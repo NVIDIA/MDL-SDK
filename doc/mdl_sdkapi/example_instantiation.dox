@@ -1,0 +1,116 @@
+/******************************************************************************
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_instantiation Example for Instantiation of MDL definitions
+
+<div align="right">
+    [\link mi_neuray_example_modules Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_calls Next\endlink]
+</div>
+
+This example creates material instances and function calls by instantiating the corresponding
+material and function definitions. It also shows how to change arguments of material instances and
+function calls.
+
+\section example_instantiation_new New Topics
+
+  - Instantiating material and function definitions
+  - Changing arguments
+  - Creating material and function variants
+
+\section example_instantiation_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Instantiating material and function definitions
+    </b></dt>
+    <dd><br>
+        The method \c instantiate_definitions() shows how to instantiate a material or function
+        definition from a previously \link mi_neuray_example_modules loaded module\endlink. The
+        methods #mi::neuraylib::IMaterial_definition::create_material_instance() and
+        #mi::neuraylib::IFunction_definition::create_function_call() are used to instantiate a
+        given material or function definition, respectively.
+
+        There are two important cases to distinguish: all parameters have defaults, or some
+        parameters have no defaults. The first part of the method deals with a material definition
+        where all parameters have defaults. Therefore, when creating the material instance, it is
+        not necessary to provide any arguments since the defaults are used automatically. The second
+        part of the method deals with a function definition without defaults for its parameters. It
+        is therefore mandatory to provide the initial arguments.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Changing arguments
+    </b></dt>
+    <dd><br>
+        The method \c change_arguments() shows how to change an argument of a material instance or
+        a function call. Essentially you have to call
+        #mi::neuraylib::IMaterial_instance::set_argument() or
+        #mi::neuraylib::IFunction_call::set_argument() with the new argument. The method
+        illustrates two ways for obtaining the new argument.
+
+        The first way is to create to obtain the old value, to clone it (because it is immutable),
+        to modify the value, and to pass it to the material instance or function call. The second
+        way is to use #mi::neuraylib::Argument_editor::set_value() which simplifies these steps.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Creating material and function variants
+    </b></dt>
+    <dd><br>
+        A variant is a material or function definition that is based on a prototype definition,
+        but has different defaults. In this example we create an MDL module \c "::variants" with
+        a single new material definition: a variant of \c "::example::diffuse_material", but with
+        a green default for \c "tint".
+
+        To do so, one has to prepare a structure of type \c "Variant_data" with all the required
+        information: the name of the definition, the name of the prototype it is based on, the new
+        defaults, and (optionally) an annotation for the variant. All such structures are combined
+        in an array (one for each variant to be created, just one in this example). The annotation
+        is created via #mi::neuraylib::IMdl_factory::create_variants().
+
+        A dump of the instantiated definition as well as the exported module show that the new
+        material definition really is a variant of the prototype but with different defaults.
+    </dd>
+</dl>
+
+\section example_instantiation Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/instantiation/example_instantiation.cpp</tt>
+
+\include instantiation/example_instantiation.cpp
+
+<div align="right">
+    [\link mi_neuray_example_modules Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_calls Next\endlink]
+</div>
+
+*/

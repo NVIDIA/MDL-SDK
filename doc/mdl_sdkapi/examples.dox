@@ -1,0 +1,89 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_examples Tutorial and Example Programs
+
+We provide several examples for the use of the \neurayApiName
+that illustrate -- in a tutorial manner -- the important
+interfaces and concepts. See the \ref mi_neuray_getting_started
+Section for a description of how the example programs can be compiled.
+
+\section mi_neuray_examples_getting_started Getting Started with \neurayProductName
+
+- \subpage mi_neuray_example_start_shutdown <br>
+  Starts and shuts down the \neurayApiName.
+
+- \subpage mi_neuray_example_modules <br>
+  Loads an MDL module and inspects its contents.
+
+- \subpage mi_neuray_example_instantiation <br>
+  Instantiates material and function definitions.
+
+- \subpage mi_neuray_example_calls <br>
+  Creates a textured material via a series of function calls.
+
+- \subpage mi_neuray_example_compilation <br>
+  Class and instance compilation of material instances.
+
+- \subpage mi_neuray_example_execution_native <br>
+  Executes material sub-expressions of a compiled MDL material for the native (CPU) backend.
+
+- \subpage mi_neuray_example_execution_ptx <br>
+  Executes material sub-expressions of a compiled MDL material for the PTX backend with CUDA.
+
+\if  MDL_BIN_RELEASE
+- \subpage mi_neuray_example_execution_glsl <br>
+  Executes material sub-expressions of a compiled MDL material for the GLSL backend with OpenGL.
+\endif
+
+- \subpage mi_neuray_example_df_cuda <br>
+  Uses compiled material distribution functions in a CUDA based renderer.
+
+- \subpage mi_neuray_example_user_state_module <br>
+  Adapts the access to the renderer state in the generated code to your renderer.
+
+\if  MDL_BIN_RELEASE
+- \subpage mi_neuray_example_distilling <br>
+  Distilling of compiled materials and baking of material sub-expressions.
+  
+- \subpage mi_neuray_example_distilling_glsl <br>
+  Mapping distilled materials to a GLSL shader.
+\endif
+
+- \subpage mi_neuray_example_traversal <br>
+  Traversing compiled MDL materials and reconstructing compilable MDL code.
+  
+- \subpage mi_neuray_example_discovery <br>
+  Discovers MDL modules in the specified search paths and lists them.
+
+- \subpage mi_neuray_example_mdl_browser <br>
+  Example for a material selection dialogue.
+
+\subpage mi_neuray_example_topics
+
+*/

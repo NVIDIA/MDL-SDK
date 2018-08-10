@@ -1,0 +1,256 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+mdl 1.4;
+
+import df::*;
+import base::*;
+import math::*;
+import state::*;
+import anno::*;
+import tex::*;
+import ::nvidia::core_definitions::*;
+
+
+// Returns the normal n in tangent space, given n is in internal space.
+float3 transform_internal_to_tangent(float3 n)
+{
+    return
+        n.x* float3(state::texture_tangent_u(0).x,state::texture_tangent_v(0).x,state::normal().x)+
+        n.y* float3(state::texture_tangent_u(0).y,state::texture_tangent_v(0).y,state::normal().y)+
+        n.z* float3(state::texture_tangent_u(0).z,state::texture_tangent_v(0).z,state::normal().z);
+}
+
+// Returns the normal n in internal space, given n is in tangent space.
+float3 transform_tangent_to_internal(float3 n)
+{
+    return  state::texture_tangent_u(0) * n.x +
+            state::texture_tangent_v(0) * n.y +
+            state::normal() * n.z ;
+}
+
+// Returns a normal by adding a detail normal to a global normal.
+float3 add_detail_normal(float3 nd = state::normal(), float3 n = state::normal())
+{
+    // http://blog.selfshadow.com/publications/blending-in-detail/
+    float3 n_t = transform_internal_to_tangent(n);
+    float3 nd_t = transform_internal_to_tangent(nd);
+
+    n_t=n_t + float3(0.,0.,1.);
+    nd_t = nd_t *  float3(-1.,-1.,1.);
+
+    n = n_t*math::dot(n_t, nd_t)/n_t.z - nd_t;
+    return math::normalize(transform_tangent_to_internal(n));
+}
+
+
+export material single_diamond_plate(
+    color metal_color = color(1.0, 1.0, 1.0)
+    [[
+        anno::display_name("Metal Color"),
+        anno::description("The reflection color of the metal"),
+        anno::in_group("Appearance")
+    ]],
+
+    uniform float bump_strength = 1.0f
+    [[
+        anno::display_name("Bump Strength"),
+        anno::description("The strength of the bumpmap of the diamond pattern"),
+        anno::in_group("Appearance")
+    ]],
+    uniform float brushing_bump_strength = .75
+    [[
+        anno::display_name("Brushing Bump Strength"),
+        anno::description("The strength of the brushing as part of the manufacturing process"),
+        anno::in_group("Appearance")
+    ]],
+    uniform float detail_bump_strength = .25
+    [[
+        anno::display_name("Detail Bump Strength"),
+        anno::description("The strength of the detail bump map that creates impurities in the bump map"),
+        anno::in_group("Appearance")
+    ]],
+
+    uniform float metal_roughness = 0.0
+    [[
+        anno::display_name("Metal Roughness"),
+        anno::description("The the overal roughness of the metal"),
+        anno::in_group("Appearance")
+    ]],
+
+    uniform float2 texture_translate  =  float2 ( 0.f, 0.0f)
+    [[
+        anno::display_name("Translate"),
+        anno::description("Controls the position of the texture."),
+        anno::in_group("Transform")
+    ]],
+
+    uniform float texture_rotate =  0.f
+    [[
+        anno::display_name("Rotate"),
+        anno::description("Rotates angle of the texture in degrees."),
+        anno::in_group("Transform")
+    ]],
+
+    uniform float2 texture_scale =  float2 ( 1.f, 1.0f)
+    [[
+        anno::display_name("Scale"),
+        anno::description("Larger numbers increase the size."),
+        anno::in_group("Transform")
+    ]],
+
+    uniform int uv_space_index = 0
+    [[
+        anno::display_name("UV Space Index"),
+        anno::description("UV space index."),
+        anno::hard_range(0,3),
+        anno::in_group("Advanced")
+    ]]
+
+) [[
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Metal Diamond Plate")
+]]  = let {
+    uniform bool flip_u = false;
+    uniform bool flip_v = false;
+
+    uniform texture_2d base_color_texture = texture_2d("resources/metal_diamond_pattern_diff.jpg", ::tex::gamma_srgb);
+    uniform texture_2d roughness_texture = texture_2d("resources/metal_diamond_pattern_rough.jpg", ::tex::gamma_linear);
+    uniform texture_2d normal_texture = texture_2d("resources/metal_diamond_pattern_norm.jpg", ::tex::gamma_linear);
+    uniform texture_2d detail_normal_texture = texture_2d("resources/metal_diamond_pattern_diamond_plate_diamond_plate_bumps_norm.jpg", ::tex::gamma_linear);
+    uniform texture_2d brushing_normal_texture = texture_2d("resources/metal_diamond_pattern_diamond_plate_diamond_plate_brushing_norm.jpg", ::tex::gamma_linear);
+
+    float specular_level = float(0.5);
+    float metallic = float(0.9);
+
+    base::texture_coordinate_info uv_src = base::transform_coordinate(
+        coordinate: base::coordinate_source(texture_space: uv_space_index),
+        transform: base::rotation_translation_scale(
+            scaling: float3(1.0 / texture_scale.x, 1.0 / texture_scale.y, 1.0),
+            rotation: float3(0.0, 0.0, texture_rotate/180.*math::PI ),
+            translation: float3(texture_translate.x, texture_translate.y, 0.0f)
+        )
+    );
+
+    color base_color = ::nvidia::core_definitions::file_texture(
+        texture: base_color_texture,
+        translation: texture_translate,
+        scaling: float2(1.f / texture_scale),
+        rotation:       texture_rotate,
+        clip:  false
+    ).tint;
+
+    color final_base_color = base_color*metal_color;
+
+    float roughness = ::nvidia::core_definitions::file_texture(
+        texture:        roughness_texture,
+        mono_source:    ::base::mono_average,
+        scaling:        float2(1.f / texture_scale),
+        translation:    texture_translate,
+        rotation:       texture_rotate,
+        clip:           false,
+        texture_space:  uv_space_index,
+        invert:         false
+    ).mono + metal_roughness * 0.25;
+
+
+    float3 diamond_normal = base::tangent_space_normal_texture(
+        texture:        normal_texture,
+        factor:         bump_strength * .3,
+        uvw:            uv_src,
+        flip_tangent_u: flip_u,
+        flip_tangent_v: flip_v
+    );
+
+    float3 brushing_normalmap_normal = ::nvidia::core_definitions::normalmap_texture(
+        texture:  brushing_normal_texture,
+        scaling:  float2(1.f / texture_scale),
+        translation:  texture_translate ,
+        rotation:  texture_rotate,
+        clip:  false,
+        factor:  brushing_bump_strength * .3,
+        texture_space:  uv_space_index
+    );
+
+    float3 detail_normalmap_normal = ::nvidia::core_definitions::normalmap_texture(
+        texture:  detail_normal_texture,
+        scaling:  float2(1.f / texture_scale),
+        translation:  texture_translate ,
+        rotation:  texture_rotate,
+        clip:  false,
+        factor:  detail_bump_strength*0.15,
+        texture_space:  uv_space_index
+    );
+
+    float3 normalmap_normal = add_detail_normal(brushing_normalmap_normal, add_detail_normal(diamond_normal, detail_normalmap_normal));
+
+    bsdf diffuse_bsdf = df::diffuse_reflection_bsdf(
+        roughness: 0.0f,
+        tint: final_base_color
+    );
+
+    bsdf ggx_smith_bsdf = df::microfacet_ggx_smith_bsdf(
+        roughness_u: roughness*roughness,
+        roughness_v: roughness*roughness,
+        tint: color(1.0, 1.0, 1.0),
+        mode: df::scatter_reflect
+    );
+
+    bsdf custom_curve_layer_bsdf = df::custom_curve_layer(
+        normal_reflectivity: 0.08 * specular_level,
+        grazing_reflectivity: 1.0,
+        exponent:   3.0,
+        weight:     1.0,
+        layer: ggx_smith_bsdf,
+        base:   diffuse_bsdf
+    );
+
+    bsdf directional_factor_bsdf = df::directional_factor(
+        normal_tint:  final_base_color,
+        grazing_tint: color(1.0, 1.0, 1.0),
+        exponent: 3.0f,
+        base: ggx_smith_bsdf
+    );
+
+    bsdf final_bsdf = df::weighted_layer(
+        base:   custom_curve_layer_bsdf,
+        weight: metallic,
+        layer:  directional_factor_bsdf
+    );
+
+} in material (
+    surface: material_surface(
+        scattering: final_bsdf
+    ),
+    geometry: material_geometry(
+        normal: normalmap_normal
+    )
+);
+
+

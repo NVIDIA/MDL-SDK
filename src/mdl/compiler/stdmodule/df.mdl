@@ -1,0 +1,332 @@
+/******************************************************************************
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ ******************************************************************************/
+mdl 1.4;
+
+using anno import hard_range;
+using state import texture_tangent_u, normal, transform_vector, coordinate_space;
+import math::PI;
+
+export enum scatter_mode {
+    scatter_reflect,
+    scatter_transmit,
+    scatter_reflect_transmit
+};
+
+export bsdf diffuse_reflection_bsdf(
+    color          tint      = color(1.0),
+    float          roughness = 0.0 [[ hard_range(0.0, 1.0) ]],
+    uniform string handle    = ""
+) [[ intrinsic() ]];
+
+export bsdf diffuse_transmission_bsdf(
+    color          tint      = color(1.0),
+    uniform string handle    = ""
+) [[ intrinsic() ]];
+
+export bsdf specular_bsdf(
+    color                tint = color(1.0),
+    uniform scatter_mode mode = scatter_reflect,
+    uniform string       handle = ""
+) [[ intrinsic() ]];
+
+export bsdf simple_glossy_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic() ]];
+
+export bsdf backscattering_glossy_reflection_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform string       handle      = ""
+) [[ intrinsic() ]];
+
+export bsdf measured_bsdf(
+    uniform bsdf_measurement measurement,
+    uniform float        multiplier  = 1.0,
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export bsdf microfacet_beckmann_smith_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+// anisotropic GGX distribution
+export bsdf microfacet_ggx_smith_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export bsdf microfacet_beckmann_vcavities_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export bsdf microfacet_ggx_vcavities_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform scatter_mode mode        = scatter_reflect,
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export bsdf ward_geisler_moroder_bsdf(
+    float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform string       handle      = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export edf diffuse_edf (
+    uniform string handle = ""
+) [[ intrinsic() ]];
+
+// cos^k
+export edf spot_edf (
+    uniform float         exponent,
+    uniform bool          global_distribution = true,
+    uniform float3x3      global_frame = float3x3(1.0),
+    uniform string        handle = ""
+) [[ intrinsic(), removed(1,1) ]];
+
+export edf spot_edf (
+    uniform float         exponent,
+    uniform float         spread = math::PI,
+    uniform bool          global_distribution = true,
+    uniform float3x3      global_frame = float3x3(1.0),
+    uniform string        handle = ""
+) [[ intrinsic(), since(1,1) ]];
+
+export edf measured_edf (
+    uniform light_profile profile,
+    uniform bool          global_distribution = true,
+    uniform float3x3      global_frame = float3x3(1.0),
+    uniform string        handle = ""
+) [[ intrinsic(), removed(1,1) ]];
+
+export edf measured_edf(
+    uniform light_profile profile,
+    uniform float         multiplier          = 1.0,
+    uniform bool          global_distribution = true,
+    uniform float3x3      global_frame        = float3x3(1.0),
+    uniform string        handle              = ""
+) [[ intrinsic(), since(1,1), removed(1,2) ]];
+
+export edf measured_edf(
+    uniform light_profile profile,
+    uniform float         multiplier          = 1.0,
+    uniform bool          global_distribution = true,
+    uniform float3x3      global_frame        = float3x3(1.0),
+    float3                tangent_u           = state::texture_tangent_u(0),
+    uniform string        handle              = ""
+) [[ intrinsic(), since(1,2) ]];
+
+// volume specifications
+export vdf anisotropic_vdf (
+    float directional_bias = 0.0 [[ hard_range(-1.0, 1.0) ]],
+    uniform string handle  = ""
+) [[ intrinsic() ]];
+
+// recoloring of bsdf and edf
+export bsdf tint( color tint, bsdf base) [[ intrinsic() ]];
+
+export edf tint(uniform color tint, edf base) [[ intrinsic() ]];
+
+// thin film effect modifier
+export bsdf thin_film( float thickness, color ior, bsdf base) [[ intrinsic() ]];
+
+// custom curve factor for blending backscattering glossy with forward scattering
+export bsdf directional_factor(
+    color  normal_tint  = color(1.0),
+    color  grazing_tint = color(1.0),
+    float  exponent     = 5.0,
+    bsdf   base         = bsdf()
+) [[ intrinsic() ]];
+
+// component structs for mixers
+export struct bsdf_component {
+    float weight    = 0.0 [[ hard_range(0.0, 1.0) ]];
+    bsdf  component = bsdf();
+};
+
+export struct edf_component {
+    uniform float weight = 0.0 [[ hard_range(0.0, 1.0) ]];
+    edf  component = edf();
+};
+
+export struct vdf_component {
+    float weight    = 0.0 [[ hard_range(0.0, 1.0) ]];
+    vdf  component = vdf();
+};
+
+// mixing of xdf
+export bsdf normalized_mix( bsdf_component[<N>] components) [[ intrinsic() ]];
+export vdf  normalized_mix( vdf_component[<N>]  components) [[ intrinsic() ]];
+export edf  normalized_mix( edf_component[<N>]  components) [[ intrinsic() ]];
+export bsdf clamped_mix(    bsdf_component[<N>] components) [[ intrinsic() ]];
+export vdf  clamped_mix(    vdf_component[<N>]  components) [[ intrinsic() ]];
+export edf  clamped_mix(    edf_component[<N>]  components) [[ intrinsic() ]];
+
+// layering of bsdf
+export bsdf weighted_layer(
+    float  weight [[ hard_range(0.0, 1.0) ]],
+    bsdf   layer,
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic() ]];
+
+export bsdf fresnel_layer(
+    color  ior,
+    float  weight = 1.0 [[ hard_range(0.0, 1.0) ]],
+    bsdf   layer  = bsdf(),
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic(), removed(1,4) ]];
+
+export bsdf custom_curve_layer(
+    float  normal_reflectivity,
+    float  grazing_reflectivity = 1.0,
+    float  exponent = 5.0, // Schlick's approximation
+    float  weight = 1.0 [[ hard_range(0.0, 1.0) ]],
+    bsdf   layer  = bsdf(),
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic() ]];
+
+export bsdf measured_curve_layer(
+    color[<N>]          curve_values,
+    float               weight = 1.0,
+    bsdf                layer = bsdf(),
+    bsdf                base = bsdf(),
+    float3              normal = state::normal()
+) [[ intrinsic(), since(1,1) ]];
+
+export bsdf measured_curve_factor(
+    color[<N>]          curve_values,
+    bsdf                base = bsdf()
+) [[ intrinsic(), since(1,1) ]];
+
+export float light_profile_power(
+    uniform light_profile profile) uniform [[ intrinsic(), since(1,1) ]];
+export float light_profile_maximum(
+    uniform light_profile profile) uniform [[ intrinsic(), since(1,1) ]];
+
+// check for valid resource
+export bool light_profile_isvalid(
+    uniform light_profile profile) uniform [[ intrinsic(), since(1,2) ]];
+export bool bsdf_measurement_isvalid(
+    uniform bsdf_measurement measurement) uniform [[ intrinsic(), since(1,2) ]];
+
+export struct color_bsdf_component  [[ since(1,4) ]] {
+    color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
+    bsdf component = bsdf();
+};
+
+export struct color_edf_component  [[ since(1,4) ]] {
+    uniform color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
+    edf component = edf();
+};
+
+export bsdf color_normalized_mix(
+    color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
+export edf  color_normalized_mix(
+    color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
+
+export bsdf color_clamped_mix(
+    color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
+export edf  color_clamped_mix(
+    color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
+
+// layering of bsdf
+export bsdf color_weighted_layer(
+    color  weight,
+    bsdf   layer,
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic(), since(1,4) ]];
+
+export bsdf fresnel_layer(
+    float  ior,
+    float  weight = 1.0 [[ hard_range(0.0, 1.0) ]],
+    bsdf   layer  = bsdf(),
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic(), since(1,4) ]];
+
+export bsdf color_fresnel_layer(
+    color  ior,
+    color  weight = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf   layer  = bsdf(),
+    bsdf   base   = bsdf(),
+    float3 normal = state::normal()
+) [[ intrinsic(), since(1,4) ]];
+
+export bsdf color_custom_curve_layer(
+    color  normal_reflectivity,
+    color  grazing_reflectivity = color(1.0),
+    float  exponent             = 5.0,
+    color  weight               = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf   layer                = bsdf(),
+    bsdf   base                 = bsdf(),
+    float3 normal               = state::normal()
+) [[ intrinsic(), since(1,4) ]];
+
+export bsdf color_measured_curve_layer(
+    color[<N>] curve_values,
+    color      weight = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf       layer  = bsdf(),
+    bsdf       base   = bsdf(),
+    float3     normal = state::normal()
+) [[ intrinsic(), since(1,4) ]];
+
+export bsdf fresnel_factor(
+    color ior,                     // n(Eta), refractive index, per wavelength
+    color extinction_coefficient,  // k, extinction coefficient, per wavelength
+    bsdf  base = bsdf()
+) [[ intrinsic(), since(1,4) ]];

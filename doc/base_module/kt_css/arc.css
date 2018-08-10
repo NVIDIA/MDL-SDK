@@ -1,0 +1,18 @@
+.comment {
+    background-color: yellow;
+    border: 1px solid black;
+    padding: .5em 1em;
+}
+
+.comment_right {
+    /*
+    width: 50vw;
+    float: right;
+    clear: both;
+    */
+}
+
+.imagecode {
+   padding: 0;
+   margin: 0 0 0 1em;
+}	  

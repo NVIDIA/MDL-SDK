@@ -1,0 +1,16 @@
+
+Changes from NVIDIA compared to original zlib 1.2.8
+---------------------------------------------------
+
+i_zlib.h
+zlib_wrapper.cpp
+    New files. They integrate the zlib functionality in the neuray module system.
+
+ChangeLog:
+    Reformatted $ Id $ to avoid expansion in repository checkouts.
+
+gzguts.h
+    Added include of unistd.h.
+
+zutil.c
+    Set verbose to -1 instead of 0 to avoid messages in DEBUG builds.

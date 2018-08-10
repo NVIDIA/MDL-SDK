@@ -1,0 +1,122 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+// Internal comment:
+//
+// Manual style principles:
+//
+// - We address the reader with 'you', avoiding use of passive verbs,
+//   such as 'one', 'the programmer', etc.
+//
+// - We do not use 'we' to talk about ourselves.
+//
+
+/*! \anchor mi_neuray_main
+
+\mainpage \NeurayAdjectiveName \MiProductVersion  API Programmer's Manual
+
+This reference documentation is structured into introductory material, tutorials
+and examples, reference manuals, and auxiliary material.
+
+The \neurayApiName supports the startup and configuration of the
+MDL compiler, the import and analysis of MDL modules, and compilation
+into other representations. The \neurayApiName
+includes also the \mathApiName and the \baseApiName. The \mathApiName
+provides vector, matrix, bbox, and color classes and math
+functions. The \baseApiName provides basic types, functions on
+them, assertions, and configurations.
+
+\section mi_neuray_contents_intro Introduction
+
+  - \subpage mi_neuray_overview
+  - \subpage mi_neuray_getting_started
+  - \subpage mi_neuray_design
+  - \subpage mi_neuray_includes
+  - \subpage mi_neuray_intro_config
+  - \subpage mi_neuray_intro_versioning
+
+\section mi_neuray_contents_tutorial Tutorial and Examples
+
+  - \subpage mi_neuray_examples
+  - \ref mi_neuray_example_topics
+
+\section mi_neuray_contents_ref_manual Reference Manual
+
+  - \BaseApiName Reference
+      - \ref mi_base_version "Versioning", \ref mi_base_config "Configuration",
+        and \ref mi_base_assert "Assertions" of the \baseApiName
+      - \ref mi_base_types
+      - \ref mi_base_threads
+      - \ref mi_base_iinterface
+      - \ref mi_base_iallocator, \ref mi_base_ilogger, and \ref mi_base_plugin
+
+  - \MathApiName Reference
+      - \ref mi_math_version "Versioning" and \ref mi_math_assert "Assertions" 
+         of the \mathApiName
+      - \ref mi_math_function
+      - \ref mi_math_vector "Math Vector", \ref mi_math_matrix "Matrix",
+        \ref mi_math_bbox "Bounding Box", and \ref mi_math_color "Color" Classes
+
+  - \NeurayApiName Reference
+      - \ref mi_neuray_version "Versioning" and \ref mi_neuray_assert "Assertions" 
+         of the \neurayApiName
+      - \ref mi_neuray_ineuray "Main \neurayAdjectiveName Interface and C access function"
+      - \subpage mi_neuray_api_components
+      - \ref mi_neuray_configuration "Configuration Interfaces"
+      - \ref mi_neuray_types "Types"
+      - \ref mi_neuray_mdl_types "MDL type system"
+      - \ref mi_neuray_database_access "Database Access"
+      - \ref mi_neuray_scene_element "Scene Elements"
+          - \ref mi_neuray_mdl_elements "MDL-related elements",
+            which comprises classes such as
+            #mi::neuraylib::IModule,
+            #mi::neuraylib::IFunction_definition,
+            #mi::neuraylib::IMaterial_definition,
+            #mi::neuraylib::IFunction_call,
+            #mi::neuraylib::IMaterial_instance, and
+            #mi::neuraylib::ICompiled_material.
+          - \ref mi_neuray_misc "Miscellaneous",
+            which comprises classes such as
+            #mi::neuraylib::IBsdf_measurement,
+            #mi::neuraylib::IImage, 
+            #mi::neuraylib::ILightprofile, and
+            #mi::neuraylib::ITexture.
+      - \ref mi_neuray_mdl_compiler "MDL compiler"
+          - \subpage mi_neuray_compiler
+      - \ref mi_neuray_mdl_sdk_misc "Miscellaneous Interfaces"
+
+\section mi_neuray_contents_related Related Pages
+
+  - \subpage mi_neuray_biblio
+  - \subpage mi_def_lexicographic_order
+\if MDL_BIN_RELEASE  
+  - <b><a href="../../release_notes/relnotes.pdf">Release Notes</a></b> 
+\endif
+
+*/
+

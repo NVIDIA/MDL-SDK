@@ -1,0 +1,1565 @@
+/******************************************************************************
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+#include "pch.h"
+
+#include <climits>
+
+#include <mi/mdl/mdl_generated_executable.h>
+
+#include <mdl/compiler/compilercore/compilercore_mdl.h>
+#include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compilercore/compilercore_tools.h>
+
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/DebugInfo.h>
+#include <llvm/DIBuilder.h>
+#include <llvm/IR/DataLayout.h>
+
+#include "generator_jit_generated_code.h"
+#include "generator_jit_type_map.h"
+
+namespace mi {
+namespace mdl {
+
+/// Helper: get the index of a matrix type in the matrix type cache.
+///
+/// \param col  number of columns
+/// \param row  number of rows
+static int get_matric_index(int col, int row)
+{
+    MDL_ASSERT(2 <= col && col <= 4);
+    MDL_ASSERT(2 <= row && row <= 4);
+
+    return (col - 2) * 3 + row - 2;
+}
+
+// Constructor.
+Type_mapper::Type_mapper(
+    IAllocator             *alloc,
+    llvm::LLVMContext      &context,
+    llvm::DataLayout const *target_data,
+    unsigned               state_mapping,
+    Type_mapping_mode      tm_mode)
+: m_state_mapping(state_mapping)
+, m_context(context)
+, m_tm_mode(tm_mode)
+
+, m_type_size_t(llvm::IntegerType::get(context, sizeof(size_t) * CHAR_BIT))
+
+, m_type_void(llvm::Type::getVoidTy(context))
+// the LLVM void type is not allowed to be used for get_ptr, so create a int8 * here
+, m_type_void_ptr(get_ptr(llvm::Type::getInt8Ty(context)))
+
+// the type of LLVM predicates (aka compare results)
+, m_type_predicate(llvm::Type::getInt1Ty(context))
+
+, m_type_bool(llvm::IntegerType::get(context, tm_mode & TM_BOOL1_SUPPORTED ? 1 : 8))
+, m_type_bool2(llvm::VectorType::get(m_type_bool, 2))
+, m_type_bool3(llvm::VectorType::get(m_type_bool, 3))
+, m_type_bool4(llvm::VectorType::get(m_type_bool, 4))
+
+// int is 32bit in MDL
+, m_type_int(llvm::Type::getInt32Ty(context))
+, m_type_int2(llvm::VectorType::get(m_type_int, 2))
+, m_type_int3(llvm::VectorType::get(m_type_int, 3))
+, m_type_int4(llvm::VectorType::get(m_type_int, 4))
+
+, m_type_float(llvm::Type::getFloatTy(context))
+, m_type_float2(llvm::VectorType::get(m_type_float, 2))
+, m_type_float3(llvm::VectorType::get(m_type_float, 3))
+, m_type_float4(llvm::VectorType::get(m_type_float, 4))
+
+, m_type_double(llvm::Type::getDoubleTy(context))
+, m_type_double2(llvm::VectorType::get(m_type_double, 2))
+, m_type_double3(llvm::VectorType::get(m_type_double, 3))
+, m_type_double4(llvm::VectorType::get(m_type_double, 4))
+
+, m_type_color(NULL)
+
+// int/float arrays needed in glue code / state interface
+, m_type_arr_int_2(llvm::ArrayType::get(m_type_int, 2))
+, m_type_arr_int_3(llvm::ArrayType::get(m_type_int, 3))
+
+, m_type_arr_float_2(llvm::ArrayType::get(m_type_float, 2))
+, m_type_arr_float_3(llvm::ArrayType::get(m_type_float, 3))
+, m_type_arr_float_4(llvm::ArrayType::get(m_type_float, 4))
+
+// matrix types ...
+, m_type_float2x2(NULL)
+, m_type_float3x2(NULL)
+, m_type_float4x2(NULL)
+, m_type_float2x3(NULL)
+, m_type_float3x3(NULL)
+, m_type_float4x3(NULL)
+, m_type_float2x4(NULL)
+, m_type_float3x4(NULL)
+, m_type_float4x4(NULL)
+, m_type_double2x2(NULL)
+, m_type_double3x2(NULL)
+, m_type_double4x2(NULL)
+, m_type_double2x3(NULL)
+, m_type_double3x3(NULL)
+, m_type_double4x3(NULL)
+, m_type_double2x4(NULL)
+, m_type_double3x4(NULL)
+, m_type_double4x4(NULL)
+
+// we represent MDL strings as C-strings, i.e. char pointer
+, m_type_char(llvm::Type::getInt8Ty(context))
+, m_type_cstring(get_ptr(m_type_char))
+
+, m_type_tag(llvm::IntegerType::get(context, sizeof(Tag) * CHAR_BIT))
+
+// State types constructed later
+, m_type_state_environemnt(NULL)
+, m_type_state_environment_ptr(NULL)
+, m_type_state_core(NULL)
+, m_type_state_core_ptr(NULL)
+
+// Exception state type constructed later
+, m_type_exc_state(NULL)
+, m_type_exc_state_ptr(NULL)
+
+// res_data_pair type constructed later
+, m_type_res_data_pair(NULL)
+, m_type_res_data_pair_ptr(NULL)
+
+// core texture handler type constructed later
+, m_type_core_tex_handler(NULL)
+, m_type_core_tex_handler_ptr(NULL)
+
+// attribute entry types constructed later
+, m_type_texture_attribute_entry(NULL)
+, m_type_light_profile_attribute_entry(NULL)
+, m_type_bsdf_measurement_attribute_entry(NULL)
+
+// optix types constructed on demand
+, m_type_optix_type_info(NULL)
+
+, m_type_struct_cache(0, Type_struct_map::hasher(), Type_struct_map::key_equal(), alloc)
+, m_type_arr_cache(0, Type_array_map::hasher(), Type_array_map::key_equal(), alloc)
+{
+    switch (tm_mode & TM_VECTOR_MASK) {
+    case TM_ALL_SCALAR:
+        // don't use vector types at all
+        m_type_bool2     = llvm::ArrayType::get(m_type_bool,   2);
+        m_type_bool3     = llvm::ArrayType::get(m_type_bool,   3);
+        m_type_bool4     = llvm::ArrayType::get(m_type_bool,   4);
+
+        m_type_int2      = llvm::ArrayType::get(m_type_int,    2);
+        m_type_int3      = llvm::ArrayType::get(m_type_int,    3);
+        m_type_int4      = llvm::ArrayType::get(m_type_int,    4);
+
+        m_type_float2    = llvm::ArrayType::get(m_type_float,  2);
+        m_type_float3    = llvm::ArrayType::get(m_type_float,  3);
+        m_type_float4    = llvm::ArrayType::get(m_type_float,  4);
+
+        m_type_double2   = llvm::ArrayType::get(m_type_double, 2);
+        m_type_double3   = llvm::ArrayType::get(m_type_double, 3);
+        m_type_double4   = llvm::ArrayType::get(m_type_double, 4);
+
+        m_type_float2x2  = llvm::ArrayType::get(m_type_float,  2 * 2);
+        m_type_float3x2  = llvm::ArrayType::get(m_type_float,  3 * 2);
+        m_type_float4x2  = llvm::ArrayType::get(m_type_float,  4 * 2);
+        m_type_float2x3  = llvm::ArrayType::get(m_type_float,  2 * 3);
+        m_type_float3x3  = llvm::ArrayType::get(m_type_float,  3 * 3);
+        m_type_float4x3  = llvm::ArrayType::get(m_type_float,  4 * 3);
+        m_type_float2x4  = llvm::ArrayType::get(m_type_float,  2 * 4);
+        m_type_float3x4  = llvm::ArrayType::get(m_type_float,  3 * 4);
+        m_type_float4x4  = llvm::ArrayType::get(m_type_float,  4 * 4);
+
+        m_type_double2x2 = llvm::ArrayType::get(m_type_double, 2 * 2);
+        m_type_double3x2 = llvm::ArrayType::get(m_type_double, 3 * 2);
+        m_type_double4x2 = llvm::ArrayType::get(m_type_double, 4 * 2);
+        m_type_double2x3 = llvm::ArrayType::get(m_type_double, 2 * 3);
+        m_type_double3x3 = llvm::ArrayType::get(m_type_double, 3 * 3);
+        m_type_double4x3 = llvm::ArrayType::get(m_type_double, 4 * 3);
+        m_type_double2x4 = llvm::ArrayType::get(m_type_double, 2 * 4);
+        m_type_double3x4 = llvm::ArrayType::get(m_type_double, 3 * 4);
+        m_type_double4x4 = llvm::ArrayType::get(m_type_double, 4 * 4);
+        break;
+
+    case TM_SMALL_VECTORS:
+        // matrix types are arrays of vectors ...
+        m_type_float2x2  = llvm::ArrayType::get(m_type_float2,  2);
+        m_type_float3x2  = llvm::ArrayType::get(m_type_float2,  3);
+        m_type_float4x2  = llvm::ArrayType::get(m_type_float2,  4);
+        m_type_float2x3  = llvm::ArrayType::get(m_type_float3,  2);
+        m_type_float3x3  = llvm::ArrayType::get(m_type_float3,  3);
+        m_type_float4x3  = llvm::ArrayType::get(m_type_float3,  4);
+        m_type_float2x4  = llvm::ArrayType::get(m_type_float4,  2);
+        m_type_float3x4  = llvm::ArrayType::get(m_type_float4,  3);
+        m_type_float4x4  = llvm::ArrayType::get(m_type_float4,  4);
+
+        m_type_double2x2 = llvm::ArrayType::get(m_type_double2, 2);
+        m_type_double3x2 = llvm::ArrayType::get(m_type_double2, 3);
+        m_type_double4x2 = llvm::ArrayType::get(m_type_double2, 4);
+        m_type_double2x3 = llvm::ArrayType::get(m_type_double3, 2);
+        m_type_double3x3 = llvm::ArrayType::get(m_type_double3, 3);
+        m_type_double4x3 = llvm::ArrayType::get(m_type_double3, 4);
+        m_type_double2x4 = llvm::ArrayType::get(m_type_double4, 2);
+        m_type_double3x4 = llvm::ArrayType::get(m_type_double4, 3);
+        m_type_double4x4 = llvm::ArrayType::get(m_type_double4, 4);
+        break;
+    case TM_BIG_VECTORS:
+        // matrix types are big vectors ...
+        m_type_float2x2  = llvm::VectorType::get(m_type_float,  2 * 2);
+        m_type_float3x2  = llvm::VectorType::get(m_type_float,  3 * 2);
+        m_type_float4x2  = llvm::VectorType::get(m_type_float,  4 * 2);
+        m_type_float2x3  = llvm::VectorType::get(m_type_float,  2 * 3);
+        m_type_float3x3  = llvm::VectorType::get(m_type_float,  3 * 3);
+        m_type_float4x3  = llvm::VectorType::get(m_type_float,  4 * 3);
+        m_type_float2x4  = llvm::VectorType::get(m_type_float,  2 * 4);
+        m_type_float3x4  = llvm::VectorType::get(m_type_float,  3 * 4);
+        m_type_float4x4  = llvm::VectorType::get(m_type_float,  4 * 4);
+
+        m_type_double2x2 = llvm::VectorType::get(m_type_double, 2 * 2);
+        m_type_double3x2 = llvm::VectorType::get(m_type_double, 3 * 2);
+        m_type_double4x2 = llvm::VectorType::get(m_type_double, 4 * 2);
+        m_type_double2x3 = llvm::VectorType::get(m_type_double, 2 * 3);
+        m_type_double3x3 = llvm::VectorType::get(m_type_double, 3 * 3);
+        m_type_double4x3 = llvm::VectorType::get(m_type_double, 4 * 3);
+        m_type_double2x4 = llvm::VectorType::get(m_type_double, 2 * 4);
+        m_type_double3x4 = llvm::VectorType::get(m_type_double, 3 * 4);
+        m_type_double4x4 = llvm::VectorType::get(m_type_double, 4 * 4);
+        break;
+    }
+
+#define ENTRY(ty, col, row) m_##ty##_matrix[get_matric_index(col, row)] = m_type_##ty##col##x##row
+
+    ENTRY(float, 2, 2);
+    ENTRY(float, 3, 2);
+    ENTRY(float, 4, 2);
+    ENTRY(float, 2, 3);
+    ENTRY(float, 3, 3);
+    ENTRY(float, 4, 3);
+    ENTRY(float, 2, 4);
+    ENTRY(float, 3, 4);
+    ENTRY(float, 4, 4);
+
+    ENTRY(double, 2, 2);
+    ENTRY(double, 3, 2);
+    ENTRY(double, 4, 2);
+    ENTRY(double, 2, 3);
+    ENTRY(double, 3, 3);
+    ENTRY(double, 4, 3);
+    ENTRY(double, 2, 4);
+    ENTRY(double, 3, 4);
+    ENTRY(double, 4, 4);
+
+#undef ENTRY
+
+    // the following types depend on float3 representation ...
+
+    // for now, a color is a RGB float
+    m_type_color = m_type_float3;
+
+    // built state types
+    m_type_state_environemnt     = construct_state_environment_type(
+        context, target_data,
+        m_type_arr_float_3,
+        m_state_mapping);
+    m_type_state_environment_ptr = get_ptr(m_type_state_environemnt);
+    m_type_state_core            = construct_state_core_type(
+        context, target_data,
+        m_type_int, m_type_arr_float_3, m_type_arr_float_4, m_type_float, m_type_cstring,
+        m_state_mapping);
+    m_type_state_core_ptr        = get_ptr(m_type_state_core);
+
+    m_type_exc_state             = construct_exception_state_type(
+        context, m_type_void_ptr, llvm::Type::getInt32Ty(context));
+    m_type_exc_state_ptr         = get_ptr(m_type_exc_state);
+
+    m_type_res_data_pair         = construct_res_data_pair_type(
+        context, target_data, m_type_void_ptr);
+    m_type_res_data_pair_ptr     = get_ptr(m_type_res_data_pair);
+
+    // these must be run last, as they expect fully initialized upper types
+    m_type_core_tex_handler      = construct_core_texture_handler_type(context);
+    m_type_core_tex_handler_ptr  = get_ptr(m_type_core_tex_handler);
+
+    m_type_texture_attribute_entry =
+        construct_texture_attribute_entry_type(context);
+    m_type_texture_attribute_entry_ptr =
+        get_ptr(m_type_texture_attribute_entry);
+
+    m_type_light_profile_attribute_entry =
+        construct_light_profile_attribuute_entry_type(context);
+    m_type_light_profile_attribute_entry_ptr =
+        get_ptr(m_type_light_profile_attribute_entry);
+
+    m_type_bsdf_measurement_attribute_entry =
+        construct_bsdf_measurement_attribuute_entry_type(context);
+    m_type_bsdf_measurement_attribute_entry_ptr =
+        get_ptr(m_type_bsdf_measurement_attribute_entry);
+}
+
+// Get the index of a state field in the current state struct.
+int Type_mapper::get_state_index(
+    State_field state_field,
+    unsigned    state_mapping)
+{
+    switch (state_field) {
+
+    // Environment context
+    case STATE_ENV_DIRECTION:
+        // always 0
+        return 0;
+
+    // Core context
+    case STATE_CORE_NORMAL:
+        return 0;
+    case STATE_CORE_GEOMETRY_NORMAL:
+        return 1;
+    case STATE_CORE_POSITION:
+        return 2;
+    case STATE_CORE_ANIMATION_TIME:
+        return 3;
+    case STATE_CORE_TEXTURE_COORDINATE:
+        return 4;
+    case STATE_CORE_TANGENT_U:
+        if (state_mapping & SM_USE_BITANGENT)
+            return -1;
+        return 5;
+    case STATE_CORE_TANGENT_V:
+        if (state_mapping & SM_USE_BITANGENT)
+            return -1;
+        return 6;
+    case STATE_CORE_BITANGENTS:
+        if (state_mapping & SM_USE_BITANGENT)
+            return 5;
+        return -1;
+    case STATE_CORE_TEXT_RESULTS:
+        if (state_mapping & SM_USE_BITANGENT)
+            return 6;
+        return 7;
+    case STATE_CORE_RO_DATA_SEG:
+        if (state_mapping & SM_USE_BITANGENT)
+            return 7;
+        return 8;
+    case STATE_CORE_W2O_TRANSFORM:
+        if (state_mapping & SM_INCLUDE_UNIFORM_STATE) {
+            if (state_mapping & SM_USE_BITANGENT)
+                return 8;
+            return 9;
+        }
+        return -1;
+    case STATE_CORE_O2W_TRANSFORM:
+        if (state_mapping & SM_INCLUDE_UNIFORM_STATE) {
+            if (state_mapping & SM_USE_BITANGENT)
+                return 9;
+            return 10;
+        }
+        return -1;
+    case STATE_CORE_OBJECT_ID:
+        if (state_mapping & SM_INCLUDE_UNIFORM_STATE) {
+            if (state_mapping & SM_USE_BITANGENT)
+                return 10;
+            return 11;
+        }
+        return -1;
+    }
+    return -1;
+}
+
+// Get the index of a state field in the current state struct.
+int Type_mapper::get_state_index(State_field state_field)
+{
+    return Type_mapper::get_state_index(state_field, m_state_mapping);
+}
+
+// Get an llvm type for an MDL type.
+llvm::Type *Type_mapper::lookup_type(
+    llvm::LLVMContext &context,
+    mdl::IType const  *type,
+    int               arr_size) const
+{
+    switch (type->get_kind()) {
+    case mdl::IType::TK_ALIAS:
+        return lookup_type(context, cast<mdl::IType_alias>(type)->get_aliased_type());
+    case mdl::IType::TK_BOOL:
+        return m_type_bool;
+    case mdl::IType::TK_INT:
+        return m_type_int;
+    case mdl::IType::TK_ENUM:
+        // map to int
+        return m_type_int;
+    case mdl::IType::TK_FLOAT:
+        return m_type_float;
+    case mdl::IType::TK_DOUBLE:
+        return m_type_double;
+    case mdl::IType::TK_STRING:
+        return get_string_type();
+    case mdl::IType::TK_LIGHT_PROFILE:
+    case mdl::IType::TK_BSDF:
+    case mdl::IType::TK_EDF:
+    case mdl::IType::TK_VDF:
+        // handled as tags for now
+        return m_type_tag;
+    case mdl::IType::TK_VECTOR:
+        {
+            mdl::IType_vector const *v_type = cast<mdl::IType_vector>(type);
+            mdl::IType_atomic const *e_type = v_type->get_element_type();
+            int size = v_type->get_size();
+
+            switch (e_type->get_kind()) {
+            case mdl::IType::TK_BOOL:
+                switch (size) {
+                case 2: return m_type_bool2;
+                case 3: return m_type_bool3;
+                case 4: return m_type_bool4;
+                }
+                break;
+            case mdl::IType::TK_INT:
+                switch (size) {
+                case 2: return m_type_int2;
+                case 3: return m_type_int3;
+                case 4: return m_type_int4;
+                }
+                break;
+            case mdl::IType::TK_FLOAT:
+                switch (size) {
+                case 2: return m_type_float2;
+                case 3: return m_type_float3;
+                case 4: return m_type_float4;
+                }
+                break;
+            case mdl::IType::TK_DOUBLE:
+                switch (size) {
+                case 2: return m_type_double2;
+                case 3: return m_type_double3;
+                case 4: return m_type_double4;
+                }
+                break;
+            default:
+                break;
+            }
+            MDL_ASSERT(!"Unsupported atomic type");
+            return NULL;
+        }
+    case mdl::IType::TK_MATRIX:
+        {
+            mdl::IType_matrix const *m_type = cast<mdl::IType_matrix>(type);
+            mdl::IType_vector const *v_type = m_type->get_element_type();
+            int col = m_type->get_columns();
+            int row = v_type->get_size();
+            int idx = get_matric_index(col, row);
+
+            switch (v_type->get_element_type()->get_kind()) {
+            case mdl::IType::TK_FLOAT:
+                return m_float_matrix[idx];
+            case mdl::IType::TK_DOUBLE:
+                return m_double_matrix[idx];
+            default:
+                break;
+            }
+            MDL_ASSERT(!"Unsupported matrix type");
+            return NULL;
+        }
+    case mdl::IType::TK_ARRAY:
+        {
+            // lookup in the array cache
+            Type_array_map::const_iterator it = m_type_arr_cache.find(
+                Array_type_cache_key(type, arr_size));
+            if (it != m_type_arr_cache.end())
+                return it->second;
+
+            mdl::IType_array const *a_type = cast<mdl::IType_array>(type);
+
+            mdl::IType const *e_type = a_type->get_element_type();
+            llvm::Type       *res    = lookup_type(context, e_type);
+
+            if (a_type->is_immediate_sized()) {
+                res = llvm::ArrayType::get(res, a_type->get_size());
+            } else if (arr_size >= 0) {
+                // instantiated array
+                res = llvm::ArrayType::get(res, arr_size);
+            } else {
+                // uninstantiated deferred size array, create an array_desc<T> struct
+                llvm::Type *types[2];
+                types[ARRAY_DESC_BASE] = get_ptr(res);
+                types[ARRAY_DESC_SIZE] = m_type_size_t;
+                res = llvm::StructType::get(context, types, /*isPacked=*/false);
+            }
+            m_type_arr_cache[Array_type_cache_key(type, arr_size)] = res;
+            return res;
+        }
+    case mdl::IType::TK_COLOR:
+        return m_type_color;
+    case mdl::IType::TK_FUNCTION:
+        // should never be needed
+        MDL_ASSERT(!"requested function type");
+        return NULL;
+    case mdl::IType::TK_STRUCT:
+        {
+            mdl::IType_struct const *s_type = cast<mdl::IType_struct>(type);
+            char const              *s_name = s_type->get_symbol()->get_name();
+
+            // lookup in the struct cache
+            Type_struct_map::const_iterator it = m_type_struct_cache.find(s_name);
+            if (it != m_type_struct_cache.end())
+                return it->second;
+            
+            // build the struct
+            int n_fields = s_type->get_field_count();
+
+            llvm::SmallVector<llvm::Type *, 16> member_types;
+            member_types.resize(n_fields);
+
+            for (int i = 0; i < n_fields; ++i) {
+                mdl::IType const   *m_type;
+                mdl::ISymbol const *m_sym;
+
+                s_type->get_field(i, m_type, m_sym);
+
+                member_types[i] = lookup_type(context, m_type);
+            }
+
+            llvm::Type *res = llvm::StructType::create(
+                context, member_types, s_name, /*isPacked=*/false);
+
+            m_type_struct_cache[s_name] = res;
+            return res;
+        }
+    case mdl::IType::TK_TEXTURE:
+    case mdl::IType::TK_BSDF_MEASUREMENT:
+        // handled as tags for now
+        return m_type_tag;
+    case mdl::IType::TK_INCOMPLETE:
+    case mdl::IType::TK_ERROR:
+        // should never be needed
+        MDL_ASSERT(!"requested error type");
+        return NULL;
+    }
+    MDL_ASSERT(!"Unsupported type");
+    return NULL;
+}
+
+// Checks if a given type needs reference return calling convention.
+bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
+{
+    type = type->skip_type_alias();
+    switch (type->get_kind()) {
+    case mi::mdl::IType::TK_ALIAS:
+        // should not happen
+        break;
+    case mi::mdl::IType::TK_BOOL:
+    case mi::mdl::IType::TK_INT:
+    case mi::mdl::IType::TK_ENUM:
+    case mi::mdl::IType::TK_FLOAT:
+    case mi::mdl::IType::TK_DOUBLE:
+        // all atomic
+        return false;
+    case mi::mdl::IType::TK_STRING:
+        // because we "known" all possible string literals in advance
+        // we use char * for strings, so it is atomic
+        return false;
+    case mi::mdl::IType::TK_LIGHT_PROFILE:
+    case mi::mdl::IType::TK_BSDF:
+    case mi::mdl::IType::TK_EDF:
+    case mi::mdl::IType::TK_VDF:
+        // returned as atomic tags
+        return false;
+    case mi::mdl::IType::TK_VECTOR:
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+            // returned as an array, needs reference
+            return true;
+        }
+        // else returned as a LLVM vector type
+        return false;
+    case mi::mdl::IType::TK_MATRIX:
+        if ((m_tm_mode & (TM_VECTOR_MASK|TM_BIG_VECTOR_RETURN)) ==
+            (TM_BIG_VECTORS|TM_BIG_VECTOR_RETURN))
+        {
+            // returned as a LLVM vector type
+            return false;
+        }
+        // else is either returned as an array, or the BE does not support returning big
+        // vectors, needs reference
+        return true;
+    case mi::mdl::IType::TK_ARRAY:
+        // use reference for arrays
+        return true;
+    case mi::mdl::IType::TK_COLOR:
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+            // returned as an array, needs reference
+            return true;
+        }
+        // else returned as a LLVM vector type
+        return false;
+    case mi::mdl::IType::TK_FUNCTION:
+        // should not happen
+        break;
+    case mi::mdl::IType::TK_STRUCT:
+        // return structs by value
+        return false;
+    case mi::mdl::IType::TK_TEXTURE:
+    case mi::mdl::IType::TK_BSDF_MEASUREMENT:
+        // returned as atomic tags
+        return false;
+    case mi::mdl::IType::TK_INCOMPLETE:
+    case mi::mdl::IType::TK_ERROR:
+        // should not happen
+        break;
+    }
+    MDL_ASSERT(!"Unexpected type kind");
+    return false;
+}
+
+// Check if the given parameter type must be passed by reference.
+bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type) const
+{
+restart:
+    switch (type->get_kind()) {
+    case mi::mdl::IType::TK_ALIAS:
+        {
+            mi::mdl::IType_alias const *a_type = cast<mi::mdl::IType_alias>(type);
+            type = a_type->get_aliased_type();
+            goto restart;
+        }
+    case mi::mdl::IType::TK_BOOL:
+    case mi::mdl::IType::TK_INT:
+    case mi::mdl::IType::TK_ENUM:
+    case mi::mdl::IType::TK_FLOAT:
+    case mi::mdl::IType::TK_DOUBLE:
+        // simple atomic types, pass by value
+        return false;
+    case mi::mdl::IType::TK_STRING:
+        // only string literals represented by C-strings, pass by value
+        return false;
+    case mi::mdl::IType::TK_LIGHT_PROFILE:
+    case mi::mdl::IType::TK_BSDF:
+    case mi::mdl::IType::TK_EDF:
+    case mi::mdl::IType::TK_VDF:
+        // pass tags by value
+        return false;
+    case mi::mdl::IType::TK_VECTOR:
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+            // returned as an array, needs reference
+            return true;
+        }
+        // else represented by LLVM vector types, pass by value
+        return false;
+    case mi::mdl::IType::TK_MATRIX:
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_BIG_VECTORS) {
+            // represented by LLVM vector types, pass by value
+            return false;
+        }
+        // else represented by LLVM array types, pass by reference
+        return true;
+    case mi::mdl::IType::TK_ARRAY:
+        // try by reference to safe memory and CPU cycles
+        return true;
+    case mi::mdl::IType::TK_COLOR:
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+            // represented by LLVM array type, needs reference
+            return true;
+        }
+        // else represented by a LLVM vector type, pass by value
+        return false;
+    case mi::mdl::IType::TK_FUNCTION:
+        MDL_ASSERT(!"unhandled function type");
+        return false;
+    case mi::mdl::IType::TK_STRUCT:
+        // pass by reference if possible, let LLVM decide
+        return true;
+    case mi::mdl::IType::TK_TEXTURE:
+    case mi::mdl::IType::TK_BSDF_MEASUREMENT:
+        // pass tags by value
+        return false;
+    case mi::mdl::IType::TK_INCOMPLETE:
+        MDL_ASSERT(!"incomplete type occured");
+        return false;
+    case mi::mdl::IType::TK_ERROR:
+        MDL_ASSERT(!"error type occured");
+        return false;
+    }
+    MDL_ASSERT(!"unsupported type kind");
+    return false;
+}
+
+// Get a pointer type from a base type.
+llvm::PointerType *Type_mapper::get_ptr(llvm::Type *type)
+{
+    // use default memory space
+    return llvm::PointerType::get(type, 0);
+}
+
+// Get the LLVM State * type for the given state context.
+llvm::PointerType *Type_mapper::get_state_ptr_type(
+    State_subset_mode mode)
+{
+    switch (mode) {
+    case SSM_NO_STATE:
+        MDL_ASSERT(!"state type should not be requested in empty state mode");
+        return NULL;
+
+    case SSM_ENVIRONMENT:
+        return m_type_state_environment_ptr;
+
+    case SSM_CORE:
+        return m_type_state_core_ptr;
+
+    case SSM_FULL_SET:
+        // FIXME: no bigger set available yet
+        return m_type_state_core_ptr;
+    }
+    MDL_ASSERT(!"unsupported state subset");
+    return NULL;
+}
+
+// Get the Optix rti_internal_typeinfo::rti_typeinfo type.
+llvm::StructType *Type_mapper::get_optix_typeinfo_type()
+{
+    if (m_type_optix_type_info == NULL) {
+        /*
+        struct rti_typeinfo {
+            unsigned int kind;
+            unsigned int size;
+        };
+        */
+        llvm::Type *members[] = {
+            m_type_int,
+            m_type_int
+        };
+
+        m_type_optix_type_info = llvm::StructType::create(
+            m_context, members, "rti_internal_typeinfo::rti_typeinfo", /*is_packed=*/false);
+    }
+    return m_type_optix_type_info;
+}
+
+// Get the debug info type for an MDL type.
+llvm::DIType Type_mapper::get_debug_info_type(
+    llvm::DIBuilder      *diBuilder,
+    llvm::DIDescriptor   scope,
+    mi::mdl::IType const *type) const
+{
+    switch (type->get_kind()) {
+    case mi::mdl::IType::TK_ALIAS:
+        {
+            mi::mdl::IType_alias const *a_tp = cast<mi::mdl::IType_alias>(type);
+            mi::mdl::IType const       *d_tp = a_tp->get_aliased_type();
+
+            llvm::DIType di_type = get_debug_info_type(diBuilder, scope, d_tp);
+
+            // Note: LLVM 3.3 does not handle typedefs well, so do not try to generate them
+            return di_type;
+
+            mi::mdl::IType::Modifiers mod = a_tp->get_type_modifiers();
+            if (mod == 0)
+                return di_type;
+
+            if (mod & mi::mdl::IType::MK_CONST)
+                di_type = diBuilder->createQualifiedType(llvm::dwarf::DW_TAG_const_type, di_type);
+
+            // FIXME: handle uniform and varying
+            return diBuilder->createQualifiedType(llvm::dwarf::DW_TAG_typedef, di_type);
+        }
+
+    case mi::mdl::IType::TK_BOOL:
+        return diBuilder->createBasicType(
+            "bool",
+            /*SizeInBits=*/m_type_bool->getBitWidth(),
+            /*AlignInBits=*/8,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_INT:
+        return diBuilder->createBasicType(
+            "int",
+            /*SizeInBits=*/m_type_int->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_signed);
+
+    case mi::mdl::IType::TK_ENUM:
+        {
+            mi::mdl::IType_enum const *e_type = cast<mi::mdl::IType_enum>(type);
+
+            MISTD::vector<llvm::Value *> enumeratorDescriptors;
+            for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
+                mi::mdl::ISymbol const *sym;
+                int                    code;
+
+                e_type->get_value(i, sym, code);
+
+                llvm::Value *descriptor = diBuilder->createEnumerator(sym->get_name(), code);
+                enumeratorDescriptors.push_back(descriptor);
+            }
+            llvm::DIArray elementArray = diBuilder->getOrCreateArray(enumeratorDescriptors);
+
+            // FIXME: get the type position here
+            int start_pos = 0;
+
+            llvm::DIFile diFile;
+
+            return diBuilder->createEnumerationType(
+                scope,
+                e_type->get_symbol()->get_name(),
+                diFile,
+                start_pos,
+                /*SizeInBits=*/m_type_int->getBitWidth(),
+                /*AlignInBits=*/32,
+                elementArray,
+                /*UnderlyingType=*/llvm::DIType()
+            );
+        }
+
+    case mi::mdl::IType::TK_FLOAT:
+        return diBuilder->createBasicType(
+            "float",
+            /*SizeInBits=*/m_type_float->getPrimitiveSizeInBits(),
+            /*AlignInBits=*/m_type_float->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_float);
+
+    case mi::mdl::IType::TK_DOUBLE:
+        return diBuilder->createBasicType(
+            "double",
+            /*SizeInBits=*/m_type_double->getPrimitiveSizeInBits(),
+            /*AlignInBits=*/m_type_double->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_float);
+
+    case mi::mdl::IType::TK_STRING:
+        return diBuilder->createBasicType(
+            "string",
+            /*SizeInBits=*/m_type_cstring->getPrimitiveSizeInBits(),
+            /*AlignInBits=*/m_type_cstring->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_LIGHT_PROFILE:
+        return diBuilder->createBasicType(
+            "light_profile",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_BSDF:
+        return diBuilder->createBasicType(
+            "bsdf",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_EDF:
+        return diBuilder->createBasicType(
+            "edf",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_VDF:
+        return diBuilder->createBasicType(
+            "vdf",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_VECTOR:
+        {
+            mi::mdl::IType_vector const *v_tp = cast<mi::mdl::IType_vector>(type);
+            mi::mdl::IType const        *e_tp = v_tp->get_element_type();
+            int                         size  = v_tp->get_size();
+
+            llvm::DIType eltType   = get_debug_info_type(diBuilder, scope, e_tp);
+            llvm::Value  *sub      = diBuilder->getOrCreateSubrange(0, size - 1);
+            llvm::DIArray subArray = diBuilder->getOrCreateArray(sub);
+
+            uint64_t sizeBits = eltType.getSizeInBits() * size;
+            uint64_t align    = eltType.getAlignInBits();
+
+            return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
+        }
+
+    case mi::mdl::IType::TK_MATRIX:
+        {
+            mi::mdl::IType_matrix const *m_tp = cast<mi::mdl::IType_matrix>(type);
+            mi::mdl::IType const        *e_tp = m_tp->get_element_type();
+            int                         cols  = m_tp->get_columns();
+
+            llvm::DIType eltType   = get_debug_info_type(diBuilder, scope, e_tp);
+            llvm::Value  *sub      = diBuilder->getOrCreateSubrange(0, cols - 1);
+            llvm::DIArray subArray = diBuilder->getOrCreateArray(sub);
+
+            uint64_t sizeBits = eltType.getSizeInBits() * cols;
+            uint64_t align    = eltType.getAlignInBits();
+
+            return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
+        }
+
+    case mi::mdl::IType::TK_ARRAY:
+        {
+            mi::mdl::IType_array const *a_type = cast<mi::mdl::IType_array>(type);
+            mi::mdl::IType const       *e_type = a_type->get_element_type();
+
+            llvm::DIType eltType = get_debug_info_type(diBuilder, scope, e_type);
+
+            int lowerBound, upperBound;
+            unsigned count = 0;
+            if (a_type->is_immediate_sized()) {
+                count      = a_type->get_size();
+                lowerBound = 0;
+                upperBound = (int)count - 1;
+            } else {
+                // deferred size array -> indicate with low > high
+                lowerBound = 1;
+                upperBound = 0;
+            }
+
+            llvm::Value *sub = diBuilder->getOrCreateSubrange(lowerBound, upperBound);
+            MISTD::vector<llvm::Value *> subs;
+            subs.push_back(sub);
+            llvm::DIArray subArray = diBuilder->getOrCreateArray(subs);
+
+            uint64_t size  = eltType.getSizeInBits() * count;
+            uint64_t align = eltType.getAlignInBits();
+
+            return diBuilder->createArrayType(size, align, eltType, subArray);
+        }
+
+    case mi::mdl::IType::TK_COLOR:
+        {
+            // modell as <3 * float>
+            llvm::DIType eltType =
+                diBuilder->createBasicType(
+                    "float",
+                    /*SizeInBits=*/m_type_float->getPrimitiveSizeInBits(),
+                    /*AlignInBits=*/m_type_float->getPrimitiveSizeInBits(),
+                    llvm::dwarf::DW_ATE_float);
+
+            llvm::Value  *sub      = diBuilder->getOrCreateSubrange(0, 3 - 1);
+            llvm::DIArray subArray = diBuilder->getOrCreateArray(sub);
+
+            uint64_t sizeBits = eltType.getSizeInBits() * 3;
+            uint64_t align    = eltType.getAlignInBits();
+
+            return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
+        }
+
+    case mi::mdl::IType::TK_FUNCTION:
+        break;
+
+    case mi::mdl::IType::TK_STRUCT:
+        {
+            mi::mdl::IType_struct const *s_tp = cast<mi::mdl::IType_struct>(type);
+
+            MISTD::vector<llvm::Value *> field_types;
+            uint64_t currentSize = 0, align = 0;
+
+            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                mi::mdl::IType const   *f_tp;
+                mi::mdl::ISymbol const *f_sym;
+
+                s_tp->get_field(i, f_tp, f_sym);
+
+                llvm::DIType eltType = get_debug_info_type(diBuilder, scope, f_tp);
+                uint64_t eltAlign = eltType.getAlignInBits();
+                uint64_t eltSize = eltType.getSizeInBits();
+                MDL_ASSERT(eltAlign != 0);
+
+                // The alignment for the entire structure is the maximum of the
+                // required alignments of its elements
+                align = MISTD::max(align, eltAlign);
+
+                // Move the current size forward if needed so that the current
+                // element starts at an offset that's the correct alignment.
+                if (currentSize > 0 && (currentSize % eltAlign) != 0)
+                    currentSize += eltAlign - (currentSize % eltAlign);
+                MDL_ASSERT((currentSize == 0) || (currentSize % eltAlign) == 0);
+
+                // FIXME: position of the fields
+                llvm::DIFile diFile;
+                int line = 0;
+
+                llvm::DIType fieldType = diBuilder->createMemberType(
+                    scope,
+                    f_sym->get_name(),
+                    diFile,
+                    line,
+                    eltSize,
+                    eltAlign,
+                    currentSize,
+                    /*Flags=*/0,
+                    eltType);
+                field_types.push_back(fieldType);
+
+                currentSize += eltSize;
+            }
+            // Round up the struct's entire size so that it's a multiple of the
+            // required alignment that we figured out along the way...
+            if (currentSize > 0 && (currentSize % align) != 0)
+                currentSize += align - (currentSize % align);
+
+            llvm::DIArray elements = diBuilder->getOrCreateArray(field_types);
+
+            // FIXME: position of the struct
+            llvm::DIFile diFile;
+            int start_pos = 0;
+
+            return diBuilder->createStructType(
+                scope,
+                s_tp->get_symbol()->get_name(),
+                diFile,
+                start_pos,
+                currentSize,
+                align,
+                /*Flags=*/0,
+                /*DerivedFrom=*/llvm::DIType(),
+                elements);
+        }
+
+    case mi::mdl::IType::TK_TEXTURE:
+        return diBuilder->createBasicType(
+            "texture",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_BSDF_MEASUREMENT:
+        return diBuilder->createBasicType(
+            "bsdf_measurement",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            /*AlignInBits=*/32,
+            llvm::dwarf::DW_ATE_unsigned);
+
+    case mi::mdl::IType::TK_INCOMPLETE:
+    case mi::mdl::IType::TK_ERROR:
+        // should not happen
+        break;
+    }
+    MDL_ASSERT(!"Unexpected type kind");
+    return llvm::DIType();
+}
+
+// Get the debug info type for an MDL function type.
+llvm::DICompositeType Type_mapper::get_debug_info_type(
+    llvm::DIBuilder               *diBuilder,
+    llvm::DIFile                  scope,
+    mi::mdl::IType_function const *func_tp) const
+{
+    MISTD::vector<llvm::Value *> signature_types;
+
+    signature_types.push_back(
+        get_debug_info_type(diBuilder, scope, func_tp->get_return_type()));
+    for (int i = 0, n = func_tp->get_parameter_count(); i < n; ++i) {
+        mi::mdl::IType const   *p_tp;
+        mi::mdl::ISymbol const *p_sym;
+
+        func_tp->get_parameter(i, p_tp, p_sym);
+        signature_types.push_back(get_debug_info_type(diBuilder, scope, p_tp));
+    }
+
+    llvm::DIArray signature_types_array =
+        diBuilder->getOrCreateArray(llvm::ArrayRef<llvm::Value *>(signature_types));
+    return diBuilder->createSubroutineType(scope, signature_types_array);
+}
+
+// Construct the State type for the environment context.
+llvm::StructType *Type_mapper::construct_state_environment_type(
+    llvm::LLVMContext      &context,
+    llvm::DataLayout const *data_layout,
+    llvm::Type             *float3_type,
+    unsigned               state_mapping)
+{
+    llvm::Type *members[] = {
+        float3_type,        // direction
+    };
+
+    llvm::StructType *res = llvm::StructType::create(
+        context, members, "State_environment", /*is_packed=*/false);
+
+#if defined(DEBUG) || defined(ENABLE_ASSERT)
+    {
+        // check struct layout offsets and size
+        // must match between LLVM layout and C++ layout from the native
+        // compiler
+
+        typedef mi::mdl::Shading_state_environment State;
+        llvm::StructLayout const *sl = data_layout->getStructLayout(res);
+        MDL_ASSERT(sl->getSizeInBytes() ==
+            sizeof(State));
+        MDL_ASSERT(sl->getElementOffset(get_state_index(STATE_ENV_DIRECTION, state_mapping)) ==
+            offsetof(State, direction));
+    }
+#endif
+    return res;
+}
+
+// Construct the State type for the iray core context.
+llvm::StructType *Type_mapper::construct_state_core_type(
+    llvm::LLVMContext      &context,
+    llvm::DataLayout const *data_layout,
+    llvm::Type             *int_type,
+    llvm::Type             *float3_type,
+    llvm::Type             *float4_type,
+    llvm::Type             *float_type,
+    llvm::Type             *byte_ptr_type,
+    unsigned               state_mapping)
+{
+    llvm::StructType *res = NULL;
+
+    if (state_mapping & SM_USE_BITANGENT) {
+        llvm::Type *members[] = {
+            float3_type,          // normal
+            float3_type,          // geom_normal
+            float3_type,          // position
+            float_type,           // animation time
+            get_ptr(float3_type), // texture_coordinate(index)
+            get_ptr(float4_type), // tangents_bitangentssign(index)
+            get_ptr(float4_type), // texture_results
+            byte_ptr_type,        // read-only data segment
+
+            get_ptr(float4_type), // world-to-object transform matrix
+            get_ptr(float4_type), // object-to-world transform matrix
+            int_type,             // state::object_id() result
+        };
+
+        res = llvm::StructType::create(
+            context, members, "State_core", /*is_packed=*/false);
+    } else {
+        llvm::Type *members[] = {
+            float3_type,          // normal
+            float3_type,          // geom_normal
+            float3_type,          // position
+            float_type,           // animation time
+            get_ptr(float3_type), // texture_coordinate(index)
+            get_ptr(float3_type), // tangent_u(index)
+            get_ptr(float3_type), // tangent_v(index)
+            get_ptr(float4_type), // texture_results
+            byte_ptr_type,        // read-only data segment
+
+            get_ptr(float4_type), // world-to-object transform matrix
+            get_ptr(float4_type), // object-to-world transform matrix
+            int_type,             // state::object_id() result
+        };
+
+        res = llvm::StructType::create(
+            context, members, "State_core", /*is_packed=*/false);
+    }
+
+#if defined(DEBUG) || defined(ENABLE_ASSERT)
+    {
+        // check struct layout offsets and size
+        // must match between LLVM layout and C++ layout from the native
+        // compiler
+
+        // MDL SDK state
+        struct SDK_State {
+            Float3_struct       normal;                   ///< state::normal() result
+            Float3_struct       geom_normal;              ///< state::geom_normal() result
+            Float3_struct       position;                 ///< state::position() result
+            float               animation_time;           ///< state::animation_time() result
+            Float3_struct const *text_coords;             ///< state::texture_coordinate() result
+            Float3_struct const *tangent_u;               ///< state::texture_tangent_u() data
+            Float3_struct const *tangent_v;               ///< state::texture_tangent_u() data
+            Float4_struct const *text_results;            ///< texture results lookup table
+            unsigned char const *ro_data_segment;         ///< read only data segment
+
+            // these fields are used only if the uniform state is included
+            Float4_struct const *world_to_object;         ///< world-to-object transform matrix
+            Float4_struct const *object_to_world;         ///< object-to-world transform matrix
+            int                 object_id;                ///< state::object_id() result
+        };
+
+        // IRAY SDK state
+        typedef mi::mdl::Shading_state_material_bitangent IRAY_State;
+
+        llvm::StructLayout const *sl = data_layout->getStructLayout(res);
+        if (state_mapping & SM_USE_BITANGENT) {
+            MDL_ASSERT(sl->getSizeInBytes() == sizeof(IRAY_State));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_NORMAL, state_mapping))
+                == offsetof(IRAY_State, normal));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_GEOMETRY_NORMAL, state_mapping))
+                == offsetof(IRAY_State, geom_normal));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_POSITION, state_mapping))
+                == offsetof(IRAY_State, position));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TEXTURE_COORDINATE, state_mapping))
+                == offsetof(IRAY_State, text_coords));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_BITANGENTS, state_mapping))
+                == offsetof(IRAY_State, tangents_bitangentssign));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TEXT_RESULTS, state_mapping))
+                == offsetof(IRAY_State, text_results));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_ANIMATION_TIME, state_mapping))
+                == offsetof(IRAY_State, animation_time));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_RO_DATA_SEG, state_mapping))
+                == offsetof(IRAY_State, ro_data_segment));
+
+            if (state_mapping & SM_INCLUDE_UNIFORM_STATE) {
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_W2O_TRANSFORM, state_mapping))
+                    == offsetof(IRAY_State, world_to_object));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_O2W_TRANSFORM, state_mapping))
+                    == offsetof(IRAY_State, object_to_world));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_OBJECT_ID, state_mapping))
+                    == offsetof(IRAY_State, object_id));
+            }
+        } else {
+            MDL_ASSERT(sl->getSizeInBytes() == sizeof(SDK_State));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_NORMAL, state_mapping))
+                == offsetof(SDK_State, normal));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_GEOMETRY_NORMAL, state_mapping))
+                == offsetof(SDK_State, geom_normal));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_POSITION, state_mapping))
+                == offsetof(SDK_State, position));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TEXTURE_COORDINATE, state_mapping))
+                == offsetof(SDK_State, text_coords));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TANGENT_U, state_mapping))
+                == offsetof(SDK_State, tangent_u));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TANGENT_V, state_mapping))
+                == offsetof(SDK_State, tangent_v));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_TEXT_RESULTS, state_mapping))
+                == offsetof(SDK_State, text_results));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_ANIMATION_TIME, state_mapping))
+                == offsetof(SDK_State, animation_time));
+            MDL_ASSERT(
+                sl->getElementOffset(get_state_index(STATE_CORE_RO_DATA_SEG, state_mapping))
+                == offsetof(SDK_State, ro_data_segment));
+
+            if (state_mapping & SM_INCLUDE_UNIFORM_STATE) {
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_W2O_TRANSFORM, state_mapping))
+                    == offsetof(SDK_State, world_to_object));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_O2W_TRANSFORM, state_mapping))
+                    == offsetof(SDK_State, object_to_world));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_OBJECT_ID, state_mapping))
+                    == offsetof(SDK_State, object_id));
+            }
+        }
+    }
+#endif
+    return res;
+}
+
+// Construct the exception state type.
+llvm::StructType *Type_mapper::construct_exception_state_type(
+    llvm::LLVMContext &context,
+    llvm::Type        *void_ptr_type,
+    llvm::Type        *atom32_type)
+{
+    llvm::Type *members[] = {
+        void_ptr_type,        // exception-handler
+        get_ptr(atom32_type)  // abort destination
+    };
+
+    return llvm::StructType::create(context, members, "Exception_state", /*is_packed=*/false);
+}
+
+// Construct the Res_data_pair type.
+llvm::StructType *Type_mapper::construct_res_data_pair_type(
+    llvm::LLVMContext      &context,
+    llvm::DataLayout const *data_layout,
+    llvm::Type             *void_ptr_type)
+{
+    llvm::Type *members[] = {
+        void_ptr_type,        // shared data
+        void_ptr_type         // thread data
+    };
+
+    llvm::StructType *res =
+        llvm::StructType::create(context, members, "Res_data_pair", /*is_packed=*/false);
+
+#if defined(DEBUG) || defined(ENABLE_ASSERT)
+    {
+        // check struct layout offsets and size
+        // must match between LLVM layout and C++ layout from the native
+        // compiler
+
+        typedef mi::mdl::Generated_code_lambda_function::Res_data_pair Pair;
+        llvm::StructLayout const *sl = data_layout->getStructLayout(res);
+        MDL_ASSERT(sl->getSizeInBytes() ==
+            sizeof(Pair));
+        MDL_ASSERT(sl->getElementOffset(RDP_SHARED_DATA) ==
+            offsetof(Pair, m_shared_data));
+        MDL_ASSERT(sl->getElementOffset(RDP_THREAD_DATA) ==
+            offsetof(Pair, m_thread_data));
+    }
+#endif
+
+    return res;
+}
+
+// Construct the texture handler vtable type.
+llvm::StructType *Type_mapper::construct_core_texture_handler_type(
+    llvm::LLVMContext &context)
+{
+    llvm::StructType *self_type      = llvm::StructType::create(context, "Core_tex_handler");
+    llvm::Type *self_ptr_type        = get_ptr(self_type);
+    llvm::Type *void_type            = get_void_type();
+    llvm::Type *arr_float_2_ptr_type = get_arr_float_2_ptr_type();
+    llvm::Type *arr_float_4_ptr_type = get_arr_float_4_ptr_type();
+    llvm::Type *arr_float_3_ptr_type = get_arr_float_3_ptr_type();
+    llvm::Type *arr_int_2_ptr_type   = get_arr_int_2_ptr_type();
+    llvm::Type *arr_int_3_ptr_type   = get_arr_int_3_ptr_type();
+    llvm::Type *int_type             = get_int_type();
+
+    llvm::FunctionType *tex_lookup_float4_2d_type   = NULL;
+    llvm::FunctionType *tex_lookup_float3_2d_type   = NULL;
+    llvm::FunctionType *tex_texel_float4_2d_type    = NULL;
+    llvm::FunctionType *tex_lookup_float4_3d_type   = NULL;
+    llvm::FunctionType *tex_lookup_float3_3d_type   = NULL;
+    llvm::FunctionType *tex_texel_float4_3d_type    = NULL;
+    llvm::FunctionType *tex_lookup_float4_cube_type = NULL;
+    llvm::FunctionType *tex_lookup_float3_cube_type = NULL;
+    llvm::FunctionType *tex_resolution_2d_type      = NULL;
+
+    {
+        // virtual void tex_lookup_<T>_2d(
+        //     T                result,
+        //     Core_tex_handler *self,
+        //     unsigned         texture,
+        //     float const      coord[2],
+        //     MDL_wrap_mode    wrap_u,
+        //     MDL_wrap_mode    wrap_v,
+        //     float const      crop_u[2],
+        //     float const      crop_v[2]) const = 0;
+
+        llvm::Type *args[] = {
+            NULL,                   // T
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type,
+            int_type,
+            int_type,
+            arr_float_2_ptr_type,
+            arr_float_2_ptr_type
+        };
+
+        args[0] = arr_float_4_ptr_type;
+        tex_lookup_float4_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+
+        args[0] = arr_float_3_ptr_type;
+        tex_lookup_float3_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_texel_float4_2d(
+        //     T                result,
+        //     Core_tex_handler *self,
+        //     unsigned         texture,
+        //     int const        coord[2],
+        //     int const        uv_tile[2]) const = 0;
+
+        llvm::Type *args[] = {
+            arr_float_4_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_int_2_ptr_type,
+            arr_int_2_ptr_type
+        };
+
+        tex_texel_float4_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_lookup_<T>_3d(
+        //     T                      result,
+        //     Core_tex_handler const *self,
+        //     unsigned               texture_idx,
+        //     float const            coord[3],
+        //     tex_wrap_mode const    wrap_u,
+        //     tex_wrap_mode const    wrap_v,
+        //     tex_wrap_mode const    wrap_w,
+        //     float const            crop_u[2],
+        //     float const            crop_v[2],
+        //     float const            crop_w[2]);
+
+        llvm::Type *args[] = {
+            NULL,                   // T
+            self_ptr_type,
+            int_type,
+            arr_float_3_ptr_type,
+            int_type,
+            int_type,
+            int_type,
+            arr_float_2_ptr_type,
+            arr_float_2_ptr_type,
+            arr_float_2_ptr_type
+        };
+
+        args[0] = arr_float_4_ptr_type;
+        tex_lookup_float4_3d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+
+        args[0] = arr_float_3_ptr_type;
+        tex_lookup_float3_3d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_texel_float4_3d(
+        //     float                  result[4],
+        //     Core_tex_handler const *self,
+        //     unsigned               texture_idx,
+        //     int const              coord[3]);
+
+        llvm::Type *args[] = {
+            arr_float_4_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_int_3_ptr_type
+        };
+
+        tex_texel_float4_3d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_lookup_float4_cube(
+        //     float                  result[4],
+        //     Core_tex_handler const *self,
+        //     unsigned               texture_idx,
+        //     float const            coord[3]);
+
+        llvm::Type *args[] = {
+            arr_float_4_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_3_ptr_type
+        };
+
+        tex_lookup_float4_cube_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+    {
+        // virtual void tex_lookup_float3_cube(
+        //     float                  result[3],
+        //     Core_tex_handler const *self,
+        //     unsigned               texture_idx,
+        //     float const            coord[3]);
+
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_3_ptr_type
+        };
+
+        tex_lookup_float3_cube_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_resolution_2d(
+        //     int              result[2],
+        //     Core_tex_handler *self,
+        //     unsigned         texture,
+        //     int const        uv_tile[2]);
+
+        llvm::Type *args[] = {
+            arr_int_2_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_int_2_ptr_type
+        };
+
+        tex_resolution_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    // currently we support only these
+    llvm::Type *vtable_members[] = {
+        get_ptr(tex_lookup_float4_2d_type),
+        get_ptr(tex_lookup_float3_2d_type),
+        get_ptr(tex_texel_float4_2d_type),
+        get_ptr(tex_lookup_float4_3d_type),
+        get_ptr(tex_lookup_float3_3d_type),
+        get_ptr(tex_texel_float4_3d_type),
+        get_ptr(tex_lookup_float4_cube_type),
+        get_ptr(tex_lookup_float3_cube_type),
+        get_ptr(tex_resolution_2d_type)
+    };
+
+    llvm::StructType *vtable_type =
+        llvm::StructType::create(context, vtable_members, "Core_th_vtable", /*is_packed=*/false);
+
+    // the texture handler interface has only the vtable
+     llvm::Type *members[] = {
+         get_ptr(vtable_type)
+     };
+
+     self_type->setBody(members, /*is_packed=*/false);
+     return self_type;
+}
+
+// Construct the texture attribute entry type.
+llvm::StructType *Type_mapper::construct_texture_attribute_entry_type(
+    llvm::LLVMContext &context)
+{
+    llvm::Type *members[] = {
+        m_type_bool,
+        m_type_int,
+        m_type_int,
+        m_type_int
+    };
+
+    return llvm::StructType::create(
+        context, members, "Texture_attribute_entry", /*is_packed=*/false);
+}
+
+// Construct the light profile attribute entry type.
+llvm::StructType *Type_mapper::construct_light_profile_attribuute_entry_type(
+    llvm::LLVMContext &context)
+{
+    llvm::Type *members[] = {
+        m_type_bool,
+        m_type_float,
+        m_type_float
+    };
+
+    return llvm::StructType::create(
+        context, members, "Light_profile_attribute_entry", /*is_packed=*/false);
+}
+
+// Construct the bsdf measurement attribute entry type.
+llvm::StructType *Type_mapper::construct_bsdf_measurement_attribuute_entry_type(
+    llvm::LLVMContext &context)
+{
+    llvm::Type *members[] = {
+        m_type_bool
+    };
+
+    return llvm::StructType::create(
+        context, members, "Bsdf_measurement_attribute_entry", /*is_packed=*/false);
+}
+
+}  // mdl
+}  // mi

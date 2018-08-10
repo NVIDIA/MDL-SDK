@@ -1,0 +1,57 @@
+/******************************************************************************
+ * Copyright (c) 2009-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_api_components API components
+
+The functionality offered by the \neurayApiName is split into so-called API components. Each
+component gives access to some aspect of the \neurayApiName. The basic interface
+#mi::neuraylib::INeuray gives access to these API components via
+its \c get_api_component() methods.
+
+This page here lists all API components. Note that some API components are always available (e.g.,
+configuration interfaces), while other API components might only available while \neurayProductName
+is running.
+
+<table>
+  <tr><th>Interface                                </th><th>always available</th></tr>
+  <tr><td>#mi::neuraylib::IDatabase                </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IDebug_configuration     </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IFactory                 </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IImage_api               </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdl_archive_api         </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdl_compiler            </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IMdl_discovery_api       </td><td>yes</td></tr>
+\if  MDL_BIN_RELEASE
+  <tr><td>#mi::neuraylib::IMdl_distiller_api       </td><td>yes</td></tr>
+\endif
+  <tr><td>#mi::neuraylib::IMdl_evaluator_api       </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IMdl_factory             </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IVersion                 </td><td>yes</td></tr>
+</table>
+
+*/

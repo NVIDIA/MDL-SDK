@@ -1,0 +1,136 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_cuda_shared The Material_ptx_compiler helper class
+
+<div align="right">
+    [\link mi_mdl_core_example_shared Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_calls Next\endlink]
+</div>
+
+This page explains the Material_ptx_compiler helper class.
+
+\section example_cuda_shared_new New Topics
+
+  - The Material_ptx_compiler helper class
+  - Configuration of the JIT backend
+  - Resource management
+  - Adding material subexpressions to the link unit
+  - Adding distribution functions to the link unit
+  - Generating the CUDA PTX code
+
+\section example_cuda_shared_descr Detailed Description
+
+<dl>
+<dt><b>The Material_ptx_compiler helper class</b></dt>
+<dd>
+The purpose of the \c Material_ptx_compiler helper class is to simplify the use of the \MDLCoreApiName when compiling MDL materials into executable CUDA PTX code by providing some of the functionality of the MDL SDK API.
+The compilation to the DAG representation is handled by the base class \c Material_compiler explained in \ref mi_mdl_core_example_shared.
+The compilation from the DAG representation to CUDA PTX code is handled by the JIT backend obtained from IMDL::load_code_generator("jit").
+</dd>
+
+<dt><b>Configuration of the JIT backend</b></dt>
+<dd>
+The options of the JIT backend can be accessed via ICode_generator_jit::access_options().
+For the examples, we set these options:
+ - \c MDL_JIT_OPTION_ENABLE_RO_SEGMENT: We enable this option to avoid large arrays to be dumped as PTX code, slowing down the compilation.
+ - \c MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE: Instead of the default \c "vtable" mode, using a table of function pointers to the user provided texture runtime, we use the \c "direct_call" mode, where the texture runtime functions are called by name.
+   As this avoids a pointer indirection, it is slightly faster.
+ - \c MDL_JIT_OPTION_MAP_STRINGS_TO_IDS: We enable using string IDs to allow changing string material parameters at runtime without knowing the pointers of the strings on the GPU.
+
+Next we create an ILink_unit via ICode_generator_jit::create_link_unit() for a \c sm_30 PTX target (where the \c enable_simd option is ignored), with one texture space and a renderer specific number of texture result slots, where intermediate results for BSDF evaluation will be stored.
+The link unit will be used to add one or more material subexpressions or distribution functions and then to compile the link unit to PTX code and collect the resources required by the code.
+</dd>
+
+<dt><b>Resource management</b></dt>
+<dd>
+While processing DAG nodes of a material instance, the compiler may encounter resources, for which it has to generate IDs for either hardcoding them into the generated code or for using the values for target argument blocks when using class-compilation.
+With the \MDLCoreApiName, the mapping of IValue_resource objects to such IDs has to be managed by you.
+ID zero should be reserved for the invalid resource of the corresponding type.
+As the IDs will also be used as an index into an internal attribute table per resource type by the generated code, the IDs should be continuous and start by 0.
+
+In the examples, we use a helper class \c Resource_collection
+ - for collecting and loading resources used by MDL expressions via the ILambda_resource_enumerator interface and registering the resulting IDs with a ILambda_function and
+ - for providing resource IDs for target argument blocks via the IGenerated_code_value_callback.
+For loading texture resources, the examples use the \c Texture_data helper class, which accesses the image file data via an IEntity_resolver obtained from IMDL::create_entity_resolver() and uses the FreeImage library for retrieving image meta information and image data.
+</dd>
+
+<dt><b>Adding material subexpressions to the link unit</b></dt>
+<dd>
+The \c Material_ptx_compiler::add_material_subexpr() function allows to add subexpressions of a material for code generation to the link unit.
+The \link ILink_unit::add(ILambda_function const *, ICall_name_resolver const *, Function_kind, size_t *) ILink_unit::add() \endlink expects an ILambda_function as a parameter which represents such MDL expressions.
+To create a lambda function, we need a material instance of the requested material and the DAG node for the requested path starting at the constructor node of the material.
+
+When creating the ILambda_function object, an ILambda_function::Lambda_execution_context must be provided.
+This context specifies the meaning of internal_space when creating or importing new DAG nodes inside the lambda function.
+For environment and displacement contexts, all coordinate spaces are treated as equal.
+For the core context, the internal space is equal to the world space.
+
+We then have to declare the parameters of the lambda function and the mapping from the material instance to the lambda parameters.
+This information is needed by the next step, where a deep copy of the expression is created via ILambda_function::import_expr(), ensuring that all DAG nodes are owned by the lambda function.
+Now, the resulting node can be set as the body of the lambda function.
+
+Then, we use the resource collection to collect all resources used by the lambda function and additionally provide all resources from the default arguments of the material instance to the resource collection.
+
+Finally, we can add the lambda function to the link unit.
+</dd>
+
+<dt><b>Adding distribution functions to the link unit</b></dt>
+<dd>
+The \c Material_ptx_compiler::add_material_df() function is very similar to \c Material_ptx_compiler::add_material_subexpr() function, but adds a distribution function to the link unit.
+Internally, an IDistribution_function is split into a tree of pure distribution function nodes, the main lambda, and a set of non-distribution-function trees, the expression lambdas, which are either direct or indirect arguments for the distribution function nodes.
+Indirect arguments are material properties like \c thin_walled or \c ior which are implicitly used by some distribution functions like \c df::custom_curve_layer().
+The split into the main lambda and the expression lambdas is done by IDistribution_function::initialize().
+</dd>
+
+<dt><b>Generating the CUDA PTX code</b></dt>
+<dd>
+Once, all material expressions and distribution functions have been added to the link unit, we can use ICode_generator_jit::compile_unit() to compile it into an IGenerated_code_executable object.
+This object provides access to the generated source code, the read-only data segments, the components of the state actually used, the argument blocks used for class-compilation and all string constants used by the code.
+The used string constants are only available after code generation, because the translation of functions like \c debug::assert() may introduce new debug information strings not visible in the DAG representation.
+
+So, the \c Material_ptx_compiler::generated_cuda_ptx() function collects all string constants after compiling the link unit.
+Then, it initializes any argument blocks using the IGenerated_code_value_layout from the link unit in combination with the corresponding material instance.
+All information like generated source code and used resources is then returned in form of an instance of the \c Ptx_code helper class.
+</dd>
+</dl>
+
+<div align="right">
+    [\link mi_mdl_core_example_shared Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_calls Next\endlink]
+</div>
+
+*/
+
+}
+}

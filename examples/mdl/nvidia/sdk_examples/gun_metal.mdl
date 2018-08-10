@@ -1,0 +1,107 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.4;
+
+import df::*;
+import math::*;
+import base::*;
+import anno::*;
+
+export material gun_metal (
+    uniform color base_color  = color(0.08) 
+    [[ 
+        anno::display_name("Base color"),
+        anno::description("The base color of the material")
+    ]],
+    uniform float flake_amount        = .25         
+    [[ 
+        anno::display_name("Flake Amount"),
+        anno::soft_range(0.0, 1.0),
+        anno::description("The amount of metal flakes in the material")
+    ]],
+    uniform float particle_size = .1           
+    [[ 
+        anno::display_name("Particle Size"), 
+        anno::soft_range(0.0, 1.0),
+        anno::description("The size of the particles in millimeters. If the paticles don't appear "
+		"at all, check whether you are using the correct units in yout scene. The materials is built to "
+		"use meters as scene unit")
+    ]]
+) [[ 
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA corporation"),
+    anno::display_name("Gun Metal")
+]] = let
+{
+    color flake_color               = color(1,1,1);
+    float flake_intensity           = .8;
+    float flake_roughness           = .3;
+    float flake_bumpiness           = .25;
+	
+	// Scaling the particle size parameters to give the right average size of
+	// the particles in the render
+	uniform float flake_scale  = particle_size * 0.0008;
+	
+	float flake_amount_2 = math::lerp(0.2,0.6,flake_amount);
+    
+    base::texture_coordinate_info uvw = base::coordinate_source(coordinate_system: base::texture_coordinate_object);
+
+    bsdf flake = df::simple_glossy_bsdf(
+        roughness_u: flake_roughness,
+        tint: flake_color
+    );
+    
+    bsdf base = df::diffuse_reflection_bsdf (
+        tint: base_color * 0.2
+    );
+    
+    float3 flake_bump = base::flake_noise_bump_texture( 
+        uvw: uvw,
+        strength: flake_bumpiness,
+        scale: particle_size*flake_scale
+    );
+    
+    float flake_weight = base::flake_noise_texture( 
+        uvw: uvw,
+        intensity: flake_intensity,
+        scale: particle_size*flake_scale,
+        density: flake_amount_2
+    ).mono;
+    
+} in material (
+    surface: material_surface (
+        scattering: df::weighted_layer(
+                weight: flake_weight,
+                normal: flake_bump,
+                layer: flake,    
+                base: base
+        )
+    )
+);

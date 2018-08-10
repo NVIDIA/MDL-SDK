@@ -1,0 +1,161 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_start_shutdown Example for Starting and Shutting Down the \neurayApiName
+
+<div align="right">
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_modules Next\endlink]
+</div>
+
+This example accesses the main \neurayAdjectiveName interface, queries the version interface,
+prints some version information and then starts and shuts down the \neurayApiName. See the \ref 
+mi_neuray_getting_started Section for a description of how the example programs can be compiled.
+
+\section example_start_shutdown_new New Topics
+
+  - Naming conventions.
+  - Main include files.
+  - Main API access point.
+  - Interfaces and handles.
+  - Starting and shutting down the \neurayApiName.
+
+\section example_start_shutdown_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Naming conventions
+    </b></dt>
+    <dd><br>
+        \NeurayProductName is written in C++. It uses the #mi and #mi::neuraylib
+        namespaces for its own identifiers, or the MI_NEURAYLIB_ prefix for macros.
+
+        Multiple words are concatenated with \c _ to form identifiers. Function names are all lower
+        case, while types and classes start with one initial upper-case letter.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Main include files
+    </b></dt>
+    <dd><br>
+        The include file mi/mdl_sdk.h provides all the functionality of the \neurayApiName.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Main API access point
+    </b></dt>
+    <dd><br>
+        The #mi_factory() function is the only public access point to all algorithms and
+        data structures in the API (see \ref mi_neuray_design for an explanation why).
+        To obtain a pointer to the main interface #mi::neuraylib::INeuray, call this function
+        with the #mi::neuraylib::INeuray::IID() as its \c iid parameter. If no compatible
+        interface can be found in the library, a \c NULL pointer is returned. In this case,
+        you can use #mi::neuraylib::IVersion::IID() to request a #mi::neuraylib::IVersion
+        interface from the #mi_factory() for diagnostics.
+        The #mi::neuraylib::INeuray interface can only be accessed once per process.
+
+        Before you are able to call the #mi_factory() function, you need to load the
+        \neurayAdjectiveName DSO and to locate the factory function. The convenience function
+        \c load_and_get_ineuray() abstracts these platform-dependent steps.
+
+        Note that it is not required to use \c load_and_get_ineuray(). In particular in larger
+        setups you might want to write your own code to load the \neurayAdjectiveName DSO and to
+        locate the factory function. In such cases, you call #mi_factory() directly. For
+        simplicity, the examples will use the convenience function \c load_and_get_ineuray() instead
+        of #mi_factory().
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Interfaces and handles
+    </b></dt>
+    <dd><br>
+        Except for trivial classes, such as the math vector class, all classes in the
+        \neurayApiName are implemented using \e interfaces. See \ref mi_neuray_design
+        for an explanation. Interfaces are created and destroyed by the \neurayApiName.
+        They implement reference counting for life-time control and cheap copying operations.
+        Interface names start with an \c I prefix.
+
+        Whenever you do not need an interface any longer, you have to release it by calling
+        its \c release() method. Omitting such calls leads to memory leaks. To simplify your life
+        we provide a simple handle class #mi::base::Handle. This handle class maintains a
+        pointer semantic while supporting reference counting for interface pointers. For example,
+        the \c -> operator acts on the underlying interface pointer, which means that you can use
+        a handle to a particular interface pointer in a way very similar to the interface pointer
+        itself. The destructor calls \c release() on the interface pointer, copy constructor and
+        assignment operator take care of retaining and releasing the interface pointer as necessary.
+
+        Note that the handle class has two different constructors to deal with ownership of
+        the interface pointer. See the #mi::base::Handle documentation for details.
+
+        Note that it is also possible to use other handle class implementations, e.g.,
+        \c std::tr1::shared_ptr<T> (or \c boost::shared_ptr<T>). In case you prefer to use such
+        handle classes, you have to ensure that their destructor calls the \c release() method of
+        the interface pointer. This can be achieved by passing an appropriate argument as second
+        parameter, e.g.,
+        \code
+std::tr1::shared_ptr<T> p ( load_and_get_ineuray(), std::mem_fun (&T::release));
+        \endcode
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Starting and shutting down the \neurayApiName
+    </b></dt>
+    <dd><br>
+        The #mi::neuraylib::INeuray interface is used to start and shut down the \neurayApiName.
+        The API can only be used after it has been started (and before it has been shut down).
+        Startup does not happen during the #mi_factory() call because you might want to
+        configure the behavior of the API, which has to happen before startup.
+
+        The status of the API can be queried using the #mi::neuraylib::INeuray::get_status()
+        method.
+
+        Finally, you have to shut down the \neurayApiName. At this point, you should have released
+        all interface pointers except the pointer to the main #mi::neuraylib::INeuray interface.
+        If you are using the handle class, make sure that all handles have gone out of scope.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_start_shutdown Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/shared/example_shared.h</tt>
+
+\include shared/example_shared.h
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/start_shutdown/example_start_shutdown.cpp</tt>
+
+\include start_shutdown/example_start_shutdown.cpp
+
+<div align="right">
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_modules Next\endlink]
+</div>
+
+*/

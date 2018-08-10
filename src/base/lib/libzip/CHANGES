@@ -1,0 +1,7 @@
+
+Changes from NVIDIA compared to original libzip 1.5.1 
+-----------------------------------------------------
+https://libzip.org/download/
+
+zip.h
+    Change: '#include "zipconf.h"' instead of '#include <zipconf.h>'

@@ -1,0 +1,312 @@
+/******************************************************************************
+ * Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_ptx_texture_lookup_call_modes Texture lookup call modes of the PTX backend
+
+The PTX backend allows to configure how texture lookup methods are called in the generated code.
+The mode can be chosen by setting the \c MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE option on the Options object returned by ICode_generator::access_options() to one of the modes described in the next sections:
+
+- \c "vtable"
+- \c "direct_call"
+- \c "optix_cp"
+
+Depending on the mode, the generated code makes different use of the Resource_data parameter \c res_data which has to be provided to the generated code by the renderer:
+
+\code
+    struct Resource_data {
+        void const                 *shared_data;
+        Texture_handler_base const *texture_handler;
+    };
+\endcode
+
+\note The \c shared_data field is currently unused and should always be NULL.
+
+\section mi_mdl_core_ptx_texture_lookup_call_modes_vtable "vtable" mode
+
+This is the default mode.
+In this mode, the \c texture_handler field of the \c res_data parameter has to point to a customizable structure that can be derived from Texture_handler_base.
+
+The only requirement is that the first field of this structure is a pointer to a vtable
+(table of function pointers) pointing to the texture access functions (see below).
+Any additional data needed by your implementation can be appended after the vtable.
+The texture access functions can access the structure via the \c self parameter.
+
+The retrieved texture value should be stored in the \c result parameter.
+
+The \c texture_idx parameter is the index of the texture resource as registered by you via ILambda_function::map_tex_resource() during compilation.
+Note that index 0 should be reserved for the invalid texture.
+
+Please refer to the MDL specification (section 20.3) for an explanation of the other parameters.
+
+\code
+    // The wrap mode determines the texture lookup behavior if a lookup coordinate
+    // is exceeding the normalized half-open texture space range of [0, 1).
+    enum Tex_wrap_mode {
+        wrap_clamp           = 0,  // clamps the lookup coordinate to the range
+        wrap_repeat          = 1,  // takes the fractional part of the lookup coordinate
+                                   // effectively repeating the texture along this axis
+        wrap_mirrored_repeat = 2,  // like wrap_repeat but takes one minus the fractional
+                                   // part every other interval to mirror every second
+                                   // instance of the texture
+        wrap_clip            = 3   // makes the texture lookup return zero for texture
+                                   // coordinates outside of the range
+    };
+
+    // The vtable for the texture handler.
+    struct Texture_handler_vtable {
+        void (*m_tex_lookup_float4_2d)(
+            float                       result[4],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[2],
+            Tex_wrap_mode               wrap_u,
+            Tex_wrap_mode               wrap_v,
+            float const                 crop_u[2],
+            float const                 crop_v[2]);
+
+        void (*m_tex_lookup_float3_2d)(
+            float                       result[3],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[2],
+            Tex_wrap_mode               wrap_u,
+            Tex_wrap_mode               wrap_v,
+            float const                 crop_u[2],
+            float const                 crop_v[2]);
+
+        void (*m_tex_texel_float4_2d)(
+            float                       result[4],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            int const                   coord[2],
+            int const                   uv_tile[2]);
+
+        void (*m_tex_lookup_float4_3d)(
+            float                       result[4],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[3],
+            Tex_wrap_mode               wrap_u,
+            Tex_wrap_mode               wrap_v,
+            Tex_wrap_mode               wrap_w,
+            float const                 crop_u[2],
+            float const                 crop_v[2],
+            float const                 crop_w[2]);
+
+        void (*m_tex_lookup_float3_3d)(
+            float                       result[3],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[3],
+            Tex_wrap_mode               wrap_u,
+            Tex_wrap_mode               wrap_v,
+            Tex_wrap_mode               wrap_w,
+            float const                 crop_u[2],
+            float const                 crop_v[2],
+            float const                 crop_w[2]);
+
+        void (*m_tex_texel_float4_3d)(
+            float                       result[4],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            int const                   coord[3]);
+
+        void (*m_tex_lookup_float4_cube)(
+            float                       result[4],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[3]);
+
+        void (*m_tex_lookup_float3_cube)(
+            float                       result[3],
+            Texture_handler_base const *self,
+            unsigned                    texture_idx,
+            float const                 coord[3]);
+
+        void (*m_tex_resolution_2d)(
+            int                        result[2],
+            Texture_handler_base const *self,
+            unsigned                   texture_idx,
+            int const                  uv_tile[2]);
+    };
+
+    // Your texture handler structure.
+    struct Texture_handler : public Texture_handler_base {
+        // additional data for the texture access functions can be provided here
+        int  example_field;
+    };
+
+\endcode
+
+
+\section mi_mdl_core_ptx_texture_lookup_call_modes_direct_call "direct_call" mode
+
+In this mode, the texture access functions will be called directly in the PTX code.
+The implementations must be linked to the generated code.
+
+The expected prototypes correspond to the prototypes in the
+\c Texture_handler_vtable structure of the vtable, except that the
+\c Texture_handler structure is not required to contain the \c vtable field.
+The \c texture_handler field of the Resource_data structure may be NULL, if your implementation does not need it.
+
+Here are the CUDA prototypes of the functions you have to implement:
+
+\code
+    // Your texture handler structure.
+    struct Texture_handler : public Texture_handler_base {
+        // additional data for the texture access functions can be provided here
+        int  example_field;
+    };
+
+    extern "C" __device__ void tex_lookup_float4_2d(
+        float                   result[4],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[2],
+        Tex_wrap_mode           wrap_u,
+        Tex_wrap_mode           wrap_v,
+        float const             crop_u[2],
+        float const             crop_v[2]);
+
+    extern "C" __device__ void tex_lookup_float3_2d(
+        float                   result[3],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[2],
+        Tex_wrap_mode           wrap_u,
+        Tex_wrap_mode           wrap_v,
+        float const             crop_u[2],
+        float const             crop_v[2]);
+
+    extern "C" __device__ void tex_texel_float4_2d(
+        float                   result[4],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        int const               coord[2]);
+
+    extern "C" __device__ void tex_lookup_float4_3d(
+        float                   result[4],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[3],
+        Tex_wrap_mode           wrap_u,
+        Tex_wrap_mode           wrap_v,
+        Tex_wrap_mode           wrap_w,
+        float const             crop_u[2],
+        float const             crop_v[2],
+        float const             crop_w[2]);
+
+    extern "C" __device__ void tex_lookup_float3_3d(
+        float                   result[3],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[3],
+        Tex_wrap_mode           wrap_u,
+        Tex_wrap_mode           wrap_v,
+        Tex_wrap_mode           wrap_w,
+        float const             crop_u[2],
+        float const             crop_v[2],
+        float const             crop_w[2]);
+
+    extern "C" __device__ void tex_texel_float4_3d(
+        float                   result[4],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        int const               coord[3]);
+
+    extern "C" __device__ void tex_lookup_float4_cube(
+        float                   result[4],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[3]);
+
+    extern "C" __device__ void tex_lookup_float3_cube(
+        float                   result[3],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        float const             coord[3]);
+
+    extern "C" __device__ void tex_resolution_2d(
+        int                     result[2],
+        Texture_handler const  *self,
+        unsigned                texture_idx,
+        int const               uv_tile[2]);
+
+\endcode
+
+\note You have to declare the implementations as \c extern "C" when using CUDA code
+to avoid name mangling.
+
+\section mi_mdl_core_ptx_texture_lookup_call_modes_optix_cp "optix_cp" mode
+
+This mode is meant for applications using the OptiX framework.
+In this mode, the generated code will contain OptiX \c rtCallableProgramId variables which
+have to be set to the texture access functions like this (\c mdl_textures_ptx_path is the
+path to a PTX file containing the implementations of the texture access functions,
+\c mdl_expr_prog is the OptiX program created from the PTX code generated for the material
+sub-expression):
+
+\code
+    // Set up the texture access functions for the MDL expression code.
+    static const char *tex_prog_names[] = {
+        "tex_lookup_float4_2d",
+        "tex_lookup_float3_2d",
+        "tex_texel_float4_2d",
+        "tex_lookup_float4_3d",
+        "tex_lookup_float3_3d",
+        "tex_texel_float4_3d"
+        "tex_lookup_float4_cube",
+        "tex_lookup_float3_cube",
+        "tex_resolution_2d"
+    };
+
+    for (size_t i = 0; i < sizeof(tex_prog_names) / sizeof(*tex_prog_names); ++i) {
+        optix::Program tex_prog = m_optix_ctx->createProgramFromPTXFile(
+            mdl_textures_ptx_path, tex_prog_names[i]);
+
+        // your code should set any required variables in the texture access program here,
+        // like a buffer of texture sampler IDs for the used textures
+
+        tex_prog["texture_sampler_ids"]->set(tex_samplers);
+        mdl_expr_prog[tex_prog_names[i]]->setProgramId(tex_prog);
+    }
+\endcode
+
+In this example, the names of the methods in the PTX file referenced by \c mdl_textures_ptx_path
+are identical to the names of the needed OptiX variables, but this is not required.
+
+The prototypes of the functions are identical to the \c "direct_call" mode except that
+<tt>extern "C" \_\_device\_\_</tt> is replaced by \c RT_CALLABLE_PROGRAM.
+
+*/
+
+}
+}

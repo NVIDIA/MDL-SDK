@@ -1,0 +1,100 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_shared The Material_compiler helper class
+
+<div align="right">
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_cuda_shared Next\endlink]
+</div>
+
+This page explains the Material_compiler helper class.
+
+\section example_shared_new New Topics
+
+  - The Material_compiler helper class
+  - Thread contexts
+  - Search paths
+  - Module management
+
+\section example_shared_descr Detailed Description
+
+<dl>
+<dt><b>The Material_compiler helper class</b></dt>
+<dd>
+This class simplifies the use of the \MDLCoreApiName when compiling MDL materials into IGenerated_code_dag::IMaterial_instance objects by providing some of the functionality of the MDL SDK API.
+Apart from built-in support for default arguments and putting the arguments into the correct order as expected by the \MDLCoreApiName, it also manages error messages, the MDL search paths and loaded modules.
+
+Using the \c Material_compiler helper class, compiling an MDL material into an MDL material instance consists of these steps:
+ - Load the module containing the MDL material and compile it into an IGenerated_code_dag representation via \c Material_compiler::compile_module().
+   Internally this method uses IMDL::load_module() and ICode_generator_dag::compile() on the DAG code generator obtained from IMDL::load_code_generator("dag").
+ - Create an (uninitialized) material instance via \c Material_compiler::create_material_instance().
+   Internally this method uses IGenerated_code_dag::create_material_instance().
+   It will not return a IGenerated_code_dag::IMaterial_instance, but an instance of the \c Material_instance helper class.
+   This class wraps the MDL material instance together with the MDL module DAG and the index of the MDL material to simplify the use of the material instance.
+ - Optionally create DAG arguments for the material instance using the \c create_*() functions of IGenerated_code_dag::IMaterial_instance or the \c Material_instance::create_call() function, which also provides support for default arguments.
+ - Initialize the material instance with the arguments filled up with defaults where required via \c Material_compiler::initialize_material_instance().
+   Internally this method uses IGenerated_code_dag::IMaterial_instance::initialize().
+</dd>
+
+<dt><b>Thread contexts</b></dt>
+<dd>
+When loading modules, the MDL compiler requires an IThread_context object which will receive compiler messages and also allows to provide per thread compiler options.
+In the examples, we use a helper class \c Msg_context holding a thread context for printing compiler messages to stdout and for dumping the DAG (directed acyclic graph) representations of material instances.
+</dd>
+
+<dt><b>Search paths</b></dt>
+<dd>
+To resolve MDL modules and resources, the MDL compiler requires you to install an implementation of the IMDL_search_path class via IMDL::install_search_path().
+In the examples, we use a small helper class \c MDL_search_path which is basically just a wrapper around a \c std::vector<std::string>.
+</dd>
+
+<dt><b>Module management</b></dt>
+<dd>
+The MDL compiler requires you to provide an implementation of ICall_name_resolver in several places to find the owning module of an entity, especially when compiling to target code with one of the backends.
+In the examples, we use a helper class \c Module_manager which not only implements ICall_name_resolver, but also IModule_cache to avoid recompilation of modules (see \ref mdl_avoid_recompilation).
+Whenever a module is loaded via IMDL::load_module() or a similar function, the loaded module is added to the module manager, which also recursively adds the modules imported by the loaded module.
+
+There is one module which needs some special treatment.
+When the ICall_name_resolver::get_owner_module() function is called for an entity name without a colon, the entity is owned by the \c builtins module.
+To be able to return this module, we have to look out for it via the IModule::is_builtins() function when adding the modules to the module manager.
+</dd>
+</dl>
+
+<div align="right">
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_cuda_shared Next\endlink]
+</div>
+
+*/
+
+}
+}

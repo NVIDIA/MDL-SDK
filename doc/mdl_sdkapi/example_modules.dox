@@ -1,0 +1,131 @@
+/******************************************************************************
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_modules Example for MDL modules
+
+<div align="right">
+    [\link mi_neuray_example_start_shutdown Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_instantiation Next\endlink]
+</div>
+
+This example loads an MDL module and inspects it contents.
+
+\section example_modules_new New Topics
+
+  - Configuration of \neurayProductName
+  - Loading of MDL modules
+  - Enumerating the contents of MDL modules
+  - Inspecting the parameters of material and function definitions
+
+\section example_modules_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Configuration of \neurayProductName
+    </b></dt>
+    <dd><br>
+        In order to allow the \neurayProductName to locate MDL modules and its resources
+        in the file system it is necessary to configure the MDL module search path.
+        This is done by calling #mi::neuraylib::IMdl_compiler::add_module_path().
+        
+        Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. The 
+        support for image formats in the \neurayProductName is provided by image plugins, which
+        have to be loaded explicitly via #mi::neuraylib::IMdl_compiler::load_plugin_library().
+        
+        In this and most other examples the configuration is done within the utility function
+        \c configure(). Here, we set the module search path to the MDL directory shipped wit
+        the examples. We also load the \c FreeImage plugin which comes with the \neurayProductName
+        and is capable of handling \c .png files.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Loading of MDL modules
+    </b></dt>
+    <dd><br>
+        MDL modules are loaded with the method #mi::neuraylib::IMdl_compiler::load_module(). Note
+        that this method expects the module name, not the name of the file containing the module. To
+        find the corresponding file it is necessary to configure the module search path as described
+        above.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Enumerating the contents of MDL modules
+    </b></dt>
+    <dd><br>
+        The #mi::neuraylib::IModule interface offers various methods related to metadata, like
+        the name of the module, or the name of the file it was loaded from. Furthermore, it offers
+        methods to enumerate the material and function definitions contained in the module. It also
+        allows to enumerate all modules that have been (directly) imported by that module. Imported
+        modules will be automatically loaded (if not already loaded before).
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Inspecting the parameters of material and function definitions
+    </b></dt>
+    <dd><br>
+        MDL materials and functions (as found in a \c .mdl file) are represented in the
+        \neurayApiName by the interfaces #mi::neuraylib::IMaterial_definition and
+        #mi::neuraylib::IFunction_definition. Similar to the module interface these interfaces
+        offer various methods related to metadata, like the name of the definition, or the name of
+        the containing module. Important methods are those that provide details about the
+        parameters, like their names, types, and the values of defaults (if present).
+
+        In this example we simply dump the parameter information for the first material and
+        function definition. The textual representation of the default values is generated by the
+        method #mi::neuraylib::IExpression_factory::dump().
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Enumerating resources required by a module
+    </b></dt>
+    <dd><br>
+        The example also demonstrates the iteration of required resources.
+        After reading the number of resources, we can iterate them and get the database name, the
+        mdl file path, and the resource type.
+        Based on the latter, it is possible to fetch the resolved resource path that points to the file on the current system.
+        In case the resource could not be resolved, the database name will be \c NULL.
+        However, the mdl file path will still point to the missing resource.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_modules Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/modules/example_modules.cpp</tt>
+
+\include modules/example_modules.cpp
+
+<div align="right">
+    [\link mi_neuray_example_start_shutdown Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_instantiation Next\endlink]
+</div>
+
+*/

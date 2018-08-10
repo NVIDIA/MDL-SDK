@@ -1,0 +1,3117 @@
+/******************************************************************************
+ * Copyright (c) 2011-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+#include <cstring>
+#include <cmath>
+
+#include <mdl/compiler/compilercore/compilercore_mdl.h>
+#include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compilercore/compilercore_wchar_support.h>
+#include <mdl/compiler/compilercore/compilercore_errors.h>
+
+#define ERR_TYPE ((IType_name *)1)
+#define ERR_EXPR ((IExpression *)1)
+#define ERR_STMT ((IStatement *)1)
+#define ERR_DECL ((IDeclaration *)1)
+
+$namespace=mi::mdl
+
+COMPILER mdl
+
+    IAllocator *m_alloc;
+
+    MDL *m_mdl;
+
+    IName_factory *m_name_factory;
+
+    IType_factory *m_type_factory;
+
+    IValue_factory *m_value_factory;
+
+    IExpression_factory *m_expression_factory;
+
+    IStatement_factory *m_statement_factory;
+
+    IDeclaration_factory *m_declaration_factory;
+
+    IAnnotation_factory *m_annotation_factory;
+    
+    void set_imdl(IAllocator *alloc, MDL *imdl)
+    {
+        m_alloc = alloc;
+        m_mdl = imdl;
+        m_type_factory = m_mdl->get_type_factory();
+    }
+
+    Module *m_module;
+
+    void set_module(Module *module)
+    {
+        m_module              = module;
+        m_name_factory        = m_module->get_name_factory();
+        m_type_factory        = m_module->get_type_factory();
+        m_expression_factory  = m_module->get_expression_factory();
+        m_value_factory       = m_module->get_value_factory();
+        m_statement_factory   = m_module->get_statement_factory();
+        m_declaration_factory = m_module->get_declaration_factory();
+        m_annotation_factory  = m_module->get_annotation_factory();
+    }
+
+    Module *get_module()
+    {
+        return m_module;
+    }
+
+    // Parses an expression instead of a full MDL document.
+    IExpression const *parse_expression()
+    {
+        IExpression const *expr = NULL;
+
+        t = NULL;
+        la = dummyToken = scanner->CreateToken();
+        la->val = L"Dummy Token";
+        Get();
+        expression(expr);
+        Expect(0);
+
+        return expr;
+    }
+
+    // Check if the lookahead token is a comma.
+    bool see_comma()
+    {
+        return la->kind == _COMMA;
+    }
+
+    // Skip square brackets.
+    bool skip_square_brackets(Token *&x)
+    {
+        for(;;) {
+            x = scanner->Peek();
+            if (x->kind == _LEFT_SQUARE_BRACKET) {
+                if (!skip_square_brackets(x))
+                    return false;
+            } else if (x->kind == _RIGHT_SQUARE_BRACKET) {
+                x = scanner->Peek();
+                return true;
+            } else if (x->kind == _EOF) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    // Skip a type.
+    bool skip_type(Token *&x)
+    {
+        if ((x->kind == _UNIFORM) || (x->kind == _VARYING))
+            x = scanner->Peek();
+        switch (x->kind) {
+        case _SCOPE:
+            x = scanner->Peek();
+            return skip_type(x);
+        case _IDENT:
+            x = scanner->Peek();
+            if (x->kind == _SCOPE) {
+                x = scanner->Peek();
+                return skip_type(x);
+            } else if (x->kind == _LEFT_SQUARE_BRACKET) {
+                return skip_square_brackets(x);
+            }
+            return true;
+        case _BOOL:
+        case _BOOL2:
+        case _BOOL3:
+        case _BOOL4:
+        case _INT:
+        case _INT2:
+        case _INT3:
+        case _INT4:
+        case _FLOAT:
+        case _FLOAT2:
+        case _FLOAT3:
+        case _FLOAT4:
+        case _FLOAT2X2:
+        case _FLOAT2X3:
+        case _FLOAT2X4:
+        case _FLOAT3X2:
+        case _FLOAT3X3:
+        case _FLOAT3X4:
+        case _FLOAT4X2:
+        case _FLOAT4X3:
+        case _FLOAT4X4:
+        case _DOUBLE:
+        case _DOUBLE2:
+        case _DOUBLE3:
+        case _DOUBLE4:
+        case _DOUBLE2X2:
+        case _DOUBLE2X3:
+        case _DOUBLE2X4:
+        case _DOUBLE3X2:
+        case _DOUBLE3X3:
+        case _DOUBLE3X4:
+        case _DOUBLE4X2:
+        case _DOUBLE4X3:
+        case _DOUBLE4X4:
+        case _COLOR:
+        case _STRING:
+        case _BSDF:
+        case _EDF:
+        case _VDF:
+        case _LIGHT_PROFILE:
+        case _TEXTURE_2D:
+        case _TEXTURE_3D:
+        case _TEXTURE_CUBE:
+        case _TEXTURE_PTEX:
+        case _BSDF_MEASUREMENT:
+        case _INTENSITY_MODE:
+        case _MATERIAL:
+        case _MATERIAL_EMISSION:
+        case _MATERIAL_GEOMETRY:
+        case _MATERIAL_SURFACE:
+        case _MATERIAL_VOLUME:
+            x = scanner->Peek();
+            if (x->kind == _LEFT_SQUARE_BRACKET)
+                return skip_square_brackets(x);
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // If we see either "import" or "using" or "export" followed by "import" or "using"
+    // during lookeahed, we assume that the declaration is an import declaration.
+    bool is_import_declaration()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind == _EXPORT) {
+            x = scanner->Peek();
+        }
+        return (x->kind == _IMPORT) || (x->kind == _USING);
+    }
+
+    // If we see a type followed by an identifier during lookahead,
+    // we assume that this is a declaration.
+    bool is_declaration()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (!skip_type(x))
+            return false;
+        return (x->kind == _IDENT) || (x->kind == _ANNOTATION_BLOCK_BEGIN);
+    }
+
+    /// Check for C-style cast: We have already seen '(' expr '), check for start(postfix_expr)
+    bool is_c_style_cast()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind != _LEFT_PARENTHESIS)
+            return false;
+        x = scanner->Peek();
+        if (!skip_type(x))
+            return false;
+        if (x->kind != _RIGHT_PARENTHESIS)
+            return false;
+        x = scanner->Peek();
+
+        switch (x->kind) {
+        // start of unary expression
+        case _TILDE:
+        case _BANG:
+        case _PLUS:
+        case _MINUS:
+        case _INC_OP:
+        case _DEC_OP:
+        // start of primary expression (subset of unary)
+        case _TRUE:
+        case _FALSE:
+        case _INTEGER_LITERAL:
+        case _FLOATING_LITERAL:
+        case _FRACT_LITERAL:
+        case _STRING_LITERAL:
+        case _SCOPE:
+        case _BOOL:
+        case _BOOL2:
+        case _BOOL3:
+        case _BOOL4:
+        case _INT:
+        case _INT2:
+        case _INT3:
+        case _INT4:
+        case _FLOAT:
+        case _FLOAT2:
+        case _FLOAT3:
+        case _FLOAT4:
+        case _FLOAT2X2:
+        case _FLOAT2X3:
+        case _FLOAT2X4:
+        case _FLOAT3X2:
+        case _FLOAT3X3:
+        case _FLOAT3X4:
+        case _FLOAT4X2:
+        case _FLOAT4X3:
+        case _FLOAT4X4:
+        case _DOUBLE:
+        case _DOUBLE2:
+        case _DOUBLE3:
+        case _DOUBLE4:
+        case _DOUBLE2X2:
+        case _DOUBLE2X3:
+        case _DOUBLE2X4:
+        case _DOUBLE3X2:
+        case _DOUBLE3X3:
+        case _DOUBLE3X4:
+        case _DOUBLE4X2:
+        case _DOUBLE4X3:
+        case _DOUBLE4X4:
+        case _COLOR:
+        case _STRING:
+        case _BSDF:
+        case _EDF:
+        case _VDF:
+        case _LIGHT_PROFILE:
+        case _TEXTURE_2D:
+        case _TEXTURE_3D:
+        case _TEXTURE_CUBE:
+        case _TEXTURE_PTEX:
+        case _BSDF_MEASUREMENT:
+        case _INTENSITY_MODE:
+        case _MATERIAL:
+        case _MATERIAL_EMISSION:
+        case _MATERIAL_GEOMETRY:
+        case _MATERIAL_SURFACE:
+        case _MATERIAL_VOLUME:
+        case _IDENT:
+            return true;
+        case _LEFT_PARENTHESIS:
+            // while '(' is a start of a primary expression, do not treat it as a c-style cast
+            // here:
+            // (t)(f) *is* legal
+            return false;
+        default:
+            return false;
+        }
+    }
+
+    // If we see an identifier followed by a colon during lookeahed,
+    // we assume that the argument is named.
+    bool is_named_argument()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind == _COMMA)
+            x = scanner->Peek();
+        if (x->kind == _IDENT) {
+            x = scanner->Peek();
+            return x->kind == _COLON;
+        } else {
+            return false;
+        }
+    }
+
+    // Check if the next two tokens are coupled right brackets
+    bool is_anno_block_end()
+    {
+        scanner->ResetPeek();
+        if (la->kind == _RIGHT_SQUARE_BRACKET) {
+            int line = la->line;
+            int col  = la->col;
+            Token *x = scanner->Peek();
+            if (x->kind != _RIGHT_SQUARE_BRACKET)
+                return false;
+            return line == x->line && col + 1 == x->col;
+        }
+        return false;
+    }
+    
+    // Check if the next two tokens are '[' and ']
+    bool is_array_constructor()
+    {
+        scanner->ResetPeek();
+        if (la->kind == _LEFT_SQUARE_BRACKET) {
+            Token *x = scanner->Peek();
+            if (x->kind == _RIGHT_SQUARE_BRACKET)
+                return true;
+        }
+        return false;
+    }
+    
+    // Check if the next three tokens are '(', '*', and ')'.
+    bool is_clone()
+    {
+        scanner->ResetPeek();
+        if (la->kind == _LEFT_PARENTHESIS) {
+            Token *x = scanner->Peek();
+            if (x->kind == _STAR) {
+                x = scanner->Peek();
+                if (x->kind == _RIGHT_PARENTHESIS)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Check if we see '::' and IDENT
+    bool is_scope_ident()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind != _SCOPE)
+            return false;
+        x = scanner->Peek();
+        return x->kind == _IDENT;
+    }
+
+    // Create a simple name from a token.
+    ISimple_name const *to_simple(Token const *t)
+    {
+        string tmp(m_alloc);
+        wchar_t const *s = errDist > 0 ? t->val : L"<ERROR>";
+        ISymbol const *symbol = m_name_factory->create_symbol(wchar_to_utf8(tmp, s));
+        return m_name_factory->create_simple_name(
+                    symbol,
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col + wcslen(t->val) - 1);
+    }
+
+    // Create a qualified name from a simple name.
+    IQualified_name *to_qualified(ISimple_name const *simple_name)
+    {
+        IQualified_name *qualified_name = m_name_factory->create_qualified_name();
+        qualified_name->add_component(simple_name);
+        return qualified_name;
+    }
+
+    // Create a qualified error name.
+    IQualified_name *qualified_error()
+    {
+        ISymbol const *symbol = m_name_factory->create_symbol("<ERROR>");
+        ISimple_name const *simple_name = m_name_factory->create_simple_name(
+                    symbol,
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col);
+        return to_qualified(simple_name);
+    }
+
+    // Create a type name from a type name prefix and a token.
+    IType_name *to_type(IType_name *prefix, Token *tok)
+    {
+        IType_name *type_name = prefix;
+        IQualified_name *qualified_name;
+                
+        if (type_name) {
+            qualified_name = type_name->get_qualified_name();
+        } else {
+            qualified_name = m_name_factory->create_qualified_name();
+            type_name = m_name_factory->create_type_name(qualified_name, tok->line, tok->col);
+        }
+        ISimple_name const *simple_name = to_simple(tok);
+        qualified_name->add_component(simple_name);
+        Position &tpos = type_name->access_position();
+        Position const &qpos = qualified_name->access_position();
+        tpos.set_end_line(qpos.get_end_line());
+        tpos.set_end_column(qpos.get_end_column());
+        return type_name;
+    }
+
+    // Create a type name from a simple name.
+    IType_name *to_type(ISimple_name const *simple_name)
+    {
+        IQualified_name *qualified_name = to_qualified(simple_name);
+        IType_name *type_name = m_name_factory->create_type_name(qualified_name);
+        Position &q_pos = qualified_name->access_position();
+        Position &t_pos = type_name->access_position();
+        t_pos.set_start_line(q_pos.get_start_line());
+        t_pos.set_start_column(q_pos.get_start_column());
+        t_pos.set_end_line(q_pos.get_end_line());
+        t_pos.set_end_column(q_pos.get_end_column());
+        return type_name;
+    }
+
+    // Create a reference from a type name.
+    IExpression_reference const *to_reference(
+        IType_name const *type_name,
+        bool             is_array_con = false)
+    {
+        IExpression_reference *result = m_expression_factory->create_reference(type_name);
+        if (is_array_con)
+            result->set_array_constructor();
+        Position const &t_pos = type_name->access_position();
+        Position &r_pos = result->access_position();
+        r_pos.set_start_line(t_pos.get_start_line());
+        r_pos.set_start_column(t_pos.get_start_column());
+        r_pos.set_end_line(t_pos.get_end_line());
+        r_pos.set_end_column(t_pos.get_end_column());
+        return result;
+    }
+
+    // Create a reference from a simple name.
+    IExpression_reference const *to_reference(ISimple_name const *simple_name)
+    {
+        return to_reference(to_type(simple_name));
+    }
+
+    // Create a statement from an expression.
+    IStatement_expression const *to_statement(IExpression const *exp)
+    {
+        exp = check_expr(exp);
+        IStatement_expression *result = m_statement_factory->create_expression(exp);
+        if (exp != NULL) {
+            Position const &pos = exp->access_position();
+            Position &r_pos = result->access_position();
+            r_pos.set_start_line(pos.get_start_line());
+            r_pos.set_start_column(pos.get_start_column());
+            r_pos.set_end_line(pos.get_end_line());
+            r_pos.set_end_column(pos.get_end_column());
+        }
+        return result;
+    }
+
+    // Create an integer value.
+    static wchar_t const *integer_value(wchar_t const *val, bool &overflow, unsigned long &value)
+    {
+        int base = 0;
+        unsigned long res = 0;
+        unsigned long maxv = 0, maxd = 0;
+        overflow = false;
+
+        wchar_t const *s = val;
+        if (*s == L'0') {
+            ++s;
+            if (*s == L'x' || *s == L'X') {
+                ++s;
+                base = 16;
+                maxv = 0x10000000;  // 0x10000000 * 16 + 0 = 0x100000000
+            } else if (*s == L'b' || *s == L'B') {
+                ++s;
+                base = 2;
+                maxv = 0x80000000;  // 0x80000000 *  2 + 0 = 0x100000000
+            } else {
+                base = 8;
+                maxv = 0x20000000;  // 0x20000000 *  8 + 0 = 0x100000000
+            }
+        } else {
+            base = 10;
+            maxv = 0x19999999;      // 0x19999999 * 10 + 6 = 0x100000000
+            maxd = 6;
+        }
+
+        for (;;) {
+            unsigned long digit = 16;
+            switch (*s) {
+            case L'0': digit = 0; break;
+            case L'1': digit = 1; break;
+            case L'2': digit = 2; break;
+            case L'3': digit = 3; break;
+            case L'4': digit = 4; break;
+            case L'5': digit = 5; break;
+            case L'6': digit = 6; break;
+            case L'7': digit = 7; break;
+            case L'8': digit = 8; break;
+            case L'9': digit = 9; break;
+            case L'a': digit = 10; break;
+            case L'b': digit = 11; break;
+            case L'c': digit = 12; break;
+            case L'd': digit = 13; break;
+            case L'e': digit = 14; break;
+            case L'f': digit = 15; break;
+            case L'A': digit = 10; break;
+            case L'B': digit = 11; break;
+            case L'C': digit = 12; break;
+            case L'D': digit = 13; break;
+            case L'E': digit = 14; break;
+            case L'F': digit = 15; break;
+            default: goto out;
+            }
+
+            // beware of C++ semantics: gcc will optimize simple overflow tests away :-(
+            if (res >= maxv && digit >= maxd)
+                overflow = true;
+
+            res *= base;
+            res += digit;
+            ++s;
+        }
+    out:
+        /* ignore overflow on sign bit, this cannot be checked reliable here
+        if (res >= 0x80000000) {
+            // overflow on sign bit
+            overflow = true;
+        }
+        */
+        value = res;
+        return s;
+    }
+
+    // Check an expression.
+    IType_name *check_type(IType_name *type) {
+        if (type == ERR_TYPE) {
+            IQualified_name *q_name = qualified_error();
+            IType_name *result = m_name_factory->create_type_name(q_name);
+            Position const &t_pos = q_name->access_position();
+            Position &r_pos = result->access_position();
+            r_pos.set_start_line(t_pos.get_start_line());
+            r_pos.set_start_column(t_pos.get_start_column());
+            r_pos.set_end_line(t_pos.get_end_line());
+            r_pos.set_end_column(t_pos.get_end_column());
+            return result;
+        }
+        return type;
+    }
+
+    // Check an expression.
+    IExpression const *check_expr(IExpression const *expr) {
+        if (expr == ERR_EXPR)
+            return m_expression_factory->create_invalid(
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col);
+        return expr;
+    }
+
+    // Make an invalid expression from onother expression.
+    IExpression const *make_invalid(Position const &pos) {
+        return m_expression_factory->create_invalid(
+            pos.get_start_line(),
+            pos.get_start_column(),
+            pos.get_end_line(),
+            pos.get_end_column());
+    }
+
+    // Check a statement.
+    IStatement const *check_stmt(IStatement const *stmt) {
+        if (stmt == ERR_STMT)
+            return m_statement_factory->create_invalid(
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col);
+        return stmt;
+    }
+
+    // Check a declaration.
+    IDeclaration const *check_decl(IDeclaration const *decl) {
+        if (decl == ERR_DECL)
+            return m_declaration_factory->create_invalid(
+                    /*exported=*/false,
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col);
+        return decl;
+    }
+
+    // Create an unary expression.
+    IExpression_unary *create_unary(
+        IExpression_unary::Operator const op,
+        IExpression const                 *argument)
+    {
+        argument = check_expr(argument);
+        Position const &pos = argument->access_position();
+        IExpression_unary *expr = m_expression_factory->create_unary(
+                                                            op,
+                                                            argument,
+                                                            pos.get_start_line(),
+                                                            pos.get_start_column(),
+                                                            pos.get_end_line(),
+                                                            pos.get_end_column());
+        return expr;
+    }
+
+    // Create a binary expression.
+    IExpression_binary *create_binary(
+        IExpression_binary::Operator const op,
+        IExpression const                  *left,
+        IExpression const                  *right)
+    {
+        left  = check_expr(left);
+        right = check_expr(right);
+        IExpression_binary *expr = m_expression_factory->create_binary(op, left, right);
+        Position const &l_pos = left->access_position();
+        Position const &r_pos = right->access_position();
+        Position &e_pos = expr->access_position();
+        e_pos.set_start_line(l_pos.get_start_line());
+        e_pos.set_start_column(l_pos.get_start_column());
+        e_pos.set_end_line(r_pos.get_end_line());
+        e_pos.set_end_column(r_pos.get_end_column());
+        return expr;
+    }
+
+    // Create a conditional expression.
+    IExpression_conditional *create_conditional(
+        IExpression const *cond,
+        IExpression const *true_exp,
+        IExpression const *false_exp)
+    {
+        cond  = check_expr(cond);
+        true_exp = check_expr(true_exp);
+        false_exp = check_expr(false_exp);
+        Position const &s_pos = cond->access_position();
+        Position const &e_pos = false_exp->access_position();
+        return m_expression_factory->create_conditional(
+            cond,
+            true_exp,
+            false_exp,
+            s_pos.get_start_line(),
+            s_pos.get_start_column(),
+            e_pos.get_end_line(),
+            e_pos.get_end_column());
+    }
+
+    // Create a positional argument.
+    IArgument_positional const *create_positional_argument(IExpression const *expr)
+    {
+        expr = check_expr(expr);
+        Position const &e_pos = expr->access_position();
+        return m_expression_factory->create_positional_argument(
+                expr,
+                e_pos.get_start_line(),
+                e_pos.get_start_column(),
+                e_pos.get_end_line(),
+                e_pos.get_end_column());
+    }
+
+    // Create a named argument.
+    IArgument_named const *create_named_argument(
+        ISimple_name const *parameter_name,
+        IExpression const  *expr)
+    {
+        expr = check_expr(expr);
+        Position const &p_pos = parameter_name->access_position();
+        Position const &e_pos = expr->access_position();
+        return m_expression_factory->create_named_argument(
+            parameter_name,
+            expr,
+            p_pos.get_start_line(),
+            p_pos.get_start_column(),
+            e_pos.get_end_line(),
+            e_pos.get_end_column());
+    }
+
+    // Create a parameter.
+    IParameter const *create_parameter(
+        int                     sl,
+        int                     sc,
+        IType_name const        *type_name,
+        ISimple_name const      *name,
+        IExpression const       *init,
+        IAnnotation_block const *annotations)
+    {
+        init = check_expr(init);
+        Position const &t_pos = type_name->access_position();
+        int start_line = sl ? sl : t_pos.get_start_line();
+        int start_column = sc ? sc : t_pos.get_start_column();
+        int end_line = t_pos.get_end_line();
+        int end_column = t_pos.get_end_line();
+        if (annotations) {
+            Position const &a_pos = annotations->access_position();
+            end_line = a_pos.get_end_line();
+            end_column = a_pos.get_end_column();
+        } else if (init) {
+            Position const &i_pos = init->access_position();
+            end_line = i_pos.get_end_line();
+            end_column = i_pos.get_end_column();
+        }
+        IParameter const *param = m_declaration_factory->create_parameter(
+                                        type_name,name,init,annotations,
+                                        start_line,start_column,end_line,end_column);
+        return param;
+    }
+
+    // Create a declaration.
+    IStatement_declaration *create_declaration(IDeclaration const *decl)
+    {
+        decl = check_decl(decl);
+        IStatement_declaration *stmnt = m_statement_factory->create_declaration(decl);
+        Position const &d_pos = decl->access_position();
+        Position &s_pos = stmnt->access_position();
+        s_pos.set_start_line(d_pos.get_start_line());
+        s_pos.set_start_column(d_pos.get_start_column());
+        s_pos.set_end_line(d_pos.get_end_line());
+        s_pos.set_end_column(d_pos.get_end_column());
+        return stmnt;
+    }
+
+    // Add a declaration.
+    void add_declaration(IDeclaration const *decl)
+    {
+        decl = check_decl(decl);
+        m_module->add_declaration(decl);
+    }
+
+    // Add an annotation.
+    static void add_annotation(
+        IAnnotation_block *&annotations,
+        IAnnotation const *anno)
+    {
+        // just ignore wrong annotations
+        if (anno != NULL)
+            annotations->add_annotation(anno);
+    }
+
+    // Mark that an expression was in parenthesis.
+    static void mark_parenthesis(IExpression const *exp)
+    {
+      if (exp != ERR_EXPR)
+          const_cast<IExpression *>(exp)->mark_parenthesis();
+    }
+
+    // Convert escape sequences in string literals amnd skip quaotes.
+    string convert_escape_sequences_skip_quotes(wchar_t const *ws)
+    {
+        size_t l = wcslen(ws);
+        wstring res(m_alloc);
+        res.reserve(l - 2);
+
+        wchar_t const *p = ws + 1;     // skip first quote
+        wchar_t const *e = ws + l - 1; // skip last quote
+
+        while (p < e) {
+            if (*p == '\\') {
+                ++p;
+                wchar_t wc = *p;
+                switch (wc) {
+                case L'a': res += '\a'; ++p; break;
+                case L'b': res += '\b'; ++p; break;
+                case L'f': res += '\f'; ++p; break;
+                case L'n': res += '\n'; ++p; break;
+                case L'r': res += '\r'; ++p; break;
+                case L't': res += '\t'; ++p; break;
+                case L'v': res += '\v'; ++p; break;
+                case L'\\': res += '\\'; ++p; break;
+                case L'\'': res += '\''; ++p; break;
+                case L'"': res += '"'; ++p; break;
+                case L'0':
+                case L'1':
+                case L'2':
+                case L'3':
+                case L'4':
+                case L'5':
+                case L'6':
+                case L'7':
+                    {
+                        unsigned code = 0;
+                        bool exit = false;
+                        do {
+                            switch (*p) {
+                            case L'0': code = code * 8 + 0; break;
+                            case L'1': code = code * 8 + 1; break;
+                            case L'2': code = code * 8 + 2; break;
+                            case L'3': code = code * 8 + 3; break;
+                            case L'4': code = code * 8 + 4; break;
+                            case L'5': code = code * 8 + 5; break;
+                            case L'6': code = code * 8 + 6; break;
+                            case L'7': code = code * 8 + 7; break;
+                            default: --p; exit = true; break;
+                            }
+                            ++p;
+                         } while (!exit);
+                         res += wchar_t(code);
+                    }
+                    break;
+                case L'x':
+                case L'u':
+                case L'U':
+                    {
+                        unsigned code = 0;
+                        unsigned range = 0x10FFFF;
+
+                        if (code == L'x')
+                            range = 0xFF;
+                        else if (code == L'u')
+                            range = 0xFFFF;
+                        bool exit = false;
+                        bool overrun = false;
+                        ++p;
+                        wchar_t const *start = p;
+                        if (!isxdigit(*p)) {
+                            wchar_t wbuf[32];
+                            swprintf(wbuf, 32, L"\\%c used with no following hex digits", wc);
+
+                            errors->Warning(t->line, int(t->col + p - ws), wbuf);
+                            res += *p;
+                         } else {
+                            do {
+                                switch (*p) {
+                                case L'0': code = code * 16 + 0; break;
+                                case L'1': code = code * 16 + 1; break;
+                                case L'2': code = code * 16 + 2; break;
+                                case L'3': code = code * 16 + 3; break;
+                                case L'4': code = code * 16 + 4; break;
+                                case L'5': code = code * 16 + 5; break;
+                                case L'6': code = code * 16 + 6; break;
+                                case L'7': code = code * 16 + 7; break;
+                                case L'8': code = code * 16 + 8; break;
+                                case L'9': code = code * 16 + 9; break;
+                                case L'a':
+                                case L'A': code = code * 16 + 10; break;
+                                case L'b':
+                                case L'B': code = code * 16 + 11; break;
+                                case L'c':
+                                case L'C': code = code * 16 + 12; break;
+                                case L'd':
+                                case L'D': code = code * 16 + 13; break;
+                                case L'e':
+                                case L'E': code = code * 16 + 14; break;
+                                case L'f':
+                                case L'F': code = code * 16 + 15; break;
+                                default: --p; exit = true; break;
+                                }
+                                if (code > range)
+                                    overrun = true;
+                                ++p;
+                             } while (!exit);
+                             if (overrun) {
+                                 wchar_t wbuf[48];
+                                 swprintf(wbuf, 48, L"\\%c escape sequence out of range", wc);
+
+                                 errors->Warning(t->line, int(t->col + p - start), wbuf);
+                             }
+                             res += wchar_t(code);
+                         }
+                    }
+                    break;
+                case L'\0':
+                    res += wc; ++p; break;
+                default:
+                    {
+                        wchar_t wbuf[32];
+                        swprintf(wbuf, 32, L"Unknown escape sequence '\\%c'", wc);
+                        errors->Warning(t->line, int(t->col + p - ws), wbuf);
+                        res += wc; ++p;
+                    }
+                    break;
+                }
+            } else {
+                res += *p;
+                ++p;
+            }
+        }
+        string tmp(m_alloc);
+        res.reserve(l - 2);
+        wchar_to_utf8(tmp, res.c_str());
+        return tmp;
+    }
+
+    // The type of vectors of parameters.
+    typedef vector<IParameter const *>::Type Parameter_vector;
+
+    // The type of vectors of arguments.
+    typedef vector<IArgument const *>::Type Argument_vector;
+
+CHARACTERS
+
+    LETTER = 'A'..'Z' + 'a'..'z' .
+
+    DIGIT = '0'..'9' .
+
+    NONZERODIGIT = '1'..'9' .
+
+    HEXDIGIT = '0'..'9' + 'a'..'f' + 'A'..'F'.
+
+    OCTDIGIT = '0'..'7'.
+
+    CHARACTER = ANY - '"' - '\\' .
+
+    ESCAPE = 'a' + 'b' + 'f' + 'r' + 'n' + 't' + '\\' + '\'' + '\"' .
+
+    NOT_EXP = ANY - 'e' - 'E' - 'f' - 'F' - 'd' - 'D' - DIGIT .
+
+TOKENS
+
+    IDENT = LETTER { LETTER | DIGIT | '_' } .
+
+    INTEGER_LITERAL
+        = (NONZERODIGIT { DIGIT })
+        | ( '0' ( ('x'|'X') HEXDIGIT { HEXDIGIT } | { OCTDIGIT } ) ).
+
+    FRACT_LITERAL
+        = DIGIT { DIGIT } '.' DIGIT { DIGIT } CONTEXT(NOT_EXP).
+
+    FLOATING_LITERAL
+        = 
+        ( (   DIGIT { DIGIT } '.'
+            | '.' DIGIT { DIGIT }
+            | DIGIT { DIGIT } ['.' { DIGIT }] ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+            | '.' DIGIT { DIGIT } ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+          ) ['f'|'F'|'d'|'D']
+        )
+        | ( DIGIT { DIGIT } '.' DIGIT { DIGIT } ['f'|'F'|'d'|'D'] )
+        .
+
+    STRING_LITERAL = '"' { CHARACTER | '\\' ESCAPE | '\\' CHARACTER } '"' .
+
+    IMPORT = "import" .
+
+    EXPORT = "export" .
+
+    USING = "using" .
+
+    EQUAL = '=' .
+
+    COMMA = ',' .
+
+    SEMICOLON = ';' .
+
+    DOT = '.' .
+
+    DOTDOT = ".." .
+
+    COLON = ':' .
+
+    SCOPE = "::" .
+
+    QUESTION = '?' .
+
+    LEFT_PARENTHESIS = '(' .
+
+    RIGHT_PARENTHESIS = ')' .
+
+    STAR = '*' .
+    PLUS = '+' .
+    MINUS = '-' .
+    TILDE = '~' .
+    BANG = '!' .
+    INC_OP = "++" .
+    DEC_OP = "--" .
+
+    LEFT_SQUARE_BRACKET = '[' .
+
+    RIGHT_SQUARE_BRACKET = ']' .
+
+    ANNOTATION_BLOCK_BEGIN = "[[" .
+
+    UNIFORM = "uniform" .
+
+    VARYING = "varying" .
+
+    BOOL = "bool" .
+    BOOL2 = "bool2" .
+    BOOL3 = "bool3" .
+    BOOL4 = "bool4" .
+
+    INT = "int" .
+    INT2 = "int2" .
+    INT3 = "int3" .
+    INT4 = "int4" .
+
+    FLOAT = "float" .
+    FLOAT2 = "float2" .
+    FLOAT3 = "float3" .
+    FLOAT4 = "float4" .
+    FLOAT2X2 = "float2x2" .
+    FLOAT2X3 = "float2x3" .
+    FLOAT2X4 = "float2x4" .
+    FLOAT3X2 = "float3x2" .
+    FLOAT3X3 = "float3x3" .
+    FLOAT3X4 = "float3x4" .
+    FLOAT4X2 = "float4x2" .
+    FLOAT4X3 = "float4x3" .
+    FLOAT4X4 = "float4x4" .
+
+    DOUBLE = "double" .
+    DOUBLE2 = "double2" .
+    DOUBLE3 = "double3" .
+    DOUBLE4 = "double4" .
+    DOUBLE2X2 = "double2x2" .
+    DOUBLE2X3 = "double2x3" .
+    DOUBLE2X4 = "double2x4" .
+    DOUBLE3X2 = "double3x2" .
+    DOUBLE3X3 = "double3x3" .
+    DOUBLE3X4 = "double3x4" .
+    DOUBLE4X2 = "double4x2" .
+    DOUBLE4X3 = "double4x3" .
+    DOUBLE4X4 = "double4x4" .
+
+    COLOR = "color" .
+
+    STRING = "string" .
+    
+    BSDF = "bsdf" .
+    
+    EDF = "edf" .
+    
+    VDF = "vdf" .
+    
+    LIGHT_PROFILE = "light_profile" .
+    
+    TEXTURE_2D = "texture_2d" .
+
+    TEXTURE_3D = "texture_3d" .
+
+    TEXTURE_CUBE = "texture_cube" .
+
+    TEXTURE_PTEX = "texture_ptex" .
+
+    BSDF_MEASUREMENT = "bsdf_measurement" . // MDL 1.1+
+
+    INTENSITY_MODE = "intensity_mode" . // MDL 1.1+
+
+    INTENSITY_RADIANT_EXITANCE = "intensity_radiant_exitance" . // MDL 1.1+
+
+    INTENSITY_POWER = "intensity_power" . // MDL 1.1+
+
+    MATERIAL = "material" .
+
+    MATERIAL_EMISSION = "material_emission" .
+
+    MATERIAL_GEOMETRY = "material_geometry" .
+
+    MATERIAL_SURFACE = "material_surface" .
+
+    MATERIAL_VOLUME = "material_volume" .
+
+    MODULE = "module" .
+
+    TRUE = "true" .
+
+    FALSE = "false" .
+
+// The following token is not a reserved MDL keyword, but ensures that the R_RESERVED token
+// is defined. The reserved set is dynamic and set depending on the MDL version.
+
+    R_RESERVED = "reserved" .
+
+// We allow nested comments in MDL to "comment out" code
+COMMENTS FROM "/*" TO "*/" NESTED
+COMMENTS FROM "//" TO '\n'
+
+IGNORE '\r' + '\n' + '\t'
+
+PRODUCTIONS
+
+mdl
+    = mdl_version
+        {
+            IF(is_import_declaration())
+                                            (. IDeclaration const *declaration = ERR_DECL; .)
+                import<declaration>         (. add_declaration(declaration); .)
+        }
+        [                                   (. IDeclaration const *declaration = ERR_DECL; .)
+            module_declaration<declaration>
+                                            (. add_declaration(declaration); .)
+        ]
+        {                                   (. bool exported = false; .)
+            [
+                "export"                    (. exported = true; .)
+            ]
+                                            (. IDeclaration const *declaration = ERR_DECL; .)
+            global_declaration<exported, declaration>
+                                            (.  add_declaration(declaration); .)
+        }
+    .
+
+boolean_literal<bool &value,int &sl,int &sc,int &el,int &ec>
+    = "true"
+                                    (.
+                                        value = true;
+                                        sl = t->line;
+                                        sc = t->col;
+                                        el = t->line;
+                                        ec = t->col + wcslen(t->val) - 1;
+                                    .)
+    | "false"
+                                    (.
+                                        value = false;
+                                        sl = t->line;
+                                        sc = t->col;
+                                        el = t->line;
+                                        ec = t->col + wcslen(t->val) - 1;
+                                    .)
+    .
+
+integer_literal<unsigned long &value, int &sl, int &sc, int &el, int &ec>
+    = INTEGER_LITERAL               (.
+                                        bool overflow = false;
+                                        integer_value(t->val, overflow, value);
+                                        if (overflow)
+                                            errors->Warning(
+                                                t->line, t->col, L"Integer constant overflow");
+                                        sl = t->line;
+                                        sc = t->col;
+                                        el = t->line;
+                                        ec = t->col + wcslen(t->val) - 1;
+                                    .)
+    .
+
+fract_literal<int &major, int &minor>
+    = FRACT_LITERAL                 (.
+                                        bool overflow = false, ov = false;
+                                        unsigned long v;
+
+                                        wchar_t const *dot = integer_value(t->val, ov, v);
+                                        overflow |= ov;
+                                        major = v;
+
+                                        ov = false;
+                                        integer_value(dot + 1, ov, v);
+                                        overflow |= ov;
+                                        if (overflow)
+                                            errors->Warning(
+                                                t->line, t->col, L"Integer constant overflow");
+
+                                        minor = v;
+                                    .)
+    .
+
+floating_literal<double &value,int &sl,int &sc,int &el,int &ec,bool &is_float,bool &is_error>
+    = (FLOATING_LITERAL | FRACT_LITERAL)
+                                    (.
+                                        // do this only if we had NO error here
+                                        if (errDist > 0) {
+                                            wchar_t *end;
+                                            value = wcstod(t->val,&end);
+                                            if (value == HUGE_VAL || value == -HUGE_VAL) {
+                                                errors->Error(
+                                                    t->line, t->col,
+                                                    CONSTANT_TOO_BIG,
+                                                    Error_params(m_alloc));
+                                            }
+                                            switch (*end) {
+                                            case 'f': case 'F': is_float = true; ++end; break;
+                                            case 'd': case 'D': is_float = false; ++end; break;
+                                            case '\0': is_float = true; break;
+                                            }
+                                            if (*end)
+                                                fprintf(
+                                                    stderr,
+                                                    "failed to convert floating literal '%ls'\n",
+                                                    t->val);
+                                            sl = t->line;
+                                            sc = t->col;
+                                            el = t->line;
+                                            ec = t->col + wcslen(t->val) - 1;
+                                            is_error = false;
+                                        } else {
+                                            is_error = true;
+                                            value = 0.0;
+                                        }
+                                    .)
+    .
+
+string_literal<wchar_t const *&value,int &sl,int &sc,int &el,int &ec>
+    = STRING_LITERAL                (.
+                                        value = t->val;
+                                        sl = t->line;
+                                        sc = t->col;
+                                        el = t->line;
+                                        ec = t->col + wcslen(t->val) - 1;
+                                    .)
+    .
+
+mdl_version
+    = "mdl"
+                                    (.
+                                        int major = 0, minor = 0;
+                                    .)
+      fract_literal<major,minor>    (.
+                                        // do this only if we had NO error here
+                                        if (errDist > 0) {
+                                            bool res = m_module->set_version(
+                                                m_mdl, major, minor);
+                                            if (!res) {
+                                                errors->Error(
+                                                    t->line, t->col,
+                                                    UNSUPPORTED_MDL_VERSION,
+                                                    Error_params(m_alloc)
+                                                        .add(major)
+                                                        .add(minor));
+                                            } else {
+                                                scanner->set_mdl_version(major, minor);
+                                            }
+                                        }
+                                    .)
+    SYNC ';' .
+
+simple_name<ISimple_name const *&value>
+    = IDENT                         (. value = to_simple(t); .)
+    .
+
+qualified_import<IQualified_name *&value>
+    =
+                                        (.
+                                            value = m_name_factory->create_qualified_name();
+                                            ISimple_name const *simp_name = NULL;
+                                        .)
+        [
+            '.'                         (. value->add_component(to_simple(t)); .)
+            "::"
+            |
+            ".."                        (. value->add_component(to_simple(t)); .)
+            "::"
+            {
+                ".."                    (. value->add_component(to_simple(t)); .)
+                "::"
+            }
+            |
+            "::"                        (. value->set_absolute(); .)
+        ]
+        simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        { IF(is_scope_ident())
+            "::"
+            simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        }
+        [
+            "::" '*'                    (. value->add_component(to_simple(t)); .)
+        ]
+    .
+
+qualified_name<IQualified_name *&value>
+    =
+                                        (.
+                                            value = m_name_factory->create_qualified_name();
+                                            ISimple_name const *simp_name = NULL;
+                                        .)
+        [
+            "::"
+                                        (. value->set_absolute(); .)
+        ]
+        simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        {
+            "::"
+            simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        }
+    .
+
+qualified_import_prefix<IQualified_name *&value>
+    =
+                                        (.
+                                            value = m_name_factory->create_qualified_name();
+                                            ISimple_name const *simp_name = NULL;
+                                        .)
+        [
+            '.'                         (. value->add_component(to_simple(t)); .)
+            "::"
+            |
+            ".."                        (. value->add_component(to_simple(t)); .)
+            "::"
+            {
+                ".."                    (. value->add_component(to_simple(t)); .)
+                "::"
+            }
+            |
+            "::"                        (. value->set_absolute(); .)
+        ]
+        simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        {
+            "::"
+            simple_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        }
+    .
+
+frequency_qualifier<Qualifier &qualifier,int &sl,int &sc>
+    = "varying"
+                                                (.
+                                                    qualifier = FQ_VARYING;
+                                                    sl = t->line;
+                                                    sc = t->col;
+                                                .)
+    | "uniform"
+                                                (.
+                                                    qualifier = FQ_UNIFORM;
+                                                    sl = t->line;
+                                                    sc = t->col;
+                                                .)
+    .
+
+relative_type<IType_name *prefix,IType_name *&name>
+    = "bool"                                (. name = to_type(prefix, t); .)
+    | "bool2"                               (. name = to_type(prefix, t); .)
+    | "bool3"                               (. name = to_type(prefix, t); .)
+    | "bool4"                               (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "int"                                 (. name = to_type(prefix, t); .)
+    | "int2"                                (. name = to_type(prefix, t); .)
+    | "int3"                                (. name = to_type(prefix, t); .)
+    | "int4"                                (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "float"                               (. name = to_type(prefix, t); .)
+    | "float2"                              (. name = to_type(prefix, t); .)
+    | "float3"                              (. name = to_type(prefix, t); .)
+    | "float4"                              (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "float2x2"                            (. name = to_type(prefix, t); .)
+    | "float2x3"                            (. name = to_type(prefix, t); .)
+    | "float2x4"                            (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "float3x2"                            (. name = to_type(prefix, t); .)
+    | "float3x3"                            (. name = to_type(prefix, t); .)
+    | "float3x4"                            (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "float4x2"                            (. name = to_type(prefix, t); .)
+    | "float4x3"                            (. name = to_type(prefix, t); .)
+    | "float4x4"                            (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "double"                              (. name = to_type(prefix, t); .)
+    | "double2"                             (. name = to_type(prefix, t); .)
+    | "double3"                             (. name = to_type(prefix, t); .)
+    | "double4"                             (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "double2x2"                           (. name = to_type(prefix, t); .)
+    | "double2x3"                           (. name = to_type(prefix, t); .)
+    | "double2x4"                           (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "double3x2"                           (. name = to_type(prefix, t); .)
+    | "double3x3"                           (. name = to_type(prefix, t); .)
+    | "double3x4"                           (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "double4x2"                           (. name = to_type(prefix, t); .)
+    | "double4x3"                           (. name = to_type(prefix, t); .)
+    | "double4x4"                           (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "color"                               (. name = to_type(prefix, t); .)
+    | "string"                              (. name = to_type(prefix, t); .)
+    | "bsdf"                                (. name = to_type(prefix, t); .)
+    | "edf"                                 (. name = to_type(prefix, t); .)
+    | "vdf"                                 (. name = to_type(prefix, t); .)
+    | "light_profile"                       (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "material"                            (. name = to_type(prefix, t); .)
+    | "material_emission"                   (. name = to_type(prefix, t); .)
+    | "material_geometry"                   (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "material_surface"                    (. name = to_type(prefix, t); .)
+    | "material_volume"                     (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "texture_2d"                          (. name = to_type(prefix, t); .)
+    | "texture_3d"                          (. name = to_type(prefix, t); .)
+    | "texture_cube"                        (. name = to_type(prefix, t); .)
+    | "texture_ptex"                        (. name = to_type(prefix, t); .)
+    | "bsdf_measurement"                    (. name = to_type(prefix, t); .)
+    | "intensity_mode"                      (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | "intensity_radiant_exitance"          (. name = to_type(prefix, t); .)
+    | "intensity_power"                     (. name = to_type(prefix, t); .)
+                                                                                    /// @break
+    | IDENT                                 (. name = to_type(prefix, t); .)
+        [
+            "::"                            (. IType_name *name_cont = ERR_TYPE; .)
+            relative_type<name,name_cont>
+                                            (.  name = check_type(name_cont); .)
+        ]
+    .
+
+simple_type<IType_name *prefix,IType_name *&name>
+    =
+                                            (. bool is_absolute = false; .)
+        [
+            "::"
+                                            (. is_absolute = true; .)
+        ]
+        relative_type<prefix,name>
+                                            (.
+                                                name = check_type(name);
+                                                if (is_absolute)
+                                                    name->set_absolute();
+                                            .)
+    .
+
+array_type<IType_name *&name>
+    =
+        simple_type<0,name>                         (. name = check_type(name); .)
+        [                                           (. ISimple_name const *size_name = NULL; .)
+            '['                                     (. name->set_incomplete_array(); .)
+                [                                   (. IExpression const *exp = NULL; .)
+                    conditional_expression<exp>     (. name->set_array_size(check_expr(exp)); .)
+                | '<' simple_name<size_name> '>'    (. name->set_size_name(size_name); .)
+                ]
+            ']'
+                                                    (.
+                                                        Position &pos = name->access_position();
+                                                        pos.set_end_line(t->line);
+                                                        pos.set_end_column(t->col);
+                                                    .)
+        ]
+    .
+
+type<IType_name *&name>
+    =
+                                                    (.
+                                                        Qualifier qualifier = FQ_NONE;
+                                                        int sl = 0, sc = 0;
+                                                    .)
+        [ frequency_qualifier<qualifier,sl,sc> ]
+        array_type<name>
+                                                    (.
+                                                        name = check_type(name);
+                                                        name->set_qualifier(qualifier);
+                                                        if (sl) {
+                                                            Position &pos = name->access_position();
+                                                            pos.set_start_line(sl);
+                                                            pos.set_start_column(sc);
+                                                        }
+                                                    .)
+    .
+
+parameter<IParameter const *&parameter>
+    =
+                                                (.
+                                                    IType_name *type_name = ERR_TYPE;
+                                                    ISimple_name const *parameter_name = NULL;
+                                                    IExpression const *init_exp = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                    int sl = 0, sc = 0;
+                                                .)
+        type<type_name>
+        simple_name<parameter_name>
+        [ '=' assignment_expression<init_exp> ]                             /// @break@tab
+        [ annotation_block<annos> ]
+                                                (.
+                                                    parameter = create_parameter(
+                                                                    sl,
+                                                                    sc,
+                                                                    type_name,
+                                                                    parameter_name,
+                                                                    check_expr(init_exp),
+                                                                    annos);
+                                                .)
+    .
+
+parameter_list<Parameter_vector &parameters>
+    =
+        '('                                     (. IParameter const *para = NULL; .)
+            [
+                parameter<para>
+                                                (. parameters.push_back(para); .)
+                { WEAK ','
+                    parameter<para>
+                                                (. parameters.push_back(para); .)
+                }
+            ]
+        ')'
+    .
+
+positional_argument<IArgument const *&arg>
+    =                                           (. IExpression const *exp = NULL; .)
+        assignment_expression<exp>
+                                                (.
+                                                    arg = create_positional_argument(exp);
+                                                .)
+    .
+
+named_argument<IArgument const *&arg>
+    =                                           (.
+                                                    ISimple_name const *parameter_name = NULL;
+                                                    IExpression const  *exp = NULL;
+                                                .)
+        simple_name<parameter_name>
+        ':'
+        assignment_expression<exp>
+                                                (.
+                                                    arg = create_named_argument(
+                                                            parameter_name,
+                                                            exp);
+                                                .)
+    .
+
+argument_list<Argument_vector &args>
+    = '('                                                                       /// @break@tab
+                                                (. IArgument const *argument = NULL; .)
+            [ IF(is_named_argument())
+                named_argument<argument>
+                                                (. args.push_back(argument); .)
+                { WEAK ','
+                    named_argument<argument>
+                                                (. args.push_back(argument); .)
+                }                                                               /// @break
+            | positional_argument<argument>
+                                                (. args.push_back(argument); .)
+                { IF(see_comma() && !is_named_argument())
+                    WEAK ',' positional_argument<argument>
+                                                (. args.push_back(argument); .)
+                }                                                               /// @break@tab
+                { WEAK ','
+                    named_argument<argument>
+                                                (. args.push_back(argument); .)
+                }                                                               /// @break
+            ]                                                                   /// @break
+        ')'
+    .
+
+import<IDeclaration const *&declaration>
+    = 
+        "import"
+                                                (.
+                                                    IQualified_name *qual_name = NULL;
+                                                    IDeclaration_import *import
+                                                        = m_declaration_factory
+                                                            ->create_import(0,
+                                                                            false,
+                                                                            t->line,
+                                                                            t->col);
+                                                .)
+        qualified_import<qual_name>             (. import->add_name(qual_name); .)
+                                                       
+        {
+            WEAK ','
+            qualified_import<qual_name>         (. import->add_name(qual_name); .)
+        }
+        SYNC ';'                                                            /// @break
+                                                (.
+                                                    Position &pos = import->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                    declaration = import;
+                                                .)
+    |                                           (. bool exported = false; .)
+        [
+            "export"                            (. exported = true; .)
+        ]
+                                                (.
+                                                    IQualified_name *module_name = NULL;
+                                                    ISimple_name const *simp_name = NULL;
+                                                .)
+        "using"
+                                                (. int sl = t->line, sc = t->col; .)
+        qualified_import_prefix<module_name>                                /// @break@tab
+                                                (.
+                                                    IDeclaration_import *import
+                                                        = m_declaration_factory
+                                                            ->create_import(module_name,
+                                                                            exported,
+                                                                            sl,
+                                                                            sc);
+                                                .)
+        "import"
+            ( '*'
+                                                (. import->add_name(to_qualified(to_simple(t))); .)
+            | simple_name<simp_name>
+                                                (.
+                                                    import->add_name(to_qualified(simp_name));
+                                                .)
+                {
+                    WEAK ','
+                    simple_name<simp_name>
+                                                (.
+                                                    import->add_name(to_qualified(simp_name));
+                                                .)
+                }
+            )
+            SYNC ';'
+                                                (.
+                                                    Position &pos = import->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                    declaration = import;
+                                                .)
+    .
+
+module_declaration<IDeclaration const *&declaration>
+    =
+        (.
+            IAnnotation_block *annos = NULL;
+            int sl = t->line;
+            int sc = t->col;
+        .)
+        "module" [ annotation_block<annos> ] ';'
+        (.
+            declaration = m_declaration_factory->create_module(
+                annos,
+                sl,
+                sc,
+                t->line,
+                t->col);
+        .)
+    .
+
+global_declaration<bool exported, IDeclaration const *&declaration>
+    =
+        annotation_declaration<exported,declaration>                                /// @break
+    |
+        constant_declaration<exported,declaration>                                  /// @break
+    |
+        type_declaration<exported,declaration>                                      /// @break
+    |
+        function_declaration<exported,declaration>
+    .
+
+annotation_declaration<bool exported, IDeclaration const *&declaration>
+    =
+                                                (.  declaration = ERR_DECL; .)
+    "annotation"
+                                                (.
+                                                    ISimple_name const *annotation_name = NULL;
+                                                    Parameter_vector parameters(m_alloc);
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        simple_name<annotation_name>
+        parameter_list<parameters>
+        SYNC ';'
+                                                (.
+                                                    IDeclaration_annotation *annotation
+                                                        = m_declaration_factory
+                                                            ->create_annotation(
+                                                                annotation_name,
+                                                                exported,
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                                    size_t count = parameters.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        annotation->add_parameter(parameters[i]);
+                                                    declaration = annotation;
+                                                .)
+    .
+
+constant_declarator<IDeclaration_constant *declaration>
+    =                                           (.
+                                                    ISimple_name const *constant_name = NULL;
+                                                    IExpression const *init_exp = ERR_EXPR;
+                                                    IAnnotation_block *annos = NULL;
+                                                .)
+        simple_name<constant_name>
+        (                                       (.
+                                                    Argument_vector arguments(m_alloc);
+                                                    Position const &start_pos =
+                                                        constant_name->access_position();
+                                                    int sl = start_pos.get_start_line();
+                                                    int sc = start_pos.get_start_column();
+                                                .)
+            argument_list<arguments>
+                                                (.
+                                                    IType_name *tn = m_module->clone_name(
+                                                        declaration->get_type_name(),
+                                                        /*modifier=*/NULL);
+                                                    IExpression_call *call
+                                                        = m_expression_factory
+                                                            ->create_call(
+                                                                to_reference(tn),
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                                    size_t count = arguments.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        call->add_argument(arguments[i]);
+                                                    init_exp = call;
+                                                .)
+        | '=' conditional_expression<init_exp>
+        )
+                                                                                /// @break@tab
+        [ annotation_block<annos> ]
+                                                (.
+                                                    declaration->add_constant(
+                                                                    constant_name,
+                                                                    check_expr(init_exp),
+                                                                    annos);
+                                                .)
+    .
+
+constant_declaration<bool exported, IDeclaration const *&declaration>
+    =
+                                                    (. declaration = ERR_DECL; .)
+    "const"
+                                                    (.
+                                                        IType_name *type_name = ERR_TYPE;
+                                                        int sl = t->line;
+                                                        int sc = t->col;
+                                                    .)
+        type<type_name>
+                                                    (.
+                                                        IDeclaration_constant *constant_declaration
+                                                            = m_declaration_factory
+                                                                ->create_constant(
+                                                                    type_name,
+                                                                    exported,
+                                                                    sl,
+                                                                    sc);
+                                                    .)
+        constant_declarator<constant_declaration>
+        { WEAK ','
+            constant_declarator<constant_declaration>
+        }
+        SYNC ';'
+                                                    (.
+                                                        Position &pos
+                                                            = constant_declaration
+                                                                ->access_position();
+                                                        pos.set_end_line(t->line);
+                                                        pos.set_end_column(t->col);
+                                                        declaration = constant_declaration;
+                                                    .)
+    .
+
+type_declaration<bool exported, IDeclaration const *&declaration>
+    =
+                                                    (. declaration = ERR_DECL; .)
+        alias_type_declaration<exported,declaration>                                /// @break
+    |
+                                                    (. declaration = ERR_DECL; .)
+        struct_type_declaration<exported,declaration>                               /// @break
+    |
+                                                    (. declaration = ERR_DECL; .)
+        enum_type_declaration<exported,declaration>
+    .
+
+alias_type_declaration<bool exported, IDeclaration const *&declaration>
+    =                                           (. declaration = ERR_DECL; .)
+    "typedef"                                   (.
+                                                    IType_name *type_name = ERR_TYPE;
+                                                    ISimple_name const *alias_name = NULL;
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        type<type_name>
+        simple_name<alias_name>
+        SYNC ';'
+                                                (.
+                                                    declaration
+                                                        = m_declaration_factory
+                                                            ->create_alias(
+                                                                type_name,
+                                                                alias_name,
+                                                                exported,
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                                .)
+    .
+
+struct_field_declarator<IDeclaration_type_struct *declaration>
+    =                                           (.
+                                                    IType_name *field_type = ERR_TYPE;
+                                                    ISimple_name const *field_name = NULL;
+                                                    IExpression const *init_exp = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                .)
+        type<field_type>
+        simple_name<field_name>
+        [ '='                                   (. init_exp = ERR_EXPR; .)
+            expression<init_exp>
+        ]                                                                           /// @break@tab
+        [ annotation_block<annos> ]
+        SYNC ';'
+                                                (.
+                                                    declaration->add_field(
+                                                                    field_type,
+                                                                    field_name,
+                                                                    check_expr(init_exp),
+                                                                    annos);
+                                                .)
+    .
+
+struct_type_declaration<bool exported, IDeclaration const *&declaration>
+    =                                           (. declaration = ERR_DECL; .)
+    "struct"
+                                                (.
+                                                    ISimple_name const *struct_name = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        simple_name<struct_name>
+        [ annotation_block<annos> ]
+                                                (.
+                                                    IDeclaration_type_struct *struct_declaration
+                                                        = m_declaration_factory
+                                                            ->create_struct(
+                                                                struct_name,
+                                                                annos,
+                                                                exported,
+                                                                sl,
+                                                                sc);
+                                                .)
+        '{'
+            {
+                struct_field_declarator<struct_declaration>
+            }
+        '}'
+        SYNC ';'
+                                                (.
+                                                    Position &pos
+                                                        = struct_declaration->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                    declaration = struct_declaration;
+                                                .)
+    .
+
+enum_value_declarator<IDeclaration_type_enum *declaration>
+    =                                           (.
+                                                    ISimple_name const *enum_value_name = NULL;
+                                                    IExpression const *init_exp = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                .)
+        simple_name<enum_value_name>
+        [ '='                                   (. init_exp = ERR_EXPR; .)
+            assignment_expression<init_exp> ]
+        [ annotation_block<annos> ]
+                                                (.
+                                                    declaration->add_value(
+                                                                    enum_value_name,
+                                                                    check_expr(init_exp),
+                                                                    annos);
+                                                .)
+    .
+
+enum_type_declaration<bool exported, IDeclaration const *&declaration>
+    =
+                                                (. declaration = ERR_DECL; .)
+    "enum"
+                                                (.
+                                                    ISimple_name const *enum_name = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                    bool enum_class = false;
+                                                .)
+        simple_name<enum_name>
+        [ annotation_block<annos> ]
+                                                (.
+                                                    IDeclaration_type_enum *enum_declaration
+                                                        = m_declaration_factory
+                                                            ->create_enum(
+                                                                enum_name,
+                                                                annos,
+                                                                exported,
+                                                                enum_class,
+                                                                sl,
+                                                                sc);
+                                                .)
+        '{'                                                             /// @break@tab
+            enum_value_declarator<enum_declaration>
+            { WEAK ','
+                enum_value_declarator<enum_declaration>
+            }                                                           /// @break
+        '}'
+        SYNC ';'
+                                                (.
+                                                    Position &pos
+                                                        = enum_declaration->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                    declaration = enum_declaration;
+                                                .)
+    .
+
+variable_declarator<IDeclaration_variable *declaration>
+    =                                           (.
+                                                    ISimple_name const *variable_name = NULL;
+                                                    IExpression const *init_exp = NULL;
+                                                    IAnnotation_block *annos = NULL;
+                                                .)
+        simple_name<variable_name>
+        [                                       (.
+                                                    Argument_vector arguments(m_alloc);
+                                                    Position const &start_pos =
+                                                        variable_name->access_position();
+                                                    int sl = start_pos.get_start_line();
+                                                    int sc = start_pos.get_start_column();
+                                                .)
+            argument_list<arguments>
+                                                (.
+                                                    IType_name *tn = m_module->clone_name(
+                                                        declaration->get_type_name(),
+                                                        /*modifier=*/NULL);
+                                                    IExpression_call *call
+                                                        = m_expression_factory
+                                                            ->create_call(
+                                                                to_reference(tn),
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                                    size_t count = arguments.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        call->add_argument(arguments[i]);
+                                                    init_exp = call;
+                                                .)
+        | '=' assignment_expression<init_exp>
+        ]                                                                   /// @break@tab@tab
+        [ annotation_block<annos> ]
+                                                (.
+                                                    declaration->add_variable(
+                                                                    variable_name,
+                                                                    check_expr(init_exp),
+                                                                    annos);
+                                                .)
+    .
+
+variable_declaration<bool exported, IDeclaration const *&declaration>
+    =                                           (. declaration = ERR_DECL; .)
+                                                (.
+                                                    IType_name *type_name = ERR_TYPE;
+                                                    int sl = 0, sc = 0;
+                                                .)
+        type<type_name>
+                                                (.
+                                                    Position &t_pos = type_name->access_position();
+                                                    IDeclaration_variable *variable_declaration
+                                                        = m_declaration_factory
+                                                            ->create_variable(
+                                                                type_name,
+                                                                exported,
+                                                                sl ? sl : t_pos.get_start_line(),
+                                                                sc ? sc : t_pos.get_start_column());
+                                                .)
+            variable_declarator<variable_declaration>                               /// @break@tab
+            { WEAK ','
+                variable_declarator<variable_declaration>
+            }
+        SYNC ';'
+                                                (.
+                                                    Position &pos
+                                                        = variable_declaration->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                    declaration = variable_declaration;
+                                                .)
+    .
+    
+function_declaration<bool exported, IDeclaration const *&declaration>
+    =
+                                                (.
+                                                    declaration = ERR_DECL;
+                                                    IDeclaration_function *function = NULL;
+                                                    IType_name *ret_type = ERR_TYPE;
+                                                    ISimple_name const *function_name = NULL;
+                                                    IAnnotation_block *ret_annos = NULL;
+                                                    IAnnotation_block *fct_annos = NULL;
+                                                    Parameter_vector parameters(m_alloc);
+                                                    Qualifier qualifier = FQ_NONE;
+                                                    int sl = 0, sc = 0;
+                                                .)
+        type<ret_type>
+                                                (. ret_type = check_type(ret_type); .)
+        [ annotation_block<ret_annos> ]
+        simple_name<function_name>                                              /// @break@tab
+            ( IF(!is_clone())
+                parameter_list<parameters>
+                [ frequency_qualifier<qualifier,sl,sc> ]
+                [ annotation_block<fct_annos> ]                                 /// @break@tab
+                (
+                    ';'                                                         /// @break
+                                                (.
+                                                    Position const &pos
+                                                                    = ret_type->access_position();
+                                                    function
+                                                        = m_declaration_factory
+                                                            ->create_function(
+                                                                ret_type,
+                                                                ret_annos,
+                                                                function_name,
+                                                                /*is_preset=*/false,
+                                                                0,
+                                                                fct_annos,
+                                                                exported,
+                                                                pos.get_start_line(),
+                                                                pos.get_start_column(),
+                                                                t->line,
+                                                                t->col);
+                                                    size_t count = parameters.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        function->add_parameter(parameters[i]);
+                                                .)
+                |                               (. IStatement const *body = NULL; .)
+                    compound_statement<body>                                    /// @break
+                                                (.
+                                                    body = check_stmt(body);
+                                                    int el = 0, ec = 0;
+                                                    if (fct_annos) {
+                                                        Position const &pos
+                                                                = fct_annos->access_position();
+                                                        el = pos.get_end_line();
+                                                        ec = pos.get_end_column();
+                                                    } else {
+                                                        Position const &pos
+                                                                = body->access_position();
+                                                        el = pos.get_end_line();
+                                                        ec = pos.get_end_column();
+                                                    }
+                                                    Position const &pos
+                                                                    = ret_type->access_position();
+                                                    function
+                                                        = m_declaration_factory
+                                                            ->create_function(
+                                                                ret_type,
+                                                                ret_annos,
+                                                                function_name,
+                                                                /*is_preset=*/false,
+                                                                body,
+                                                                fct_annos,
+                                                                exported,
+                                                                pos.get_start_line(),
+                                                                pos.get_start_column(),
+                                                                el,
+                                                                ec);
+                                                    size_t count = parameters.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        function->add_parameter(parameters[i]);
+                                                .)
+                | '='                           (. IExpression const *init_exp = ERR_EXPR; .)
+                    expression<init_exp>
+                    SYNC ';'                                                    /// @break
+                                                (.
+                                                    Position const &pos
+                                                                    = ret_type->access_position();
+                                                    function
+                                                        = m_declaration_factory
+                                                            ->create_function(
+                                                                ret_type,
+                                                                ret_annos,
+                                                                function_name,
+                                                                /*is_preset=*/false,
+                                                                to_statement(init_exp),
+                                                                fct_annos,
+                                                                exported,
+                                                                pos.get_start_line(),
+                                                                pos.get_start_column(),
+                                                                t->line,
+                                                                t->col);
+                                                    size_t count = parameters.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        function->add_parameter(parameters[i]);
+                                                .)
+                )                                                               /// @break
+            | '(' '*' ')'                       (.  IExpression const *init_exp = ERR_EXPR; .)
+                [ annotation_block<fct_annos> ]
+                '=' expression<init_exp>
+                SYNC ';'                                                        /// @break
+                                                (.
+                                                    Position const &pos
+                                                                    = ret_type->access_position();
+                                                    function
+                                                        = m_declaration_factory
+                                                            ->create_function(
+                                                                ret_type,
+                                                                ret_annos,
+                                                                function_name,
+                                                                /*is_preset=*/true,
+                                                                to_statement(init_exp),
+                                                                fct_annos,
+                                                                exported,
+                                                                pos.get_start_line(),
+                                                                pos.get_start_column(),
+                                                                t->line,
+                                                                t->col);
+                                                .)
+            )
+                                                (.
+                                                    if (function) {
+                                                        // no syntax error
+                                                        function->set_qualifier(qualifier);
+                                                        declaration = function;
+                                                    }
+                                                .)
+    .
+
+annotation_block<IAnnotation_block *&annos>
+    =
+        "[["
+                                                (.
+                                                    IAnnotation *anno = NULL;
+                                                    annos = m_annotation_factory
+                                                                ->create_annotation_block(
+                                                                    t->line,
+                                                                    t->col);
+                                                .)
+            annotation<anno>
+                                                (. add_annotation(annos,anno); .)
+            {
+                WEAK ','
+                annotation<anno>
+                                                (. add_annotation(annos,anno); .)
+            }
+        (
+            IF(is_anno_block_end()) "]" "]"
+          | IF(false) "]" "]"                   (. /* resolver cannot be without alternative */ .)
+        )
+                                                (.
+                                                    Position &pos = anno->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                .)
+    .
+
+annotation<IAnnotation *&anno>
+    =
+                                                (.
+                                                    anno = NULL;
+                                                    IQualified_name *annotation_name = NULL;
+                                                    Argument_vector arguments(m_alloc);
+                                                .)
+        qualified_name<annotation_name>
+                                                (.
+                                                    Position const &n_pos
+                                                        = annotation_name->access_position();
+                                                    anno = m_annotation_factory
+                                                            ->create_annotation(
+                                                                annotation_name,
+                                                                n_pos.get_start_line(),
+                                                                n_pos.get_start_column());
+                                                .)
+        argument_list<arguments>
+                                                (.
+                                                    size_t count = arguments.size();
+                                                    for (size_t i = 0; i < count; ++i)
+                                                        anno->add_argument(arguments[i]);
+                                                    Position &pos = anno->access_position();
+                                                    pos.set_end_line(t->line);
+                                                    pos.set_end_column(t->col);
+                                                .)
+    .
+
+statement<IStatement const *&stmnt>
+    =
+    (.
+       bool is_decl = is_declaration();
+       stmnt = ERR_STMT;
+     .)
+    (
+      compound_statement<stmnt>                                                 /// @break
+    |
+                                                (. IDeclaration const *declaration = NULL; .)
+      type_declaration<false,declaration>                                       /// @break
+                                                (. stmnt = create_declaration(declaration); .)
+    |
+                                                (. IDeclaration const *declaration = NULL; .)
+      constant_declaration<false,declaration>                                   /// @break
+                                                (. stmnt = create_declaration(declaration); .)
+    |
+        if_statement<stmnt>                                                     /// @break
+    |
+        switch_statement<stmnt>                                                 /// @break
+    |
+        while_statement<stmnt>                                                  /// @break
+    |
+        do_statement<stmnt>                                                     /// @break
+    |
+        for_statement<stmnt>                                                    /// @break
+    |
+        break_statement<stmnt>                                                  /// @break
+    |
+        continue_statement<stmnt>                                               /// @break
+    |
+        return_statement<stmnt>
+    | IF(is_decl)
+                                                (. IDeclaration const *declaration = NULL; .)
+        variable_declaration<false,declaration>                                 /// @break
+                                                (. stmnt = create_declaration(declaration); .)
+    | IF(!is_decl)
+        expression_statement<stmnt>                                             /// @break
+    )
+    .
+
+compound_statement<const IStatement *&stmnt>
+    =                                       (. stmnt = ERR_STMT; .)
+        '{'
+                                            (.
+                                                IStatement_compound *block
+                                                    = m_statement_factory->create_compound(
+                                                                                t->line,
+                                                                                t->col);
+                                                IStatement const *component = NULL;
+                                            .)
+            {
+                statement<component>        (. block->add_statement(check_stmt(component)); .)
+            }
+        '}'
+                                            (.
+                                                Position &pos = block->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col);
+                                                stmnt = block;
+                                            .)
+    .
+
+expression_statement<IStatement const *&stmnt>
+    =
+                                            (.
+                                                stmnt = ERR_STMT;
+                                                IExpression const *exp = NULL;
+                                            .)
+        [
+            expression<exp>
+        ]
+        SYNC ';'
+                                            (.
+                                                // SYNC enforces one read, so we are above ';'
+                                                if (errDist - 1 < minErrDist)
+                                                    exp = ERR_EXPR;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                                if (exp != NULL && exp != ERR_EXPR) {
+                                                    Position const &pos = exp->access_position();
+                                                    sl = pos.get_start_line();
+                                                    sc = pos.get_start_column();
+                                                }
+                                                IStatement_expression *expr_stmnt
+                                                    = m_statement_factory
+                                                        ->create_expression(
+                                                            check_expr(exp),
+                                                            sl,
+                                                            sc,
+                                                            t->line,
+                                                            t->col);
+                                                stmnt = expr_stmnt;
+                                            .)
+    .
+
+if_statement<IStatement const *&stmnt>
+    =                                       (. stmnt = ERR_STMT; .)
+    "if"
+                                            (.
+                                                IExpression const *cond = NULL;
+                                                IStatement const *true_stmnt = NULL;
+                                                IStatement const *false_stmnt = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        '(' expression<cond> ')'
+        statement<true_stmnt>               (. true_stmnt  = check_stmt(true_stmnt); .)
+        [ "else" statement<false_stmnt>     (. false_stmnt = check_stmt(false_stmnt); .) ]
+                                            (.
+                                                int el = 0, ec = 0;
+                                                if (false_stmnt) {
+                                                    Position const &pos
+                                                        = false_stmnt->access_position();
+                                                    el = pos.get_end_line();
+                                                    ec = pos.get_end_column();
+                                                } else {
+                                                    Position const &pos
+                                                        = true_stmnt->access_position();
+                                                    el = pos.get_end_line();
+                                                    ec = pos.get_end_column();
+                                                }
+                                                stmnt
+                                                    = m_statement_factory
+                                                        ->create_if(
+                                                            check_expr(cond),
+                                                            true_stmnt,
+                                                            false_stmnt,
+                                                            sl,
+                                                            sc,
+                                                            el,
+                                                            ec);
+                                            .)
+    .
+
+switch_statement<IStatement const *&stmnt>
+    =
+                                            (. stmnt = ERR_STMT; .)
+        "switch"
+                                            (.
+                                                IStatement_switch *switch_stmnt = NULL;
+                                                IExpression const *cond = NULL;
+                                                IStatement const  *scase = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        '(' expression<cond> ')'
+                                            (.
+                                                switch_stmnt = m_statement_factory
+                                                        ->create_switch(check_expr(cond), sl, sc);
+                                            .)
+        '{'
+            {
+                switch_case<scase>          (. switch_stmnt->add_case(check_stmt(scase)); .)
+            }
+        '}'
+                                            (.
+                                                Position &pos = switch_stmnt->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col);
+                                                stmnt = switch_stmnt;
+                                            .)
+    .
+
+switch_case<IStatement const *&stmnt>
+    =
+                                            (. stmnt = ERR_STMT; .)
+        "case"
+                                            (.
+                                                IExpression const *exp = ERR_EXPR;
+                                                IStatement const *component = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                                int el = sl;
+                                                int ec = sc;
+                                            .)
+        expression<exp>
+        ':'
+                                            (.
+                                                IStatement_case *switch_case
+                                                    = m_statement_factory
+                                                        ->create_switch_case(
+                                                            check_expr(exp),
+                                                            sl,
+                                                            sc);
+                                            .)
+        {
+            statement<component>
+                                            (.
+                                                component = check_stmt(component);
+                                                Position const &s_pos
+                                                                = component->access_position();
+                                                el = s_pos.get_end_line();
+                                                ec = s_pos.get_end_column();
+                                                switch_case->add_statement(component);
+                                            .)
+        }
+                                            (.
+                                                Position &pos = switch_case->access_position();
+                                                pos.set_end_line(el);
+                                                pos.set_end_column(ec);
+                                                stmnt = switch_case;
+                                            .)
+    |
+                                            (. stmnt = ERR_STMT; .)
+        "default"
+                                            (.
+                                                IStatement const *component = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                                int el = sl;
+                                                int ec = sc;
+                                            .)
+        ':'
+                                            (.
+                                                IStatement_case *switch_case
+                                                    = m_statement_factory
+                                                        ->create_switch_case(0,sl,sc);
+                                            .)
+        {
+            statement<component>
+                                            (.  component = check_stmt(component);
+                                                Position const &s_pos
+                                                                = component->access_position();
+                                                el = s_pos.get_end_line();
+                                                ec = s_pos.get_end_column();
+                                                switch_case->add_statement(component);
+                                            .)
+        }
+                                            (.
+                                                Position &pos = switch_case->access_position();
+                                                pos.set_end_line(el);
+                                                pos.set_end_column(ec);
+                                                stmnt = switch_case;
+                                            .)
+    .
+
+while_statement<IStatement const *&stmnt>
+    =                                       (. stmnt = ERR_STMT; .)
+    "while"
+                                            (.
+                                                IExpression const *cond = NULL;
+                                                IStatement const *body = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        '(' expression<cond> ')'
+        statement<body>
+                                            (.
+                                                body = check_stmt(body);
+                                                Position const &pos = body->access_position();
+                                                stmnt = m_statement_factory
+                                                            ->create_while(
+                                                                check_expr(cond),
+                                                                body,
+                                                                sl,
+                                                                sc,
+                                                                pos.get_end_line(),
+                                                                pos.get_end_column());
+                                            .)
+    .
+
+do_statement<IStatement const *&stmnt>
+    =                                       (. stmnt = ERR_STMT; .)
+    "do"
+                                            (.
+                                                IExpression const *cond = NULL;
+                                                IStatement const *body = NULL;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        statement<body>
+        "while" '(' expression<cond> ')'
+        SYNC ';'
+                                            (.
+                                                stmnt = m_statement_factory
+                                                            ->create_do_while(
+                                                                check_expr(cond),
+                                                                check_stmt(body),
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                            .)
+    .
+
+for_statement<IStatement const *&stmnt>
+    =                                       (. stmnt = ERR_STMT; .)
+    "for"
+                                            (.
+                                                IDeclaration const *init_decl = NULL;
+                                                IStatement const *init_stmnt = NULL;
+                                                IExpression const *test = NULL;
+                                                IExpression const *update = NULL;
+                                                IStatement const *body = ERR_STMT;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        '('
+                                            (. bool is_decl = is_declaration(); .)
+            ( IF(is_decl) variable_declaration<false,init_decl>
+            | IF(!is_decl) expression_statement<init_stmnt>
+            )
+                                                                        /// @break@tab@tab
+            [ expression<test> ]
+            SYNC ';'
+            [ expression<update> ]
+        ')'
+                                                                        /// @break@tab
+        statement<body>
+                                            (.
+                                                if (init_decl)
+                                                    init_stmnt
+                                                        = create_declaration(init_decl);
+                                                body = check_stmt(body);
+                                                Position const &pos = body->access_position();
+                                                stmnt
+                                                    = m_statement_factory
+                                                        ->create_for(
+                                                            check_stmt(init_stmnt),
+                                                            check_expr(test),
+                                                            check_expr(update),
+                                                            body,
+                                                            sl,
+                                                            sc,
+                                                            pos.get_end_line(),
+                                                            pos.get_end_column());
+                                            .)
+    .
+
+break_statement<IStatement const *&stmnt>
+    =                                           (. stmnt = ERR_STMT; .)
+    "break"
+                                                (.
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        SYNC ';'
+                                                (.
+                                                    stmnt = m_statement_factory->create_break(
+                                                                                    sl,
+                                                                                    sc,
+                                                                                    t->line,
+                                                                                    t->col);
+                                                .)
+    .
+
+continue_statement<IStatement const *&stmnt>
+    =                                           (. stmnt = ERR_STMT; .)
+    "continue"
+                                                (.
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        SYNC ';'
+                                                (.
+                                                    stmnt = m_statement_factory->create_continue(
+                                                                                    sl,
+                                                                                    sc,
+                                                                                    t->line,
+                                                                                    t->col);
+                                                .)
+    .
+
+return_statement<IStatement const *&stmnt>
+    =                                           (. stmnt = ERR_STMT; .)
+    "return"                                    (.
+                                                    IExpression const *exp = ERR_EXPR;
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        expression<exp>
+        SYNC ';'
+                                                (.
+                                                    stmnt = m_statement_factory->create_return(
+                                                                                    check_expr(exp),
+                                                                                    sl,
+                                                                                    sc,
+                                                                                    t->line,
+                                                                                    t->col);
+                                                .)
+    .
+
+literal_expression<IExpression const *&exp>
+    =
+                                            (.
+                                                exp = ERR_EXPR;
+                                                bool boolean_value;
+                                                int sl = 0, sc = 0, el = 0, ec = 0;
+                                            .)
+      boolean_literal<boolean_value,sl,sc,el,ec>
+                                            (.
+                                                exp = m_expression_factory
+                                                        ->create_literal(
+                                                            m_value_factory
+                                                                ->create_bool(boolean_value),
+                                                            sl,sc,el,ec);
+                                            .)                                          /// @break
+    |
+                                            (.
+                                                exp = ERR_EXPR;
+                                                unsigned long integer_value;
+                                                int sl = 0, sc = 0, el = 0, ec = 0;
+                                            .)
+      integer_literal<integer_value,sl,sc,el,ec>
+                                            (.
+                                                exp = m_expression_factory
+                                                        ->create_literal(
+                                                            m_value_factory
+                                                                ->create_int(integer_value),
+                                                            sl,sc,el,ec);
+                                            .)                                          /// @break
+    |
+                                            (.
+                                                exp = ERR_EXPR;
+                                                double floating_value;
+                                                int sl = 0, sc = 0, el = 0, ec = 0;
+                                                bool is_float = true;
+                                                bool is_error = true;
+                                            .)
+      floating_literal<floating_value,sl,sc,el,ec,is_float,is_error>
+                                            (.
+                                                IValue *v = is_float ?
+                                                    (IValue *)m_value_factory->create_float(
+                                                        float(floating_value)) :
+                                                    (IValue *)m_value_factory->create_double(
+                                                        floating_value);
+                                                exp = m_expression_factory
+                                                        ->create_literal(v,sl,sc,el,ec);
+                                            .)                                          /// @break
+    |
+                                            (.
+                                                exp = ERR_EXPR;
+                                                wchar_t const *string_value;
+                                                int sl = 0, sc = 0, el = 0, ec = 0;
+                                                string result(m_alloc);
+                                            .)
+      string_literal<string_value,sl,sc,el,ec>
+                                            (.
+                                                result += convert_escape_sequences_skip_quotes(string_value);
+                                            .)
+      {
+                                            (. int dsl = 0, dsc = 0; .)
+        string_literal<string_value,dsl,dsc,el,ec>
+                                            (.
+                                                result += convert_escape_sequences_skip_quotes(string_value);
+                                            .)
+      }
+                                            (.
+                                                exp = m_expression_factory
+                                                        ->create_literal(
+                                                            m_value_factory
+                                                                ->create_string(result.c_str()),
+                                                            sl,sc,el,ec);
+                                            .)
+    .
+
+primary_expression<IExpression const *&exp>
+    =
+                                            (. exp = ERR_EXPR; .)
+        literal_expression<exp>                                                     /// @break
+    |
+                                            (.
+                                                exp = ERR_EXPR;
+                                                IType_name *type_name = ERR_TYPE;
+                                            .)
+        simple_type<0,type_name>            (. bool is_array_con = false; .)
+        [
+          IF(is_array_constructor())
+            '[' ']'                         (. is_array_con = true; .)
+        ]                                                                           /// @break
+                                            (. exp = to_reference(type_name, is_array_con); .)
+    |
+                                            (. exp = ERR_EXPR; .)
+        '(' expression<exp> ')'                                                     /// @break
+                                            (. mark_parenthesis(exp); .)
+    .
+
+postfix_expression<IExpression const *&exp>
+    =                                       (.  exp = ERR_EXPR;
+                                            .)
+    primary_expression<exp>                                                     /// @break@tab
+                                            (.
+                                                Position const &pos = exp->access_position();
+                                                int sl = pos.get_start_line();
+                                                int sc = pos.get_start_column();
+                                            .)
+        { "++"                                                                  /// @break
+                                            (.
+                                                IExpression_unary *un_exp = create_unary(
+                                                            IExpression_unary::OK_POST_INCREMENT,
+                                                            check_expr(exp));
+                                                Position &pos = un_exp->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col + 1);
+                                                exp = un_exp;
+                                            .)
+        | "--"                                                                  /// @break
+                                            (.
+                                                IExpression_unary *un_exp = create_unary(
+                                                            IExpression_unary::OK_POST_DECREMENT,
+                                                            check_expr(exp));
+                                                Position &pos = un_exp->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col + 1);
+                                                exp = un_exp;
+                                            .)
+        | '.'                               (. ISimple_name const *field_name = NULL; .)
+            simple_name<field_name>                                             /// @break
+                                            (.
+                                                IExpression const *right
+                                                                    = to_reference(field_name);
+                                                IExpression_binary *bin_exp = create_binary(
+                                                            IExpression_binary::OK_SELECT,
+                                                            check_expr(exp),
+                                                            right);
+                                                exp = bin_exp;
+
+                                            .)
+        |                                   (. Argument_vector arguments(m_alloc); .)
+            argument_list<arguments>                                              /// @break
+                                            (.
+                                                IExpression_call *call
+                                                    = m_expression_factory->create_call(
+                                                        check_expr(exp),
+                                                        sl,
+                                                        sc,
+                                                        t->line,
+                                                        t->col);
+                                                size_t count = arguments.size();
+                                                for (size_t i = 0; i < count; ++i)
+                                                    call->add_argument(arguments[i]);
+                                                exp = call;
+                                            .)
+        |
+            '['
+                                            (.
+                                                IExpression const *right = NULL;
+                                            .)
+                expression<right>
+            ']'                                                                 /// @break
+                                            (.
+                                                IExpression_binary *bin_exp = create_binary(
+                                                            IExpression_binary::OK_ARRAY_INDEX,
+                                                            check_expr(exp),
+                                                            check_expr(right));
+                                                Position &pos = bin_exp->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col);
+                                                exp = bin_exp;
+                                            .)
+        }
+    .
+
+let_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    "let"                                   (.
+                                                IExpression_let *let_exp
+                                                    = m_expression_factory->create_let(
+                                                                                0,
+                                                                                t->line,
+                                                                                t->col);
+                                                IDeclaration const *decl = ERR_DECL;
+                                            .)                                  /// @break@tab
+            ( variable_declaration<false, decl>                                 /// @break
+                                            (. let_exp->add_declaration(check_decl(decl)); .)
+            |
+                '{'
+                    variable_declaration<false, decl>
+                                            (. let_exp->add_declaration(check_decl(decl)); .)
+                    {
+                        variable_declaration<false, decl>
+                                            (. let_exp->add_declaration(check_decl(decl)); .)
+                    }
+                '}'                                                             /// @break
+            )                                                                   /// @break
+        WEAK "in"                           (. IExpression const *right = ERR_EXPR; .)
+        unary_expression<right>             (.
+                                                right = check_expr(right);
+                                                let_exp->set_expression(right);
+                                                Position const &e_pos = right->access_position();
+                                                Position &pos = let_exp->access_position();
+                                                pos.set_end_line(e_pos.get_end_line());
+                                                pos.set_end_column(e_pos.get_end_column());
+                                                exp = let_exp;
+                                            .)
+    .
+
+unary_expression<IExpression const *&exp>
+    =
+                                            (.
+                                                IType_name *name = ERR_TYPE;
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                                exp = ERR_EXPR;
+                                            .)
+    (
+        IF(is_c_style_cast())
+            '(' type<name> ')' unary_expression<exp>
+                                            (.
+                                                errors->Error(
+                                                    sl, sc,
+                                                    FORBIDDED_C_STYLE_CAST,
+                                                    Error_params(m_alloc));
+                                                // convert to call
+                                                name = check_type(name);
+                                                exp  = check_expr(exp);
+                                                IExpression const *cons =
+                                                    make_invalid(name->access_position());
+                                                IExpression_call *call =
+                                                    m_expression_factory->create_call(
+                                                        cons,
+                                                        sl,
+                                                        sc,
+                                                        t->line,
+                                                        t->col);
+                                                IArgument_positional const *arg =
+                                                    create_positional_argument(exp);
+                                                call->add_argument(arg);
+                                                exp = call;
+                                            .)
+    |
+        postfix_expression<exp>                                                     /// @break
+    |
+                                            (.
+                                                IExpression_unary::Operator op
+                                                    = IExpression_unary::OK_POSITIVE;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+        ( "~"                               (. op = IExpression_unary::OK_BITWISE_COMPLEMENT; .)
+        | "!"                               (. op = IExpression_unary::OK_LOGICAL_NOT; .)
+        | "+"                               (. op = IExpression_unary::OK_POSITIVE; .)
+        | "-"                               (. op = IExpression_unary::OK_NEGATIVE; .)
+        | "++"                              (. op = IExpression_unary::OK_PRE_INCREMENT; .)
+        | "--"                              (. op = IExpression_unary::OK_PRE_DECREMENT; .)
+        )
+        unary_expression<right>                                                     /// @break
+                                            (.
+                                                IExpression_unary *un_exp = create_unary(
+                                                    op, check_expr(right));
+                                                Position &pos = un_exp->access_position();
+                                                pos.set_start_line(sl);
+                                                pos.set_start_column(sc);
+                                                exp = un_exp;
+                                            .)
+    |
+        let_expression<exp>
+    )
+    .
+
+multiplicative_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    unary_expression<exp>                   (. exp = check_expr(exp); .)
+        {
+                                            (.
+                                                IExpression_binary::Operator op
+                                                    = IExpression_binary::OK_MULTIPLY;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+            ( "*"                           (. op = IExpression_binary::OK_MULTIPLY; .)
+            | "/"                           (. op = IExpression_binary::OK_DIVIDE; .)
+            | "%"                           (. op = IExpression_binary::OK_MODULO; .)
+            )
+            unary_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(op, exp, right);
+                                            .)
+        }
+    .
+
+additive_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    multiplicative_expression<exp>          (. exp = check_expr(exp); .)
+        {
+                                            (.
+                                                IExpression_binary::Operator op
+                                                    = IExpression_binary::OK_PLUS;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+            ( "+"                           (. op = IExpression_binary::OK_PLUS; .)
+            | "-"                           (. op = IExpression_binary::OK_MINUS; .)
+            )
+            multiplicative_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(op,exp,right);
+                                            .)
+        }
+    .
+
+shift_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    additive_expression<exp>                (. exp = check_expr(exp); .)
+        {
+                                            (.
+                                                IExpression_binary::Operator op
+                                                    = IExpression_binary::OK_SHIFT_LEFT;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+            ( "<<"                          (. op = IExpression_binary::OK_SHIFT_LEFT; .)
+            | ">>"                          (. op = IExpression_binary::OK_SHIFT_RIGHT; .)
+            | ">>>"                         (. op = IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT; .)
+            )
+            additive_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(op,exp,right);
+                                            .)
+        }
+    .
+
+relational_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    shift_expression<exp>                   (. exp = check_expr(exp); .)
+        {
+                                            (.
+                                                IExpression_binary::Operator op
+                                                    = IExpression_binary::OK_LESS;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+            ( "<"                           (. op = IExpression_binary::OK_LESS; .)
+            | "<="                          (. op = IExpression_binary::OK_LESS_OR_EQUAL; .)
+            | ">="                          (. op = IExpression_binary::OK_GREATER_OR_EQUAL; .)
+            | ">"                           (. op = IExpression_binary::OK_GREATER; .)
+            )
+            shift_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(op,exp,right);
+                                            .)
+        }
+    .
+
+equality_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    relational_expression<exp>              (. exp = check_expr(exp); .)
+        {
+                                            (.
+                                                IExpression_binary::Operator op
+                                                    = IExpression_binary::OK_EQUAL;
+                                                IExpression const *right = ERR_EXPR;
+                                            .)
+            ( "=="                          (. op = IExpression_binary::OK_EQUAL; .)
+            | "!="                          (. op = IExpression_binary::OK_NOT_EQUAL; .)
+            )
+            relational_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(op,exp,right);
+                                            .)
+
+        }
+    .
+
+and_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    equality_expression<exp>                (. exp = check_expr(exp); .)
+        { '&'                               (. IExpression const *right = ERR_EXPR; .)
+            equality_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(
+                                                            IExpression_binary::OK_BITWISE_AND,
+                                                            exp,
+                                                            right);
+                                            .)
+        }
+    .
+
+exclusive_or_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    and_expression <exp>                    (. exp = check_expr(exp); .)
+        { '^'                               (. IExpression const *right = ERR_EXPR; .)
+            and_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(
+                                                            IExpression_binary::OK_BITWISE_XOR,
+                                                            exp,
+                                                            right);
+                                            .)
+        }
+    .
+
+inclusive_or_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    exclusive_or_expression<exp>            (. exp = check_expr(exp); .)
+        { '|'                               (. IExpression const *right = ERR_EXPR; .)
+            exclusive_or_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(
+                                                            IExpression_binary::OK_BITWISE_OR,
+                                                            exp,
+                                                            right);
+                                            .)
+        }
+    .
+
+logical_and_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    inclusive_or_expression<exp>            (. exp = check_expr(exp); .)
+        { "&&"                              (. IExpression const *right = ERR_EXPR; .)
+            inclusive_or_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(
+                                                            IExpression_binary::OK_LOGICAL_AND,
+                                                            exp,
+                                                            right);
+                                            .)
+        }
+    .
+
+logical_or_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    logical_and_expression<exp>             (. exp = check_expr(exp); .)
+        { "||"                              (. IExpression const *right = ERR_EXPR; .)
+            logical_and_expression<right>
+                                            (.
+                                                right = check_expr(right);
+                                                exp = create_binary(
+                                                            IExpression_binary::OK_LOGICAL_OR,
+                                                            exp,
+                                                            right);
+                                            .)
+        }
+    .
+
+conditional_expression<IExpression const *&exp>
+    =                                       (. exp = ERR_EXPR; .)
+    logical_or_expression<exp>              (. exp = check_expr(exp); .)
+        [                                   (. IExpression const *true_exp = ERR_EXPR,
+                                                                 *false_exp = ERR_EXPR; .)
+            '?' expression<true_exp>
+            ':' assignment_expression<false_exp>
+                                            (.
+                                                true_exp = check_expr(true_exp);
+                                                false_exp = check_expr(false_exp);
+                                                exp = m_expression_factory
+                                                        ->create_conditional(
+                                                            exp,
+                                                            true_exp,
+                                                            false_exp);
+                                            .)
+        ]
+    .
+
+assignment_operator<IExpression_binary::Operator &op>
+    = '='                           (. op = IExpression_binary::OK_ASSIGN; .)
+    | "*="                          (. op = IExpression_binary::OK_MULTIPLY_ASSIGN; .)
+    | "/="                          (. op = IExpression_binary::OK_DIVIDE_ASSIGN; .)
+    | "%="                          (. op = IExpression_binary::OK_MODULO_ASSIGN; .)
+    | "+="                          (. op = IExpression_binary::OK_PLUS_ASSIGN; .)
+    | "-="                          (. op = IExpression_binary::OK_MINUS_ASSIGN; .)
+    | "<<="                         (. op = IExpression_binary::OK_SHIFT_LEFT_ASSIGN; .)
+    | ">>="                         (. op = IExpression_binary::OK_SHIFT_RIGHT_ASSIGN; .)
+    | ">>>="                        (. op = IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT_ASSIGN; .)
+    | "&="                          (. op = IExpression_binary::OK_BITWISE_AND_ASSIGN; .)
+    | "^="                          (. op = IExpression_binary::OK_BITWISE_XOR_ASSIGN; .)
+    | "|="                          (. op = IExpression_binary::OK_BITWISE_OR_ASSIGN; .)
+    .
+
+assignment_expression<IExpression const *&exp>
+    =                                           (. exp = ERR_EXPR; .)
+    logical_or_expression<exp>                  (. exp = check_expr(exp); .)        /// @break@tab
+            [                                   (.
+                                                    IExpression const *true_exp = ERR_EXPR;
+                                                    IExpression const *false_exp = ERR_EXPR;
+                                                .)
+                '?' expression<true_exp>
+                ':' assignment_expression<false_exp>                                /// @break
+                                                (.
+                                                    true_exp = check_expr(true_exp);
+                                                    false_exp = check_expr(false_exp);
+                                                    exp = create_conditional(
+                                                                exp,
+                                                                true_exp,
+                                                                false_exp);
+                                                .)
+            |                                   (.
+                                                    IExpression_binary::Operator op
+                                                        = IExpression_binary::OK_ASSIGN;
+                                                    IExpression const *right = ERR_EXPR;
+                                                .)
+                assignment_operator<op>
+                assignment_expression<right>                                        /// @break
+                                                (.
+                                                    right = check_expr(right);
+                                                    exp = create_binary(op,exp,right);
+                                                .)
+            ]
+    .
+
+expression<IExpression const *&exp>
+    =                                           (. exp = ERR_EXPR; .)
+    assignment_expression<exp>                  (. exp = check_expr(exp); .)
+        { ','                                   (. IExpression const *right = NULL; .)
+            assignment_expression<right>
+                                                (. 
+                                                    right = check_expr(right);
+                                                    exp = create_binary(
+                                                                IExpression_binary::OK_SEQUENCE,
+                                                                exp,
+                                                                right);
+                                                .)
+        }
+    .
+
+END mdl.

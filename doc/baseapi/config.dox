@@ -1,0 +1,93 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_base_intro_config \BaseApiName Configuration Options
+
+
+\section mi_base_intro_assert \BaseApiName Configuration Options for Assertions 
+
+The \baseApiName supports quality software development with assertions.
+They are contained in various places in the \BaseApiName include files.
+
+These tests are switched off by default to have the performance of a
+release build. To activate the tests, you need to define the two
+macros \c mi_base_assert and \c mi_base_assert_msg before
+including the relevant include files. Defining only one of the two
+macros is considered an error. These macros and their parameters
+have the following meaning:
+
+  - \c mi_base_assert(expr): If \c expr evaluates to \c true this
+       macro shall have no effect. If \c expr evaluates to \c
+       false this macro may print a diagnostic message and change
+       the control flow of the program, such as aborting the
+       program or throwing an exception. But it may also have no
+       effect at all, for example if assertions are configured to
+       be disabled.
+
+  - \c mi_base_assert_msg(expr, msg): Same behavior as \c
+       mi_base_assert(expr), but the \c msg text string contains
+       additional diagnostic information that may be shown with a
+       diagnostic message. Typical usages would contain \c
+       "precondition" or  \c "postcondition" as clarifying
+       context information in the \c msg parameter.
+
+See \ref mi_base_assert .
+
+
+\section mi_base_config_stl \BaseApiName Configuration Options for STL Use
+
+\BaseApiName makes occasionally use of Standard Template Library (STL)
+headers, classes, and functions. This behavior can be customized
+with the following macro:
+
+  - \c MI_BASE_NO_STL: The \baseApiName will not include any STL
+    header and it will not use any STL classes not functions. 
+    Instead it will add missing class and function definitions to its 
+    own namespace, for example \c min and \c max function templates.
+
+    \b Note: The \baseApiName still includes a few standard C++
+    headers, for example \c cstddef and <code>cmath</code>.
+
+The \baseApiName locates classes and functions from the standard
+library in the namespace scope <code>MISTD</code>. It is by
+default set as a namespace alias to point to the namespace
+<code>std</code>.  This behavior can be customized
+with the following macros:
+
+  - \c MI_BASE_STD_NAMESPACE: This macro has to expand to a valid
+    namespace scope that contains the standard library classes and
+    functions. It is used for the namespace alias \c MISTD
+    instead of the default <code>std</code>.
+
+  - \c MI_BASE_NO_MISTD_ALIAS: If this macro is defined, the
+    namespace alias definition for \c MISTD is suppressed. This
+    can be used if the standard library classes and functions have
+    been configured to live already in the \c MISTD namespace.
+
+*/
+

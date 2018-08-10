@@ -1,0 +1,92 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_discovery Example for Discovery of MDL modules
+
+<div align="right">
+    [\link mi_neuray_example_traversal Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdl_browser Next\endlink]
+</div>
+
+This example introduces the MDL Discovery Api that helps to overview the MDL includes.
+
+\section example_discovery_new New Topics
+
+  - Using the #mi::neuraylib::IMdl_discovery_api to discover MDL archives, packages and modules.
+
+\section example_discovery_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Discovering MDL archives, packages and modules
+    </b></dt>
+    <dd><br>
+        The #mi::neuraylib::IMdl_discovery_api eases the discovery of available MDL modules 
+        by providing a graph view on all MDL packages and modules that can be found in the 
+        currently installed search paths.
+        
+        In this example we will show how to use the #mi::neuraylib::IMdl_discovery_api and how to 
+        traverse the resulting graph structure provided as #mi::neuraylib::IMdl_discovery_result.
+        As a first step we register the MDL search paths by calling the function \c configure(),
+        where all paths given on the command line are added to the MDL compiler by using the 
+        method \c add_module_path().
+        The next step is to retrieve a pointer to the #mi::neuraylib::IMdl_discovery_api interface 
+        and call the method \c discover(). As a result a #mi::neuraylib::IMdl_discovery_result will
+        be returned, which contains a pointer to the discovered
+        MDL graph structure. An example how to traverse this MDL graph structure is shown in the
+        function \c log_api_package(). The given data structure is a simple directed graph 
+        consisting of nodes representing MDL packages and modules. Starting from the root node, the 
+        recursive function \c log_api_package() traverses through of the graph and interprets each 
+        node, depending of the given #mi::neuraylib::IMdl_info::Kind type. If a 
+        #mi::neuraylib::IMdl_package_info kind is found, that has been declared in multiple search 
+        paths, all these paths are listed to the log output. If a #mi::neuraylib::IMdl_module_info 
+        is found, that shadows modules from other search paths, this is indicated in the log 
+        output as well.
+        <br>
+        This information makes it easier to overview the interaction of modules and packages from
+        various sources no matter if they have been discovered a from file systems or from an
+        archive.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_discovery Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/example_discovery.cpp</tt>
+
+\include discovery/example_discovery.cpp
+
+<div align="right">
+    [\link mi_neuray_example_traversal Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdl_browser Next\endlink]
+</div>
+
+*/

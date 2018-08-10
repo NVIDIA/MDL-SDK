@@ -1,0 +1,111 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+mdl 1.4;
+
+import df::specular_bsdf;
+import df::measured_bsdf;
+import df::fresnel_layer;
+import df::scatter_mode;
+import anno::*;
+
+    
+export material carpaint_red(
+    uniform float coat_ior = 1.5
+    [[
+        anno::display_name("Coat ior"),
+        anno::soft_range(1.0, 4.0),
+        anno::description("Describes the directional dependence of the reflection of an analytical clear coat component.")
+    ]]
+) [[
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Measured carpaint, red"),
+    anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")
+]] = material (
+    surface: material_surface (
+        scattering: df::fresnel_layer(
+            ior: coat_ior,
+            layer: df::specular_bsdf( mode: df::scatter_reflect, tint: color(1.) ),
+            base: df::measured_bsdf (
+                measurement: bsdf_measurement( "resources/carpaint_red.mbsdf"),
+                multiplier: 1.
+            )
+        )
+    )
+);
+export material carpaint_green(
+    uniform float coat_ior = 1.5
+    [[
+        anno::display_name("coat ior"),
+        anno::soft_range(1.0, 4.0),
+        anno::description("Describes the directional dependence of the reflection of an analytical clear coat component.")
+    ]]
+) [[
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Measured carpaint, green"),
+    anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")
+]] = material (
+    surface: material_surface (
+        scattering: df::fresnel_layer(
+            ior: coat_ior,
+            layer: df::specular_bsdf( mode: df::scatter_reflect, tint: color(1.) ),
+            base: df::measured_bsdf (
+                measurement: bsdf_measurement( "resources/carpaint_green.mbsdf"),
+                multiplier: 1.
+            )
+        )
+    )
+);
+export material carpaint_blue(
+    uniform float coat_ior = 1.5
+    [[
+        anno::display_name("coat ior"),
+        anno::soft_range(1.0, 4.0),
+        anno::description("Describes the directional dependence of the reflection of an analytical clear coat component.")
+    ]]
+) [[
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Measured carpaint, blue"),
+    anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")
+]] = material (
+    surface: material_surface (
+        scattering: df::fresnel_layer(
+            ior: coat_ior,
+            layer: df::specular_bsdf( mode: df::scatter_reflect, tint: color(1.) ),
+            base: df::measured_bsdf (
+                            measurement: bsdf_measurement( "resources/carpaint_blue.mbsdf"),
+                            multiplier: 1.
+            )
+        )
+    )
+);

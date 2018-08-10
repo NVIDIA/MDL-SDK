@@ -1,0 +1,102 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_topics Index of Topics Explained in the Example Programs
+
+The \ref mi_neuray_examples explain many topics listed here as an
+index.
+
+\section mi_neuray_example_topics_general General
+
+  - \ref mi_neuray_example_start_shutdown "Naming conventions"
+  - \ref mi_neuray_example_start_shutdown "Main include files"
+  - \ref mi_neuray_example_start_shutdown "Main API access point"
+  - \ref mi_neuray_example_start_shutdown "Interfaces and handles"
+  - \ref mi_neuray_example_start_shutdown "Starting and shutting down"
+
+  - \ref mi_neuray_example_modules "Configuration of \neurayProductName"
+  - \ref mi_neuray_example_modules "Loading of MDL modules"
+  - \ref mi_neuray_example_modules "Enumerating the contents of MDL modules"
+  - \ref mi_neuray_example_modules "Inspecting the parameters of material and function definitions"
+
+  - \ref mi_neuray_example_instantiation "Instantiating material and function definitions"
+  - \ref mi_neuray_example_instantiation "Changing arguments"
+  - \ref mi_neuray_example_instantiation "Creating material and function variants"
+
+  - \ref mi_neuray_example_calls "Rationale for expressions vs values"
+  - \ref mi_neuray_example_calls "Creating a textured material"
+
+  - \ref mi_neuray_example_compilation "Compiled materials"
+  - \ref mi_neuray_example_compilation "Different compilation modes"
+  - \ref mi_neuray_example_compilation "Target code generation"
+
+  - \ref mi_neuray_example_execution_native "MDL material state (CPU)"
+  - \ref mi_neuray_example_execution_ptx "MDL material state (PTX)"
+\if  MDL_BIN_RELEASE
+  - \ref mi_neuray_example_execution_glsl "MDL material state (GLSL)"
+\endif
+
+  - \ref mi_neuray_example_execution_native "Execution of generated code (CPU)"
+  - \ref mi_neuray_example_execution_ptx "Execution of generated code (PTX)"
+\if  MDL_BIN_RELEASE
+  - \ref mi_neuray_example_execution_glsl "Execution of generated code (GLSL)"
+\endif
+
+  - \ref mi_neuray_example_execution_ptx "Loading textures (PTX)"
+\if  MDL_BIN_RELEASE
+  - \ref mi_neuray_example_execution_glsl "Loading textures (GLSL)"
+\endif
+
+  - \ref mi_neuray_example_execution_ptx "Texture access functions (PTX)"
+\if  MDL_BIN_RELEASE
+  - \ref mi_neuray_example_execution_glsl "Texture access functions (GLSL)"
+
+  - \ref mi_neuray_example_execution_glsl "Constant data (GLSL)"
+\endif
+
+  - \ref mi_neuray_example_df_cuda "Generated BSDF functions"
+  - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime"
+
+  - \ref mi_neuray_example_user_state_module "User-defined state modules"
+
+\if  MDL_BIN_RELEASE
+  - \ref mi_neuray_example_distilling "Material Distilling"
+  - \ref mi_neuray_example_distilling "Baking material sub-expressions"
+  
+  - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"
+\endif
+  
+  - \ref mi_neuray_example_traversal "Traversal of a compiled material"
+  - \ref mi_neuray_example_traversal "Generating MDL code"
+  
+  - \ref mi_neuray_example_discovery "Discovery of MDL archives, packages and modules"
+  
+  - \ref mi_neuray_example_mdl_browser "Caching of information on packages, modules, and materials"
+  - \ref mi_neuray_example_mdl_browser "Illustration of how we believe MDL materials should be presented to the user"
+
+*/

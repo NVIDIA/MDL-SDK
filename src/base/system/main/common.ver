@@ -1,0 +1,54 @@
+/* Reduced version of Microsoft's common.ver header file
+
+   This should be included in all windows RC files, to
+   provide versioning and copyright information. 
+*/
+
+
+#ifndef VER_FILEVERSION
+#define VER_FILEVERSION VER_PRODUCTVERSION
+#endif
+
+
+#ifndef VER_FILEVERSION_STR
+#define VER_FILEVERSION_STR VER_PRODUCTVERSION_STR
+#endif
+
+#define EXPORT_TAG
+
+#ifdef RC_INVOKED
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    VER_FILEVERSION
+PRODUCTVERSION VER_PRODUCTVERSION
+FILEFLAGSMASK  VER_FILEFLAGSMASK
+FILEFLAGS      VER_FILEFLAGS
+FILEOS         VER_FILEOS
+FILETYPE       VER_FILETYPE
+FILESUBTYPE    VER_FILESUBTYPE
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"   /* LANG_ENGLISH/SUBLANG_ENGLISH_US, Unicode CP */
+        BEGIN
+            VALUE "CompanyName",     VER_COMPANYNAME_STR
+            VALUE "LegalCopyright",  VER_LEGALCOPYRIGHT_STR
+            VALUE "Copyright",  VER_LEGALCOPYRIGHT_STR
+            VALUE "ProductName",     VER_PRODUCTNAME_STR
+            VALUE "ProductVersion",  VER_PRODUCTVERSION_STR
+            VALUE "ProductDate",     VER_DATE
+            VALUE "FileDescription", VER_FILEDESCRIPTION_STR EXPORT_TAG
+            VALUE "FileVersion",     VER_FILEVERSION_STR
+            VALUE "InternalName",    VER_INTERNALNAME_STR
+            VALUE "OriginalFilename",VER_ORIGINALFILENAME_STR
+        END
+
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END
+
+#endif

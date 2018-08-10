@@ -1,0 +1,92 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.4;
+
+import df::microfacet_ggx_smith_bsdf;
+import df::fresnel_factor;
+import anno::*;
+
+//first color is n (ior), second is k (extinction coefficient)
+//more data on https://refractiveindex.info/
+const color[] nk_gold=color[](color(0.19,0.475,1.25),color(3.39,2.37,1.84));
+const color[] nk_copper=color[](color(0.0277,1.06,1.24),color(3.36,2.58,2.501));
+const color[] nk_silver=color[](color(0.057,0.057,0.05),color(4.25,3.52,2.92));
+const color[] nk_aluminum=color[](color(1.42,.98,.73),color(7.5,6.53,5.78));
+const color[] nk_graphite=color[](color(2.83,2.7,2.63),color(1.59,1.47,1.35));
+
+export enum metal_kind
+{
+    Gold,
+    Copper,
+    Silver,
+    Aluminum,
+    Graphite
+};
+export material measured_metal(
+    float roughness = 0.1    
+    [[
+        anno::display_name("Metal Roughness"),
+        anno::description("Increases the overall roughness of the surface")
+    ]],
+    uniform metal_kind metal = Gold
+    [[
+        anno::display_name("Kind of metal")
+    ]]
+) [[ 
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Measured Metal"),
+    anno::description("Metalls colored based using their complex IOR's")
+]] = let {
+    color n = 
+        metal==Gold?nk_gold[0]:
+        metal==Copper?nk_copper[0]:
+        metal==Silver?nk_silver[0]:
+        metal==Aluminum?nk_aluminum[0]:
+        nk_graphite[0];
+    color k = 
+        metal==Gold?nk_gold[1]:
+        metal==Copper?nk_copper[1]:
+        metal==Silver?nk_silver[1]:
+        metal==Aluminum?nk_aluminum[1]:
+        nk_graphite[1];
+    bsdf scattering = df::fresnel_factor(
+        n,
+        k,
+        df::microfacet_ggx_smith_bsdf(
+            tint: color(1.),
+            roughness_u: roughness*roughness
+        )
+    );
+} in material(
+    surface: material_surface(
+        scattering: scattering
+    )
+);

@@ -1,0 +1,244 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_base_includes \BaseApiName Include Files
+
+\BaseApiName offers two sets of include files. One set consists of the
+single <tt>mi/base.h</tt> include file, which provides the full functionality
+ of \BaseApiName. The other set consists of several include files named
+<tt>mi/base/</tt><em>&lt;functional-name&gt;</em><tt>.h</tt>, which
+provide individual parts of \BaseApiName grouped by functionality. In
+fact, the <tt>mi/base.h</tt> include file just includes all the other
+include files.
+
+Include files are self-contained. Internal dependencies are resolved
+automatically.  As a consequence, their inclusion is order independent.
+
+<table border="2" cellpadding="3" cellspacing="3">
+  <tr valign="top"><th>Main Include File</th><th>Description</th></tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base.h</tt></td>
+    <td class="indexvalue">
+      Includes all sub-include files of \BaseApiName.
+    </td>
+  </tr>
+</table>
+
+
+<table border="2" cellpadding="3" cellspacing="3">
+  <tr valign="bottom">
+    <th>Include Files Grouped by Component</th>
+    <th>Description</th></tr>
+    <th>Documentation</th>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/version.h</tt></td>
+    <td class="indexvalue">
+        Version number for \BaseApiName.
+    </td>
+    <td class="indexvalue">\ref mi_base_version
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/config.h</tt></td>
+    <td class="indexvalue">
+        Configuration support, such as compiler, platform, and
+        operating system detection.
+    </td>
+    <td class="indexvalue">\ref mi_base_config
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/assert.h</tt></td>
+    <td class="indexvalue">
+        Assertions and static assertions.
+    </td>
+    <td class="indexvalue">\ref mi_base_assert
+    </td>
+  </tr>
+
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/types.h</tt></td>
+    <td class="indexvalue">
+        Basic types of known bit sizes and small functions on them,
+        such as three-valued comparisons, \c min and \c max.
+    </td>
+    <td class="indexvalue">\ref mi_base_types
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/uuid.h</tt></td>
+    <td class="indexvalue">
+        Universally unique identifiers (UUID).
+    </td>
+    <td class="indexvalue">\ref mi_base_types
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/enums.h</tt></td>
+    <td class="indexvalue">
+        Basic enums, as for example used by the logger.
+    </td>
+    <td class="indexvalue">\ref mi_base_types
+    </td>
+  </tr>
+
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/atom.h</tt></td>
+    <td class="indexvalue">
+        32-bit unsigned counter #mi::base::Atom32 with atomic arithmetic, 
+        increments, and decrements.
+    </td>
+    <td class="indexvalue">\ref mi_base_threads
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/condition.h</tt></td>
+    <td class="indexvalue">
+        Multithreading conditions, see #mi::base::Condition.
+    </td>
+    <td class="indexvalue">\ref mi_base_threads
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/lock.h</tt></td>
+    <td class="indexvalue">
+        Multithreading locks, see #mi::base::Lock.
+    </td>
+    <td class="indexvalue">\ref mi_base_threads
+    </td>
+  </tr>
+
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/iinterface.h</tt></td>
+    <td class="indexvalue">
+        The basic extensible interface #mi::base::IInterface, helper
+        mixin class templates to define and implement interfaces, and UUID
+        classes.
+    </td>
+    <td class="indexvalue">\ref mi_base_iinterface
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/interface_declare.h</tt></td>
+    <td class="indexvalue">
+        Mixin class template for deriving new interface declarations, 
+        see #mi::base::Interface_declare.
+    </td>
+    <td class="indexvalue">\ref mi_base_iinterface
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/interface_implement.h</tt></td>
+    <td class="indexvalue">
+        Mixin class template for deriving new interface implementations, 
+        see #mi::base::Interface_implement.
+    </td>
+    <td class="indexvalue">\ref mi_base_iinterface
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/interface_merger.h</tt></td>
+    <td class="indexvalue">
+        Mixin class template for merging the implementation of one interface
+        with a second interface, see #mi::base::Interface_merger.
+    </td>
+    <td class="indexvalue">\ref mi_base_iinterface
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/handle.h</tt></td>
+    <td class="indexvalue">
+        Handle class template for interfaces, see #mi::base::Handle.
+    </td>
+    <td class="indexvalue">\ref mi_base_iinterface
+    </td>
+  </tr>
+
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/iallocator.h</tt></td>
+    <td class="indexvalue">
+        #mi::base::IAllocator interface to dynamically allocate and deallocate memory.
+    </td>
+    <td class="indexvalue">\ref mi_base_iallocator
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/default_allocator.h</tt></td>
+    <td class="indexvalue">
+        Default implementation for #mi::base::IAllocator interface
+        based on global new and delete.
+    </td>
+    <td class="indexvalue">\ref mi_base_iallocator
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/std_allocator.h</tt></td>
+    <td class="indexvalue">
+        Standard STL %allocator implementation based on an
+        #mi::base::IAllocator interface
+    </td>
+    <td class="indexvalue">\ref mi_base_iallocator
+    </td>
+  </tr>
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/ilogger.h</tt></td>
+    <td class="indexvalue">
+        #mi::base::ILogger interface class that supports message logging.
+    </td>
+    <td class="indexvalue">\ref mi_base_ilogger
+    </td>
+  </tr>
+
+
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base/plugin.h</tt></td>
+    <td class="indexvalue">
+        #mi::base::Plugin interface for support of dynamically loaded plugins.
+    </td>
+    <td class="indexvalue">\ref mi_base_plugin
+    </td>
+  </tr>
+</table>
+
+There may be include files that are not documented here. They are
+automatically included if needed and their independent use is not
+supported. Their naming and organization might change in the future.
+
+*/
+

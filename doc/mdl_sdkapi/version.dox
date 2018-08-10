@@ -1,0 +1,60 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_intro_versioning Versioning and Compatibility
+
+Assuming the API is provided in the form of a shared library (also
+known as DLL), you may be able to upgrade the API to a new version
+without recompiling your application and also without relinking your
+application, just by replacing the old shared library with a new one.
+There might be API releases that contain only static libraries, or no
+libraries at all. In both cases the discussion in this section does
+not apply to you.
+
+The interoperability between your application and the shared library
+is managed using the GUID of the main interface #mi::neuraylib::INeuray.
+Whenever an incompatible change is made to the API a new GUID is generated.
+Typically, this only happens with major releases.
+
+In your application you ask the shared library for a pointer to a 
+compatible #mi::neuraylib::INeuray interface by passing its GUID
+#mi::neuraylib::INeuray::IID() to the global function #mi_factory
+(the main entry point to the DSO).
+If the shared library does not contain a #mi::neuraylib::INeuray interface with a matching GUID
+\c NULL is returned.
+In this case it is possible to use the #mi_factory function to obtain a pointer to 
+an #mi::neuraylib::IVersion interface. This interface provided detailed version information
+like build number, build date, the product version name and the GUID of the
+#mi::neuraylib::INeuray interface compiled into the library.
+
+\see 
+  - \subpage mi_base_intro_versioning
+  - \subpage mi_math_intro_versioning
+
+*/
+

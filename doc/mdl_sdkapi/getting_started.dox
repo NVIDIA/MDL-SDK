@@ -1,0 +1,326 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_getting_started Getting Started
+
+\NeurayProductName is a software component that you can embed in your application       
+to provide MDL support in your application.                                     
+
+The \neurayApiName is a C++ API. \NeurayProductName is provided as a dynamic library, which can be
+linked to your application or dynamically loaded at runtime.
+
+\section mi_neuray_getting_started_overview Overview
+
+The \neurayAdjectiveName release contains the following parts:
+
+  - A platform-dependent shared library (a.k.a. DLL) named \e libmdl_sdk.
+  - A set of platform-independent C++ include files,
+    see the \ref mi_neuray_includes section for all available module specific include
+    files.
+  - A collection of example programs; see the \ref mi_neuray_examples section.
+  - A programmers manual (this document).
+  - Installation instructions.
+
+\section mi_neuray_getting_started_recom Recommendation
+
+It is recommended that you read the brief \ref mi_neuray_design
+section and continue with the \ref mi_neuray_examples section. The
+\ref mi_neuray_intro_config section describes how to configure aspects
+of the library to your particular integration demands.
+
+\section mi_neuray_getting_started_compile Building the examples
+
+The \neurayAdjectiveName release contains a set of example programs. It is
+recommended that you compile them and take them as a starting point
+for your own development.
+
+\if MDL_SOURCE_RELEASE
+
+Please refer to the file Readme.md in the toplevel directory of the \neurayAdjectiveName Source Repository for 
+instructions on how to build the \neurayAdjectiveName and the examples.
+\else
+
+The \neurayAdjectiveName uses [CMake](http://www.cmake.org/) to generate build files for the examples.
+It is suggested to use CMake 3.11 or later, 
+which can be downloaded from the [CMake Website](https://cmake.org/download/).
+When using a Unix-like system, you can install the *cmake* package using 
+the respective package management systems.
+
+\subsection mi_neuray_getting_started_dependencies Dependencies
+
+The example source code requires a C++11 compiler. Some examples require additional third-party libraries.
+
+The build with the following x64-platform-compiler combinations has been 
+successfully tested:
+
+-   **Windows 10**:     Microsoft Visual Studio 2015 (msvc v140) 
+-   **Ubuntu 18.04**:   gcc/g++6 and gcc/g++7 
+
+*Note: Mac OS X is not yet supported
+
+The versions listed with the following dependencies have been
+successfully tested. Where not mentioned otherwise, other versions
+might work as well.
+
+The following third-party libraries are required:
+
+-   **GLEW** (2.1.0) 
+    - Linux: Install the *libglew-dev* package.
+    - Windows: Download and extract the pre-compiled binaries from 
+    [glew.sourceforge.net](http://glew.sourceforge.net/)
+
+-   **GLFW** (3.2.1)
+    - Linux: Install the *libglfw3-dev* package.
+    - Windows: Download and extract the pre-compiled x64 binaries from 
+    [glfw.org](http://www.glfw.org/download.html).
+
+-   **NVIDIA CUDA Toolkit** (9.0 or 9.2)
+    - Please follow the instructions on the 
+    [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
+
+-   **Qt** (5.10.1)
+    - Please follow the instructions on the [Qt Website](https://www.qt.io/).  
+    To build with Qt 5.10.1 on Linux, your system's GLIBC needs to be release 
+    2.14 or later.
+    
+\subsection mi_neuray_getting_started_windows_build Building on Windows
+
+1.  Before generating the Visual Studio 2015 solution, be sure to
+    download and extract or install the third-party libraries listed
+    above.  The following steps assume you have extracted the pre-compiled 
+    binaries to a common third-party directory that is:
+
+        C:/projects/thirdparty
+
+2.  Open CMake-Gui, click `Browse Source...` and select the example directory of the extracted mdl-sdk. 
+    This directory contains the top-level *CMakeLists.txt*.  Pick a build directory that will 
+    contain the files for your build system and eventually, the compiled 
+    example binaries.
+
+    It is recommended that you build into a subdirectory, not into the example root.
+    C:/projects/mdl-sdk/examples/build/vs2015 for example is fine, assuming you extracted the mdl-sdk to:
+
+        C:/projects/mdl-sdk
+
+3.  After clicking ``Configure``, CMake asks you to choose the
+    Generator. Select `Visual Studio 14 2015 Win64` and click
+    `Finish`. CMake starts to configure the build and stops several
+    times when user input is required to resolve dependencies.
+
+4.  Optionally, you can select or deselect 
+    Additional CMake Options (see below) by checking and 
+    un-checking the boxes next to the entries that start with *MDL*. Click
+    ``Configure`` again to continue.
+
+5.  When red error messages appear in the log, identify the dependency path 
+    that is requested and resolve the error by specifying the corresponding 
+    entry in CMake-Gui. Then, click ``Configure`` again to continue. Repeat 
+    this step until no further errors occur.
+
+    During this process, you will need to setup the following entries:
+
+    -   **GLEW_DIR** in the GLEW group  
+        for example: *C:/projects/thirdparty/glew-2.1.0*
+
+    -   **GLFW_DIR** in Ungrouped Entries  
+        for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
+
+    -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer)  
+        for example: *C:/Qt/5.10.1/msvc2015_64*
+
+
+6.  When all dependencies have been resolved or the corresponding examples 
+    have been disabled as indicated in the CMake error messages, the log 
+    will show that the configuration is done.
+
+    Generate the Visual Studio solution by clicking ``Generate`` and open it 
+    afterwards using ``Open Project``. CMake-Gui is not needed anymore and
+    can be closed.
+
+    You can also open the Visual Studio solution directly from the build 
+    directory.
+
+7.  Use Visual Studio to build the examples. You can run the examples by double-clicking the
+    executable in the build directories or by using the command line,
+    which allows you to provide additional arguments. When running the
+    examples using the Visual Studio debugger, you can provide additional 
+    arguments by specifying them in the individual Visual Studio project 
+    settings.
+    
+\subsection mi_neuray_getting_started_linux_build Building on Linux
+
+1.  Before generating make files, you need to install the required
+    tools and libraries as listed \link mi_neuray_getting_started_dependencies above\endlink.
+
+2.  Before running CMake, create a build directory that will contain 
+    your make files and switch to that directory. It is recommended 
+    that you build into a subdirectory, not the example root folder: 
+
+        mkdir ~/mdl-sdk/examples/build/linux-x64-gcc
+        cd ~/mdl-sdk/examples/build/linux-x64-gcc
+
+3.  To generate your build files, run CMake with the path to the top-level 
+    *CMakeLists.txt* as the last argument.
+
+    1.  When all dependencies are installed correctly, the default settings 
+        should complete the configuration without any further interactions necessary.
+        In this case, you can continue with step 4.
+
+            cmake ../../
+
+    2.  Optionally, you can use CMake options and the *-D* flags to customize your build.
+
+        One or multiple of these flags can be used to enable and disable examples, for example:
+
+            cmake -DMDL_ENABLE_QT_EXAMPLES=OFF ../../
+
+        You can also use the flags to point CMake to custom installation directories 
+        for third party libraries. Please refer to 
+        \link mi_neuray_getting_started_windows_build Windows build\endlink for a list of supported flags. 
+        On Unix-like systems, it is assumed that the 
+        specified paths contain a directory named *include* for headers 
+        files and subdirectories named `lib64` or `lib` that contain shared 
+        libraries. For a custom build of the GLEW library for example, the 
+        call to CMake could look as follows:
+
+            cmake -DGLEW_DIR=~/thirdparty/glew-2.1.0 ../../
+
+        For builds using a different compiler version, you need to pass the 
+        compiler names when calling CMake as follows:
+
+            sudo apt-get install gcc-6 g++-6 g++-6-multilib
+            cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-6 -DCMAKE_CXX_COMPILER=/usr/bin/g++-6 ../../
+
+    3.  In case CMake is not able to find a working CUDA compiler for the 
+        examples, make sure the *nvcc* is reachable through the system PATH 
+        variable before running CMake:
+
+            export PATH=<CUDA_SDK_DIR>/bin:$PATH
+
+    4.  If Qt5 cannot be found, or you want to use an extracted package 
+        rather than installing Qt on your system, you can optionally set 
+        an additional environment variable before calling CMake:
+
+            export Qt5_DIR=~/Qt/5.10.1/gcc_64
+
+        or pass the Qt5_DIR as CMake option:
+
+            cmake -DQt5_DIR=~/Qt/5.10.1/gcc_64 ../../
+
+4.  After a successful configuration, you can run make from within the
+    specified build directory or any subdirectory that corresponds to a
+    source directory containing a *CMakeLists.txt*:
+
+        make
+
+5.  Because the different MDL SDK libraries are loaded at runtime, the 
+    location has to be provided in order to run an example. Therefore, 
+    specify the paths to the built MDL SDK library and 
+    the image plugins using the `LD_LIBRARAY_PATH` variable:
+
+        export LD_LIBRARY_PATH=~/mdl-sdk/examples/linux-x86-64/lib:${LD_LIBRARY_PATH}
+
+    To run the MDL SDK Modules example for instance use:
+
+        cd ~/mdl-sdk/examples/build/linux-x64-gcc/mdl_sdk/modules
+        ./mdl_sdk_example-modules
+  
+\subsection mi_neuray_getting_started_cmake_options Additional CMake Options
+
+The following options allow to select the components to build and particular logging information:
+
+-   **MDL_ENABLE_CUDA_EXAMPLES**  
+
+    [ON/OFF] enable/disable examples that require CUDA.
+
+-   **MDL_ENABLE_OPENGL_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require OpenGL.
+
+-   **MDL_ENABLE_QT_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require Qt.
+
+-   **MDL_LOG_PLATFORM_INFOS**  
+    [ON/OFF] enable/disable the logging of platform and CMake settings.
+
+-   **MDL_LOG_DEPENDENCIES**  
+    [ON/OFF] enable/disable the logging of dependencies of the individual targets.
+
+-   **MDL_LOG_FILE_DEPENDENCIES**  
+    [ON/OFF] enable/disable the logging of files that copied to the output folder.
+
+By default, all options are set to ON. In case of any help request, please attach 
+the log messages generated when the log options are enabled.
+\endif
+\subsection mi_neuray_getting_started_custom_build Custom builds environments
+
+You can integrate \neurayProductName easily in other build
+environments. You can also compile the examples by hand following the
+steps below. Let the environment variable \c \$MDL_SDK_ROOT refer to
+the installation root of \neurayProductName.
+
+  -# Use the \neurayAdjectiveName include files in your source:
+     \code
+#include <mi/mdl_sdk.h>
+     \endcode
+     Load the \neurayLibraryName dynamically and access the API entry point:
+     \code
+mi::neuraylib::INeuray* neuray = load_and_get_ineuray();
+     \endcode
+     See \c examples/example_shared.h for the definition of this convenience method.
+     Alternatively, if you want to use the #mi::base::Handle class:
+     \code
+mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
+     \endcode
+     For a start, you can copy the examples that come with the \neurayAdjectiveName release, make
+     them writable, and change into that directory:
+     \code
+cp -r $MDL_SDK_ROOT/examples .
+chmod -R u+w examples
+cd examples
+     \endcode
+     <br>
+  -# Compile the program with the appropriate include path switch that
+     points the compiler to the location of the \neurayAdjectiveName include
+     files. A \c g++ compiler call could look like this:
+     \code
+g++ -I$MDL_SDK_ROOT/include -c example_start_shutdown.cpp -o example_start_shutdown.o -pthread
+     \endcode
+     <br>
+  -# Link the program with the library that provides \c dlopen().
+      A \c g++ linker call could look like this:
+     \code
+g++ -o example_start_shutdown example_start_shutdown.o -ldl -pthread
+     \endcode
+     <br>
+  -# Make the shared library (a.k.a. DLL) known to your runtime system so that it is found when
+     starting the example program. You can do this by placing the shared library in an appropriate
+     location, and/or setting environment variables such as \c PATH (on Windows), \c LD_LIBRARY_PATH
+     (on Linux), or DYLD_LIBRARY_PATH and DYLD_FRAMEWORK_PATH (on MacOS X).
+     Note: This step is platform and installation dependent.
+
+*/

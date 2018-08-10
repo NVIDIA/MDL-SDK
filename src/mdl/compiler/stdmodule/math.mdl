@@ -1,0 +1,556 @@
+/******************************************************************************
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+mdl 1.4;
+
+export const float PI = 3.14159265358979323846f;
+export const float TWO_PI = 6.28318530717958647692f;
+export const float HALF_PI = 1.57079632679489661923f;
+
+export int abs(int a) [[ intrinsic(), const_expr() ]];
+export int2 abs(int2 a) [[ intrinsic(), const_expr() ]];
+export int3 abs(int3 a) [[ intrinsic(), const_expr() ]];
+export int4 abs(int4 a) [[ intrinsic(), const_expr() ]];
+export float abs(float a) [[ intrinsic(), const_expr() ]];
+export float2 abs(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 abs(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 abs(float4 a) [[ intrinsic(), const_expr() ]];
+export double abs(double a) [[ intrinsic(), const_expr() ]];
+export double2 abs(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 abs(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 abs(double4 a) [[ intrinsic(), const_expr() ]];
+export color abs(color a) [[ intrinsic(), const_expr() ]];
+
+export float acos(float a) [[ intrinsic(), const_expr() ]];
+export float2 acos(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 acos(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 acos(float4 a) [[ intrinsic(), const_expr() ]];
+export double acos(double a) [[ intrinsic(), const_expr() ]];
+export double2 acos(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 acos(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 acos(double4 a) [[ intrinsic(), const_expr() ]];
+
+export bool all(bool a) [[ intrinsic(), const_expr() ]];
+export bool all(bool2 a) [[ intrinsic(), const_expr() ]];
+export bool all(bool3 a) [[ intrinsic(), const_expr() ]];
+export bool all(bool4 a) [[ intrinsic(), const_expr() ]];
+
+export bool any(bool a) [[ intrinsic(), const_expr() ]];
+export bool any(bool2 a) [[ intrinsic(), const_expr() ]];
+export bool any(bool3 a) [[ intrinsic(), const_expr() ]];
+export bool any(bool4 a) [[ intrinsic(), const_expr() ]];
+
+export float asin(float a) [[ intrinsic(), const_expr() ]];
+export float2 asin(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 asin(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 asin(float4 a) [[ intrinsic(), const_expr() ]];
+export double asin(double a) [[ intrinsic(), const_expr() ]];
+export double2 asin(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 asin(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 asin(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float atan(float a) [[ intrinsic(), const_expr() ]];
+export float2 atan(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 atan(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 atan(float4 a) [[ intrinsic(), const_expr() ]];
+export double atan(double a) [[ intrinsic(), const_expr() ]];
+export double2 atan(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 atan(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 atan(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float atan2(float y, float x) [[ intrinsic(), const_expr() ]];
+export float2 atan2(float2 y, float2 x) [[ intrinsic(), const_expr() ]];
+export float3 atan2(float3 y, float3 x) [[ intrinsic(), const_expr() ]];
+export float4 atan2(float4 y, float4 x) [[ intrinsic(), const_expr() ]];
+export double atan2(double y, double x) [[ intrinsic(), const_expr() ]];
+export double2 atan2(double2 y, double2 x) [[ intrinsic(), const_expr() ]];
+export double3 atan2(double3 y, double3 x) [[ intrinsic(), const_expr() ]];
+export double4 atan2(double4 y, double4 x) [[ intrinsic(), const_expr() ]];
+
+export float average(float a) [[ intrinsic(), const_expr() ]];
+export float average(float2 a) [[ intrinsic(), const_expr() ]];
+export float average(float3 a) [[ intrinsic(), const_expr() ]];
+export float average(float4 a) [[ intrinsic(), const_expr() ]];
+export double average(double a) [[ intrinsic(), const_expr() ]];
+export double average(double2 a) [[ intrinsic(), const_expr() ]];
+export double average(double3 a) [[ intrinsic(), const_expr() ]];
+export double average(double4 a) [[ intrinsic(), const_expr() ]];
+export float average(color a) [[ intrinsic(), const_expr() ]];
+
+export float ceil(float a) [[ intrinsic(), const_expr() ]];
+export float2 ceil(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 ceil(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 ceil(float4 a) [[ intrinsic(), const_expr() ]];
+export double ceil(double a) [[ intrinsic(), const_expr() ]];
+export double2 ceil(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 ceil(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 ceil(double4 a) [[ intrinsic(), const_expr() ]];
+
+export int clamp(int a, int min, int max) [[ intrinsic(), const_expr() ]];
+export int2 clamp(int2 a, int2 min, int2 max) [[ intrinsic(), const_expr() ]];
+export int3 clamp(int3 a, int3 min, int3 max) [[ intrinsic(), const_expr() ]];
+export int4 clamp(int4 a, int4 min, int4 max) [[ intrinsic(), const_expr() ]];
+export float clamp(float a, float min, float max) [[ intrinsic(), const_expr() ]];
+export float2 clamp(float2 a, float2 min, float2 max) [[ intrinsic(), const_expr() ]];
+export float3 clamp(float3 a, float3 min, float3 max) [[ intrinsic(), const_expr() ]];
+export float4 clamp(float4 a, float4 min, float4 max) [[ intrinsic(), const_expr() ]];
+export double clamp(double a, double min, double max) [[ intrinsic(), const_expr() ]];
+export double2 clamp(double2 a, double2 min, double2 max) [[ intrinsic(), const_expr() ]];
+export double3 clamp(double3 a, double3 min, double3 max) [[ intrinsic(), const_expr() ]];
+export double4 clamp(double4 a, double4 min, double4 max) [[ intrinsic(), const_expr() ]];
+export color clamp(color a, color min, color max) [[ intrinsic(), const_expr() ]];
+
+export int2 clamp(int2 a, int2 min, int max) [[ intrinsic(), const_expr() ]];
+export int2 clamp(int2 a, int min, int2 max) [[ intrinsic(), const_expr() ]];
+export int2 clamp(int2 a, int min, int max) [[ intrinsic(), const_expr() ]];
+export int3 clamp(int3 a, int3 min, int max) [[ intrinsic(), const_expr() ]];
+export int3 clamp(int3 a, int min, int3 max) [[ intrinsic(), const_expr() ]];
+export int3 clamp(int3 a, int min, int max) [[ intrinsic(), const_expr() ]];
+export int4 clamp(int4 a, int4 min, int max) [[ intrinsic(), const_expr() ]];
+export int4 clamp(int4 a, int min, int4 max) [[ intrinsic(), const_expr() ]];
+export int4 clamp(int4 a, int min, int max) [[ intrinsic(), const_expr() ]];
+export float2 clamp(float2 a, float2 min, float max) [[ intrinsic(), const_expr() ]];
+export float2 clamp(float2 a, float min, float2 max) [[ intrinsic(), const_expr() ]];
+export float2 clamp(float2 a, float min, float max) [[ intrinsic(), const_expr() ]];
+export float3 clamp(float3 a, float3 min, float max) [[ intrinsic(), const_expr() ]];
+export float3 clamp(float3 a, float min, float3 max) [[ intrinsic(), const_expr() ]];
+export float3 clamp(float3 a, float min, float max) [[ intrinsic(), const_expr() ]];
+export float4 clamp(float4 a, float4 min, float max) [[ intrinsic(), const_expr() ]];
+export float4 clamp(float4 a, float min, float4 max) [[ intrinsic(), const_expr() ]];
+export float4 clamp(float4 a, float min, float max) [[ intrinsic(), const_expr() ]];
+export color clamp(color a, color min, float max) [[ intrinsic(), const_expr() ]];
+export color clamp(color a, float min, color max) [[ intrinsic(), const_expr() ]];
+export color clamp(color a, float min, float max) [[ intrinsic(), const_expr() ]];
+export double2 clamp(double2 a, double2 min, double max) [[ intrinsic(), const_expr() ]];
+export double2 clamp(double2 a, double min, double2 max) [[ intrinsic(), const_expr() ]];
+export double2 clamp(double2 a, double min, double max) [[ intrinsic(), const_expr() ]];
+export double3 clamp(double3 a, double3 min, double max) [[ intrinsic(), const_expr() ]];
+export double3 clamp(double3 a, double min, double3 max) [[ intrinsic(), const_expr() ]];
+export double3 clamp(double3 a, double min, double max) [[ intrinsic(), const_expr() ]];
+export double4 clamp(double4 a, double4 min, double max) [[ intrinsic(), const_expr() ]];
+export double4 clamp(double4 a, double min, double4 max) [[ intrinsic(), const_expr() ]];
+export double4 clamp(double4 a, double min, double max) [[ intrinsic(), const_expr() ]];
+
+export float cos(float a) [[ intrinsic(), const_expr() ]];
+export float2 cos(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 cos(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 cos(float4 a) [[ intrinsic(), const_expr() ]];
+export double cos(double a) [[ intrinsic(), const_expr() ]];
+export double2 cos(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 cos(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 cos(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float3 cross(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export double3 cross(double3 a, double3 b) [[ intrinsic(), const_expr(), since(1, 3) ]];
+
+export float degrees(float a) [[ intrinsic(), const_expr() ]];
+export float2 degrees(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 degrees(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 degrees(float4 a) [[ intrinsic(), const_expr() ]];
+export double degrees(double a) [[ intrinsic(), const_expr() ]];
+export double2 degrees(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 degrees(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 degrees(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float distance(float a, float b) [[ intrinsic(), const_expr() ]];
+export float distance(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float distance(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float distance(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double distance(double a, double b) [[ intrinsic(), const_expr() ]];
+export double distance(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double distance(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double distance(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+
+export float dot(float a, float b) [[ intrinsic(), const_expr() ]];
+export float dot(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float dot(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float dot(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double dot(double a, double b) [[ intrinsic(), const_expr() ]];
+export double dot(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double dot(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double dot(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+
+export float exp(float a) [[ intrinsic(), const_expr() ]];
+export float2 exp(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 exp(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 exp(float4 a) [[ intrinsic(), const_expr() ]];
+export double exp(double a) [[ intrinsic(), const_expr() ]];
+export double2 exp(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 exp(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 exp(double4 a) [[ intrinsic(), const_expr() ]];
+export color exp(color a) [[ intrinsic(), const_expr() ]];
+
+export float exp2(float a) [[ intrinsic(), const_expr() ]];
+export float2 exp2(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 exp2(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 exp2(float4 a) [[ intrinsic(), const_expr() ]];
+export double exp2(double a) [[ intrinsic(), const_expr() ]];
+export double2 exp2(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 exp2(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 exp2(double4 a) [[ intrinsic(), const_expr() ]];
+export color exp2(color a) [[ intrinsic(), const_expr() ]];
+
+export float floor(float a) [[ intrinsic(), const_expr() ]];
+export float2 floor(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 floor(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 floor(float4 a) [[ intrinsic(), const_expr() ]];
+export double floor(double a) [[ intrinsic(), const_expr() ]];
+export double2 floor(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 floor(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 floor(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float fmod(float a, float b) [[ intrinsic(), const_expr() ]];
+export float2 fmod(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float3 fmod(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float4 fmod(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double fmod(double a, double b) [[ intrinsic(), const_expr() ]];
+export double2 fmod(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double3 fmod(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double4 fmod(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+export float2 fmod(float2 a, float b) [[ intrinsic(), const_expr() ]];
+export float3 fmod(float3 a, float b) [[ intrinsic(), const_expr() ]];
+export float4 fmod(float4 a, float b) [[ intrinsic(), const_expr() ]];
+export double2 fmod(double2 a, double b) [[ intrinsic(), const_expr() ]];
+export double3 fmod(double3 a, double b) [[ intrinsic(), const_expr() ]];
+export double4 fmod(double4 a, double b) [[ intrinsic(), const_expr() ]];
+
+export float frac(float a) [[ intrinsic(), const_expr() ]];
+export float2 frac(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 frac(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 frac(float4 a) [[ intrinsic(), const_expr() ]];
+export double frac(double a) [[ intrinsic(), const_expr() ]];
+export double2 frac(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 frac(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 frac(double4 a) [[ intrinsic(), const_expr() ]];
+
+export bool isnan(float a) [[ intrinsic(), const_expr() ]];
+export bool2 isnan(float2 a) [[ intrinsic(), const_expr() ]];
+export bool3 isnan(float3 a) [[ intrinsic(), const_expr() ]];
+export bool4 isnan(float4 a) [[ intrinsic(), const_expr() ]];
+export bool isnan(double a) [[ intrinsic(), const_expr() ]];
+export bool2 isnan(double2 a) [[ intrinsic(), const_expr() ]];
+export bool3 isnan(double3 a) [[ intrinsic(), const_expr() ]];
+export bool4 isnan(double4 a) [[ intrinsic(), const_expr() ]];
+
+export bool isfinite(float a) [[ intrinsic(), const_expr() ]];
+export bool2 isfinite(float2 a) [[ intrinsic(), const_expr() ]];
+export bool3 isfinite(float3 a) [[ intrinsic(), const_expr() ]];
+export bool4 isfinite(float4 a) [[ intrinsic(), const_expr() ]];
+export bool isfinite(double a) [[ intrinsic(), const_expr() ]];
+export bool2 isfinite(double2 a) [[ intrinsic(), const_expr() ]];
+export bool3 isfinite(double3 a) [[ intrinsic(), const_expr() ]];
+export bool4 isfinite(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float length(float a) [[ intrinsic(), const_expr() ]];
+export float length(float2 a) [[ intrinsic(), const_expr() ]];
+export float length(float3 a) [[ intrinsic(), const_expr() ]];
+export float length(float4 a) [[ intrinsic(), const_expr() ]];
+export double length(double a) [[ intrinsic(), const_expr() ]];
+export double length(double2 a) [[ intrinsic(), const_expr() ]];
+export double length(double3 a) [[ intrinsic(), const_expr() ]];
+export double length(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float lerp(float a, float b, float l) [[ intrinsic(), const_expr() ]];
+export float2 lerp(float2 a, float2 b, float2 l) [[ intrinsic(), const_expr() ]];
+export float3 lerp(float3 a, float3 b, float3 l) [[ intrinsic(), const_expr() ]];
+export float4 lerp(float4 a, float4 b, float4 l) [[ intrinsic(), const_expr() ]];
+export double lerp(double a, double b, double l) [[ intrinsic(), const_expr() ]];
+export double2 lerp(double2 a, double2 b, double2 l) [[ intrinsic(), const_expr() ]];
+export double3 lerp(double3 a, double3 b, double3 l) [[ intrinsic(), const_expr() ]];
+export double4 lerp(double4 a, double4 b, double4 l) [[ intrinsic(), const_expr() ]];
+export float2 lerp(float2 a, float2 b, float l) [[ intrinsic(), const_expr() ]];
+export float3 lerp(float3 a, float3 b, float l) [[ intrinsic(), const_expr() ]];
+export float4 lerp(float4 a, float4 b, float l) [[ intrinsic(), const_expr() ]];
+export double2 lerp(double2 a, double2 b, double l) [[ intrinsic(), const_expr() ]];
+export double3 lerp(double3 a, double3 b, double l) [[ intrinsic(), const_expr() ]];
+export double4 lerp(double4 a, double4 b, double l) [[ intrinsic(), const_expr() ]];
+export color lerp(color a, color b, color l) [[ intrinsic(), const_expr() ]];
+export color lerp(color a, color b, float l) [[ intrinsic(), const_expr() ]];
+
+export float log(float a) [[ intrinsic(), const_expr() ]];
+export float2 log(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 log(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 log(float4 a) [[ intrinsic(), const_expr() ]];
+export double log(double a) [[ intrinsic(), const_expr() ]];
+export double2 log(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 log(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 log(double4 a) [[ intrinsic(), const_expr() ]];
+export color log(color a) [[ intrinsic(), const_expr() ]];
+
+export float log2(float a) [[ intrinsic(), const_expr() ]];
+export float2 log2(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 log2(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 log2(float4 a) [[ intrinsic(), const_expr() ]];
+export double log2(double a) [[ intrinsic(), const_expr() ]];
+export double2 log2(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 log2(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 log2(double4 a) [[ intrinsic(), const_expr() ]];
+export color log2(color a) [[ intrinsic(), const_expr() ]];
+
+export float log10(float a) [[ intrinsic(), const_expr() ]];
+export float2 log10(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 log10(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 log10(float4 a) [[ intrinsic(), const_expr() ]];
+export double log10(double a) [[ intrinsic(), const_expr() ]];
+export double2 log10(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 log10(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 log10(double4 a) [[ intrinsic(), const_expr() ]];
+export color log10(color a) [[ intrinsic(), const_expr() ]];
+
+export float luminance(float3 a) [[ intrinsic(), const_expr() ]];
+export float luminance(color a) [[ intrinsic(), const_expr() ]];
+
+export int max(int a, int b) [[ intrinsic(), const_expr() ]];
+export int2 max(int2 a, int2 b) [[ intrinsic(), const_expr() ]];
+export int3 max(int3 a, int3 b) [[ intrinsic(), const_expr() ]];
+export int4 max(int4 a, int4 b) [[ intrinsic(), const_expr() ]];
+export float max(float a, float b) [[ intrinsic(), const_expr() ]];
+export float2 max(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float3 max(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float4 max(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double max(double a, double b) [[ intrinsic(), const_expr() ]];
+export double2 max(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double3 max(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double4 max(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+export color max(color a, color b) [[ intrinsic(), const_expr() ]];
+export color max(float a, color b) [[ intrinsic(), const_expr() ]];
+export color max(color a, float b) [[ intrinsic(), const_expr() ]];
+
+export float max_value(float a) [[ intrinsic(), const_expr() ]];
+export float max_value(float2 a) [[ intrinsic(), const_expr() ]];
+export float max_value(float3 a) [[ intrinsic(), const_expr() ]];
+export float max_value(float4 a) [[ intrinsic(), const_expr() ]];
+export double max_value(double a) [[ intrinsic(), const_expr() ]];
+export double max_value(double2 a) [[ intrinsic(), const_expr() ]];
+export double max_value(double3 a) [[ intrinsic(), const_expr() ]];
+export double max_value(double4 a) [[ intrinsic(), const_expr() ]];
+export float max_value(color a) [[ intrinsic(), const_expr() ]];
+
+export int min(int a, int b) [[ intrinsic(), const_expr() ]];
+export int2 min(int2 a, int2 b) [[ intrinsic(), const_expr() ]];
+export int3 min(int3 a, int3 b) [[ intrinsic(), const_expr() ]];
+export int4 min(int4 a, int4 b) [[ intrinsic(), const_expr() ]];
+export float min(float a, float b) [[ intrinsic(), const_expr() ]];
+export float2 min(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float3 min(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float4 min(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double min(double a, double b) [[ intrinsic(), const_expr() ]];
+export double2 min(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double3 min(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double4 min(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+export color min(color a, color b) [[ intrinsic(), const_expr() ]];
+export color min(float a, color b) [[ intrinsic(), const_expr() ]];
+export color min(color a, float b) [[ intrinsic(), const_expr() ]];
+
+export float min_value(float a) [[ intrinsic(), const_expr() ]];
+export float min_value(float2 a) [[ intrinsic(), const_expr() ]];
+export float min_value(float3 a) [[ intrinsic(), const_expr() ]];
+export float min_value(float4 a) [[ intrinsic(), const_expr() ]];
+export double min_value(double a) [[ intrinsic(), const_expr() ]];
+export double min_value(double2 a) [[ intrinsic(), const_expr() ]];
+export double min_value(double3 a) [[ intrinsic(), const_expr() ]];
+export double min_value(double4 a) [[ intrinsic(), const_expr() ]];
+export float min_value(color a) [[ intrinsic(), const_expr() ]];
+
+export float[2] modf(float a) [[ intrinsic(), const_expr() ]];
+export float2[2] modf(float2 a) [[ intrinsic(), const_expr() ]];
+export float3[2] modf(float3 a) [[ intrinsic(), const_expr() ]];
+export float4[2] modf(float4 a) [[ intrinsic(), const_expr() ]];
+export double[2] modf(double a) [[ intrinsic(), const_expr() ]];
+export double2[2] modf(double2 a) [[ intrinsic(), const_expr() ]];
+export double3[2] modf(double3 a) [[ intrinsic(), const_expr() ]];
+export double4[2] modf(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float normalize(float a) [[ intrinsic(), const_expr() ]];
+export float2 normalize(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 normalize(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 normalize(float4 a) [[ intrinsic(), const_expr() ]];
+export double normalize(double a) [[ intrinsic(), const_expr() ]];
+export double2 normalize(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 normalize(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 normalize(double4 a) [[ intrinsic(), const_expr() ]];
+
+export int pow(int a, int b) [[ intrinsic(), const_expr() ]];
+export int2 pow(int2 a, int2 b) [[ intrinsic(), const_expr() ]];
+export int3 pow(int3 a, int3 b) [[ intrinsic(), const_expr() ]];
+export int4 pow(int4 a, int4 b) [[ intrinsic(), const_expr() ]];
+export float pow(float a, float b) [[ intrinsic(), const_expr() ]];
+export float2 pow(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float3 pow(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float4 pow(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double pow(double a, double b) [[ intrinsic(), const_expr() ]];
+export double2 pow(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double3 pow(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double4 pow(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+export int2 pow(int2 a, int b) [[ intrinsic(), const_expr() ]];
+export int3 pow(int3 a, int b) [[ intrinsic(), const_expr() ]];
+export int4 pow(int4 a, int b) [[ intrinsic(), const_expr() ]];
+export float2 pow(float2 a, float b) [[ intrinsic(), const_expr() ]];
+export float3 pow(float3 a, float b) [[ intrinsic(), const_expr() ]];
+export float4 pow(float4 a, float b) [[ intrinsic(), const_expr() ]];
+export double2 pow(double2 a, double b) [[ intrinsic(), const_expr() ]];
+export double3 pow(double3 a, double b) [[ intrinsic(), const_expr() ]];
+export double4 pow(double4 a, double b) [[ intrinsic(), const_expr() ]];
+export color pow(color a, color b) [[ intrinsic(), const_expr() ]];
+export color pow(color a, float b) [[ intrinsic(), const_expr() ]];
+
+export float radians(float a) [[ intrinsic(), const_expr() ]];
+export float2 radians(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 radians(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 radians(float4 a) [[ intrinsic(), const_expr() ]];
+export double radians(double a) [[ intrinsic(), const_expr() ]];
+export double2 radians(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 radians(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 radians(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float round(float a) [[ intrinsic(), const_expr() ]];
+export float2 round(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 round(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 round(float4 a) [[ intrinsic(), const_expr() ]];
+export double round(double a) [[ intrinsic(), const_expr() ]];
+export double2 round(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 round(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 round(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float rsqrt(float a) [[ intrinsic(), const_expr() ]];
+export float2 rsqrt(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 rsqrt(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 rsqrt(float4 a) [[ intrinsic(), const_expr() ]];
+export double rsqrt(double a) [[ intrinsic(), const_expr() ]];
+export double2 rsqrt(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 rsqrt(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 rsqrt(double4 a) [[ intrinsic(), const_expr() ]];
+export color rsqrt(color a) [[ intrinsic(), const_expr() ]];
+
+export float saturate(float a) [[ intrinsic(), const_expr() ]];
+export float2 saturate(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 saturate(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 saturate(float4 a) [[ intrinsic(), const_expr() ]];
+export double saturate(double a) [[ intrinsic(), const_expr() ]];
+export double2 saturate(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 saturate(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 saturate(double4 a) [[ intrinsic(), const_expr() ]];
+export color saturate(color a) [[ intrinsic(), const_expr() ]];
+
+export int sign(int a) [[ intrinsic(), const_expr() ]];
+export int2 sign(int2 a) [[ intrinsic(), const_expr() ]];
+export int3 sign(int3 a) [[ intrinsic(), const_expr() ]];
+export int4 sign(int4 a) [[ intrinsic(), const_expr() ]];
+export float sign(float a) [[ intrinsic(), const_expr() ]];
+export float2 sign(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 sign(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 sign(float4 a) [[ intrinsic(), const_expr() ]];
+export double sign(double a) [[ intrinsic(), const_expr() ]];
+export double2 sign(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 sign(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 sign(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float sin(float a) [[ intrinsic(), const_expr() ]];
+export float2 sin(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 sin(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 sin(float4 a) [[ intrinsic(), const_expr() ]];
+export double sin(double a) [[ intrinsic(), const_expr() ]];
+export double2 sin(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 sin(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 sin(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float[2] sincos(float a) [[ intrinsic(), const_expr() ]];
+export float2[2] sincos(float2 a) [[ intrinsic(), const_expr() ]];
+export float3[2] sincos(float3 a) [[ intrinsic(), const_expr() ]];
+export float4[2] sincos(float4 a) [[ intrinsic(), const_expr() ]];
+export double[2] sincos(double a) [[ intrinsic(), const_expr() ]];
+export double2[2] sincos(double2 a) [[ intrinsic(), const_expr() ]];
+export double3[2] sincos(double3 a) [[ intrinsic(), const_expr() ]];
+export double4[2] sincos(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float smoothstep(float a, float b, float l) [[ intrinsic(), const_expr() ]];
+export float2 smoothstep(float2 a, float2 b, float2 l) [[ intrinsic(), const_expr() ]];
+export float3 smoothstep(float3 a, float3 b, float3 l) [[ intrinsic(), const_expr() ]];
+export float4 smoothstep(float4 a, float4 b, float4 l) [[ intrinsic(), const_expr() ]];
+export double smoothstep(double a, double b, double l) [[ intrinsic(), const_expr() ]];
+export double2 smoothstep(double2 a, double2 b, double2 l) [[ intrinsic(), const_expr() ]];
+export double3 smoothstep(double3 a, double3 b, double3 l) [[ intrinsic(), const_expr() ]];
+export double4 smoothstep(double4 a, double4 b, double4 l) [[ intrinsic(), const_expr() ]];
+export float2 smoothstep(float2 a, float2 b, float l) [[ intrinsic(), const_expr() ]];
+export float3 smoothstep(float3 a, float3 b, float l) [[ intrinsic(), const_expr() ]];
+export float4 smoothstep(float4 a, float4 b, float l) [[ intrinsic(), const_expr() ]];
+export double2 smoothstep(double2 a, double2 b, double l) [[ intrinsic(), const_expr() ]];
+export double3 smoothstep(double3 a, double3 b, double l) [[ intrinsic(), const_expr() ]];
+export double4 smoothstep(double4 a, double4 b, double l) [[ intrinsic(), const_expr() ]];
+
+export float sqrt(float a) [[ intrinsic(), const_expr() ]];
+export float2 sqrt(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 sqrt(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 sqrt(float4 a) [[ intrinsic(), const_expr() ]];
+export double sqrt(double a) [[ intrinsic(), const_expr() ]];
+export double2 sqrt(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 sqrt(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 sqrt(double4 a) [[ intrinsic(), const_expr() ]];
+export color sqrt(color a) [[ intrinsic(), const_expr() ]];
+
+export float step(float a, float b) [[ intrinsic(), const_expr() ]];
+export float2 step(float2 a, float2 b) [[ intrinsic(), const_expr() ]];
+export float3 step(float3 a, float3 b) [[ intrinsic(), const_expr() ]];
+export float4 step(float4 a, float4 b) [[ intrinsic(), const_expr() ]];
+export double step(double a, double b) [[ intrinsic(), const_expr() ]];
+export double2 step(double2 a, double2 b) [[ intrinsic(), const_expr() ]];
+export double3 step(double3 a, double3 b) [[ intrinsic(), const_expr() ]];
+export double4 step(double4 a, double4 b) [[ intrinsic(), const_expr() ]];
+
+export float tan(float a) [[ intrinsic(), const_expr() ]];
+export float2 tan(float2 a) [[ intrinsic(), const_expr() ]];
+export float3 tan(float3 a) [[ intrinsic(), const_expr() ]];
+export float4 tan(float4 a) [[ intrinsic(), const_expr() ]];
+export double tan(double a) [[ intrinsic(), const_expr() ]];
+export double2 tan(double2 a) [[ intrinsic(), const_expr() ]];
+export double3 tan(double3 a) [[ intrinsic(), const_expr() ]];
+export double4 tan(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float2x2 transpose(float2x2 a) [[ intrinsic(), const_expr() ]];
+export float2x3 transpose(float3x2 a) [[ intrinsic(), const_expr() ]];
+export float3x2 transpose(float2x3 a) [[ intrinsic(), const_expr() ]];
+export float3x3 transpose(float3x3 a) [[ intrinsic(), const_expr() ]];
+export float4x2 transpose(float2x4 a) [[ intrinsic(), const_expr() ]];
+export float2x4 transpose(float4x2 a) [[ intrinsic(), const_expr() ]];
+export float3x4 transpose(float4x3 a) [[ intrinsic(), const_expr() ]];
+export float4x3 transpose(float3x4 a) [[ intrinsic(), const_expr() ]];
+export float4x4 transpose(float4x4 a) [[ intrinsic(), const_expr() ]];
+export double2x2 transpose(double2x2 a) [[ intrinsic(), const_expr() ]];
+export double2x3 transpose(double3x2 a) [[ intrinsic(), const_expr() ]];
+export double3x2 transpose(double2x3 a) [[ intrinsic(), const_expr() ]];
+export double3x3 transpose(double3x3 a) [[ intrinsic(), const_expr() ]];
+export double4x2 transpose(double2x4 a) [[ intrinsic(), const_expr() ]];
+export double2x4 transpose(double4x2 a) [[ intrinsic(), const_expr() ]];
+export double3x4 transpose(double4x3 a) [[ intrinsic(), const_expr() ]];
+export double4x3 transpose(double3x4 a) [[ intrinsic(), const_expr() ]];
+export double4x4 transpose(double4x4 a) [[ intrinsic(), const_expr() ]];
+
+export color blackbody(float temperature) [[ intrinsic(), const_expr(), since(1,1) ]];
+
+export color emission_color(
+    float[<N>] wavelengths, float[N] amplitudes) uniform [[ intrinsic(), since(1,3) ]];
+export color emission_color(color value) uniform [[ intrinsic(), since(1,3) ]];

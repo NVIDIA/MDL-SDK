@@ -1,0 +1,116 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_base_intro_versioning \BaseApiName Version Numbers and Compatibility
+
+There are several aspects of the API that may change over
+time. Version numbers are used to document various kinds of
+compatibility between different versions.
+
+
+\if SHARED_LIB_VERSION
+\section mi_base_version_api API Version of a Shared Library
+
+<b>This section does currently not apply. It will be reviewed towards
+the end of the Base API development</b>
+
+Assuming the API is provided in the form of a shared library (also
+known as DLL), you may be able to upgrade the API to a new version
+without recompiling your application and also without relinking your
+application, just by replacing the old shared library with a new one.
+There might be API releases that contain only static libraries, or no
+libraries at all. In both cases the discussion in this section does
+not apply to you.
+
+The interoperability between your application and the shared library
+is versioned with the <em>API version number</em> and the following
+protocol. In your application you ask the shared library for a
+particular API version by passing the API version number as an
+argument an interface querying function that depends on the particular
+API. The shared library returns then either an interface to you that
+conforms to this version, or it returns an invalid interface, which
+means that this version is not supported.
+
+The API version refers to a particular collection of interfaces and
+their APIs. It is a single integer
+number that increases over time. The current API version number is
+provided with the symbolic name \c MI_BASE_API_VERSION, which is the
+default argument to the interface querying function.
+
+The shared library always supports its own API version number and, if
+possible, older API version numbers in order to support upgrades from
+an older shared library version to a newer version. Older API versions
+of libraries with the same major product version number (see next
+section) are always supported, while older API versions of libraries
+with a different major API version are not guaranteed to be
+supported. Such support will be documented in the
+Release Notes.
+\endif
+
+\section mi_base_version_product Major and Minor API Product Version
+
+The product version number for the API governs the compatibility on
+the source code level, that is, the include files.
+\if SHARED_LIB_VERSION 
+, and to some extent on the binary level of the shared library. 
+See the previous section for details on binary compatibility.
+\endif 
+
+
+\BaseApiName has a product version number, which consists of three
+components: major version number, minor version number, and version
+qualifier.
+
+Detailed description:
+
+  - <b>Major Version Number</b><br>
+    Changes in the major version number indicate a disruptive change
+    without guaranteeing compatibility with prior
+    versions. Details are documented in the
+    Release Notes.
+    <br> See #MI_BASE_VERSION_MAJOR in \ref mi_base_version.
+
+  - <b>Minor Version Number</b><br>
+    Changes in the minor version number, where the major version number
+    remains unchanged, indicate an upwards compatible change. Old
+    sources compile without changes.
+    <br> See #MI_BASE_VERSION_MINOR in \ref mi_base_version.
+    \if SHARED_LIB_VERSION and a
+    possibly older API version number continues to be supported by the
+    new API.\endif
+
+  - <b>Version Qualifier</b><br>
+    A string that indicates special versions, such as alpha and beta
+    releases. Final end-customer releases have an empty version
+    qualifier. The compatibility guarantees described here are only
+    given for end-customer releases and do not hold for new features
+    introduced in alpha or beta releases.
+    <br> See #MI_BASE_VERSION_QUALIFIER in \ref mi_base_version.
+
+*/
+

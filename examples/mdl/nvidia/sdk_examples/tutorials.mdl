@@ -1,0 +1,306 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.4;
+
+import anno::*;
+import base::*;
+import df::*;
+import math::*;
+import state::*;
+import tex::*;
+
+// A simple struct.
+export struct example_struct {
+    int param_int;
+    float param_float = 0.0;
+};
+
+// A constant.
+export const int example_constant = 42;
+
+// A simple material.
+export material example_material(color tint = color(1.0), float roughness = 0)
+= let bsdf tmp = df::diffuse_reflection_bsdf(tint, roughness);
+in material(
+    surface: material_surface(scattering: tmp),
+    backface: material_surface(scattering: tmp)
+);
+
+// A simple function.
+export color example_function(color tint, float distance)
+{
+    return distance <= 0 ? color(0.0) : -1.0 * math::log(tint) / distance;
+}
+
+// A material used for instance compilation vs class compilation.
+export material example_compilation(color tint = color(1.0))
+= material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(tint: tint)
+    ),
+    backface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(tint: tint * color(state::normal()))
+    )
+);
+
+// The first material used to show the execution of material sub-expressions.
+export material example_execution1(color tint = color(1.0))
+= let {
+    float3 tex_coord = state::texture_coordinate(0);
+    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+}
+in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: tint *
+                color(
+                    0.5,
+                    math::sin(state::position().y) * 0.4 + 0.6,
+                    math::cos(state::position().x) * 0.3 + 0.5) *
+                (
+                    1.1 * tex.tint * tex.mono +
+                    base::perlin_noise_texture(
+                        uvw: base::texture_coordinate_info(
+                            position: tex_coord + state::animation_time() * float3(0, 0, 0.04)
+                        ),
+                        color1: color(0.1),
+                        color2: color(0.7),
+                        size: .2,
+                        noise_levels: 4
+                    ).tint * (1 - tex.mono * 0.5)
+        )
+        )
+    )
+);
+
+// Calculate height of waves at the given position.
+export float wave_height(
+    float2    pos,
+    float2[3] wave_centers = float2[3](float2(0.2, 0.7), float2(0.6, 0.4), float2(0.35, 0.6)))
+{
+    float radians_per_unit = 5 * 2 * math::PI;
+    float val = 0;
+    for ( int i = 0; i < 3; ++i ) {
+        float dist = math::distance(pos, wave_centers[i]);
+        val += math::cos(dist * radians_per_unit);
+    }
+
+    return (math::cos(val * math::PI) + 1) / 2;
+}
+
+// Calculate the gradient of the waves at the given texture coordinates.
+export float3 wave_gradient(
+    base::texture_coordinate_info  uvw = base::texture_coordinate_info(),
+    float3     normal = state::normal(),
+    float      delta = 0.01,
+    float      factor = 1.0,
+    float2[3]  wave_centers = float2[3](float2(0.2, 0.7), float2(0.6, 0.4), float2(0.35, 0.6)))
+{
+    float2[3] offsets(
+        float2(0.0,   0.0),
+        float2(delta, 0.0),
+        float2(0.0,   delta)
+    );
+    float[3] results;
+    for ( int i = 0; i < 3; ++i ) {
+        float2 pos = float2(
+            uvw.position.x + offsets[i].x,
+            uvw.position.y + offsets[i].y);
+        results[i] = wave_height(pos, wave_centers);
+    }
+    if ( (results[2] == results[0]) && (results[1] == results[0]) ) {
+        return normal;
+    } else {
+        return math::normalize(
+            normal +
+            uvw.tangent_v * (results[2] - results[0]) * factor +
+            uvw.tangent_u * (results[1] - results[0]) * factor);
+   }
+}
+
+// A second material used to show the execution of material sub-expressions.
+export material example_execution2(
+    float3 light_pos = float3(-5, 3, 5))
+= let {
+    float time = state::animation_time();
+    float2[3] wave_centers = float2[3](
+        float2(0.2 + 0.2 * math::cos(0.3 * time), 0.7 + 0.3 * math::sin(0.4 * time)),
+        float2(0.6, 0.4),
+        float2(0.35, 0.6));
+    float3 grad = wave_gradient(wave_centers: wave_centers);
+    base::texture_return tex = base::file_texture(
+        texture_2d("resources/example.png"),
+        uvw: base::texture_coordinate_info(
+            position: state::texture_coordinate(0) + 0.02 * grad
+        ));
+}
+in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint:
+                (
+                    color(0.3) * (1 - tex.mono * 0.5) + (1.4 * tex.tint * tex.mono)
+                ) *
+                math::dot(grad, math::normalize(light_pos))
+        )
+    )
+);
+
+// A third material used to show the execution of material sub-expressions.
+export material example_execution3()
+= let {
+    float time = state::animation_time();
+    float3 pos = state::texture_coordinate(0) +
+        (4 + math::cos(0.005 * time)) *
+        float3(math::sin(0.005 * time), math::cos(0.005 * time), 0);
+    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+}
+in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: (tex.tint * tex.mono) +
+                (1 - tex.mono * 0.8) * base::flake_noise_texture(
+                    uvw: base::texture_coordinate_info(position: pos),
+                    scale: 0.1,
+                    maximum_size: 1.2,
+                    noise_type: 1).tint
+        )
+    )
+);
+
+// simple material with textures and light profile
+export material example_modulemdl_material_examples(
+    color tint = color(1.0),
+    uniform light_profile profile = light_profile("resources/example_modules.ies")
+) = let {
+    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+}
+in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: tex.tint
+        ),
+        emission:  material_emission (
+            emission: df::measured_edf(profile: profile, global_distribution: true, global_frame: float3x3(1.,0,0,   0,0,1.,  0.,1,0) ),
+            intensity: tint
+        )
+    )
+);
+
+// simple measured material
+export material example_modules2()
+ =  material (
+    surface: material_surface(
+        scattering: df::measured_bsdf(
+            measurement: bsdf_measurement("resources/example_modules.mbsdf"),
+            multiplier: 1
+        )
+    )
+);
+
+export struct checker_value {
+    float2 roughness;
+    float weight;
+};
+
+export enum Options {
+   None,
+   Checker
+};
+
+export checker_value checker(float2 uv, float roughness, float anisotropy)
+{
+    checker_value val;
+    bool x =  (int(uv.x) & 1) != 0;
+    bool y =  (int(uv.y) & 1) != 0;
+
+    if (x != y)  {
+        float iso = (1.0f - anisotropy);
+        val.roughness = x ? float2(roughness * iso, roughness / iso) : float2(roughness / iso, roughness * iso);
+        val.weight = 1.0f;
+    }
+    return val;
+}
+
+// a material combining a diffuse, glossy, and specular
+export material example_df(
+    float tex_coord_scale = 14.0f,
+    float checker_scale = 1.0f,
+    color glossy_tint = color(0.3f, 0.5f, 1.0f),
+    float glossy_weight = 1.0f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+    color diffuse_tint = color(1.0f, 0.5f, 0.3f),
+    float diffuse_weight = 0.25f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+    float clearcoat_ior = 1.5f
+    [[
+        anno::hard_range(1.0f, 10.0f)
+    ]],
+    float roughness = 0.1f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+    float anisotropy = 0.5f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+    Options add_checker = Checker
+)
+= let {
+    float3 tex_coord3 = state::texture_coordinate(0);
+    float2 tex_coord = float2(tex_coord3.x, tex_coord3.y) * tex_coord_scale;
+    color tex_value = tex::lookup_color(texture_2d("resources/example.png"), tex_coord);
+
+    checker_value cval = add_checker != None ? checker(tex_coord * checker_scale, roughness, anisotropy) : checker_value();
+}
+in material(
+    surface: material_surface(
+        scattering: df::fresnel_layer(
+            ior: clearcoat_ior,
+            layer: df::specular_bsdf(),
+            base: df::normalized_mix(
+                df::bsdf_component[2](
+                    df::bsdf_component(
+                        weight: diffuse_weight,
+                        component: df::diffuse_reflection_bsdf(
+                            tint: tex_value * diffuse_tint)),
+                    df::bsdf_component(
+                        weight: glossy_weight * cval.weight,
+                        component: df::simple_glossy_bsdf(
+                            roughness_u: cval.roughness.x, roughness_v: cval.roughness.y, tint: glossy_tint))
+                    )
+                )
+            )
+        )
+);
+

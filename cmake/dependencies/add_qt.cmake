@@ -1,0 +1,101 @@
+# -------------------------------------------------------------------------------------------------
+# script expects the following variables:
+# - __TARGET_ADD_DEPENDENCY_TARGET
+# - __TARGET_ADD_DEPENDENCY_DEPENDS
+# - __TARGET_ADD_DEPENDENCY_COMPONENTS
+# - __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY
+# - __TARGET_ADD_DEPENDENCY_NO_LINKING
+# -------------------------------------------------------------------------------------------------
+
+# assuming the find_qt_ext script was successful
+# if not, this is an error case. The corresponding project should not have been selected for build.
+if(NOT MDL_ENABLE_QT_EXAMPLES)
+    message(FATAL_ERROR "The dependency \"${__TARGET_ADD_DEPENDENCY_DEPENDS}\" for target \"${__TARGET_ADD_DEPENDENCY_TARGET}\" could not be resolved.")
+else()
+    # get the base dir variable
+    string(LENGTH ${Qt5_DIR} _BASE_DIR_LENGTH)
+    math(EXPR _BASE_DIR_LENGTH "${_BASE_DIR_LENGTH}-14") 
+    string(SUBSTRING ${Qt5_DIR} 0 ${_BASE_DIR_LENGTH} Qt5_BASE_DIR)
+    set(Qt5_BASE_DIR ${Qt5_BASE_DIR} CACHE INTERNAL "qt root directory for the current platform. This directory contains the bin directory for example.") 
+
+    # find the required packages
+    find_package(Qt5 COMPONENTS ${__TARGET_ADD_DEPENDENCY_COMPONENTS} REQUIRED)
+
+    foreach (qt_component ${__TARGET_ADD_DEPENDENCY_COMPONENTS})
+
+        # add include directories
+        target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
+            PRIVATE
+                $<TARGET_PROPERTY:Qt5::${qt_component},INCLUDE_DIRECTORIES>
+            )
+
+        # link dependencies
+        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+            PRIVATE
+                Qt5::${qt_component}
+            )
+
+        # copy runtime dependencies
+        # we assume that qt is not installed locally but available, e.g., on a network drive
+        if(WIN32)
+            target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                RELATIVE  ${Qt5_BASE_DIR}/bin
+                FILES     Qt5${qt_component}$<$<CONFIG:DEBUG>:d>.dll)
+
+            # collect plugins and other libraries that are required
+            if(${qt_component} STREQUAL Svg)
+                target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                    RELATIVE    ${Qt5_BASE_DIR}/plugins
+                    FILES       imageformats/qsvg$<$<CONFIG:DEBUG>:d>.dll)
+
+            elseif(${qt_component} STREQUAL QuickControls2)
+                target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                    RELATIVE    ${Qt5_BASE_DIR}/bin
+                    FILES       Qt5QuickTemplates2$<$<CONFIG:DEBUG>:d>.dll)
+            endif()
+        endif()
+
+        #foreach(plugin ${Qt5${qt_component}_PLUGINS})
+        #    get_target_property(_loc ${plugin} LOCATION)
+        #    message("${qt_component}-Plugin ${plugin} is at location ${_loc}")
+        #endforeach()
+
+    endforeach()
+
+    # add platform dependencies
+    if(UNIX)
+
+        set_property(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET} APPEND PROPERTY
+            LINK_LIBRARIES
+                ${LINKER_NO_AS_NEEDED}
+                ${Qt5_BASE_DIR}/plugins/platforms/libqxcb.so
+                ${Qt5_BASE_DIR}/plugins/imageformats/libqsvg.so
+                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-egl-integration.so
+                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-glx-integration.so
+                ${Qt5_BASE_DIR}/plugins/egldeviceintegrations/libqeglfs-x11-integration.so
+                ${Qt5_BASE_DIR}/lib/libQt5XcbQpa.so
+                ${Qt5_BASE_DIR}/lib/libQt5DBus.so
+                ${Qt5_BASE_DIR}/lib/libQt5QuickTemplates2.so
+                ${Qt5_BASE_DIR}/lib/libicuuc.so
+                ${Qt5_BASE_DIR}/lib/libicui18n.so
+                ${Qt5_BASE_DIR}/lib/libicudata.so
+                ${LINKER_AS_NEEDED}
+            )
+
+        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+            FILES
+                "${Qt5_BASE_DIR}/plugins/xcbglintegrations"
+                "${Qt5_BASE_DIR}/plugins/egldeviceintegrations"
+            )
+    endif()
+
+    # copy qml dependencies which are not found if qt is not installed locally
+    target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+        FILES
+            "${Qt5_BASE_DIR}/qml/QtGraphicalEffects"
+            "${Qt5_BASE_DIR}/qml/QtQuick"
+            "${Qt5_BASE_DIR}/qml/QtQuick.2"
+            "${Qt5_BASE_DIR}/plugins/platforms"
+            "${Qt5_BASE_DIR}/plugins/imageformats"
+        )
+endif()

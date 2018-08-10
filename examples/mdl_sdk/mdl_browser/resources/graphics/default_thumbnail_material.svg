@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="128pt"
+   height="128pt"
+   viewBox="0 0 45.155557 45.155555"
+   version="1.1"
+   id="svg8"
+   inkscape:version="0.92.2 (5c3e80d, 2017-08-06)"
+   sodipodi:docname="default_thumbnail_material.svg"
+   inkscape:export-filename="C:\Projects\neuray\discovery\research\mdl_browser\resources\graphics\default_thumbnail_material_256.png"
+   inkscape:export-xdpi="144"
+   inkscape:export-ydpi="144">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="3.4493827"
+     inkscape:cx="136.7054"
+     inkscape:cy="62.162481"
+     inkscape:document-units="pt"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1920"
+     inkscape:window-height="1137"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     units="pt"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-251.84444)">
+    <rect
+       id="rect3707"
+       width="45.155556"
+       height="45.155556"
+       x="-3.5527137e-015"
+       y="251.84444"
+       style="fill:#c3c3c3;fill-opacity:1;stroke-width:0.37335646"
+       inkscape:export-xdpi="72.000008"
+       inkscape:export-ydpi="72.000008" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:14.11103344px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.35277581"
+       x="2.2113078"
+       y="288.53174"
+       id="text4524"
+       transform="scale(0.99999449,1.0000055)"><tspan
+         sodipodi:role="line"
+         id="tspan4522"
+         x="2.2113078"
+         y="288.53174"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.585186px;font-family:Verdana;-inkscape-font-specification:'Verdana Bold';fill:#424242;fill-opacity:1;stroke-width:0.35277581">MDL</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:14.11111164px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.35277778"
+       x="2.1791379"
+       y="294.07809"
+       id="text4524-8"><tspan
+         sodipodi:role="line"
+         id="tspan4522-5"
+         x="2.1791379"
+         y="294.07809"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:6.585186px;font-family:Verdana;-inkscape-font-specification:Verdana;fill:#424242;fill-opacity:1;stroke-width:0.35277778">Material</tspan></text>
+  </g>
+</svg>

@@ -1,0 +1,218 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_mdl_browser Example Implementation of an MDL Browser
+
+<div align="right">
+    [\link mi_neuray_example_discovery Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+This example demonstrates how a material selection dialogue that emphasizes the package and module
+structure could look like. The #mi::neuraylib::IMdl_discovery_api is used to get a
+holistic view of the modules that are installed on the system, independent of the of individually
+configured search paths.
+
+\section example_calls_new New Topics
+
+  - Caching of information on packages, modules, and materials
+  - Illustration of how we believe MDL materials should be presented to the user
+
+\section example_calls_descr Detailed Description
+
+<dl>
+    <dt><b>Discovering modules and caching of information</b></dt>
+    <dd><br>
+        When starting the application, the #mi::neuraylib::IMdl_discovery_api is used the get the 
+        current package and module structure installed on the system. This includes the handling of
+        admin and user space search paths as well as modules inside of MDL Archives. As 
+        demonstrated in the \link mi_neuray_example_discovery Discovery Example\endlink, this gives
+        us a holistic tree 
+        of #mi::neuraylib::IMdl_info objects with basic information on the modules and packages, 
+        e.g., simple and qualified name, the search path they have been found in and whether a module is 
+        located in an MDL Archive or not. To get information on materials or functions that are 
+        exported by individual modules, we need to load the modules and iterate over the exported 
+        elements. Since that can take a lot of time for large material libraries or libraries that 
+        are for instance stored on network drives, we try to minimize the loading time by storing the 
+        gathered information in a persistent cache file that can be loaded much faster.
+
+        The MDL browser contains an example implementation of such a cache that follows the MDL API 
+        design. Like the result of the #mi::neuraylib::IMdl_discovery_api, it is also organized in 
+        a tree structure with materials and functions as leaf nodes, while modules and packages are 
+        represented by inner nodes. 
+        Each node in the tree can save various information in form of key-value-pairs. 
+        This allows us to store names, authors, descriptions or other data, mainly gathered from 
+        annotations, for each exported material or function. The example also contains an 
+        implementation of the IMdl_cache_serializer, which exports the cache to a xml file 
+        and imports it back again when the application is started the next time.
+
+        In the current implementation, all modules that are not already in the cache, 
+        are loaded and analyzed at the first start of the MDL Browser. 
+        This can take several seconds up to minutes, depending on the number of modules 
+        installed on the system. Modules that are present in the cache are checked for updates. 
+        Therefore, we store the file path and the time of the last modification in the cache. 
+        In case the module (or archive) has changed, we load and analyze the content again. 
+        We also check if the resolved file path provided by the #mi::neuraylib::IMdl_discovery_api
+        matches the one stored in the cache to detect if a module originates from a different search
+        path. This can happen due to new shadowing modules or after resolving previously existing
+        shadows.
+    </dd>
+
+    <dt><b>Usage of the Package Explorer</b></dt>
+    <dd><br>
+        On the left side of the MDL Browser window there is a Package Explorer that allows to  
+        navigate the package and module structure. 
+        Every time the user clicks on a package it is expanded 
+        to show its content. At the same time, the main selection pane on the right is filtered 
+        to only show materials that are exported by modules of the current navigation level 
+        or deeper levels in the hierarchy. This way the user can narrow down the module 
+        he or she is looking for. To go up the hierarchy, there is a back button at the left edge 
+        of the screen and breadcrumbs at the top of the Package Explorer. 
+        Every time the user goes up, the filtering on the right side is updated to again 
+        show all materials for the current or deeper levels.
+        Selecting a module in the Package Explorer, illustrated by a piece of a puzzle, 
+        the selection pane shows only materials that are exported by that module. 
+        Selecting the same module once more, or picking the last breadcrumb, removes this restriction again.
+        
+        Please note, that always showing all possible materials in the selection pane might not scale arbitrarily. 
+        Furthermore, it would make sense to introduce pages, similar to many web shops, 
+        or to only show the materials that are exported by the modules of the current level – and not deeper levels – of the hierarchy.
+    </dd>
+
+    <dt><b>Searching for materials based on the cached information</b></dt>
+    <dd><br>
+        For reasonable large material libraries, the navigation of packages using only the 
+        Package Explorer is starting to get a tedious task, especially if the user already 
+        knows which material or at least which type of material he or she wants. 
+        Therefore, it is necessary to offer a search mechanism that allows to filter the 
+        set of materials to select from. Adding multiple search terms allows to further 
+        narrow down the list of candidates.
+
+        To realize such a search mechanism, a very basic inverse index structure is used. 
+        Each material or function acts as document that can be retrieved by the search and all 
+        the text information we store in the cache is treated as content of the individual documents. 
+        This content is split into single words and each word can be weighted based on the type of information, 
+        as a word appearing in the name might be more descriptive than a word in the description or in the author’s name. 
+        During the construction of the index structure, each document is processed into a list 
+        of pairs containing all words and their relevance for the document. 
+        The index itself consists of a hash map that is indexed by the words retrieved from all documents. 
+        The values in the map are so called posting lists. Here, the document is added 
+        if it contains the word that is used as key. The element that is added as a posting list is again a pair. 
+        This time, a pointer to the document itself and the relevance of the current word.
+
+        The index is constructed at application startup, right after the cache was updated.
+        In contrast to the cache however, the index is not stored persistently even though it 
+        would make sense for very large material libraries or more detailed information about the individual elements.
+
+        At runtime, the user can search for materials by inserting queries into the search bar 
+        at the top of the window. This query is split into single words following the same rules 
+        as during the document processing. Then, for each word of the query, 
+        a regex matching for all keys in the index structure is computed. 
+        In case of a match, the posting list is iterated and the documents along with their 
+        relevance are retrieved. If there is more than one search term, only documents that appear 
+        in all results are presented to the user and the product of their relevance is used 
+        for ranking the selectable materials. Adding a leading minus sign directly in front 
+        of a search term allows to negate a search result. Only elements that do not appear 
+        in result list for that term are excepted. So, searching for “metal -copper” 
+        will retrieve all materials that are made of metal but not of copper. 
+    </dd>
+
+    <dt><b>Presentation of selectable materials</b></dt>
+    <dd><br>
+        Depending on the user’s intension, we support him or her by sorting the results on the selection pane. 
+        The example provides three example sorting strategies: 
+        sorting by name, by modification date, and by search ranking, 
+        while all of them can be sorted ascending and descending. 
+        Besides the corresponding buttons below the search bar that can be used to configure the sorting, 
+        we automatically sort descending by search ranking when the user hits enter to submit a search query. 
+        Since hitting enter is optional, this is only added for convenience.
+
+        The selectable elements can be presented in a list or in a grid view. 
+        While the latter offers more possible selection candidates at once, 
+        the list view displays more information, i.e., the author and the description. 
+        However, both presentations provide more data when hovering over a small info icon.
+        
+        Selecting a material shows a button to confirm the selection, 
+        which closes the browser and returns the qualified name back to the application, 
+        or in our case, to the console. Double-clicking a material can be used alternatively.
+    </dd>
+
+    <dt><b>Shadowed modules</b></dt>
+    <dd><br>
+        The #mi::neuraylib::IMdl_discovery_api provides information about modules that are shadowed by modules in other search paths. 
+        The MDL Browser informs the user by a red exclamation mark on the module icon in the Package Explorer.
+        Hovering over the icon uncovers the search path of the visible module, 
+        the one that can be loaded by the SDK, and the search paths of all modules that are shadows and thereby unavailable.
+    </dd>
+
+    <dt><b>Building the example</b></dt>
+    <dd><br>
+        To compile the source code, you need the Qt Toolkit 5.10 or above available at <a href="https://www.qt.io/download">https://www.qt.io/download</a>.
+        During the installation of Qt select the 64-bit toolkit for Visual Studio 2015 and/or 2017 (MSVC 2015 64-bit and/or MSVC 2017 64-bit).
+
+        The application was tested to build and run with Qt toolkit version 5.10.1.
+        If you use a different Qt version or you didn't install it in the default path <em>C:\\Qt</em>, you will have to adapt the \c "QtVersion" and \c "QT_INSTALL_PATH" properties in \c examples/mdl_browser/config.props before building.
+        After changing this file, you may have to reopen the project solution to make the changes effective.
+    </dd>
+
+    <dt><b>Running the example from the command line</b></dt>
+    <dd><br>
+        The MDL Browser can be started with the command line options:
+        - -c | \--cache_rebuild<br>
+          Forces a rebuild of the cache file.
+
+        - -h | \--help<br>
+          Shows all options with a short explanation.
+
+        - -k | \--keep_open<br>        
+          Reopens the browser after closing the window or selecting a material until the console is closed.
+
+        - -p | \--mdl_path<br>
+          By default, the MDL Browser uses the two default search paths for the system. 
+          On the Windows platform this is the admin-space search path, 
+          e.g., <em>C:\\ProgramData\\NVIDIA Corporation\\mdl</em> and the 
+          user-space search path <em>\%USERPROFILE%\\Documents\\mdl</em>. 
+          By passing the command line option -p \<value\>, this default behavior can be changed. 
+          The option can appear multiple times.
+    </dd>
+
+    <dt><b>Restrictions</b></dt>
+    <dd><br>
+        The MDL Browser is a prototype that illustrates certain aspects user experience.
+
+        - At the moment, the example only works on the Windows platform.
+        - Only materials can be selected even though the cache already supports functions.
+    </dd>
+</dl>
+
+<div align="right">
+    [\link mi_neuray_example_discovery Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

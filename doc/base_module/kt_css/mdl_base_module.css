@@ -1,0 +1,16 @@
+
+.elemheader {
+    background-color: #DDDDDD;
+    padding: .4em 1em;
+    margin-top: 2em;
+    vertical-align: middle;
+    fontsize: 110%;
+}
+
+td {
+    line-height: 1.4;
+}
+
+.panelink {
+    font-family: Consolas, "Courier New", monospace;
+}

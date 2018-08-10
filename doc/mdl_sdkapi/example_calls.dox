@@ -1,0 +1,113 @@
+/******************************************************************************
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_calls Example for Function calls
+
+<div align="right">
+    [\link mi_neuray_example_instantiation Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_compilation Next\endlink]
+</div>
+
+This example uses function calls to create a textured material.
+
+\section example_calls_new New Topics
+
+  - Rationale for expressions vs values
+  - Creating a textured material
+
+\section example_calls_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Rationale for expressions vs values
+    </b></dt>
+    <dd><br>
+        Arguments of material instances and function calls are not values, but expressions. For
+        example, the argument for the \c "tint" parameter in the \link
+        mi_neuray_example_instantiation previous example\endlink is an instance of
+        #mi::neuraylib::IExpression, and not of #mi::neuraylib::IValue_color. Why is this
+        indirection needed?
+
+        If material instances and function calls are only used in isolation, simple values like
+        #mi::neuraylib::IValue_color would be sufficient. However, much of the flexibility of MDL comes from
+        the fact that one can create connections between material instances and function calls
+        (provided the return type and the parameter type match). These connections are represented
+        by call expressions while simple values are represented by constant expressions.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Creating a textured material
+    </b></dt>
+    <dd><br>
+        The method \c create_texture_material() shows all the steps needed to create a textured
+        material in a bottom-up order. First we create a DB element of type #mi::neuraylib::IImage
+        that represents the provided \c .png file, and a DB element of type
+        #mi::neuraylib::ITexture that references the image.
+
+        Next we load the MDL modules we want to use. The \c example module contains the material
+        definition that we are going to use later. The \c base module contains a function
+        definition that we are using in the next step to make use of the texture.
+
+        The function definition \c base::file_texture() is used to access the texture object in the
+        DB. Apart from the texture name it provides several arguments to influence the texture
+        lookup process. In this example we just set the texture name and leave the other arguments
+        at their defaults. This step uses #mi::neuraylib::IModule::get_function_overloads() to
+        retrieve the exact name of a function definition (which includes the signature). Using this
+        method frees one from hardcoding the signature if there is only one overload.
+
+        The return type of the function definition \c base::file_texture() is \c base::texture_return,
+        a struct of two fields: \c "tint" of type #mi::neuraylib::IType_color and \c "mono" of type
+        #mi::neuraylib::IType_float. Since the material definition we plan to use has a parameter
+        of type #mi::neuraylib::IType_color we cannot directly attach the function call of \c
+        base::file_texture(). Instead we have to isolate the \c "tint" field in the returned
+        struct. This can be done by a so-called \em member \em selection \em operator (see \ref
+        mi_neuray_mdl_structs for details). In this case, the name of the required struct getter is
+        \c base::texture_return.tint().
+
+        Finally, we connect the just created instance of the member selection operator to the \c
+        "tint" argument of our diffuse material. The dump of the material instance and all function
+        calls clearly shows the created call expressions.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_calls Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/example_calls.cpp</tt>
+
+\include calls/example_calls.cpp
+
+<div align="right">
+    [\link mi_neuray_example_instantiation Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_compilation Next\endlink]
+</div>
+
+*/

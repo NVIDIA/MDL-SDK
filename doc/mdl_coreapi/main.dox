@@ -1,0 +1,111 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+// Manual style principles:
+//
+// - We address the reader with 'you', avoiding use of passive verbs,
+//   such as 'one', 'the programmer', etc.
+//
+// - We do not use 'we' to talk about ourselves.
+
+
+/*! \anchor mdl_core_main
+
+\mainpage \MDLCoreApiName Programmer's Manual
+
+This reference documentation is structured into introductory material, tutorials
+and examples, and reference manuals.
+
+\section mi_mdl_core_contents_intro Introduction
+
+The \MDLCoreApiName is an internal component of the MDL SDK. With the MDL
+SDK source code release, it becomes accessible as a stand-alone and
+separately usable component.
+
+The \MDLCoreApiName provides a lower-level API to the MDL compiler. When
+you consider using this API, please be advised that it deviates in
+many aspects from the various policies that you might got used to with
+the MDL SDK. On the other hand, if you have experience working with
+compiler APIs, and you just need a compiler and no additional
+infrastructure around it, this might be just the API for you to use.
+
+The following list explains some of the main differences between the
+\MDLCoreApiName and the MDL SDK API:
+
+ - The \MDLCoreApiName deviates from the MDL SDK memory ownership
+   policies where every object has a separately reference counted
+   interface. Instead, many objects are stored in memory arenas that
+   are owned by larger objects, such as a compiled MDL module.
+
+ - Objects in the \MDLCoreApiName are often immutable interfaces. Once
+   constructed, they cannot be changed anymore. The MDL SDK instead
+   offers mutable interfaces, such that it is easier for programmers
+   to change a parameter value of an existing material.
+
+ - The \MDLCoreProductName compiler is stateless and communicates
+   through interfaces and callbacks with the integrating application
+   when it needs information about already compiled modules or
+   loaded resources such as texture files. On the other hand, the MDL
+   SDK provides an in-memory database for all loaded MDL modules,
+   materials, and resources. The MDL SDK provides also the importers
+   for the different resource file types and the exporter for MDL. 
+
+ - The MDL SDK API provides more extensive parameter checking to
+   protect against programming errors while the \MDLCoreApiName relies
+   mostly on assertions in debug mode.
+
+\section mi_mdl_core_contents_tutorial Tutorial and Examples
+
+  - \subpage mi_mdl_core_examples
+  - \ref mi_mdl_core_example_topics
+
+\section mi_mdl_core_contents_ref_manual Reference Manual
+
+  - \BaseApiName Reference
+      - \subpage mi_base_includes "Include files", \subpage mi_base_intro_versioning "Versioning" and \subpage mi_base_intro_config "Configuration" of the \baseApiName
+      - \ref mi_base_types
+      - \ref mi_base_threads
+      - \ref mi_base_iinterface
+      - \ref mi_base_iallocator, \ref mi_base_ilogger, and \ref mi_base_plugin
+
+  - \MDLCoreApiName Reference
+      - #mi_mdl_factory(), the main function and entry point to the \MDLCoreApiName
+      - #mi::mdl::IMDL, the main interface component to access the \MDLCoreApiName functionality
+      - #mi::mdl::IModule, the interface of a compiled  MDL module
+      - \subpage mdl_ownership
+      - \subpage mdl_compilation
+      - \subpage mdl_dag_ir
+      - Configuration
+        - \subpage mdl_compiler_options
+        - \subpage mdl_code_generator_options
+        - \subpage mdl_archive_tool
+      - Backend specific topics
+        - \subpage mi_mdl_core_ptx_texture_lookup_call_modes
+
+*/
+

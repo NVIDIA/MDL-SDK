@@ -1,0 +1,203 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+ 
+mdl 1.4;
+
+
+import base::perlin_noise_texture;
+import base::worley_noise_texture;
+import base::perlin_noise_bump_texture;
+import base::worley_noise_bump_texture;
+import base::transform_coordinate;
+import base::coordinate_source;
+import base::texture_return;
+import base::rotation_translation_scale;
+import base::texture_coordinate_system;
+import nvidia::core_definitions::scratched_plastic;
+import anno::*;
+
+export material noise_worley_glossy (
+    uniform float ior = 3
+    [[ 
+        anno::display_name("Coating ior"),
+        anno::soft_range(1.0, 4.0),
+        anno::description("Describes the directional dependence of the reflection."
+            " Values around 1.5 are realistic, higher values will increase reflectivity for"
+            " surfaces facing the observer")
+    ]],
+    color noise_color = color(0)
+    [[ 
+        anno::display_name("Color 1")
+    ]],
+    color base_color = color(1.,1.,0.)
+    [[ 
+        anno::display_name("Color2")
+    ]],
+    uniform float3 scaling = float3(20.)
+    [[ 
+        anno::display_name("Scaling factor")
+    ]],
+    uniform float threshold_low = 0.3
+    [[ 
+        anno::display_name("Lower noise threshold"),
+        anno::hard_range(0.0, 1.0)
+    ]],
+    uniform float threshold_high = .9
+    [[ 
+        anno::display_name("Upper noise threshold"),
+        anno::hard_range(0.0, 1.0)
+    ]]
+) [[ 
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Dielectric, worley noise textures"),
+    anno::description("A simple dielectric material showcasing procedural texturing")
+]] = nvidia::core_definitions::scratched_plastic(
+    ior: ior,
+    diffuse_color: base::worley_noise_texture(
+        uvw: base::transform_coordinate(
+                transform: base::rotation_translation_scale(rotation: float3(0.), translation: float3(0.), scaling: scaling),
+                coordinate: base::coordinate_source(coordinate_system: base::texture_coordinate_uvw, texture_space: 0)
+        ),
+        color1: noise_color,
+        color2: base_color ,
+        size: 1.,
+        apply_marble: true,
+        apply_dent: false,
+        noise_threshold_high: threshold_high,
+        noise_threshold_low: threshold_low,
+        noise_bands: 1.0
+
+    ).tint,
+    normal: base::worley_noise_bump_texture(
+        uvw: base::transform_coordinate(
+                transform: base::rotation_translation_scale(rotation: float3(0.), translation: float3(0.), scaling: scaling),
+                coordinate: base::coordinate_source(coordinate_system: base::texture_coordinate_uvw, texture_space: 0)
+        ),
+        size: 1.,
+        apply_marble: true,
+        apply_dent: false,
+        noise_threshold_high: threshold_high,
+        noise_threshold_low: threshold_low,
+        noise_bands: 1.0,
+        factor: 2.
+    )
+);
+
+export material noise_perlin_glossy (
+    uniform float ior = 3
+    [[ 
+        anno::display_name("Coating ior"),
+        anno::soft_range(1.0, 4.0),
+        anno::description("Describes the directional dependence of the reflection."
+            " Values around 1.5 are realistic, higher values will increase reflectivity for"
+            " surfaces facing the observer")
+    ]],
+    color noise_color = color(.1,.9,.3)
+    [[ 
+        anno::display_name("Color 1")
+    ]],
+    color base_color = color(0.)
+    [[ 
+        anno::display_name("Color 2")
+    ]],
+    uniform float3 scaling = float3(1. )
+    [[ 
+        anno::display_name("Scaling factor")
+    ]],
+    uniform bool absolute = false
+    [[ 
+        anno::display_name("Absolute noise")
+    ]],
+    uniform int levels = 3
+    [[ 
+        anno::display_name("Detail levels")
+    ]],
+    uniform float threshold_low = 0.5
+    [[ 
+        anno::display_name("Lower noise threshold"),
+        anno::hard_range(0.0, 1.0)
+    ]],
+    uniform float threshold_high = 1
+    [[ 
+        anno::display_name("Upper noise threshold"),
+        anno::hard_range(0.0, 1.0)
+    ]],
+    uniform bool apply_marble = false
+    [[ 
+        anno::display_name("Apply marble function")
+    ]],
+    uniform bool apply_dent = false
+    [[ 
+        anno::display_name("Apply dent function")
+    ]]
+) [[ 
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Dielectric, perlin noise textures"),
+    anno::description("A simple dielectric material showcasing procedural texturing")
+]] = nvidia::core_definitions::scratched_plastic(
+    ior: ior,
+    diffuse_color: base::perlin_noise_texture(
+        uvw: base::transform_coordinate(
+                transform: base::rotation_translation_scale(rotation: float3(0.), translation: float3(0.), scaling: scaling),
+                coordinate: base::coordinate_source(coordinate_system: base::texture_coordinate_world, texture_space: 0)
+        ),
+        color1: base_color,
+        color2: noise_color,
+        size: 1.,
+        apply_marble: apply_marble,
+        apply_dent: apply_dent,
+        noise_phase: 0.0,
+        noise_levels: levels,
+        absolute_noise: absolute,
+        noise_distortion: float3( 0.0 ),
+        noise_threshold_high: threshold_high,
+        noise_threshold_low: threshold_low,
+        noise_bands: 1.0
+    ).tint,
+    normal: base::perlin_noise_bump_texture(
+        uvw: base::transform_coordinate(
+            transform: base::rotation_translation_scale(rotation: float3(0.), translation: float3(0.), scaling: scaling),
+            coordinate: base::coordinate_source(coordinate_system: base::texture_coordinate_world, texture_space: 0)
+        ),
+        size: 1.,
+        apply_marble: apply_marble,
+        apply_dent: apply_dent,
+        noise_phase: 0.0,
+        noise_levels: levels,
+        absolute_noise: absolute,
+        noise_distortion: float3( 0.0 ),
+        noise_threshold_high: threshold_high,
+        noise_threshold_low: threshold_low,
+        noise_bands: 1.0,
+        factor: 2.
+    )
+);

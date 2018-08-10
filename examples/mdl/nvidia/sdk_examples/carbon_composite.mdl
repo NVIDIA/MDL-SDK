@@ -1,0 +1,173 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+ 
+mdl 1.4;
+
+import df::fresnel_layer;
+import df::weighted_layer;
+import df::microfacet_ggx_smith_bsdf;
+import nvidia::core_definitions::scratched_metal;
+import nvidia::core_definitions::apply_clearcoat;
+import nvidia::core_definitions::file_texture;
+import nvidia::core_definitions::file_bump_texture;
+import nvidia::core_definitions::perlin_noise_bump_texture;
+import nvidia::core_definitions::mono_mode;
+import nvidia::core_definitions::texture_return;
+import base::anisotropy_conversion;
+import base::anisotropy_return;
+import tex::gamma_mode;
+import anno::*;
+
+
+export material carbon_composite (
+    uniform float ior = 1.5
+    [[ 
+        anno::display_name("IOR"), 
+        anno::soft_range(1.0, 4.0),
+        anno::in_group("Top coat") 
+    ]],
+    float coat_roughness = 0. 
+    [[ 
+        anno::display_name("Micro roughness"), 
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Top coat") 
+    ]],
+    uniform float peel_amount = .1          
+    [[ 
+        anno::display_name("Orange peel strength"), 
+        anno::soft_range(0.0, 3.0),
+        anno::in_group("Top coat") 
+    ]],
+    uniform float peel_size = .3           
+    [[ 
+        anno::display_name("Orange peel size"), 
+        anno::in_group("Top coat")
+    ]],
+    uniform texture_2d rotation = texture_2d("resources/carbon_direction.jpg",tex::gamma_linear)
+    [[ 
+        anno::display_name("Orientation texture"), 
+        anno::in_group("Carbon fibres") 
+    ]], 
+    uniform texture_2d bump_texture = texture_2d("resources/carbon_bump.png",tex::gamma_linear)
+    [[  
+        anno::display_name("Bump texture"), 
+        anno::in_group("Carbon fibres") 
+    ]], 
+    uniform texture_2d fibre_reflectance = texture_2d("resources/carbon_reflectivity.jpg",tex::gamma_linear)
+    [[ 
+        anno::display_name("Reflectivity texture"), 
+        anno::in_group("Carbon fibres") 
+    ]], 
+    uniform float fibre_reflectance_multiplier = .1
+    [[ 
+        anno::display_name("Reflectivity"), 
+        anno::in_group("Carbon fibres") 
+    ]],
+    uniform float roughness = .2 
+    [[ 
+        anno::display_name("Micro roughness"), 
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Carbon fibres") 
+    ]], 
+    uniform float bump_amount =  10.
+    [[ 
+        anno::display_name("Bump scale"), 
+        anno::in_group("Carbon fibres") 
+    ]],
+    uniform float anisotropy = .9  
+    [[ 
+        anno::display_name("Anisotropy"), 
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Carbon fibres") 
+    ]],
+    uniform float2 scale = float2(10.,10.)
+    [[ 
+        anno::display_name("Texture repetition"), 
+        anno::in_group("Other") 
+    ]]
+) [[ 
+    anno::copyright_notice (
+    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("Carbon fibre composite")
+]] = let{
+    base::anisotropy_return aniso = base::anisotropy_conversion(
+        roughness: roughness*roughness, //squaring the roughness is perceived more natural by many
+        anisotropy: anisotropy, 
+        anisotropy_rotation: 
+            nvidia::core_definitions::file_texture(
+                texture:  rotation,
+                mono_source:  nvidia::core_definitions::mono_average,
+                scaling:  scale,
+                texture_space:  0
+            ).mono
+    ); 
+
+    float3 bump_map = ::nvidia::core_definitions::file_bump_texture(
+        texture: bump_texture,
+        bump_source: nvidia::core_definitions::mono_average,
+        scaling: scale,
+        factor: bump_amount,
+        texture_space:  0
+    );
+
+    float3 orange_peel = nvidia::core_definitions::perlin_noise_bump_texture( 
+        scaling: float3(scale.x,scale.y,1.)/peel_size,
+        object_space: false,
+        noise_levels: 1,
+        factor: peel_amount
+    );    
+    
+    color base_color = nvidia::core_definitions::file_texture(
+        texture: fibre_reflectance,
+        brightness: fibre_reflectance_multiplier,
+        scaling:  scale
+    ).tint;
+    
+} in material (
+    surface: material_surface (
+        scattering: df::fresnel_layer( 
+            ior: ior,
+            normal: orange_peel,
+            layer: df::microfacet_ggx_smith_bsdf ( 
+                roughness_u: coat_roughness*coat_roughness, //squaring the roughness is perceived more natural by many 
+                tint: color(1.) 
+            ),
+            base: df::weighted_layer(
+                weight: 1.,
+                normal: bump_map,
+                layer: df::microfacet_ggx_smith_bsdf (
+                    tint: base_color,
+                    roughness_u: aniso.roughness_u,
+                    roughness_v: aniso.roughness_v,
+                    tangent_u: aniso.tangent_u
+                )
+            )
+        )
+    )
+);

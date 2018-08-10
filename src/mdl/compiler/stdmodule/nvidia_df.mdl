@@ -1,0 +1,153 @@
+/******************************************************************************
+ * Copyright (c) 2014-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+//
+// additional BSDF models support by NVIDIA Iray
+//
+
+mdl 1.4;
+
+using ::anno import hard_range;
+import ::df::*;
+import ::state::*;
+
+// The glossy reflection component of the Ashikhmin-Shirley BRDF model (excluding Fresnel)
+// References:
+// M. Ashikhmin, P. Shirley - "An Anisotropic Phong BRDF model", Journal of Graphic Tools, Vol. 5, 2000
+export bsdf ashikhmin_shirley_glossy_bsdf(
+    float                n_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                n_v         = n_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform string       handle      = ""
+) [[ intrinsic() ]];
+
+// The glossy reflection component of the Ward BRDF model (albedo-bound variant)
+// References:
+// D. Geisler-Moroder, A. Duer - "A New Ward BRDF Model with Bounded Albedo", Computer Graphics Forum, Vol. 29, 2010
+export bsdf ward_geisler_moroder_glossy_bsdf(
+    float                alpha_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                alpha_v     = alpha_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint        = color(1.0),
+    float3               tangent_u   = state::texture_tangent_u(0),
+    uniform string       handle      = ""
+) [[ intrinsic() ]];
+
+
+// Microfacet BSDFs (optionally with Fresnel-weighted combination of microfacet reflection and refraction)
+// References:
+// B. Walter, S. Marschner, H. Li, K. Torrance - "Microfacet Models for Refraction through Rough Surfaces", Rendering Techniques 2007
+// E. Heitz - "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs", INRIA Research Report 8468, 2014
+// E. Heitz, E. d'Eon - "Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals", Computer Graphics Forum, Vol. 33, 2014
+
+// Smith masking variants:
+// anisotropic Beckmann distribution
+export bsdf microfacet_beckmann_smith_bsdf(
+    float                    alpha_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    alpha_v     = alpha_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+// anisotropic GGX distribution
+export bsdf microfacet_ggx_smith_bsdf(
+    float                    alpha_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    alpha_v     = alpha_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+// v-cavity masking variants:
+// anisotropic Beckmann distribution
+export bsdf microfacet_beckmann_vcavities_bsdf(
+    float                    alpha_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    alpha_v     = alpha_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+// anisotropic GGX distribution
+export bsdf microfacet_ggx_vcavities_bsdf(
+    float                    alpha_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    alpha_v     = alpha_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+// anisotropic Phong distribution
+export bsdf microfacet_phong_vcavities_bsdf(
+    float                    n_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    n_v         = n_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+
+
+// MDL 1.3's df::simple_glossy_bsdf
+export bsdf simple_glossy_bsdf(
+    float                    roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
+// pre MDL 1.3's df::simple_glossy_bsdf
+export bsdf simple_glossy_bsdf_legacy(
+    float                    roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string           handle      = ""
+) [[ intrinsic(), since(1,3) ]];
+
+// MSL mcp_backscattering_glossy's forward scattering component
+export bsdf legacy_mcp_glossy_bsdf(
+    float                    roughness                 [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    anisotropy  = 0.0         [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    anisotropy_rotation = 0.0,
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    uniform string       handle          = ""
+) [[ intrinsic() ]];
+
+
+
+

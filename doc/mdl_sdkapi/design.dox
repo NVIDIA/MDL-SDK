@@ -1,0 +1,298 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_design Library Design
+
+In addition to the introduction given here, the \ref
+mi_neuray_examples explain many topics about the \neurayApiName
+design. A list of such topics can be found in the \ref
+mi_neuray_example_topics.
+
+\section mi_neuray_interfaces Interfaces
+
+The \neurayApiName follows conventional modern C++ library design
+principles for component software to achieve binary compatibility
+across shared library boundaries and future extensibility. The design
+provides access to the shared library through interfaces, abstract
+base classes with pure virtual member functions.
+
+The main interface #mi::neuraylib::INeuray can be retrieved by calling
+the global function #mi_factory().
+#mi::neuraylib::INeuray allows access to the whole library.
+From this interface other interfaces of the library can be requested
+with the #mi::neuraylib::INeuray::get_api_component() member function.
+
+\section mi_neuray_refcounting Reference counting
+
+Interfaces implement reference counting for life-time control.
+
+Whenever a function returns a pointer to #mi::base::IInterface or a subclass
+thereof, the corresponding reference counter has already been increased by 1.
+That is, you can use the interface pointer without worrying whether the
+pointer is still valid. Whenever you do not need an interface any longer,
+you have to release it by calling its \c release() method. Omitting such
+calls leads to memory leaks.
+
+In more detail, the rules for reference counting are as follows:
+
+- A method that returns an interface increments the reference count for the
+  caller. The caller needs to release the interface when it is done. See
+  Example 1 below.
+
+- When a caller passes an interface as method argument the caller has to
+  guarantee that the interface is valid for the runtime of that method, and
+  the callee can safely use the interface for that time without the need to
+  change the reference count.
+
+- If the callee wants to reference an interface passed as an argument later
+  (typically via a member variable) then it has to use reference counting to
+  ensure that the interface remains valid. See Example 2 below.
+
+- The initial reference count after construction is 1 (such that one can
+  implement methods returning an interface pointer by writing \c return \c
+  new \c Foo(); ).
+
+- Interfaces passed as out arguments of methods are treated similar to
+  return values. The callee decrements the reference count for the value
+  passed in and increments it for the value passed back.
+
+Example 1:
+
+Assume there is an interface \c IFoo derived from #mi::base::IInterface, and an
+API method that creates instances of \c IFoo, e.g.,
+
+\code
+    class IFactory : public mi::base::Interface_declare...>
+    {
+    public:
+        virtual IFoo* create_foo() = 0;
+    };
+\endcode
+
+Let \c factory be an instance of \c IFactory. As described by the rules above
+the implementation of \c create_foo() increments the reference count for the
+caller. When you are done with your reference to the instance of \c IFoo, you
+need to decrement its reference count again via
+#mi::base::IInterface::release().
+
+\code
+    IFoo* foo = factory->create_foo();
+    // use "foo"
+    foo->release();
+    // must no longer use "foo" here
+\endcode
+
+\note This example demonstrates the rules above for reference counting. We
+strongly recommend not to call \c retain() and \c release() manually. See the
+variant of this example in \ref mi_neuray_handle which is simpler, obtain
+simpler, less error-prone and exception-safe.
+
+Example 2:
+
+Assume you want to implement the following interface.
+
+\code
+    class IRegistry : public mi::base::Interface_declare...>
+    {
+    public:
+        virtual void register_foo( IFoo* foo) = 0;
+    };
+\endcode
+
+Further assume that the implementation of \c IRegistry needs to reference the
+registered instance of \c IFoo after the method \c register_foo() returned.
+This can be done as follows. Checking \c foo and \c m_foo for \c NULL has been
+omitted for brevity.
+
+\code
+    class Registry_impl : public mi::base::Interface_implement<IRegistry>
+    {
+    public:
+        Registry_impl( IFoo* foo);
+        Registry_impl( const Registry_impl& other);
+        Registry_impl& operator=( const Registry_impl& rhs);
+        ~Registry_impl();
+        void register_foo( IFoo* foo);
+    private:
+        IFoo* m_foo;
+    };
+
+    Registry_impl::Registry_impl( IFoo* foo)
+    {
+        m_foo = foo;
+        m_foo->retain();  
+    }
+
+    Registry_impl::Registry_impl( const Registry_impl& other)
+      : mi::base::Interface_implement<IRegistry>( other)
+    {
+        m_foo = other.m_foo;
+        m_foo->retain();  
+    }
+
+    Registry_impl& Registry_impl::operator=( const Registry_impl& rhs)
+    {
+        mi::base::Interface_implement<IRegistry>::operator=( rhs);
+        m_foo->release();
+        m_foo = rhs.m_foo;
+        m_foo->retain();
+        return *this;
+    }
+
+    Registry_impl::~Registry_impl()
+    {
+        m_foo->release(); 
+    }
+
+    void Registry_impl::register_foo( IFoo* foo)
+    {
+        m_foo->release(); 
+        m_foo = foo;
+        m_foo->retain();  
+    }
+\endcode
+
+As described by the rules above you need to increment and decrement the
+reference count of the \c IFoo instance if you keep a reference that exceeds
+the lifetime of the called method. 
+
+\note This example demonstrates the rules for reference counting. We strongly
+recommend not to call \c retain() and \c release() manually. See the variant of
+this example in \ref mi_neuray_handle which is much simpler and where copy
+constructor, assignment operator, destructor, and \c NULL handling are for
+free.
+
+\section mi_neuray_handle Handle class
+
+To simplify your life and to relieve you from keeping track of \c
+release() calls, we offer a simple handle class #mi::base::Handle. This
+handle class maintains a pointer semantic while supporting reference
+counting for interface pointers. For example, the \c -> operator acts
+on the underlying interface pointer. The destructor calls \c release()
+on the interface pointer, copy constructor and assignment operator
+take care of retaining and releasing the interface pointer as
+necessary. Note that it is also possible to use other handle class
+implementations, e.g., \c std::tr1::shared_ptr<T> (or \c
+boost::shared_ptr<T>). See \ref mi_neuray_example_start_shutdown for
+details.
+		
+Example 1:
+
+Assume there is an interface \c IFoo derived from #mi::base::IInterface, and an
+API method that creates instances of \c IFoo, e.g.,
+
+\code
+    class IFactory : public mi::base::Interface_declare...>
+    {
+    public:
+        virtual IFoo* create_foo() = 0;
+    };
+\endcode
+
+Let \c factory be an instance of \c IFactory. As described by the rules in \ref
+mi_neuray_refcounting the implementation of \c create_foo() increments the
+reference count for the caller. Since the default constructor of
+#mi::base::Handle leaves the reference count unchanged, you can simply use it
+to capture the return value. The destructor or the \c reset() method of
+#mi::base::Handle decrement the reference count again via
+#mi::base::IInterface::release().
+
+\code
+    mi::base::Handle<IFoo> foo( factory->create_foo());
+\endcode
+
+Using #mi::base::Handle (or similar helper classes) instead of manually calling
+\c retain() and \c release() is strongly recommended for exception-safe code.
+    
+Example 2:
+
+Assume you want to implement the following interface.
+
+\code
+    class IRegistry : public mi::base::Interface_declare...>
+    {
+    public:
+        virtual void register_foo( IFoo* foo) = 0;
+    };
+\endcode
+
+Further assume that the implementation of \c IRegistry needs to reference the
+registered instance of \c IFoo after the method \c register_foo() returned.
+
+\code
+    class Registry_impl : public mi::base::Interface_implement<IRegistry>
+    {
+    public:
+        Registry_impl( IFoo* foo);
+        void register_foo( IFoo* foo);
+    private:
+        mi::base::Handle<IFoo> m_foo;
+    };
+
+    Registry_impl::Registry_impl( IFoo* foo)
+      : m_foo( foo, mi::base::DUP_INTERFACE) { } // or: m_foo( make_handle_dup( foo))
+
+    void Registry_impl::register_foo( IFoo* foo)
+    {
+        m_foo = make_handle_dup( foo);
+        // or: m_foo = mi::base::Handle<IFoo>( foo, mi::base::DUP_INTERFACE);
+    }
+\endcode
+
+In this case you cannot use the default constructor of #mi::base::Handle since
+you need to increment the reference count as well. This is done by the
+constructor that takes #mi::base::DUP_INTERFACE as second argument.
+Alternatively, you can use the inline function #mi::base::make_handle_dup()
+which does that for you.
+
+Note that the default implementation of the copy constructor, assignment
+operator, and destructor of #mi::base::Handle just do the right thing, and
+therefore, there is no need to implement them for \c Registry_impl. Also \c
+NULL handling for \c foo and \c m_foo is for free.
+
+\section mi_neuray_resources Resources
+
+In general, you should aim for minimal resource usage. This implies
+releasing interface pointers as soon as you no longer need them. When using
+the #mi::base::Handle class, it can be beneficial to introduce additional \c
+{ \c ... \c } blocks to enforce the destruction of the handle, and release
+of the corresponding interface pointer, at the end of the block.
+Alternatively, you can also call #mi::base::Handle::reset() or assign \c
+0 to the handle.
+
+\section mi_neuray_strings Strings
+
+There is an interface #mi::IString representing strings. However, some
+methods return constant strings as a pointer to \c const \c char for
+simplicity. These strings are managed by the \neurayApiName and you
+must not deallocate the memory pointed to by such a pointer. These
+pointers are valid as long as the interface from which the pointer was
+obtained is valid. Exceptions from this rule are documented with the
+corresponding method.
+ 
+*/

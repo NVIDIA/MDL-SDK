@@ -1,0 +1,122 @@
+/******************************************************************************
+ * Copyright (c) 2008-2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_includes Include Files
+
+The \neurayApiName is based on and uses the \baseApiName and the
+\mathApiName. The \baseApiName provides  basic types, functions on
+them, assertions, and configurations. The \mathApiName provides
+vector, matrix, bbox, and color classes and math functions.
+
+The \neurayApiName contains the \baseApiName and \mathApiName include
+files as well. The <tt>mi/base.h</tt> include file and all include
+files in the <tt>mi/base/</tt> subdirectory are from the
+\baseApiName. The <tt>mi/math.h</tt> include file and all include
+files in the <tt>mi/math/</tt> subdirectory are from the
+\mathApiName. The <tt>mi/mdl_sdk.h</tt> include file and all include
+files in the <tt>mi/neuraylib/</tt>
+subdirectory are from the \neurayApiName.
+
+The \neurayApiName offers two groups of include files. One group
+contains the <tt>mi/mdl_sdk.h</tt>, <tt>mi/math.h</tt>, and
+<tt>mi/base.h</tt> include files, which provide the full functionality
+of the \neurayApiName, the \mathApiName, and the \baseApiName,
+respectively. The other group consists of several include files named
+<tt>mi/neuraylib/</tt><em>&lt;functional-name&gt;</em><tt>.h</tt>, which
+provide individual parts of the \neurayApiName grouped by functionality,
+<tt>mi/math/</tt><em>&lt;functional-name&gt;</em><tt>.h</tt>, which
+provide individual parts of the \mathApiName grouped by functionality,
+and <tt>mi/base/</tt><em>&lt;functional-name&gt;</em><tt>.h</tt>, which
+provide individual parts of the \baseApiName grouped by
+functionality. The files of the first group, <tt>mi/mdl_sdk.h</tt>,
+<tt>mi/math.h</tt>, and <tt>mi/base.h</tt>, include all relevant files
+of the second group.
+
+See \subpage mi_base_includes for the individual base API include
+files grouped by component.
+
+See \subpage mi_math_includes for the individual math API include
+files grouped by component.
+
+Include files are self-contained. Internal dependencies are resolved
+automatically. As a consequence, their inclusion is order independent.
+
+<table border="2" cellpadding="3" cellspacing="3">
+  <tr valign="top"><th>Main Include File</th><th>Description</th></tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/base.h</tt></td>
+    <td class="indexvalue">
+      Includes all sub-include files of the \baseApiName.
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/math.h</tt></td>
+    <td class="indexvalue">
+      Includes all sub-include files of the \mathApiName and <tt>mi/base.h</tt>.
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/mdl_sdk.h</tt></td>
+    <td class="indexvalue">
+      Includes all sub-include files of the \neurayApiName,
+     <tt>mi/base.h</tt>, and <tt>mi/math.h</tt>. Simply including this header
+     gives you access to all the functionality of \neurayApiName.
+    </td>
+  </tr>
+</table>
+
+There may be include files that are not documented below. They are
+automatically included if needed and their independent use is not
+supported. Their naming and organization might change in the future.
+
+<table border="2" cellpadding="3" cellspacing="3">
+  <tr valign="bottom">
+    <th>\neurayAdjectiveName Include Files Grouped by Component</th>
+    <th>Description</th></tr>
+    <th>Documentation</th>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/neuraylib/version.h</tt></td>
+    <td class="indexvalue">
+        Version number for the \neurayApiName.
+    </td>
+    <td class="indexvalue">\ref mi_neuray_version
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey"><tt> mi/neuraylib/assert.h</tt></td>
+    <td class="indexvalue">
+        Assertions and static assertions.
+    </td>
+    <td class="indexvalue">\ref mi_neuray_assert
+    </td>
+  </tr>
+</table>
+
+*/
+

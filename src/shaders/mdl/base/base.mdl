@@ -1,0 +1,4949 @@
+/***************************************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ **************************************************************************************************/
+
+mdl 1.4;
+
+//@ignore volume_coefficient
+
+/*@
+@# Begin module documentation in Klammertext format #@
+
+@s1 Introduction @
+
+Material Definition Language (MDL) enables users to define the
+reflective, transmissive, emissive and volumetric properties of
+objects. For details regarding the elemental distribution functions
+and operations, please see the MDL specification.
+
+
+
+The module @c base.mdl @ provides a set of texturing functions covering
+the whole range from bitmap to procedural texturing. In addition,
+module @c base.mdl @ provides helper functions to make some common tasks
+easy, as well as provide backwards compatibility support for some
+legacy parameter semantics.
+
+@s1 Functionality overview @
+
+@s2 Texturing functions @
+
+The main purpose of the module @c-mdl is to provide material creators
+with a comprehensive set of texturing functions to spatial variations
+to their materials.
+
+The texture functions enable you to add bitmapped textures, various
+types of procedural patterns, as well as layered combinations of these
+textures to your material.  The coordinate space for these texture
+nodes defaults to the receiving object's first avg coordinate
+space. Function names for texturing functions end with @sp@ @c-_texture.
+
+All basic texturing functions return a value of type @c-struct
+containing two fields:
+
+@table :indent 1em |
+@tr @c-tint | Used for texturing parameters of type color @
+@tr @c-mono | Used for texturing parameters of type float @
+@
+
+For bitmap textures, the @c-mono value can be used to access the alpha
+channel of bitmaps.
+
+If a different coordinate space is used or the coordinate space is
+transformed then you will need to use the ancillary functions
+@c-base::coordinate_source, @c-base::coordinate_projection and
+@c-base::coordinate_transformation. Internally, all coordinates for
+texturing are treated as 3D.
+
+To enable bump mapping, texturing functions with names ending with
+@c-_bump_texture can be attached to the @c-bump input parameter of
+distribution functions and the material geometry interface.  A
+dedicated function @c-base::tangent_space_normal_texture can be used
+to load tangent space normal map textures for normal mapping.
+
+For additional functionality, the output of texturing functions can be
+modified by using @c-base::gradient3_recolor or combined with other
+textures and values through @c-base::blend_color_layers, based on a
+number of blend operations.
+
+@s2 Ancillary functions @
+
+A number of ancillary functions complete module @c base.mdl @.
+
+Functions @c-base::coordinate_source and
+@c-base::coordinate_projection allow advanced handling of 3D
+coordinates from various sources as well as procedural generation of
+coordinate systems through projection techniques. The enum
+@c-base::projection_mode is used to specify the technique to be used:
+
+@table :header t :indent 1em :lines true :cellpad .2em .5em |
+@tr Field name in @c-base::projection_mode | Description @
+
+@tr @c-base::projection_cubic | The projection is formed by six
+planar projections. The geometry normal is modified to point away from
+the origin of the projection and then the major direction of the resulting normal
+is used to decide for each face which projection is to be used:
+
+@table :header t :indent 1em :hpos c |
+@tr Major direction | Projection plane @
+@tr  x |  yz @
+@tr -x | -yz @
+@tr  y | -xz @
+@tr -y |  xz @
+@tr  z |  xy @
+@tr -z | -xy @
+table@
+
+@nl@
+
+tr@
+
+@tr @c-base::projection_tri_planar | Similar to projection_cubic,
+but in addition blends the texture smoothly on the edges. @
+
+@tr @c-base::projection_spherical | Spherical projection around the z
+axis. The created texture space is scaled with the distance from the
+origin of the projection so that mapping happens according to the
+circumference of an object. For example, if the projection is applied
+to a sphere of radius 2, textures are repeated 4*PI times around the
+sphere. @
+
+@tr @c-base::projection_spherical_normalized | Spherical projection
+around the z axis. u on the sphere is between -1 and 1, v is in the
+range -.5 to 0.5. @
+
+@tr @c-base::projection_cylindrical | Projection targeted at objects
+close in shape to a capped cylinder aligned with the z axis. The geometry normal
+is modified to point away from the origin of the projection and the major
+direction of the resulting normal is z or -z, fitting planar
+projections are used.  For all other directions, a cylindrical
+projection is used with z mapping to v. The mapping range of u is tied
+to the distance from the z axis of the projection. @
+
+@tr @c-base::projection_cylindrical_normalized | Like
+@c-base::projection_cylindrical, but u is normalized to always wrap
+twice onto the circumference of the cylinder (u is in the range -1
+1). @
+
+@tr @c-base::projection_infinite_cylindrical | Cylindrical projection
+around the z axis. z is mapped to v and the mapping range of u is tied
+to the distance from the z axis of the projection. @
+
+@tr @c-base::projection_infinite_cylindrical_normalised | Cylindrical
+projection around the z axis. z is mapped to v and u is normalized to
+always wrap twice onto the circumference of the cylinder (u is in the
+range -1 1). @
+
+@tr @c-base::projection_planar | Planar projection along the z
+axis. The plane of projection is xy. @
+
+table@
+
+Function @c-base::transform_coordinate allows 3D transformations of
+those coordinates and @c-base::rotation_translation_scale provides one
+way to generate the necessary transformation matrix.
+
+MDL allows the simulation of dispersion effects. The functions
+@c-base::abbe_number_ior and @c-base::sellmeier_coefficients_ior allow
+the specification of the necessarily varying index of refraction used
+by the material.
+
+The new explicit tangential alignment of roughness values for glossy
+BSDF allows full control over anisotropic effects and the functions
+@c-base::anisotropy_conversion in conjunction with
+@c-base::gloss_to_rough and @c-base::architectural_gloss_to_rough
+enable designers use the semantic for anisotropy they prefer while
+still retaining the alignment information.
+
+@# End module documentation #@
+@*/
+
+import tex::*;
+import state::*;
+import math::*;
+import anno::*;
+import limits::*;
+
+// --------------------------------------------------------------------------------
+// Enums
+
+export enum projection_mode
+[[
+    anno::description("Methods for texture projection"),
+    anno::hidden()
+]]
+{
+    projection_cubic = 1
+        [[ anno::description("Projected space has a cube-shaped appearance") ]],
+    projection_spherical = 2
+        [[ anno::description("Projected space forms a sphere around the projector") ]],
+    projection_cylindrical = 3
+        [[ anno::description("Projected space forms a capped cylinder") ]],
+    projection_infinite_cylindrical = 4
+        [[ anno::description("Projected space forms an infinite cylinder") ]],
+    projection_planar = 5
+        [[ anno::description("Planar projection along the z axis of the projectors space") ]],
+    projection_spherical_normalized = 6
+        [[ anno::description("Like projection_spherical, but u is normalized between -1 and 1 and v between -0.5 and 0.5") ]],
+    projection_cylindrical_normalized = 7
+        [[ anno::description("Like projection_cylindrical, but u is normalized between -1 and 1 (if not on the cap)") ]],
+    projection_infinite_cylindrical_normalized = 8
+        [[ anno::description("Like projection_cylindrical_infinite, but u is normalized between -1 and 1") ]],
+    projection_tri_planar = 9
+        [[ anno::description("Like projection_cubic, but blends the texture smoothly on the edges") ]]
+};
+
+export enum color_layer_mode
+[[
+    anno::description("Texture combination modes between two layers. The two layers are modified in the manner described by the modes, and the result is blended with the bottom layer based on a weighting factor."),
+    anno::hidden()
+]]
+{
+    color_layer_blend = 0
+        [[ anno::description("top") ]],
+    color_layer_add = 1
+        [[ anno::description("top + bottom") ]],
+    color_layer_multiply  = 2
+        [[ anno::description("top * bottom") ]],
+    color_layer_screen  = 3
+        [[ anno::description("1 - ((1 - top) * (1 - bottom))") ]],
+    color_layer_overlay  = 4
+        [[ anno::description("for each channel individually: if bottom <0.5: top*bottom*2, else: 2*(top+bottom-top*bottom-0.5)")]],
+    color_layer_brightness  = 5
+        [[ anno::description("Hue of the bottom layer combined with the intensity of the top") ]],
+    color_layer_color  = 6
+        [[ anno::description("Intensity of the bottom layer combined with the hue of the top") ]],
+    color_layer_exclusion  = 7
+        [[ anno::description("bottom + top - bottom * top * 2") ]],
+    color_layer_average  = 8
+        [[ anno::description("Average of top and bottom layer") ]],
+    color_layer_lighten  = 9
+        [[ anno::description("Maximum of top and bottom layer") ]],
+    color_layer_darken  = 10
+        [[ anno::description("Minimum of top and bottom layer") ]],
+    color_layer_sub  = 11
+        [[ anno::description("bottom + top - 1") ]],
+    color_layer_negation  = 12
+        [[ anno::description("1 - math::abs(1 - (bottom + top))") ]],
+    color_layer_difference  = 13
+        [[ anno::description("Absolute difference of top and bottom layer") ]],
+    color_layer_softlight  = 14
+        [[ anno::description("(top < 0.5) ? 2 * (top * bottom + bottom * bottom * (0.5 - top)) : 2 * (math::sqrt(bottom) * (top - 0.5) + bottom - top * bottom)") ]],
+    color_layer_colordodge  = 15
+        [[ anno::description("bottom / (1 - top)") ]],
+    color_layer_reflect  = 16
+        [[ anno::description("bottom * bottom/(1 - top)") ]],
+    color_layer_colorburn  = 17
+        [[ anno::description("1 - (1 - bottom)/top") ]],
+    color_layer_phoenix  = 18
+        [[ anno::description("Minimum of both layers minus the maximum of both layers (plus 1.0)") ]],
+    color_layer_hardlight= 19
+        [[ anno::description("for each channel individually: if top >0.5: top*bottom*2, else: 2*(top+bottom-top*bottom-0.5)") ]],
+    color_layer_pinlight = 20
+        [[ anno::description(" ") ]],
+    color_layer_hardmix  = 21
+        [[ anno::description("for each channel individually: (top+bottom <= 1) ? 0 : 1") ]],
+    color_layer_lineardodge = 22
+        [[ anno::description("top + bottom (clamped)") ]],
+    color_layer_linearburn=23
+        [[ anno::description("bottom + top - 1 (clamped)") ]],
+    color_layer_spotlight= 24
+        [[ anno::description("2 * top * bottom") ]],
+    color_layer_spotlightblend = 25
+        [[ anno::description("top * bottom + bottom") ]],
+    color_layer_hue      = 26
+        [[ anno::description("Uses hue from top layer, saturation and brightness from bottom") ]],
+    color_layer_saturation=27
+        [[ anno::description("Uses saturation from top layer, hue and brightness from bottom") ]]
+};
+
+export enum texture_coordinate_system
+[[
+    anno::description("Coordinate system selection for textures"),
+    anno::hidden()
+]]
+{
+    texture_coordinate_uvw = 0
+        [[ anno::description("Texture space of surface") ]],
+    texture_coordinate_world = 1
+        [[ anno::description("World coordinate space") ]],
+    texture_coordinate_object = 2
+        [[ anno::description("Object coordinate space") ]]
+};
+
+export enum mono_mode
+[[
+    anno::description("Modes for the creation of a gray-scale value from a color"),
+    anno::hidden()
+]]
+{
+    mono_alpha = 0
+        [[ anno::description("Alpha channel of the texture is used") ]],
+    mono_average = 1
+        [[ anno::description("Average intensity of RGB is used") ]],
+    mono_luminance = 2
+        [[ anno::description("Value is calculated using math::math::luminance()") ]],
+    mono_maximum = 3
+        [[ anno::description("Maximum intensity of the texture is used") ]]
+};
+
+export enum gradient_interpolation_mode
+[[
+    anno::description("Modes for interpolating between the different colors in a gradient texture"),
+    anno::hidden()
+]]
+{
+    gradient_interpolation_linear = 0
+        [[ anno::description("Linear interpolation") ]],
+    gradient_interpolation_off = 1
+        [[ anno::description("No interpolation (\"solid\")") ]],
+    gradient_interpolation_ease_in = 2
+        [[ anno::description("Ease-in") ]],
+    gradient_interpolation_ease_out = 3
+        [[ anno::description("Ease-out") ]],
+    gradient_interpolation_ease_in_out = 4
+        [[ anno::description("Ease-in-out") ]]
+};
+
+
+export enum gradient_mode
+[[
+    anno::description("Modes for generating the gradient position based on input uv coordinates"),
+    anno::hidden()
+]]
+{
+    gradient_linear
+        [[ anno::description("Linear") ]],
+    gradient_squared
+        [[ anno::description("Squared") ]],
+    gradient_box
+        [[ anno::description("Box") ]],
+    gradient_diagonal
+        [[ anno::description("Diagonal") ]],
+    gradient_90_degree
+        [[ anno::description("Asymmetric 90 degree") ]],
+    gradient_symmetric_90_degree
+        [[ anno::description("Symmetric 90 degree") ]],
+    gradient_radial
+        [[ anno::description("Radial") ]],
+    gradient_360_degree
+        [[ anno::description("360 degree") ]]
+};
+
+// --------------------------------------------------------------------------------
+// Structs
+
+export struct texture_coordinate_info
+[[
+    anno::description("The texture coordinate, tangent_u and tangent_v needed by bump mapping and anisotropy"),
+    anno::hidden()
+]]
+{
+    float3 position = state::texture_coordinate(0)
+        [[ anno::description("Texture coordinate") ]];
+    float3 tangent_u = state::texture_tangent_u(0)
+        [[ anno::description("Tangent in u direction") ]];
+    float3 tangent_v = state::texture_tangent_v(0)
+        [[ anno::description("Tangent in v direction") ]];
+};
+
+export struct color_layer
+[[
+    anno::description("Single texture layer for use in blending"),
+    anno::hidden()
+]]
+{
+    color layer_color = color(0)
+        [[ anno::description("The color to be combined with a layer \"below\" this layer") ]];
+    float weight = 1.0
+        [[ anno::description("Scale factor for blending this color with the color produced by the mode value (the \"lower layer\")") ]];
+    uniform color_layer_mode mode = color_layer_blend
+        [[ anno::description("Method for combining this layer and the lower layer") ]];
+};
+
+export struct texture_return
+[[
+    anno::description("Type of the return value from texturing functions"),
+    anno::hidden()
+]]
+{
+    color tint = color(0)
+        [[ anno::description("Return value suitable to for driving input parameters of type color") ]];
+    float mono = 0.0
+        [[ anno::description("Gray-scale return value suitable for driving input parameters of type float") ]];
+};
+
+export struct anisotropy_return
+[[
+    anno::description("Type of the return value from functions driving roughness and anisotropy parameters of glossy BSDF"),
+    anno::hidden()
+]]
+{
+    float roughness_u = 0.0
+        [[ anno::description("Roughness in u direction") ]];
+    float roughness_v = 0.0
+        [[ anno::description("Roughness in v direction") ]];
+    float3 tangent_u = state::texture_tangent_u(0)
+        [[ anno::description("Tangent in u direction") ]];
+};
+
+
+// --------------------------------------------------------------------------------
+// Functions
+
+
+float4x4 compute_cylindric_transform(
+    uniform float4x4 projection_transform,
+    float3 t_normal_3,
+    float3 pos,
+    uniform bool infinite = false,
+    uniform bool normalized = false
+) uniform
+[[
+    anno::description("Utility function for coordinate_projection()"),
+    anno::noinline()
+]]
+{
+    float4 t_normal = projection_transform*float4(t_normal_3.x,t_normal_3.y,t_normal_3.z,0);
+
+    float4 t_pos2 =float4(pos.x,pos.y,pos.z,1.);
+    float4 t_pos = projection_transform*t_pos2;
+
+    // make normal pointing to the 'outside' of the projector geometry body
+    // (to avoid potentially different uvs on front and backface)
+    if ((t_pos.x * t_normal.x + t_pos.y * t_normal.y + t_pos.z * t_normal.z) < 0.0f)
+        t_normal = -t_normal;
+
+    float3 uv_coord(0.);
+    if (! infinite && math::abs(t_normal.z) >= math::abs(t_normal.x) && math::abs(t_normal.z) >= math::abs(t_normal.y)) {
+        if (t_normal.z < 0){
+            return float4x4(-1.,0.,0.,0.,  0.,1.,0.,0.,  0.,0.,1.,0.,   0.,0.,0.,1.)*projection_transform;
+        }
+            return projection_transform;
+    }
+    float OrgDist = normalized?1./math::PI:math::sqrt(t_pos.x * t_pos.x + t_pos.y * t_pos.y);
+    uv_coord.x = OrgDist * math::atan2(t_pos.y, t_pos.x);
+    uv_coord.y = t_pos.z;
+
+    float4x4 uv_offset = float4x4(1, 0., 0., 0,
+                    0., 1, 0., 0,
+                    0., 0., 1., 0,
+                    -pos.x, -pos.y, -pos.z, 1.);
+    float4x4 uv_offset2 = float4x4(1, 0., 0., 0,
+                    0., 1, 0., 0,
+                    0., 0., 1., 0,
+                    uv_coord.x, uv_coord.y, 0, 1.);
+
+    //construct a "useful" base
+    float3 base_z = math::normalize(float3(t_pos.x, t_pos.y, 0.));//normal of the plane in which uv live
+    float3 base_y = float3(0.,0.,1.); //v is only depending on z. for the poles, its undefined but I don't care.
+    float3 base_x = math::normalize(math::cross(base_y,base_z));
+
+    float4x4 base = float4x4(
+                            base_x.x,base_y.x,base_z.x,0.,
+                            base_x.y,base_y.y,base_z.y,0.,
+                            base_x.z,base_y.z,base_z.z,0.,
+                            0.,0.,0.,1.);
+    return uv_offset2*base*uv_offset; //transform so that current pos is at 0, last add projected coordinate
+
+}
+
+float3 compute_spheric_projection(
+    float4 dir,
+    uniform bool normalized = false) uniform
+{
+    float3 uv_coord(0.);
+    if (math::abs(dir.x) > 0. || math::abs(dir.y) > 0.){
+        float xy = dir.x * dir.x + dir.y * dir.y;
+        float OrgDist = normalized?1./math::PI:math::sqrt(xy + dir.z * dir.z);
+        uv_coord.x = OrgDist * math::atan2(dir.y, dir.x);
+        uv_coord.y = OrgDist * math::atan2(dir.z, math::sqrt(xy));
+        uv_coord.z = OrgDist;
+    }  else if (math::abs(dir.z) > 0.) {
+        float xy = dir.x * dir.x + dir.y * dir.y;
+        float OrgDist  = normalized?1./math::PI:math::sqrt(xy + dir.z * dir.z);
+        uv_coord.y = OrgDist * math::atan2(dir.z, math::sqrt(xy));
+        uv_coord.z = OrgDist;
+    }
+    return uv_coord;
+}
+
+float4x4 compute_spheric_transform(
+    uniform float4x4 projection_transform,
+    float3 pos,
+    uniform bool normalized = false
+) uniform
+[[
+    anno::description("Utility function for coordinate_projection()"),
+    anno::noinline()
+]]
+{
+    float4 t_pos2 =float4(pos.x,pos.y,pos.z,1.);
+    float4 t_pos = projection_transform * t_pos2;
+
+    float3 uv_coord = compute_spheric_projection(t_pos,normalized);
+    float4x4 uv_offset = float4x4(1, 0., 0., 0,
+                    0., 1, 0., 0,
+                    0., 0., 1., 0,
+                    -pos.x, -pos.y, -pos.z, 1.);
+    float4x4 uv_offset2 = float4x4(1, 0., 0., 0,
+                    0., 1, 0., 0,
+                    0., 0., 1., 0,
+                    uv_coord.x, uv_coord.y, 0, 1.);
+    //construct a "useful" base
+    float3 base_z = math::normalize(float3(t_pos.x, t_pos.y, t_pos.z));//normal of the plane in which uv live
+    float3 base_y = float3(0.,0.,1.); //v is only depending on z. for the poles, its undefined but I don't care.
+    float3 base_x = math::normalize(math::cross(base_y,base_z));
+    base_y = math::normalize(math::cross(base_z,base_x));
+
+    float4x4 base = float4x4(
+                            base_x.x,base_y.x,base_z.x,0.,
+                            base_x.y,base_y.y,base_z.y,0.,
+                            base_x.z,base_y.z,base_z.z,0.,
+                            0.,0.,0.,1.);
+    return uv_offset2*base*uv_offset; //transform so that current pos is at 0, last add projected coordinate
+}
+
+uniform float4x4 compute_cubic_transform(
+    uniform float4x4 projection_transform, float3 t_normal_3, float3 pos
+)
+[[
+    anno::description("Utility function for coordinate_projection()"),
+    anno::noinline()
+]]
+{
+    float4 t_normal =  projection_transform*float4(t_normal_3.x,t_normal_3.y,t_normal_3.z,0);
+    float4 t_position = projection_transform*float4(pos.x,pos.y,pos.z,1);
+    if ((t_position.x * t_normal.x + t_position.y * t_normal.y + t_position.z * t_normal.z) < 0.0f)
+        t_normal = -t_normal;
+    // Find out on which cube face is the intersection point
+    //transform is then planar, but based on a rotated/flipped coordsys
+    if (math::abs(t_normal.x) >= math::abs(t_normal.y) && math::abs(t_normal.x) >= math::abs(t_normal.z)) {
+        if (t_normal.x > 0) {
+            return float4x4(0.,0.,1.,0.,  1.,0.,0.,0.,  0.,1.,0.,0.,   0.,0.,0.,1.)*projection_transform;
+        } else {
+            return float4x4(0.,0.,1.,0.,  -1.,0.,0.,0.,  0.,1.,0.,0.,   0.,0.,0.,1.)*projection_transform;
+        }
+    } else if (math::abs(t_normal.y) >= math::abs(t_normal.x) && math::abs(t_normal.y) >= math::abs(t_normal.z)) {
+        if (t_normal.y > 0){
+            return float4x4(-1.,0.,0.,0.,  0.,0.,1.,0.,  0.,1.,0.,0.,   0.,0.,0.,1.)*projection_transform;
+        } else {
+            return float4x4(1.,0.,0.,0.,  0.,0.,1.,0.,  0.,1.,0.,0.,   0.,0.,0.,1.)*projection_transform;
+        }
+    } else if (math::abs(t_normal.z) >= math::abs(t_normal.x) && math::abs(t_normal.z) >= math::abs(t_normal.y)) {
+        if (t_normal.z < 0){
+            return float4x4(-1.,0.,0.,0.,  0.,1.,0.,0.,  0.,0.,1.,0.,   0.,0.,0.,1.)*projection_transform;
+        }
+    }
+    return projection_transform;
+}
+
+texture_coordinate_info compute_tangents(state::coordinate_space space)
+{
+        texture_coordinate_info tangents;
+        float3 u_dir = math::normalize(state::transform_vector(space,state::coordinate_internal,float3(1.,0.,0)));
+        float3 v_dir = math::normalize(state::transform_vector(space,state::coordinate_internal,float3(0.,1.,0)));
+        if(math::abs(math::dot(state::normal(),v_dir)) > .999 || math::abs(math::dot(state::normal(),u_dir)) > .999)
+
+        {
+            float3 shading_normal = state::transform_vector(state::coordinate_internal,space,state::normal());
+            float yz = -shading_normal.y * shading_normal.z;
+            tangents.tangent_v = ((math::abs(shading_normal.z) > 0.99999f) ?
+                    math::normalize(float3(-shading_normal.x*shading_normal.y, 1.0f - shading_normal.y*shading_normal.y, yz)) :
+                    math::normalize(float3(-shading_normal.x*shading_normal.z, yz, 1.0f - shading_normal.z*shading_normal.z)) );
+            tangents.tangent_u = math::normalize(math::cross(tangents.tangent_v,shading_normal));
+            tangents.tangent_v = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_v ));
+            tangents.tangent_u = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_u ));
+
+        }
+        else
+        {
+            tangents.tangent_u = math::normalize(math::cross(v_dir,state::normal()));
+            tangents.tangent_v = math::normalize(math::cross(state::normal(),tangents.tangent_u));
+            if(math::dot(tangents.tangent_u,u_dir) < 0.) //make sure u and u' point into the same dir
+                tangents.tangent_u = - tangents.tangent_u;
+        }
+        return tangents;
+}
+
+texture_coordinate_info compute_tangents(uniform texture_coordinate_system coordinate_system, float3x3 transform)
+{
+        texture_coordinate_info tangents;
+        float3 u_dir,v_dir;
+        if(coordinate_system == texture_coordinate_world)
+        {
+            u_dir = math::normalize(state::transform_vector(state::coordinate_world,state::coordinate_internal,transform*float3(1.,0.,0)));
+            v_dir = math::normalize(state::transform_vector(state::coordinate_world,state::coordinate_internal,transform*float3(0.,1.,0)));
+        }
+
+        else
+        {
+            u_dir = math::normalize(state::transform_vector(state::coordinate_object,state::coordinate_internal,transform*float3(1.,0.,0)));
+            v_dir = math::normalize(state::transform_vector(state::coordinate_object,state::coordinate_internal,transform*float3(0.,1.,0)));
+        }
+        if(math::abs(math::dot(state::normal(),v_dir)) > .999 || math::abs(math::dot(state::normal(),u_dir)) > .999)
+
+        {
+            state::coordinate_space space = (coordinate_system == texture_coordinate_world)?
+                state::coordinate_world:state::coordinate_object;
+            float3 shading_normal = state::transform_vector(state::coordinate_internal,space,state::normal());
+            float yz = -shading_normal.y * shading_normal.z;
+            tangents.tangent_v = ((math::abs(shading_normal.z) > 0.99999f) ?
+                    math::normalize(float3(-shading_normal.x*shading_normal.y, 1.0f - shading_normal.y*shading_normal.y, yz)) :
+                    math::normalize(float3(-shading_normal.x*shading_normal.z, yz, 1.0f - shading_normal.z*shading_normal.z)) );
+            tangents.tangent_u = math::normalize(math::cross(tangents.tangent_v,shading_normal));
+            tangents.tangent_v = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_v ));
+            tangents.tangent_u = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_u ));
+        }
+        else
+        {
+            tangents.tangent_u = math::normalize(math::cross(v_dir,state::normal()));
+            tangents.tangent_v = math::normalize(math::cross(state::normal(),tangents.tangent_u));
+            if(math::dot(tangents.tangent_u,u_dir) < 0.) //make sure u and u' point into the same dir
+                tangents.tangent_u = - tangents.tangent_u;
+            if(math::dot(tangents.tangent_v,v_dir) < 0.) //make sure u and u' point into the same dir
+                tangents.tangent_v = - tangents.tangent_v;
+        }
+        return tangents;
+}
+
+export texture_coordinate_info coordinate_projection(
+    uniform texture_coordinate_system coordinate_system = texture_coordinate_object
+        [[
+            anno::description("The projection can be done based on world, object or any uvw space.")
+        ]],
+    uniform int texture_space = 0
+        [[
+            anno::description("if texture_coordinate_uvw, index into the appropriate one"),
+            anno::hard_range(0, 255)
+        ]],
+    uniform projection_mode projection_type = projection_planar
+        [[ anno::description("Projection method to be used to generate the coordinates") ]],
+    uniform float4x4 projection_transform = float4x4(1.0)
+        [[ anno::description("Transformation of the projector in world space") ]]
+)
+[[
+    anno::description("Constructs a texturing coordinate system based on a variety of projection functions."),
+    anno::noinline()
+]]
+{
+    float3 int_pos;
+    float3 normal;
+    switch (coordinate_system) {
+    case texture_coordinate_object:
+        int_pos = state::transform_point(state::coordinate_internal,state::coordinate_object,state::position());
+        normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::normal());
+        break;
+    case texture_coordinate_world:
+        int_pos = state::transform_point(state::coordinate_internal,state::coordinate_world,state::position());
+        normal = state::transform_normal(state::coordinate_internal,state::coordinate_world,state::normal());
+        break;
+    case texture_coordinate_uvw:
+        int_pos = state::texture_coordinate(texture_space);
+        normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::normal());
+        break;
+    }
+    float4x4 finaltransform;
+    switch (projection_type) {
+    case projection_cylindrical:
+        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos);
+        break;
+    case projection_spherical:
+        finaltransform = compute_spheric_transform(projection_transform,int_pos);
+        break;
+    case projection_tri_planar:
+    case projection_cubic:
+        finaltransform = compute_cubic_transform(projection_transform,normal,int_pos);
+        break;
+    case projection_infinite_cylindrical:
+        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, true);
+        break;
+    case projection_spherical_normalized:
+        finaltransform = compute_spheric_transform(projection_transform,int_pos,true);
+        break;
+    case projection_cylindrical_normalized:
+        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, false, true);
+        break;
+    case projection_infinite_cylindrical_normalized:
+        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, true, true);
+        break;
+    case projection_planar:
+    default:
+        finaltransform = projection_transform;
+        break;
+    }
+
+    float4  r_pos =  finaltransform*float4(int_pos.x,int_pos.y,int_pos.z,1.);
+
+
+    float3x3 finaltransform2= float3x3(finaltransform[0][0],finaltransform[1][0],finaltransform[2][0],
+                                       finaltransform[0][1],finaltransform[1][1],finaltransform[2][1],
+                                       finaltransform[0][2],finaltransform[1][2],finaltransform[2][2]);
+    texture_coordinate_info tangents = compute_tangents(coordinate_system,finaltransform2);
+    tangents.position = float3(r_pos.x,r_pos.y,0.);
+    return tangents;
+}
+
+export texture_coordinate_info coordinate_source(
+    uniform texture_coordinate_system coordinate_system = texture_coordinate_uvw
+        [[ anno::description("The function can source coordinates in uvw, world or object space") ]],
+    uniform int texture_space = 0
+        [[
+            anno::description("if texture_coordinate_uvw, index into the appropriate one"),
+            anno::hard_range(0, 255)
+        ]]
+)
+[[
+    anno::description("Access to world coordinates, object coordinates or specifically defined texture spaces"),
+    anno::noinline()
+]]
+{
+    texture_coordinate_info tangents;
+
+    switch (coordinate_system) {
+    case texture_coordinate_object:
+        tangents = compute_tangents(state::coordinate_object);
+        tangents.position = state::transform_point(state::coordinate_internal,state::coordinate_object,state::position());
+        break;
+    case texture_coordinate_world:
+        tangents = compute_tangents(state::coordinate_world);
+        tangents.position = state::transform_point(state::coordinate_internal,state::coordinate_world,state::position());
+        break;
+    case texture_coordinate_uvw:
+    default:
+        tangents.tangent_u = state::texture_tangent_u(texture_space);
+        tangents.tangent_v = state::texture_tangent_v(texture_space);
+        tangents.position = state::texture_coordinate(texture_space);
+        break;
+    }
+    return tangents;
+}
+
+export texture_coordinate_info transform_coordinate(
+    uniform float4x4 transform
+        [[ anno::description("A transformation to be applied to the source coordinates. rotation_translation_scale() is a suggested means to compute the transformation matrix") ]],
+    texture_coordinate_info coordinate = texture_coordinate_info()
+        [[ anno::description("Coordinate, typically sourced from coordinate_source or coordinate_projection") ]]
+)
+[[
+    anno::description("Transform a texture coordinate by a matrix"),
+    anno::noinline()
+]]
+{
+    float4 r_position = transform * float4(coordinate.position.x,coordinate.position.y,coordinate.position.z,1);
+
+
+
+    //we do not have enough info to compute result tangent based on original tangent and uv transform alone.
+    //-for spaces where we have the full  transformation into internal space available (object/world space based transforms) we could track the full transform (rotation) in texture_coordinate_info
+    // and compute tangents out of the final transformation
+    //-for uv spaces where we only have per vertex tangents and coordinates, there is no way to exactly compute the effect of concatenated transforms.
+    // We would need access to all 3 vertices of the triangle to approximate tangents
+    // worst is that we don't have info on the handedness of the source transformation
+
+
+    return texture_coordinate_info(
+        float3(r_position.x,r_position.y,r_position.z),
+        coordinate.tangent_u,
+        coordinate.tangent_v);
+}
+
+export uniform float4x4 rotation_translation_scale(
+    uniform float3 rotation = float3(0.)
+        [[ anno::description("Rotation applied to every UVW coordinate") ]],
+    uniform float3 translation = float3(0.)
+        [[ anno::description("Offset applied to every UVW coordinate") ]],
+    uniform float3 scaling = float3(1.)
+        [[ anno::description("Scale applied to every UVW coordinate") ]]
+)
+[[
+        anno::description("Construct transformation matrix from Euler rotation, translation and scale"),
+        anno::noinline()
+]]
+{
+    float4x4 scale =
+        float4x4(scaling.x        , 0.               , 0.               , 0.,
+                 0.               , scaling.y        , 0.               , 0.,
+                 0.               , 0.               , scaling.z        , 0.,
+                 translation.x-0.5, translation.y-0.5, translation.z-0.5, 1.);  //rotation is around .5
+
+    // Euler rotation matrix  xyz order
+    float3 s = math::sin(rotation);
+    float3 c = math::cos(rotation);
+    float4x4 rotate =
+        float4x4(  c.y*c.z ,  -c.x*s.z + s.x*s.y*c.z ,  s.x*s.z + c.x*s.y*c.z , 0.0,
+                   c.y*s.z ,   c.x*c.z + s.x*s.y*s.z , -s.x*c.z + c.x*s.y*s.z , 0.0,
+                  -s.y     ,   s.x*c.y               ,  c.x*c.y               , 0.0,
+                   0.5     ,   0.5                   ,  0.5                   , 1.);  //rotation is around .5
+
+
+    return rotate * scale;
+}
+
+
+export texture_return file_texture(
+    uniform texture_2d texture
+        [[ anno::description("The input texture") ]],
+    color color_offset = color(0.0)
+        [[ anno::description("Fixed offset value added to all texture values") ]],
+    color color_scale = color(1.0)
+        [[ anno::description("Fixed scaling factor applied to all texture values") ]],
+    uniform mono_mode mono_source = mono_alpha
+        [[ anno::description("Defines how mono_result is computed") ]],
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[ anno::description("Custom value for texture coordinate") ]],
+    uniform float2 crop_u = float2(0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the u direction") ]],
+    uniform float2 crop_v = float2(0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the v direction") ]],
+    uniform tex::wrap_mode wrap_u = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the u direction") ]],
+    uniform tex::wrap_mode wrap_v = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the v direction") ]],
+    uniform bool clip = false
+        [[
+            anno::description("Deprecated, use wrap_mode=tex::wrap_clip. Defines wrap_clamp behavior. If true, a lookup outside [0,1] results in black/transparent"),
+            anno::hidden()
+        ]]
+)
+[[
+    anno::description("General texturing function for 2D bitmap texture stored in a file"),
+    anno::noinline()
+]]
+{
+    color color_result;
+    float mono_result;
+    if (clip) {
+        if (wrap_u == tex::wrap_clamp && (uvw.position.x < 0. || uvw.position.x > 1.)) {
+            return texture_return(color(0.),0);
+        }
+        if (wrap_v == tex::wrap_clamp && (uvw.position.y < 0. || uvw.position.y > 1.)) {
+            return texture_return(color(0.),0);
+        }
+    }
+    switch( mono_source ) {
+    case mono_alpha:
+        float3 float3_scale = float3(color_scale);
+        float3 float3_offset = float3(color_offset);
+
+        float4 result = tex::lookup_float4(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v) *
+            float4(float3_scale.x,float3_scale.y,float3_scale.z,1) + float4(float3_offset.x,float3_offset.y,float3_offset.z,0);
+        color_result = color(result.x,result.y, result.z);
+        mono_result=result.w;
+        break;
+    case mono_average:
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        mono_result = math::average(color_result);
+        break;
+    case mono_luminance:
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        mono_result = math::luminance(color_result);
+        break;
+    case mono_maximum:
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        mono_result = math::max_value(color_result);
+        break;
+    }
+    return texture_return(color_result,mono_result);
+}
+
+
+export float architectural_gloss_to_rough(
+    float glossiness
+        [[
+            anno::description("Glossiness according to mia material semantic"),
+            anno::hard_range(0.0, 1.0)
+        ]]
+)
+[[
+    anno::description("Convert glossiness parameter to roughness parameter, semantics according to the Iray v2 Arch+Design implementation"),
+    anno::noinline()
+]]
+{
+    return (glossiness >= 1.0) ? 0.0 : math::sqrt(2.0 * math::exp2(-4.0 - 14.0 * glossiness));
+}
+
+export float gloss_to_rough(
+    float glossiness
+        [[
+            anno::description("Inverse of roughness"),
+            anno::hard_range(0.0, 1.0)
+        ]]
+)
+[[
+    anno::description("Convert glossiness parameter to roughness parameter through simple inversion"),
+    anno::noinline()
+]]
+{
+    return 1-glossiness;
+}
+
+
+export color abbe_number_ior(
+    uniform float ior = 1.5
+        [[
+            anno::description("Index of refraction"),
+            anno::soft_range(1.0, 5.0)
+        ]],
+    uniform float abbe_number = 0.0
+        [[
+            anno::description("Dispersion in relation to index of refraction"),
+            anno::unused(),
+            anno::soft_range(10.0, 100.0)
+        ]]
+)
+[[
+    anno::description("Calculate spectral index of refraction"),
+    anno::noinline()
+]]
+{
+    return color(ior); //simplified for RGB
+}
+
+
+export color sellmeier_coefficients_ior(
+    uniform float3 sellmeier_B = float3(1.04, 0.23, 1.01)
+        [[
+            anno::description("Sellmeier coefficient B")
+        ]],
+    uniform float3 sellmeier_C = float3(0.006, 0.200, 103.56)
+        [[
+            anno::description("Sellmeier coefficient C (in um^2)")
+        ]]
+)
+[[
+     anno::description("Calculate spectral index of refraction using Sellmeier coefficients"),
+     anno::noinline()
+]]
+{
+    float l2 = 0.5892 * 0.5892; // simplified to fixed wavelength of 589.2 nm
+    return
+        color(
+            math::sqrt(1.0 +
+                sellmeier_B.x * l2 / (l2 - sellmeier_C.x) +
+                sellmeier_B.y * l2 / (l2 - sellmeier_C.y) +
+                sellmeier_B.z * l2 / (l2 - sellmeier_C.z)));
+}
+
+
+export texture_return environment_spherical(
+    uniform texture_2d texture
+        [[
+            anno::description("Spherical environment")
+        ]]
+)
+[[
+    anno::description("Environment function implementing a spherical environment"),
+    anno::noinline()
+]]
+{
+    float3 v = state::transform_vector(state::coordinate_internal, state::coordinate_world, state::direction());
+
+    float theta, gamma;
+
+    gamma = math::asin(v.y);
+    theta = math::atan2(v.z, v.x);
+
+    float2 uv = float2( theta/math::PI , gamma/(math::PI * 0.5));
+
+    uv = (uv + 1.0) * 0.5;
+    color return_color = tex::lookup_color(texture, uv);
+    return texture_return(return_color,1.);
+}
+/*helper functions for sun_and_sky*/
+float3 xyz2dir(
+               float3 in_main,
+               float x,
+               float y,
+               float z)
+{
+    float3 u;
+    float3 v;
+
+
+
+    float3 omain = in_main;
+
+    if (math::abs(omain.x) < math::abs(omain.y)) {
+        // u = n x x_axis
+        u = float3( 0.0,-omain.z, omain.y);
+    } else {
+        // u = n x y_axis
+        u = float3( omain.z,0.0,-omain.x);
+    }
+
+
+
+
+    // degenerate transform
+    if (math::length(u) == 0.0) {
+        if (math::abs(in_main.x) < math::abs(in_main.y)) {
+           u = float3( 0.0,-in_main.z,in_main.y);
+        } else {
+           u = float3( in_main.z, 0.0, -in_main.x);
+        }
+    }
+    u = math::normalize(u);
+    v = math::cross(in_main, u);
+    return  x * u + y * v + z * in_main;
+}
+
+float2 mi_lib_square_to_disk(
+    float inout_r,
+    float inout_phi,
+    float in_x,
+    float in_y)
+{
+    // map to [-1, 1] x [-1, 1]
+    float local_x = 2 * in_x - 1;
+    float local_y = 2 * in_y - 1;
+    // pathological: avoid 0.0/0.0
+    if (local_x == 0.0 && local_y == 0.0) {
+        inout_phi = 0.0;
+        inout_r = 0.0;
+    } else {
+        if (local_x > - local_y) {
+            if (local_x > local_y) {
+                inout_r = local_x;
+                inout_phi = (math::PI / 4.0) * (1.0 + local_y / local_x);
+            } else {
+                inout_r = local_y;
+                inout_phi = (math::PI / 4.0) * (3.0 - local_x / local_y);
+            }
+        } else {
+            if (local_x < local_y) {
+                inout_r = -local_x;
+                inout_phi = (math::PI / 4.0) * (5.0 + local_y / local_x);
+            } else {
+                inout_r = -local_y;
+                inout_phi = (math::PI / 4.0) * (7.0 - local_x / local_y);
+            }
+        }
+    }
+    return float2(inout_r,inout_phi);
+}
+
+float3 mi_reflection_dir_diffuse_x(
+    float3 in_normal,
+    float2 in_sample)
+{
+
+    float2 r_phi = mi_lib_square_to_disk(0, 0, in_sample.x, in_sample.y);
+    float x = r_phi.x * math::cos(r_phi.y);
+    float y = r_phi.x * math::sin(r_phi.y);
+    // compute the z component by "lifting" the point onto the unit
+    // hemisphere
+    float z2 = 1.0 - x * x - y * y;
+    float z;
+    if (z2 > 0.0) {
+        z = math::sqrt(z2);
+    } else {
+        z = 0.0;
+    }
+
+    return xyz2dir(in_normal, x, y, z);
+}
+
+color calc_sun_color(float3 sun_dir, float turbidity)
+{
+    color sun_color = color(0.0);
+    color ko = color(12.0, 8.5, 0.9);
+    color wavelength = color(0.610, 0.550, 0.470);
+    color solRad = color(1.0   * 127500 / 0.9878,
+                         0.992 * 127500 / 0.9878,
+                         0.911 * 127500 / 0.9878);
+    if (sun_dir.z > 0.0) {
+        float m = (1.0 / (sun_dir.z + 0.15 *
+                   math::pow(93.885 - math::acos(sun_dir.z) * 180 / math::PI, -1.253)));
+        float beta = 0.04608 * turbidity - 0.04586;
+        float alpha = 1.3;
+        color ta, to, tr;
+        // aerosol (water + dust) attenuation
+        ta = math::exp(-m * beta * math::pow(wavelength, -alpha));
+        // ozone absorption
+        float l = 0.0035;
+        to = math::exp(-m * ko * l);
+        // Rayleigh scattering
+        tr = math::exp(-m * 0.008735 * math::pow(wavelength, -4.08));
+        // result
+        sun_color = tr * ta * to * solRad;
+    }
+    return sun_color;
+}
+
+float3 sky_color_xyz(
+    float3 in_dir,
+    float3 in_sun_pos,
+    float in_turbidity, float in_luminance)
+{
+    float3 xyz;
+    float A, B, C, D, E;
+    float cos_gamma = math::dot(in_sun_pos, in_dir);
+    if (cos_gamma > 1.0) {
+        cos_gamma = 2.0 - cos_gamma;
+    }
+    float gamma = math::acos(cos_gamma);
+    float cos_theta = in_dir.z;
+    float cos_theta_sun = in_sun_pos.z;
+    float theta_sun = math::acos(cos_theta_sun);
+    float t2  = in_turbidity * in_turbidity;
+    float ts2 = theta_sun * theta_sun;
+    float ts3 = ts2 * theta_sun;
+    // determine x and y at zenith
+    float zenith_x = ((+0.001650*ts3 - 0.003742*ts2 +
+                       0.002088*theta_sun + 0) * t2 +
+                      (-0.029028*ts3 + 0.063773*ts2 -
+                       0.032020*theta_sun + 0.003948) * in_turbidity +
+                      (+0.116936*ts3 - 0.211960*ts2 +
+                       0.060523*theta_sun + 0.258852));
+    float zenith_y = ((+0.002759*ts3 - 0.006105*ts2 +
+                        0.003162*theta_sun + 0) * t2 +
+                      (-0.042149*ts3 + 0.089701*ts2 -
+                       0.041536*theta_sun + 0.005158) * in_turbidity +
+                      (+0.153467*ts3 - 0.267568*ts2 +
+                       0.066698*theta_sun + 0.266881));
+    xyz.y = in_luminance;
+    // TODO: Preetham/Utah
+
+    A = -0.019257 * in_turbidity  - (0.29 - math::pow(cos_theta_sun, 0.5) * 0.09);
+    // use flags (see above)
+    B = -0.066513 * in_turbidity  + 0.000818;
+    C = -0.000417 * in_turbidity  + 0.212479;
+    D = -0.064097 * in_turbidity  - 0.898875;
+    E = -0.003251 * in_turbidity  + 0.045178;
+    float x = (((1 + A * math::exp(B/cos_theta)) * (1 + C * math::exp(D * gamma) +
+                                              E * cos_gamma * cos_gamma)) /
+               ((1 + A * math::exp(B/1.0)) * (1 + C * math::exp(D * theta_sun) +
+                                        E * cos_theta_sun * cos_theta_sun)));
+    A = -0.016698 * in_turbidity  - 0.260787;
+    B = -0.094958 * in_turbidity  + 0.009213;
+    C = -0.007928 * in_turbidity  + 0.210230;
+    D = -0.044050 * in_turbidity  - 1.653694;
+    E = -0.010922 * in_turbidity  + 0.052919;
+    float y = (((1 + A * math::exp(B/cos_theta)) * (1 + C * math::exp(D * gamma) +
+                                              E * cos_gamma * cos_gamma)) /
+               ((1 + A * math::exp(B/1.0)) * (1 + C * math::exp(D * theta_sun) +
+                                        E * cos_theta_sun * cos_theta_sun)));
+    float local_saturation = 1.0;
+    x = zenith_x * ((x * local_saturation) + (1.0 - local_saturation));
+    y = zenith_y * ((y * local_saturation) + (1.0 - local_saturation));
+    // convert chromaticities x and y to CIE
+    xyz.x = (x / y) * xyz.y;
+    xyz.z = ((1.0 - x - y) / y) * xyz.y;
+    return xyz;
+}
+
+float sky_luminance(
+    float3 in_dir,
+    float3 in_sun_pos,
+    float in_turbidity)
+{
+    float cos_gamma = math::dot(in_sun_pos, in_dir);
+    if (cos_gamma < 0.0) {
+        cos_gamma = 0.0;
+    }
+    if (cos_gamma > 1.0) {
+        cos_gamma = 2.0 - cos_gamma;
+    }
+    float gamma = math::acos(cos_gamma);
+    float cos_theta = in_dir.z;
+    float cos_theta_sun = in_sun_pos.z;
+    float theta_sun = math::acos(cos_theta_sun);
+
+    float A =  0.178721 * in_turbidity  - 1.463037;
+    float B = -0.355402 * in_turbidity  + 0.427494;
+    float C = -0.022669 * in_turbidity  + 5.325056;
+    float D =  0.120647 * in_turbidity  - 2.577052;
+    float E = -0.066967 * in_turbidity  + 0.370275;
+
+    float Y = (((1 + A * math::exp(B/cos_theta)) * (1 + C * math::exp(D * gamma) +
+                                              E * cos_gamma * cos_gamma)) /
+               ((1 + A * math::exp(B/1.0)) * (1 + C * math::exp(D * theta_sun) +
+                                        E * cos_theta_sun * cos_theta_sun)));
+    return Y;
+}
+
+color calc_env_color(
+    float3 in_sun_dir,
+    float3 in_dir,
+    float in_turbidity)
+{
+    // start with absolute value of zenith luminance in K cd/m2
+    float theta_sun = math::acos(in_sun_dir.z);
+    float chi = (4.0 / 9.0 - in_turbidity / 120.0) * (math::PI - 2 * theta_sun);
+    float luminance = 1000.0 * ((4.0453 * in_turbidity - 4.9710) * math::tan(chi) -
+                       0.2155 * in_turbidity + 2.4192);
+    luminance *= sky_luminance(in_dir, in_sun_dir, in_turbidity);
+    // calculate the sky color - this uses 2 matrices (for 'x' and for 'y')
+    float3 XYZ = sky_color_xyz(in_dir, in_sun_dir, in_turbidity, luminance);
+    // use result
+    color env_color = color( 3.241 * XYZ.x - 1.537 * XYZ.y - 0.499 * XYZ.z,
+                -0.969 * XYZ.x + 1.876 * XYZ.y + 0.042 * XYZ.z,
+                0.056 * XYZ.x - 0.204 * XYZ.y + 1.057 * XYZ.z);
+    env_color *= math::PI;
+    return env_color;
+}
+
+color calc_irrad(
+   float3 in_data_sun_dir,
+   float in_data_sun_dir_haze)
+{
+    color colaccu = color(0.0);
+    float3 nuState_normal = float3(0.0, 0.0, 1.0);
+
+
+
+    float3 sun_dir = in_data_sun_dir;
+
+    color work = color( 0.0);
+    for (float u=1./10.;u<1.;u+=1./5.) {
+        for(float v=1./10.;v<1.;v+=1./5.) {
+            float3 diff;
+            diff = mi_reflection_dir_diffuse_x( nuState_normal, float2(u,v));
+            work = calc_env_color(sun_dir, diff, in_data_sun_dir_haze);
+            colaccu += work;
+        }
+    }
+    colaccu /= 25.0;
+    return colaccu;
+}
+
+float tweak_saturation(float inout_saturation, float in_haze)
+{
+    float lowsat = math::pow(inout_saturation, 3.0);
+    if (inout_saturation <= 1.0) {
+        float local_haze = in_haze;
+        local_haze -= 2.0;
+        local_haze /= 15.0;
+        if (local_haze < 0.0) local_haze = 0.0;
+        if (local_haze > 1.0) local_haze = 1.0;
+        local_haze = math::pow(local_haze, 3.0);
+        return ((inout_saturation * (1.0 - local_haze)) +
+                lowsat * local_haze);
+    }
+    return 1.;
+}
+
+float3 arch_vectortweak(
+    float3 dir,
+    bool y_is_up,
+    float horiz_height)
+{
+    float3 out_dir = dir;
+    if (y_is_up) {
+        out_dir = float3(dir.x, dir.z,dir.y);
+    }
+    if (horiz_height != 0) {
+        out_dir.z -= horiz_height;
+        out_dir = math::normalize(out_dir);
+    }
+    return out_dir;
+}
+
+color arch_colortweak(
+    color tint,
+    float saturation,
+    float redness)
+{
+
+    float intensity = math::luminance(tint);
+    color out_tint;
+    // clamp down negatives (should never happen, but ...)
+    if (saturation <= 0.0) {
+        out_tint = color(intensity);
+    } else {
+        out_tint = tint * saturation + intensity * (1.0 - saturation);
+        // boosted saturation can cause negatives
+        if (saturation > 1.0) {
+            float3 rgb_color = float3(tint);
+            if (rgb_color.x < 0.0) rgb_color.x = 0.0;
+            if (rgb_color.y < 0.0) rgb_color.y = 0.0;
+            if (rgb_color.z < 0.0) rgb_color.z = 0.0;
+            tint = color(rgb_color);
+        }
+    }
+    // redness
+    out_tint *= color(1.0 + redness,1., 1.0 - redness);
+    return out_tint;
+}
+
+float2 calc_physical_scale(
+    float sun_disk_scale,
+    float sun_glow_intensity,
+    float sun_disk_intensity)
+{
+    float sun_angular_radius = 0.00465f;
+
+    /* This is the angular radius of the sun in radians, scaled according to the user's wishes
+    and further scaled by 10 which is the radius of the glow */
+    float sun_disk_radius = sun_angular_radius * sun_disk_scale;
+    float sun_glow_radius = sun_disk_radius * 10.0f;
+
+    /* The contribution of the sun disk & glow is ultimately driven by these expressions:
+    miScalar factor = (1.0f - sun_angle / sun_radius) * 10.0f;
+    factor = (miScalar) pow(factor / 10.0, 3.0) * 2.0f * glow_intensity +   // SUN GLOW
+    smoothstep(8.5f, 9.5f + (haze / 50.0f), factor) * 100.0f * disk_int;     // SUN DISK
+    color.r += data->sun_color.r * factor;
+    color.g += data->sun_color.g * factor;
+    color.b += data->sun_color.b * factor;
+
+    Our goal is:
+    a. the integration of factor==disk_int,
+        such that we get a physically-scaled sun for disk_int=1
+    b. the glow intensity is capped at 50% of the total
+        (50% is an arbitrary number, we have to cap somewhere)
+    ==> To achieve this goal, we simply calculate the integrals of
+    the sun GLOW & DISK functions,
+    calculate their ratio and scale them accordingly.
+    */
+
+    /* We calculate the integral of the glow intensity function */
+    float glow_func_integral;
+    {
+        /* Calculate the integral of the glow function over its, i.e.:
+        integral[x=0 to x=sun_glow_radius] (pow(factor / 10.0, 3.0) *
+                2.0f * glow_intensity * sin(x) dx)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        With x being "sun_angle". */
+        // flattened code:
+        glow_func_integral = sun_glow_intensity * ( (4.*math::PI) - (24.*math::PI)/(sun_glow_radius*sun_glow_radius) + (24.*math::PI)*math::sin(sun_glow_radius)/(sun_glow_radius*sun_glow_radius*sun_glow_radius) );
+    }
+
+    /* Calculate the target sun disk intensity integral (the value towards which
+    we must scale to attain a physically-scaled sun intensity */
+    float target_sundisk_integral = sun_disk_intensity * math::PI;
+
+    /* Subtract the glow integral from the target disk integral,
+    limiting the glow power to 50% of the sun disk */
+    float sky_sunglow_scale = 1.0;
+    float max_glow_integral = 0.5f * target_sundisk_integral;
+    if(glow_func_integral > max_glow_integral)
+    {
+        sky_sunglow_scale *= max_glow_integral / glow_func_integral;
+        target_sundisk_integral -= max_glow_integral;
+    }
+    else
+    {
+        target_sundisk_integral -= glow_func_integral;
+    }
+
+    float sundisk_area = 2*math::PI*(1 - math::cos(sun_disk_radius));
+    float target_sundisk_intensity = target_sundisk_integral / sundisk_area;
+
+    /* Calculate the actual sun disk intensity, before scaling is applied */
+    /* The integral of the sun disk intensity function should be taken into
+    account, however the average value of the sun disk smoothing function
+    is very close to 1 though probably not exactly 1), and I've so far failed
+    at calculating the integral in a way where I can match the intensity of
+    the mia_physicalsun shader. The results are actually closer if I assume
+    the sun disk intensity has an average value of 1, and only deviate slightly
+    with very large sun disk radii. I can't quite explain this, so I'll
+    accept this "approximation" which apparently yields very acceptable
+    results.
+    So, TODO: re-calculate the integral for that sun smooth function! */
+    float actual_sundisk_integral = 1.0f * sundisk_area;
+    /* approximation! needs to be re-calculated from the integral of
+    the function */
+    float actual_sundisk_intensity =  sun_disk_intensity * 100.0f *
+        actual_sundisk_integral / sundisk_area;/* average value of the */
+
+    /* Apply the proper scaling to get to the target value */
+    return float2(
+        (target_sundisk_intensity == 0.0) ? 0.0 : target_sundisk_intensity / actual_sundisk_intensity,
+        sky_sunglow_scale);
+}
+
+float night_brightness_adjustment(
+    float3 sun_dir)
+{
+    float lmt = 0.30901699437494742410229341718282;
+    if (sun_dir.z <= -lmt)
+        return 0.0;
+    float factor = (sun_dir.z + lmt) / lmt;
+    factor *= factor;
+    factor *= factor;
+    return factor;
+}
+
+
+export texture_return sun_and_sky(
+    uniform bool on = true [[ anno::description("") ]],
+    float  multiplier = 0.025 [[ anno::description("") ]],
+    uniform color rgb_unit_conversion = color(0.000666667) [[ anno::description("") ]],
+    float  haze = 0.5 [[ anno::description("") ]],
+    float  redblueshift = 0.0 [[ anno::description("") ]],
+    uniform float  saturation = 0.5 [[ anno::description("") ]],
+    float  horizon_height = 0.001 [[ anno::description("") ]],
+    float  horizon_blur = 0.1 [[ anno::description("") ]],
+    color  ground_color = color(0.4, 0.4, 0.4) [[ anno::description("") ]],
+    color  night_color = color(0.0, 0.0, 0.0) [[ anno::description("") ]],
+    uniform float3 sun_direction = float3(0.0, 0.229271, 0.418882) [[ anno::description("") ]],
+    uniform float  sun_disk_intensity = 0.01 [[ anno::description("") ]],
+    uniform float  sun_disk_scale = 0.5 [[ anno::description("") ]],
+    uniform float  sun_glow_intensity = 1.0 [[ anno::description("") ]],
+    uniform bool y_is_up = true [[ anno::description("") ]],
+    uniform int flags = 0 [[ anno::unused() ]],
+    uniform bool physically_scaled_sun = true [[ anno::description("") ]]
+)
+[[
+    anno::description("Sun and sky model environment. (For documentation of the parameters, please see the official documentation of the matching mental ray shader.)"),
+    anno::noinline()
+]]
+{
+    color result = color(0.0);
+
+    float factor = 1.0;
+    float night_factor = 1.0;
+    color out_color = color(0.0);
+    color rgb_scale = rgb_unit_conversion;
+    float3 dir = state::transform_vector(state::coordinate_internal, state::coordinate_world, state::direction());
+    float horiz_height = horizon_height / 10.0; // done in *_init
+    dir = arch_vectortweak(dir, y_is_up, horiz_height);
+    // haze
+    float local_haze = 2.0 + haze;
+    if (local_haze < 2.0) {
+        local_haze = 2.0;
+    }
+    float local_saturation = tweak_saturation(saturation, local_haze);
+    if (math::luminance(rgb_scale) < 0.0) {
+        rgb_scale = color( 1.0 / 80000.0);
+    }
+    rgb_scale *= multiplier;
+    if (multiplier <= 0.0 || (!on)) {
+        return texture_return(color(0.),1.);
+    }
+    // downness
+    float downness = dir.z;
+    float3 real_dir = dir;
+    // only calc for above-the-horizon
+    if (dir.z < 0.001) {
+        dir.z = 0.001;
+        dir = math::normalize(dir);
+    }
+    // sun_dir
+    float3 sun_dir = sun_direction;
+    sun_dir = math::normalize(sun_dir);
+    sun_dir = arch_vectortweak(sun_dir, y_is_up, horiz_height);
+    float3 real_sun_dir = sun_dir;
+    if (sun_dir.z < 0.001) {
+        if (sun_dir.z < 0.0)  {
+            factor = night_brightness_adjustment(sun_dir);
+        }
+        sun_dir.z = 0.001;
+        sun_dir = math::normalize(sun_dir);
+    }
+    color tint;
+    if (factor > 0.0) {
+        tint = calc_env_color(sun_dir, dir, local_haze);
+        if (factor < 1.0) {
+            tint *= factor;
+        }
+    } else {
+        tint = color(0.);
+    }
+    color data_sun_color = calc_sun_color(sun_dir, downness>0?local_haze:2.0);
+    if (sun_disk_intensity > 0.0 && sun_disk_scale > 0.0) {
+        float sun_angle = math::acos(math::dot(real_dir, real_sun_dir));
+        float sun_radius = 0.00465 * sun_disk_scale * 10.0;
+        if (sun_angle < sun_radius) {
+            /* Calculate the scales necessary to get a sun with physical intensity */
+            /* default values */
+            float sky_sundisk_scale = 1.0f;
+            float sky_sunglow_scale = 1.0f;
+            if (physically_scaled_sun) {
+                float2 return_value = calc_physical_scale(sun_disk_scale, sun_glow_intensity, sun_disk_intensity);
+                sky_sundisk_scale = return_value.x;
+                sky_sunglow_scale = return_value.y;
+            }
+
+            float sun_factor = (1.0 - sun_angle / sun_radius) * 10.0;
+
+            sun_factor = (math::pow(sun_factor / 10.0, 3.0) * 2.0 *
+                    sun_glow_intensity *  sky_sunglow_scale +
+                    math::smoothstep(8.5, 9.5 +
+                   (local_haze / 50.0), sun_factor) *
+                    100.0 * sun_disk_intensity * sky_sundisk_scale);
+            tint += data_sun_color * sun_factor;
+        }
+    }
+    // set the output
+    out_color = tint * rgb_scale;
+    if (downness <= 0.0) {
+        color irrad = color(0.0);
+        color downcolor = ground_color;
+
+        irrad = calc_irrad(sun_dir, 2.0);
+        downcolor *= (irrad + data_sun_color * sun_dir.z) * rgb_scale;
+        // apply 1+sun_dir.z night factor to downcolor
+        // otherwise at sun_dir.z==-1 (midnight) we get a brightly
+        // illuminated ground plane!
+        if (factor < 1) {
+          downcolor *= factor;
+        }
+        float hor_blur = horizon_blur / 10.0;
+        if (hor_blur > 0.0) {
+            float dness = -downness;
+            dness /= hor_blur;
+            if (dness > 1.0) {
+                dness = 1.0;
+            }
+            dness = math::smoothstep(0.0, 1.0, dness);
+            out_color = out_color * (1.0 - dness) + downcolor * dness;
+            night_factor = 1.0 - dness;
+        } else  {
+            out_color = downcolor;
+            night_factor = 0.0;
+        }
+    }
+
+    out_color = arch_colortweak(out_color, local_saturation, redblueshift);
+    result = out_color;
+    if (night_factor > 0.0) {
+        color night = night_color;
+        night *= night_factor;
+        /*rgb code*/
+        float3 rgb_result = float3(result);
+        float3 rgb_night = float3(night);
+        if (rgb_result.x < rgb_night.x) rgb_result.x = rgb_night.x;
+        if (rgb_result.y < rgb_night.y) rgb_result.y = rgb_night.y;
+        if (rgb_result.z < rgb_night.z) rgb_result.z = rgb_night.z;
+        result = color(rgb_result);
+    }
+    result *= math::PI;
+
+    return texture_return(result, 1.);
+}
+
+float compute_perez_clearness(
+    float diffuse_irradiance,
+    float direct_irradiance,
+    float theta_sun)
+{
+    // [1] equation 1
+    float zenith_angle3 = theta_sun * theta_sun * theta_sun;
+    return
+        ((diffuse_irradiance + direct_irradiance) / diffuse_irradiance +
+         1.041f * zenith_angle3) /
+        (1.0f + 1.041f * zenith_angle3);
+}
+
+float compute_perez_brightness(
+    float diffuse_irradiance,
+    float air_mass,
+    float eccentricity)
+{
+    // [1] equation 2
+    float solar_constant_irrad = 1367.0f;   // W/m^2
+    return diffuse_irradiance * air_mass /
+        (solar_constant_irrad * eccentricity);
+}
+
+float compute_eccentricity(float julian_date)
+{
+    float day_angle = (2.0 * math::PI / 365.0) * (julian_date - 1.0f);
+
+    return
+        1.00011f + 0.034221f * math::cos(day_angle) + 0.00128f * math::sin(day_angle) +
+        0.000719f * math::cos(2.0f * day_angle) + 0.000077f * math::sin(2.0f * day_angle);
+}
+
+// approximation for air mass on ground level by Kasten & Young
+float compute_air_mass(float theta_sun)
+{
+     float theta_sun_deg = theta_sun * (180.0 / math::PI);
+     return 1.0f / (math::cos(theta_sun) + 0.15f * math::pow(93.885f - theta_sun_deg, -1.253f));
+}
+
+
+// Perez clearness categories
+// (clearness between 1.0 and 12.0)
+//#define NUM_CLEARNESS_CATEGORIES 8
+int get_clearness_category(
+    float clearness)
+{
+    //float[8] s_clearness_categories( 1.065f, 1.230f, 1.5f, 1.95f, 2.80f, 4.5f, 6.2f, 12.0f);
+    if( clearness < 1.065 ) return 0;
+    if( clearness < 1.230 ) return 1;
+    if( clearness < 1.5 ) return 2;
+    if( clearness < 1.95 ) return 3;
+    if( clearness < 2.80 ) return 4;
+    if( clearness < 4.5 ) return 5;
+    if( clearness < 6.2 ) return 6;
+
+    return 7;
+}
+
+struct perez_coefficients {
+    float [5]c;
+};
+
+perez_coefficients compute_perez_params(
+    float z,
+    float epsilon, // clearness
+    float delta) // brightness
+{
+    float[32] s_perez_a( //NUM_CLEARNESS_CATEGORIES * 4
+     1.3525f, -0.2576f, -0.2690f, -1.4366f,
+    -1.2219f, -0.7730f,  1.4148f,  1.1016f,
+    -1.1000f, -0.2515f,  0.8952f,  0.0156f,
+    -0.5484f, -0.6654f, -0.2672f,  0.7117f,
+    -0.6000f, -0.3566f, -2.5000f,  2.3250f,
+    -1.0156f, -0.3670f,  1.0078f,  1.4051f,
+    -1.0000f,  0.0211f,  0.5025f, -0.5119f,
+    -1.0500f,  0.0289f,  0.4260f,  0.3590f
+    );
+    float[32] s_perez_b( //NUM_CLEARNESS_CATEGORIES * 4
+    -0.7670f,  0.0007f,  1.2734f, -0.1233f,
+    -0.2054f,  0.0367f, -3.9128f,  0.9156f,
+     0.2782f, -0.1812f, -4.5000f,  1.1766f,
+     0.7234f, -0.6219f, -5.6812f,  2.6297f,
+     0.2937f,  0.0496f, -5.6812f,  1.8415f,
+     0.2875f, -0.5328f, -3.8500f,  3.3750f,
+    -0.3000f,  0.1922f,  0.7023f, -1.6317f,
+    -0.3250f,  0.1156f,  0.7781f,  0.0025f
+    );
+    float[32] s_perez_c( //NUM_CLEARNESS_CATEGORIES * 4
+     2.8000f,   0.6004f,   1.2375f,  1.0000f,
+     6.9750f,   0.1774f,   6.4477f, -0.1239f,
+    24.7219f, -13.0812f, -37.7000f, 34.8438f,
+    33.3389f, -18.3000f, -62.2500f, 52.0781f,
+    21.0000f,  -4.7656f, -21.5906f,  7.2492f,
+    14.0000f,  -0.9999f,  -7.1406f,  7.5469f,
+    19.0000f,  -5.0000f,   1.2438f, -1.9094f,
+    31.0625f, -14.5000f, -46.1148f, 55.3750f
+    );
+    float[32] s_perez_d( //NUM_CLEARNESS_CATEGORIES * 4
+     1.8734f,  0.6297f,  0.9738f,  0.2809f,
+    -1.5798f, -0.5081f, -1.7812f,  0.1080f,
+    -5.0000f,  1.5218f,  3.9229f, -2.6204f,
+    -3.5000f,  0.0016f,  1.1477f,  0.1062f,
+    -3.5000f, -0.1554f,  1.4062f,  0.3988f,
+    -3.4000f, -0.1078f, -1.0750f,  1.5702f,
+    -4.0000f,  0.0250f,  0.3844f,  0.2656f,
+    -7.2313f,  0.4050f, 13.3500f,  0.6234f
+    );
+    float[32] s_perez_e( //NUM_CLEARNESS_CATEGORIES * 4
+     0.0356f, -0.1246f, -0.5718f,  0.9938f,
+     0.2624f,  0.0672f, -0.2190f, -0.4285f,
+    -0.0156f,  0.1597f,  0.4199f, -0.5562f,
+     0.4659f, -0.3296f, -0.0876f, -0.0329f,
+     0.0032f,  0.0766f, -0.0656f, -0.1294f,
+    -0.0672f,  0.4016f,  0.3017f, -0.4844f,
+     1.0468f, -0.3788f, -2.4517f,  1.4656f,
+     1.5000f, -0.6426f,  1.8564f,  0.5636f
+    );
+    // modification from [3]
+    if (epsilon > 1.065f && epsilon < 2.8f)
+        delta = math::max(delta, 0.2f);
+
+    int idx = get_clearness_category(epsilon) * 4;
+
+    perez_coefficients abcde;
+    abcde.c[0] = s_perez_a[idx] + s_perez_a[idx + 1] * z +
+        delta * (s_perez_a[idx + 2] + s_perez_a[idx + 3] * z);
+    abcde.c[1] = s_perez_b[idx] + s_perez_b[idx + 1] * z +
+        delta * (s_perez_b[idx + 2] + s_perez_b[idx + 3] * z);
+    if (idx == 0)
+    {
+        // [2] eq. 7, 8 for c and d in the first interval
+        abcde.c[2] = math::exp(math::pow(delta * (s_perez_c[0] + s_perez_c[1] * z), s_perez_c[2])) -
+            s_perez_c[3];
+        abcde.c[3] = -math::exp(delta * (s_perez_d[0] + s_perez_d[1] * z)) + s_perez_d[2] +
+            delta * s_perez_d[3];
+    }
+    else
+    {
+        abcde.c[2] = s_perez_c[idx] + s_perez_c[idx + 1] * z +
+            delta * (s_perez_c[idx + 2] + s_perez_c[idx + 3] * z);
+        abcde.c[3] = s_perez_d[idx] + s_perez_d[idx + 1] * z +
+            delta * (s_perez_d[idx + 2] + s_perez_d[idx + 3] * z);
+    }
+    abcde.c[4] = s_perez_e[idx] + s_perez_e[idx + 1] * z +
+        delta * (s_perez_e[idx + 2] + s_perez_e[idx + 3] * z);
+
+    return abcde;
+}
+
+
+// diffuse and direct efficacy coefficients ([1] table 7)
+
+float compute_diffuse_illuminance(
+    float diffuse_irradiance,
+    float clearness,
+    float brightness,
+    float cos_theta_sun,
+    float pwc)
+{
+    int idx = get_clearness_category(clearness);
+    float[8] s_perez_diffuse_a(    97.24f, 107.22f, 104.97f, 102.39f, 100.71f, 106.42f, 141.88f, 152.23f );
+    float[8] s_perez_diffuse_b(    -0.46f, 1.15f, 2.96f, 5.59f, 5.94f, 3.83f, 1.90f, 0.35f);
+    float[8] s_perez_diffuse_c(    12.00f, 0.59f, -5.53f, -13.95f, -22.75f, -36.15f, -53.24f, -45.27f);
+    float[8] s_perez_diffuse_d(    -8.91f, -3.95f, -8.77f, -13.90f, -23.74f, -28.83f, -14.03f, -7.98f);
+
+    // [3], equation 7
+    return
+        diffuse_irradiance *
+        (s_perez_diffuse_a[idx] +
+         s_perez_diffuse_b[idx] * pwc +
+         s_perez_diffuse_c[idx] * cos_theta_sun +
+         s_perez_diffuse_d[idx] * math::log(brightness));
+}
+
+float compute_direct_illuminance(
+    float direct_irradiance,
+    float clearness,
+    float brightness,
+    float theta_sun,
+    float pwc)
+{
+    int idx = get_clearness_category(clearness);
+    float[8] s_perez_direct_a(    57.20f, 98.99f, 109.83f, 110.34f, 106.36f, 107.19f, 105.75f, 101.18f);
+    float[8] s_perez_direct_b(    -4.55f, -3.46f, -4.90f, -5.84f, -3.97f, -1.25f, 0.77f, 1.58f);
+    float[8] s_perez_direct_c(    -2.98f, -1.21f, -1.71f, -1.99f, -1.75f, -1.51f, -1.26f, -1.10f);
+    float[8] s_perez_direct_d(    117.12f, 12.38f, -8.81f, -4.56f, -6.16f, -26.73f, -34.44f, -8.29f);
+
+    // [3], equation 8
+    return direct_irradiance *
+        math::max(
+            (s_perez_direct_a[idx] +
+             s_perez_direct_b[idx] * pwc +
+             s_perez_direct_c[idx] * math::exp(5.73f * theta_sun - 5.0f) +
+             s_perez_direct_d[idx] * brightness),
+            0.0f);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const float[128] randxi(0.0,0.5,0.25,0.75,0.125,0.625,0.375,0.875,0.0625,0.5625,0.3125,0.8125,0.1875,0.6875,0.4375,0.9375,
+0.03125,0.53125,0.28125,0.78125,0.15625,0.65625,0.40625,0.90625,0.09375,0.59375,0.34375,0.84375,0.21875,0.71875,0.46875,0.96875,
+0.015625,0.515625,0.265625,0.765625,0.140625,0.640625,0.390625,0.890625,0.078125,0.578125,0.328125,0.828125,0.203125,0.703125,0.453125,0.953125,
+0.046875,0.546875,0.296875,0.796875,0.171875,0.671875,0.421875,0.921875,0.109375,0.609375,0.359375,0.859375,0.234375,0.734375,0.484375,0.984375,
+0.0078125,0.5078125,0.2578125,0.7578125,0.1328125,0.6328125,0.3828125,0.8828125,0.0703125,0.5703125,0.3203125,0.8203125,0.1953125,0.6953125,0.4453125,0.9453125,
+0.0390625,0.5390625,0.2890625,0.7890625,0.1640625,0.6640625,0.4140625,0.9140625,0.1015625,0.6015625,0.3515625,0.8515625,0.2265625,0.7265625,0.4765625,0.9765625,
+0.0234375,0.5234375,0.2734375,0.7734375,0.1484375,0.6484375,0.3984375,0.8984375,0.0859375,0.5859375,0.3359375,0.8359375,0.2109375,0.7109375,0.4609375,0.9609375,
+0.0546875,0.5546875,0.3046875,0.8046875,0.1796875,0.6796875,0.4296875,0.9296875,0.1171875,0.6171875,0.3671875,0.8671875,0.2421875,0.7421875,0.4921875,0.9921875
+);
+
+float eval_perez(
+        float[5] perez_abcde,
+        float cos_theta, float gamma, float cos_gamma)
+{
+    return
+        (1.f + perez_abcde[0] * math::exp(perez_abcde[1] / cos_theta)) *
+        (1.f + perez_abcde[2] * math::exp(perez_abcde[3] * gamma) + perez_abcde[4] * cos_gamma * cos_gamma);
+}
+
+struct perez_data_preetham
+{
+    float[5] x;
+    float[5] y;
+
+    float perez_x_scale;
+    float perez_y_scale;
+};
+
+uniform perez_data_preetham compute_perez_coefficients_preetham(uniform float turbidity, uniform float cos_theta_sun)
+{
+    // chromaticity from Preetham et al: A Practical Analytic Model for Daylight
+
+    float theta_sun = math::acos(cos_theta_sun);
+
+    float t2  = turbidity * turbidity;
+    float ts2 = theta_sun * theta_sun;
+    float ts3 = ts2 * theta_sun;
+
+    float zenith_x =
+            (+0.00165f*ts3 - 0.00374f*ts2 + 0.00208f*theta_sun ) * t2 +
+            (-0.02902f*ts3 + 0.06377f*ts2 - 0.03202f*theta_sun + 0.00394f) * turbidity +
+             +0.11693f*ts3 - 0.21196f*ts2 + 0.06052f*theta_sun + 0.25885f;
+    float zenith_y =
+            (+0.00275f*ts3 - 0.00610f*ts2 + 0.00316f*theta_sun ) * t2 +
+            (-0.04214f*ts3 + 0.08970f*ts2 - 0.04153f*theta_sun + 0.00515f) * turbidity +
+             +0.15346f*ts3 - 0.26756f*ts2 + 0.06669f*theta_sun + 0.26688f;
+
+
+    perez_data_preetham data;
+
+    data.x[0] = -0.01925f * turbidity - 0.29f + math::sqrt(cos_theta_sun) * 0.09f;
+    data.x[1] = -0.06651f * turbidity + 0.00081f;
+    data.x[2] = -0.00041f * turbidity + 0.21247f;
+    data.x[3] = -0.06409f * turbidity - 0.89887f;
+    data.x[4] = -0.00325f * turbidity + 0.04517f;
+    float perez_x_fz = eval_perez(data.x, 1.0f, theta_sun, cos_theta_sun);
+    data.perez_x_scale = zenith_x / perez_x_fz;
+
+
+    data.y[0] = -0.01669f * turbidity - 0.26078f;
+    data.y[1] = -0.09495f * turbidity + 0.00921f;
+    data.y[2] = -0.00792f * turbidity + 0.21023f;
+    data.y[3] = -0.04405f * turbidity - 1.65369f;
+    data.y[4] = -0.01092f * turbidity + 0.05291f;
+    float perez_y_fz = eval_perez(data.y, 1.0f, theta_sun, cos_theta_sun);
+    data.perez_y_scale = zenith_y / perez_y_fz;
+
+    return data;
+}
+
+struct perez_data
+{
+    perez_coefficients abcde;
+    float perez_lum_scale;
+
+    float sun_illuminance;
+    float3 sky_illuminance_rgb;
+};
+
+uniform perez_data compute_perez_all_weather(
+    uniform float cos_theta_sun,
+    uniform float diffuse_irradiance,     // W / m^2
+    uniform float direct_irradiance,      // W / m^2
+    uniform float dew_point,              // degree Celsius
+    uniform float julian_date,            // day in year
+    uniform perez_data_preetham perez_data_xy)
+{
+    float theta_sun = math::acos(cos_theta_sun);
+
+    float air_mass = compute_air_mass(theta_sun);
+    float eccentricity = compute_eccentricity(julian_date);
+
+    float perez_clearness = compute_perez_clearness(diffuse_irradiance, direct_irradiance, theta_sun);
+    float perez_brightness = compute_perez_brightness(diffuse_irradiance, air_mass, eccentricity);
+
+    // compute illuminances
+    // [1] equation 3
+    float pwc = math::exp(0.07f * dew_point - 0.075f);  // precipitable water content for given dew point
+
+    perez_data data;
+
+    float sky_illuminance = compute_diffuse_illuminance(diffuse_irradiance, perez_clearness, perez_brightness, cos_theta_sun, pwc);
+    data.sun_illuminance = compute_direct_illuminance(direct_irradiance, perez_clearness, perez_brightness, theta_sun, pwc);
+    data.abcde = compute_perez_params( theta_sun, perez_clearness, perez_brightness);
+
+    // compute normalization
+    int num_samples = 128;
+    float inv_num_samples = 1.0f / float(num_samples);
+    float3 sum_XYZ(0.0);
+    float sin_theta_sun = math::sqrt(1.0f - cos_theta_sun * cos_theta_sun);
+    for (int i = 0; i < num_samples; ++i)
+    {
+        float xi0 = (float(i) + 0.5f) * inv_num_samples;
+
+        float xi1 = randxi[i];
+
+        // uniformly sample projected hemisphere
+        float phi = xi0 * (2.0 * math::PI);
+        float cos_theta = math::sqrt(1.0f - xi1);
+        float sin_theta = math::sqrt(xi1);
+
+        // dot(dir, sundir) with sundir = (0, sin(theta_sun), cos(theta_sun)
+        float cos_gamma = math::max(math::sin(phi) * sin_theta * sin_theta_sun + cos_theta * cos_theta_sun, 0.0f);
+        float gamma = math::acos(cos_gamma);
+
+        float Y = eval_perez(data.abcde.c, cos_theta, gamma, cos_gamma);
+        float x = eval_perez(perez_data_xy.x, cos_theta, gamma, cos_gamma) * perez_data_xy.perez_x_scale;
+        float y = eval_perez(perez_data_xy.y, cos_theta, gamma, cos_gamma) * perez_data_xy.perez_y_scale;
+
+        // convert xyY to XYZ
+        float l_div_y = Y / y;
+        float3 XYZ(x * l_div_y, Y, l_div_y - (x + y) * l_div_y);
+
+        sum_XYZ += XYZ;
+    }
+    sum_XYZ *= math::PI * inv_num_samples;
+
+    data.perez_lum_scale = sky_illuminance / sum_XYZ.y;
+    sum_XYZ *= data.perez_lum_scale;
+    // convert CIE XYZ to sRGB
+    data.sky_illuminance_rgb = float3(
+            3.241f * sum_XYZ.x - 1.537f * sum_XYZ.y - 0.499f * sum_XYZ.z,
+           -0.969f * sum_XYZ.x + 1.876f * sum_XYZ.y + 0.042f * sum_XYZ.z,
+            0.056f * sum_XYZ.x - 0.204f * sum_XYZ.y + 1.057f * sum_XYZ.z);
+
+    return data;
+}
+
+float3 arch_skyvectortweak(bool y_is_up, float horizon_height, float3 dir)
+{
+    float3 mydir = dir;
+    if (y_is_up)
+    {
+         mydir.z = dir.y;
+         mydir.y = dir.z;
+    }
+
+    /* Do-nothing */
+    if (horizon_height == 0.0f)
+        return mydir;
+
+    /* Tweak Z */
+    mydir.z -= horizon_height;
+    /* Renormalize */
+    return math::normalize(mydir);
+}
+
+float3 calc_sun_disk_color(
+    float3 sun_color,
+    float turbidity,
+    float3 dir,
+    float3 sun_dir,
+    float sun_disk_intensity_scale)
+{
+    float sun_angle = math::acos(math::dot(dir,sun_dir));
+    /* Angular radius of sun times 5 for extra glow */
+    float sun_radius = (0.00465f * 10.0f);
+
+    if (sun_angle > sun_radius)
+        return float3(0.f);
+
+     /* Varies from 0 at edge of sun+glow and 5 at center of
+       sun, and the sun itself is from 4 to 5 */
+    float factor = (1.0f - sun_angle / sun_radius) * 10.0f;
+
+    return sun_color *
+        math::smoothstep(8.5f, 9.5f + (turbidity * (1.0/50.0)), factor) * 100.0f * sun_disk_intensity_scale;
+}
+
+float3 compute_unscaled_sun_illuminance(float3 sun_dir, float turbidity)
+{
+    if (sun_dir.z <= 0.0f)
+        return float3(0.);
+
+    // the color of the sun is computed as 6000k blackbody emitter (1.0, 0.992, 0.911)
+    // and scaled from its illuminance value (0.9878) to 127500.0 (lux)
+    float3 solar_illuminance = float3(
+        (  1.0 * 127500.0 / 0.9878),
+        (0.992 * 127500.0 / 0.9878),
+        (0.911 * 127500.0 / 0.9878));
+
+    // the attenuation of the sunlight is computed along the lines of the Preetham paper
+    // (not fully spectral, just three wavelengths corresponding to RGB and omitting some small components,
+
+
+    // relative optical mass
+    float m = 1.f / (sun_dir.z + 0.15f * math::pow(93.885f - math::acos(sun_dir.z) * (180.0/math::PI), -1.253f));
+
+    float minus_m_beta = -m * (0.04608f * turbidity - 0.04586f);
+    float alpha = -1.3f;
+
+    // aerosol (water + dust) attenuation
+    float3 wavelength = float3( .610f, .550f, .470f ); // in micrometers, not nanometers
+    float3 ta = math::exp(minus_m_beta * math::pow(wavelength, alpha));
+
+    float minus_m_l = -m * 0.0035f;
+
+    // ozone absorption
+    float3 ko = float3( 12.f, 8.5f, 0.9f );
+    float3 to =  math::exp(minus_m_l * ko);
+
+    float minus_m_r = -m * 0.008735f;
+
+    // Rayleigh scattering
+    float3 tr = math::exp(minus_m_r * math::pow(wavelength, -4.08f));
+
+    // omitted: mixed gases absorption
+    // omitted: water vapour absorption
+
+    return tr * ta * to * solar_illuminance;
+}
+
+struct perez_sun_and_sky_data
+{
+    // sun direction
+    float3 clamped_sun_dir;
+
+    // Preetham turbidity parameter
+    float turbidity;
+
+    // Perez sun and sky parameters for luminance
+    perez_data perez_data_lum;
+    // and for chromaticity
+    perez_data_preetham perez_data_xy;
+
+    // sun color (illuminance)
+    float3 sun_color;
+    // scale to get sun luminance from sun color (based on disk size)
+    float sun_disk_intensity_scale;
+
+    // precomputed ground color tint
+    float3 ground_luminance;
+
+    // scale factor for sun below the horizon
+    float factor;
+};
+
+uniform perez_sun_and_sky_data perez_sun_and_sky_init(
+    uniform float3 sun_direction,
+    uniform bool y_is_up,
+    uniform float haze,
+    uniform float diffuse_horizontal_irradiance,
+    uniform float direct_normal_irradiance,
+    uniform float dew_point,
+    uniform float julian_date)
+{
+    perez_sun_and_sky_data data;
+
+    // sun direction
+    uniform float3 sun_dir = math::normalize(sun_direction);
+    sun_dir = arch_skyvectortweak(y_is_up, 0.001, sun_dir);
+
+    data.clamped_sun_dir = sun_dir;
+    data.factor = 1.0;
+    //!! sun below horizon factor...
+    if (data.clamped_sun_dir.z < 0.001)
+    {
+        if (data.clamped_sun_dir.z < 0.0)
+            data.factor = night_brightness_adjustment(data.clamped_sun_dir);
+
+        data.clamped_sun_dir.z = 0.001;
+        data.clamped_sun_dir = math::normalize(data.clamped_sun_dir);
+    }
+
+    data.turbidity = math::max(haze + 2.0f, 2.0f);
+
+    // perez coefficients
+    data.perez_data_xy = compute_perez_coefficients_preetham(data.turbidity, data.clamped_sun_dir.z);
+    data.perez_data_lum =  compute_perez_all_weather(
+        data.clamped_sun_dir.z,
+        diffuse_horizontal_irradiance,
+        direct_normal_irradiance,
+        dew_point,
+        julian_date,
+        data.perez_data_xy);
+
+    // compute unscaled sun color
+    data.sun_color = compute_unscaled_sun_illuminance(sun_dir, data.turbidity);
+    // scale to correct illuminance
+    data.sun_color *= data.perez_data_lum.sun_illuminance / math::luminance(data.sun_color);
+
+    // compute scale for sun disk size
+    uniform float2 disk_glow_scale = calc_physical_scale(
+        1.0 /* disk size scale */, 1.0 /* glow intensity */, 1.0 /* disk intensity */);
+    data.sun_disk_intensity_scale = disk_glow_scale.x;
+
+    // compute ground color
+    data.ground_luminance = (1.0 / math::PI) * (data.perez_data_lum.sky_illuminance_rgb + data.sun_color * data.clamped_sun_dir.z);
+
+    return data;
+}
+
+float3 calc_env_color(
+    perez_sun_and_sky_data data,
+    float3 dir)
+{
+    float cos_gamma = math::dot(data.clamped_sun_dir, dir);
+    if (cos_gamma > 1.f) cos_gamma = 2.0f - cos_gamma;
+    float gamma = math::acos(cos_gamma);
+    float cos_theta = dir.z;
+
+    // compute luminance
+    float luminance = data.perez_data_lum.perez_lum_scale * eval_perez(data.perez_data_lum.abcde.c, cos_theta, gamma, cos_gamma);
+
+    // compute chromaticity
+    float x = eval_perez(data.perez_data_xy.x, cos_theta, gamma, cos_gamma) * data.perez_data_xy.perez_x_scale;
+    float y = eval_perez(data.perez_data_xy.y, cos_theta, gamma, cos_gamma) * data.perez_data_xy.perez_y_scale;
+
+    // convert xyY to XYZ
+    float l_div_y = luminance / y;
+    float3 XYZ(x * l_div_y, luminance, l_div_y - (x + y) * l_div_y);
+
+    // convert CIE XYZ to sRGB
+    float3 result = float3(
+            3.241f * XYZ.x - 1.537f * XYZ.y - 0.499f * XYZ.z,
+           -0.969f * XYZ.x + 1.876f * XYZ.y + 0.042f * XYZ.z,
+            0.056f * XYZ.x - 0.204f * XYZ.y + 1.057f * XYZ.z);
+
+    if(!math::isfinite(result.x) || !math::isfinite(result.y) || !math::isfinite(result.z))
+        return float3(0.0);
+    else
+        return result;
+}
+
+
+
+export color perez_sun_and_sky(
+    uniform float direct_normal_irradiance = 500.0
+        [[
+            anno::description("Direct sun irradiance in W / m^2")
+        ]],
+    uniform float diffuse_horizontal_irradiance = 50.0
+        [[
+            anno::description("Diffuse horizontal sky irradiance in W / m^2 (excluding sun)")
+        ]],
+    uniform float3 sun_direction = float3(0.0, 0.229271, 0.418882)
+        [[
+            anno::description("Sun direction")
+        ]],
+    color ground_color = color(0.2, 0.2, 0.2)
+        [[
+            anno::description("Ground reflectivity")
+        ]],
+    uniform float horizon_blur = 0.1
+        [[
+            anno::description("Blur between ground and sky at the horizon")
+        ]],
+    uniform bool y_is_up = true
+        [[
+            anno::description("Sun direction is y-up coordinates")
+        ]],
+    uniform float julian_date = 180.0
+        [[
+            anno::description("Day in year")
+        ]],
+    uniform float dew_point = 11.0
+        [[
+            anno::description("Dew point in degree Celsius")
+        ]],
+    uniform float haze = 0.5
+        [[
+            anno::description("Haze value to compute chromaticity of the sky (in analogy to base::sun_and_sky)")
+        ]]
+)
+[[
+    anno::description("Perez all weather sun and sky model."),
+    anno::noinline()
+]]
+{
+    // precompute uniform data
+    uniform perez_sun_and_sky_data data = perez_sun_and_sky_init(
+        sun_direction,
+        y_is_up,
+        haze,
+        diffuse_horizontal_irradiance,
+        direct_normal_irradiance,
+        dew_point,
+        julian_date);
+
+
+    float3 dir = arch_skyvectortweak(y_is_up, 0.001, state::direction());
+    float3 clamped_dir = dir;
+    if( clamped_dir.z < 0.001)
+        clamped_dir.z = 0.001;
+
+
+    float3 skycolor(0.0);
+    if (data.factor > 0.0)
+    {
+        skycolor = calc_env_color(data, clamped_dir);
+        if (data.factor < 1.0f)
+            skycolor *= data.factor;
+    }
+
+    skycolor += calc_sun_disk_color(data.sun_color, data.turbidity, dir, data.clamped_sun_dir, data.sun_disk_intensity_scale);
+
+    float3 ground_color_rgb = float3(ground_color);
+    /* Tweak output for down-pointing values */
+    if (dir.z <= 0.0f)
+    {
+        float3 downcolor = data.ground_luminance * ground_color_rgb;
+
+        if (data.factor < 1.0f)
+            downcolor *= data.factor;
+
+        float hor_blur = horizon_blur * .1;
+        if (hor_blur > 0.0f)
+        {
+            float dness = -dir.z / hor_blur;
+            if (dness > 1.0f)
+                dness = 1.0f;
+            else
+                dness = dness*dness*(3.0f-2.0f*dness);
+
+            skycolor = skycolor + (downcolor-skycolor)*dness;
+        }
+        else // Just use the downcolor as-is
+            skycolor = downcolor;
+    }
+    skycolor = math::max(skycolor, float3(0.0));
+
+    return color(skycolor);
+}
+
+int texremapu( int texres, int crop_ofs, int texi_in, tex::wrap_mode wrap )
+{
+    int texi = texi_in;
+    // Wrap or Clamp
+    if (wrap == tex::wrap_clamp) {
+        int newval = math::clamp(texi, 0, texres-1);
+        // Texture is clipped if UV was clamped
+
+
+        texi = newval;
+    }
+    else {
+        int s = texi < 0 ? 1 : 0; // extract sign to handle all < 0 magic below
+        int d = texi / texres;
+        texi = texi % texres;  // texi -= d * texres;
+        int alternate = wrap == tex::wrap_mirrored_repeat?1:0;
+        int a = alternate & (d ^ s) & 1;
+        bool altu = (a != 0);
+        if(altu)   // if alternating, negative tex has to be flipped, could also be: (tex^-a)+a (-m = (m^-1)+1)
+            texi = -texi;
+        if(s != a) // "otherwise" negative tex will be padded back to positive
+            texi += texres-1;
+    }
+
+    // Crop
+    texi += crop_ofs;
+    return texi;
+}
+
+int2 texremapu( int2 texres, int2 crop_ofs, float2 tex, tex::wrap_mode wrap_u, tex::wrap_mode wrap_v )
+{
+    return int2( texremapu(texres.x, crop_ofs.x, int(tex.x), wrap_u),
+                 texremapu(texres.y, crop_ofs.y, int(tex.y), wrap_v));
+}
+
+float texel_average(uniform texture_2d texture, int2 coord)
+{
+    return math::average(tex::texel_color(texture, coord));
+}
+
+float texel_alpha(uniform texture_2d texture, int2 coord)
+{
+    return tex::texel_float4(texture, coord).w;
+}
+float texel_luminance(uniform texture_2d texture, int2 coord)
+{
+    return math::luminance(tex::texel_color(texture, coord));
+}
+float texel_maximum(uniform texture_2d texture, int2 coord)
+{
+    return math::max_value(tex::texel_color(texture, coord));
+}
+float texel_lookup(uniform texture_2d texture, int2 coord,uniform mono_mode bump_source = mono_average)
+{
+    switch (bump_source){
+    case mono_average:
+        return  texel_average(texture, coord);
+    case mono_alpha:
+        return  texel_alpha(texture, coord);
+    case mono_luminance:
+        return  texel_luminance(texture, coord);
+    case mono_maximum:
+        return  texel_maximum(texture, coord);
+    }
+}
+
+float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, uniform mono_mode bump_source=mono_average)
+{
+    return
+        texel_lookup(texture, int2(texi.x, texi.y),bump_source) * st.z +
+        texel_lookup(texture, int2(texi.z, texi.y),bump_source) * st.y +
+        texel_lookup(texture, int2(texi.x, texi.w),bump_source) * st.w +
+        texel_lookup(texture, int2(texi.z, texi.w),bump_source) * st.x;
+}
+
+export float3 file_bump_texture(
+    uniform texture_2d texture
+        [[ anno::description("The input texture") ]],
+    uniform float factor = 1.0f
+        [[ anno::description("Determines the degree of bumpiness") ]],
+    uniform mono_mode bump_source=mono_average
+        [[
+            anno::description("Defines what value to use for computing the slope of the bump")
+        ]],
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[ anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.") ]],
+    uniform float2 crop_u = float2( 0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the u direction") ]],
+    uniform float2 crop_v = float2( 0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the v direction") ]],
+    uniform tex::wrap_mode wrap_u = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the u direction") ]],
+    uniform tex::wrap_mode wrap_v = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the v direction") ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]],
+    uniform bool clip = false
+        [[
+            anno::description("deprecated, usewrap_mode=tex::wrap_clip. Defines wrap_clamp behavior. If true, lookup outside [0,1] results in no bump"),
+            anno::hidden()
+        ]]
+
+)
+[[
+    anno::description("Computes a normal based on a heightfield-style bump texture"),
+    anno::noinline()
+]]
+{
+    int width = tex::width(texture), height = tex::height(texture);
+    if (width == 0 || height == 0 || // avoid division by zero in texremapu for invalid resource
+        factor == 0.0f)
+        return normal;
+
+    float2 bump_texspace;
+    {
+        if (clip) {
+            if (wrap_u == tex::wrap_clamp && (uvw.position.x < 0. || uvw.position.x > 1.)) {
+                return normal;
+            }
+            if (wrap_v == tex::wrap_clamp && (uvw.position.y < 0. || uvw.position.y > 1.)) {
+                return normal;
+            }
+        }
+        if (wrap_u == tex::wrap_clip && (uvw.position.x < 0. || uvw.position.x > 1.)) {
+            return normal;
+        }
+        if (wrap_v == tex::wrap_clip && (uvw.position.y < 0. || uvw.position.y > 1.)) {
+            return normal;
+        }
+    }
+
+    int2 crop_ofs(    int(width * crop_u.x), int(height * crop_v.x) );
+    int2 crop_texres( int(width * (crop_u.y-crop_u.x)), int(height * (crop_v.y-crop_v.x)) );
+    float2 tex2( uvw.position.x * crop_texres.x, uvw.position.y * crop_texres.y );
+    int2 texi0 = texremapu( crop_texres, crop_ofs, float2(tex2.x - 1.f, tex2.y - 1.f), wrap_u, wrap_v );
+    int2 texi1 = texremapu( crop_texres, crop_ofs, tex2, wrap_u, wrap_v );
+    int2 texi2 = texremapu( crop_texres, crop_ofs, float2(tex2.x + 1.f, tex2.y + 1.f), wrap_u, wrap_v );
+    int2 texi3 = texremapu( crop_texres, crop_ofs, float2(tex2.x + 2.f, tex2.y + 2.f), wrap_u, wrap_v );
+
+    float2 lerp( tex2.x - math::floor(tex2.x), tex2.y - math::floor(tex2.y));
+    lerp.x *= lerp.x*lerp.x*(lerp.x*(lerp.x*6.f-15.f)+10.f); // smootherstep
+    lerp.y *= lerp.y*lerp.y*(lerp.y*(lerp.y*6.f-15.f)+10.f);
+    float4 st(lerp.x*lerp.y, lerp.x*(1.0f-lerp.y), (1.0f-lerp.x)*(1.0f-lerp.y), (1.0f-lerp.x)*lerp.y);
+    bump_texspace = float2(
+        (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source)
+            - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source)) * (-factor),
+        (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source)
+            - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source)) * (-factor));
+
+    float3 result = normal + uvw.tangent_u * bump_texspace.x + uvw.tangent_v * bump_texspace.y;
+    return math::normalize(result);
+}
+
+
+export float3 tangent_space_normal_texture(
+    uniform texture_2d texture
+        [[ anno::description("The input texture") ]],
+    uniform float factor = 1.0f
+        [[ anno::description("Determines the degree of bumpiness") ]],
+    uniform bool flip_tangent_u = false
+        [[ anno::description("Can be used to fix mismatches between the object's tangent space and the normal map's tangent space") ]],
+    uniform bool flip_tangent_v = false
+        [[ anno::description("Can be used to fix mismatches between the object's tangent space and the normal map's tangent space") ]],
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[ anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.") ]],
+    uniform float2 crop_u = float2( 0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the u direction") ]],
+    uniform float2 crop_v = float2( 0.0, 1.0)
+        [[ anno::description("Restricts the texture access to sub-domain of the texture in the v direction") ]],
+    uniform tex::wrap_mode wrap_u = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the u direction") ]],
+    uniform tex::wrap_mode wrap_v = tex::wrap_repeat
+        [[ anno::description("Wrapping mode in the v direction") ]],
+    uniform bool clip = false
+        [[
+            anno::description("deprecated, usewrap_mode=tex::wrap_clip. Defines wrap_clamp behavior. If true, lookup outside [0,1] results in no bump"),
+            anno::hidden()
+        ]],
+    uniform float scale = 1.
+        [[
+            anno::description("Scales the value red from the texture file. Can be used to adapt to different normal map formats"),
+            anno::unused()
+        ]],
+    uniform float offset = 0.
+        [[
+            anno::description("Offset applied to the value red from the texture file. Can be used to adapt to different normal map formats"),
+            anno::unused()
+        ]]
+)
+[[
+    anno::description("Interprets the color values of a bitmap as a vector in tangent space"),
+    anno::noinline()
+]]
+{
+    if (tex::width(texture) == 0 || tex::height(texture) == 0 || // avoid division by zero in texremapu for invalid resource
+        factor == 0.0f)
+        return state::normal();
+    {
+        if (clip) {
+            if (wrap_u == tex::wrap_clamp && (uvw.position.x < 0. || uvw.position.x > 1.)) {
+                return state::normal();
+            }
+            if (wrap_v == tex::wrap_clamp && (uvw.position.y < 0. || uvw.position.y > 1.)) {
+                return state::normal();
+            }
+        }
+        if (wrap_u == tex::wrap_clip && (uvw.position.x < 0. || uvw.position.x > 1.)) {
+            return state::normal();
+        }
+        if (wrap_v == tex::wrap_clip && (uvw.position.y < 0. || uvw.position.y > 1.)) {
+            return state::normal();
+        }
+    }
+    bool pixel_flip_u = flip_tangent_u;
+    bool pixel_flip_v = flip_tangent_v;
+    //if we mirror repeat a tangent space texture, tangent space needs to be flipped for every other tile
+    if (wrap_u == tex::wrap_mirrored_repeat) {
+        if( uvw.position.x > 0. && int(uvw.position.x) % 2 == 1)
+            pixel_flip_u = ! pixel_flip_u;
+        else if( uvw.position.x < 0. && int(uvw.position.x) % 2 == 0)
+            pixel_flip_u = ! pixel_flip_u;
+    }
+    if (wrap_v == tex::wrap_mirrored_repeat) {
+        if( uvw.position.y > 0. && int(uvw.position.y) % 2 == 1)
+            pixel_flip_v = ! pixel_flip_v;
+        else if( uvw.position.y < 0. && int(uvw.position.y) % 2 == 0)
+            pixel_flip_v = ! pixel_flip_v;
+    }
+
+    float3 transformed_tangent_u = uvw.tangent_u;
+    float3 transformed_tangent_v = uvw.tangent_v;
+
+    if (pixel_flip_u)
+        transformed_tangent_u=-transformed_tangent_u;
+    if (pixel_flip_v)
+        transformed_tangent_v=-transformed_tangent_v;
+
+    float3 tangent_space_normal =
+        (tex::lookup_float3(texture,float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v,  crop_u, crop_v) - float3(0.5)) * (2.0 * factor);
+
+    return math::normalize(
+        transformed_tangent_u * tangent_space_normal.x +
+        transformed_tangent_v * tangent_space_normal.y +
+        state::normal() * (tangent_space_normal.z + (1.0 - factor)));
+}
+
+float saturation(color rgb)
+{
+    float max = math::max_value(rgb);
+    return (max != 0.0f) ? (1.0f - math::min_value(rgb)/max) : 0.0f;
+}
+
+float hue(float3 rgb)
+{
+    float max = math::max_value(rgb);
+    float min = math::min_value(rgb);
+    float range = max - min;
+    float inv_range = 1.0f/range;
+
+    float hue = (range != 0.0f) ?
+        (1.0f/6.0f) * (                                     // 60.0/360.0
+        (max == rgb.x) ? ((rgb.y-rgb.z)*inv_range)          // R is max
+        : (max == rgb.y) ? (2.0f + (rgb.z-rgb.x)*inv_range) // G is max
+        : (4.0f + (rgb.x-rgb.y)*inv_range)                  // B is max
+        )
+
+        : 0.0f;                                             // hue is undefined (assume 0)
+
+    return (hue >= 0.0f) ? hue : (hue + 1.0f);
+}
+
+float3 hsv_to_rgb(float3 hsv)
+{
+    // from "Color Imaging, Fundamentals and Applications", Reinhard et al., p. 442
+
+    // A hue of 1.0 is questionably valid, and needs to be interpreted as 0.0f
+    float h_prime = (hsv.x != 1.0f) ? hsv.x * 6.0f : 0.0f; // H * 360.0/60.0
+    float h_floor = math::floor(h_prime);
+    float f = h_prime - h_floor;
+    float zy = hsv.z*hsv.y;
+    float a = hsv.z - zy;
+    float b = hsv.z - zy*f;
+    float c = a + zy*f;
+
+    switch(int(h_floor))
+    {
+    default:
+
+        // fall through...
+    case 0:
+        return float3(hsv.z, c, a);
+    case 1:
+        return float3(b, hsv.z, a);
+    case 2:
+        return float3(a, hsv.z, c);
+    case 3:
+        return float3(a, b, hsv.z);
+    case 4:
+        return float3(c, a, hsv.z);
+    case 5:
+        return float3(hsv.z, a, b);
+    }
+}
+
+color blend_colors(
+    color top,
+    color bottom,
+    float weight,
+    uniform color_layer_mode mode
+    )
+[[
+    anno::description("Helper function for texture blending"),
+    anno::noinline()
+]]
+{
+    color op_result = top;
+
+    switch (mode) {
+    case color_layer_add:
+        op_result += bottom;
+        break;
+    case color_layer_multiply:
+        op_result *= bottom;
+        break;
+    case color_layer_screen:
+        op_result += bottom - top * bottom;
+        break;
+    case color_layer_overlay:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            float3 mul = base_color*blend_color;
+            float3 add = base_color+blend_color;
+            if (base_color.x >= .5) mul.x = add.x-mul.x-0.5;
+            if (base_color.y >= .5) mul.y = add.y-mul.y-0.5;
+            if (base_color.z >= .5) mul.z = add.z-mul.z-0.5;
+            op_result = color(mul+mul);
+        }
+        break;
+    case color_layer_brightness:
+        {
+            float top_brightness = math::max_value(top);
+            float bottom_brightness = math::max_value(bottom);
+            op_result = (bottom_brightness == 0)
+                ? color(top_brightness)
+                : bottom * (top_brightness / bottom_brightness);
+        }
+        break;
+    case color_layer_color:
+        {
+            float top_brightness = math::max_value(top);
+            float bottom_brightness = math::max_value(bottom);
+            op_result = (top_brightness == 0)
+                ? color(bottom_brightness)
+                : top * (bottom_brightness / top_brightness);
+        }
+        break;
+    case color_layer_exclusion:
+        op_result = bottom + top - bottom * top * 2;
+        break;
+    case color_layer_average:
+        op_result = (bottom + top) * 0.5;
+        break;
+    case color_layer_lighten:
+        op_result = math::max(top, bottom);
+        break;
+    case color_layer_darken:
+        op_result = math::min(top, bottom);
+        break;
+    case color_layer_sub:
+        op_result = bottom + top - 1;
+        break;
+    case color_layer_negation:
+        op_result = 1 - math::abs(1 - (bottom + top));
+        break;
+    case color_layer_difference:
+        op_result = math::abs(top - bottom);
+        break;
+    case color_layer_softlight:
+        {
+            float3 t_rgb = top;
+            float r = t_rgb.x;
+            float g = t_rgb.y;
+            float b = t_rgb.z;
+
+            float3 b_rgb = bottom;
+            float b_r = b_rgb.x;
+            float b_g = b_rgb.y;
+            float b_b = b_rgb.z;
+
+            r = (r < 0.5)
+                ? 2.0 * (r * b_r + b_r * b_r * (0.5 - r))
+                : 2.0 * (math::sqrt(b_r) * (r - 0.5) + b_r - r * b_r);
+            g = (g < 0.5)
+                ? 2.0 * (g * b_g + b_g * b_g * (0.5 - g))
+                : 2.0 * (math::sqrt(b_g) * (g - 0.5) + b_g - g * b_g);
+            b = (b < 0.5)
+                ? 2.0 * (b * b_b + b_b * b_b * (0.5 - b))
+                : 2.0 * (math::sqrt(b_b) * (b - 0.5) + b_b - b * b_b);
+            op_result = color(r, g, b);
+        }
+        break;
+    case color_layer_colordodge:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            op_result = color((blend_color.x == 1.0f) ? 1.0f : math::min(base_color.x/(1.0f-blend_color.x), 1.0f),
+                (blend_color.y == 1.0f) ? 1.0f : math::min(base_color.y/(1.0f-blend_color.y), 1.0f),
+                (blend_color.z == 1.0f) ? 1.0f : math::min(base_color.z/(1.0f-blend_color.z), 1.0f));
+        }
+        break;
+    case color_layer_reflect:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            op_result = color((blend_color.x == 1.0f) ? 1.0f :  math::min(base_color.x*base_color.x/(1.0f-blend_color.x), 1.0f),
+                (blend_color.y == 1.0f) ? 1.0f : math::min(base_color.y*base_color.y/(1.0f-blend_color.y), 1.0f),
+                (blend_color.z == 1.0f) ? 1.0f : math::min(base_color.z*base_color.z/(1.0f-blend_color.z), 1.0f));
+        }
+        break;
+    case color_layer_colorburn:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            op_result = color(
+                (blend_color.x == 0.0f) ? 0.0f : math::max(1.0f-(1.0f-base_color.x)/blend_color.x, 0.0f),
+                (blend_color.y == 0.0f) ? 0.0f : math::max(1.0f-(1.0f-base_color.y)/blend_color.y, 0.0f),
+                (blend_color.z == 0.0f) ? 0.0f : math::max(1.0f-(1.0f-base_color.z)/blend_color.z, 0.0f));
+        }
+        break;
+    case color_layer_phoenix:
+        op_result = math::min(top, bottom) - math::max(top, bottom) + 1.0f;
+        break;
+    case color_layer_hardlight:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            float3 mul =  base_color*blend_color;
+            float3 add = base_color+blend_color;
+            if (blend_color.x > 0.5f) mul.x = add.x - mul.x - 0.5f;
+            if (blend_color.y > 0.5f) mul.y = add.y - mul.y - 0.5f;
+            if (blend_color.z > 0.5f) mul.z = add.z - mul.z - 0.5f;
+            op_result = color(mul+mul);
+        }
+        break;
+    case color_layer_pinlight:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            op_result = color(
+                (((blend_color.x > 0.5f) && (blend_color.x > base_color.x)) || !((blend_color.x > 0.5f) || (blend_color.x > base_color.x))) ? blend_color.x : base_color.x,
+                (((blend_color.y > 0.5f) && (blend_color.y > base_color.y)) || !((blend_color.y > 0.5f) || (blend_color.y > base_color.y))) ? blend_color.y : base_color.y,
+                (((blend_color.z > 0.5f) && (blend_color.z > base_color.z)) || !((blend_color.z > 0.5f) || (blend_color.z > base_color.z))) ? blend_color.z : base_color.z);
+        }
+        break;
+    case color_layer_hardmix:
+        {
+            float3 blend_color = float3(top);
+            float3 base_color = float3(bottom);
+            op_result = color(
+                (blend_color.x+base_color.x <= 1.0f) ? 0.0f : 1.0f,
+                (blend_color.y+base_color.y <= 1.0f) ? 0.0f : 1.0f,
+                (blend_color.z+base_color.z <= 1.0f) ? 0.0f : 1.0f);
+        }
+        break;
+    case color_layer_lineardodge:
+        op_result = math::min(top+bottom, 1.0);
+        break;
+    case color_layer_linearburn:
+        op_result = math::max(top+bottom-1.0, 0.0);
+        break;
+    case color_layer_spotlight:
+        op_result *= bottom*2;
+        break;
+    case color_layer_spotlightblend:
+        op_result = top*bottom + bottom;
+        break;
+    case color_layer_hue:
+        op_result = color(hsv_to_rgb(
+            float3(
+                hue(float3(top)),
+                saturation(bottom),
+                math::max_value(bottom))));
+        break;
+    case color_layer_saturation:
+        op_result = color(hsv_to_rgb(
+            float3(
+                hue(float3(bottom)),
+                saturation(top),
+                math::max_value(bottom))));
+        break;
+    case color_layer_blend:
+    default:
+        break;
+    }
+
+    return math::lerp( bottom, op_result, weight );
+}
+
+
+export texture_return blend_color_layers(
+    color_layer[<P>] layers
+        [[ anno::description("Array of structs describing the layers to blend") ]],
+    color base = color(0.0)
+        [[ anno::description("Color of initial layer") ]],
+    uniform mono_mode mono_source = mono_average
+        [[
+            anno::description("Defines how mono_result is computed")
+        ]]
+)
+[[
+    anno::description("Texture layering functionality similar to the functionality known from painting programs "),
+    anno::noinline()
+]]
+{
+    color result = base;
+    for (int i = 0; i < P; ++i) {
+        result = blend_colors(layers[i].layer_color, result, layers[i].weight, layers[i].mode);
+    }
+    float mono;
+    switch (mono_source){
+    case mono_average:
+        mono = math::average(result);
+        break;
+    case mono_luminance:
+        mono = math::luminance(result);
+        break;
+    case mono_maximum:
+    default:
+        mono = math::max_value(result);
+        break;
+    }
+    return texture_return(result,mono);
+}
+
+float sqr_cbrtf(float x)
+{
+    return math::pow(x,2./3.);
+}
+float gradient_interpolate(gradient_interpolation_mode type, float value)
+{
+    switch(type)
+    {
+    case gradient_interpolation_linear:
+        return value;
+    case gradient_interpolation_off:
+        return 0.0f;
+    case gradient_interpolation_ease_in: //!! opt. unify with below variations
+        return 1.0f - sqr_cbrtf(1.0f - value);
+    case gradient_interpolation_ease_out:
+        return sqr_cbrtf(value);
+    case gradient_interpolation_ease_in_out:
+        // Ease in-out:
+        // 0.5 = 0.5
+        // 0.25 = 0.3
+        // 0.75 = 0.69
+        // < 0.5: ease out
+        // > 0.5: ease in
+        // compress each such that it transitions around 0.5
+        return (value <= 0.5f)
+            ?
+
+
+            sqr_cbrtf(0.70710678f*value)
+            :
+
+
+            1.0f - sqr_cbrtf(0.70710678f - 0.70710678f*value);
+    }
+}
+
+float gradient_get_position(gradient_mode type, float2 tex_in)
+{
+    // Get the fractional UV
+    float2 tex = float2(
+        tex_in.x - math::floor(tex_in.x),
+        tex_in.y - math::floor(tex_in.y));
+
+    switch(type)
+    {
+    case gradient_linear:
+        return tex.x;
+    case gradient_squared:
+        return tex.x * tex.x;
+    case gradient_box:
+        // Linear from center to edge
+        return math::max(math::abs(tex.x - 0.5f), math::abs(tex.y - 0.5f)) * 2.0f;
+    case gradient_diagonal:
+        // Linear, diagonally, from center to upper-left and lower-right corners
+        // Calculate distance from diagonal
+        return 1.4142135623730950488f*math::abs(tex.x - tex.y); // sqrt(2)
+    case gradient_90_degree: //!! opt. unify with 90deg below
+        if(tex.x > tex.y)
+            return 1.0f - (tex.y / tex.x) * 0.5f;
+        else if(tex.y > tex.x)
+            return (tex.x / tex.y) * 0.5f;
+        else    // Covers cases when one of them is zero
+            return 0.5f;
+    case gradient_symmetric_90_degree:
+        if(tex.x > tex.y)
+            return tex.y / tex.x;
+        else if(tex.y > tex.x)
+            return tex.x / tex.y;
+        else    // Covers cases when one of them is zero
+            return 1.0f;
+    case gradient_radial: //!! opt. unify with 360deg below
+        // Distance from center
+        {
+            float dist_x = tex.x - 0.5f;
+            float dist_y = tex.y - 0.5f;
+            return 2.0f * math::sqrt(dist_x*dist_x+ dist_y*dist_y);
+        }
+    case gradient_360_degree:
+        {
+            // Consider two vectors (0,1) and tex, and calculate the angle between them.
+            // Center the coord around the (0.5, 0.5)
+            float dist_x = tex.x - 0.5f;
+            float dist_y = tex.y - 0.5f;
+            // Vector must be normalized.
+
+            float ret = math::acos(dist_y/math::sqrt(dist_x*dist_x+ dist_y*dist_y)) * (0.5 / math::PI);
+            return (dist_x < 0.0f) ? ret : (1.0f - ret);
+        }
+    }
+}
+
+// Returns the color at the given position in the gradient
+color gradient_get_color(
+    float    position,
+    gradient_interpolation_mode[3] interpolation_modes,
+    color[3]   grad_color,
+    float[3] grad_position)
+{
+    if(position <= grad_position[0])
+    {
+        return grad_color[0];
+    }
+    else if(position >= grad_position[2])
+    {
+        return grad_color[2];
+    }
+    else
+    {
+
+        int index = (position >= grad_position[1]) ?
+        ((position >= grad_position[2]) ? 2 : 1)
+        : 0;
+
+        float rel_pos = gradient_interpolate(
+            // Use the left position for the interpolation type
+            interpolation_modes[index],
+            // No need to check for denom of 0, previous checks ensure that position is not the same as pos0 or pos3
+            (position - grad_position[index]) / (grad_position[index+1] - grad_position[index]));
+
+        // linear interpolation
+        return grad_color[index] + (grad_color[index+1] - grad_color[index])*rel_pos;
+    }
+}
+
+export texture_return gradient3_texture(
+    uniform gradient_mode mode = gradient_linear
+        [[
+            anno::description("Mode of gradient calculation, describes shape of the gradient")
+        ]],
+    float[3] gradient_positions = float[]( 0.0, 0.5, 1.0 )
+        [[
+            anno::description("Position of the gradient colors")
+        ]],
+    color[3] gradient_colors = color[]( color(0.0), color(0.5), color(1.0))
+        [[
+            anno::description("Colors at the positions")
+        ]],
+    gradient_interpolation_mode[3] interpolation_modes = gradient_interpolation_mode[](
+        gradient_interpolation_linear, gradient_interpolation_linear, gradient_interpolation_linear )
+        [[
+            anno::description("Interpolation mode between gradient colors")
+        ]],
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    float distortion = 0.0
+        [[
+            anno::description("Distortion value to be added to the position inside the gradient")
+        ]]
+)
+[[
+    anno::description("Gradient calculated from three colors at three positions"),
+    anno::noinline()
+]]
+{
+    // Get the position in the gradient
+    float position = gradient_get_position(mode, float2(uvw.position.x, uvw.position.y)) + distortion;
+
+    color grad_color = gradient_get_color(
+        position,
+        interpolation_modes,
+        gradient_colors,
+        gradient_positions);
+    return texture_return(grad_color,math::luminance(grad_color));
+}
+
+
+export float3 gradient3_bump_texture(
+    uniform gradient_mode mode = gradient_linear
+        [[
+            anno::description("Mode of gradient calculation, describes shape of the gradient")
+        ]],
+    float[3] gradient_positions = float[]( 0.0, 0.5, 1.0 )
+        [[
+            anno::description("Position of the gradient colors")
+        ]],
+    color[3] gradient_colors = color[]( color(0.0), color(0.5), color(1.0) )
+        [[
+            anno::description("Colors at the positions")
+        ]],
+    gradient_interpolation_mode[3] interpolation_modes = gradient_interpolation_mode[](
+        gradient_interpolation_linear,gradient_interpolation_linear,gradient_interpolation_linear )
+        [[
+            anno::description("Interpolation mode between gradient colors")
+        ]],
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    float distortion = 0.0
+        [[
+            anno::description("Distortion value to be added to the position inside the gradient")
+        ]],
+    float scale = 1.0
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Gradient for bump mapping calculated from three colors at three positions"),
+    anno::noinline()
+]]
+{
+    if (scale == 0.0f)
+        return normal;
+
+    const float delta = 0.0025f; //!! magic, looks good with this value
+
+    // Here we evaluate the gradient color at three different positions. The sub-maps are not evaluated
+    // at three different positions.
+
+    float2[3] offsets;
+    offsets[0] = float2(0.0f, 0.0f);
+    offsets[1] = float2(delta,0.0f);
+    offsets[2] = float2(0.0f,delta);
+
+    color[3] results;
+
+    float2 tex(uvw.position.x, uvw.position.y);
+    for(int i = 0; i < 3; ++i)
+    {
+        // Get the position in the gradient
+        float position = gradient_get_position(mode, tex + offsets[i]) + distortion;
+        results[i] = gradient_get_color(
+            position,
+            interpolation_modes,
+            gradient_colors,
+            gradient_positions);
+    }
+    return math::normalize(
+        normal  +
+        uvw.tangent_v * math::average(results[2] - results[0])   * scale/delta     +
+        uvw.tangent_u * math::average(results[1] - results[0])   * scale/delta   );
+}
+
+
+export texture_return gradient3_recolor(
+    float[3] gradient_positions = float[]( 0.0, 0.5, 1.0 )
+        [[
+            anno::description("Position of the gradient colors")
+        ]],
+    color[3] gradient_colors = color[]( color(0.0), color(0.5), color(1.0) )
+        [[
+            anno::description("Colors at the positions")
+        ]],
+    gradient_interpolation_mode[3] interpolation_modes = gradient_interpolation_mode[](
+        gradient_interpolation_linear,gradient_interpolation_linear,gradient_interpolation_linear)
+        [[
+            anno::description("Mode of gradient calculations")
+        ]],
+    uniform mono_mode mono_source = mono_alpha
+        [[
+            anno::description("deprecated, has no effect in gradient3 recolor"),
+            anno::hidden(),
+            anno::unused()
+        ]],
+    float distortion = 0.0
+        [[
+            anno::description("Distortion value to be added to the position inside the gradient")
+        ]],
+    float position = 0.0
+        [[
+            anno::description("Value driving the gradient calculation")
+        ]]
+)
+[[
+    anno::description("Function mapping an arbitrary float value into a gradient. Can be used to re-color textures"),
+    anno::noinline()
+]]
+{
+    color result = gradient_get_color(
+            position + distortion,
+            interpolation_modes,
+            gradient_colors,
+            gradient_positions);
+    return texture_return(result,math::luminance(result));
+}
+
+float eval_checker(float3 position, float checker_position,float blur )
+{
+    position.z +=math::min(checker_position, 1.0f-checker_position)*0.5f;
+
+    // Get the fractional UV
+    float3 tex = position - math::floor(position);
+
+    // Determine what part of the checker we're in
+    bool in_color1 =
+        ((tex.x-checker_position) < 0.0f) ^ ((tex.y-checker_position) < 0.0f) ^ ((tex.z-checker_position) < 0.0f);
+
+    // Calculate distance to the closest edge in each dimension
+    float3 edge_dist = math::min(tex, math::min(1.0f - tex, math::abs(tex - float3(checker_position))));
+
+    // Calculate the amount of blending for each dimension, where 1.0 means no blending and 0.0 means full blending
+    // Total amount of blending by combining the blends from all dimensions to get smoother corners.
+    // Scaled to [0.0, 0.5].
+    float blend_amount = (blur > edge_dist.x) ? (edge_dist.x / blur)*0.5f : 0.5f;
+    if (blur > edge_dist.y)
+        blend_amount *= edge_dist.y / blur;
+    if (blur > edge_dist.z)
+        blend_amount *= edge_dist.z / blur;
+    return in_color1 ? (0.5f+blend_amount) : (0.5f-blend_amount);
+}
+
+export texture_return checker_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    color color1 = color(0)
+        [[
+            anno::description("Color of the even tiles of the checker function")
+        ]],
+    color color2 = color(1)
+        [[
+            anno::description("Color of the odd tiles of the checker function")
+        ]],
+    uniform float blur = 0 //checker_blend_size
+        [[
+            anno::description("Softens the border between tiles")
+        ]],
+    uniform float checker_position = 0.5
+        [[
+            anno::description("Ratio of division. Values other than .5 produce non square tiles")
+        ]]
+)
+[[
+    anno::description("3D color checker pattern"),
+    anno::noinline()
+]]
+{
+    float sn = eval_checker(uvw.position, checker_position,blur );
+    color col = math::lerp(color2, color1, sn);
+    return texture_return(col, math::luminance(col));
+}
+
+export float3 checker_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float factor = 1
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    uniform float blur = 0.0
+        [[
+            anno::description("Softens the border between tiles"),
+            anno::hard_range(0.0, 1.0)
+         ]],
+    uniform float checker_position = 0.5
+        [[
+            anno::description("Ratio of division. Values other than .5 produce non square tiles")
+        ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("3D bump mapping checker pattern"),
+    anno::noinline()
+]]
+{
+    if (factor == 0.0f)
+        return normal;
+
+    float delta = 0.025f; //!! magic, looks good with this value
+
+    float3[4] offsets;
+    offsets[0] = float3(0.0f, 0.0f,0.0f);
+    offsets[1] = float3(delta,0.0f,0.0f);
+    offsets[2] = float3(0.0f,delta,0.0f);
+    offsets[3] = float3(0.0f, 0.0f,delta);
+
+    float[4] results;
+    for(int i = 0; i < 4; ++i) {
+        results[i] = eval_checker(uvw.position+ offsets[i], checker_position,blur );
+    }
+    return math::normalize(
+        normal    * (math::abs(results[3]-results[0])  * factor +1.) +
+        uvw.tangent_u * (results[1]-results[0])        * factor  +
+        uvw.tangent_v * (results[2]-results[0])        * factor);
+}
+
+struct noise_return
+{
+    float3 grad;
+    float val = 0.0;
+};
+
+const int[256] rnd1(151,160,137,91,90,15,
+    131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
+    190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
+    88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
+    77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
+    102,143,54, 65,25,63,161, 1,216,80,73,209,76,132,187,208, 89,18,169,200,196,
+    135,130,116,188,159,86,164,100,109,198,173,186, 3,64,52,217,226,250,124,123,
+    5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,
+    223,183,170,213,119,248,152, 2,44,154,163, 70,221,153,101,155,167, 43,172,9,
+    129,22,39,253, 19,98,108,110,79,113,224,232,178,185, 112,104,218,246,97,228,
+    251,34,242,193,238,210,144,12,191,179,162,241, 81,51,145,235,249,14,239,107,
+    49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
+    138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180);
+
+const int[256] rnd2(120,73,105,71,106,25,159,92,184,93,179,181,
+    51,168,252,235,114,143,108,82,4,72,9,192,214,112,12,200,188,8,187,117,157,88,70,87,
+    56,38,115,96,59,24,215,231,123,44,144,119,243,245,212,249,197,109,76,66,183,58,232,
+    113,86,234,203,80,163,254,140,62,174,118,167,18,55,99,126,170,52,149,156,142,89,189,
+    178,240,255,251,169,226,236,153,223,219,54,130,133,7,173,77,242,190,1,122,27,147,196,
+    180,238,124,145,101,195,57,61,39,53,154,45,47,107,233,20,176,83,36,136,138,15,230,
+    246,94,69,6,135,132,29,131,172,199,228,177,182,216,134,151,95,17,218,155,19,175,41,
+    191,85,23,160,125,248,42,209,165,110,102,79,221,32,26,217,2,46,81,74,16,63,202,220,
+    37,75,205,13,21,68,148,40,253,241,250,141,164,35,104,49,50,224,166,247,208,162,193,
+    150,30,14,10,60,98,207,84,11,239,100,116,152,90,225,129,128,64,28,158,186,127,97,
+    204,206,65,5,194,91,67,198,48,111,211,227,229,237,244,43,146,139,222,137,201,22,103,
+    210,34,213,31,0,33,185,161,78,121,171,3);
+
+const int[256] rnd3(
+    88,147,251,140,206,77,107,169,5,222,84,97,116,234,24,90,201,133,40,216,229,34,37,
+    158,186,49,98,61,47,9,124,123,65,249,2,66,76,172,198,179,218,210,78,170,132,32,60,
+    110,213,223,151,225,115,83,180,161,42,41,164,250,233,70,231,27,217,244,114,96,183,
+    228,63,195,236,192,177,209,246,109,171,72,101,23,35,112,182,162,57,69,146,81,248,215,
+    7,154,178,252,136,55,150,8,1,142,167,199,39,3,14,135,152,74,33,243,121,13,181,26,211,
+    19,64,168,58,67,52,143,113,43,25,240,166,59,4,187,53,238,103,159,220,204,208,245,85,
+    122,62,120,93,191,224,16,68,80,226,207,134,188,73,232,102,125,196,254,253,130,241,
+    46,119,38,94,221,153,100,163,175,242,131,255,214,87,139,92,12,203,117,219,21,239,6,
+    31,20,44,50,28,111,141,18,157,145,11,30,237,82,129,200,89,148,95,194,144,128,176,45,
+    79,106,235,75,0,230,160,126,138,227,247,91,17,173,29,51,71,22,36,118,149,189,155,156,
+    197,54,202,99,174,137,105,184,205,108,10,193,165,127,56,212,104,190,185,48,86,15);
+
+const int[256] rnd4(
+    249,199,162,114,17,55,64,57,29,137,194,247,45,70,210,106,184,178,219,122,156,193,
+    214,126,138,28,148,121,19,37,135,132,173,225,221,161,180,220,36,84,224,10,185,209,
+    238,119,89,253,165,248,120,235,198,52,3,190,125,226,20,6,168,2,170,167,94,54,201,
+    179,42,208,242,33,146,158,245,196,166,83,86,34,74,188,44,49,85,11,243,4,99,100,102,
+    78,252,26,35,24,113,236,237,9,1,72,63,204,13,15,129,53,79,163,212,213,48,92,97,38,
+    189,68,230,234,41,22,246,133,250,202,77,112,18,218,229,124,181,14,108,107,255,91,
+    145,223,134,142,96,88,222,207,141,175,203,27,69,95,62,47,147,164,130,232,39,244,21,
+    154,239,153,110,172,59,46,81,176,217,80,150,159,182,186,66,174,169,98,231,123,215,
+    12,128,187,127,58,32,111,160,149,31,195,65,152,144,82,197,216,75,61,101,117,93,51,
+    60,0,67,211,241,206,90,87,56,240,73,177,43,155,157,71,191,136,103,116,140,205,143,
+    228,109,23,16,171,115,7,131,192,183,105,251,5,139,40,200,30,254,227,76,151,50,8,104,
+    118,233,25);
+
+const int[256] rnd5(
+    39,244,56,240,73,135,254,227,196,35,166,195,65,132,173,225,177,41,158,245,22,199,
+    214,126,138,28,200,148,121,19,37,221,161,180,220,36,84,224,10,143,185,209,249,
+    248,120,235,198,52,3,190,125,226,20,6,168,2,170,167,94,54,201,5,139,40,30,76,
+    179,42,49,85,11,243,4,99,100,182,97,26,186,206,90,175,203,113,144,236,130,232,
+    7,131,192,228,109,23,21,159,183,105,251,151,50,8,104,89,253,142,222,207,27,69,95,
+    189,68,230,234,162,114,246,133,250,202,77,112,18,218,229,124,43,155,157,71,191,
+    154,239,153,66,174,169,98,231,75,115,17,145,61,101,123,215,128,187,127,102,110,
+    78,252,14,108,223,62,47,147,164,13,96,88,93,51,15,129,53,79,163,212,213,48,92,24,
+    55,64,57,29,137,194,247,45,70,210,106,184,178,219,122,156,193,181,107,255,91,
+    12,172,59,46,81,176,217,80,150,58,32,111,160,149,31,82,197,216,117,165,134,
+    60,0,67,211,87,16,171,241,136,103,116,140,205,237,9,72,63,204,38,238,119,
+    118,1,233,25,141,208,242,33,146,152,83,86,34,74,188,44);
+
+noise_return mi_noise( float3 xyz )
+{
+
+    // compute b-spline blending as functions of input point
+    // coords du = d/dx. Everything is a tensor product so we
+    // have only one "derivative" per dimension
+
+    int ixtmp = math::floor(xyz.x);
+    int ix0 =  ixtmp   &255;
+    int ix1 = (ixtmp+1)&255;
+    int ix2 = (ixtmp+2)&255;
+    float fx = xyz.x-math::floor(xyz.x);
+    float du2 = fx*(1.0/256.0); // 1/256 because of normalization of the rnd[]'s
+    float du2tmp = fx*du2;
+    float du1 = (1.0/256.0) - du2 - du2;
+    float du0 = du2 - (1.0/256.0);
+    float u2  = du2tmp * 0.5f;
+    float u1  = du2 + (0.5/256.0) - du2tmp;
+    float u0  = u2 - du2 + (0.5/256.0);
+
+
+    int iytmp = math::floor(xyz.y);
+    int iy0 =  iytmp   &255;
+    int iy1 = (iytmp+1)&255;
+    int iy2 = (iytmp+2)&255;
+    float du5 = xyz.y-math::floor(xyz.y);
+    float du4 = 1.0f - du5 - du5;
+    float du3 = du5 - 1.0f;
+    float u5  = du5*du5 * 0.5f;
+    float u4  = du5 + 0.5f - du5*du5;
+    float u3  = u5 - du5 + 0.5f;
+
+
+    int iztmp = math::floor(xyz.z);
+    int3 iz = int3(iztmp&255, (iztmp+1)&255, (iztmp+2)&255);
+    float fz = xyz.z-math::floor(xyz.z);
+    float3 du(fz - 1.0f, 1.0f - fz - fz, fz);
+    float3 u(fz*fz * 0.5f - fz + 0.5f, fz + 0.5f - fz*fz, fz*fz * 0.5f);
+
+    // compute the value of the spline function at the input point
+
+    float val = 0.0f;
+    float3 grad(0.0f,0.0f,0.0f);
+    for (int i = 0; i < 3; ++i)
+    { //!! unroll?
+        float noise_factor01 = rnd5[rnd1[ix0]^rnd2[iy0]^rnd3[iz[i]]]^rnd4[ix0^iy0^iz[i]];
+        float noise_factor02 = rnd5[rnd1[ix1]^rnd2[iy0]^rnd3[iz[i]]]^rnd4[ix1^iy0^iz[i]];
+        float noise_factor03 = rnd5[rnd1[ix2]^rnd2[iy0]^rnd3[iz[i]]]^rnd4[ix2^iy0^iz[i]];
+
+        float noise_factor11 = rnd5[rnd1[ix0]^rnd2[iy1]^rnd3[iz[i]]]^rnd4[ix0^iy1^iz[i]];
+        float noise_factor12 = rnd5[rnd1[ix1]^rnd2[iy1]^rnd3[iz[i]]]^rnd4[ix1^iy1^iz[i]];
+        float noise_factor13 = rnd5[rnd1[ix2]^rnd2[iy1]^rnd3[iz[i]]]^rnd4[ix2^iy1^iz[i]];
+
+        float noise_factor21 = rnd5[rnd1[ix0]^rnd2[iy2]^rnd3[iz[i]]]^rnd4[ix0^iy2^iz[i]];
+        float noise_factor22 = rnd5[rnd1[ix1]^rnd2[iy2]^rnd3[iz[i]]]^rnd4[ix1^iy2^iz[i]];
+        float noise_factor23 = rnd5[rnd1[ix2]^rnd2[iy2]^rnd3[iz[i]]]^rnd4[ix2^iy2^iz[i]];
+
+        float fxdz = u3 * (du0 * noise_factor01 + du1 * noise_factor02 + du2 * noise_factor03) +
+                     u4 * (du0 * noise_factor11 + du1 * noise_factor12 + du2 * noise_factor13) +
+                     u5 * (du0 * noise_factor21 + du1 * noise_factor22 + du2 * noise_factor23); // x-partial
+
+        float dyz0 = u0 * noise_factor01 + u1 * noise_factor02 + u2 * noise_factor03; // f(x)
+        float dyz1 = u0 * noise_factor11 + u1 * noise_factor12 + u2 * noise_factor13;
+        float dyz2 = u0 * noise_factor21 + u1 * noise_factor22 + u2 * noise_factor23;
+
+        grad.x +=  u[i] * fxdz; // x-partial
+        grad.y +=  u[i] * (du3 * dyz0 + du4 * dyz1 + du5 * dyz2); // y-partial
+
+        float dz = u3 * dyz0 + u4 * dyz1 + u5 * dyz2; // f(x,y)
+
+        val    +=  u[i] * dz; // f(x,y,z)
+        grad.z += du[i] * dz; // z-partial
+    }
+
+    return noise_return(grad,val);
+}
+
+noise_return mi_noise(int3 xyz)
+{
+    float3 grad;
+    int ix0 = (xyz.x-1)&255;
+    int ix1 =  xyz.x   &255;
+    int ix2 = (xyz.x+1)&255;
+    int iy0 = (xyz.y-1)&255;
+    int iy1 =  xyz.y   &255;
+    int iy2 = (xyz.y+1)&255;
+    int iz0 = (xyz.z-1)&255;
+    int iz1 =  xyz.z   &255;
+    int iz2 = (xyz.z+1)&255;
+
+    // compute b-spline blending as functions of input point
+    // coords du = d/dx. Everything is a tensor product so we
+    // have only one "derivative" per dimension
+
+    int noise_factor001 = rnd5[rnd1[ix0]^rnd2[iy0]^rnd3[iz0]]^rnd4[ix0^iy0^iz0];
+    int noise_factor002 = rnd5[rnd1[ix1]^rnd2[iy0]^rnd3[iz0]]^rnd4[ix1^iy0^iz0];
+    int noise_factor003 = rnd5[rnd1[ix2]^rnd2[iy0]^rnd3[iz0]]^rnd4[ix2^iy0^iz0];
+
+    int noise_factor011 = rnd5[rnd1[ix0]^rnd2[iy1]^rnd3[iz0]]^rnd4[ix0^iy1^iz0];
+    int noise_factor012 = rnd5[rnd1[ix1]^rnd2[iy1]^rnd3[iz0]]^rnd4[ix1^iy1^iz0];
+    int noise_factor013 = rnd5[rnd1[ix2]^rnd2[iy1]^rnd3[iz0]]^rnd4[ix2^iy1^iz0];
+
+    int noise_factor021 = rnd5[rnd1[ix0]^rnd2[iy2]^rnd3[iz0]]^rnd4[ix0^iy2^iz0];
+    int noise_factor022 = rnd5[rnd1[ix1]^rnd2[iy2]^rnd3[iz0]]^rnd4[ix1^iy2^iz0];
+    int noise_factor023 = rnd5[rnd1[ix2]^rnd2[iy2]^rnd3[iz0]]^rnd4[ix2^iy2^iz0];
+
+    int noise_factor101 = rnd5[rnd1[ix0]^rnd2[iy0]^rnd3[iz1]]^rnd4[ix0^iy0^iz1];
+    int noise_factor102 = rnd5[rnd1[ix1]^rnd2[iy0]^rnd3[iz1]]^rnd4[ix1^iy0^iz1];
+    int noise_factor103 = rnd5[rnd1[ix2]^rnd2[iy0]^rnd3[iz1]]^rnd4[ix2^iy0^iz1];
+
+    int noise_factor111 = rnd5[rnd1[ix0]^rnd2[iy1]^rnd3[iz1]]^rnd4[ix0^iy1^iz1];
+    int noise_factor112 = rnd5[rnd1[ix1]^rnd2[iy1]^rnd3[iz1]]^rnd4[ix1^iy1^iz1];
+    int noise_factor113 = rnd5[rnd1[ix2]^rnd2[iy1]^rnd3[iz1]]^rnd4[ix2^iy1^iz1];
+
+    int noise_factor121 = rnd5[rnd1[ix0]^rnd2[iy2]^rnd3[iz1]]^rnd4[ix0^iy2^iz1];
+    int noise_factor122 = rnd5[rnd1[ix1]^rnd2[iy2]^rnd3[iz1]]^rnd4[ix1^iy2^iz1];
+    int noise_factor123 = rnd5[rnd1[ix2]^rnd2[iy2]^rnd3[iz1]]^rnd4[ix2^iy2^iz1];
+
+    int noise_factor201 = rnd5[rnd1[ix0]^rnd2[iy0]^rnd3[iz2]]^rnd4[ix0^iy0^iz2];
+    int noise_factor202 = rnd5[rnd1[ix1]^rnd2[iy0]^rnd3[iz2]]^rnd4[ix1^iy0^iz2];
+    int noise_factor203 = rnd5[rnd1[ix2]^rnd2[iy0]^rnd3[iz2]]^rnd4[ix2^iy0^iz2];
+
+    int noise_factor211 = rnd5[rnd1[ix0]^rnd2[iy1]^rnd3[iz2]]^rnd4[ix0^iy1^iz2];
+    int noise_factor212 = rnd5[rnd1[ix1]^rnd2[iy1]^rnd3[iz2]]^rnd4[ix1^iy1^iz2];
+    int noise_factor213 = rnd5[rnd1[ix2]^rnd2[iy1]^rnd3[iz2]]^rnd4[ix2^iy1^iz2];
+
+    int noise_factor221 = rnd5[rnd1[ix0]^rnd2[iy2]^rnd3[iz2]]^rnd4[ix0^iy2^iz2];
+    int noise_factor222 = rnd5[rnd1[ix1]^rnd2[iy2]^rnd3[iz2]]^rnd4[ix1^iy2^iz2];
+    int noise_factor223 = rnd5[rnd1[ix2]^rnd2[iy2]^rnd3[iz2]]^rnd4[ix2^iy2^iz2];
+
+    grad.x = (0.0078125/256.0) * (noise_factor003 - noise_factor001 + noise_factor023 - noise_factor021 + noise_factor203 - noise_factor201 + noise_factor223 - noise_factor221) +
+             (0.046875/256.0)  * (noise_factor013 - noise_factor011 + noise_factor103 - noise_factor101 + noise_factor123 - noise_factor121 + noise_factor213 - noise_factor211) +
+             (0.28125/256.0)   * (noise_factor113 - noise_factor111); // x-partial
+
+    int dyz00 = noise_factor001 + 6 * noise_factor002 + noise_factor003; // f(x)
+    int dyz02 = noise_factor021 + 6 * noise_factor022 + noise_factor023;
+
+    int dyz10 = noise_factor101 + 6 * noise_factor102 + noise_factor103;
+    int dyz12 = noise_factor121 + 6 * noise_factor122 + noise_factor123;
+
+    int dyz20 = noise_factor201 + 6 * noise_factor202 + noise_factor203;
+    int dyz22 = noise_factor221 + 6 * noise_factor222 + noise_factor223;
+
+    grad.y = (0.0078125/256.0) * (dyz02 - dyz00 + dyz22 - dyz20) + (0.046875/256.0) * (dyz12 - dyz10); // y-partial
+
+    float dz0 = (0.001953125/256.0) * (dyz00 + dyz02) + (0.01171875/256.0) * (noise_factor011 + noise_factor013) + (0.0703125/256.0) * (noise_factor012); // f(x,y)
+    float dz2 = (0.001953125/256.0) * (dyz20 + dyz22) + (0.01171875/256.0) * (noise_factor211 + noise_factor213) + (0.0703125/256.0) * (noise_factor212);
+
+    grad.z = 4.0f * (dz2 - dz0); // z-partial
+
+    float val = dz0 + dz2 + (0.01171875/256.0) * (dyz10 + dyz12) + (0.0703125/256.0) * (noise_factor111 + noise_factor113) + (0.421875/256.0) * (noise_factor112); // f(x,y,z)
+    return noise_return(grad,val);
+}
+
+float fade(float t) { return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); }
+
+const float4[128] grad4(
+        float4(0,1,1,1), float4(0,-1,1,0), float4(1,1,0,-1), float4(0,-1,1,-1), float4(0,1,1,0), float4(1,0,-1,1), float4(0,-1,-1,0), float4(-1,0,-1,-1), float4(0,1,-1,1),  float4(1,1,0,1), float4(1,0,-1,-1), float4(0,1,1,-1), float4(0,1,-1,0), float4(-1,1,0,1), float4(0,-1,-1,1), float4(-1,0,1,-1), float4(0,-1,-1,-1), float4(1,0,1,1), float4(-1,-1,0,-1), float4(0,-1,1,1), float4(-1,1,0,-1), float4(0,1,-1,-1), float4(1,-1,0,1), float4(0,-1,-1,0), float4(-1,0,-1,1), float4(1,-1,0,-1), float4(0,-1,1,0), float4(-1,-1,0,1), float4(0,1,-1,0), float4(1,1,0,-1), float4(-1,0,1,1), float4(0,1,1,0),
+        float4(1,1,0,-1), float4(0,1,1,-1), float4(-1,0,1,1), float4(0,1,1,0), float4(0,-1,1,-1), float4(0,-1,-1,0), float4(1,0,-1,1), float4(0,1,-1,1), float4(-1,0,-1,-1), float4(1,0,-1,-1), float4(1,1,0,1), float4(0,1,-1,0), float4(0,1,1,1), float4(0,-1,1,0), float4(-1,1,0,1), float4(0,1,-1,0), float4(1,1,0,-1), float4(0,-1,-1,1), float4(-1,0,1,-1), float4(0,-1,-1,-1), float4(1,0,1,1), float4(-1,-1,0,-1), float4(0,-1,1,1), float4(-1,1,0,-1), float4(0,1,-1,-1), float4(1,-1,0,1), float4(0,-1,-1,0), float4(-1,0,-1,1), float4(1,-1,0,-1), float4(0,1,1,0), float4(0,-1,1,0), float4(-1,-1,0,1),
+        float4(1,0,1,1), float4(-1,-1,0,-1), float4(0,1,1,0), float4(-1,0,1,-1), float4(1,1,0,1), float4(-1,0,-1,-1), float4(0,-1,-1,0), float4(1,0,-1,-1), float4(-1,0,-1,1), float4(1,-1,0,-1), float4(0,1,1,-1), float4(0,1,-1,0), float4(-1,1,0,1), float4(0,-1,-1,1), float4(1,1,0,-1), float4(-1,0,1,1), float4(0,-1,-1,-1), float4(1,0,-1,1), float4(0,1,1,1), float4(0,-1,1,0), float4(-1,1,0,-1), float4(0,-1,1,1), float4(0,1,-1,-1), float4(1,-1,0,1), float4(0,-1,1,0), float4(-1,-1,0,1), float4(0,1,-1,0), float4(0,-1,1,-1), float4(0,1,1,0), float4(1,1,0,-1), float4(0,-1,-1,0), float4(0,1,-1,1),
+         float4(0,1,-1,1), float4(1,1,0,1), float4(1,0,-1,-1), float4(0,1,-1,0), float4(0,1,1,1), float4(0,-1,1,0), float4(-1,1,0,1), float4(0,1,-1,0), float4(1,1,0,-1), float4(0,-1,-1,1), float4(-1,0,1,-1), float4(0,-1,-1,-1), float4(1,0,1,1), float4(-1,-1,0,-1), float4(0,-1,1,1), float4(-1,1,0,-1), float4(0,1,-1,-1), float4(1,-1,0,1), float4(0,-1,-1,0), float4(-1,0,-1,1), float4(1,-1,0,-1), float4(0,1,1,0), float4(0,-1,1,0), float4(-1,-1,0,1), float4(1,1,0,-1), float4(0,1,1,-1), float4(-1,0,1,1), float4(0,1,1,0), float4(0,-1,1,-1), float4(1,0,-1,1), float4(0,-1,-1,0), float4(-1,0,-1,-1));
+
+float grad128(int hash, float x, float y, float z, float w)
+{
+    return x*grad4[hash].x + y*grad4[hash].y + z*grad4[hash].z + w*grad4[hash].w;
+}
+
+float grad128(int hash, float x, float y, float z)[[anno::unused()]]
+{
+    return x*grad4[hash].x + y*grad4[hash].y + z*grad4[hash].z;
+}
+
+float grad128(int hash, float x, float y)
+{
+    return x*grad4[hash].x + y*grad4[hash].y;
+}
+
+float grad128(int hash, float x)
+{
+    return x*grad4[hash].x;
+}
+
+float perlin_noise(float4 pos)
+{
+    int X = math::floor(pos.x),
+        Y = math::floor(pos.y),
+        Z = math::floor(pos.z),
+        W = math::floor(pos.w);
+    pos.x -= math::floor(pos.x);
+    pos.y -= math::floor(pos.y);
+    pos.z -= math::floor(pos.z);
+    pos.w -= math::floor(pos.w);
+    float u = fade(pos.x);
+    float v = fade(pos.y),
+          w = fade(pos.z),
+          x = fade(pos.w);
+    int AX = rnd1[ X   &255] & 127, // &127 = hash for grad4 lookups
+        BX = rnd1[(X+1)&255] & 127,
+        AY = rnd2[ Y   &255] & 127,
+        BY = rnd2[(Y+1)&255] & 127,
+        AZ = rnd3[ Z   &255] & 127,
+        BZ = rnd3[(Z+1)&255] & 127;
+    int AW = rnd4[ W   &255] & 127;
+
+    float[2] result;
+    for (int i = 0; i < 2; ++i) {
+        result[i] = math::lerp(math::lerp(math::lerp(grad128(AX^AY^AZ^AW, pos.x     , pos.y     , pos.z     , pos.w),
+                                                     grad128(BX^AY^AZ^AW, pos.x-1.0f, pos.y     , pos.z     , pos.w),
+                                                     u),
+                                          math::lerp(grad128(AX^BY^AZ^AW, pos.x     , pos.y-1.0f, pos.z     , pos.w),
+                                                     grad128(BX^BY^AZ^AW, pos.x-1.0f, pos.y-1.0f, pos.z     , pos.w),
+                                                     u),
+                                          v),
+                               math::lerp(math::lerp(grad128(AX^AY^BZ^AW, pos.x     , pos.y     , pos.z-1.0f, pos.w),
+                                                     grad128(BX^AY^BZ^AW, pos.x-1.0f, pos.y     , pos.z-1.0f, pos.w),
+                                                     u),
+                                          math::lerp(grad128(AX^BY^BZ^AW, pos.x     , pos.y-1.0f, pos.z-1.0f, pos.w),
+                                                     grad128(BX^BY^BZ^AW, pos.x-1.0f, pos.y-1.0f, pos.z-1.0f, pos.w),
+                                                     u),
+                                          v),
+                               w);
+        AW = rnd4[(W+1)&255] & 127;
+        pos.w -= 1.0f;
+    }
+
+    return math::lerp(result[0], result[1], x);
+}
+
+float perlin_noise(float2 pos)
+{
+    int X = int(math::floor(pos.x)),
+               Y = int(math::floor(pos.y));
+    pos.x -= math::floor(pos.x);
+    pos.y -= math::floor(pos.y);
+    float u = fade(pos.x);
+    int AX = rnd1[ X   &255] & 127, // &127 = hash for grad4 lookups
+               BX = rnd1[(X+1)&255] & 127,
+               AY = rnd2[ Y   &255] & 127,
+               BY = rnd2[(Y+1)&255] & 127;
+
+    return math::lerp(math::lerp(grad128(AX^AY, pos.x     , pos.y     ),
+                 grad128(BX^AY, pos.x-1.0f, pos.y     ),
+             u),
+            math::lerp(grad128(AX^BY, pos.x     , pos.y-1.0f),
+             grad128(BX^BY, pos.x-1.0f, pos.y-1.0f),
+             u),
+            fade(pos.y));
+}
+
+float perlin_noise(float pos)
+{
+    int X = int(math::floor(pos));
+    pos -= math::floor(pos);
+
+    return math::lerp(grad128(rnd1[ X   &255] & 127, pos     ), // &127 = hash for grad4 lookups
+            grad128(rnd1[(X+1)&255] & 127, pos-1.0f),
+        fade(pos));
+}
+
+
+float ridge(float h, float offset)
+{
+    h = offset - math::abs(h);
+    return h*h;
+}
+
+float summed_perlin_noise(float3 pos, float time,  int terms, float3 turbulence_weight, bool abs_noise, bool ridged)
+{
+    float sum = 0.0f;
+    float weight = ridged ? 0.625f : 1.0f;
+    float prev = 1.0f;
+    float4 p = float4(pos.x,pos.y,pos.z,time);
+    while(terms != 0) {
+        terms--;
+        float n = perlin_noise(p);
+        float n2 = ridged ? ridge(n, 1.0f) : (abs_noise ? math::abs(n) : n); // ridged offset = 1.0f, could be configurable
+        sum += weight*prev*n2;
+        p += p;       // frequency doubled, could be configurable
+        if (ridged)
+            prev = n2;
+        weight *= 0.5f; // gain halved, could be configurable
+    }
+    float sn = ((turbulence_weight.x != 0.0f) || (turbulence_weight.y != 0.0f) || (turbulence_weight.z != 0.0f) )
+        ? math::sin(pos.x*turbulence_weight.x + pos.y*turbulence_weight.y + pos.z*turbulence_weight.z + sum)
+        : sum;
+
+    if (!abs_noise && !ridged) { // Absolute & Ridged already are in 0..1
+        // Scale [-1,1] to [0,1]
+        sn = sn*0.5f+0.5f;
+    }
+    return sn;
+}
+float apply_noise_modifications(
+    float value,
+    float position,
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to \"color1\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to \"color2\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_bands = 1.0
+        [[
+            anno::description("Creates a \"tree ring\" like banding effect")
+        ]]
+
+)
+{
+    float sn = value;
+    if(apply_marble)
+    {
+        // Classic Perlin marble function
+        sn = math::cos(position + sn*5.0f); //!! 5.0f = magic
+    }
+
+    if(apply_dent)
+    {
+        // Cube
+        sn *= sn * sn;
+    }
+
+    // Create banding/stripes by using the fraction component only
+    if(noise_bands != 1.0f) // avoid case of sn = 1 being wrapped to 0
+    {
+        sn *= noise_bands;
+        sn -= math::floor(sn);
+        // Smooth transition slightly
+
+        float tmp = 1.0f - sn;
+        tmp *= tmp; // ^2
+        tmp *= tmp; // ^4
+        float tmp2 = tmp*tmp; // ^8
+        sn += tmp2*tmp2*tmp; // ^20
+    }
+
+    // Clamp the noise
+    sn= (noise_threshold_high > noise_threshold_low)
+        ? math::saturate((sn - noise_threshold_low) / (noise_threshold_high - noise_threshold_low))
+        : sn;
+    return sn;
+
+}
+
+export texture_return perlin_noise_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    color color1 = color(0)
+        [[
+            anno::description("The Perlin noise function will blend between this color and \"color2\"")
+        ]],
+    color color2 = color(1)
+        [[
+            anno::description("The Perlin noise function will blend between \"color1\" and this color")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float noise_phase = 0.0
+        [[
+            anno::description("Controls the 4th dimension of the function (can be time in animations)")
+        ]],
+    uniform int noise_levels = 1
+        [[
+            anno::description("Number of octaves to of Perlin to sum up"),
+            anno::soft_range(1, 6)
+        ]],
+    uniform bool absolute_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"billowing\" and \"turbulent\"")
+        ]],
+    uniform bool ridged_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"electrical\"")
+        ]],
+    uniform float3 noise_distortion = float3( 0.0 )
+        [[
+            anno::description("Weight of additional noise turbulence")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to \"color1\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to \"color2\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_bands = 1.0
+        [[
+            anno::description("creates a \"tree ring\" like banding effect")
+        ]]
+)
+[[
+    anno::description("Color Perlin noise"),
+    anno::noinline()
+]]
+{
+    float sn = 0.0f;
+    if (size != 0.0f)
+    {
+        sn = summed_perlin_noise(
+            uvw.position/size,
+            noise_phase,
+            noise_levels,
+            noise_distortion,
+            absolute_noise, ridged_noise);
+
+        if (apply_marble) {
+            // Classic Perlin marble function
+            sn = math::cos(uvw.position.x/size + sn*5.0f); //!! 5.0f = magic
+        }
+
+        if (apply_dent) {
+            // Cube
+            sn *= sn * sn;
+        }
+
+        // Create banding/stripes by using the fraction component only
+        if (noise_bands != 1.0f) { // avoid case of sn = 1 being wrapped to 0
+            sn *= noise_bands;
+            sn -= math::floor(sn);
+            // Smooth transition slightly
+
+            float tmp = 1.0f - sn;
+            tmp *= tmp; // ^2
+            tmp *= tmp; // ^4
+            float tmp2 = tmp*tmp; // ^8
+            sn += tmp2*tmp2*tmp; // ^20
+        }
+
+        // Clamp the noise
+        sn = (noise_threshold_high > noise_threshold_low)
+            ? math::saturate((sn - noise_threshold_low) / (noise_threshold_high - noise_threshold_low))
+            : sn;
+    }
+    color color_value = math::lerp(color1,color2,sn);
+    return texture_return(color_value,math::luminance(color_value));
+}
+
+export float3 perlin_noise_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float factor = 1.
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float noise_phase = 0.0
+        [[
+            anno::description("Controls the 4th dimension of the function")
+        ]],
+    uniform int noise_levels = 1
+        [[
+            anno::description("Number of octaves to of Perlin to sum up"),
+            anno::soft_range(1, 6)
+        ]],
+    uniform bool absolute_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"billowing\" and \"turbulent\"")
+        ]],
+    uniform bool ridged_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"electrical\"")
+        ]],
+    uniform float3 noise_distortion = float3( 0.0 )
+        [[
+            anno::description("Weight of additional noise turbulence")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to the maximum bump height"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to the minimum bump height"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_bands = 1.0
+        [[
+            anno::description("creates a \"tree ring\" like banding effect")
+        ]],
+    float3 normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Bump-mapping Perlin noise"),
+    anno::noinline()
+]]
+{
+    if (factor == 0.0f || size == 0.0f)
+        return normal;
+
+    float delta = 0.0001 * size / noise_bands; //!! magic
+
+    float3[4] offsets;
+    offsets[0] = float3(0.0f, 0.0f,0.0f);
+    offsets[1] = float3(delta,0.0f,0.0f);
+    offsets[2] = float3(0.0f,delta,0.0f);
+    offsets[3] = float3(0.0f, 0.0f,delta);
+    float[4] results;
+    for(int i = 0; i < 4; ++i)
+    {
+        float3 scaled_position=(uvw.position+offsets[i])/size;
+        results[i] = apply_noise_modifications(
+        summed_perlin_noise(
+                scaled_position,
+                noise_phase,
+                noise_levels,
+                noise_distortion,
+                absolute_noise,
+                ridged_noise
+                ),
+        scaled_position.x,
+        apply_marble,
+        apply_dent,
+        noise_threshold_high,
+        noise_threshold_low,
+        noise_bands
+        );
+    }
+
+    float bump_factor = -factor * (0.1 / 0.0001); // original code used 0.1 as magic constant for delta, obtain same magnitude
+
+    return math::normalize(
+        normal    * (math::abs((results[3]-results[0]) * bump_factor) + 1.) +
+        uvw.tangent_u * (results[1]-results[0])        * bump_factor  +
+        uvw.tangent_v * (results[2]-results[0])        * bump_factor);
+}
+
+float  sqrlength(float3 a)                   { return a.x * a.x + a.y * a.y + a.z * a.z; }
+float  length_chebyshev(float3 a)            { return math::max(math::max(math::abs(a.x), math::abs(a.y)), math::abs(a.z)); }
+float  length_chebyshev( float3 a, float3 b) { return math::max(math::max(math::abs(b.x-a.x), math::abs(b.y-a.y)), math::abs(b.z-a.z)); }
+float  length_manhattan(float3 a)            { return math::abs(a.x) + math::abs(a.y) + math::abs(a.z); }
+float  length_manhattan(float3 a, float3 b)  { return math::abs(b.x-a.x) + math::abs(b.y-a.y) + math::abs(b.z-a.z); }
+
+struct worley_return {
+    float3 nearest_pos_0;
+    float3 nearest_pos_1;
+    float2 val;
+};
+
+worley_return worley_noise(float3 pos, float jitter, int metric)
+{
+    worley_return ret;
+    float3 cell = float3(math::floor(pos.x),math::floor(pos.y),math::floor(pos.z));
+    float2 f1f2 = float2(limits::FLOAT_MAX,limits::FLOAT_MAX);
+    jitter *= (1.0/255.0);
+
+    for (int i = -1; i <= 1; ++i) {
+        float localcellx = cell.x + float(i);
+        int X = math::floor(localcellx);
+        int RNDX = rnd1[X&255];
+        for (int j = -1; j <= 1; ++j) {
+            float localcelly = cell.y + float(j);
+            int Y = math::floor(localcelly);
+            int RNDXY = RNDX^rnd2[Y&255];
+            for (int k = -1; k <= 1; ++k) {
+                //!! unroll??
+                float localcellz = cell.z + float(k);
+                int Z = math::floor(localcellz);
+                int RNDXYZ = RNDXY^rnd3[Z&255];
+                float3 localpos = float3(localcellx,localcelly,localcellz) + float3(float(rnd4[RNDXYZ]),float(rnd1[RNDXYZ]),float(rnd2[RNDXYZ]))*jitter;
+                float3 diff = localpos-pos;
+                float dist = (metric == 0/*TextureNoise_WorleyMetric_Euclidean*/) ? sqrlength(diff) : ((metric == 1/*TextureNoise_WorleyMetric_Manhattan*/) ? length_manhattan(diff) : length_chebyshev(diff));
+                if (dist < f1f2.x) {
+                    f1f2.y = f1f2.x;
+                    ret.nearest_pos_1 = ret.nearest_pos_0;
+                    f1f2.x = dist;
+                    ret.nearest_pos_0 = localpos;
+                } else if(dist < f1f2.y) {
+                    f1f2.y = dist;
+                    ret.nearest_pos_1 = localpos;
+                }
+            }
+        }
+    }
+    ret.val = (metric == 0/*TextureNoise_WorleyMetric_Euclidean*/) ? float2(math::sqrt(f1f2.x), math::sqrt(f1f2.y)) : f1f2;
+    return ret;
+}
+
+float worley_noise(float3 pos, float3 turbulence_weight, float step_threshold, int mode, int metric, float jitter = 1.0f)
+{
+    worley_return worley = worley_noise(pos, jitter, metric);
+    float2 f1f2 = worley.val;
+    float result;
+
+    switch (mode) {
+    default:
+    case 0://TextureNoise_WorleyMode_Simple0:
+        result = f1f2.x;
+        break;
+    case 1://TextureNoise_WorleyMode_Simple1: // Squared simple worley
+        result = f1f2.x*f1f2.x;
+        break;
+    case 8://TextureNoise_WorleyMode_Simple2:
+        result = f1f2.y;
+        break;
+    case 9://TextureNoise_WorleyMode_Simple3:
+        result = f1f2.y*f1f2.y;
+        break;
+    case 2://TextureNoise_WorleyMode_Cell:
+    {
+        float3 fractf = float3(worley.nearest_pos_0.x - math::floor(worley.nearest_pos_0.x), worley.nearest_pos_0.y - math::floor(worley.nearest_pos_0.y), worley.nearest_pos_0.z - math::floor(worley.nearest_pos_0.z));
+        result = float(rnd1[int(fractf.x*255.0f)]^rnd2[int(fractf.y*255.0f)]^rnd3[int(fractf.z*255.0f)])*(1.0/255.0);
+        break;
+    }
+    case 3://TextureNoise_WorleyMode_Step0: // "Hard" Step
+        result = (f1f2.y-f1f2.x < step_threshold) ? 0.0f : 1.0f;
+        break;
+    case 4://TextureNoise_WorleyMode_Step1: // "Smooth" Step
+        result = f1f2.y-f1f2.x;
+        break;
+    case 5://TextureNoise_WorleyMode_Step2: // Normalized "Smooth" Step
+        result = (f1f2.y-f1f2.x)/(f1f2.y+f1f2.x);
+        break;
+    case 6://TextureNoise_WorleyMode_Mul:
+        result = f1f2.x*f1f2.y;
+        break;
+    case 7://TextureNoise_WorleyMode_Add:
+        result = f1f2.x+f1f2.y;
+        break;
+    case 10://TextureNoise_WorleyMode_Manhattan:
+        result = length_manhattan(worley.nearest_pos_0, worley.nearest_pos_1);
+        break;
+    case 11://TextureNoise_WorleyMode_Chebyshev:
+        result = length_chebyshev(worley.nearest_pos_0, worley.nearest_pos_1);
+        break;
+    }
+
+    return ((turbulence_weight.x != 0.0f) || (turbulence_weight.y != 0.0f) || (turbulence_weight.z != 0.0f))
+           ? math::sin(pos.x*turbulence_weight.x + pos.y*turbulence_weight.y + pos.z*turbulence_weight.z + result)
+           : result;
+}
+
+export texture_return worley_noise_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    color color1 = color(0)
+        [[
+            anno::description("The Worley noise function will blend between this color and \"color2\"")
+        ]],
+    color color2 = color(1)
+        [[
+            anno::description("The Worley noise function will blend between \"color1\" and this color")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform int mode = 0
+        [[
+            anno::description("Output function used to modify the noise result (0..11)"),
+            anno::hard_range(0, 11)
+        ]],
+    uniform int metric = 0
+        [[
+            anno::description("Metric used in the noise function (0: Euclidean, 1: Manhattan, 2: Chebyshev)"),
+            anno::hard_range(0, 2)
+        ]],
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float3 noise_distortion = float3( 0.0 )
+        [[
+            anno::description("Weight of additional noise turbulence")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to \"color1\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to \"color2\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_bands = 1.0
+        [[
+            anno::description("Creates a \"tree ring\" like banding effect")
+        ]],
+    uniform float step_threshold = 0.2
+        [[
+            anno::description("Used only in mode 3")
+        ]],
+        uniform float edge = 1.0
+        [[
+            anno::description("Smoothness of noise"),
+            anno::hard_range(0.0, 1.0),
+            anno::unused()
+        ]]
+)
+[[
+    anno::description("Color Worley noise"),
+    anno::noinline()
+]]
+{
+    float sn = 0.0f;
+    if (size != 0.0f)
+    {
+        float3 scaled_pos = uvw.position / size;
+        sn = apply_noise_modifications(
+            worley_noise(
+                scaled_pos,
+                noise_distortion,
+                step_threshold,
+                mode,
+                metric),
+            scaled_pos.x,
+            apply_marble,
+            apply_dent,
+            noise_threshold_high,
+            noise_threshold_low,
+            noise_bands
+            );
+    }
+    color color_value = math::lerp(color1, color2, sn);
+    return texture_return(color_value, math::luminance(color_value));
+}
+
+export float3 worley_noise_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float factor = 1.
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform int mode = 0
+        [[
+            anno::description("Output function used to modify the noise result (0..11)"),
+            anno::hard_range(0, 11)
+        ]],
+    uniform int metric = 0
+        [[
+            anno::description("Metric used in the noise function (0: Euclidean, 1: Manhattan, 2: Chebyshev)"),
+            anno::hard_range(0, 2)
+        ]],
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float3 noise_distortion = float3( 0.0 )
+        [[
+            anno::description("Weight of additional noise turbulence")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to the maximum bump height"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to the minimum bump height"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float  noise_bands = 1.0
+        [[
+            anno::description("Creates a \"tree ring\" like banding effect")
+        ]],
+    uniform float step_threshold = 0.2
+        [[
+            anno::description("Used only in mode 3")
+        ]],
+    uniform float edge = 1.0
+        [[
+            anno::description("Smoothness of noise"),
+            anno::hard_range(0.0, 1.0),
+            anno::unused()
+        ]],
+    float3 normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Bump-mapping Worley noise"),
+    anno::noinline()
+]]
+{
+    if (factor == 0.0f || size == 0.0f)
+        return normal;
+
+    float delta = 0.0001 * size / noise_bands; //!! magic
+
+    // Use a loop, it proves to be faster than without a loop
+    float3[4] offsets;
+    offsets[0] = float3(0.0f, 0.0f,0.0f);
+    offsets[1] = float3(delta,0.0f,0.0f);
+    offsets[2] = float3(0.0f,delta,0.0f);
+    offsets[3] = float3(0.0f, 0.0f,delta);
+    float[4] results;
+    for (int i = 0; i < 4; ++i) {
+        float3 scaled_position=(uvw.position+offsets[i])/size;
+        results[i] = apply_noise_modifications(
+            worley_noise(
+                scaled_position,
+                noise_distortion,
+                step_threshold,
+                mode,
+                metric),
+            scaled_position.x,
+            apply_marble,
+            apply_dent,
+            noise_threshold_high,
+            noise_threshold_low,
+            noise_bands
+        );
+    }
+
+
+    float bump_factor = -factor * (0.1 / 0.0001);
+
+    return math::normalize(
+        normal    * (math::abs((results[3]-results[0]) * bump_factor) + 1.) +
+        uvw.tangent_u * (results[1]-results[0])        * bump_factor +
+        uvw.tangent_v * (results[2]-results[0])        * bump_factor);
+}
+
+int permute_flow2(int x)
+{
+    //x %= 289; // correct, but doesn't matter in practice
+    return (x*x*34 + x) % 289;
+}
+
+// gradient mapping + extra rotation
+float2 grad_flow2(int p, float rot)
+{
+    float u = float(p)*(1.0/41.0) + rot; // [0..7] + rot //!! (a bit) magic
+    // map from line to diamond -> shift maps to rotation
+    u = (u-math::floor(u))*4.0f - 2.0f;
+    return float2(math::abs(u)-1.0f, math::abs(math::abs(u+1.0f)-2.0f)-1.0f);
+}
+
+float flow_noise(float2 p, float rot)
+{
+    float  SQRT3 = 1.7320508075688772935274463415059;
+
+
+    float2 pi = math::floor(p + (p.x+p.y)*(SQRT3/2.0-0.5));
+
+
+    float2 v0 = p - pi + (pi.x+pi.y)*(0.5-SQRT3/6.0);
+
+    // offsets for other 2 corners
+    float2 v1 = v0 + ((v0.x < v0.y) ? float2((0.5-SQRT3/6.0), (-0.5-SQRT3/6.0)) : float2((-0.5-SQRT3/6.0), (0.5-SQRT3/6.0)));
+    float2 v2 = v0 + (-1.0/SQRT3);
+
+    // calc circularly symmetric part of each noise wiggle
+    float3 t = math::max(float3(0.5f-math::dot(v0,v0), 0.5f-math::dot(v1,v1), 0.5f-math::dot(v2,v2)), float3(0.0f,0.0f,0.0f));
+
+    int2 pii = int2(int(pi.x), int(pi.y));
+    int tmpp0 = permute_flow2(pii.x) + pii.y;
+    int tmpp2 = permute_flow2(pii.x+1) + pii.y;
+    float2 g0 = grad_flow2(permute_flow2(tmpp0),                                                     rot);
+    float g0v0 = math::dot(g0,v0);
+    float2 g1 = grad_flow2(permute_flow2(((v0.x < v0.y) ? tmpp0 : tmpp2) + ((v0.x < v0.y) ? 1 : 0)), rot);
+    float g1v1 = math::dot(g1,v1);
+    float2 g2 = grad_flow2(permute_flow2(tmpp2+1),                                                   rot);
+
+    // compute noise contributions from each corner
+    float3 gv = float3(g0v0, g1v1, math::dot(g2,v2)); // ramp
+    float3 t2 = t*t;
+    float3 t4 = t2*t2;
+    // add contributions from all 3 corners
+    float result = 40.0f*(t4.x*gv.x + t4.y*gv.y + t4.z*gv.z); // circular kernel * ramp
+
+    return result;
+}
+
+float summed_flow_noise2(
+    float2 pos,
+    float time,
+    int iterations,
+    bool abs_noise,
+    float weight_factor = 0.5f,
+    float pos_factor = 2.0f,
+    float u_progressive_scale = 1.0f,
+    float v_progressive_offset = 0.0f)
+{
+    float sum = 0.0f;
+    float weight = 1.0f;
+    float3 p = float3(pos.x,pos.y,time);
+    // iteration_offset is used to avoid creating concentric artifacts around the origin from having all
+    // wave sizes originate from the same origin.
+    float iteration_offset = 0.0f;
+    float inv_iterations = 1.0f / float(iterations - 1);
+    for(int i = 0; i < iterations; ++i, iteration_offset += 7.0f)
+    {
+        float lerp_pos = (iterations > 1) ? float(i)*inv_iterations : 1.0f;
+        float n = flow_noise(
+            float2(
+             p.x * (1.0f-lerp_pos + lerp_pos*u_progressive_scale),
+             p.y + lerp_pos*v_progressive_offset + iteration_offset),
+            p.z);
+        sum += weight*(abs_noise ? math::abs(n) : n);
+        p   *= pos_factor;
+        weight *= weight_factor;
+    }
+
+    return sum;
+}
+
+export texture_return flow_noise_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    color color1 = color(0)
+        [[
+            anno::description("The Flow noise function will blend between this color and \"color2\"")
+        ]],
+    color color2 = color(1)
+        [[
+            anno::description("The Flow noise function will blend between \"color1\" and this color")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform float phase = 0.0
+        [[
+            anno::description("Controls the 3rd dimension of the function")
+        ]],
+    uniform int levels = 1
+        [[
+            anno::description("Number of octaves to of Flow noise to sum up"),
+            anno::soft_range(1, 6)
+        ]],
+    uniform bool absolute_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"billowing\" and \"turbulent\"")
+        ]],
+    uniform float level_gain = 0.5
+        [[
+            anno::description("If multiple levels are used, \"level_gain\" specifies a weighting factor for subsequent levels")
+        ]],
+    uniform float level_scale = 2.0
+        [[
+            anno::description("If multiple levels are used, \"level_scale\" specifies a global scaling factor for subsequent levels")
+        ]],
+    uniform float level_progressive_u_scale = 1.
+        [[
+            anno::description("If multiple levels are used, \"level_progressive_u_scale\" specifies an additional scaling factor in the \"u\" direction")
+        ]],
+    uniform float level_progressive_v_motion = 0.
+        [[
+            anno::description("If multiple levels are used, \"level_progressive_v_motion\" specifies an offset for subsequent levels in the \"v\" direction")
+        ]]
+)
+[[
+    anno::description("Color Perlin flow noise"),
+    anno::noinline()
+]]
+{
+    float sn = 0.0f;
+    if (size != 0.0f)
+    {
+        sn = summed_flow_noise2(
+            float2(uvw.position.x, uvw.position.y)/size,
+
+            phase,
+            levels,
+            absolute_noise,
+            level_gain,
+            level_scale,
+            level_progressive_u_scale,
+            level_progressive_v_motion);
+
+        // Scale [-1,1] to [0,1]
+        sn= sn*0.5f+0.5f;
+    }
+    color color_value = math::lerp(color1, color2, sn);
+    return texture_return(color_value, math::luminance(color_value));
+}
+
+export float3 flow_noise_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float factor = 1.
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    uniform float size = 1.
+        [[
+            anno::description("Size of the biggest feature of the pattern")
+        ]],
+    uniform float phase = 0.0
+        [[
+            anno::description("Controls the 4th dimension of the function")
+        ]],
+    uniform int levels = 1
+        [[
+            anno::description("Number of octaves to of Perlin to sum up"),
+            anno::soft_range(1, 6)
+        ]],
+    uniform bool absolute_noise = false
+        [[
+            anno::description("If set to true, the appearance of the pattern will be more \"billowing\" and \"turbulent\"")
+        ]],
+    uniform float level_gain = 0.5
+        [[
+            anno::description("If multiple levels are used, \"level_gain\" specifies a weighting factor for subsequent levels")
+        ]],
+    uniform float level_scale = 2.0
+        [[
+            anno::description("If multiple levels are used, \"level_scale\" specifies a global scaling factor for subsequent levels")
+        ]],
+    uniform float level_progressive_u_scale = 1.
+        [[
+            anno::description("If multiple levels are used, \"level_progressive_u_scale\" specifies an additional scaling factor in the \"u\" direction")
+        ]],
+    uniform float level_progressive_v_motion = 0.
+        [[
+            anno::description("If multiple levels are used, \"level_progressive_v_motion\" specifies an offset for subsequent levels in the \"v\" direction")
+        ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Bump-mapping flow noise"),
+    anno::noinline()
+]]
+{
+    if (factor == 0.0f || size == 0.0f)
+        return normal;
+
+    float delta = 0.0001 * size ; //!! magic
+    // Use a loop, it proves to be faster than without a loop
+    float2[3] offsets;
+    offsets[0] = float2(0.0f, 0.0f);
+    offsets[1] = float2(delta,0.0f);
+    offsets[2] = float2(0.0f,delta);
+    float[3] results;
+    for (int i = 0; i < 3; ++i) {
+        results[i] = summed_flow_noise2(
+            (float2(uvw.position.x,uvw.position.y)+offsets[i])/size,
+
+            phase,
+            levels,
+            absolute_noise,
+            level_gain,
+            level_scale,
+            level_progressive_u_scale,
+            level_progressive_v_motion);
+
+        // Scale [-1,1] to [0,1]
+        results[i]= results[i]*0.5f+0.5f;
+    }
+
+
+    float bump_factor = factor * (0.1 / 0.0001);
+
+    return math::normalize(
+        normal  +
+        uvw.tangent_v * (results[2] - results[0])   * bump_factor  +
+        uvw.tangent_u * (results[1] - results[0])   * bump_factor   );
+}
+
+export texture_return flake_noise_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+
+
+
+    uniform float  intensity = 1.0
+        [[
+            anno::description("Specifies the maximum reflectivity of any flake"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float  scale = 1.0
+        [[
+            anno::description("Size of the features of the pattern")
+        ]],
+    uniform float  density = 1.0
+        [[
+            anno::description("Controls the amount of flakes in the substrate. The higher the number, the bigger is the space between flakes"),
+            anno::soft_range(0.0, 100.0)
+        ]],
+    uniform int  noise_type = 0
+        [[
+            anno::description("Selects the noise type (0: Classic, 1: Worley)"),
+            anno::hard_range(0, 1)
+        ]],
+    uniform float  maximum_size = 1.0
+        [[
+            anno::description("Controls the shape of flakes in the secondary noise mode (Worley)")
+        ]],
+    uniform int metric = 0
+        [[
+            anno::description("Metric used in the secondary noise mode (Worley: 0: Euclidean, 1: Manhattan, 2: Chebyshev)"),
+            anno::hard_range(0, 2)
+        ]]
+)
+[[
+    anno::description("Flake noise"),
+    anno::noinline()
+]]
+{
+    if (scale == 0.0f)
+        return texture_return(color(0.0f), 0.0f);
+
+    float3 pos = uvw.position / scale;
+    float reflectivity;
+    float cell_distance = 0.0f;
+    if (noise_type == 1) {
+        worley_return ret = worley_noise(pos, 1.0f, metric);
+        cell_distance = ret.val.x; //!! configurable jitter? //!! use other output as "distance"?
+        pos = ret.nearest_pos_0; //!! use other output as "uvw"?
+    }
+
+    noise_return ret2 = mi_noise(pos);
+    float scal = ret2.val;
+
+    if (noise_type == 0) {
+        // Displace the coordinate according to noise value
+        pos += ret2.grad*2.0f;
+
+        // Then use only integer coordinates, to make
+        // flake transients "harder" and not "wobbly"
+        ret2 = mi_noise(int3(int(math::floor(pos.x)),int(math::floor(pos.y)),int(math::floor(pos.z))));
+        scal = ret2.val;
+    }
+
+    if ((noise_type == 1) && (cell_distance > maximum_size)) {
+        reflectivity = 0.0f;
+        ret2.grad = float3(0.0f);
+    } else {
+        reflectivity = math::pow(scal, 1.0f / density) * intensity;
+    }
+
+    return texture_return(color(reflectivity),reflectivity);
+}
+
+
+export float3 flake_noise_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float  scale = 1.0
+        [[
+            anno::description("Size of the features of the pattern")
+        ]],
+    uniform float  strength = 1.0
+        [[
+            anno::description("Controls the randomness of the flake orientation")
+        ]],
+    uniform int  noise_type = 0
+        [[
+            anno::description("Selects the noise type (0: Classic, 1: Worley)"),
+            anno::hard_range(0, 1)
+        ]],
+    uniform float  maximum_size = 1.0
+        [[
+            anno::description("Controls the shape of flakes in the secondary noise mode (Worley)")
+        ]],
+    uniform int metric = 0
+        [[
+            anno::description("Metric used in the secondary noise mode (Worley: 0: Euclidean, 1: Manhattan, 2: Chebyshev)"),
+            anno::hard_range(0, 2)
+        ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Bump-mapping flake noise"),
+    anno::noinline()
+]]
+{
+    if(strength == 0.0 || scale == 0.0)
+        return normal;
+    float3 pos = uvw.position / scale;
+    float cell_distance = 0.0f;
+    if (noise_type == 1) {
+        worley_return ret = worley_noise(pos, 1.0f, metric);
+        cell_distance = ret.val.x; //!! configurable jitter? //!! use other output as "distance"?
+        pos = ret.nearest_pos_0; //!! use other output as "uvw"?
+    }
+
+    noise_return ret2 = mi_noise(pos);
+
+    if (noise_type == 0) {
+        // Displace the coordinate according to noise value
+        pos += ret2.grad*2.0f;
+
+        // Then use only integer coordinates, to make
+        // flake transients "harder" and not "wobbly"
+        ret2 = mi_noise(int3(int(math::floor(pos.x)),int(math::floor(pos.y)),int(math::floor(pos.z))));
+    }
+
+    if ((noise_type == 1) && (cell_distance > maximum_size)) {
+        ret2.grad = float3(0.0f);
+    }
+
+    return math::normalize(
+        normal * (math::abs(ret2.grad.z)  + 1.0f / strength) +
+        uvw.tangent_u * ret2.grad.x +
+        uvw.tangent_v * ret2.grad.y);
+}
+
+struct Tiledata
+{
+    bool is_in_tile;
+    color color_result;
+};
+
+Tiledata eval_tile_function(
+    float2 tex,
+    color tile_color,
+    color grout_color,
+    float tile_brightness_variation,
+    float tile_hole_amount,
+    float seed,
+    float number_of_rows,
+    float number_of_columns,
+    float odd_row_offset,
+    float random_row_offset,
+    float tile_grout_width,
+    float tile_grout_height,
+    float tile_grout_roughness,
+    int special_column_index,
+    int special_row_index,
+    float special_column_height_factor,
+    float special_row_width_factor
+    )
+{
+    // Pattern is constrained to uv [0,1), and just repeats outside of that
+    float2 xy = float2(tex.x-math::floor(tex.x), tex.y-math::floor(tex.y));
+
+    // Calculate row/column coordinate
+    float num_columns = number_of_columns;
+    float num_rows = number_of_rows;
+    xy.x *= num_columns;
+    xy.y *= num_rows;
+
+    // Apply additional row/column multiplier for every nth row/column
+    int row_index = math::floor(xy.y);
+    {
+        int col_index = int(math::floor(xy.x));
+        // We add a +1 to do more like base-1 indexing, makes more sense for user
+        if((((row_index+1) % special_row_index) == 0)
+            && (((col_index+1) % special_column_index) == 0))
+        {
+            num_columns *= special_column_height_factor;
+            xy.x *= special_column_height_factor;
+            num_rows *= special_row_width_factor;
+            xy.y *= special_row_width_factor;
+
+        row_index = int(math::floor(xy.y));
+        }
+    }
+
+    float row_indexf = math::floor(xy.y);
+
+    // Apply tile offset for every other row (odd positive or even negative)
+    if((row_index & 1) != 0)
+    {
+        xy.x += odd_row_offset;
+    }
+    // Apply additional 'random' tile offset
+    if(random_row_offset > 0.0f)
+    {
+        xy.x += random_row_offset * perlin_noise(row_indexf*seed);
+    }
+
+    // Calculate the column index now that we've applied all possible modifications to x
+    float col_indexf = math::floor(xy.x);
+
+    // Determine the relative position inside the tile (tile is defined as [0,1)
+    xy.x -= col_indexf;
+    xy.y -= row_indexf;
+
+    float2[4] noise_pos;
+    noise_pos[0] = float2(col_indexf* seed,       row_indexf* seed);
+    noise_pos[3] = float2(col_indexf*(seed*0.5f), row_indexf*(seed*0.5f));
+
+    // Noise frequency modifiers. Compresses the noise along the edge direction.
+    float noise_scaley = 10.0f * (num_rows + num_columns);        //!! 10 is magic, num_rows+num_columns is to have noise adapt to tile size
+    float noise_scalex = (num_columns / num_rows) * noise_scaley; // apply aspect ratio, to have constant noise frequency when tile is stretched
+
+    noise_pos[1] = float2(tex.x*noise_scalex, tex.y*noise_scaley);
+    noise_pos[2] = float2(tex.x*noise_scaley, tex.y*noise_scalex);
+
+    float[4] results;
+    for(int i = 0; i < 4; ++i)
+        results[i] = perlin_noise(noise_pos[i]);
+
+    // Insert 'random' holes (i.e. brick renders using grout color)
+    if(tile_hole_amount > 0.0f)
+    {
+        float hole_sample = results[0];
+        // Remapping noise samples to uniform samples in [0,1): the noise function isn't linear but
+        // is symmetric so adding the inverse of negative values to positive values should provide a
+        // linear sample distribution.
+        if(tile_hole_amount > ((hole_sample >= 0.0f) ? hole_sample : (hole_sample + 1.0f)))
+        {
+            // Grout
+            return Tiledata(false,grout_color);
+        }
+    }
+
+    // Calculate the grout size in tile-space
+    float grout_width = tile_grout_width * num_columns;
+    float grout_height = tile_grout_height * num_rows;
+
+    // Apply a noise function to roughness to grout edges
+    if(tile_grout_roughness > 0.0f)
+    {
+        grout_width +=
+            // Apply factor between original and new number of row/col, to have the noise amplitude remain the same
+            // for large or small tiles.
+            (num_columns / number_of_columns)
+            // And the noise...
+            * tile_grout_roughness * results[1];
+        grout_height +=
+            // Apply aspect ratio to make the noise even in height and width
+        // and
+        // Apply factor between original and new number of row/col, to have the noise amplitude remain the same
+            // for large or small tiles.
+            (num_rows*num_rows / (num_columns*number_of_rows))
+            // And the noise...
+            * tile_grout_roughness * results[2];
+    }
+
+    // Determine if we're in the tile or the grout
+    if((xy.x < grout_width) || (xy.x > (1.0f - grout_width)) || (xy.y < grout_height) || (xy.y > (1.0f - grout_height)))
+    {
+        // Grout
+        return Tiledata(false,grout_color);
+    }
+    else
+    {
+        // Tile
+        // Apply 'random' color variation
+        if(tile_brightness_variation > 0.0f)
+        {
+            // Use a seed different than for the holes (multiply seed by 0.5 is ok-ish I guess?)
+            float variation = tile_brightness_variation * results[3];
+            tile_color = math::saturate(tile_color + tile_color * variation);
+        }
+
+        return Tiledata(true,tile_color);
+    }
+}
+
+export texture_return tile_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    color tile_color = color(0)
+        [[
+            anno::description("Color of \"bricks\" in the function")
+        ]],
+    color grout_color = color(1)
+        [[
+            anno::description("Color of \"grout\" between the \"bricks\" in the function")
+        ]],
+    uniform float number_of_rows = 4.
+        [[
+            anno::description("Number of tile rows in the 0-1 texturing domain")
+        ]],
+    uniform float number_of_columns = 4.
+        [[
+            anno::description("Number of tile columns in the 0-1 texturing domain")
+        ]],
+    uniform float grout_width = .02
+        [[
+            anno::description("Absolute width of vertical grout lines"),
+            anno::hard_range(0.0, 1.0)
+         ]],
+    uniform float grout_height = .02
+        [[
+            anno::description("Absolute height of horizontal grout lines"),
+            anno::hard_range(0.0, 1.0)
+         ]],
+    uniform float grout_roughness = 0.
+        [[
+            anno::description("Amount of noise added to grout size"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float missing_tile_amount = 0.
+        [[
+            anno::description("Number of tiles that will end up as grout, rather than as a tile (\"holes\"). Values are [0,1]."),
+            anno::hard_range(0.0, 1.0)
+         ]],
+    uniform float tile_brightness_variation = 0.
+        [[
+            anno::description("Randomization factor to the brightness of the tile color"),
+            anno::hard_range(0.0, 1.0)
+         ]],
+    uniform float seed = 2.284
+        [[
+            anno::description("Seeding number for random number generator controlling tile randomization effects")
+        ]],
+    uniform int special_row_index = 1
+        [[
+            anno::description("Every nth row, width of tiles is modified. Set nth all to 1 to disable. Never set the nth row or column to 0."),
+            anno::soft_range(1, 10)
+         ]],
+    uniform float special_row_width_factor = 1.
+        [[
+            anno::description("Change of width for tiles identified through \"special_row_index\"")
+        ]],
+    uniform int special_column_index = 1
+        [[
+            anno::description("Every nth column, height of tiles is modified. Set nth all to 1 to disable. Never set the nth row or column to 0."),
+            anno::soft_range(1, 10)
+        ]],
+    uniform float special_column_height_factor = 1.
+        [[
+            anno::description("Change of height for tiles identified through \"special_column_index\"")
+        ]],
+    uniform float odd_row_offset = .5
+        [[
+            anno::description("Controls bonding pattern. 0 will result in a \"stack bond\", .5 a \"running bond\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float random_row_offset = 0.
+        [[
+            anno::description("Randomization factor for \"odd_row_offset\""),
+            anno::hard_range(0.0, 1.0)
+        ]]
+)
+[[
+    anno::description("Color tiling generator"),
+    anno::noinline()
+]]
+{
+    Tiledata tiledata = eval_tile_function(
+        float2(uvw.position.x, uvw.position.y),
+        tile_color,
+        grout_color,
+        tile_brightness_variation,
+        missing_tile_amount,
+        seed,
+        number_of_rows,
+        number_of_columns,
+        odd_row_offset,
+        random_row_offset,
+        grout_width,
+        grout_height,
+        grout_roughness,
+        special_column_index,
+        special_row_index,
+        special_column_height_factor,
+        special_row_width_factor
+    );
+    float sn = 0.;
+    if(tiledata.is_in_tile)
+    {
+        sn = 1.;
+    }
+
+    return texture_return(    tiledata.color_result,sn);
+}
+
+export float3 tile_bump_texture(
+    texture_coordinate_info uvw = texture_coordinate_info()
+        [[
+            anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
+        ]],
+    uniform float factor = 1
+        [[
+            anno::description("Strength of the bump mapping effect")
+        ]],
+    uniform float number_of_rows = 4.
+        [[
+            anno::description("Number of tile rows in the 0-1 texturing domain")
+        ]],
+    uniform float number_of_columns = 4.
+        [[
+            anno::description("Number of tile columns in the 0-1 texturing domain")
+        ]],
+    uniform float grout_width = .02
+        [[
+            anno::description("Absolute width of vertical grout lines"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float grout_height = .02
+        [[
+            anno::description("Absolute height of horizontal grout lines"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+     uniform float grout_roughness = 0.
+        [[
+            anno::description("Amount of noise added to grout size"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float missing_tile_amount = 0.
+        [[
+            anno::description("Number of tiles that will end up as grout, rather than as a tile (\"holes\"). Values are [0,1].")
+        ]],
+    uniform float tile_brightness_variation = 0.
+        [[
+            anno::description("Randomization factor to the brightness of the tile color, will affect the bumpiness for that tile"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float seed = 2.284
+        [[
+            anno::description("Seeding number for random number generator controlling tile randomization effects")
+        ]],
+    uniform int special_row_index = 1
+        [[
+            anno::description("Every nth row, width of tiles is modified. Set nth all to 1 to disable. Never set the nth row or column to 0.")
+        ]],
+    uniform float special_row_width_factor = 1.
+        [[
+            anno::description("Change of width for tiles identified through \"special_row_index\"")
+        ]],
+    uniform int special_column_index = 1
+        [[
+            anno::description("Every nth column, height of tiles is modified. Set nth all to 1 to disable. Never set the nth row or column to 0.")
+        ]],
+    uniform float special_column_height_factor = 1.
+        [[
+            anno::description("Change of height for tiles identified through \"special_column_index\"")
+        ]],
+    uniform float odd_row_offset = .5
+        [[
+            anno::description("Controls bonding pattern. 0 will result in a \"stack bond\", .5 a \"running bond\"")
+        ]],
+    uniform float random_row_offset = 0.
+        [[
+            anno::description("Randomization factor for \"odd_row_offset\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    float3  normal = state::normal()
+        [[
+            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+        ]]
+)
+[[
+    anno::description("Bump-mapping tiling generator"),
+    anno::noinline()
+]]
+{
+    if (factor == 0.0f)
+        return normal;
+
+    float delta = 0.5f*(grout_width+grout_height); //!! magic, looks good with this value, has to be dependent on the incoming grout spacing as otherwise problems/aliasing with sampling the bump values
+    float2[3] offsets;
+
+    offsets[0] = float2(0.0f, 0.0f);
+    offsets[1] = float2(delta,0.0f);
+    offsets[2] = float2(0.0f,delta);
+    float[3] results;
+    Tiledata tiledata;
+    color color_result;
+    for(int i = 0; i < 3; ++i)
+    {
+        tiledata = eval_tile_function(
+            float2(uvw.position.x+offsets[i].x, uvw.position.y+offsets[i].y),
+            color(1.),
+            color(1.),
+            tile_brightness_variation,
+            missing_tile_amount,
+            seed,
+            number_of_rows,
+            number_of_columns,
+            odd_row_offset,
+            random_row_offset,
+            grout_width,
+            grout_height,
+            grout_roughness,
+            special_column_index,
+            special_row_index,
+            special_column_height_factor,
+            special_row_width_factor
+        );
+        results[i] = tiledata.is_in_tile?1.:0.;
+        if( i == 0)
+            color_result = tiledata.color_result;
+    }
+    if((results[2] == results[0]) && (results[1] == results[0]))
+    {
+        return normal;
+    }
+    else
+    {
+        // The color variation was applied to this color which we use to scale the bump effect
+        // (allowing this feature to be a "depth variation" for bricks of different depths)
+        float contrast_factor = factor * math::abs(math::luminance(color_result));
+
+        return math::normalize(
+            normal  +
+            uvw.tangent_v * (results[2] - results[0])   * contrast_factor     +
+            uvw.tangent_u * (results[1] - results[0])   * contrast_factor   );
+   }
+
+}
+
+export anisotropy_return anisotropy_conversion(
+    float roughness = 0.5
+    [[
+            anno::description("The base roughness value"),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    float anisotropy = 0.0
+        [[
+            anno::description("The anisotropy of the roughness"),
+            anno::soft_range(0.01, 100.0)
+        ]],
+    float anisotropy_rotation = 0.0
+        [[
+            anno::description("Rotation of direction of anisotropy, where 1 equals 360 degrees"),
+            anno::soft_range(0.0, 1.0)
+        ]],
+    float3 tangent_u = state::texture_tangent_u(0)
+        [[
+            anno::description("Tangent to align the anisotropy with. \"coordinate_source\" or \"coordinate_projection\" are possible sources")
+        ]],
+    uniform bool mia_anisotropy_semantic = false
+        [[
+            anno::description("allows backwards compatibility with mia material")
+        ]]
+)
+[[
+    anno::description("Convert old anisotropy controls into new ones"),
+    anno::noinline()
+]]
+{
+    float r1,r2;
+
+    if(mia_anisotropy_semantic)
+    {
+        if(anisotropy > 1)
+        {
+            float iso = math::max(math::sqrt(1.0 / anisotropy), 0.0001);
+            r1 = roughness / iso;
+            r2 = roughness * iso;
+        }
+        else
+        {
+            float iso = math::max(math::sqrt(math::sqrt(anisotropy)), 0.0001);
+            r2 = roughness / iso;
+            r1 = roughness * iso;
+        }
+    }
+    else
+    {
+        r1 = roughness;
+        r2 = (anisotropy == 1.0) ? roughness / 0.0001 : roughness / (1.0 - anisotropy);
+    }
+
+    // rotate basis if necessary
+    anisotropy_return aniso(r1,r2,tangent_u);
+    if(anisotropy_rotation != 0.0)
+    {
+        float rotation_angle = math::PI * 2.0 * anisotropy_rotation;
+        float cos_p = math::cos(rotation_angle);
+        float sin_p = math::sin(rotation_angle);
+        float3 tmp= math::cross(state::normal(), tangent_u);
+        aniso.tangent_u = tangent_u * cos_p - tmp * sin_p;
+    }
+    return aniso;
+}
+
+
+/*this can directly written as an expression in the material
+i.e. directly use
+return distance <= 0? color(0): -1.* math::log(tint) / distance;
+wherever a volume coefficient is needed.
+*/
+export color volume_coefficient(
+    uniform color tint = color(0)
+        [[
+            anno::description("The basic color of the absorption")
+        ]],
+    uniform float distance = 1.
+        [[
+            anno::description("The thickness of the material at which all but \"tint\" is absorbed")
+        ]]
+) [[ anno::description("Compute a volume coefficient based on distance and value") ]]
+{
+    return distance <= 0 ? color(0): -1.* math::log(tint) / distance;
+}
