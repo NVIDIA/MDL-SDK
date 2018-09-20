@@ -36,11 +36,13 @@
 
 #include "neuray_image_api_impl.h"
 #include "neuray_image_impl.h"
+#include "neuray_array_impl.h"
 
 #include <mi/base/handle.h>
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/iimage_plugin.h>
+#include <mi/neuraylib/ipointer.h>
 
 #include <base/system/stlext/i_stlext_likely.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
@@ -227,6 +229,26 @@ mi::Uint32 Image_api_impl::get_bytes_per_component( const char* pixel_type) cons
 {
     IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
     return IMAGE::get_bytes_per_component( pixel_type_enum);
+}
+
+mi::IArray* Image_api_impl::create_mipmaps(
+    const mi::neuraylib::ICanvas* canvas, 
+    mi::Float32 gamma) const
+{
+    std::vector<mi::base::Handle<mi::neuraylib::ICanvas> > mipmaps;
+    m_image_module->create_mipmaps(mipmaps, canvas, gamma);
+
+    if (mipmaps.empty())
+        return 0;
+
+    Array_impl* arr = new Array_impl(0, "Pointer<Interface>", mipmaps.size());
+    for(mi::Size i=0; i<mipmaps.size(); ++i)
+    { 
+        mi::base::Handle<mi::base::IInterface> if_p (arr->get_element(i));
+        mi::base::Handle<mi::IPointer> p(if_p->get_interface<mi::IPointer>());
+        p->set_pointer(mipmaps[i].get());
+    }
+    return arr;
 }
 
 mi::Sint32 Image_api_impl::start()

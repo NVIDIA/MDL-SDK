@@ -2,8 +2,14 @@
 set(PROJECT_NAME base-lib-config)
 
 # collect sources
+set(PROJECT_HEADERS
+    "config.h"
+    "config_impl.h"
+    )
+
 set(PROJECT_SOURCES 
     "config.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template

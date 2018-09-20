@@ -1392,15 +1392,32 @@ void Generated_code_dag::compile_material(
         dag_builder.reset();
 
         if (mat_decl->is_preset()) {
-            // A preset, retrieve its original material definition.
+            // A preset: First handle the preset initializers: These are in the original module
+            // (of the preset) at the original definition (of the preset).
+            {
+                Module_scope scope(dag_builder, orig_module.get());
+                for (int k = 0; k < parameter_count; ++k) {
+                    // Do not CSE default parameters, don't build DAGs for them
+                    No_CSE_scope cse_off(m_node_factory);
+
+                    // do not inline calls inside the default initializers
+                    No_INLINE_scope no_inline(m_node_factory);
+
+                    Parameter_info &param = mat.get_parameter(k);
+                    param.set_default(
+                        dag_builder.exp_to_dag(orig_mat_def->get_default_param_initializer(k)));
+                }
+            }
+
+            // Now retrieve the original material definition of the preset.
             // Beware, might be a preset of a preset, so find out the original (non-preset)
             // material by iteration.
 
             IDefinition           const *orig_mat_def;
-            IDeclaration_function const *orig_proto;
+            IDeclaration_function const *orig_mat_proto;
 
-            IDeclaration_function const     *orig_decl  = mat_decl;
-            mi::base::Handle<IModule const> orig_module(mi::base::make_handle_dup(module));
+            IDeclaration_function const     *orig_mat_decl = mat_decl;
+            mi::base::Handle<IModule const> orig_mat_module(orig_module);
 
             typedef stack<Let_entry>::Type Let_stack;
 
@@ -1408,13 +1425,13 @@ void Generated_code_dag::compile_material(
 
             do {
                 IStatement_expression const *clone_stmnt =
-                    cast<IStatement_expression>(orig_decl->get_body());
+                    cast<IStatement_expression>(orig_mat_decl->get_body());
                 IExpression const *mat_inst = clone_stmnt->get_expression();
                 IExpression_call const *call = NULL;
                 if (IExpression_let const *let = as<IExpression_let>(mat_inst)) {
                     call = cast<IExpression_call>(let->get_expression());
 
-                    let_stack.push(Let_entry(let, orig_module.get()));
+                    let_stack.push(Let_entry(let, orig_mat_module.get()));
                 } else {
                     call = cast<IExpression_call>(mat_inst);
                 }
@@ -1424,21 +1441,21 @@ void Generated_code_dag::compile_material(
                 orig_mat_def = ref->get_definition();
 
                 mi::base::Handle<IModule const> next(
-                    orig_module->get_owner_module(orig_mat_def));
+                    orig_mat_module->get_owner_module(orig_mat_def));
 
-                orig_mat_def = orig_module->get_original_definition(orig_mat_def);
-                orig_module  = next;
+                orig_mat_def    = orig_mat_module->get_original_definition(orig_mat_def);
+                orig_mat_module = next;
 
                 // get the prototype of the clone material if any, else its definition
-                orig_decl =
+                orig_mat_decl =
                     cast<IDeclaration_function>(orig_mat_def->get_declaration());
-                orig_proto =
+                orig_mat_proto =
                     cast<IDeclaration_function>(orig_mat_def->get_prototype_declaration());
-                if (orig_proto == NULL)
-                    orig_proto = orig_decl;
-            } while (orig_decl->is_preset());
+                if (orig_mat_proto == NULL)
+                    orig_mat_proto = orig_mat_decl;
+            } while (orig_mat_decl->is_preset());
 
-            string preset_material(orig_module->get_name(), get_allocator());
+            string preset_material(orig_mat_module->get_name(), get_allocator());
             preset_material += "::";
             preset_material += orig_mat_def->get_symbol()->get_name();
 
@@ -1472,31 +1489,15 @@ void Generated_code_dag::compile_material(
                 let_stack.pop();
             }
 
-            // now handle inits
+            // the following operations are done at the module of the original material,
+            // so enter it
+            Module_scope scope(dag_builder, orig_mat_module.get());
+
+            // Retrieve the parameter annotations from the original material, those are
+            // "copied", because the preset itself does not have parameters.
             for (int k = 0; k < parameter_count; ++k) {
-                // Do not CSE default parameters, don't build DAGs for them
-                No_CSE_scope cse_off(m_node_factory);
-
-                // do not inline calls inside the default initializers
-                No_INLINE_scope no_inline(m_node_factory);
-
-                IParameter const *orig_param = orig_proto->get_parameter(k);
-                dag_builder.make_accessible(orig_param);
-
-                Parameter_info &param = mat.get_parameter(k);
-                param.set_default(
-                    dag_builder.exp_to_dag(material_def->get_default_param_initializer(k)));
-            }
-
-            // Retrieve the parameter annotations from the cloned prototype, those are
-            // "copied".
-            // Note that we must enter the original module here, because we retrieve
-            // them from there.
-            Module_scope scope(dag_builder, orig_module.get());
-
-            for (int k = 0; k < parameter_count; ++k) {
-                IParameter const *orig_param = orig_proto->get_parameter(k);
-                if (IAnnotation_block const *annotations = orig_param->get_annotations()) {
+                IParameter const *orig_mat_param = orig_mat_proto->get_parameter(k);
+                if (IAnnotation_block const *annotations = orig_mat_param->get_annotations()) {
                     Parameter_info &param = mat.get_parameter(k);
 
                     int annotation_count = annotations->get_annotation_count();

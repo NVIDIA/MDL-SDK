@@ -127,7 +127,7 @@ public:
     /// \param callee_name  the unmangled DAG name of the callee
     /// \param n_params     number of parameters of the callee
     /// \param args         callee arguments
-    /// \param named_call   if true, create a call with name arguments, else with
+    /// \param named_args   if true, create a call with name arguments, else with
     ///                     positional arguments
     const mi::mdl::IExpression* transform_call(
         const mi::base::Handle<const IType>& ret_type,
@@ -135,7 +135,7 @@ public:
         const std::string &callee_name,
         mi::Size n_params,
         const mi::base::Handle<const IExpression_list>& args,
-        bool named_call);
+        bool named_args);
 
     /// Transform a MDL expression from neuray representation to MDL representation.
     ///

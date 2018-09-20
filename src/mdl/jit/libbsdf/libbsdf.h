@@ -54,7 +54,6 @@ struct MDL_SDK_Res_data_pair
     void             *thread_data;
 };
 
-
 enum BSDF_event_flags
 {
     BSDF_EVENT_DIFFUSE      = 1,
@@ -128,6 +127,53 @@ typedef void (*mdl_bsdf_evaluate_function)(BSDF_evaluate_data *,
 typedef void (*mdl_bsdf_pdf_function)     (BSDF_pdf_data *,
                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
+
+
+// type of events created by EDF importance sampling
+enum EDF_event_type
+{
+    EDF_EVENT_NONE = 0,
+    EDF_EVENT_EMISSION = 1,
+};
+
+struct EDF_sample_data
+{
+    // Input fields
+    float3 xi;  // pseudo-random sample number
+
+    // Output fields
+    float3 k1;              // outgoing direction
+    float  pdf;             // pdf (non-projected hemisphere)
+    float3 edf_over_pdf;    // edf * dot(normal,k1) / pdf
+    int event_type;
+};
+
+struct EDF_evaluate_data
+{
+    // Input fields
+    float3 k1;  // outgoing direction
+
+    // Output fields
+    float cos;      // dot(normal, k1)
+    float3 edf;     // edf
+    float  pdf;     // pdf (non-projected hemisphere)
+};
+
+struct EDF_pdf_data
+{
+    // Input fields
+    float3 k1;  // outgoing direction
+
+    // Output fields
+    float pdf;  // pdf (non-projected hemisphere)
+};
+
+typedef void(*mdl_edf_sample_function)  (EDF_sample_data *,
+                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void(*mdl_edf_evaluate_function)(EDF_evaluate_data *,
+                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void(*mdl_edf_pdf_function)     (EDF_pdf_data *,
+                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
 
 #endif // MDL_LIBBSDF_H

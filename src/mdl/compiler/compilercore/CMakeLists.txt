@@ -18,6 +18,58 @@ set(_GENERATED_SOURCES
     )
 
 # collect sources
+set(PROJECT_HEADERS 
+    "compilercore_allocator.h"
+    "compilercore_analysis.h"
+    "compilercore_archiver.h"
+    "compilercore_array_ref.h"
+    "compilercore_assert.h"
+    "compilercore_bitset.h"
+    "compilercore_builder.h"
+    "compilercore_builtin_types.h"
+    "compilercore_call_graph.h"
+    "compilercore_cc_conf.h"
+    "compilercore_checker.h"
+    "compilercore_cstring_hash.h"
+    "compilercore_debug_tools.h"
+    "compilercore_def_table.h"
+    "compilercore_dependency_graph.h"
+    "compilercore_dynamic_memory.h"
+    "compilercore_errors.h"
+    "compilercore_factories.h"
+    "compilercore_fatal.h"
+    "compilercore_file_resolution.h"
+    "compilercore_file_utils.h"
+    "compilercore_function_instance.h"
+    "compilercore_hash_ptr.h"
+    "compilercore_known_defs.h"
+    "compilercore_malloc_allocator.h"
+    "compilercore_mangle.h"
+    "compilercore_manifest.h"
+    "compilercore_mdl.h"
+    "compilercore_memory_arena.h"
+    "compilercore_messages.h"
+    "compilercore_modules.h"
+    "compilercore_names.h"
+    "compilercore_optimizer.h"
+    "compilercore_options.h"
+    "compilercore_overload.h"
+    "compilercore_positions.h"
+    "compilercore_predefined_symbols.h"
+    "compilercore_printers.h"
+    "compilercore_rawbitset.h"
+    "compilercore_serializer.h"
+    "compilercore_stmt_info.h"
+    "compilercore_streams.h"
+    "compilercore_string.h"
+    "compilercore_symbols.h"
+    "compilercore_thread_context.h"
+    "compilercore_tools.h"
+    "compilercore_type_cache.h"
+    "compilercore_visitor.h"
+    "compilercore_wchar_support.h"
+    )
+
 set(PROJECT_SOURCES 
     "compilercore_analysis.cpp"
     "compilercore_annotations.cpp"
@@ -62,6 +114,7 @@ set(PROJECT_SOURCES
     "compilercore_visitor.cpp"
     "compilercore_wchar_support.cpp"
     ${_GENERATED_SOURCES}
+    ${PROJECT_HEADERS}
     )
 
 # mark files as generated to disable the check for existance during configure

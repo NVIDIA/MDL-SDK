@@ -248,7 +248,8 @@ public:
         }
 
         /// Get the cloned material name if any.
-        char const *get_cloned_name() const { return m_cloned.c_str(); }
+        char const *get_cloned_name() const {
+            return m_cloned.empty() ? NULL : m_cloned.c_str(); }
 
         /// Get the parameter count.
         size_t get_parameter_count() const { return m_parameters.size(); }
@@ -349,7 +350,9 @@ public:
         }
 
         /// Get the cloned function name if any.
-        char const *get_cloned_name() const { return m_cloned.c_str(); }
+        char const *get_cloned_name() const {
+            return m_cloned.empty() ? NULL : m_cloned.c_str();
+        }
 
         /// Get the parameter count.
         size_t get_parameter_count() const { return m_parameters.size(); }
@@ -1505,11 +1508,11 @@ public:
     /// \returns                    True if this is an exported material, false if it is local.
     bool get_material_exported(int material_index) const MDL_FINAL;
 
-    /// Return the original material name of a cloned material or "" if the material
+    /// Return the original material name of a cloned material or NULL if the material
     /// is not a clone.
     ///
     /// \param material_index   The index of the material.
-    /// \returns                The absolute name of the original material or "".
+    /// \returns                The absolute name of the original material or NULL.
     char const *get_cloned_material_name(
         int material_index) const MDL_FINAL;
 
@@ -1674,11 +1677,11 @@ public:
         int function_index,
         int callee_index) const MDL_FINAL;
 
-    /// Return the original function name of a cloned function or "" if the function
+    /// Return the original function name of a cloned function or NULL if the function
     /// is not a clone.
     ///
     /// \param function_index   The index of the function.
-    /// \returns                The absolute name of the original function or "".
+    /// \returns                The absolute name of the original function or NULL.
     char const *get_cloned_function_name(
         int function_index) const MDL_FINAL;
 

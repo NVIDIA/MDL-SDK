@@ -2,11 +2,18 @@
 set(PROJECT_NAME prod-bin-mdlc)
 
 # collect sources
+set(PROJECT_HEADERS
+    "getopt.h"
+    "mdlc.h"
+    "search_path.h"
+    )
+
 set(PROJECT_SOURCES
     "mdlc.cpp"
     "getopt.cpp"
     "search_path.cpp"
     "main.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template
@@ -33,9 +40,4 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::base-system-version
         ${LINKER_END_GROUP}
     )
-
-# add system dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld threads
-    )
+    

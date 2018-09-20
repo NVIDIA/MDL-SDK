@@ -57,6 +57,9 @@ struct Options {
     // List of materials to use.
     std::vector<std::string> material_names;
 
+    // List of MDL module paths.
+    std::vector<std::string> mdl_paths;
+
     // The constructor.
     Options()
         : outputfile()
@@ -143,6 +146,7 @@ void usage(char const *prog_name)
         << "  --cc                use class compilation\n"
         << "  -o <outputfile>     image file to write result to\n"
         << "                      (default: example_cuda_<material_pattern>.png)\n"
+        << "  --mdl_path <path>   mdl search path, can occur multiple times.\n"
         << "  <material_pattern>  a number from 1 to 2 ^ num_materials - 1 choosing which\n"
         << "                      material combination to use (default: 2 ^ num_materials - 1)\n"
         << "  <material_name*>    qualified name of materials to use. The example will try to\n"
@@ -163,25 +167,24 @@ int main(int argc, char* argv[])
 {
     // Parse command line options
     Options options;
+    options.mdl_paths.push_back(get_samples_mdl_root());
 
     for (int i = 1; i < argc; ++i) {
         char const *opt = argv[i];
         if (opt[0] == '-') {
-            if (strcmp(opt, "-o") == 0) {
-                if (i < argc - 1)
-                    options.outputfile = argv[++i];
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "--res") == 0) {
-                if (i < argc - 2) {
-                    options.res_x = std::max(atoi(argv[++i]), 1);
-                    options.res_y = std::max(atoi(argv[++i]), 1);
-                } else
-                    usage(argv[0]);
+            if (strcmp(opt, "-o") == 0 && i < argc - 1) {
+                options.outputfile = argv[++i];
+            } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
+                options.res_x = std::max(atoi(argv[++i]), 1);
+                options.res_y = std::max(atoi(argv[++i]), 1);
             } else if (strcmp(opt, "--cc") == 0) {
                 options.use_class_compilation = true;
-            } else
+            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+                options.mdl_paths.push_back(argv[++i]);
+            } else {
+                std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
+            }
         } else if (opt[0] >= '0' && opt[0] <= '9') {
             options.material_pattern = unsigned(atoi(opt));
         } else
@@ -218,7 +221,8 @@ int main(int argc, char* argv[])
     // Load plugin required for loading textures
     check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
     // Configure MDL search root
-    check_success(mdl_compiler->add_module_path(get_samples_mdl_root().c_str()) == 0);
+    for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
+        check_success(mdl_compiler->add_module_path(options.mdl_paths[i].c_str()) == 0);
 
     // Start the MDL SDK
     mi::Sint32 result = neuray->start();

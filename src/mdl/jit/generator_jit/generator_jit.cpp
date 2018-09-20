@@ -114,6 +114,10 @@ Code_generator_jit::Code_generator_jit(
         MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
         "false",
         "Map string constants to identifiers");
+    m_options.add_option(
+        MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU,
+        "true",
+        "Use built-in resource handler on CPU");
 }
 
 // Get the name of the target language.
@@ -181,7 +185,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
         /*ptx_mode=*/false,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_texture_handler=*/true,
+        /*has_texture_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_ENVIRONMENT,
         /*num_texture_spaces=*/0,
         /*num_texture_results=*/0,
@@ -342,7 +346,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
         /*ptx_mode=*/false,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/true,
+        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_NO_STATE,
         /*num_texture_spaces=*/0,
         /*num_texture_results=*/0,
@@ -599,7 +603,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         /*ptx_mode=*/false,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/true,
+        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
@@ -679,7 +683,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         /*ptx_mode=*/false,
         enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
-        /*has_tex_handler=*/true,
+        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
@@ -770,7 +774,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
         /*ptx_mode=*/false,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/true,
+        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
@@ -1277,7 +1281,8 @@ Link_unit_jit::Link_unit_jit(
     /*ptx_mode=*/target_kind == TK_CUDA_PTX,
     tm_mode,
     sm_version,
-    /*has_tex_handler=*/target_kind != TK_CUDA_PTX,  // PTX mode: there's no texture handler
+    /*has_tex_handler=*/target_kind == TK_CUDA_PTX ? false : // PTX mode: there's no tex handler
+        options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU), 
     Type_mapper::SSM_CORE,
     num_texture_spaces,
     num_texture_results,
@@ -1462,7 +1467,8 @@ bool Link_unit_jit::add(
     ILambda_function const    *ilambda,
     ICall_name_resolver const *resolver,
     Function_kind              kind,
-    size_t                    *arg_block_index)
+    size_t                    *arg_block_index,
+    size_t                    *function_index)
 {
     if (arg_block_index == NULL)
         return false;
@@ -1493,20 +1499,24 @@ bool Link_unit_jit::add(
     }
 
     if (func != NULL) {
-        if (m_code_gen.get_captured_arguments_llvm_type() != NULL) {
+        if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
             IAllocator        *alloc = get_allocator();
             Allocator_builder builder(alloc);
             m_arg_block_layouts.push_back(
                 mi::base::make_handle(
                     builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
             *arg_block_index = m_arg_block_layouts.size() - 1;
-        } else
-            *arg_block_index = ~0;
+        }
+
+        // pass out the function index
+        if (function_index != NULL)
+            *function_index = m_func_infos.size();
 
         m_func_infos.push_back(
             Link_unit_jit_function_info(
                 string(func->getName().data(), get_allocator()),
                 func,
+                ILink_unit::DK_NONE,
                 kind,
                 *arg_block_index));
 
@@ -1519,7 +1529,8 @@ bool Link_unit_jit::add(
 bool Link_unit_jit::add(
     IDistribution_function const *idist_func,
     ICall_name_resolver const    *resolver,
-    size_t                       *arg_block_index)
+    size_t                       *arg_block_index,
+    size_t                       *function_index)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
     if (dist_func == NULL)
@@ -1539,20 +1550,40 @@ bool Link_unit_jit::add(
         /*incremental=*/true, *dist_func, resolver, llvm_funcs);
 
     if (module != NULL) {
-        if (m_code_gen.get_captured_arguments_llvm_type() != NULL) {
+        if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
             IAllocator        *alloc = get_allocator();
             Allocator_builder builder(alloc);
             m_arg_block_layouts.push_back(
                 mi::base::make_handle(
                     builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
             *arg_block_index = m_arg_block_layouts.size() - 1;
-        } else
-            *arg_block_index = ~0;
+        }
+
+        // get distribution kind
+        ILink_unit::Distribution_kind distribution_kind = ILink_unit::Distribution_kind::DK_INVALID;
+        switch (root_lambda->get_body()->get_type()->get_kind())
+        {
+            case mi::mdl::IType::Kind::TK_BSDF:
+                distribution_kind = ILink_unit::DK_BSDF;
+                break;
+
+            case mi::mdl::IType::Kind::TK_EDF:
+                distribution_kind = ILink_unit::DK_EDF;
+                break;
+
+            default:
+                return false;
+        }
+
+        // pass out the function index of the init function
+        if (function_index != NULL)
+            *function_index = m_func_infos.size();
 
         m_func_infos.push_back(
             Link_unit_jit_function_info(
                 root_lambda->get_name() + string("_init", get_allocator()),
                 llvm_funcs[0],
+                distribution_kind,
                 FK_DF_INIT,
                 *arg_block_index));
 
@@ -1560,6 +1591,7 @@ bool Link_unit_jit::add(
             Link_unit_jit_function_info(
                 root_lambda->get_name() + string("_sample", get_allocator()),
                 llvm_funcs[1],
+                distribution_kind,
                 FK_DF_SAMPLE,
                 *arg_block_index));
 
@@ -1567,6 +1599,7 @@ bool Link_unit_jit::add(
             Link_unit_jit_function_info(
                 root_lambda->get_name() + string("_evaluate", get_allocator()),
                 llvm_funcs[2],
+                distribution_kind,
                 FK_DF_EVALUATE,
                 *arg_block_index));
 
@@ -1574,6 +1607,7 @@ bool Link_unit_jit::add(
             Link_unit_jit_function_info(
                 root_lambda->get_name() + string("_pdf", get_allocator()),
                 llvm_funcs[3],
+                distribution_kind,
                 FK_DF_PDF,
                 *arg_block_index));
 
@@ -1596,7 +1630,15 @@ char const *Link_unit_jit::get_function_name(size_t i) const
     return NULL;
 }
 
-// Returns the kind of the i'th function inside this link unit.
+// Returns the distribution kind of the i'th function inside this link unit.
+ILink_unit::Distribution_kind Link_unit_jit::get_distribution_kind(size_t i) const
+{
+    if (i < m_func_infos.size())
+        return m_func_infos[i].m_dist_kind;
+    return ILink_unit::DK_INVALID;
+}
+
+// Returns the function kind of the i'th function inside this link unit.
 ILink_unit::Function_kind Link_unit_jit::get_function_kind(size_t i) const
 {
     if (i < m_func_infos.size())

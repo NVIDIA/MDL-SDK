@@ -829,25 +829,6 @@ DAG_node const *DAG_node_factory_impl::unwrap_float_to_color(DAG_node const *n)
     return NULL;
 }
 
-/// Create an int2(0,0) constant.
-static IValue const *create_int2_zero(
-    Value_factory &vf)
-{
-    Type_factory &tf = *vf.get_type_factory();
-
-    IType_vector const *int2_tp = tf.create_vector(tf.create_int(), 2);
-
-    return vf.create_zero(int2_tp);
-}
-
-/// Check if a given type is the texture_2d type.
-static bool is_tex_2d(IType const *type)
-{
-    if (IType_texture const *tex_tp = as<IType_texture>(type))
-        return tex_tp->get_shape() == IType_texture::TS_2D;
-    return false;
-}
-
 // Create a call.
 DAG_node const *DAG_node_factory_impl::create_call(
     char const                    *name,

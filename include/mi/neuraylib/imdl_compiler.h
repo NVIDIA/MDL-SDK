@@ -57,6 +57,8 @@ class ITarget_code;
 class ITarget_argument_block;
 class ITransaction;
 
+struct Target_function_description;
+
 /** \defgroup mi_neuray_mdl_compiler MDL compiler
     \ingroup mi_neuray
 
@@ -502,6 +504,10 @@ public:
     /// - \c "internal_space": Set the internal space of the backend.
     ///   Possible values: \c "world", \c "object". Default: \c "world".
     ///
+    /// The following options are supported by the NATIVE backend only:
+    /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
+    ///   Possible values: \c "on", \c "off". Default: \c "on".
+    ///
     /// The following options are supported by the LLVM-IR backend only:
     /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
@@ -791,6 +797,30 @@ public:
         bool include_geometry_normal,
         Sint32* errors) = 0;
 
+    /// Transforms (multiple) distribution functions and expressions of a material to target code.
+    /// For each distribution function this results in four functions, suffixed with \c "_init", 
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application, 
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param transaction              The transaction to be used.
+    /// \param material                 The compiled MDL material.
+    /// \param function_descriptions    The list of descriptions of function to translate.
+    /// \param description_count        The size of the list of descriptions.
+    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
+    ///                                 to the MDL state prior to evaluation of the given DF.
+    ///
+    /// \return              The generated target code, or \c NULL in case of failure.
+    ///                      In the latter case, check the return codes in descriptions.
+    virtual const ITarget_code* translate_material(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        Target_function_description* function_descriptions,
+        Size description_count,
+        bool include_geometry_normal) = 0;
+
     /// Creates a new link unit.
     ///
     /// \param transaction  The transaction to be used.
@@ -851,7 +881,7 @@ public:
     /// The value 0 is always the "not known string".
     ///
     /// \param s  the string value
-    virtual mi::Uint32 get_string_index(IValue_string const *s) = 0;
+    virtual Uint32 get_string_index(IValue_string const *s) = 0;
 };
 
 /// Represents an argument block of a class-compiled material compiled for a specific target.
@@ -922,7 +952,7 @@ public:
     /// \param       state     The layout state representing the current nesting within the
     ///                        argument value block. The default value is used for the top-level.
     ///
-    /// \returns the offset of the requested argument / element or \c mi::Size(0) if the state
+    /// \returns the offset of the requested argument / element or \c "~mi::Size(0)" if the state
     ///          is invalid.
     virtual Size get_layout(
         IValue::Kind &kind,
@@ -936,7 +966,7 @@ public:
     /// \param state  The layout state representing the current nesting within the argument
     ///               value block. The default value is used for the top-level.
     ///
-    /// \returns the layout state for the nested element or a state with \c mi::Uint32(0) as
+    /// \returns the layout state for the nested element or a state with \c "~mi::Uint32(0)" as
     ///          m_state_offs if the element is atomic.
     virtual Target_value_layout_state get_nested_state(
         Size i,
@@ -1009,6 +1039,15 @@ public:
         SL_CUDA,
         SL_PTX,
         SL_GLSL              // \if MDL_SOURCE_RELEASE Reserved\else GLSL\endif.
+    };
+
+    /// Possible kinds of distribution functions.
+    enum Distribution_kind
+    {
+        DK_NONE,
+        DK_BSDF,
+        DK_EDF,
+        DK_INVALID
     };
 
     /// Possible kinds of callable functions.
@@ -1194,7 +1233,15 @@ public:
     virtual const char* get_callable_function_prototype( Size index, Prototype_language lang)
         const = 0;
 
-    /// Returns the kind of a callable function in the target code.
+    /// Returns the distribution kind of a callable function in the target code.
+    ///
+    /// \param index   The index of the callable function.
+    ///
+    /// \return The distribution kind of the callable function 
+    ///         or \c DK_INVALID if \p index was invalid.
+    virtual Distribution_kind get_callable_function_distribution_kind( Size index) const = 0;
+
+    /// Returns the function kind of a callable function in the target code.
     ///
     /// \param index   The index of the callable function.
     ///
@@ -1211,9 +1258,12 @@ public:
 
     /// Run this code on the native CPU.
     ///
-    /// \param[in]  index     the index of the callable function
-    /// \param[in]  state     the core state
-    /// \param[out] result    the result will be written to
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[out] result      The result will be written to.
     ///
     /// \returns
     ///    - 0  on success
@@ -1225,16 +1275,20 @@ public:
     virtual Sint32 execute_environment(
         Size index,
         const Shading_state_environment& state,
+        Texture_handler_base* tex_handler,
         Spectrum_struct* result) const = 0;
 
     /// Run this code on the native CPU with the given captured arguments block.
     ///
-    /// \param[in]  index     the index of the callable function
-    /// \param[in]  state     the core state
-    /// \param[in]  cap_args  the captured arguments to use for the execution.
-    ///                       If \p cap_args is \c NULL, the captured arguments of this
-    ///                       \c ITarget_code object will be used, if any.
-    /// \param[out] result    the result will be written to
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object will be used, if any.
+    /// \param[out] result      The result will be written to.
     ///
     /// \returns
     ///    - 0  on success
@@ -1247,6 +1301,7 @@ public:
     virtual Sint32 execute(
         Size index,
         const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args,
         void* result) const = 0;
     
@@ -1256,12 +1311,15 @@ public:
     /// \c "geometry.normal" and, if the \c "num_texture_results" backend option has been set to
     /// non-zero, fills the text_results fields of the state.
     ///
-    /// \param[in]  index     The index of the callable function.
-    /// \param[in]  state     The core state.
-    /// \param[in]  cap_args  The captured arguments to use for the execution.
-    ///                       If \p cap_args is \c NULL, the captured arguments of this
-    ///                       \c ITarget_code object for the given callable function will be used,
-    ///                       if any.
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
     ///
     /// \returns
     ///    - 0  on success
@@ -1270,6 +1328,7 @@ public:
     virtual Sint32 execute_bsdf_init(
         Size index,
         Shading_state_material& state,
+        Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
 
     /// Run the BSDF sample function for this code on the native CPU.
@@ -1277,6 +1336,9 @@ public:
     /// \param[in]    index     The index of the callable function.
     /// \param[inout] data      The input and output fields for the BSDF sampling.
     /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
@@ -1289,7 +1351,8 @@ public:
     virtual Sint32 execute_bsdf_sample(
         Size index,
         Bsdf_sample_data *data,
-        const Shading_state_material& state,
+        const Shading_state_material& state, 
+        Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
 
     /// Run the BSDF evaluation function for this code on the native CPU.
@@ -1297,6 +1360,9 @@ public:
     /// \param[in]    index     The index of the callable function.
     /// \param[inout] data      The input and output fields for the BSDF evaluation.
     /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
@@ -1311,6 +1377,7 @@ public:
         Size index,
         Bsdf_evaluate_data *data,
         const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
 
     /// Run the BSDF PDF calculation function for this code on the native CPU.
@@ -1318,6 +1385,9 @@ public:
     /// \param[in]    index     The index of the callable function.
     /// \param[inout] data      The input and output fields for the BSDF PDF calculation.
     /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
@@ -1332,6 +1402,107 @@ public:
         Size index,
         Bsdf_pdf_data *data,
         const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+    
+    /// Run the EDF init function for this code on the native CPU.
+    ///
+    /// This function updates the normal field of the shading state with the result of
+    /// \c "geometry.normal" and, if the \c "num_texture_results" backend option has been set to
+    /// non-zero, fills the text_results fields of the state.
+    ///
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a EDF init function
+    virtual Sint32 execute_edf_init(
+        Size index,
+        Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+    /// Run the EDF sample function for this code on the native CPU.
+    ///
+    /// \param[in]    index     The index of the callable function.
+    /// \param[inout] data      The input and output fields for the EDF sampling.
+    /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]    cap_args  The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a EDF sample function
+    virtual Sint32 execute_edf_sample(
+        Size index,
+        Edf_sample_data *data,
+        const Shading_state_material& state, 
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+    /// Run the EDF evaluation function for this code on the native CPU.
+    ///
+    /// \param[in]    index     The index of the callable function.
+    /// \param[inout] data      The input and output fields for the EDF evaluation.
+    /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]    cap_args  The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a EDF evaluation
+    ///         function
+    virtual Sint32 execute_edf_evaluate(
+        Size index,
+        Edf_evaluate_data *data,
+        const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+    /// Run the EDF PDF calculation function for this code on the native CPU.
+    ///
+    /// \param[in]    index     The index of the callable function.
+    /// \param[inout] data      The input and output fields for the EDF PDF calculation.
+    /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]    cap_args  The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a EDF PDF calculation
+    ///         function
+    virtual Sint32 execute_edf_pdf(
+        Size index,
+        Edf_pdf_data *data,
+        const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
 };
 
@@ -1405,15 +1576,120 @@ public:
     ///                      - -6: The backend does not support compiled MDL materials obtained
     ///                            from class compilation mode.
     ///                      - -7: The backend does not implement this function, yet.
-    ///                      - -8: EDFs are not supported.
+    ///                      - -8: EDFs are not supported. (deprecated, will not occur anymore)
     ///                      - -9: VDFs are not supported.
-    ///                      - -10: The requested BSDF is not supported, yet.
+    ///                      - -10: The requested DF is not supported, yet.
     virtual Sint32 add_material_df(
         const ICompiled_material* material,
         const char* path,
         const char* base_fname,
         bool include_geometry_normal) = 0;
+
+
+
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// For each distribution function this results in four functions, suffixed with \c "_init", 
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application, 
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param material                     The compiled MDL material.
+    /// \param function_descriptions        The list of descriptions of function to translate.
+    /// \param description_count            The size of the list of descriptions.
+    /// \param include_geometry_normal      If true, the \c "geometry.normal" field will be applied
+    ///                                     to the MDL state prior to evaluation of the given DF.
+    /// \returns             A return code. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: An error occurred while processing the entries in the list.
+    ///                            For more detailed error information, each list entry contains
+    ///                            the error code of the corresponding function type 
+    ///                            (see the return codes of \c add_material_expression and 
+    ///                            \c add_material_df). In case of an error, rely only on the first
+    ///                            return code different from 0.
+    virtual Sint32 add_material(
+        const ICompiled_material*       material,
+        Target_function_description*    function_descriptions,
+        Size                            description_count,
+        bool                            include_geometry_normal) = 0;
 };
+
+struct Target_function_description
+{
+    Target_function_description(
+        const char* expression_path = NULL,
+        const char* base_function_name = NULL)
+        : path(expression_path)
+        , base_fname(base_function_name)
+        , argument_block_index(~0)
+        , function_index(~0)
+        , distribution_kind(ITarget_code::DK_INVALID)
+        , return_code(~0) // not processed
+    {
+    }
+
+    /// The path from the material root to the expression that should be translated,
+    /// e.g., \c "surface.scattering".
+    const char* path;
+
+    /// The base name of the generated functions.
+    /// If \c NULL is passed, the function name will be 'lambda' followed by an increasing
+    /// counter. Note, that this counter is tracked per link unit. That means, you need to provide
+    /// functions names when using multiple link units in order to avoid collisions.
+    const char* base_fname;
+
+    /// The index of argument block that belongs to the compiled material the function is  
+    /// generated from or ~0 if none of the added function required arguments. 
+    /// It allows to get the layout and a writable pointer to argument data. This is an output
+    /// parameter which is available after adding the function to the link unit.
+    Size argument_block_index;
+
+    /// The index of the generated function for accessing the callable function information of 
+    /// the link unit or ~0 if the selected function is an invalid distribution function. 
+    /// ~0 is not an error case, it just means, that evaluating the function will result in 0.
+    /// In case the function is a distribution function, the returned index will be the 
+    /// index of the \c init function, while \c sample, \c evaluate, and \c pdf will be 
+    /// accessible by the consecutive indices, i.e., function_index + 1, function_index + 2,
+    /// function_index + 3. This is an output parameter which is available after adding the
+    /// function to the link unit.
+    Size function_index;
+
+    /// Return the distribution kind of this function (or NONE in case expressions). This is 
+    /// an output parameter which is available after adding the function to the link unit. 
+    ITarget_code::Distribution_kind distribution_kind;
+
+    /// A return code. For the meaning of the error codes correspond to the codes 
+    /// \c add_material_expression (code * 10) and \c add_material_df (code * 100).
+    ///      0:  Success.
+    ///     ~0:  The function has not yet been processed
+    ///     -1:  Invalid parameters (\c NULL pointer).
+    ///     -2:  Invalid path (non-existing).
+    ///     -7:  The backend does not implement this function, yet.
+    /// 
+    ///  codes for expressions, i.e., distribution_kind == DK_NONE
+    ///    -10:  The JIT backend is not available.
+    ///    -20:  Invalid field name (non-existing).
+    ///    -30:  invalid function name.
+    ///    -40:  The JIT backend failed to compile the function.
+    ///    -50:  The requested expression is a constant.
+    ///    -60:  Neither BSDFs, EDFs, VDFs, nor resource type expressions can be compiled.
+    /// 
+    ///  codes for distribution functions, i.e., distribution_kind == DK_BSDF, DK_EDF, ...
+    ///   -100:  Invalid parameters (\c NULL pointer).
+    ///   -200:  Invalid path (non-existing).
+    ///   -300:  The backend failed to generate target code for the material.
+    ///   -400:  The requested expression is a constant.
+    ///   -500:  Only distribution functions are allowed.
+    ///   -600:  The backend does not support compiled MDL materials obtained from 
+    ///          class compilation mode.
+    ///   -700:  The backend does not implement this function, yet.
+    ///   -800:  EDFs are not supported. (deprecated, will not occur anymore)
+    ///   -900:  VDFs are not supported.
+    ///  -1000:  The requested DF is not supported, yet.
+    Sint32 return_code;
+};
+
 
 mi_static_assert( sizeof( ITarget_code::State_usage_property) == sizeof( mi::Uint32));
 

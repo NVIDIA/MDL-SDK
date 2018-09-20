@@ -2053,9 +2053,15 @@ class SignatureParser:
 				}
 				""" % code_params
 			else:
+				# for atomic types, this normalize() is just sign()
+				f_name = self.get_runtime_enum("sign" + self.get_type_suffix(params[0]))
 				code = """
-				res = a;
-				"""
+				llvm::Value *call_args[1] = {
+					a,
+				};
+				llvm::Function *callee = get_runtime_func(%s);
+				res = ctx->CreateCall(callee, call_args);
+				""" % f_name
 			self.format_code(f, code)
 
 		elif mode == "math::distance":

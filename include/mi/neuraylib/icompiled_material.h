@@ -39,6 +39,8 @@ namespace mi {
 
 namespace neuraylib {
 
+    class IMaterial_instance;
+
 /** \addtogroup mi_neuray_mdl_elements
 @{
 */
@@ -263,6 +265,43 @@ public:
     /// \return                A sub-expression for \p expr according to \p path, or \c NULL in case
     ///                        of errors.
     virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
+
+
+    /// Looks up the database name of the mdl instance connected to the argument of a compiled
+    /// material.
+    /// 
+    /// The parameters on the compiled material in class compilation mode can have more complex 
+    /// names if a shade graph has been compiled. The name corresponds to a path through the shade
+    /// graph identifying a node and a parameter on that node whose value should be passed into
+    /// the parameter of the compiled result. For example, the path "a.b.x" refers to a parameter
+    /// named x on a node connected to a parameter named b on a node connected to the parameter a
+    /// of the material that has been compiled.
+    /// \param material_instance_name   The name of the material instance this material was
+    ///                                 compiled from.
+    /// \param parameter_index          The index of the parameter for which the database name of
+    ///                                 the connected function is to be looked up (e.g. if the
+    ///                                 compiled material has a parameter named \c "tint.s.texture"
+    ///                                 the function returns the database name of the function
+    ///                                 connected to the tint parameter.
+    /// \param errors                   An optional pointer to an #mi::Sint32 to which an error
+    ///                                    code will be written. The error codes have the following
+    ///                                    meaning:
+    ///                                    -  0: Success.
+    ///                                    - -1: The parameter material_instance_name is NULL or a
+    ///                                          material instance of that name does not exist in
+    ///                                          the database.
+    ///                                    - -2: The given parameter index exceeds the parameter 
+    ///                                          count of the compiled material.
+    ///                                    - -3: The function could not be found in the database.
+    ///                                          This might be due to the fact that the given
+    ///                                          parameter is not connected to a function or the
+    ///                                          material instance has been changed after the
+    ///                                          creation of this compiled material.
+    /// \return The database name of the connected function or NULL in case an error occurred.
+    virtual const IString* get_connected_function_db_name(
+        const char* material_instance_name,
+        Size parameter_index,
+        Sint32* errors = 0) const = 0;
 
     //@}
 };

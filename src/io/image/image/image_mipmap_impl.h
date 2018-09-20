@@ -209,15 +209,6 @@ public:
 
 private:
 
-    /// Creates the given miplevel.
-    ///
-    /// \note The caller needs to hold the lock m_lock.
-    ///
-    /// \pre The miplevel for level \p level - 1 has already been created.
-    ///
-    /// \param level         The miplevel to be created.
-    void create_miplevel( mi::Uint32 level) const;
-
     /// The number of miplevels of this mipmap.
     ///
     /// The number of miplevels is determined from the width and height of the base level. The last

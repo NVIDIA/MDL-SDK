@@ -49,10 +49,12 @@ struct Link_unit_jit_function_info
     Link_unit_jit_function_info(
         string const &name,
         llvm::Function *func,
+        ILink_unit::Distribution_kind dist_kind,
         ILink_unit::Function_kind kind,
         size_t arg_block_index)
     : m_name(name)
     , m_func(func)
+    , m_dist_kind(dist_kind)
     , m_kind(kind)
     , m_arg_block_index(arg_block_index)
     {}
@@ -62,6 +64,9 @@ struct Link_unit_jit_function_info
 
     /// The LLVM function.
     llvm::Function *m_func;
+
+    /// The kind of the function.
+    ILink_unit::Distribution_kind m_dist_kind;
 
     /// The kind of the function.
     ILink_unit::Function_kind m_kind;
@@ -95,13 +100,16 @@ public:
     /// \param kind                 the kind of the lambda function
     /// \param arg_block_index      on success, this parameter will receive the index of the target
     ///                             argument block used for added entity or ~0 if none is used
+    /// \param function_index       the index of the callable function in the created target code.
+    ///                             This parameter is option, provide NULL if not required.
     ///
     /// \return true on success
     bool add(
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         Function_kind              kind,
-        size_t                    *arg_block_index) MDL_FINAL;
+        size_t                    *arg_block_index,
+        size_t                    *function_index) MDL_FINAL;
 
     /// Add a distribution function to this link unit.
     ///
@@ -114,12 +122,15 @@ public:
     /// \param name_resolver        the call name resolver
     /// \param arg_block_index      this variable will receive the index of the target argument
     ///                             block used for this distribution function or ~0 if none is used
+    /// \param function_index       the index of the callable function in the created target code.
+    ///                             This parameter is option, provide NULL if not required.
     ///
     /// \return true on success
     bool add(
         IDistribution_function const *dist_func,
         ICall_name_resolver const    *name_resolver,
-        size_t                       *arg_block_index) MDL_FINAL;
+        size_t                       *arg_block_index,
+        size_t                       *function_index) MDL_FINAL;
 
     /// Get the number of functions in this link unit.
     size_t get_function_count() const MDL_FINAL;
@@ -131,11 +142,18 @@ public:
     /// \return the name of the i'th function or NULL if the index is out of bounds
     char const *get_function_name(size_t i) const MDL_FINAL;
 
-    /// Returns the kind of the i'th function inside this link unit.
+    /// Returns the distribution kind of the i'th function inside this link unit.
     ///
     /// \param i  the index of the function
     ///
-    /// \return The kind of the i'th function function or \c FK_INVALID if \p i was invalid.
+    /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    Distribution_kind get_distribution_kind(size_t i) const MDL_FINAL;
+
+    /// Returns the function kind of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
     Function_kind get_function_kind(size_t i) const MDL_FINAL;
 
     /// Get the index of the target argument block layout for the i'th function inside this link

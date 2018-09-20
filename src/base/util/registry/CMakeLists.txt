@@ -2,8 +2,14 @@
 set(PROJECT_NAME base-util-registry)
 
 # collect sources
+set(PROJECT_HEADERS
+    "config_registry_impl.h"
+    "i_config_registry.h"
+    )
+
 set(PROJECT_SOURCES
     "config_registry_impl.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template

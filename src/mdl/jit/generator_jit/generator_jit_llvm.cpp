@@ -920,6 +920,12 @@ LLVM_code_generator::LLVM_code_generator(
 , m_type_bsdf_evaluate_data(NULL)
 , m_type_bsdf_pdf_func(NULL)
 , m_type_bsdf_pdf_data(NULL)
+, m_type_edf_sample_func(NULL)
+, m_type_edf_sample_data(NULL)
+, m_type_edf_evaluate_func(NULL)
+, m_type_edf_evaluate_data(NULL)
+, m_type_edf_pdf_func(NULL)
+, m_type_edf_pdf_data(NULL)
 , m_bsdf_param_metadata_id(0)
 , m_int_func_state_set_normal(NULL)
 {
@@ -1046,6 +1052,12 @@ static void AddDeleteUnusedLibDeviceExtension(
     PM.add(llvm::createDeleteUnusedLibDevicePass());
 }
 
+// Optimize an LLVM function.
+bool LLVM_code_generator::optimize(llvm::Function *func)
+{
+    return m_func_pass_manager->run(*func);
+}
+
 // Optimize LLVM code.
 bool LLVM_code_generator::optimize(llvm::Module *module)
 {
@@ -1134,7 +1146,29 @@ llvm::Type *LLVM_code_generator::lookup_type(
             return m_type_bsdf_pdf_data;
 
         default:
-            MDL_ASSERT(!"Unsupported distribution function state");
+            MDL_ASSERT(!"Unsupported distribution function state (bsdf)");
+            break;
+        }
+    }
+
+    if (type->get_kind() == mdl::IType::TK_EDF && m_dist_func_state != DFSTATE_NONE)
+    {
+        switch (m_dist_func_state)
+        {
+        case DFSTATE_INIT:
+            return m_type_mapper.get_void_type();
+
+        case DFSTATE_SAMPLE:
+            return m_type_edf_sample_data;
+
+        case DFSTATE_EVALUATE:
+            return m_type_edf_evaluate_data;
+
+        case DFSTATE_PDF:
+            return m_type_edf_pdf_data;
+
+        default:
+            MDL_ASSERT(!"Unsupported distribution function state (edf)");
             break;
         }
     }
@@ -1145,7 +1179,8 @@ llvm::Type *LLVM_code_generator::lookup_type(
 // Check if a given type needs reference return calling convention.
 bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) const
 {
-    if (type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF &&
+    if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF || 
+            type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_EDF) &&
         m_dist_func_state != DFSTATE_NONE)
     {
         // init function does not return anything
@@ -1162,7 +1197,8 @@ bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) cons
 // Check if the given parameter type must be passed by reference.
 bool LLVM_code_generator::is_passed_by_reference(mi::mdl::IType const *type) const
 {
-    if (type->skip_type_alias()->get_kind() == mdl::IType::TK_BSDF &&
+    if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF || 
+            type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_EDF) &&
         m_dist_func_state != DFSTATE_NONE)
     {
         // init function does not return anything

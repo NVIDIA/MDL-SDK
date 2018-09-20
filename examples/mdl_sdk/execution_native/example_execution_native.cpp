@@ -40,7 +40,11 @@
 #include <mi/mdl_sdk.h>
 
 #include "example_shared.h"
+#include "texture_support.h"
+#include <vector>
 
+// Comment out this define to use the example texture runtime instead of the built-in one.
+#define USE_BUILTIN_TEXTURE_RUNTIME
 
 // Creates an instance of "mdl::example_execution::execution_material".
 void create_material_instance(
@@ -97,6 +101,9 @@ mi::neuraylib::ITarget_code const *generate_native(
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
         mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_NATIVE));
     check_success(be_native->set_option("num_texture_spaces", "1") == 0);
+#ifndef USE_BUILTIN_TEXTURE_RUNTIME
+    check_success(be_native->set_option("use_builtin_resource_handler", "off") == 0);
+#endif
 
     // Generate the native code
     mi::Sint32 result = -1;
@@ -115,6 +122,7 @@ mi::neuraylib::ITarget_code const *generate_native(
 mi::neuraylib::ICanvas *bake_expression_native(
     mi::neuraylib::IImage_api         *image_api,
     mi::neuraylib::ITarget_code const *code_native,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     mi::Uint32                         width,
     mi::Uint32                         height)
 {
@@ -179,7 +187,7 @@ mi::neuraylib::ICanvas *bake_expression_native(
             texture_coords[0].y  = rel_y;             // [0, 1)
 
             // Evaluate sub-expression
-            check_success(code_native->execute(0, mdl_state, NULL, &execute_result) == 0);
+            check_success(code_native->execute(0, mdl_state, tex_handler, NULL, &execute_result) == 0);
 
             // Apply gamma correction
             execute_result.float3_val.x = powf(execute_result.float3_val.x, 1.f / 2.2f);
@@ -193,6 +201,53 @@ mi::neuraylib::ICanvas *bake_expression_native(
 
     canvas->retain();
     return canvas.get();
+}
+
+bool prepare_textures(
+    std::vector<Texture>& textures,
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::IImage_api* image_api,
+    const mi::neuraylib::ITarget_code* target_code)
+{
+    for (mi::Size i = 1 /*skip invalid texture*/; i < target_code->get_texture_count(); ++i)
+    {
+        mi::base::Handle<const mi::neuraylib::ITexture> texture(
+            transaction->access<const mi::neuraylib::ITexture>(
+                target_code->get_texture(i)));
+        mi::base::Handle<const mi::neuraylib::IImage> image(
+            transaction->access<mi::neuraylib::IImage>(texture->get_image()));
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+        char const *image_type = image->get_type();
+
+        if (image->is_uvtile()) {
+            std::cerr << "The example does not support uvtile textures!" << std::endl;
+            return false;
+        }
+
+        if (canvas->get_tiles_size_x() != 1 || canvas->get_tiles_size_y() != 1) {
+            std::cerr << "The example does not support tiled images!" << std::endl;
+            return false;
+        }
+
+        // For simplicity, the texture access functions are only implemented for float4 and gamma
+        // is pre-applied here (all images are converted to linear space).
+
+        // Convert to linear color space if necessary
+        if (texture->get_effective_gamma() != 1.0f) {
+            // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
+            mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
+                image_api->convert(canvas.get(), "Color"));
+            gamma_canvas->set_gamma(texture->get_effective_gamma());
+            image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
+            canvas = gamma_canvas;
+        }
+        else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
+            // Convert to expected format
+            canvas = image_api->convert(canvas.get(), "Color");
+        }
+        textures.push_back(Texture(canvas));
+    }
+    return true;
 }
 
 int main(int /*argc*/, char* /*argv*/[])
@@ -241,11 +296,25 @@ int main(int /*argc*/, char* /*argv*/[])
             // Acquire image api needed to create a canvas for baking
             mi::base::Handle<mi::neuraylib::IImage_api> image_api(
                 neuray->get_api_component<mi::neuraylib::IImage_api>());
+#ifndef USE_BUILTIN_TEXTURE_RUNTIME
+            // Setup texture handler 
+            std::vector<Texture> textures;
+            check_success(
+                prepare_textures(textures, transaction.get(), image_api.get(), target_code.get()));
 
+            Texture_handler tex_handler;
+            tex_handler.vtable = &tex_vtable;
+            tex_handler.num_textures = target_code->get_texture_count() - 1;
+            tex_handler.textures = textures.data();
+
+            Texture_handler* tex_handler_ptr = &tex_handler;
+#else
+            Texture_handler* tex_handler_ptr = nullptr;
+#endif
             // Bake the expression into a 700x520 canvas
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 bake_expression_native(
-                    image_api.get(), target_code.get(), 700, 520));
+                    image_api.get(), target_code.get(), tex_handler_ptr, 700, 520));
 
             // Export the canvas to an image on disk
             mdl_compiler->export_canvas("example_native.png", canvas.get());

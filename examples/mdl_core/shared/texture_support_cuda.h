@@ -221,7 +221,7 @@ extern "C" __device__ void tex_texel_float4_2d(
     Texture const &tex = self->textures[texture_idx - 1];
 
     store_result4(result, tex2D<float4>(
-        self->textures[texture_idx - 1].unfiltered_object,
+        tex.unfiltered_object,
         float(coord[0]) * tex.inv_size.x,
         float(coord[1]) * tex.inv_size.y));
 }
@@ -306,7 +306,7 @@ extern "C" __device__ void tex_texel_float4_3d(
     Texture const &tex = self->textures[texture_idx - 1];
 
     store_result4(result, tex3D<float4>(
-        self->textures[texture_idx - 1].unfiltered_object,
+        tex.unfiltered_object,
         float(coord[0]) * tex.inv_size.x,
         float(coord[1]) * tex.inv_size.y,
         float(coord[2]) * tex.inv_size.z));

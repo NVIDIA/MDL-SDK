@@ -1228,6 +1228,9 @@ IDefinition const *skip_presets(
     IDefinition const               *func_def,
     mi::base::Handle<IModule const> &owner_mod)
 {
+    MDL_ASSERT(
+        !func_def->get_property(IDefinition::DP_IS_IMPORTED) &&
+        "skip_presets() called on imported entity");
     if (func_def->get_kind() != IDefinition::DK_FUNCTION)
         return func_def;
 

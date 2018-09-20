@@ -187,6 +187,9 @@ public:
     /// Get the first (real) parameter of the current function.
     llvm::Function::arg_iterator get_first_parameter();
 
+    /// Get the exec_ctx parameter of the current function.
+    llvm::Value *get_exec_ctx_parameter();
+
     /// Get the state parameter of the current function.
     llvm::Value *get_state_parameter();
 

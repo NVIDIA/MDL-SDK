@@ -422,7 +422,7 @@ void AsmWriterEmitter::EmitPrintInstruction(raw_ostream &O) {
   }
 
   // Emit the string itself.
-  O << "  const char AsmStrs[] = {\n";
+  O << "  static const char AsmStrs[] = {\n";
   StringTable.emit(O, printChar);
   O << "  };\n\n";
 

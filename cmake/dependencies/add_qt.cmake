@@ -37,7 +37,7 @@ else()
 
         # copy runtime dependencies
         # we assume that qt is not installed locally but available, e.g., on a network drive
-        if(WIN32)
+        if(WINDOWS)
             target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
                 RELATIVE  ${Qt5_BASE_DIR}/bin
                 FILES     Qt5${qt_component}$<$<CONFIG:DEBUG>:d>.dll)
@@ -63,22 +63,22 @@ else()
     endforeach()
 
     # add platform dependencies
-    if(UNIX)
+    if(LINUX)
 
-        set_property(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET} APPEND PROPERTY
-            LINK_LIBRARIES
+        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+            PRIVATE
                 ${LINKER_NO_AS_NEEDED}
-                ${Qt5_BASE_DIR}/plugins/platforms/libqxcb.so
-                ${Qt5_BASE_DIR}/plugins/imageformats/libqsvg.so
-                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-egl-integration.so
-                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-glx-integration.so
-                ${Qt5_BASE_DIR}/plugins/egldeviceintegrations/libqeglfs-x11-integration.so
-                ${Qt5_BASE_DIR}/lib/libQt5XcbQpa.so
-                ${Qt5_BASE_DIR}/lib/libQt5DBus.so
-                ${Qt5_BASE_DIR}/lib/libQt5QuickTemplates2.so
-                ${Qt5_BASE_DIR}/lib/libicuuc.so
-                ${Qt5_BASE_DIR}/lib/libicui18n.so
-                ${Qt5_BASE_DIR}/lib/libicudata.so
+                ${Qt5_BASE_DIR}/plugins/platforms/libqxcb${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/plugins/imageformats/libqsvg${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-egl-integration${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/plugins/xcbglintegrations/libqxcb-glx-integration${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/plugins/egldeviceintegrations/libqeglfs-x11-integration${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libQt5XcbQpa${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libQt5DBus${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libQt5QuickTemplates2${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libicuuc${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libicui18n${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${Qt5_BASE_DIR}/lib/libicudata${CMAKE_SHARED_LIBRARY_SUFFIX}
                 ${LINKER_AS_NEEDED}
             )
 
@@ -86,6 +86,12 @@ else()
             FILES
                 "${Qt5_BASE_DIR}/plugins/xcbglintegrations"
                 "${Qt5_BASE_DIR}/plugins/egldeviceintegrations"
+            )
+
+    elseif(MACOSX)
+        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+            PRIVATE
+                ${Qt5_BASE_DIR}/plugins/imageformats/libqsvg${CMAKE_SHARED_LIBRARY_SUFFIX}
             )
     endif()
 

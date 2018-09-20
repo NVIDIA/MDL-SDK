@@ -117,7 +117,8 @@ Mdl_function_definition::Mdl_function_definition(
 , m_enable_if_conditions()
 , m_enable_if_users()
 {
-    std::string prototype_name = code_dag->get_cloned_function_name( function_index);
+    const char* s = code_dag->get_cloned_function_name( function_index);
+    std::string prototype_name = s == NULL ? "" : s;
     m_prototype_tag = prototype_name.empty()
         ? DB::Tag() : transaction->name_to_tag( add_mdl_db_prefix( prototype_name).c_str());
     ASSERT( M_SCENE, m_prototype_tag || prototype_name.empty());

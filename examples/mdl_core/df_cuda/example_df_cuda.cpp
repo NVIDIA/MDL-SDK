@@ -508,6 +508,7 @@ struct Options {
     unsigned int iterations;
     unsigned int samples_per_iteration;
     unsigned int mdl_test_type;
+    unsigned int max_path_length;
     float exposure;
     float3 light_pos;
     float3 light_intensity;
@@ -697,7 +698,8 @@ bool get_annotation_argument_value(mi::mdl::DAG_call const *anno, int index, con
 static void render_scene(
     const Options &options,
     std::unique_ptr<Ptx_code> target_code,
-    mi::mdl::IMDL *mdl_compiler)
+    mi::mdl::IMDL *mdl_compiler,
+    const std::vector<Df_cuda_material>& material_bundle)
 {
     Window_context window_context;
     memset(&window_context, 0, sizeof(Window_context));
@@ -760,6 +762,7 @@ static void render_scene(
     kernel_params.iteration_start = 0;
     kernel_params.iteration_num = options.samples_per_iteration;
     kernel_params.mdl_test_type = options.mdl_test_type;
+    kernel_params.max_path_length = options.max_path_length;
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
 
     // Build the full CUDA kernel with all the generated code
@@ -771,6 +774,15 @@ static void render_scene(
         (get_executable_folder() + "example_df_cuda.ptx").c_str(),
         "render_sphere_kernel",
         &cuda_function);
+
+    // copy materials of the scene to the device 
+    CUdeviceptr material_buffer = 0;
+    check_cuda_success(cuMemAlloc(&material_buffer,
+                       material_bundle.size() * sizeof(Df_cuda_material)));
+
+    check_cuda_success(cuMemcpyHtoD(material_buffer, material_bundle.data(),
+                       material_bundle.size() * sizeof(Df_cuda_material)));
+    kernel_params.material_buffer = reinterpret_cast<Df_cuda_material*>(material_buffer);
 
     // Setup environment map and acceleration
     CUdeviceptr env_accel;
@@ -819,7 +831,7 @@ static void render_scene(
             Material_instance const &cur_inst = target_codes[0]->get_material_instance(i);
 
             // Get the target argument block and its layout
-            size_t arg_block_index = material_gpu_context.get_df_argument_block_index(i);
+            size_t arg_block_index = material_gpu_context.get_bsdf_argument_block_index(i);
             mi::base::Handle<mi::mdl::IGenerated_code_value_layout const> layout(
                 material_gpu_context.get_argument_block_layout(arg_block_index));
             Argument_block *arg_block = material_gpu_context.get_argument_block(arg_block_index);
@@ -955,7 +967,7 @@ static void render_scene(
                     std::cout << std::endl;
 
                     // All materials have been rendered? -> done
-                    if (kernel_params.current_material + 1 >= options.material_names.size())
+                    if (kernel_params.current_material + 1 >= material_bundle.size())
                         break;
 
                     // Start new image with next material
@@ -1011,7 +1023,8 @@ static void render_scene(
                 else
                     ImGui::Text("Parameter editing requires class compilation.");
 
-                Material_info &mat_info = mat_infos[kernel_params.current_material];
+                Material_info &mat_info = mat_infos[
+                    material_bundle[kernel_params.current_material].compiled_material_index];
 
                 // Print material name
                 ImGui::Text("%s", mat_info.name());
@@ -1139,7 +1152,7 @@ static void render_scene(
                 // If any material argument changed, update the target argument block on the device
                 if (changed) {
                     material_gpu_context.update_device_argument_block(
-                        kernel_params.current_material);
+                        material_bundle[kernel_params.current_material].compiled_material_index);
                     kernel_params.iteration_start = 0;
                 }
 
@@ -1158,7 +1171,7 @@ static void render_scene(
                     kernel_params.iteration_start = 0;
 
                     // Update change material
-                    const unsigned num_materials = unsigned(options.material_names.size());
+                    const unsigned num_materials = unsigned(material_bundle.size());
                     kernel_params.current_material = (kernel_params.current_material +
                         ctx->material_index_delta + num_materials) % num_materials;
                     ctx->material_index_delta = 0;
@@ -1294,6 +1307,45 @@ static void render_scene(
     }
 }
 
+// Returns true, if the string str starts with the given prefix, false otherwise.
+bool starts_with(std::string const &str, std::string const &prefix)
+{
+    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
+}
+
+// Create application material representation for use in our CUDA kernel
+Df_cuda_material create_cuda_material(
+    size_t target_code_index,
+    size_t compiled_material_index,
+    std::vector<mi::mdl::ILink_unit::Target_function_description> const& descs)
+{
+    Df_cuda_material mat;
+
+    // shared by all generated functions of the same material
+    // used here to alter the materials parameter set
+    mat.compiled_material_index = static_cast<unsigned int>(compiled_material_index);
+
+    // not used at the moment in this example, it but allows more flexible implementations.
+    // Since the generated functions belong to the same material, they will use
+    // the same argument block. Therefore, the CUDA code can be optimized because the
+    // argument block has to be fetched only once (instead of once per function).
+    mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
+
+    // identify the BSDF function by target_code_index (i'th link unit)
+    // and the function_index inside this target_code.
+    // same for the EDF and the intensity expression.
+    mat.bsdf.x = static_cast<unsigned int>(target_code_index);
+    mat.bsdf.y = static_cast<unsigned int>(descs[0].function_index);
+
+    mat.edf.x = static_cast<unsigned int>(target_code_index);
+    mat.edf.y = static_cast<unsigned int>(descs[1].function_index);
+
+    mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
+    mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
+
+    return mat;
+}
+
 
 static void usage(const char *name)
 {
@@ -1307,15 +1359,20 @@ static void usage(const char *name)
         << "--hdr <filename>            HDR environment map "
            "(default: nvidia/sdk_examples/resources/environment.hdr)\n"
         << "-o <outputfile>             image file to write result to (default: output.exr).\n"
-        << "                            With multiple materials a \"-<material index>\" will be\n"
+        << "                            With multiple materials \"-<material index>\" will be\n"
         << "                            added in front of the extension\n"
-        << "--spp <num>                 samples per pixel, only active for -nogl (default: 4096)\n"
+        << "--spp <num>                 samples per pixel, only active for --nogl (default: 4096)\n"
         << "--spi <num>                 samples per render call (default: 8)\n"
         << "-t <type>                   0: eval, 1: sample, 2: mis, 3: mis + pdf, 4: no env\n"
         << "                            (default: 2)\n"
         << "-e <exposure>               exposure for interactive display (default: 0.0)\n"
-        << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and intensity (flux)\n"
-        << "--mdl_path <path>           mdl search path, can occur multiple times.\n";
+        << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and "
+           "intensity (flux)\n"
+        << "--mdl_path <path>           mdl search path, can occur multiple times.\n"
+        << "--max_path_length <num>     maximum path length, default 4 (up to one total internal "
+           "reflection), clamped to 2..100\n"
+        << "\n"
+        << "Note: material names can end with an '*' as a wildcard\n";
 
     exit(EXIT_FAILURE);
 }
@@ -1331,6 +1388,7 @@ int main(int argc, char* argv[])
     options.iterations = 4096;
     options.samples_per_iteration = 8;
     options.mdl_test_type = MDL_TEST_MIS;
+    options.max_path_length = 4;
     options.exposure = 0.0f;
     options.light_pos = make_float3(0.0f, 0.0f, 0.0f);
     options.light_intensity = make_float3(0.0f, 0.0f, 0.0f);
@@ -1341,73 +1399,51 @@ int main(int argc, char* argv[])
     for (int i = 1; i < argc; ++i) {
         const char *opt = argv[i];
         if (opt[0] == '-') {
-            if (strcmp(opt, "--nogl") == 0)
+            if (strcmp(opt, "--nogl") == 0) {
                 options.opengl = false;
-            else if (strcmp(opt, "--nocc") == 0)
+            } else if (strcmp(opt, "--nocc") == 0) {
                 options.use_class_compilation = false;
-            else if (strcmp(opt, "--gui_scale") == 0) {
-                if (i < argc - 1)
-                    options.gui_scale = static_cast<float>(atof(argv[++i]));
-                else
+            } else if (strcmp(opt, "--gui_scale") == 0 && i < argc - 1) {
+                options.gui_scale = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
+                options.res_x = std::max(atoi(argv[++i]), 1);
+                options.res_y = std::max(atoi(argv[++i]), 1);
+            } else if (strcmp(opt, "--hdr") == 0 && i < argc - 1) {
+                options.hdrfile = argv[++i];
+            } else if (strcmp(opt, "-o") == 0 && i < argc - 1) {
+                options.outputfile = argv[++i];
+            } else if (strcmp(opt, "--spp") == 0 && i < argc - 1) {
+                options.iterations = std::max(atoi(argv[++i]), 1);
+            } else if (strcmp(opt, "--spi") == 0 && i < argc - 1) {
+                options.samples_per_iteration = std::max(atoi(argv[++i]), 1);
+            } else if (strcmp(opt, "-t") == 0 && i < argc - 1) {
+                const int type = atoi(argv[++i]);
+                if (type < 0 || type >= MDL_TEST_COUNT) {
+                    std::cout << "Invalid type for \"-t\" option!" << std::endl;
                     usage(argv[0]);
-            }
-            else if (strcmp(opt, "--res") == 0) {
-                if (i < argc - 2) {
-                    options.res_x = std::max(atoi(argv[++i]), 1);
-                    options.res_y = std::max(atoi(argv[++i]), 1);
-                } else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "--hdr") == 0) {
-                if (i < argc - 1)
-                    options.hdrfile = argv[++i];
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "-o") == 0) {
-                if (i < argc - 1)
-                    options.outputfile = argv[++i];
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "--spp") == 0) {
-                if (i < argc - 1)
-                    options.iterations = std::max(atoi(argv[++i]), 1);
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "--spi") == 0) {
-                if (i < argc - 1)
-                    options.samples_per_iteration = std::max(atoi(argv[++i]), 1);
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "-t") == 0) {
-                if (i < argc - 1) {
-                    const int type = atoi(argv[++i]);
-                    if (type < 0 || type >= MDL_TEST_COUNT)
-                        usage(argv[0]);
-                    options.mdl_test_type = type;
-                } else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "-e") == 0) {
-                if (i < argc - 1)
-                    options.exposure = static_cast<float>(atof(argv[++i]));
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "-l") == 0) {
-                if (i < argc - 6) {
-                    options.light_pos.x = static_cast<float>(atof(argv[++i]));
-                    options.light_pos.y = static_cast<float>(atof(argv[++i]));
-                    options.light_pos.z = static_cast<float>(atof(argv[++i]));
-                    options.light_intensity.x = static_cast<float>(atof(argv[++i]));
-                    options.light_intensity.y = static_cast<float>(atof(argv[++i]));
-                    options.light_intensity.z = static_cast<float>(atof(argv[++i]));
                 }
-                else
-                    usage(argv[0]);
+                options.mdl_test_type = type;
+            } else if (strcmp(opt, "-e") == 0 && i < argc - 1) {
+                options.exposure = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "-l") == 0 && i < argc - 6) {
+                options.light_pos.x = static_cast<float>(atof(argv[++i]));
+                options.light_pos.y = static_cast<float>(atof(argv[++i]));
+                options.light_pos.z = static_cast<float>(atof(argv[++i]));
+                options.light_intensity.x = static_cast<float>(atof(argv[++i]));
+                options.light_intensity.y = static_cast<float>(atof(argv[++i]));
+                options.light_intensity.z = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "--mdl_path") == 0) {
                 if (i < argc - 1)
                     options.mdl_paths.push_back(argv[++i]);
                 else
                     usage(argv[0]);
-            } else
+            } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
+                options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
+            } else {
+                std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
+
                 usage(argv[0]);
+            }
         }
         else
             options.material_names.push_back(std::string(opt));
@@ -1429,17 +1465,71 @@ int main(int argc, char* argv[])
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
             mc.add_module_path(options.mdl_paths[i].c_str());
 
+        // List of materials in the scene
+        std::vector<Df_cuda_material> material_bundle;
+
+        // Select the functions to translate
+        std::vector<mi::mdl::ILink_unit::Target_function_description> descs;
+        descs.push_back(
+            mi::mdl::ILink_unit::Target_function_description("surface.scattering"));
+        descs.push_back(
+            mi::mdl::ILink_unit::Target_function_description("surface.emission.emission"));
+        descs.push_back(
+            mi::mdl::ILink_unit::Target_function_description("surface.emission.intensity"));
+
         // Generate code for all materials
         bool success = true;
+        std::vector<std::string> used_material_names;
         for (size_t i = 0; i < options.material_names.size(); ++i) {
-            if (!mc.add_material_df(
-                    options.material_names[i].c_str(),
-                    { "surface", "scattering" },
-                    ("bsdf_" + to_string(i)).c_str(),
-                    options.use_class_compilation)) {
-                std::cout << "Loading material \"" << options.material_names[i] << "\" failed!"
-                    << std::endl;
-                success = false;
+            std::string material_name(options.material_names[i]);
+            if (!starts_with(material_name, "::")) material_name = "::" + material_name;
+
+            // Is this a material name pattern?
+            if (material_name.size() > 1 && material_name.back() == '*') {
+                std::string pattern = material_name.substr(0, material_name.size() - 1);
+
+                std::vector<std::string> module_materials(mc.get_material_names(
+                    mc.get_module_name(material_name)));
+
+                for (size_t j = 0, n = module_materials.size(); j < n; ++j) {
+                    material_name = module_materials[j];
+
+                    // make sure the material name starts with the pattern
+                    if (!starts_with(material_name, pattern))
+                        continue;
+
+                    std::cout << "Adding material \"" << material_name << "\"..." << std::endl;
+
+                    // Add functions of the material to the link unit
+                    if (!mc.add_material(
+                            material_name,
+                            descs.data(), descs.size(),
+                            options.use_class_compilation)) {
+                        std::cout << "Failed!" << std::endl;
+                        success = false;
+                    }
+
+                    // Create application material representation
+                    material_bundle.push_back(create_cuda_material(
+                        0, material_bundle.size(), descs));
+                    used_material_names.push_back(material_name);
+                }
+            } else {
+                std::cout << "Adding material \"" << material_name << "\"..." << std::endl;
+
+                // Add functions of the material to the link unit
+                if (!mc.add_material(
+                        material_name,
+                        descs.data(), descs.size(),
+                        options.use_class_compilation)) {
+                    std::cout << "Failed!" << std::endl;
+                    success = false;
+                }
+
+                // Create application material representation
+                material_bundle.push_back(create_cuda_material(
+                    0, material_bundle.size(), descs));
+                used_material_names.push_back(material_name);
             }
         }
 
@@ -1452,7 +1542,7 @@ int main(int argc, char* argv[])
 
             if (target_code.get()) {
                 // Render
-                render_scene(options, std::move(target_code), mdl_compiler.get());
+                render_scene(options, std::move(target_code), mdl_compiler.get(), material_bundle);
             }
         }
     }

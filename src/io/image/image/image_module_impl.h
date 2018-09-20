@@ -95,6 +95,9 @@ public:
         std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
         bool is_cubemap) const;
 
+    void create_mipmaps(std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+        const mi::neuraylib::ICanvas* base_canvas, mi::Float32 gamma) const;
+
     mi::neuraylib::ICanvas* create_canvas(
         Pixel_type pixel_type,
         mi::Uint32 width,
@@ -193,6 +196,9 @@ public:
     void set_mdr_callback( IMdr_callback* mdr_callback);
 
     IMdr_callback* get_mdr_callback() const;
+
+    mi::neuraylib::ICanvas* create_miplevel(
+        const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const;
 
     void dump() const;
 

@@ -274,7 +274,8 @@ export material example_df(
     [[
         anno::hard_range(0.0f, 1.0f)
     ]],
-    Options add_checker = Checker
+    Options add_checker = Checker,
+    color emission_intensity = color(0.25f,0.5f,0.75f)
 )
 = let {
     float3 tex_coord3 = state::texture_coordinate(0);
@@ -298,9 +299,13 @@ in material(
                         weight: glossy_weight * cval.weight,
                         component: df::simple_glossy_bsdf(
                             roughness_u: cval.roughness.x, roughness_v: cval.roughness.y, tint: glossy_tint))
-                    )
                 )
             )
+        ),
+        emission:  material_emission (
+            emission: df::diffuse_edf(),
+            intensity: emission_intensity
         )
+    )
 );
 

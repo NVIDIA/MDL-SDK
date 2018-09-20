@@ -287,6 +287,12 @@ public:
     /// Get the LLVM void * type.
     llvm::PointerType *get_void_ptr_type() const { return m_type_void_ptr; }
 
+    /// Get the LLVM execution context type.
+    llvm::StructType *get_exec_ctx_type() const { return m_type_exec_ctx; }
+
+    /// Get the LLVM execution context * type.
+    llvm::PointerType *get_exec_ctx_ptr_type() const { return m_type_exec_ctx_ptr; }
+
     /// Get the LLVM State * type for the given state context.
     llvm::PointerType *get_state_ptr_type(State_subset_mode mode);
 
@@ -478,6 +484,14 @@ private:
         llvm::DataLayout const *data_layout,
         llvm::Type             *void_ptr_type);
 
+    /// Construct the exec_ctx type.
+    static llvm::StructType *construct_exec_ctx_type(
+        llvm::LLVMContext      &context,
+        llvm::Type             *state_core_ptr_type,
+        llvm::Type             *res_data_pair_ptr_type,
+        llvm::Type             *exc_state_ptr_type,
+        llvm::Type             *void_ptr_type);
+
     /// Construct the core texture handler type.
     ///
     /// \param context        the LLVM context this type is build belongs to
@@ -577,6 +591,9 @@ private:
 
     llvm::StructType  *m_type_res_data_pair;
     llvm::PointerType *m_type_res_data_pair_ptr;
+
+    llvm::StructType  *m_type_exec_ctx;
+    llvm::PointerType *m_type_exec_ctx_ptr;
 
     llvm::StructType  *m_type_core_tex_handler;
     llvm::PointerType *m_type_core_tex_handler_ptr;

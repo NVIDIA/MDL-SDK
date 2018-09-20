@@ -593,12 +593,15 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover() c
     mi::base::Handle<Mdl_package_info_impl> root_package(
         new Mdl_package_info_impl("", "", "", -1, ""));
 
-    for (mi::Size i = 0; i < search_paths.size(); ++i) 
+    for (mi::Size i = 0; i < search_paths.size(); ++i)
     {
-        std::string path = HAL::Ospath::normpath_v2(search_paths[i]);
-
-        if (!DISK::access(path.c_str(), false))
+        std::string path = search_paths[i]; 
+        if(!DISK::access(path.c_str(), false))
             continue;
+
+        if (!DISK::is_path_absolute(path))
+            path = HAL::Ospath::join(DISK::get_cwd(), path);
+        path = HAL::Ospath::normpath_v2(path);
 
         // Collect all archives
         DISK::Directory dir;
@@ -655,116 +658,114 @@ bool Mdl_discovery_api_impl::create_archive_graph_recursive(
     std::string quali = std::string(full_q_path);
     size_t p = quali.find_first_of("::");
     bool is_package = true;
-    if (p != std::string::npos)
+
+    // Package found
+    std::string entry = quali.substr(0, p);
+    std::string qualified_path("");
+    std::string strip_path(full_q_path);
+
+    for (mi::Size l = 0; l <= level; l++)
     {
-        // Package found
-        std::string entry = quali.substr(0, p);
-        std::string qualified_path("");
-        std::string strip_path(full_q_path);
+        // strip entry and qualified path from full path
+        size_t e = strip_path.find_first_of("::");
 
-        for (mi::Size l = 0; l <= level; l++)
+        if (e == std::string::npos)
         {
-            // strip entry and qualified path from full path
-            size_t e = strip_path.find_first_of("::");
+            // Check if file name is valid for MDL
+            if (!check_ident_validity(entry.c_str()))
+                return false; //ToDo: Add error message 
 
-            if (e == std::string::npos)
-            {
-                // Check if file name is valid for MDL
-                if (!check_ident_validity(entry.c_str()))
-                    return false; //ToDo: Add error message 
-
-                // Convert to correct path convention
-                std::string qpath_form(qualified_path + strip_path);
-                std::string rpath_form(resolved_path);
-                rpath_form += ":" + colon_to_slash(qpath_form) + ".mdl";
-                qpath_form = "::" + qpath_form;
-
-                // Add module
-                mi::base::Handle< Mdl_module_info_impl>
-                    module(new Mdl_module_info_impl(strip_path.c_str(),
-                            qpath_form.c_str(),
-                            rpath_form.c_str(),
-                            search_path,
-                            s_idx));
-                module->set_archive(true);
-
-                mi::Sint32 res = parent->shadow_module(module.get());
-                if (res < 0)
-                    parent->add_module(module.get());
-
-                // Terminate
-                is_package = false;
-            }
-            qualified_path.append(strip_path.substr(0, e + 2));
-            entry = strip_path.substr(0, e);
-            strip_path = strip_path.substr(e + 2, strip_path.size());
-        }
-
-        if (is_package)
-        {
             // Convert to correct path convention
-            std::string qpath_form(qualified_path.substr(0, qualified_path.size() - 2));
+            std::string qpath_form(qualified_path + strip_path);
             std::string rpath_form(resolved_path);
-            rpath_form += ":" + colon_to_slash(qpath_form);
+            rpath_form += ":" + colon_to_slash(qpath_form) + ".mdl";
             qpath_form = "::" + qpath_form;
 
-            mi::base::Handle< Mdl_package_info_impl>new_package(new Mdl_package_info_impl(
-                entry.c_str(),
-                search_path,
-                rpath_form.c_str(),
-                mi::Uint32(s_idx),
-                qpath_form.c_str()));
-            new_package->set_archive(0, true);
+            // Add module
+            mi::base::Handle< Mdl_module_info_impl>
+                module(new Mdl_module_info_impl(strip_path.c_str(),
+                        qpath_form.c_str(),
+                        rpath_form.c_str(),
+                        search_path,
+                        s_idx));
+            module->set_archive(true);
+
+            mi::Sint32 res = parent->shadow_module(module.get());
+            if (res < 0)
+                parent->add_module(module.get());
+
+            // Terminate
+            is_package = false;
+        }
+        qualified_path.append(strip_path.substr(0, e + 2));
+        entry = strip_path.substr(0, e);
+        strip_path = strip_path.substr(e + 2, strip_path.size());
+    }
+
+    if (is_package)
+    {
+        // Convert to correct path convention
+        std::string qpath_form(qualified_path.substr(0, qualified_path.size() - 2));
+        std::string rpath_form(resolved_path);
+        rpath_form += ":" + colon_to_slash(qpath_form);
+        qpath_form = "::" + qpath_form;
+
+        mi::base::Handle< Mdl_package_info_impl>new_package(new Mdl_package_info_impl(
+            entry.c_str(),
+            search_path,
+            rpath_form.c_str(),
+            mi::Uint32(s_idx),
+            qpath_form.c_str()));
+        new_package->set_archive(0, true);
           
-            // Check if package already exists
-            size_t f = std::string(previous_module).find(qualified_path);
-            if ((f == std::string::npos) && (s_idx == 0))
+        // Check if package already exists
+        size_t f = std::string(previous_module).find(qualified_path);
+        if ((f == std::string::npos) && (s_idx == 0))
+        {
+            // Add package to first graph
+            parent->add_package(new_package.get());
+            create_archive_graph_recursive(new_package, previous_module,
+                full_q_path, search_path, resolved_path, s_idx, level + 1);               
+        }
+        else
+        {
+            mi::Sint32 idx = parent->check_package(new_package.get());
+            if (idx >= 0)
             {
-                // Add package to first graph
-                parent->add_package(new_package.get());
-                create_archive_graph_recursive(new_package, previous_module,
-                    full_q_path, search_path, resolved_path, s_idx, level + 1);               
+                // Reuse package
+                const Mdl_package_info_impl* mg(parent->get_package(idx));
+                    
+                mi::base::Handle< Mdl_package_info_impl>
+                    reuse_package(new Mdl_package_info_impl(*mg));
+
+                // Add new search path if it does not exist yet
+                bool found = false;
+                mi::Size i = 0;
+                while ((i < mg->get_search_path_index_count()) && (found == false))
+                {
+                    if (strcmp(mg->get_search_path(i), search_path) == 0)
+                        found = true;
+                    i++;
+                }
+                if (!found)
+                {
+                    reuse_package->add_path(search_path);
+                    reuse_package->add_path_index(s_idx);
+                    reuse_package->add_resolved_path(rpath_form.c_str());
+                    reuse_package->add_in_archive(true);
+                }
+
+                // Continue recursion with reused node
+                parent->reset_package(reuse_package.get(), idx);
+                create_archive_graph_recursive(reuse_package, previous_module,
+                    full_q_path, search_path, resolved_path, s_idx, level + 1);
             }
             else
             {
-                mi::Sint32 idx = parent->check_package(new_package.get());
-                if (idx >= 0)
-                {
-                    // Reuse package
-                    const Mdl_package_info_impl* mg(parent->get_package(idx));
-                    
-                    mi::base::Handle< Mdl_package_info_impl>
-                        reuse_package(new Mdl_package_info_impl(*mg));
-
-                    // Add new search path if it does not exist yet
-                    bool found = false;
-                    mi::Size i = 0;
-                    while ((i < mg->get_search_path_index_count()) && (found == false))
-                    {
-                        if (strcmp(mg->get_search_path(i), search_path) == 0)
-                            found = true;
-                        i++;
-                    }
-                    if (!found)
-                    {
-                        reuse_package->add_path(search_path);
-                        reuse_package->add_path_index(s_idx);
-                        reuse_package->add_resolved_path(rpath_form.c_str());
-                        reuse_package->add_in_archive(true);
-                    }
-
-                    // Continue recursion with reused node
-                    parent->reset_package(reuse_package.get(), idx);
-                    create_archive_graph_recursive(reuse_package, previous_module,
-                        full_q_path, search_path, resolved_path, s_idx, level + 1);
-                }
-                else
-                {
-                    // Add new package
-                    parent->add_package(new_package.get());
-                    create_archive_graph_recursive(new_package, previous_module,
-                        full_q_path, search_path, resolved_path, s_idx, level + 1);
-                }
+                // Add new package
+                parent->add_package(new_package.get());
+                create_archive_graph_recursive(new_package, previous_module,
+                    full_q_path, search_path, resolved_path, s_idx, level + 1);
             }
         }
     }
@@ -778,15 +779,10 @@ bool Mdl_discovery_api_impl::create_archive_graph(
     mi::Size s_idx,
     const char* res_path) const
 {
-    mi::base::Handle<Mdl_package_info_impl> archive_package(
-        new Mdl_package_info_impl("", "", "", -1, ""));
-
     // Read modules from archive
     std::vector<std::string> module_list;
-    mi::Size i;
-    for (i = 0; i < m->get_number_of_fields(); i++)
+    for (mi::Size i = 0; i < m->get_number_of_fields(); ++i)
     {
-        std::string package_name;
         const char* manifest_value = m->get_value(i);
         if (manifest_value)
         {
@@ -800,40 +796,21 @@ bool Mdl_discovery_api_impl::create_archive_graph(
         }
     }
 
-    for (size_t x=0; x < module_list.size(); ++x)
+    for (mi::Size x=0; x < module_list.size(); ++x)
     {
-        size_t p = 0;
+        mi::Size p = 0;
         while (module_list[x][p] == ':')
             p++;
 
         std::string module_path = module_list[x].substr(p);
 
-        if ((x == 0)&&(s_idx == 0))
-        {
-            create_archive_graph_recursive(parent,
-                        "",
-                        module_path.c_str(),
-                        search_path,
-                        res_path,
-                        s_idx,
-                        0);
-        }
-        else
-        {             
-            std::string previous_module;
-            if ((x == 0) && (s_idx > 0))
-                previous_module = "";
-            else
-                previous_module = module_list[x - 1].c_str();
-                
-            create_archive_graph_recursive(parent,
-                        previous_module.c_str(),
-                        module_path.c_str(),
-                        search_path,
-                        res_path,
-                        s_idx,
-                        0);
-        }
+        create_archive_graph_recursive(parent,
+            x == 0 ? "" : module_list[x - 1].c_str(), // previous module
+            module_path.c_str(),
+            search_path,
+            res_path,
+            s_idx,
+            0);
     }
     return true;
 }

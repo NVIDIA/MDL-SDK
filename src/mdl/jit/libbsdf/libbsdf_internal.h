@@ -34,7 +34,8 @@
 #define BSDF_INLINE __attribute__((always_inline))
 #define __align__(n) __attribute__((aligned(n)))
 
-#define M_PI       3.14159265358979323846   // pi
+#define M_PI            3.14159265358979323846   // pi
+#define M_ONE_OVER_PI   0.318309886183790671538  // pi
 
 enum scatter_mode {
     scatter_reflect,
@@ -213,22 +214,23 @@ BSDF_INLINE float copysignf(const float dst, const float src)
 }
 
 
-namespace state
+class State
 {
-    float3 normal();
-    float3 geometry_normal();
-    float3 texture_tangent_u(int index);
-    float3 texture_tangent_v(int index);
-}
+public:
+    float3 normal() const;
+    float3 geometry_normal() const;
+    float3 texture_tangent_u(int index) const;
+    float3 texture_tangent_v(int index) const;
+};
 
 #include "libbsdf_runtime.h"
 #include "libbsdf.h"
 
 struct BSDF
 {
-    void (*sample)(BSDF_sample_data *data, float3 const &inherited_normal);
-    void (*evaluate)(BSDF_evaluate_data *data, float3 const &inherited_normal);
-    void (*pdf)(BSDF_pdf_data *data, float3 const &inherited_normal);
+    void (*sample)(BSDF_sample_data *data, State *state, float3 const &inherited_normal);
+    void (*evaluate)(BSDF_evaluate_data *data, State *state, float3 const &inherited_normal);
+    void (*pdf)(BSDF_pdf_data *data, State *state, float3 const &inherited_normal);
 
     // returns true, if the attached BSDF is "bsdf()".
     // note: this is currently unsupported for BSDFs in BSDF_component
@@ -245,6 +247,29 @@ struct color_BSDF_component
 {
     float3 weight;
     BSDF component;
+};
+
+struct EDF
+{
+    void(*sample)(EDF_sample_data *data, State *state, float3 const &inherited_normal);
+    void(*evaluate)(EDF_evaluate_data *data, State *state, float3 const &inherited_normal);
+    void(*pdf)(EDF_pdf_data *data, State *state, float3 const &inherited_normal);
+
+    // returns true, if the attached BSDF is "edf()".
+    // note: this is currently unsupported for EDFs in EDF_component
+    bool(*is_black)();
+};
+
+struct EDF_component
+{
+    float weight;
+    EDF component;
+};
+
+struct color_EDF_component
+{
+    float3 weight;
+    EDF component;
 };
 
 

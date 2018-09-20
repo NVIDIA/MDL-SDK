@@ -24,6 +24,10 @@ create_from_base_preset(
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "lib")
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "mdl_sdk")
 
+if(MACOSX)
+    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so") # corresponding to the binary release
+endif()
+
 # target alias for the custom name
 add_library(mdl_sdk ALIAS ${PROJECT_NAME})
 add_library(mdl::mdl_sdk ALIAS ${PROJECT_NAME})
@@ -34,8 +38,10 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
+        mdl::include-mi
         mdl::api-api-mdl
         mdl::base-data-attr
+        mdl::base-data-db
         mdl::base-data-dblight
         mdl::base-data-serial
         mdl::base-hal-disk
@@ -43,14 +49,17 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::base-hal-link
         mdl::base-hal-time
         mdl::base-lib-config
+        mdl::base-lib-cont
         mdl::base-lib-mem
         mdl::base-lib-path
         mdl::base-lib-plug
+        mdl::base-lib-log
         mdl::base-lib-libzip
         mdl::base-lib-zlib
         mdl::base-util-string_utils
         mdl::base-util-registry
         mdl::base-system-main
+        mdl::base-system-stlext
         mdl::base-system-version
         mdl::io-image
         mdl::io-scene
@@ -66,10 +75,4 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_END_GROUP}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}
-    )
-
-# add system dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld threads
     )

@@ -8,7 +8,7 @@ set(PROJECT_NAME mdl_core_example-df_cuda)
 # collect sources
 set(PROJECT_SOURCES
     "example_df_cuda.cpp"
-    ${CMAKE_CURRENT_BINARY_DIR}/example_df_cuda.ptx
+    "example_df_cuda.h"
     )
 
 # create target from template
@@ -29,13 +29,9 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         cuda
         freeimage
     )
-
-# link system libraries
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld
-        threads
-    )
+    
+# creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # -------------------------------------------------------------------------------------------------
 # PTX Target 
@@ -47,3 +43,4 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     CUDA_SOURCES
         "example_df_cuda.cu"
     )
+    

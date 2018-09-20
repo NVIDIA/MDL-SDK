@@ -301,6 +301,14 @@ Type_mapper::Type_mapper(
         context, target_data, m_type_void_ptr);
     m_type_res_data_pair_ptr     = get_ptr(m_type_res_data_pair);
 
+    m_type_exec_ctx              = construct_exec_ctx_type(
+        context,
+        m_type_state_core_ptr,
+        m_type_res_data_pair_ptr,
+        m_type_exc_state_ptr,
+        m_type_void_ptr);
+    m_type_exec_ctx_ptr          = get_ptr(m_type_exec_ctx);
+
     // these must be run last, as they expect fully initialized upper types
     m_type_core_tex_handler      = construct_core_texture_handler_type(context);
     m_type_core_tex_handler_ptr  = get_ptr(m_type_core_tex_handler);
@@ -1321,6 +1329,24 @@ llvm::StructType *Type_mapper::construct_res_data_pair_type(
 #endif
 
     return res;
+}
+
+llvm::StructType *Type_mapper::construct_exec_ctx_type(
+    llvm::LLVMContext      &context,
+    llvm::Type             *state_core_ptr_type,
+    llvm::Type             *res_data_pair_ptr_type,
+    llvm::Type             *exc_state_ptr_type,
+    llvm::Type             *void_ptr_type)
+{
+    llvm::Type *members[] = {
+        state_core_ptr_type,
+        res_data_pair_ptr_type,
+        exc_state_ptr_type,
+        void_ptr_type,   // captured_arguments
+        void_ptr_type,   // lambda_results
+    };
+
+    return llvm::StructType::create(context, members, "Execution_context", /*is_packed=*/false);
 }
 
 // Construct the texture handler vtable type.

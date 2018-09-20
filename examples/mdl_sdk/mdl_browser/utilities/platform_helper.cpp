@@ -36,7 +36,7 @@
 #include "string_helper.h"
 
 
-#ifdef MI_PLATFORM_WINDOWS
+#if defined(MI_PLATFORM_WINDOWS)
     #include <direct.h>
     #include <windows.h>
     #include <strsafe.h>
@@ -51,7 +51,12 @@
     #include <dlfcn.h>
     #include <unistd.h>
     #include <libgen.h>
-    #include <linux/limits.h>
+    #if defined(MI_PLATFORM_LINUX)
+        #include <linux/limits.h>
+    #elif defined(MI_PLATFORM_MACOSX)
+        #include <limits.h>
+        #include <mach-o/dyld.h>
+    #endif
 #endif
 
 std::string Platform_helper::get_working_directory()
@@ -76,12 +81,19 @@ std::string Platform_helper::get_executable_directory()
         std::wstring path_wstr(path_wchar);
         path = std::string(path_wstr.begin(), path_wstr.end());
         path = path.substr(0, path.find_last_of('\\'));
-    # else
-        char result[PATH_MAX];
-        size_t count = readlink("/proc/self/exe", result, PATH_MAX);
-        if (count != -1)
+    #else 
+        char result[PATH_MAX + 1];
+        #if defined(MI_PLATFORM_LINUX)
+            size_t count = readlink("/proc/self/exe", result, PATH_MAX);
+        #elif defined(MI_PLATFORM_MACOSX)
+            uint32_t count = sizeof(result);
+            _NSGetExecutablePath(&result[0], &count);
+        #endif
+        if (count > 0)
             path = dirname(result);
     #endif
+
+    std::cerr << "[path] " << path.c_str() << "\n";
     return path;
 }
 

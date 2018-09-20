@@ -62,9 +62,11 @@ struct Callable_function_info
 {
     Callable_function_info(
         MISTD::string const &name,
+        mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
         mi::neuraylib::ITarget_code::Function_kind kind,
         mi::Size arg_block_index)
     : m_name( name)
+    , m_dist_kind( dist_kind)
     , m_kind( kind)
     , m_arg_block_index( arg_block_index)
     {}
@@ -72,7 +74,10 @@ struct Callable_function_info
     /// The name of the callable function.
     MISTD::string m_name;
 
-    /// The kind of the callable function.
+    /// The distribution kind of the callable function.
+    mi::neuraylib::ITarget_code::Distribution_kind m_dist_kind;
+
+    /// The function kind of the callable function.
     mi::neuraylib::ITarget_code::Function_kind m_kind;
 
     /// The prototypes for the different languages according to
@@ -87,22 +92,20 @@ struct Callable_function_info
 class Target_code : public mi::base::Interface_implement<mi::neuraylib::ITarget_code>
 {
 public:
-    typedef mi::neuraylib::Shading_state_material     Shading_state_material;
-    typedef mi::neuraylib::Shading_state_environment  Shading_state_environment;
-    typedef mi::neuraylib::Bsdf_sample_data           Bsdf_sample_data;
-    typedef mi::neuraylib::Bsdf_evaluate_data         Bsdf_evaluate_data;
-    typedef mi::neuraylib::Bsdf_pdf_data              Bsdf_pdf_data;
 
     /// Constructor from executable code.
     ///
     /// \param code            MDL generated executable code
     /// \param transaction     the current transaction
-    /// \param string_ids      True if string arguments inside target argument blocks
+    /// \param string_ids      True, if string arguments inside target argument blocks
     ///                        are mapped to identifiers
+    /// \param use_builtin_resource_handler True, if the builtin texture runtime is supposed to be
+    ///                        used when running x86 code.
     Target_code(
         mi::mdl::IGenerated_code_executable* code,
         MI::DB::Transaction* transaction,
-        bool string_ids);
+        bool string_ids,
+        bool use_builtin_resource_handler);
 
 
     /// Constructor for link mode.
@@ -281,7 +284,17 @@ public:
     const char* get_callable_function_prototype(
         Size index, Prototype_language lang) const NEURAY_OVERRIDE;
 
-    /// Returns the kind of a callable function in the target code.
+    /// Returns the distribution kind of a callable function in the target code.
+    ///
+    /// \param index   The index of the callable function.
+    ///
+    /// \return The distribution kind of the callable function 
+    ///         or \c DK_INVALID if \p index was invalid.
+    Distribution_kind get_callable_function_distribution_kind( 
+        Size index) const NEURAY_OVERRIDE;
+
+
+    /// Returns the function kind of a callable function in the target code.
     ///
     /// \param index   The index of the callable function.
     ///
@@ -299,9 +312,12 @@ public:
 
     /// Run this code on the native CPU.
     ///
-    /// \param[in]  index     the index of the callable function
-    /// \param[in]  state     the core state
-    /// \param[out] result    the result will be written to
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[out] result      The result will be written to.
     ///
     /// \returns
     ///    - 0  on success
@@ -312,17 +328,21 @@ public:
     /// \note This allows to execute any compiled function on the CPU.
     Sint32 execute_environment(
         Size index,
-        const Shading_state_environment& state,
+        const mi::neuraylib::Shading_state_environment& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         mi::Spectrum_struct* result) const NEURAY_OVERRIDE;
 
     /// Run this code on the native CPU with the given captured arguments block.
     ///
-    /// \param[in]  index     the index of the callable function
-    /// \param[in]  state     the core state
-    /// \param[in]  cap_args  the captured arguments to use for the execution.
-    ///                       If \p cap_args is \c NULL, the captured arguments of this
-    ///                       \c ITarget_code object will be used, if any.
-    /// \param[out] result    the result will be written to
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object will be used, if any.
+    /// \param[out] result      The result will be written to.
     ///
     /// \returns
     ///    - 0  on success
@@ -334,18 +354,22 @@ public:
     ///       big enough to take the functions result.
     mi::Sint32 execute(
         mi::Size index,
-        const Shading_state_material& state,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args,
         void* result) const NEURAY_OVERRIDE;
 
     /// Run the BSDF init function for this code on the native CPU.
     ///
-    /// \param[in]  index     The index of the callable function.
-    /// \param[in]  state     The core state.
-    /// \param[in]  cap_args  The captured arguments to use for the execution.
-    ///                       If \p cap_args is \c NULL, the captured arguments of this
-    ///                       \c ITarget_code object for the given callable function will be used,
-    ///                       if any.
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
     ///
     /// \returns
     ///    - 0  on success
@@ -353,18 +377,22 @@ public:
     ///    - -2 cannot execute: not native code or the given function is not a BSDF init function
     mi::Sint32 execute_bsdf_init(
         mi::Size index,
-        Shading_state_material& state,
+        mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
     /// Run the BSDF sample function for this code on the native CPU.
     ///
-    /// \param[in]    index     The index of the callable function.
-    /// \param[inout] data      The input and output fields for the BSDF sampling.
-    /// \param[in]    state     The core state.
-    /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
-    ///                         \c ITarget_code object for the given callable function will be used,
-    ///                         if any.
+    /// \param[in]    index         The index of the callable function.
+    /// \param[inout] data          The input and output fields for the BSDF sampling.
+    /// \param[in]    state         The core state.
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    ///                             texture lookup functions. Can be NULL if the built-in resource
+    ///                             handler is used.
+    /// \param[in]    cap_args      The captured arguments to use for the execution.
+    ///                             If \p cap_args is \c NULL, the captured arguments of this
+    ///                             \c ITarget_code object for the given callable function will be
+    ///                             used, if any.
     ///
     /// \returns
     ///    - 0  on success
@@ -372,19 +400,23 @@ public:
     ///    - -2 cannot execute: not native code or the given function is not a BSDF sample function
     mi::Sint32 execute_bsdf_sample(
         mi::Size index,
-        Bsdf_sample_data *data,
-        const Shading_state_material& state,
+        mi::neuraylib::Bsdf_sample_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
     /// Run the BSDF evaluation function for this code on the native CPU.
     ///
-    /// \param[in]    index     The index of the callable function.
-    /// \param[inout] data      The input and output fields for the BSDF evaluation.
-    /// \param[in]    state     The core state.
-    /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
-    ///                         \c ITarget_code object for the given callable function will be used,
-    ///                         if any.
+    /// \param[in]    index         The index of the callable function.
+    /// \param[inout] data          The input and output fields for the BSDF evaluation.
+    /// \param[in]    state         The core state.
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    ///                             texture lookup functions. Can be NULL if the built-in resource
+    ///                             handler is used.
+    /// \param[in]    cap_args      The captured arguments to use for the execution.
+    ///                             If \p cap_args is \c NULL, the captured arguments of this
+    ///                             \c ITarget_code object for the given callable function will be
+    ///                             used, if any.
     ///
     /// \returns
     ///    - 0  on success
@@ -393,19 +425,23 @@ public:
     ///         function
     mi::Sint32 execute_bsdf_evaluate(
         mi::Size index,
-        Bsdf_evaluate_data *data,
-        const Shading_state_material& state,
+        mi::neuraylib::Bsdf_evaluate_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
     /// Run the BSDF PDF calculation function for this code on the native CPU.
     ///
-    /// \param[in]    index     The index of the callable function.
-    /// \param[inout] data      The input and output fields for the BSDF PDF calculation.
-    /// \param[in]    state     The core state.
-    /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
-    ///                         \c ITarget_code object for the given callable function will be used,
-    ///                         if any.
+    /// \param[in]    index         The index of the callable function.
+    /// \param[inout] data          The input and output fields for the BSDF PDF calculation.
+    /// \param[in]    state         The core state.
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    ///                             texture lookup functions. Can be NULL if the built-in resource
+    ///                             handler is used.
+    /// \param[in]    cap_args      The captured arguments to use for the execution.
+    ///                             If \p cap_args is \c NULL, the captured arguments of this
+    ///                             \c ITarget_code object for the given callable function will be
+    ///                             used, if any.
     ///
     /// \returns
     ///    - 0  on success
@@ -414,21 +450,59 @@ public:
     ///         function
     mi::Sint32 execute_bsdf_pdf(
         mi::Size index,
-        Bsdf_pdf_data *data,
-        const Shading_state_material& state,
+        mi::neuraylib::Bsdf_pdf_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
+    /// Run the EDF init function for this code on the native CPU.
+    mi::Sint32 execute_edf_init(
+        mi::Size index,
+        mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
+    /// Run the EDF sample function for this code on the native CPU.
+    mi::Sint32 execute_edf_sample(
+        Size index,
+        mi::neuraylib::Edf_sample_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
+    /// Run the EDF evaluation function for this code on the native CPU.
+    mi::Sint32 execute_edf_evaluate(
+        mi::Size index,
+        mi::neuraylib::Edf_evaluate_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
+    /// Run the EDF PDF calculation function for this code on the native CPU.
+    mi::Sint32 execute_edf_pdf(
+        mi::Size index,
+        mi::neuraylib::Edf_pdf_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
 
     // non-API methods.
 
     /// Adds a new callable function to this target code.
     ///
     /// \param name             the name of the function
+    /// \param dist_kind        the distribution kind of the function
     /// \param kind             the kind of the function
     /// \param arg_block_index  the argument block index associated with this function or ~0
     ///                         if no argument block is used
     ///
     /// \return  The index of this function.
-    size_t add_function( const MISTD::string& name, Function_kind kind, mi::Size arg_block_index);
+    size_t add_function( 
+        const MISTD::string& name, 
+        Distribution_kind dist_kind, 
+        Function_kind kind, 
+        mi::Size arg_block_index);
 
     /// Set a function prototype for a callable function.
     ///
@@ -556,6 +630,24 @@ private:
         Texture_shape   m_texture_shape;
     };
 
+    // reduce redundant code be wrapping bsdf, edf, ... calls
+    mi::Sint32 execute_df_init_function(
+        mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
+        mi::Size index,
+        mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const;
+
+    // reduce redundant code be wrapping bsdf, edf, ... calls
+    mi::Sint32 execute_generic_function(
+        mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
+        mi::neuraylib::ITarget_code::Function_kind func_kind,
+        mi::Size index,
+        void *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const;
+
     /// The texture resource table.
     MISTD::vector<Texture_info> m_texture_table;
 
@@ -618,6 +710,9 @@ private:
 
     /// True, if string arguments in the target block are mapped to identifiers.
     bool m_string_args_mapped_to_ids;
+
+    /// True, if the builtin resource handler is supposed to be used when running native code
+    bool m_use_builtin_resource_handler;
 };
 
 } // namespace BACKENDS

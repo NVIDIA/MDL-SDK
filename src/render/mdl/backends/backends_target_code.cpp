@@ -106,7 +106,8 @@ private:
 Target_code::Target_code(
     mi::mdl::IGenerated_code_executable* code,
     MI::DB::Transaction* transaction,
-    bool string_ids)
+    bool string_ids,
+    bool use_builtin_resource_handler)
   : m_native_code(),
     m_code(),
     m_code_segments(),
@@ -123,7 +124,9 @@ Target_code::Target_code(
     m_cap_arg_blocks(),
     m_rh( NULL),
     m_render_state_usage(~0u),
-    m_string_args_mapped_to_ids(string_ids)
+    m_string_args_mapped_to_ids(string_ids),
+    m_use_builtin_resource_handler(use_builtin_resource_handler)
+
 {
     finalize(code, transaction);
 
@@ -159,7 +162,8 @@ Target_code::Target_code(
     m_cap_arg_blocks(),
     m_rh( NULL),
     m_render_state_usage( ~0u),
-    m_string_args_mapped_to_ids(string_ids)
+    m_string_args_mapped_to_ids(string_ids),
+    m_use_builtin_resource_handler(true)
 {
 }
 
@@ -188,7 +192,8 @@ void Target_code::finalize(
 
     if (m_native_code.is_valid_interface()) {
 
-        m_rh = new MDLRT::Resource_handler;
+        if(m_use_builtin_resource_handler)
+            m_rh = new MDLRT::Resource_handler;
 
         m_native_code->init(transaction, NULL, m_rh);
     } else {
@@ -233,6 +238,16 @@ const char* Target_code::get_callable_function_prototype(
         return NULL;
     }
     return m_callable_function_infos[ index].m_prototypes[ lang].c_str();
+}
+
+// Returns the kind of a callable function in the target code.
+mi::neuraylib::ITarget_code::Distribution_kind 
+    Target_code::get_callable_function_distribution_kind(
+        mi::Size index) const
+{
+    if (index < m_callable_function_infos.size())
+        return m_callable_function_infos[index].m_dist_kind;
+    return mi::neuraylib::ITarget_code::DK_INVALID;
 }
 
 // Returns the kind of a callable function in the target code.
@@ -344,177 +359,195 @@ const char* Target_code::get_ro_data_segment_data( mi::Size index) const
 }
 
 
+// reduce redundant code be wrapping bsdf, edf, ... calls
+mi::Sint32 Target_code::execute_df_init_function(
+    mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
+    mi::Size index,
+    mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    if (!m_native_code.is_valid_interface()) return -2;
+    if (index >= m_callable_function_infos.size()) return -2;
+    if (m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
+    if (m_callable_function_infos[index].m_kind != mi::neuraylib::ITarget_code::FK_DF_INIT)
+        return -2;
+
+    const char *args_data = NULL;
+    if (cap_args != NULL)
+        args_data = cap_args->get_data();
+    else
+    {
+        mi::Size block_index = get_callable_function_argument_block_index(index);
+        if (block_index != mi::Size(~0) &&
+            block_index < m_cap_arg_blocks.size() &&
+            m_cap_arg_blocks[block_index])
+        {
+            args_data = m_cap_arg_blocks[block_index]->get_data();
+        }
+    }
+
+    return m_native_code->run_init(
+        index,
+        // ugly cast necessary because the C++ I/F cannot handle the layout options
+        reinterpret_cast<mi::mdl::Shading_state_material*>(&state),
+        tex_handler,
+        args_data) ? 0 : -1;
+}
+
+// reduce redundant code be wrapping bsdf, edf, ... calls
+mi::Sint32 Target_code::execute_generic_function(
+    mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
+    mi::neuraylib::ITarget_code::Function_kind func_kind,
+    mi::Size index,
+    void *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    if (!m_native_code.is_valid_interface()) return -2;
+    if (index >= m_callable_function_infos.size()) return -2;
+    if (m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
+    if (m_callable_function_infos[index].m_kind != func_kind) return -2;
+
+    const char *args_data = NULL;
+    if (cap_args != NULL)
+        args_data = cap_args->get_data();
+    else
+    {
+        mi::Size block_index = get_callable_function_argument_block_index(index);
+        if (block_index != mi::Size(~0) &&
+            block_index < m_cap_arg_blocks.size() &&
+            m_cap_arg_blocks[block_index])
+        {
+            args_data = m_cap_arg_blocks[block_index]->get_data();
+        }
+    }
+
+    return m_native_code->run_generic(
+        index,
+        data,
+        // ugly cast necessary because the C++ I/F cannot handle the layout options
+        reinterpret_cast<const mi::mdl::Shading_state_material*>(&state),
+        tex_handler,
+        args_data) ? 0 : -1;
+}
+
+
 mi::Sint32 Target_code::execute(
     mi::Size index,
-    const Shading_state_material& state,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args,
     void* result) const
 {
-    if (m_native_code.is_valid_interface() && 
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_LAMBDA) {
-
-        const char *args_data;
-        if (cap_args != NULL) args_data = cap_args->get_data();
-        else {
-            mi::Size block_index = get_callable_function_argument_block_index(index);
-            if (block_index != mi::Size(~0) &&
-                block_index < m_cap_arg_blocks.size() &&
-                m_cap_arg_blocks[block_index])
-                args_data = m_cap_arg_blocks[block_index]->get_data();
-            else args_data = NULL;
-        }
-
-        return m_native_code->run_generic(
-            index,
-            result,
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<const mi::mdl::Shading_state_material*>(&state),
-            NULL,
-            args_data) ? 0 : -1;
-    }
-    return -2;
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_NONE,
+        mi::neuraylib::ITarget_code::FK_LAMBDA, index, result, state, tex_handler, cap_args);
 }
 
 mi::Sint32 Target_code::execute_environment(
     mi::Size index,
-    const Shading_state_environment& state,
+    const mi::neuraylib::Shading_state_environment& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     mi::Spectrum_struct* result) const
 {
-    if (m_native_code.is_valid_interface() &&
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_ENVIRONMENT) {
-        return m_native_code->run_environment(
-            index,
-            // ugly cast necessary because the libmdl I/F uses RGB_color*
-            reinterpret_cast<mi::mdl::RGB_color*>(result),
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<const mi::mdl::Shading_state_environment*>(&state),
-            NULL) ? 0 : -1;
-    }
-    return -2;
+    if (!m_native_code.is_valid_interface()) return -2;
+    if (index >= m_callable_function_infos.size()) return -2;
+    if (m_callable_function_infos[index].m_kind != FK_ENVIRONMENT) return -2;
+
+    return m_native_code->run_environment(
+        index,
+        // ugly cast necessary because the libmdl I/F uses RGB_color*
+        reinterpret_cast<mi::mdl::RGB_color*>(result),
+        // ugly cast necessary because the C++ I/F cannot handle the layout options
+        reinterpret_cast<const mi::mdl::Shading_state_environment*>(&state),
+        tex_handler) ? 0 : -1;
 }
 
 mi::Sint32 Target_code::execute_bsdf_init(
     mi::Size index,
-    Shading_state_material& state,
+    mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
 {
-    if (m_native_code.is_valid_interface() &&
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_DF_INIT) {
-        const char *args_data;
-        if (cap_args != NULL) args_data = cap_args->get_data();
-        else {
-            mi::Size block_index = get_callable_function_argument_block_index(index);
-            if (block_index != mi::Size(~0) &&
-                    block_index < m_cap_arg_blocks.size() &&
-                    m_cap_arg_blocks[block_index] )
-                args_data = m_cap_arg_blocks[block_index]->get_data();
-            else args_data = NULL;
-        }
-
-        return m_native_code->run_init(
-            index,
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<mi::mdl::Shading_state_material*>(&state),
-            NULL,
-            args_data) ? 0 : -1;
-    }
-    return -2;
+    return execute_df_init_function(mi::neuraylib::ITarget_code::DK_BSDF,
+        index, state, tex_handler, cap_args);
 }
 
 mi::Sint32 Target_code::execute_bsdf_sample(
     mi::Size index,
-    Bsdf_sample_data *data,
-    const Shading_state_material& state,
+    mi::neuraylib::Bsdf_sample_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
 {
-    if (m_native_code.is_valid_interface() &&
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_DF_SAMPLE) {
-        const char *args_data;
-        if (cap_args != NULL) args_data = cap_args->get_data();
-        else {
-            mi::Size block_index = get_callable_function_argument_block_index(index);
-            if (block_index != mi::Size(~0) &&
-                    block_index < m_cap_arg_blocks.size() &&
-                    m_cap_arg_blocks[block_index] )
-                args_data = m_cap_arg_blocks[block_index]->get_data();
-            else args_data = NULL;
-        }
-
-        return m_native_code->run_generic(
-            index,
-            data,
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<const mi::mdl::Shading_state_material*>(&state),
-            NULL,
-            args_data) ? 0 : -1;
-    }
-    return -2;
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_BSDF,
+        mi::neuraylib::ITarget_code::FK_DF_SAMPLE, index, data, state, tex_handler, cap_args);
 }
 
 mi::Sint32 Target_code::execute_bsdf_evaluate(
     mi::Size index,
-    Bsdf_evaluate_data *data,
-    const Shading_state_material& state,
+    mi::neuraylib::Bsdf_evaluate_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
 {
-    if (m_native_code.is_valid_interface() &&
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_DF_EVALUATE) {
-        const char *args_data;
-        if (cap_args != NULL) args_data = cap_args->get_data();
-        else {
-            mi::Size block_index = get_callable_function_argument_block_index(index);
-            if (block_index != mi::Size(~0) &&
-                    block_index < m_cap_arg_blocks.size() &&
-                    m_cap_arg_blocks[block_index] )
-                args_data = m_cap_arg_blocks[block_index]->get_data();
-            else args_data = NULL;
-        }
-
-        return m_native_code->run_generic(
-            index,
-            data,
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<const mi::mdl::Shading_state_material*>(&state),
-            NULL,
-            args_data) ? 0 : -1;
-    }
-    return -2;
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_BSDF,
+        mi::neuraylib::ITarget_code::FK_DF_EVALUATE, index, data, state, tex_handler, cap_args);
 }
 
 mi::Sint32 Target_code::execute_bsdf_pdf(
     mi::Size index,
-    Bsdf_pdf_data *data,
-    const Shading_state_material& state,
+    mi::neuraylib::Bsdf_pdf_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
 {
-    if (m_native_code.is_valid_interface() &&
-            index < m_callable_function_infos.size() &&
-            m_callable_function_infos[index].m_kind == FK_DF_PDF) {
-        const char *args_data;
-        if (cap_args != NULL) args_data = cap_args->get_data();
-        else {
-            mi::Size block_index = get_callable_function_argument_block_index(index);
-            if (block_index != mi::Size(~0) &&
-                    block_index < m_cap_arg_blocks.size() &&
-                    m_cap_arg_blocks[block_index] )
-                args_data = m_cap_arg_blocks[block_index]->get_data();
-            else args_data = NULL;
-        }
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_BSDF,
+        mi::neuraylib::ITarget_code::FK_DF_PDF, index, data, state, tex_handler, cap_args);
+}
 
-        return m_native_code->run_generic(
-            index,
-            data,
-            // ugly cast necessary because the C++ I/F cannot handle the layout options
-            reinterpret_cast<const mi::mdl::Shading_state_material*>(&state),
-            NULL,
-            args_data) ? 0 : -1;
-    }
-    return -2;
+mi::Sint32 Target_code::execute_edf_init(
+    mi::Size index,
+    mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_df_init_function(mi::neuraylib::ITarget_code::DK_EDF,
+        index, state, tex_handler, cap_args);
+}
+
+mi::Sint32 Target_code::execute_edf_sample(
+    mi::Size index,
+    mi::neuraylib::Edf_sample_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_EDF,
+        mi::neuraylib::ITarget_code::FK_DF_SAMPLE, index, data, state, tex_handler, cap_args);
+}
+
+mi::Sint32 Target_code::execute_edf_evaluate(
+    mi::Size index,
+    mi::neuraylib::Edf_evaluate_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_EDF,
+        mi::neuraylib::ITarget_code::FK_DF_EVALUATE, index, data, state, tex_handler, cap_args);
+}
+
+mi::Sint32 Target_code::execute_edf_pdf(
+    mi::Size index,
+    mi::neuraylib::Edf_pdf_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_EDF,
+        mi::neuraylib::ITarget_code::FK_DF_PDF, index, data, state, tex_handler, cap_args);
 }
 
 Target_code::State_usage Target_code::get_render_state_usage() const
@@ -524,6 +557,7 @@ Target_code::State_usage Target_code::get_render_state_usage() const
 
 size_t Target_code::add_function(
     const MISTD::string& name,
+    Distribution_kind dist_kind,
     Function_kind kind,
     mi::Size arg_block_index)
 {
@@ -533,7 +567,8 @@ size_t Target_code::add_function(
         return it->second;
     }
     size_t idx = m_callable_function_infos.size();
-    m_callable_function_infos.push_back( Callable_function_info( name, kind, arg_block_index));
+    m_callable_function_infos.push_back( 
+        Callable_function_info( name, dist_kind, kind, arg_block_index));
     m_callable_function_map[ name] = idx;
     return idx;
 }

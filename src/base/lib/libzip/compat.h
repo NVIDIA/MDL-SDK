@@ -41,7 +41,9 @@
 #endif
 
 /* to have *_MAX definitions for all types when compiling with g++ */
+#ifndef __STDC_LIMIT_MACROS 
 #define __STDC_LIMIT_MACROS
+#endif
 
 #ifdef _WIN32
 #ifndef ZIP_EXTERN

@@ -14,6 +14,17 @@ set(_GENERATED_SOURCES
 # -------------------------------------------------------------------------------------------------
 
 # collect sources
+set(PROJECT_HEADERS
+    "generator_jit.h"
+    "generator_jit_code_printer.h"
+    "generator_jit_context.h"
+    "generator_jit_generated_code.h"
+    "generator_jit_llvm.h"
+    "generator_jit_llvm_passes.h"
+    "generator_jit_res_manager.h"
+    "generator_jit_type_map.h"
+    )
+
 set(PROJECT_SOURCES 
     "generator_jit.cpp"
     "generator_jit_code_printer.cpp"
@@ -28,6 +39,7 @@ set(PROJECT_SOURCES
     "generator_jit_llvm_passes.cpp"
     "generator_jit_type_map.cpp"
     ${_GENERATED_SOURCES}
+    ${PROJECT_HEADERS}
     )
 
 # mark files as generated to disable the check for existence during configure
@@ -41,22 +53,29 @@ create_from_base_preset(
         ${_GENERATED_DIR}
 )
 
-# additional options
-target_compile_options(${PROJECT_NAME} 
+# additional definitions
+target_compile_definitions(${PROJECT_NAME} 
     PRIVATE 
         # LLVM include files require this
-        "-D__STDC_CONSTANT_MACROS"
-        "-D__STDC_FORMAT_MACROS"
-        "-D__STDC_LIMIT_MACROS"
+        "__STDC_CONSTANT_MACROS"
+        "__STDC_FORMAT_MACROS"
+        "__STDC_LIMIT_MACROS"
 
-        # LLVM does not use RTTI
-        "$<$<CXX_COMPILER_ID:GNU>:-DNO_RTTI>"
-        "$<$<CXX_COMPILER_ID:Clang>:-DNO_RTTI>"
-        "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:GNU>>:-fno-rtti>"
-        "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:-fno-rtti>"
-
-        "-D_USE_MATH_DEFINES" # to get M_PI
+        # to get M_PI
+        "_USE_MATH_DEFINES" 
     )
+
+if(NOT MSVC)
+    # LLVM does not use RTTI
+    target_compile_options(${PROJECT_NAME} 
+        PRIVATE 
+            "$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>"
+        )
+    target_compile_definitions(${PROJECT_NAME} 
+        PRIVATE 
+            "$<$<COMPILE_LANGUAGE:CXX>:NO_RTTI>"
+        )
+endif()
 
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME} 

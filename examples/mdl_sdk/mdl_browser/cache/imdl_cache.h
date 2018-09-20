@@ -37,6 +37,7 @@
 
 #include <mi/base/atom.h>
 #include <string>
+#include <functional>
 
 namespace mi
 {
@@ -48,7 +49,6 @@ namespace mi
 }
 
 class IMdl_cache;
-class IMdl_cache_item;
 class IMdl_cache_package;
 class IMdl_cache_module;
 class IMdl_cache_material;
@@ -129,11 +129,12 @@ public:
     // hashing and comparison
     struct Child_map_key_hash
     {
+
         // hash function
         std::size_t operator () (const IMdl_cache_node::Child_map_key& p) const
         {
             // TODO replace by a more robust hash combination
-            return std::hash<IMdl_cache_item::Kind>()(p.kind) 
+            return std::hash<size_t>()(static_cast<size_t>(p.kind))
                  ^ std::hash<std::string>()(p.name) << 1;
         }
 

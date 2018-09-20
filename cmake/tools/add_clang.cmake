@@ -11,6 +11,8 @@ if(NOT clang_PATH)
 endif()
 
 # call --version
+get_filename_component(clang_PATH_ABS ${clang_PATH} REALPATH)
+set(clang_PATH ${clang_PATH_ABS} CACHE FILEPATH "Path of the Clang 3.4 binary." FORCE)
 execute_process(COMMAND "${clang_PATH}" "--version" 
     OUTPUT_VARIABLE 
         _CLANG_VERSION_STRING 
@@ -18,10 +20,14 @@ execute_process(COMMAND "${clang_PATH}" "--version"
         _CLANG_VERSION_STRING
     )
 
-# parse version number
-STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _CLANG_VERSION_STRING ${_CLANG_VERSION_STRING})
-
 # check version
-if(${_CLANG_VERSION_STRING} VERSION_GREATER_EQUAL "3.5.0" OR ${_CLANG_VERSION_STRING} VERSION_LESS "3.4.0")
-    message(FATAL_ERROR "Clang 3.4 is required but Clang ${_CLANG_VERSION_STRING} was found instead. Please set the CMake option 'clang_PATH' that needs to point to a clang 3.4.x compiler.")
+if(NOT _CLANG_VERSION_STRING)
+    message(STATUS "clang_PATH: ${clang_PATH}")
+    message(FATAL_ERROR "Clang version could not be determined.")
+else()
+    # parse version number
+    STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _CLANG_VERSION_STRING ${_CLANG_VERSION_STRING})
+    if(${_CLANG_VERSION_STRING} VERSION_GREATER_EQUAL "3.5.0" OR ${_CLANG_VERSION_STRING} VERSION_LESS "3.4.0")
+        message(FATAL_ERROR "Clang 3.4 is required but Clang ${_CLANG_VERSION_STRING} was found instead. Please set the CMake option 'clang_PATH' that needs to point to a clang 3.4.x compiler.")
+    endif()
 endif()

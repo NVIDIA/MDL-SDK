@@ -2,12 +2,20 @@
 set(PROJECT_NAME base-data-dblight)
 
 # collect sources
+set(PROJECT_HEADERS
+    "dblight_database.h"
+    "dblight_scope.h"
+    "dblight_transaction.h"
+    "i_dblight.h"
+    )
+
 set(PROJECT_SOURCES 
     "dblight_access.cpp"
     "dblight_database.cpp"
     "dblight_info.cpp"
     "dblight_scope.cpp"
     "dblight_transaction.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template

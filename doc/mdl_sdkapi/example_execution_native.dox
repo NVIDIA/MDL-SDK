@@ -41,6 +41,7 @@ compiled materials to evaluate sub-expressions of multiple materials on the CPU.
 
   - MDL material state (CPU)
   - Execution of generated code (CPU)
+  - Texture handling
 
 \section example_execution_native_descr Detailed Description
 
@@ -91,22 +92,63 @@ with the requested result.
 In this example, we will provide a \c NULL pointer as a target argument block as we use instance compilation.
 See \ref mi_neuray_compilation_modes for more details about compilation modes.
 
-When the \c nv_freeimage plugin has been loaded via
-#mi::neuraylib::IMdl_compiler::load_plugin_library() before starting the MDL SDK, even
-texture access within the MDL code will work automatically for many common image formats.
-PTEX textures are not supported, yet.
+
 
 In this example, we bake a sub-expression of a material into a texture by executing
 the generated code for every texel updating the material state accordingly.
 At the end, we write the texture to disk.
 </dd>
 
+<dt><b>Texture handling</b></dt>
+<dd><br>
+Per default, the \neurayAdjectiveName provides a built-in runtime which handles texture access functions
+(texture lookups etc.). In some situations, you may however want to provide your own implementation. This
+requires you to disable the built-in texture handler by setting the #mi::neuraylib::IMdl_backend option 
+\c use_builtin_resource_handler to \c "off" (via #mi::neuraylib::IMdl_backend::set_option()).
+It also requires you to implement the following functions:
+
+- tex_lookup_float4_2d
+
+- tex_lookup_float3_2d
+
+- tex_texel_float4_2d
+
+- tex_lookup_float4_3d
+
+- tex_lookup_float3_3d
+
+- tex_texel_float4_3d
+
+- tex_lookup_float4_cube
+
+- tex_lookup_float3_cube
+
+- tex_resolution_2d
+
+Except for the last one, this functions correspond directly to the functions described in section 20.3
+"Standard library functions - Texture" in the MDL specification.
+
+You pass your functions to the
+\neurayAdjectiveName via an instance of the struct #mi::neuraylib::Texture_handler_base when calling any
+of the #mi::neuraylib::ITarget_code::execute*() functions. The #mi::neuraylib::Texture_handler_base has a
+vtable parameter which contains function pointers matching the signature of the required functions. This
+function pointers need to point to your functions.
+
+An example implementation (limited to 2d texture lookup for now) can be found in texture_support.h.
+To switch example_execution_native to the custom texturing code, please disable the define
+\c USE_BUILTIN_TEXTURE_RUNTIME on top of example_execution_native.cpp.
+
+</dd>
+
 \section example_execution_native Example Source
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/execution_native/example_execution_native.cpp</tt>
+  
+  <tt>examples/mdl_sdk/execution_native/texture_support.h</tt>
 
 \include execution_native/example_execution_native.cpp
+\include execution_native/texture_support.h
 
 <div align="right">
     [\link mi_neuray_example_compilation Previous\endlink]

@@ -428,13 +428,13 @@ public:
         return this->data()[off];
     }
 
-    // look for ch before off
+    // look for ch before or at off
     size_type find_last_of(CharT ch, size_type off = npos) const
     {
         return rfind(const_pointer(&ch), off, 1);
     }
 
-    // look for none of [ptr, ptr + len) before off
+    // look for none of [ptr, ptr + len) before or at off
     size_type find_last_not_of(const_pointer ptr, size_type off, size_type len) const
     {
         if (0 < this->m_size) {
@@ -449,7 +449,7 @@ public:
         return npos;  // not found
     }
 
-    // look for non ch before off
+    // look for non ch before or at off
     size_type find_last_not_of(CharT ch, size_type off = npos) const
     {
         return find_last_not_of(const_pointer(&ch), off, 1);
@@ -496,7 +496,7 @@ public:
         return find(const_pointer(&ch), off, 1);
     }
 
-    // look for [ptr, ptr + len) beginning before off
+    // look for [ptr, ptr + len) beginning before or at off
     size_type rfind(CharT const *ptr, size_type off, size_type len) const
     {
         if (len == 0)
@@ -513,13 +513,13 @@ public:
         return npos;  // not found
     }
 
-    // look for [ptr, <null>) beginning before off
+    // look for [ptr, <null>) beginning before or at off
     size_type rfind(CharT const *ptr, size_type off = npos) const
     {
         return rfind(ptr, off, Traits::length(ptr));
     }
 
-    // look for ch before off
+    // look for ch before or at off
     size_type rfind(CharT ch, size_type off = npos) const
     {
         return rfind(const_pointer(&ch), off, 1);

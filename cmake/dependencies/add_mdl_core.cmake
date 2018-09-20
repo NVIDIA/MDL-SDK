@@ -13,13 +13,19 @@ target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
         $<TARGET_PROPERTY:mdl::mdl_core,INTERFACE_INCLUDE_DIRECTORIES>
     )
 
-# copy runtime dependencies
-# copy system libraries only on windows
+# add build dependency
+add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_core)
+
+# runtime dependencies
 if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
-    if(WIN32)
-        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            FILES       
-                "$<TARGET_FILE:mdl::mdl_core>"
+    if(WINDOWS)
+        # instead of copying, we add the library paths the debugger environment
+        target_add_vs_debugger_env_path(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+            PATHS 
+                ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_core/$(Configuration)
             )
     endif()
+
+    # on linux, the user has to setup the LD_LIBRARY_PATH when running examples
+    # on mac, DYLD_LIBRARY_PATH, respectively.
 endif()

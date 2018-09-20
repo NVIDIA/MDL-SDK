@@ -48,13 +48,19 @@ The binary release is different in some functionality as documented in the
 [Change Log](CHANGELOG.md).
 
 
+## Support
+
+- [NVIDIA MDL SDK Forum](https://devtalk.nvidia.com/default/board/253/mdl-sdk/)
+
+
 ## Building the MDL SDK from Source
 
 MDL uses [CMake](http://www.cmake.org/) to generate build files for a 
 particular development environment. It is suggested to use CMake 3.11 or later, 
 which can be downloaded from the [CMake Website](https://cmake.org/download/).
 When using a Unix-like system, you can install the *cmake* package using 
-the respective package management systems.
+the respective package management systems. On the Mac OS X platform, third party
+dependencies can be resolved using the [Homebrew Package Manager](https://brew.sh/index_de).
 
 
 ### Dependencies
@@ -68,8 +74,7 @@ successfully tested:
 
 -   **Windows 10:**     Microsoft Visual Studio 2015 (msvc v140)
 -   **Ubuntu 18.04:**   gcc/g++6 and gcc/g++7
-
-**Note:** Mac OS X is not yet supported
+-   **Mac OS X 10.13:** Xcode 8.3.3 (Apple Clang 8.1)
 
 The versions listed with the following dependencies have been
 successfully tested. Where not mentioned otherwise, other versions
@@ -82,15 +87,17 @@ The following third-party libraries are required to build the MDL SDK:
     Linux: Install the *libboost-dev* package.  
     Windows: Download and extract the boost source code from 
     [boost.org](https://www.boost.org/users/download/).  
+    Mac OS X: Install the *boost* package using brew.
 
 -   **FreeImage** *(3.17.0)*  
     Linux: Install the *libfreeimage-dev* package.  
     Windows: Download and extract the pre-compiled binaries from 
-    [freeimage.sourceforge.net](http://freeimage.sourceforge.net/download.html).
+    [freeimage.sourceforge.net](http://freeimage.sourceforge.net/download.html).  
+    Mac OS X: Install the *freeimage* package using brew.
 
 -   **Python2** *(2.7.1)*  
     Linux: Install the *python* package.  
-    Windows: Download and install Python 2.7 from 
+    Windows and Max OS X: Download and install Python 2.7 from 
     [python.org](https://www.python.org/downloads/).
 
 -   **Clang 3.4.1**  
@@ -104,12 +111,14 @@ libraries. These additional libraries are:
 -   **GLEW** *(2.1.0)*  
     Linux: Install the *libglew-dev* package.  
     Windows: Download and extract the pre-compiled binaries from 
-    [glew.sourceforge.net](http://glew.sourceforge.net/).
+    [glew.sourceforge.net](http://glew.sourceforge.net/).  
+    Mac OS X: Install the *glew* package using brew.
 
 -   **GLFW** *(3.2.1)*  
     Linux: Install the *libglfw3-dev* package.  
     Windows: Download and extract the pre-compiled x64 binaries from 
-    [glfw.org](http://www.glfw.org/download.html).
+    [glfw.org](http://www.glfw.org/download.html).  
+    Mac OS X: Install the *glfw* package using brew.
 
 -   **NVIDIA CUDA Toolkit** *(9.0 or 9.2)*  
     Please follow the instructions on the 
@@ -187,7 +196,7 @@ Required tools to build the documentation:
     -   **python_PATH** in Ungrouped Entries (only of not found in the PATH),  
         for example: *C:/projects/thirdparty/python_2_7_1/bin/python.exe*
 
-    -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer),  
+    -   **Qt5_DIR** in Ungrouped Entries,  
         for example: *C:/Qt/5.10.1/msvc2015_64*
 
 6.  When all dependencies have been resolved or the corresponding examples 
@@ -202,12 +211,24 @@ Required tools to build the documentation:
     directory.
 
 7.  Use Visual Studio to build the MDL SDK library, MDL Core library,
-    and the examples. You can run the examples by double-clicking the
-    executable in the build directories or by using the command line,
-    which allows you to provide additional arguments. When running the
-    examples using the Visual Studio debugger, you can provide additional 
-    arguments by specifying them in the individual Visual Studio project 
-    settings.
+    and the examples. When running the examples using the Visual Studio debugger,
+    you can provide additional command line arguments by specifying them in the
+    individual Visual Studio project settings.
+
+    You can find the example binaries in the corresponding subfolders in *build/examples*.
+    To run the examples by double-clicking the executable in the build directories
+    or by using the command line, you need to add the location of the built libraries and
+    plugins to your environment PATH or copy them into the corresponding example 
+    binary folder.
+
+    For the *mdl_sdk* examples, you need *libmdl_sdk.dll* from
+    *build/src/prod/lib/mdl_sdk* and additionally,
+    *freeimage.dll* and *nv_freeimage.dll* from
+    *build/src/shaders/plugin/freeimage*.
+
+    For the *mdl_core* examples, you need *libmdl_core.dll* from
+    *build/src/prod/lib/mdl_core* and the *freeimage.dll* from 
+    *build/src/shaders/plugin/freeimage* or your third-party downloads.
 
 
 ### Building on Linux
@@ -346,7 +367,7 @@ Required tools to build the documentation:
     the image plugins using the `LD_LIBRARAY_PATH` variable:
 
     ```bash
-    export LD_LIBRARY_PATH=~/projects/mdl-sdk/build/linux-x64-gcc7/src/prod/lib/mdl_sdk:~/projects/mdl-sdk/build/linux-x64-gcc7/src/prod/lib/mdl_core:~/projects/mdl-sdk/build/linux-x64-gcc7/src/shaders/plugin/freeimage:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=~/projects/mdl-sdk/build/linux-x64-gcc7/src/prod/lib/mdl_sdk:~/projects/mdl-sdk/build/linux-x64-gcc7/src/prod/lib/mdl_core:~/projects/mdl-sdk/build/linux-x64-gcc7/src/shaders/plugin/freeimage${LD_LIBRARAY_PATH:+:${LD_LIBRARAY_PATH}}
     ```
 
     For example, to run the MDL SDK modules example, use:
@@ -356,6 +377,58 @@ Required tools to build the documentation:
     ./mdl_sdk_example-modules
     ```
 
+### Building on Mac OS X
+
+1.  Before generating make files, you need to install the required
+    tools and libraries as listed [above](#thirdparty-dependencies-libs).
+
+    Please note that the build requires clang 3.4.1, which is no
+    longer available through the package manager. Please download the
+    binary as described [above](#thirdparty-dependencies-libs). In
+    the following, it is assumed that it has been extracted to:
+
+        ~/projects/thirdparty/clang+llvm-3.4.1-x86_64-apple-darwin10.9/bin/clang
+
+2.  Depending on your workflow, you can use CMake-Gui and follow the [Windows instructions](#building-on-windows) 
+    or use the command line as described in the [Linux section](#building-on-linux).
+    In each case, begin with step 2 of the respective instructions.
+
+    If the brew packages, Python 2.7, CUDA, and Qt have been installed correctly,
+    the following CMake options need to be specified:
+
+    -   **clang_PATH** in Ungrouped Entries,  
+        for example: *~/projects/thirdparty/clang+llvm-3.4.1-x86_64-apple-darwin10.9/bin/clang*
+
+    -   **python_PATH** in Ungrouped Entries (only of not found in the PATH),  
+        for example: */usr/bin/python*
+
+    -   **Qt5_DIR** in Ungrouped Entries,  
+        for example: *~/Qt/5.10.1/clang_64*
+
+
+3.  After successfully configuring and generating make files, switch to the selected build directory and run make:
+
+    ```bash
+    cd ~/projects/mdl-sdk/build/macosx-x64-clang810
+    make -j8
+    ```
+
+4.  Because the different MDL SDK libraries are loaded at runtime, their 
+    location has to be provided in order to run an example. Therefore, 
+    specify the paths to the built MDL SDK library, MDL Core library, and 
+    the image plugins using the `DYLD_LIBRARAY_PATH` variable:
+
+    ```bash
+    export Qt5_DIR=~/Qt/5.10.1/clang_64
+    export DYLD_LIBRARAY_PATH=~/projects/mdl-sdk/build/macosx-x64-clang810/src/prod/lib/mdl_sdk:~/projects/mdl-sdk/build/macosx-x64-clang810/src/prod/lib/mdl_core:~/projects/mdl-sdk/build/macosx-x64-clang810/src/shaders/plugin/freeimage:${Qt5_DIR}/lib:${Qt5_DIR}/plugins/imageformats${DYLD_LIBRARAY_PATH:+:${DYLD_LIBRARAY_PATH}}
+    ```
+
+    For example, to run the MDL SDK modules example, use:
+
+    ```bash
+    cd ~/projects/mdl-sdk/build/macosx-x64-clang810/examples/mdl_sdk/modules
+    ./mdl_sdk_example-modules
+    ```
 
 ### Additional CMake Options
 
@@ -463,17 +536,18 @@ A start page that links all documents can be found in the doc directory:
 
 The NVIDIA MDL SDK repository consists of the following directories and files:
 
-    include/     - C++ API header files
-    examples/    - example programs and MDL files
-    src/         - source code for the SDK libraries
-    doc/         - API documentation, MDL specification, 
-                   core_definitions.mdl and base.mdl documentation
-    cmake/       - support files for the CMAKE build system
+    include/       - C++ API header files
+    examples/      - example programs and MDL files
+    src/           - source code for the SDK libraries
+    doc/           - API documentation, MDL specification, 
+                     core_definitions.mdl and base.mdl documentation
+    cmake/         - support files for the CMAKE build system
     
-    README.md    - this file: introduction and build instructions
-    CHANGELOG.md - change log and difference to the binary MDL SDK release
-    LICENSE.md   - license for the MDL SDK and references to 
-                   third-party licenses
+    README.md      - this file: introduction and build instructions
+    CHANGELOG.md   - change log and difference to the binary MDL SDK release
+    LICENSE.md     - license for the MDL SDK and references to 
+                     third-party licenses
+    CMakeLists.txt - top level CMAKE file
 
 
 ## Additional Resources

@@ -23,67 +23,122 @@ function(TARGET_BUILD_SETUP)
 
     # very simple set of flags depending on the compiler instead of the combination of compiler, OS, ...
     # for more complex scenarios, replace that 
-    target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
-        PUBLIC
-            # general 
-            "$<$<CONFIG:DEBUG>:-DDEBUG>"
-            "$<$<CONFIG:DEBUG>:-D_DEBUG>"
-            "$<$<CONFIG:RELEASE>:-DNDEBUG>"
-            "-DMISTD=std"                       # Use system std lib rather than a custom one
-            "-DBIT64=1"
-            "-DX86=1"
 
-            # platform specific
-            "$<$<CXX_COMPILER_ID:MSVC>:-DMI_PLATFORM=\"nt-x86-64-vc14\">"
-            "$<$<CXX_COMPILER_ID:MSVC>:-DMI_PLATFORM_WINDOWS>"
-            "$<$<CXX_COMPILER_ID:MSVC>:-DWIN_NT>"
-            "$<$<CXX_COMPILER_ID:MSVC>:-D_MSC_VER=${MSVC_VERSION}>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/MT$<$<CONFIG:Debug>:d>>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/MP>"
-            
-            "$<$<CXX_COMPILER_ID:GNU>:-DMI_PLATFORM=\"linux-x86-64-gcc\">" #todo add major version number
-            "$<$<CXX_COMPILER_ID:GNU>:-DMI_PLATFORM_UNIX>"
-            "$<$<CXX_COMPILER_ID:GNU>:-fPIC>"   # position independent code since we will build a shared object
-            "$<$<CXX_COMPILER_ID:GNU>:-m64>"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
-            "$<$<CXX_COMPILER_ID:GNU>:-fno-strict-aliasing>"
-
-            "$<$<CXX_COMPILER_ID:GNU>:-march=nocona>"
-            "$<$<PLATFORM_ID:Linux>:-DHAS_SSE>"
-
-            # debug symbols
-            "$<$<AND:$<CONFIG:DEBUG>,$<CXX_COMPILER_ID:GNU>>:-gdwarf-3>"
-            "$<$<AND:$<CONFIG:DEBUG>,$<CXX_COMPILER_ID:GNU>>:-gstrict-dwarf>"
-
-            # additional user defined options
-            ${MDL_ADDITIONAL_COMPILER_OPTIONS}
-
-        PRIVATE 
-            # enable additional warnings
-            "$<$<CXX_COMPILER_ID:GNU>:-Wall>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wvla>"
-
-            # temporary ignored warnings
-            "$<$<CXX_COMPILER_ID:MSVC>:-D_CRT_SECURE_NO_WARNINGS>"
-            "$<$<CXX_COMPILER_ID:MSVC>:-D_SCL_SECURE_NO_WARNINGS>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/wd4267>" # Suppress Warning C4267	'argument': conversion from 'size_t' to 'int', possible loss of data
-
-            "$<$<AND:$<CXX_COMPILER_ID:GNU>,$<COMPILE_LANGUAGE:CXX>>:-Wno-placement-new>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-parentheses>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-sign-compare>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-narrowing>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-unused-but-set-variable>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-unused-local-typedefs>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated-declarations>"
-            "$<$<CXX_COMPILER_ID:GNU>:-Wno-unknown-pragmas>"
+    # GENERAL 
+    #---------------------------------------------------------------------------------------
+    target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+        PRIVATE
+            "$<$<CONFIG:DEBUG>:DEBUG>"
+            "$<$<CONFIG:DEBUG>:_DEBUG>"
+            "MISTD=std"                       # Use system std lib rather than a custom one
+            "BIT64=1"
+            "X86=1"
+            ${MDL_ADDITIONAL_COMPILER_DEFINES}   # additional user defines
         )
+
+    target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        PRIVATE
+            ${MDL_ADDITIONAL_COMPILER_OPTIONS}   # additional user options
+        )
+
+    # WINDOWS
+    #---------------------------------------------------------------------------------------
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+            PUBLIC
+                "MI_PLATFORM=\"nt-x86-64-vc14\""
+                "MI_PLATFORM_WINDOWS"
+                "WIN_NT"
+            PRIVATE
+                "_MSC_VER=${MSVC_VERSION}"
+                "_CRT_SECURE_NO_WARNINGS"
+                "_SCL_SECURE_NO_WARNINGS"
+            )
+
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+            PRIVATE
+                "/MT$<$<CONFIG:Debug>:d>"
+                "/MP"
+                "/wd4267"   # Suppress Warning C4267	'argument': conversion from 'size_t' to 'int', possible loss of data
+            )
+    endif()
+
+    # LINUX
+    #---------------------------------------------------------------------------------------
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+            PUBLIC
+                "MI_PLATFORM=\"linux-x86-64-gcc\"" #todo add major version number
+                "MI_PLATFORM_UNIX"
+            )
+
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+            PRIVATE
+                "-fPIC"   # position independent code since we will build a shared object
+                "-m64"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
+                "-fno-strict-aliasing"
+                "-march=nocona"
+                "-DHAS_SSE"
+                "$<$<CONFIG:DEBUG>:-gdwarf-3>"
+                "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
+
+                # enable additional warnings
+                "-Wall"
+                "-Wvla"
+
+                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
+                "-Wno-parentheses"
+                "-Wno-sign-compare"
+                "-Wno-narrowing"
+                "-Wno-unused-but-set-variable"
+                "-Wno-unused-local-typedefs"
+                "-Wno-deprecated-declarations"
+                "-Wno-unknown-pragmas"
+            )
+    endif()
+
+    # MACOSX
+    #---------------------------------------------------------------------------------------
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+            PUBLIC
+                "MI_PLATFORM=\"macosx-x86-64-clang\"" #todo add major version number
+                "MI_PLATFORM_MACOSX"
+                "MACOSX"
+            )
+
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+            PRIVATE
+                "-mmacosx-version-min=10.10"
+                "-fPIC"
+                "-m64"
+                "-stdlib=libc++"
+                "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
+                "$<$<CONFIG:DEBUG>:-gdwarf-2>"
+                "-fvisibility-inlines-hidden"
+                "-fdiagnostics-fixit-info"
+                "-fdiagnostics-parseable-fixits"
+                "-Wno-unused-parameter"
+                "-Wno-inconsistent-missing-override"
+                "-Wno-unnamed-type-template-args"
+                "-Wno-invalid-offsetof"
+                "-Wno-long-long"
+                "-Wwrite-strings"
+                "-Wmissing-field-initializers"
+                "-Wcovered-switch-default"
+                "-Wnon-virtual-dtor"
+                "-fdiagnostics-fixit-info"
+                "-fdiagnostics-parseable-fixits"
+            )
+    endif()
 
     # setup specific to shared libraries
     if (_TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR _TARGET_TYPE STREQUAL "MODULE_LIBRARY")
-        target_compile_options(${PROJECT_NAME} 
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
             PRIVATE
-                "-DMI_DLL_BUILD"            # export/import macro
-                "-DMI_ARCH_LITTLE_ENDIAN"   # used in the .rc files
-                "-DTARGET_FILENAME=\"$<TARGET_FILE_NAME:${PROJECT_NAME}>\""     # used in .rc
+                "MI_DLL_BUILD"            # export/import macro
+                "MI_ARCH_LITTLE_ENDIAN"   # used in the .rc files
+                "TARGET_FILENAME=\"$<TARGET_FILE_NAME:${TARGET_BUILD_SETUP_TARGET}>\""     # used in .rc
             )
     endif()
 endfunction()
@@ -95,66 +150,77 @@ function(SETUP_IDE)
     set(oneValueArgs TARGET)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(SETUP_IDE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - SETUP_IDE_TARGET
+    # - SETUP_IDE_SOURCES
 
     # not required without visual studio or xcode
     if(NOT MSVC AND NOT MSVC_IDE)
         return()
     endif()
 
-    # compute the folder relative to the top level
+    # compute the folder relative to the top level and use it as project folder hierarchy in the IDEs 
     get_filename_component(FOLDER_PREFIX ${CMAKE_SOURCE_DIR} REALPATH)
-    get_filename_component(FOLDER_NAME ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
-
+    get_filename_component(FOLDER_PATH ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
     string(LENGTH ${FOLDER_PREFIX} OFFSET)
-    string(LENGTH ${FOLDER_NAME} TOTAL_LENGTH)
+    string(LENGTH ${FOLDER_PATH} TOTAL_LENGTH)
     math(EXPR OFFSET ${OFFSET}+1)
     math(EXPR REMAINING ${TOTAL_LENGTH}-${OFFSET})
-    string(SUBSTRING ${FOLDER_NAME} ${OFFSET} ${REMAINING} FOLDER_NAME)
+    string(SUBSTRING ${FOLDER_PATH} ${OFFSET} ${REMAINING} FOLDER_PATH)
     
+    get_filename_component(FOLDER_NAME ${FOLDER_PATH} NAME)         # last folder is used as project name
+    get_filename_component(FOLDER_PATH ${FOLDER_PATH} PATH)         # drop the last folder (equals the project name)
+
     set_target_properties(${SETUP_IDE_TARGET} PROPERTIES 
         VS_DEBUGGER_WORKING_DIRECTORY           "$(OutDir)"         # working directory
-        FOLDER                                  ${FOLDER_NAME}      # folder
+        PROJECT_LABEL                           ${FOLDER_NAME}      # project name
         MAP_IMPORTED_CONFIG_DEBUG               Debug
         MAP_IMPORTED_CONFIG_RELEASE             Release
         MAP_IMPORTED_CONFIG_MINSIZEREL          Release
         MAP_IMPORTED_CONFIG_RELWITHDEBINFO      Release
         )
 
-        # keep the folder structure in visual studio
-        foreach(_SOURCE ${SETUP_IDE_SOURCES})
-            string(FIND ${_SOURCE} "/" _POS REVERSE)
+    if(NOT ${FOLDER_PATH}) # if not, fall back to root level
+        set_target_properties(${SETUP_IDE_TARGET} PROPERTIES 
+            FOLDER                              ${FOLDER_PATH}      # hierarchy
+        )
+    endif()
 
-            # file in project root
-            if(${_POS} EQUAL -1)
-                source_group("" FILES ${_SOURCE})
+    # keep the folder structure in visual studio
+    foreach(_SOURCE ${SETUP_IDE_SOURCES})
+        string(FIND ${_SOURCE} "/" _POS REVERSE)
+
+        # file in project root
+        if(${_POS} EQUAL -1)
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
+
+        # generated files
+        math(EXPR _START ${_POS}-9)
+        if(${_START} GREATER 0)
+            string(SUBSTRING ${_SOURCE} ${_START} 9 FOLDER_PATH)
+            if(FOLDER_PATH STREQUAL "generated")
+                source_group("generated" FILES ${_SOURCE})
                 continue()
             endif()
+        endif()
 
-            # generated files
-            math(EXPR _START ${_POS}-9)
-            if(${_START} GREATER 0)
-                string(SUBSTRING ${_SOURCE} ${_START} 9 FOLDER_NAME)
-                if(FOLDER_NAME STREQUAL "generated")
-                    source_group("generated" FILES ${_SOURCE})
-                    continue()
-                endif()
-            endif()
+        # relative files outside the current target
+        if(${_SOURCE} MATCHES "^../.*")
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
 
-            # relative files outside the current target
-            if(${_SOURCE} MATCHES "^../.*")
-                source_group("" FILES ${_SOURCE})
-                continue()
-            endif()
+        # absolute files (probably outside the current target)
+        if(IS_ABSOLUTE ${_SOURCE})
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
 
-            # absolute files (probably outside the current target)
-            if(IS_ABSOLUTE ${_SOURCE})
-                source_group("" FILES ${_SOURCE})
-                continue()
-            endif()
-
-            # files in folders
-            source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_SOURCE})
-        endforeach()
+        # files in folders
+        source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_SOURCE})
+    endforeach()
 
 endfunction()
 
@@ -198,10 +264,10 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
         # handle absolute and relative paths
         if(TARGET_COPY_TO_OUTPUT_DIR_RELATIVE)
             set(_SOURCE_FILE ${TARGET_COPY_TO_OUTPUT_DIR_RELATIVE}/${_ELEMENT})
-            set(_FOLDER_NAME ${_ELEMENT})
+            set(_FOLDER_PATH ${_ELEMENT})
         else()
             set(_SOURCE_FILE ${_ELEMENT})
-            get_filename_component(_FOLDER_NAME ${_ELEMENT} NAME)
+            get_filename_component(_FOLDER_PATH ${_ELEMENT} NAME)
             set (_ELEMENT "")
         endif()
 
@@ -212,7 +278,7 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
             endif()
             add_custom_command(
                 TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${_FOLDER_NAME}
+                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${_FOLDER_PATH}
             )
         else()   
             if(MDL_LOG_FILE_DEPENDENCIES)
@@ -270,8 +336,8 @@ function(__TARGET_ADD_DEPENDENCY)
         message(STATUS "- depends on:     " ${__TARGET_ADD_DEPENDENCY_DEPENDS})
     endif()
 
-    # customized depencency scripts have highest priority
-    # to use it, define a variable like this: OVERRIDE_DEPENDENCY_SCRIPT_<upper case depencency name>
+    # customized dependency scripts have highest priority
+    # to use it, define a variable like this: OVERRIDE_DEPENDENCY_SCRIPT_<upper case dependency name>
     string(TOUPPER ${__TARGET_ADD_DEPENDENCY_DEPENDS} __TARGET_ADD_DEPENDENCY_DEPENDS_UPPER)
     if(OVERRIDE_DEPENDENCY_SCRIPT_${__TARGET_ADD_DEPENDENCY_DEPENDS_UPPER})
         set(_FILE_TO_INCLUDE ${OVERRIDE_DEPENDENCY_SCRIPT_${__TARGET_ADD_DEPENDENCY_DEPENDS_UPPER}})
@@ -288,7 +354,7 @@ function(__TARGET_ADD_DEPENDENCY)
         
         # if this is no internal dependency we use the default find mechanism
         if(NOT TARGET ${__TARGET_ADD_DEPENDENCY_DEPENDS})
-            # checks if there is such a "subproject"
+            # checks if there is such a "sub project"
             find_package(${__TARGET_ADD_DEPENDENCY_DEPENDS})
             # if the target was not found this is a error
             if(NOT ${__TARGET_ADD_DEPENDENCY_DEPENDS}_FOUND)
@@ -401,7 +467,7 @@ endfunction()
 
 # -------------------------------------------------------------------------------------------------
 # Adds a tool dependency to a target, meant as shortcut for several more or less similar examples.
-# This also works for tools that are part of the build, see scripts in the 'cmake/tools' subfolder.
+# This also works for tools that are part of the build, see scripts in the 'cmake/tools' sub folder.
 #
 # target_add_tool_dependency(TARGET foo
 #     TOOL 
@@ -495,11 +561,19 @@ function(CREATE_FROM_BASE_PRESET)
             ${CREATE_FROM_BASE_PRESET_ADDITIONAL_INCLUDE_DIRS}
         )
 
+    # add system dependencies
+    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE")
+        target_add_dependencies(TARGET ${PROJECT_NAME} 
+            DEPENDS
+                system
+            )
+    endif()
+
     # includes used .rc
-    if(WINDOWS OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
+    if(WINDOWS AND CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
         target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET} 
             PRIVATE
-                ${MDL_SRC_FOLDER}/base/system/version    
+                ${MDL_SRC_FOLDER}/base/system/version
             )
     endif()
 
@@ -544,7 +618,7 @@ function(TARGET_ADD_CUDA_PTX_RULE)
     # options
     target_compile_options(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX
         PRIVATE
-            $<$<COMPILE_LANGUAGE:CUDA>:-rdc=true>
+            "-rdc=true"
     )
 
     # add dependencies (no linking no post builds since this creates a ptx only)
@@ -562,32 +636,119 @@ function(TARGET_ADD_CUDA_PTX_RULE)
             ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES}
         )
 
-    # build ptx when building the project
-    add_dependencies(${TARGET_ADD_CUDA_PTX_RULE_TARGET} ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX)
+    # extend to project names
+    get_target_property(_PROJECT_LABEL ${TARGET_ADD_CUDA_PTX_RULE_TARGET} PROJECT_LABEL)
+    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET} PROPERTIES 
+        PROJECT_LABEL   "${_PROJECT_LABEL} (main)"      # project name
+        )
+    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES 
+        PROJECT_LABEL   "${_PROJECT_LABEL} (ptx)"       # project name
+        )
 
     # post build
     foreach(_SRC ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES})
 
-        get_filename_component(_SRC_NAME ${_SRC} NAME_WE)
-
-        # mark files as generated to disable the check for existence during configure
-        set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${_SRC_NAME}.ptx PROPERTIES GENERATED TRUE)
-        # add to generated group
-        source_group("generated" FILES ${CMAKE_CURRENT_BINARY_DIR}/${_SRC_NAME}.ptx)
+        # copy ptx to example binary folder
+        get_filename_component(_SRC_NAME ${_SRC} NAME_WE)    
 
         if(MDL_LOG_FILE_DEPENDENCIES)
             MESSAGE(STATUS "- file to copy:   ${_SRC_NAME}.ptx")
         endif()
 
-        # copy ptx to example binary folder
+        if(MSVC AND MSVC_IDE) # additional config folder for multi config generators
+            set(_CONFIG_FOLDER /$<CONFIG>)
+        endif()
+
+        # due to a bug visual studio 2017 does not detect changes in cu files, so for now we compile ptx files every time
+        # https://devtalk.nvidia.com/default/topic/1029759/visual-studio-2017-not-detecting-changes-in-cuda-cu-files/
+        if(CMAKE_GENERATOR STREQUAL "Visual Studio 15 2017 Win64")
+            set(_delete_ptx 
+                COMMAND ${CMAKE_COMMAND} -E echo "Delete ${_SRC_NAME}.ptx to force next rebuild..."
+                COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX.dir
+            )
+        endif()
+
         add_custom_command(
-            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${_SRC_NAME}.ptx
+            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${_SRC_NAME}.ptx             # note, not correct for multi config generators (like VS) 
+                                                                            # this will cause copying with every build (when using these generators) 
             DEPENDS $<TARGET_OBJECTS:${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX>
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}${_CONFIG_FOLDER}
             COMMAND ${CMAKE_COMMAND} -E echo "Copy ${_SRC_NAME}.ptx to example dir..."
             COMMAND ${CMAKE_COMMAND} -E copy_if_different           
                 $<TARGET_OBJECTS:${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX>    # resulting ptx file
-                $<TARGET_FILE_DIR:${TARGET_ADD_CUDA_PTX_RULE_TARGET}>       # to example binary dir
+                ${CMAKE_CURRENT_BINARY_DIR}${_CONFIG_FOLDER}                # to example binary dir
+            ${_delete_ptx}
             )
+
+        # make sure the copying is repeated when only the ptx changed and the main project did not
+        add_custom_target(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX_COPY DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${_SRC_NAME}.ptx)
+        add_dependencies(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX_COPY ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX)
+        add_dependencies(${TARGET_ADD_CUDA_PTX_RULE_TARGET} ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX_COPY)
+        set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX_COPY PROPERTIES FOLDER "_cmake/ptx_copy")
     endforeach()
     
+endfunction()
+
+
+# -------------------------------------------------------------------------------------------------
+# Add a path to the visual studio environment variables for the debugger.
+# requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' to actually create the user settings file.
+function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
+    set(options)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs PATHS)
+    cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_PATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET
+    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS
+
+    if(NOT WINDOWS)
+        return()
+    endif()
+
+    # read current property value
+    get_property(_ENV_PATHS TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS)
+    
+    foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- add property:   Visual Studio Debugger Environment path: ${_PATH}")
+        endif()
+        list(APPEND _ENV_PATHS ${_PATH})
+    endforeach()
+
+    # update property value
+    set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS ${_ENV_PATHS})
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# Creates a visual studio user settings file to set environment variables for the debugger.
+# This should only be called after the dependencies of an executable target are added.
+function(TARGET_CREATE_VS_USER_SETTINGS)
+    set(options)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs)
+    cmake_parse_arguments(TARGET_CREATE_VS_USER_SETTINGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - TARGET_CREATE_VS_USER_SETTINGS_TARGET
+
+    if(NOT WINDOWS)
+        return()
+    endif()
+
+    set(SETTINGS_FILE "${TARGET_CREATE_VS_USER_SETTINGS_TARGET}.vcxproj.user")
+
+    if(MDL_LOG_FILE_DEPENDENCIES)
+        message(STATUS "- writing file:   Visual Studio user settings: ${SETTINGS_FILE}")
+    endif()
+
+    get_property(_PATHS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS)
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SETTINGS_FILE}
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"	
+        "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n"
+        "   <PropertyGroup>\n"
+        "       <LocalDebuggerEnvironment>PATH=${_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
+        "   </PropertyGroup>\n"
+        "</Project>\n"
+        )
 endfunction()

@@ -2,9 +2,14 @@
 set(PROJECT_NAME base-lib-plug)
 
 # collect sources
-#file(GLOB_RECURSE PROJECT_SOURCES "*.h" "*.cpp")
+set(PROJECT_HEADERS
+    "i_plug.h"
+    "plug_impl.h"
+    )
+
 set(PROJECT_SOURCES 
     "plug_impl.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template

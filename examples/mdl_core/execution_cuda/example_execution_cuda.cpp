@@ -54,11 +54,11 @@ struct Options {
     // Whether class compilation should be used for the materials.
     bool use_class_compilation;
 
-    // The MDL search paths.
-    std::vector<std::string> mdl_paths;
-
     // List of materials to use.
     std::vector<std::string> material_names;
+
+    // List of MDL module paths.
+    std::vector<std::string> mdl_paths;
 
     // The constructor.
     Options()
@@ -101,7 +101,7 @@ void bake_expression_cuda_ptx(
 
     // Allocate GPU output buffer
     CUdeviceptr device_outbuf;
-    check_cuda_success(cuMemAlloc(&device_outbuf, width * height * sizeof(mi::Uint32)));
+    check_cuda_success(cuMemAlloc(&device_outbuf, width * height * sizeof(float3)));
 
     // Launch kernel for the whole image
     dim3 threads_per_block(16, 16);
@@ -122,10 +122,10 @@ void bake_expression_cuda_ptx(
         0, nullptr, kernel_params, nullptr));
 
     // Copy the result image data to the host and export it.
-    mi::Uint32 *data = static_cast<mi::Uint32 *>(malloc(width * height * sizeof(mi::Uint32)));
+    float3 *data = static_cast<float3*>(malloc(width * height * sizeof(float3)));
     if (data != nullptr) {
-        check_cuda_success(cuMemcpyDtoH(data, device_outbuf, width * height * sizeof(mi::Uint32)));
-        export_image_rgba(out_path, width, height, data);
+        check_cuda_success(cuMemcpyDtoH(data, device_outbuf, width * height * sizeof(float3)));
+        export_image_rgbf(out_path, width, height, data);
         free(data);
     }
 
@@ -169,26 +169,19 @@ int main(int argc, char* argv[])
     for (int i = 1; i < argc; ++i) {
         char const *opt = argv[i];
         if (opt[0] == '-') {
-            if (strcmp(opt, "-o") == 0) {
-                if (i < argc - 1)
-                    options.outputfile = argv[++i];
-                else
-                    usage(argv[0]);
-            } else if (strcmp(opt, "--res") == 0) {
-                if (i < argc - 2) {
-                    options.res_x = std::max(atoi(argv[++i]), 1);
-                    options.res_y = std::max(atoi(argv[++i]), 1);
-                } else
-                    usage(argv[0]);
+            if (strcmp(opt, "-o") == 0 && i < argc - 1) {
+                options.outputfile = argv[++i];
+            } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
+                options.res_x = std::max(atoi(argv[++i]), 1);
+                options.res_y = std::max(atoi(argv[++i]), 1);
             } else if (strcmp(opt, "--cc") == 0) {
                 options.use_class_compilation = true;
-            } else if (strcmp(opt, "--mdl_path") == 0) {
-                if (i < argc - 1)
-                    options.mdl_paths.push_back(argv[++i]);
-                else
-                    usage(argv[0]);
-            } else
+            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+                options.mdl_paths.push_back(argv[++i]);
+            } else {
+                std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
+            }
         } else if (opt[0] >= '0' && opt[0] <= '9') {
             options.material_pattern = unsigned(atoi(opt));
         } else
@@ -232,7 +225,7 @@ int main(int argc, char* argv[])
             if ((options.material_pattern & (1 << i)) != 0) {
                 if (!mc.add_material_subexpr(
                         options.material_names[i].c_str(),
-                        { "surface", "scattering", "tint" },
+                        "surface.scattering.tint",
                         "tint",
                         options.use_class_compilation)) {
                     success = false;

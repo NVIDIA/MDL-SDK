@@ -20,5 +20,9 @@ function(FIND_BOOST_EXT)
         message(STATUS "BOOST_INCLUDEDIR: ${BOOST_INCLUDEDIR}")
         message(FATAL_ERROR "The dependency \"boost\" could not be resolved. Please specify 'BOOST_INCLUDEDIR'.")
     endif()
+    
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "[INFO] BOOST_INCLUDEDIR:                   ${BOOST_INCLUDEDIR}")
+    endif()
 
 endfunction()

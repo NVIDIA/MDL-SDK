@@ -123,6 +123,13 @@ public:
         bool include_geometry_normal,
         mi::Sint32* errors);
 
+    virtual const mi::neuraylib::ITarget_code* translate_material(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* material,
+        mi::neuraylib::Target_function_description* function_descriptions,
+        mi::Size description_count,
+        bool include_geometry_normal);
+
     virtual mi::neuraylib::ILink_unit *create_link_unit(
         mi::neuraylib::ITransaction *transaction,
         mi::Sint32                  *errors);
@@ -157,20 +164,7 @@ public:
     // API methods
 
     /// Add an MDL environment function call as a function to this link unit.
-    ///
-    /// \param call                       The MDL function call for the environment.
-    /// \param fname                      The name of the function that is created.
-    /// \param mdl_meters_per_scene_unit  The conversion ratio between meters and scene units
-    ///                                   for this environment function.
-    /// \param mdl_wavelength_min         The smallest supported wavelength, typical value: 380.
-    /// \param mdl_wavelength_max         The largest supported wavelength, typical value: 780.
-    ///
-    /// \return           A return code.  The return codes have the following meaning:
-    ///                   -  0: Success.
-    ///                   - -1: The JIT backend is not available.
-    ///                   - -2: Invalid expression.
-    ///                   - -3: invalid function name.
-    ///                   - -3: The JIT backend failed to compile the function.
+    /// (see #mi::neuraylib::ILink_unit::add_environment for details)
     virtual mi::Sint32 add_environment(
         mi::neuraylib::IFunction_call const *call,
         char const                          *fname,
@@ -179,53 +173,27 @@ public:
         mi::Float32                         mdl_wavelength_max);
 
     /// Add an expression that is part of an MDL material instance as a function to this
-    /// link unit.
-    ///
-    /// \param material   The compiled MDL material.
-    /// \param path       The path from the material root to the expression that should be
-    ///                   translated, e.g., \c "geometry.displacement".
-    /// \param fname      The name of the function that is created.
-    ///
-    /// \return           A return code.  The return codes have the following meaning:
-    ///                   -  0: Success.
-    ///                   - -1: The JIT backend is not available.
-    ///                   - -2: Invalid field name (non-existing).
-    ///                   - -3: invalid function name.
-    ///                   - -4: The JIT backend failed to compile the function.
-    ///                   - -5: The requested expression is a constant.
-    ///                   - -6: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
-    ///                         compiled.
+    /// (see #mi::neuraylib::ILink_unit::add_material_expression for details)
     virtual mi::Sint32 add_material_expression(
         mi::neuraylib::ICompiled_material const *material,
         char const                              *path,
         char const                              *fname);
 
     /// Add an MDL distribution function to this link unit.
-    /// For a BSDF it results in three functions, suffixed with \c "_sample", \c "_evaluate"
-    /// and \c "_pdf".
-    ///
-    /// \param material                 The compiled MDL material.
-    /// \param path                     The path from the material root to the expression that
-    ///                                 should be translated, e.g., \c "surface.scattering".
-    /// \param base_fname               The base name of the generated functions.
-    ///                                 If \c NULL is passed, \c "lambda" will be used.
-    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
-    ///                                 to the MDL state prior to evaluation of the given DF.
-    /// \returns             A return code. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: Invalid path (non-existing).
-    ///                      - -3: The backend failed to generate target code for the material.
-    ///                      - -4: The requested expression is a constant.
-    ///                      - -5: Only distribution functions are allowed.
-    ///                      - -6: The backend does not support compiled MDL materials obtained
-    ///                            from class compilation mode.
-    ///                      - -7: The backend does not implement this function, yet.
+    /// (see #mi::neuraylib::ILink_unit::add_material_df for details)
     virtual mi::Sint32 add_material_df(
         mi::neuraylib::ICompiled_material const *material,
         char const                              *path,
         char const                              *base_fname,
         bool                                     include_geometry_normal);
+
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_material for details)
+    virtual mi::Sint32 add_material(
+        mi::neuraylib::ICompiled_material const    *material,
+        mi::neuraylib::Target_function_description *function_descriptions,
+        mi::Size                                    description_count,
+        bool                                        include_geometry_normal);
 
     BACKENDS::Link_unit const *get_link_unit() const { return &m_link_unit; }
 

@@ -69,14 +69,16 @@ using mi::base::Handle;
 /// Unmangle a DAG mangled name.
 ///
 /// \param name  a DAG mangled name
-std::string dag_unmangle(
+///
+/// \note does not remove a $mdl_version suffix on deprecated symbols
+static std::string dag_unmangle(
     char const *name)
 {
     std::string res(name);
 
     size_t pos = res.find('(');
     if (pos != std::string::npos)
-        res = res.substr(0, pos);
+        res.erase(pos);
     return res;
 }
 
@@ -394,24 +396,37 @@ mi::mdl::ISymbol const *Mdl_ast_builder::get_field_sym(
     return NULL;
 }
 
+/// Removes the deprecated suffix for a DB name.
+static std::string remove_deprecated(std::string const &name)
+{
+    std::string res(name);
+
+    size_t pos = res.rfind('$');
+    if (pos != std::string::npos)
+        res.erase(pos);
+    return res;
+}
+
+static size_t const zero_size = 0u;
+
 // Transform a call.
 mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     Handle<IType const> const            &ret_type,
     mi::mdl::IDefinition::Semantics      sema,
-    std::string const                  &callee_name,
+    std::string const                    &callee_name,
     mi::Size                             n_params,
     Handle<IExpression_list const> const &args,
-    bool                                 named_call)
+    bool                                 named_args)
 {
     Handle<IType const> const type(ret_type->skip_all_type_aliases());
     if (type->get_kind() == IType::TK_STRUCT) {
-        Handle<const IType_struct> s_tp(type->get_interface<IType_struct>());
+        Handle<IType_struct const> s_tp(type->get_interface<IType_struct>());
 
         if (s_tp->get_predefined_id() == IType_struct::SID_USER) {
             m_used_user_types.push_back(s_tp->get_symbol());
         }
     } else if (type->get_kind() == IType::TK_ENUM) {
-        Handle<const IType_enum> e_tp(type->get_interface<IType_enum>());
+        Handle<IType_enum const> e_tp(type->get_interface<IType_enum>());
 
         if (e_tp->get_predefined_id() != IType_enum::EID_INTENSITY_MODE) {
             // only intensity_mode is predefined
@@ -450,6 +465,298 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             return m_ef.create_conditional(cond, true_res, false_res);
         }
+    }
+
+    // do MDL 1.X => MDL 1.LATEST conversion here
+    switch (sema) {
+    case mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
+        if (n_params == 4) {
+            // MDL 1.0 -> 1.2: insert the multiplier and tangent_u parameters
+            mi::mdl::IQualified_name *tu_qname = create_qualified_name("state::texture_tangent_u");
+            mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
+            mi::mdl::IExpression_call *tu_call = m_ef.create_call(tu_ref);
+
+            tu_call->add_argument(
+                m_ef.create_positional_argument(
+                    m_ef.create_literal(
+                        m_vf.create_int(0))));
+
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            for (mi::Size i = 0, j = 0; i < n_params; ++i, ++j) {
+                mi::mdl::IArgument const *arg = NULL;
+
+                if (j == 1) {
+                    // add multiplier
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(
+                            to_simple_name("tangent_u"),
+                            m_ef.create_literal(m_vf.create_float(1.0f)));
+                    } else {
+                        arg = m_ef.create_positional_argument(
+                            m_ef.create_literal(m_vf.create_float(1.0f)));
+                    }
+                    call->add_argument(arg);
+                    ++j;
+                } else if (j == 4) {
+                    // add tangent_u
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("multiplier"), tu_call);
+                    } else {
+                        arg = m_ef.create_positional_argument(tu_call);
+                    }
+                    call->add_argument(arg);
+                    ++j;
+                }
+
+                Handle<IExpression const> nr_arg(args->get_expression(i));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+            return call;
+        } else if (n_params == 5) {
+            // MDL 1.1 -> 1.2: insert tangent_u parameter
+            mi::mdl::IQualified_name *tu_qname = create_qualified_name("state::texture_tangent_u");
+            mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
+            mi::mdl::IExpression_call *tu_call = m_ef.create_call(tu_ref);
+
+            tu_call->add_argument(
+                m_ef.create_positional_argument(
+                    m_ef.create_literal(
+                        m_vf.create_int(0))));
+
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            for (mi::Size i = 0, j = 0; i < n_params; ++i, ++j) {
+                mi::mdl::IArgument const *arg = NULL;
+
+                if (j == 4) {
+                    // add tangent_u
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("multiplier"), tu_call);
+                    } else {
+                        arg = m_ef.create_positional_argument(tu_call);
+                    }
+                    call->add_argument(arg);
+                    ++j;
+                }
+
+                Handle<IExpression const> nr_arg(args->get_expression(i));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+            return call;
+        }
+        break;
+    case mi::mdl::IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+        {
+            size_t pos = callee_name.rfind('$');
+            if (pos != std::string::npos) {
+                // MDL 1.3 -> 1.4: convert "half-colored" to full colored
+
+                mi::mdl::IQualified_name *qname = create_qualified_name(
+                    "::df::color_fresnel_layer");
+                mi::mdl::IExpression_reference *ref = to_reference(qname);
+                mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+                for (mi::Size i = 0; i < n_params; ++i) {
+                    mi::mdl::IArgument const *arg = NULL;
+
+                    Handle<IExpression const> nr_arg(args->get_expression(i));
+                    mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                    if (i == 1) {
+                        // wrap by color constructor
+                        mi::mdl::IQualified_name *qname = create_qualified_name("color");
+                        mi::mdl::IExpression_reference *ref = to_reference(qname);
+                        mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+                        call->add_argument(m_ef.create_positional_argument(expr));
+                        expr = call;
+                    }
+
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
+                return call;
+            }
+        }
+        break;
+    case mi::mdl::IDefinition::DS_INTRINSIC_DF_SPOT_EDF:
+        if (n_params == 4) {
+            // MDL 1.0 -> 1.1: insert spread parameter
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            for (mi::Size i = 0; i < n_params; ++i) {
+                mi::mdl::IArgument const *arg = NULL;
+
+                if (i == 1) {
+                    // insert the spread parameter
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(m_vf.create_float(float(M_PI)));
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("spread"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
+
+                Handle<IExpression const> nr_arg(args->get_expression(i));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+            return call;
+        }
+        break;
+    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
+        if (n_params == 2) {
+            // MDL 1.2 -> 1.3: insert the roundness parameter
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            for (mi::Size i = 0; i < n_params; ++i) {
+                Handle<IExpression const> nr_arg(args->get_expression(i));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                mi::mdl::IArgument const *arg = NULL;
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+
+            mi::mdl::IArgument const   *arg = NULL;
+            mi::mdl::IExpression const *expr = m_ef.create_literal(m_vf.create_float(1.0f));
+            if (named_args) {
+                arg = m_ef.create_named_argument(to_simple_name("roundness"), expr);
+            } else {
+                arg = m_ef.create_positional_argument(expr);
+            }
+            call->add_argument(arg);
+            return call;
+        }
+        break;
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT:
+        if (n_params == 1) {
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            Handle<IExpression const> nr_arg(args->get_expression(zero_size));
+            mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+            mi::mdl::IArgument const *arg = NULL;
+            if (named_args) {
+                arg = m_ef.create_named_argument(to_simple_name(args->get_name(0)), expr);
+            } else {
+                arg = m_ef.create_positional_argument(expr);
+            }
+            call->add_argument(arg);
+
+            if (mi::mdl::is_tex_2d(expr->get_type())) {
+                // MDL 1.3 -> 1.4: insert the uv_tile parameter
+                mi::mdl::IExpression const *expr =
+                    m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+            return call;
+        }
+        break;
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
+        if (n_params == 2) {
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            mi::mdl::IExpression const *tex_expr;
+            {
+                Handle<IExpression const> nr_arg(args->get_expression(zero_size));
+                tex_expr = transform_expr(nr_arg);
+
+                mi::mdl::IArgument const *arg = NULL;
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(0)), tex_expr);
+                } else {
+                    arg = m_ef.create_positional_argument(tex_expr);
+                }
+                call->add_argument(arg);
+            }
+
+            {
+                Handle<IExpression const> nr_arg(args->get_expression(1));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                mi::mdl::IArgument const *arg = NULL;
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(1)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+
+            if (mi::mdl::is_tex_2d(tex_expr->get_type())) {
+                // MDL 1.3 -> 1.4: insert the uv_tile parameter
+                mi::mdl::IExpression const *expr =
+                    m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
+
+                mi::mdl::IArgument const *arg = NULL;
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+            }
+            return call;
+        }
+        break;
+
+    default:
+        // no changes
+        break;
     }
 
     switch (sema) {
@@ -544,7 +851,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
                 mi::mdl::IExpression const *expr = transform_expr(arg);
 
-                if (named_call) {
+                if (named_args) {
                     mi::mdl::ISimple_name const *sname = to_simple_name(args->get_name(i));
                     call->add_argument(
                         m_ef.create_named_argument(sname, expr));
@@ -585,8 +892,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
             Handle<IType const>             type(ncall->get_type());
             mi::mdl::IDefinition::Semantics sema = mi::mdl::IDefinition::DS_UNKNOWN;
             Handle<IExpression_list const>  args;
-            std::string                   def;
-            bool                            named_call = false;
+            std::string                     def;
+            bool                            named_args = false;
             mi::Size                        n_params;
 
             DB::Tag tag = ncall->get_call();
@@ -600,14 +907,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 DB::Access<Mdl_function_definition> fdef(def_tag, m_trans);
                 char const *orig_sig = fdef->get_mdl_original_name();
 
-                if (orig_sig != NULL) {
-                    // is reexported, use the original
-                    def  = dag_unmangle(orig_sig);
-                } else {
-                    def  = dag_unmangle(fdef->get_mdl_name());
-                }
+                // if reexported, use the original
+                def  = dag_unmangle(orig_sig != NULL ? orig_sig : fdef->get_mdl_name());
 
-                named_call = false;
+                named_args = false;
                 sema       = fdef->get_mdl_semantic();
                 args       = mi::base::make_handle(fcall->get_arguments());
                 n_params   = fcall->get_parameter_count();
@@ -619,14 +922,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 DB::Access<Mdl_material_definition> mat_def(def_tag, m_trans);
                 char const *orig_sig = mat_def->get_mdl_original_name();
 
-                if (orig_sig != NULL) {
-                    // is reexported, use the original
-                    def  = dag_unmangle(orig_sig);
-                } else {
-                    def  = dag_unmangle(mat_def->get_mdl_name());
-                }
+                // if reexported, use the original
+                def  = dag_unmangle(orig_sig != NULL ? orig_sig : mat_def->get_mdl_name());
 
-                named_call = true;
+                named_args = true;
                 args       = mi::base::make_handle(mat_inst->get_arguments());
                 sema       = mi::mdl::IDefinition::DS_UNKNOWN;
                 n_params   = mat_def->get_parameter_count();
@@ -636,7 +935,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 return m_ef.create_invalid();
             }
 
-            return transform_call(type, sema, def, n_params, args, named_call);
+            return transform_call(type, sema, def, n_params, args, named_args);
 
         }
         break;
@@ -648,8 +947,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
             Handle<IType const>             type(dcall->get_type());
             mi::mdl::IDefinition::Semantics sema = mi::mdl::IDefinition::DS_UNKNOWN;
             Handle<IExpression_list const>  args( dcall->get_arguments());
-            std::string                   def;
-            bool                            named_call = false;
+            std::string                     def;
+            bool                            named_args = false;
             mi::Size                        n_params;
 
 
@@ -661,14 +960,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 DB::Access<Mdl_function_definition> fdef(tag, m_trans);
                 char const *orig_sig = fdef->get_mdl_original_name();
 
-                if (orig_sig != NULL) {
-                    // is reexported, use the original
-                    def  = dag_unmangle(orig_sig);
-                } else {
-                    def  = dag_unmangle(fdef->get_mdl_name());
-                }
+                // if reexported, use the original
+                def  = dag_unmangle(orig_sig != NULL ? orig_sig : fdef->get_mdl_name());
 
-                named_call = false;
+                named_args = false;
                 sema       = fdef->get_mdl_semantic();
                 n_params   = fdef->get_parameter_count();
             } else if (class_id == Mdl_material_definition::id) {
@@ -676,14 +971,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 DB::Access<Mdl_material_definition> mat_def(tag, m_trans);
                 char const *orig_sig = mat_def->get_mdl_original_name();
 
-                if (orig_sig != NULL) {
-                    // is reexported, use the original
-                    def  = dag_unmangle(orig_sig);
-                } else {
-                    def  = dag_unmangle(mat_def->get_mdl_name());
-                }
+                // if reexported, use the original
+                def  = dag_unmangle(orig_sig != NULL ? orig_sig : mat_def->get_mdl_name());
 
-                named_call = true;
+                named_args = true;
                 sema       = mi::mdl::IDefinition::DS_UNKNOWN;
                 n_params   = mat_def->get_parameter_count();
             } else {
@@ -692,7 +983,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_expr(
                 return m_ef.create_invalid();
             }
 
-            return transform_call(type, sema, def, n_params, args, named_call);
+            return transform_call(type, sema, def, n_params, args, named_args);
         }
         break;
     case IExpression::EK_PARAMETER:

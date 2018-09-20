@@ -22,6 +22,10 @@ create_from_base_preset(
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "lib")
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "mdl_core")
 
+if(MACOSX)
+    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so") # corresponding to the binary release
+endif()
+
 # target alias for the custom name
 add_library(mdl_core ALIAS ${PROJECT_NAME})
 add_library(mdl::mdl_core ALIAS ${PROJECT_NAME})
@@ -32,6 +36,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
+        mdl::include-mi
         mdl::mdl-compiler-compilercore
         mdl::mdl-codegenerators-generator_dag
         mdl::mdl-codegenerators-generator_code
@@ -44,10 +49,4 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_END_GROUP}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}
-    )
-
-# add system dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld threads
     )

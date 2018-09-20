@@ -181,12 +181,14 @@ public:
     ///
     /// \param tc               The target code
     /// \param name             The name of the function to add
-    /// \param kind             The kind of the function to add
+    /// \param dist_kind        The kind of distribution to add
+    /// \param func_kind        The kind of the function to add
     /// \param arg_block_index  The argument block index for this function or ~0 if not used
     void add_target_code_function(
         Target_code *tc,
         MISTD::string const &name,
-        mi::neuraylib::ITarget_code::Function_kind kind,
+        mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
+        mi::neuraylib::ITarget_code::Function_kind func_kind,
         mi::Size arg_block_index);
 
 private:
@@ -222,6 +224,9 @@ private:
 
     /// If true, strings arguments are compiled into string identifiers.
     bool m_strings_mapped_to_ids;
+
+    /// If true, use the builtin resource handler when running native code
+    bool m_use_builtin_resource_handler;
 };
 
 

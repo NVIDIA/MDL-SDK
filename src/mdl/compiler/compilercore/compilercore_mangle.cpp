@@ -713,6 +713,11 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
     // got qualified name?
     if (*ptr == 'N') {
         ++ptr;
+
+        // skip any const modifier
+        if (*ptr == 'K')
+            ++ptr;
+
         string name(m_alloc);
         bool first = true;
         while (ptr < endptr) {

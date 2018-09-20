@@ -20,9 +20,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl_sdk
         mdl_sdk_examples::mdl_sdk_shared
     )
-
-# link system libraries
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld
-    )
+    
+# creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+target_create_vs_user_settings(TARGET ${PROJECT_NAME})

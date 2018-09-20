@@ -114,7 +114,7 @@ mi::Sint32 Link_unit::add_material_expression(
 }
 
 // Add an MDL distribution function to this link unit.
-Sint32 Link_unit::add_material_df(
+mi::Sint32 Link_unit::add_material_df(
     mi::neuraylib::ICompiled_material const *material,
     char const                              *path,
     char const                              *base_fname,
@@ -122,6 +122,19 @@ Sint32 Link_unit::add_material_df(
 {
     return m_link_unit.add_material_df(
         unwrap(material), path, base_fname, include_geometry_normal);
+}
+
+mi::Sint32 Link_unit::add_material(
+    mi::neuraylib::ICompiled_material const    *material, 
+    mi::neuraylib::Target_function_description *function_descriptions,
+    mi::Size                                    description_count,
+    bool                                        include_geometry_normal)
+{
+    return m_link_unit.add_material(
+      unwrap(material), 
+      reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+      static_cast<size_t>(description_count),
+      include_geometry_normal);
 }
 
 Mdl_llvm_backend::Mdl_llvm_backend(
@@ -134,12 +147,12 @@ Mdl_llvm_backend::Mdl_llvm_backend(
 {
 }
 
-Sint32 Mdl_llvm_backend::set_option(char const *name, char const *value)
+mi::Sint32 Mdl_llvm_backend::set_option(char const *name, char const *value)
 {
     return m_backend.set_option(name, value);
 }
 
-Sint32 Mdl_llvm_backend::set_option_binary(char const *name, const char* data, mi::Size size)
+mi::Sint32 Mdl_llvm_backend::set_option_binary(char const *name, const char* data, mi::Size size)
 {
     return m_backend.set_option_binary(name, data, size);
 }
@@ -151,9 +164,9 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     mi::Float32                         mdl_wavelength_min,
     mi::Float32                         mdl_wavelength_max,
     char const                          *fname,
-    Sint32                              *errors)
+    mi::Sint32                          *errors)
 {
-    Sint32 dummy_errors;
+    mi::Sint32 dummy_errors;
     if (errors == NULL)
         errors = &dummy_errors;
 
@@ -180,9 +193,9 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     mi::neuraylib::ICompiled_material const *compiled_material,
     char const                              *path,
     char const                              *fname,
-    Sint32                                  *errors)
+    mi::Sint32                              *errors)
 {
-    Sint32 dummy_errors;
+    mi::Sint32 dummy_errors;
     if (errors == NULL)
         errors = &dummy_errors;
 
@@ -206,11 +219,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     mi::neuraylib::ITransaction             *transaction,
     mi::neuraylib::ICompiled_material const *compiled_material,
     char const * const                      paths[],
-    Uint32                                  path_cnt,
+    mi::Uint32                              path_cnt,
     char const                              *fname,
-    Sint32                                  *errors)
+    mi::Sint32                              *errors)
 {
-    Sint32 dummy_errors;
+    mi::Sint32 dummy_errors;
     if (errors == NULL)
         errors = &dummy_errors;
 
@@ -270,9 +283,9 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     const char* path,
     const char* base_fname,
     bool include_geometry_normal,
-    Sint32* errors)
+    mi::Sint32* errors)
 {
-    Sint32 dummy_errors;
+    mi::Sint32 dummy_errors;
     if( !errors)
         errors = &dummy_errors;
 
@@ -297,6 +310,27 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         base_fname,
         include_geometry_normal,
         errors);
+}
+
+const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::ICompiled_material* material,
+    mi::neuraylib::Target_function_description* function_descriptions,
+    mi::Size description_count,
+    bool include_geometry_normal)
+{
+    // reuse link unit based implementation
+    mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
+        create_link_unit(transaction, NULL));
+
+    auto result = link_unit->add_material(
+        material, function_descriptions, description_count, include_geometry_normal);
+
+    mi::base::Handle<const mi::neuraylib::ITarget_code> tc(
+        translate_link_unit(link_unit.get(), &result));
+
+    tc->retain();
+    return tc.get();
 }
 
 mi::Uint8 const *Mdl_llvm_backend::get_device_library(Size &size) const

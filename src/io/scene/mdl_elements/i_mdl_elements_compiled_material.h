@@ -118,6 +118,11 @@ public:
 
     const IValue_list* get_arguments() const;
 
+    DB::Tag get_connected_function_db_name(
+        DB::Transaction* transaction,
+        DB::Tag material_instance_tag,
+        const std::string& path) const;
+
     // internal methods
 
     const IExpression_list* get_temporaries() const;

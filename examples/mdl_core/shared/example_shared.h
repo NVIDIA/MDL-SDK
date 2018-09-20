@@ -998,6 +998,20 @@ public:
         return mi::base::Handle<mi::mdl::IGenerated_code_dag>(m_dag_be->compile(module.get()));
     }
 
+    /// Return the list of all material names in the given MDL module.
+    std::vector<std::string> get_material_names(const std::string& module_name)
+    {
+        mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
+            compile_module(module_name.c_str()));
+
+        int num_materials = code_dag->get_material_count();
+        std::vector<std::string> material_names(num_materials);
+        for (int i = 0; i < num_materials; ++i) {
+            material_names[i] = code_dag->get_material_name(i);
+        }
+        return material_names;
+    }
+
     /// Creates an instance of the given material.
     ///
     /// \param code_dag       the DAG of a MDL module

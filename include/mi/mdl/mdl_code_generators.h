@@ -550,11 +550,11 @@ public:
 
     /// The possible kinds of error codes.
     enum Error_code {
-        EC_NONE,                         ///< No error.
-        EC_INVALID_PARAMETERS,           ///< Invalid parameters were provided.
-        EC_NOT_A_BSDF,                   ///< A non-BSDF was provided. Currently only BSDFs are
-                                         ///< supported.
-        EC_UNSUPPORTED_BSDF,             ///< An unsupported BSDF was provided.
+        EC_NONE,                            ///< No error.
+        EC_INVALID_PARAMETERS,              ///< Invalid parameters were provided.
+        EC_UNSUPPORTED_DISTRIBUTION_TYPE,   ///< Currently only BSDFs and EDFs are supported.
+        EC_UNSUPPORTED_BSDF,                ///< An unsupported BSDF was provided.
+        EC_UNSUPPORTED_EDF,                 ///< An unsupported EDF was provided.
     };
 
     /// Initialize this distribution function object for the given material
@@ -620,6 +620,16 @@ class ILink_unit : public
     mi::base::IInterface>
 {
 public:
+
+    /// Possible kinds of distribution functions.
+    enum Distribution_kind
+    {
+        DK_NONE,
+        DK_BSDF,
+        DK_EDF,
+        DK_INVALID
+    };
+
     /// Possible kinds of functions.
     enum Function_kind {
         FK_INVALID,
@@ -630,6 +640,57 @@ public:
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
         FK_DF_PDF
+    };
+
+
+    struct Target_function_description
+    {
+        Target_function_description(const char* expression_path = NULL,
+                                    const char* base_function_name = NULL)
+            : path(expression_path)
+            , base_fname(base_function_name)
+            , argument_block_index(~0)
+            , function_index(~0)
+            , distribution_kind(ILink_unit::DK_INVALID)
+            , return_code(~0) // not processed
+        {
+        }
+
+        /// The path from the material root to the expression that should be translated,
+        /// e.g., \c "surface.scattering".
+        const char* path;
+
+        /// The base name of the generated functions.
+        /// If \c NULL is passed, the function name will be 'lambda' followed by an increasing
+        /// counter. Note, that this counter is tracked per link unit. That means, you need to 
+        /// provide functions names when using multiple link units in order to avoid collisions.
+        const char* base_fname;
+
+        /// The index of argument block that belongs to the compiled material the function is  
+        /// generated from or ~0 if none of the added function required arguments. 
+        /// It allows to get the layout and a writable pointer to argument data. This is an output
+        /// parameter which is available after adding the function to the link unit.
+        size_t argument_block_index;
+
+        /// The index of the generated function for accessing the callable function information of 
+        /// the link unit or ~0 if the selected function is an invalid distribution function. 
+        /// ~0 is not an error case, it just means, that evaluating the function will result in 0.
+        /// In case the function is a distribution function, the returned index will be the 
+        /// index of the \c init function, while \c sample, \c evaluate, and \c pdf will be 
+        /// accessible by the consecutive indices, i.e., function_index + 1, function_index + 2,
+        /// function_index + 3. This is an output parameter which is available after adding the
+        /// function to the link unit.
+        size_t function_index;
+
+        /// Return the distribution kind of this function (or NONE in case expressions). This is 
+        /// an output parameter which is available after adding the function to the link unit. 
+        ILink_unit::Distribution_kind distribution_kind;
+
+        /// Return code of the processing of the function:
+        /// -   0  Success
+        /// -  ~0  Function not processed
+        /// -  -1  An error occurred while processing the function.
+        Sint32 return_code;
     };
 
     /// Add a lambda function to this link unit.
@@ -643,13 +704,16 @@ public:
     /// \param kind                 the kind of the lambda function
     /// \param arg_block_index      this variable will receive the index of the target argument
     ///                             block used for this lambda function or ~0 if none is used
+    /// \param function_index       the index of the callable function in the created target code.
+    ///                             This parameter is optional, provide NULL if not required.
     ///
     /// \return true on success
     virtual bool add(
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         Function_kind              kind,
-        size_t                    *arg_block_index) = 0;
+        size_t                    *arg_block_index,
+        size_t                    *function_index) = 0;
 
     /// Add a distribution function to this link unit.
     ///
@@ -666,12 +730,15 @@ public:
     /// \param name_resolver        the call name resolver
     /// \param arg_block_index      this variable will receive the index of the target argument
     ///                             block used for this distribution function or ~0 if none is used
+    /// \param function_index       the index of the callable function in the created target code.
+    ///                             This parameter is optional, provide NULL if not required.
     ///
     /// \return true on success
     virtual bool add(
         IDistribution_function const  *dist_func,
         ICall_name_resolver const     *name_resolver,
-        size_t                        *arg_block_index) = 0;
+        size_t                        *arg_block_index,
+        size_t                        *function_index) = 0;
 
     /// Get the number of functions in this link unit.
     virtual size_t get_function_count() const = 0;
@@ -683,11 +750,18 @@ public:
     /// \return the name of the i'th function or \c NULL if the index is out of bounds
     virtual char const *get_function_name(size_t i) const = 0;
 
-    /// Get the kind of the i'th function inside this link unit.
+    /// Returns the distribution kind of the i'th function inside this link unit.
     ///
     /// \param i  the index of the function
     ///
-    /// \return The kind of the i'th function or \c FK_INVALID if \p i is invalid.
+    /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    virtual Distribution_kind get_distribution_kind(size_t i) const = 0;
+
+    /// Returns the function kind of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
     virtual Function_kind get_function_kind(size_t i) const = 0;
 
     /// Get the index of the target argument block layout for the i'th function inside this link
@@ -809,6 +883,9 @@ class ICode_generator_jit : public
 
     /// The name of the option to set a user-specified LLVM implementation for the state module.
     #define MDL_JIT_BINOPTION_LLVM_STATE_MODULE "jit_llvm_state_module"
+
+    /// The name of the option to enable/disable the builtin texture runtime of the native backend
+    #define MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU "jit_use_builtin_resource_handler_cpu"
 
 public:
     /// The compilation mode for whole module compilation.
@@ -1085,6 +1162,7 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_tex_lookup_call_mode   "jit_tex_lookup_call_mode"
 - \ref mdl_option_jit_use_bitangent          "jit_use_bitangent"
 - \ref mdl_option_jit_write_bitcode          "jit_write_bitcode"
+- \ref mdl_option_jit_use_builtin_res_h      "jit_use_builtin_resource_handler_cpu"
 
 \section mdl_cg_options Generic MDL code generator options
 
@@ -1183,6 +1261,12 @@ These options are specific to the MDL JIT code generator:
 \anchor mdl_option_jit_write_bitcode
 - <b>jit_write_bitcode</b>: If set to \c "true", LLVM bitcode will be generated instead of LLVM IR
   assembly text.
+  Default: \c "false"
+
+\anchor mdl_option_jit_use_builtin_res_h
+- <b>jit_use_builtin_resource_handler_cpu</b>: If set to \c "false", the built-in texture handler
+  is not used when running cpu code. Instead, the user needs to provide a vtable of texture
+  functions via the tex_data parameter.
   Default: \c "false"
 */
 

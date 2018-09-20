@@ -242,7 +242,7 @@ MISTD::string Ospath::normpath_v2(const MISTD::string& path)
 
         // handle parent directory references
         if (component == "..") {
-            if (result_components.empty())
+            if (result_components.empty() || result_components.back() == "..")
                 result_components.push_back("..");
             else
                 result_components.pop_back();

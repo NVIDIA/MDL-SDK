@@ -59,7 +59,7 @@ public:
     int columnCount(const QModelIndex& = QModelIndex()) const override { return 1; }
 
     // get and set data from QML
-    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole)override;
     QHash<int, QByteArray> roleNames() const override { return VM_nav_package::roleNames(); }
     

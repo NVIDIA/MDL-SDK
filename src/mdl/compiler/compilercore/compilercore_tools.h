@@ -183,6 +183,28 @@ static inline bool is_material_type(IType const *type)
     return false;
 }
 
+/// Check if a given type is the texture_2d type.
+///
+/// \param type  the type to check
+static inline bool is_tex_2d(mi::mdl::IType const *type)
+{
+    if (IType_texture const *tex_tp = as<IType_texture>(type))
+        return tex_tp->get_shape() == IType_texture::TS_2D;
+    return false;
+}
+
+/// Create an int2(0,0) constant.
+///
+/// \param vf  the value factory that will own the constant
+static inline IValue const *create_int2_zero(
+    IValue_factory &vf)
+{
+    IType_factory      &tf      = *vf.get_type_factory();
+    IType_vector const *int2_tp = tf.create_vector(tf.create_int(), 2);
+
+    return vf.create_zero(int2_tp);
+}
+
 }  // mdl
 }  // mi
 

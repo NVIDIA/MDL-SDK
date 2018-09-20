@@ -207,6 +207,29 @@ IMipmap* Image_module_impl::create_mipmap(
     return new Mipmap_impl( canvases, is_cubemap);
 }
 
+
+void Image_module_impl::create_mipmaps(
+    std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+    const mi::neuraylib::ICanvas* base_canvas,
+    mi::Float32 gamma) const
+{
+    mi::Uint32 w = base_canvas->get_resolution_x();
+    mi::Uint32 h = base_canvas->get_resolution_y();
+
+    if (w == 1 || h == 1)
+        return;
+
+    mi::Uint32 nr_of_levels = mi::math::log2_int(std::min(w, h));
+    mipmaps.resize(nr_of_levels);
+
+    const mi::neuraylib::ICanvas* prev_canvas = base_canvas;
+    for (mi::Size i = 0; i < nr_of_levels; ++i)
+    {
+        mipmaps[i] = mi::base::make_handle(create_miplevel(prev_canvas, gamma));
+        prev_canvas = mipmaps[i].get();
+    }
+}
+
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     Pixel_type pixel_type,
     mi::Uint32 width,
@@ -1198,6 +1221,186 @@ bool Image_module_impl::get_canvas_is_cubemap( const mi::neuraylib::ICanvas* can
 {
     mi::base::Handle<const ICanvas> canvas_internal( canvas->get_interface<ICanvas>());
     return canvas_internal && canvas_internal->get_is_cubemap();
+}
+
+namespace {
+#ifdef HAS_SSE
+#include <xmmintrin.h>
+
+__m128 fast_pow4(
+    const __m128 &b,  ///< %base
+    const __m128 &e)  ///< exponent
+{
+
+    const __m128 x = _mm_sub_ps(_mm_mul_ps(_mm_cvtepi32_ps(_mm_castps_si128(b)),
+        _mm_set1_ps(0.00000011920928955078125f)), _mm_set1_ps(127.f));
+    const __m128i xi = _mm_cvttps_epi32(x);
+    const __m128 y = _mm_sub_ps(x, _mm_cvtepi32_ps(_mm_sub_epi32(
+        xi, _mm_srli_epi32(_mm_castps_si128(x), 31)))); // >>31 to correct x < 0
+    const __m128 fl = _mm_mul_ps(e, _mm_add_ps(x, _mm_mul_ps(
+        _mm_sub_ps(y, _mm_mul_ps(y, y)), _mm_set1_ps(0.346607f))));
+
+    const __m128i fli = _mm_cvttps_epi32(fl);
+    const __m128 y2 = _mm_sub_ps(fl, _mm_cvtepi32_ps(
+        _mm_sub_epi32(fli, _mm_srli_epi32(_mm_castps_si128(fl), 31)))); // >>31 to correct fl < 0
+    const __m128 z = _mm_max_ps(_mm_sub_ps(_mm_add_ps(
+        _mm_mul_ps(fl, _mm_set1_ps(8388608.0f)), _mm_set1_ps((float)(127.0*8388608.0))),
+        _mm_mul_ps(_mm_sub_ps(y2, _mm_mul_ps(y2, y2)), _mm_set1_ps((float)(0.33971*8388608.0)))),
+        _mm_setzero_ps());
+
+    return _mm_and_ps(_mm_castsi128_ps(
+        _mm_cvttps_epi32(z)), _mm_cmpneq_ps(b, _mm_setzero_ps())); // b==0 -> 0
+}
+
+#endif
+void apply_gamma(mi::math::Color& c, mi::Float32 gamma)
+{
+    if (gamma == 1.0f)
+        return;
+#ifdef HAS_SSE
+    c = mi::base::binary_cast<mi::math::Color_struct>(
+        fast_pow4(_mm_set_ps(c.a, c.b, c.g, c.r), _mm_set1_ps(gamma)));
+#else
+    c.r = mi::math::fast_pow(c.r, gamma);
+    c.g = mi::math::fast_pow(c.g, gamma);
+    c.b = mi::math::fast_pow(c.b, gamma);
+    c.a = mi::math::fast_pow(c.a, gamma);
+#endif
+}
+}
+
+mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
+    const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const
+{
+    // NOTE: This implementation creates the new miplevel tile by tile. For each tile, it retrieves
+    // the at most four needed tiles from the previous miplevel *once* (and not for every pixel).
+    // Remember that tile lookups require locks (and reference counts).
+    ASSERT(M_IMAGE, prev_canvas);
+
+    // Get properties of previous miplevel
+    mi::Uint32 prev_width = prev_canvas->get_resolution_x();
+    mi::Uint32 prev_height = prev_canvas->get_resolution_y();
+    mi::Uint32 prev_layers = prev_canvas->get_layers_size();
+    mi::Uint32 prev_tile_width = prev_canvas->get_tile_resolution_x();
+    mi::Uint32 prev_tile_height = prev_canvas->get_tile_resolution_y();
+    Pixel_type prev_pixel_type
+        = convert_pixel_type_string_to_enum(prev_canvas->get_type());
+    mi::Float32 prev_gamma = gamma_override != 0.0f ? gamma_override : prev_canvas->get_gamma();
+
+    // Compute properties of this miplevel
+    mi::Uint32 width = std::max(prev_width / 2, 1u);
+    mi::Uint32 height = std::max(prev_height / 2, 1u);
+    mi::Uint32 layers = prev_layers;
+    mi::Uint32 tile_width = std::min(prev_tile_width, width);
+    mi::Uint32 tile_height = std::min(prev_tile_height, height);
+    Pixel_type pixel_type = prev_pixel_type;
+    mi::Float32 gamma = prev_gamma;
+
+    // Create the miplevel
+    mi::neuraylib::ICanvas* canvas = new Canvas_impl(
+        pixel_type, width, height, tile_width, tile_height, layers, 
+        get_canvas_is_cubemap(prev_canvas), prev_canvas->get_gamma());
+
+    mi::Uint32 nr_of_tiles_x = (width + tile_width - 1) / tile_width;
+    mi::Uint32 nr_of_tiles_y = (height + tile_height - 1) / tile_height;
+
+    mi::Uint32 offsets_x[4] = { 0, 1, 0, 1 };
+    mi::Uint32 offsets_y[4] = { 0, 0, 1, 1 };
+
+    mi::Float32 inv_gamma = 1.0f / gamma;
+
+    // Loop over the tiles and compute the pixel data for each tile
+    for (mi::Uint32 tile_z = 0; tile_z < layers; ++tile_z) {
+        for (mi::Uint32 tile_y = 0; tile_y < nr_of_tiles_y; ++tile_y) {
+            for (mi::Uint32 tile_x = 0; tile_x < nr_of_tiles_x; ++tile_x) {
+
+                // The current tile covers pixels in the range [x_begin,x_end) x [y_begin,y_end)
+                // from the canvas for this miplevel.
+                mi::Uint32 x_begin = tile_x * tile_width;
+                mi::Uint32 y_begin = tile_y * tile_height;
+                mi::Uint32 x_end = std::min(x_begin + tile_width, width);
+                mi::Uint32 y_end = std::min(y_begin + tile_height, height);
+
+                // Lookup tile for this miplevel
+                mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(x_begin, y_begin));
+
+                // The current tile corresponds to the range
+                // [prev_x_begin,prev_x_end) x [prev_y_begin,prev_y_end) in the previous miplevel.
+                mi::Uint32 prev_x_begin = 2 * x_begin;
+                mi::Uint32 prev_y_begin = 2 * y_begin;
+                mi::Uint32 prev_x_end = std::min(2 * x_end, 2 * x_begin + prev_width);
+                mi::Uint32 prev_y_end = std::min(2 * y_end, 2 * y_begin + prev_height);
+
+                // Lookup involved tiles from the previous miplevel (note that these tiles are not
+                // necessarily distinct).
+                mi::base::Handle<const mi::neuraylib::ITile> prev_tiles[4];
+                prev_tiles[0] = prev_canvas->get_tile(prev_x_begin, prev_y_begin);
+                prev_tiles[1] = prev_canvas->get_tile(prev_x_end - 1, prev_y_begin);
+                prev_tiles[2] = prev_canvas->get_tile(prev_x_begin, prev_y_end - 1);
+                prev_tiles[3] = prev_canvas->get_tile(prev_x_end - 1, prev_y_end - 1);
+                ASSERT(M_IMAGE, prev_tiles[0].is_valid_interface());
+                ASSERT(M_IMAGE, prev_tiles[1].is_valid_interface());
+                ASSERT(M_IMAGE, prev_tiles[2].is_valid_interface());
+                ASSERT(M_IMAGE, prev_tiles[3].is_valid_interface());
+
+                // Loop over the pixels of this tile and compute the value for each pixel
+                for (mi::Uint32 y = 0; y < y_end - y_begin; ++y) {
+                    for (mi::Uint32 x = 0; x < x_end - x_begin; ++x) {
+
+                        // The current pixel (x,y) corresponds to the four pixels
+                        // [prev_x, prev_x+1] x [prev_y,prev_y+1] in the tiles of the previous
+                        // layer. Note that all four pixels might actually be in a different tile.
+                        mi::Uint32 prev_x = 2 * x;
+                        mi::Uint32 prev_y = 2 * y;
+
+                        mi::math::Color color(0.0f, 0.0f, 0.0f, 0.0f);
+                        mi::Uint32 nr_of_summands = 0;
+
+                        // Loop over the at most four pixels corresponding to pixel (x,y)
+                        for (mi::Uint32 i = 0; i < 4; ++i) {
+
+                            // Find tile of pixel
+                            // (prev_x + offsets_x[i], prev_y + offsets_y[i]) and its coordinates
+                            // with respect to that tile.
+                            mi::Uint32 prev_tile_id = 0; // the ID is the index for prev_tiles
+                            mi::Uint32 prev_actual_x = prev_x + offsets_x[i];
+                            if (prev_x_begin + prev_actual_x >= prev_width)
+                                continue;
+                            if (prev_actual_x >= prev_tile_width) {
+                                prev_actual_x -= prev_tile_width;
+                                prev_tile_id += 1;
+                            }
+                            mi::Uint32 prev_actual_y = prev_y + offsets_y[i];
+                            if (prev_y_begin + prev_actual_y >= prev_height)
+                                continue;
+                            if (prev_actual_y >= prev_tile_height) {
+                                prev_actual_y -= prev_tile_height;
+                                prev_tile_id += 2;
+                            }
+
+                            // The pixel (prev_x + offsets_x[i], prev_y + offsets_y[i]) actually
+                            // is pixel (prev_actual_x, prev_actual_y) in tile
+                            // prev_tiles[prev_tile_id].
+                            mi::math::Color prev_color;
+                            prev_tiles[prev_tile_id]->get_pixel(
+                                prev_actual_x, prev_actual_y, &prev_color.r);
+                            if (gamma != 1.0f) {
+                                apply_gamma(prev_color, gamma);
+                            }
+                            color += prev_color;
+                            nr_of_summands += 1;
+                        }
+                        color /= static_cast<mi::Float32>(nr_of_summands);
+                        if (gamma != 1.0f)
+                            apply_gamma(color, inv_gamma);
+
+                        tile->set_pixel(x, y, &color.r);
+                    }
+                }
+            }
+        }
+    }
+    return canvas;
 }
 
 } // namespace IMAGE

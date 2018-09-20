@@ -41,6 +41,7 @@
 #include <set>
 #include "tokenizer.h"
 #include "index_document.h"
+#include <cstdlib>
 
 // list element stored for each document that contains the current word 
 template<class T_document>

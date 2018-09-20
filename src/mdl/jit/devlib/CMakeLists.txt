@@ -13,29 +13,30 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
 )
 
-# additional options
-target_compile_options(${PROJECT_NAME} 
-    PUBLIC 
+# additional definitions
+target_compile_definitions(${PROJECT_NAME} 
+    PRIVATE 
         # LLVM include files require this
-        "-D__STDC_CONSTANT_MACROS"
-        "-D__STDC_FORMAT_MACROS"
-        "-D__STDC_LIMIT_MACROS"
-
-        # LLVM does not use RTTI
-        "$<$<CXX_COMPILER_ID:GNU>:-DNO_RTTI>"
-        "$<$<CXX_COMPILER_ID:Clang>:-DNO_RTTI>"
-        "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:GNU>>:-fno-rtti>"
-        "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:-fno-rtti>"
+        "__STDC_CONSTANT_MACROS"
+        "__STDC_FORMAT_MACROS"
+        "__STDC_LIMIT_MACROS"
     )
+
+if(NOT MSVC)
+    # LLVM does not use RTTI
+    target_compile_options(${PROJECT_NAME} 
+        PRIVATE 
+            "$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>"
+        )
+    target_compile_definitions(${PROJECT_NAME} 
+        PRIVATE 
+            "$<$<COMPILE_LANGUAGE:CXX>:NO_RTTI>"
+        )
+endif()
 
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         llvm
-    )
-
-# add system dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS system
-    COMPONENTS
-        ld threads
+        system
     )

@@ -760,6 +760,14 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
             print("\"\n");
             pop_color();
         }
+        char const *cloned_name = code_dag->get_cloned_function_name(i);
+        if (cloned_name != NULL) {
+            push_color(ISyntax_coloring::C_COMMENT);
+            print("// Clone of \"");
+            print(cloned_name);
+            print("\"\n");
+            pop_color();
+        }
 
         int n_refs = code_dag->get_function_references_count(i);
         if (n_refs > 0) {
@@ -893,6 +901,14 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
             push_color(ISyntax_coloring::C_COMMENT);
             print("// Alias of \"");
             print(orig_name);
+            print("\"\n");
+            pop_color();
+        }
+        char const *cloned_name = code_dag->get_cloned_material_name(mat_idx);
+        if (cloned_name != NULL) {
+            push_color(ISyntax_coloring::C_COMMENT);
+            print("// Clone of \"");
+            print(cloned_name);
             print("\"\n");
             pop_color();
         }

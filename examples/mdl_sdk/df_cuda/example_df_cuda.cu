@@ -35,6 +35,18 @@
 #include "example_df_cuda.h"
 #include "texture_support_cuda.h"
 
+// To reuse this sample code for the MDL SDK and MDL Core the corresponding namespaces are used.
+
+// when this CUDA code is used in the context of an SDK sample.
+#if defined(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR)
+    #define BSDF_USE_MATERIAL_IOR MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR
+    using namespace mi::neuraylib;
+// when this CUDA code is used in the context of an Core sample.
+#elif defined(MDL_CORE_BSDF_USE_MATERIAL_IOR)
+    #define BSDF_USE_MATERIAL_IOR MDL_CORE_BSDF_USE_MATERIAL_IOR
+    using namespace mi::mdl;
+#endif
+
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
 {
@@ -44,21 +56,137 @@ struct Target_code_data
 };
 
 
-// The number of generated MDL DF functions available.
-extern __constant__ unsigned int     mdl_df_functions_count;
+// all function types
+union Mdl_function_ptr
+{
+    Material_expr_function  *expression;
+    Bsdf_init_function      *bsdf_init;
+    Bsdf_sample_function    *bsdf_sample;
+    Bsdf_evaluate_function  *bsdf_evaluate;
+    Bsdf_pdf_function       *bsdf_pdf;
+    Edf_init_function       *edf_init;
+    Edf_sample_function     *edf_sample;
+    Edf_evaluate_function   *edf_evaluate;
+    Edf_pdf_function        *edf_pdf;
+};
 
-// The target code indices for the generated MDL DF functions.
-extern __constant__ unsigned int     mdl_df_target_code_indices[];
+// function index offset depending on the target code
+extern __constant__ unsigned int     mdl_target_code_offsets[];
 
-// The target argument block indices for the generated MDL sub-expression functions.
-// Note: the original indices are incremented by one to allow us to use 0 as "not-used".
-extern __constant__ unsigned int     mdl_df_arg_block_indices[];
+// number of generated functions
+extern __constant__ unsigned int     mdl_functions_count;
 
-// The function pointers of the generated MDL DF functions.
-extern __constant__ mi::neuraylib::Bsdf_init_function      *mdl_df_functions_init[];
-extern __constant__ mi::neuraylib::Bsdf_sample_function    *mdl_df_functions_sample[];
-extern __constant__ mi::neuraylib::Bsdf_evaluate_function  *mdl_df_functions_evaluate[];
-extern __constant__ mi::neuraylib::Bsdf_pdf_function       *mdl_df_functions_pdf[];
+// the following arrays are indexed by an mdl_function_index
+extern __constant__ Mdl_function_ptr mdl_functions[];
+extern __constant__ unsigned int     mdl_arg_block_indices[];
+
+// the material provides pairs for each generated function to evaluate
+// the functions and arg blocks array are indexed by:
+// mdl_target_code_offsets[target_code_index] + function_index
+typedef uint3 Mdl_function_index;
+__device__ inline Mdl_function_index get_mdl_function_index(const uint2& index_pair)
+{
+    return make_uint3(
+        index_pair.x,   // target_code_index
+        index_pair.y,   // function_index inside target code
+        mdl_target_code_offsets[index_pair.x] + index_pair.y); // global function index
+}
+
+// resource handler for accessing textures and other data
+// depends on the target code (link unit)
+struct Mdl_resource_handler
+{
+    __device__ Mdl_resource_handler()
+    {
+        m_tex_handler.vtable = &tex_vtable;   // only required in 'vtable' mode, otherwise NULL
+        data.shared_data = NULL;
+        data.texture_handler = &m_tex_handler;
+    }
+
+    // reuse the handler with a different target code index
+    __device__ inline void set_target_code_index(
+        const Kernel_params& params, const Mdl_function_index& index)
+    {
+        m_tex_handler.num_textures = params.tc_data[index.x].num_textures;
+        m_tex_handler.textures = params.tc_data[index.x].textures;
+    }
+
+    // a pointer to this data is passed to all generated functions
+    Resource_data data;
+
+private:
+    Texture_handler m_tex_handler;
+};
+
+
+// checks if the indexed function can be evaluated or not
+__device__ inline bool is_valid(const Mdl_function_index& index)
+{
+    return index.y != 0xFFFFFFFFu;
+}
+
+// get a pointer to the material parameters which is passed to all generated functions
+__device__ inline const char* get_arg_block(const Kernel_params& params, const Mdl_function_index& index)
+{
+    return params.arg_block_list[mdl_arg_block_indices[index.z]];
+}
+
+// restores the normal since the BSDF init will change it
+// sets the read-only data segment pointer for large arrays
+__device__ inline void prepare_state(const Kernel_params& params, const Mdl_function_index& index,
+                                     Shading_state_material& state, const float3& normal)
+{
+    state.ro_data_segment = params.tc_data[index.x].ro_data_segment;
+    state.normal = normal;
+}
+
+// Expression functions
+__device__ inline Material_expr_function* as_expression(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 0].expression;
+}
+
+// BSDF functions
+__device__ inline Bsdf_init_function* as_bsdf_init(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 0].bsdf_init;
+}
+
+__device__ inline Bsdf_sample_function* as_bsdf_sample(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 1].bsdf_sample;
+}
+
+__device__ inline Bsdf_evaluate_function* as_bsdf_evaluate(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 2].bsdf_evaluate;
+}
+
+__device__ inline Bsdf_pdf_function* as_bsdf_pdf(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 3].bsdf_pdf;
+}
+
+// EDF functions
+__device__ inline Edf_init_function* as_edf_init(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 0].edf_init;
+}
+
+__device__ inline Edf_sample_function* as_edf_sample(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 1].edf_sample;
+}
+
+__device__ inline Edf_evaluate_function* as_edf_evaluate(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 2].edf_evaluate;
+}
+
+__device__ inline Edf_pdf_function* as_edf_pdf(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 3].edf_pdf;
+}
 
 
 // Identity matrix
@@ -94,6 +222,14 @@ __device__ inline float3 operator/(const float3& a, const float s)
 __device__ inline void operator+=(float3& a, const float3& b)
 {
     a.x += b.x; a.y += b.y; a.z += b.z;
+}
+__device__ inline void operator-=(float3& a, const float3& b)
+{
+    a.x -= b.x; a.y -= b.y; a.z -= b.z;
+}
+__device__ inline void operator*=(float3& a, const float3& b)
+{
+    a.x *= b.x; a.y *= b.y; a.z *= b.z;
 }
 __device__ inline void operator*=(float3& a, const float& s)
 {
@@ -211,34 +347,35 @@ __device__ inline float intersect_sphere(
     return m > 0.0f ? m : fmaxf(t0, t1);
 }
 
-__device__ inline float3 render_sphere(
+struct Ray_state {
+    float3 contribution;
+    float3 weight;
+    float3 pos;
+    float3 dir;
+    bool inside;
+    int intersection;
+};
+
+__device__ inline bool trace_sphere(
     Rand_state &rand_state,
-    const Kernel_params &params,
-    const float2 &screen_pos)
-{
-    // create ray from the pinhole camera
-    const float r = (2.0f * screen_pos.x - 1.0f);
-    const float u = (2.0f * screen_pos.y - 1.0f);
-    const float aspect = (float)params.resolution.y / (float)params.resolution.x;
-
-    const float3 dir = normalize(
-        params.cam_dir * params.cam_focal + params.cam_right * r + params.cam_up * aspect * u);
-
+    Ray_state &ray_state,
+    const Kernel_params &params)
+{   
     // intersect with geometry
-    const float t = intersect_sphere(params.cam_pos, dir, 1.0f);
+    const float t = intersect_sphere(ray_state.pos, ray_state.dir, 1.0f);
     if (t < 0.0f) {
-        if (params.mdl_test_type != MDL_TEST_NO_ENV) {
-            const float2 uv = environment_coords(dir);
+        if (ray_state.intersection == 0 && params.mdl_test_type != MDL_TEST_NO_ENV) {
+            // primary ray miss, add environment contribution
+            const float2 uv = environment_coords(ray_state.dir);
             const float4 texval = tex2D<float4>(params.env_tex, uv.x, uv.y);
-            return make_float3(texval.x, texval.y, texval.z);
-        } else {
-            return make_float3(0, 0, 0);
+            ray_state.contribution += make_float3(texval.x, texval.y, texval.z);
         }
+        return false;
     }
 
     // compute geometry state
-    const float3 position = params.cam_pos + dir * t;
-    const float3 normal = normalize(position);
+    ray_state.pos += ray_state.dir * t;
+    const float3 normal = normalize(ray_state.pos);
 
     const float phi = atan2f(normal.x, normal.z);
     const float theta = acosf(normal.y);
@@ -252,133 +389,242 @@ __device__ inline float3 render_sphere(
     sincosf(phi, &sp, &cp);
     float3 tangent_u = make_float3(cp, 0.0f, -sp);
     const float3 tangent_v = cross(normal, tangent_u);
-
+   
     float4 texture_results[16];
-    const unsigned int material_idx = params.current_material;
-    const unsigned int tc_idx = mdl_df_target_code_indices[material_idx];
-    const char *arg_block = params.arg_block_list[mdl_df_arg_block_indices[material_idx]];
 
-    mi::neuraylib::Shading_state_material state = {
+    // material of the current object
+    Df_cuda_material material = params.material_buffer[params.current_material];
+
+    // access textures and other resource data
+    Mdl_resource_handler mdl_resources;
+
+    // create state
+    Shading_state_material state = {
         normal,
         normal,
-        position,
+        ray_state.pos,
         0.0f,
         &uvw,
         &tangent_u,
         &tangent_v,
         texture_results,
-        params.tc_data[tc_idx].ro_data_segment,
+        NULL,
         id,
         id,
         0
     };
 
-    Texture_handler tex_handler;
-    tex_handler.vtable       = &tex_vtable;   // only required in 'vtable' mode, otherwise NULL
-    tex_handler.num_textures = params.tc_data[tc_idx].num_textures;
-    tex_handler.textures     = params.tc_data[tc_idx].textures;
-
-    mi::neuraylib::Resource_data res_data = {NULL, &tex_handler};
-
-    mdl_df_functions_init[material_idx](&state, &res_data, NULL, arg_block);
-
-    float3 result = make_float3(0.0f, 0.0f, 0.0f);
-
-    union {
-        mi::neuraylib::Bsdf_sample_data   sample_data;
-        mi::neuraylib::Bsdf_evaluate_data eval_data;
-        mi::neuraylib::Bsdf_pdf_data      pdf_data;
-    };
-
-    // initialize shared fields
-    sample_data.ior1 = make_float3(1.0f, 1.0f, 1.0f);
-    sample_data.ior2.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
-    sample_data.k1 = make_float3(-dir.x, -dir.y, -dir.z);
-
-
-    // importance sample environment light
-    if (params.mdl_test_type != MDL_TEST_SAMPLE && params.mdl_test_type != MDL_TEST_NO_ENV)
+    Mdl_function_index func_idx = get_mdl_function_index(material.bsdf);
+    if (is_valid(func_idx))
     {
-        const float xi0 = curand_uniform(&rand_state);
-        const float xi1 = curand_uniform(&rand_state);
-        const float xi2 = curand_uniform(&rand_state);
+        // init for the use of the materials BSDF
+        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
+        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
+        prepare_state(params, func_idx, state, normal); // init state
 
-        float3 light_dir;
-        float pdf;
-        const float3 f = environment_sample(light_dir, pdf, make_float3(xi0, xi1, xi2), params);
+        // initialize BSDF
+        // Note, that this will change the state.normal (needs to be reset before using EDFs)
+        as_bsdf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
-        const float cos_theta = dot(light_dir, normal);
-        if (cos_theta > 0.0f && pdf > 0.0f) {
-            eval_data.k2 = light_dir;
-
-            mdl_df_functions_evaluate[material_idx](
-                &eval_data, &state, &res_data, NULL, arg_block);
-
-            const float mis_weight =
-                (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
-            result += f * eval_data.bsdf * mis_weight;
-        }
-    }
-
-    // importance sample BSDF
-    if (params.mdl_test_type != MDL_TEST_EVAL && params.mdl_test_type != MDL_TEST_NO_ENV)
-    {
-        sample_data.xi.x = curand_uniform(&rand_state);
-        sample_data.xi.y = curand_uniform(&rand_state);
-        sample_data.xi.z = curand_uniform(&rand_state);
-
-        mdl_df_functions_sample[material_idx](
-            &sample_data, &state, &res_data, NULL, arg_block);
-
-        if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
+        // reuse memory for function data
+        union
         {
+            Bsdf_sample_data   sample_data;
+            Bsdf_evaluate_data eval_data;
+            Bsdf_pdf_data      pdf_data;
+        };
+
+        // initialize shared fields
+        if (ray_state.inside)
+        {
+            sample_data.ior1.x = BSDF_USE_MATERIAL_IOR;
+            sample_data.ior2 = make_float3(1.0f, 1.0f, 1.0f);
+        }
+        else
+        {
+            sample_data.ior1 = make_float3(1.0f, 1.0f, 1.0f);
+            sample_data.ior2.x = BSDF_USE_MATERIAL_IOR;
+        }
+        sample_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
+
+        // compute direct lighting for point light
+        if (params.light_intensity.x > 0.0f ||
+            params.light_intensity.y > 0.0f ||
+            params.light_intensity.z > 0.0f)
+        {
+            float3 to_light = params.light_pos - ray_state.pos;
+            const float check_sign = squared_length(params.light_pos) < 1.0f ? -1.0f : 1.0f;
+            if (dot(to_light, normal) * check_sign > 0.0f)
+            {
+
+                const float inv_squared_dist = 1.0f / squared_length(to_light);
+                eval_data.k2 = to_light * sqrtf(inv_squared_dist);
+
+                const float3 f = params.light_intensity * inv_squared_dist * (float) (0.25 / M_PI);
+
+                // evaluate the materials BSDF
+                as_bsdf_evaluate(func_idx)(
+                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+
+                ray_state.contribution += ray_state.weight * f * eval_data.bsdf;
+            }
+        }
+
+        // importance sample environment light
+        if (params.mdl_test_type != MDL_TEST_SAMPLE && params.mdl_test_type != MDL_TEST_NO_ENV)
+        {
+            const float xi0 = curand_uniform(&rand_state);
+            const float xi1 = curand_uniform(&rand_state);
+            const float xi2 = curand_uniform(&rand_state);
+
+            float3 light_dir;
             float pdf;
-            const float3 f = environment_eval(pdf, sample_data.k2, params);
+            const float3 f = environment_sample(light_dir, pdf, make_float3(xi0, xi1, xi2), params);
 
-            float bsdf_pdf;
-            if (params.mdl_test_type == MDL_TEST_MIS_PDF) {
-                const float3 k2 = sample_data.k2;
-                pdf_data.k2 = k2;
-                mdl_df_functions_pdf[material_idx](
-                    &pdf_data, &state, &res_data, NULL, arg_block);
-                bsdf_pdf = pdf_data.pdf;
+            const float cos_theta = dot(light_dir, normal);
+            if (cos_theta > 0.0f && pdf > 0.0f)
+            {
+                eval_data.k2 = light_dir;
+
+                // evaluate the materials BSDF
+                as_bsdf_evaluate(func_idx)(
+                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+
+                const float mis_weight =
+                    (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
+                ray_state.contribution += ray_state.weight * f * eval_data.bsdf * mis_weight;
             }
-            else
-                bsdf_pdf = sample_data.pdf;
+        }
 
-            const bool is_specular =
-                (sample_data.event_type & mi::neuraylib::BSDF_EVENT_SPECULAR) != 0;
-            if (is_specular || bsdf_pdf > 0.0f) {
-                const float mis_weight = is_specular ||
-                    (params.mdl_test_type == MDL_TEST_SAMPLE) ? 1.0f : bsdf_pdf / (pdf + bsdf_pdf);
-                result += f * sample_data.bsdf_over_pdf * mis_weight;
+        // importance sample BSDF
+        {
+            sample_data.xi.x = curand_uniform(&rand_state);
+            sample_data.xi.y = curand_uniform(&rand_state);
+            sample_data.xi.z = curand_uniform(&rand_state);
+
+
+            // sample the materials BSDF
+            as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, NULL, arg_block);
+
+
+            if (sample_data.event_type == BSDF_EVENT_ABSORB)
+                return false;
+
+            ray_state.dir = sample_data.k2;
+            ray_state.weight *= sample_data.bsdf_over_pdf;
+
+
+            const bool transmission = (sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0;
+            if (transmission)
+                ray_state.inside = !ray_state.inside;
+
+            if (ray_state.inside)
+            {
+                // avoid self-intersections
+                ray_state.pos -= normal * 0.001f;
+
+                return true; // continue bouncing in sphere
+            }
+            else if (params.mdl_test_type != MDL_TEST_NO_ENV &&
+                params.mdl_test_type != MDL_TEST_EVAL)
+            {
+                // leaving sphere, add contribution from environment hit
+
+                float pdf;
+                const float3 f = environment_eval(pdf, sample_data.k2, params);
+
+                float bsdf_pdf;
+                if (params.mdl_test_type == MDL_TEST_MIS_PDF)
+                {
+                    const float3 k2 = sample_data.k2;
+                    pdf_data.k2 = k2;
+
+                    // get pdf corresponding to the materials BSDF
+                    as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, NULL, arg_block);
+
+                    bsdf_pdf = pdf_data.pdf;
+                }
+                else
+                    bsdf_pdf = sample_data.pdf;
+
+                const bool is_specular =
+                    (sample_data.event_type & BSDF_EVENT_SPECULAR) != 0;
+                if (is_specular || bsdf_pdf > 0.0f)
+                {
+                    const float mis_weight = is_specular ||
+                        (params.mdl_test_type == MDL_TEST_SAMPLE) ? 1.0f :
+                            bsdf_pdf / (pdf + bsdf_pdf);
+                    ray_state.contribution += ray_state.weight * f * mis_weight;
+                }
             }
         }
     }
 
-    // compute direct lighting for point light
-    if (params.light_intensity.x > 0.0f ||
-        params.light_intensity.y > 0.0f ||
-        params.light_intensity.z > 0.0f)
+    // add emission
+    func_idx = get_mdl_function_index(material.edf);
+    if (is_valid(func_idx))
     {
-        float3 to_light = params.light_pos - position;
-        if (dot(to_light, normal) > 0.0f) {
+        // init for the use of the materials EDF
+        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
+        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
+        prepare_state(params, func_idx, state, normal); // init state
+        as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
-            const float inv_squared_dist = 1.0f / squared_length(to_light);
-            eval_data.k2 = to_light * sqrtf(inv_squared_dist);
-            
-            const float3 f = params.light_intensity * inv_squared_dist * (float)(0.25 / M_PI);
+        // evaluate EDF
+        Edf_evaluate_data eval_data;
+        eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
+        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
-            mdl_df_functions_evaluate[material_idx](
-                &eval_data, &state, &res_data, NULL, arg_block);
+        // evaluate intensity expression
+        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
+        func_idx = get_mdl_function_index(material.emission_intensity);
+        if (is_valid(func_idx))
+        {
+            // init for the use of the materials emission intensity
+            mdl_resources.set_target_code_index(params, func_idx); // init resource handler
+            arg_block = get_arg_block(params, func_idx); // get material parameters
+            prepare_state(params, func_idx, state, normal); // init state
 
-            result += f * eval_data.bsdf;
+            as_expression(func_idx)(
+                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
         }
+
+        // add emission
+        ray_state.contribution += emission_intensity * eval_data.edf;
     }
 
-    return isfinite(result.x) && isfinite(result.y) && isfinite(result.z)
-        ? result : make_float3(0.0f, 0.0f, 0.0f);
+    return false;
 }
+
+__device__ inline float3 render_sphere(
+    Rand_state &rand_state,
+    const Kernel_params &params,
+    const float2 &screen_pos)
+{
+    const float r = (2.0f * screen_pos.x - 1.0f);
+    const float u = (2.0f * screen_pos.y - 1.0f);
+    const float aspect = (float)params.resolution.y / (float)params.resolution.x;
+
+    Ray_state ray_state;
+    ray_state.contribution = make_float3(0.0f, 0.0f, 0.0f);
+    ray_state.weight = make_float3(1.0f, 1.0f, 1.0f);
+    ray_state.pos = params.cam_pos;
+    ray_state.dir = normalize(
+        params.cam_dir * params.cam_focal + params.cam_right * r + params.cam_up * aspect * u);
+    ray_state.inside = false;
+
+    const unsigned int max_num_intersections = params.max_path_length - 1;
+    for (ray_state.intersection = 0; ray_state.intersection < max_num_intersections;
+            ++ray_state.intersection)
+        if (!trace_sphere(rand_state, ray_state, params))
+            break;
+
+    return
+        isfinite(ray_state.contribution.x) &&
+        isfinite(ray_state.contribution.y) &&
+        isfinite(ray_state.contribution.z) ? ray_state.contribution : make_float3(0.0f, 0.0f, 0.0f);
+}
+
 
 // exposure + simple Reinhard tonemapper + gamma
 __device__ inline unsigned int display(float3 val, const float tonemap_scale)

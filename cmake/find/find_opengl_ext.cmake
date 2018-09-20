@@ -21,11 +21,11 @@ function(FIND_OPENGL_EXT)
         message(STATUS "OPENGL_GLU_FOUND: ${OPENGL_GLU_FOUND}")
         message(STATUS "OPENGL_INCLUDE_DIR: ${OPENGL_INCLUDE_DIR}")
         message(STATUS "OPENGL_LIBRARIES: ${OPENGL_LIBRARIES}")
-        if(LINUX AND EXISTS ${OPENGL_INCLUDE_DIR})
+        if(NOT WINDOWS AND EXISTS ${OPENGL_INCLUDE_DIR})
             find_file(_LIB_OPENGL 
                 NAMES 
-                    "libOpenGL.so"
-                    "libGL.so"
+                    "libOpenGL${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                    "libGL${CMAKE_SHARED_LIBRARY_SUFFIX}"
                 HINTS
                     /usr/lib64/
                     /usr/lib/x86_64-linux-gnu
@@ -34,7 +34,7 @@ function(FIND_OPENGL_EXT)
 
             find_file(_LIB_GLU 
                 NAMES
-                    "libGLU.so"
+                    "libGLU${CMAKE_SHARED_LIBRARY_SUFFIX}"
                 HINTS
                     /usr/lib64/
                     /usr/lib/x86_64-linux-gnu
@@ -54,9 +54,11 @@ function(FIND_OPENGL_EXT)
     # store path that are later used in the add_opengl.cmake
     set(MDL_DEPENDENCY_GL_INCLUDE ${OPENGL_INCLUDE_DIR} CACHE INTERNAL "gl headers")
     set(MDL_DEPENDENCY_GL_SHARED ${_GL_SHARED} CACHE INTERNAL "gl libs")
-    # message(STATUS "MDL_DEPENDENCY_GL_INCLUDE: ${MDL_DEPENDENCY_GL_INCLUDE}")
-    # message(STATUS "MDL_DEPENDENCY_GL_SHARED: ${MDL_DEPENDENCY_GL_SHARED}")
 
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "[INFO] MDL_DEPENDENCY_GL_INCLUDE:          ${MDL_DEPENDENCY_GL_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GL_SHARED:           ${MDL_DEPENDENCY_GL_SHARED}")
+    endif()
     #-----------------------------------------------------------------------------------------------
 
     # extend find GLEW
@@ -80,7 +82,7 @@ function(FIND_OPENGL_EXT)
                 set(_GLEW_LIB "${GLEW_DIR}/lib/Release/x64/glew32.lib")
                 set(_GLEW_SHARED "${GLEW_DIR}/bin/Release/x64/glew32.dll")
 
-            elseif(LINUX)
+            else()
                 # link dynamic
                 set(_GLEW_LIB "")  # not used
                 find_file(_GLEW_SHARED "${CMAKE_SHARED_LIBRARY_PREFIX}GLEW${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -109,9 +111,12 @@ function(FIND_OPENGL_EXT)
     set(MDL_DEPENDENCY_GLEW_INCLUDE ${_GLEW_INCLUDE} CACHE INTERNAL "glew headers")
     set(MDL_DEPENDENCY_GLEW_LIBS ${_GLEW_LIB} CACHE INTERNAL "glew libs")
     set(MDL_DEPENDENCY_GLEW_SHARED ${_GLEW_SHARED} CACHE INTERNAL "glew shared libs")
-    # message(STATUS "MDL_DEPENDENCY_GLEW_INCLUDE: ${MDL_DEPENDENCY_GLEW_INCLUDE}")
-    # message(STATUS "MDL_DEPENDENCY_GLEW_LIBS: ${MDL_DEPENDENCY_GLEW_LIBS}")
-    # message(STATUS "MDL_DEPENDENCY_GLEW_SHARED: ${MDL_DEPENDENCY_GLEW_SHARED}")
+
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_INCLUDE:        ${MDL_DEPENDENCY_GLEW_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_LIBS:           ${MDL_DEPENDENCY_GLEW_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_SHARED:         ${MDL_DEPENDENCY_GLEW_SHARED}")
+    endif()
     #-----------------------------------------------------------------------------------------------
 
     find_package(glfw3 QUIET)
@@ -132,7 +137,7 @@ function(FIND_OPENGL_EXT)
                 set(_GLFW_LIB "${GLFW_DIR}/lib-vc2015/glfw3dll.lib")
                 set(_GLFW_SHARED "${GLFW_DIR}/lib-vc2015/glfw3.dll")
 
-            elseif(LINUX)
+            else()
                 # link dynamic
                 set(_GLFW_LIB "")  # not used
                 find_file(_GLFW_SHARED "${CMAKE_SHARED_LIBRARY_PREFIX}glfw${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -161,8 +166,11 @@ function(FIND_OPENGL_EXT)
     set(MDL_DEPENDENCY_GLFW_INCLUDE ${_GLFW_INCLUDE} CACHE INTERNAL "glfw headers")
     set(MDL_DEPENDENCY_GLFW_LIBS ${_GLFW_LIB} CACHE INTERNAL "glfw libs")
     set(MDL_DEPENDENCY_GLFW_SHARED ${_GLFW_SHARED} CACHE INTERNAL "glfw shared libs")
-    # message(STATUS "MDL_DEPENDENCY_GLFW_INCLUDE: ${MDL_DEPENDENCY_GLFW_INCLUDE}")
-    # message(STATUS "MDL_DEPENDENCY_GLFW_LIBS: ${MDL_DEPENDENCY_GLFW_LIBS}")
-    # message(STATUS "MDL_DEPENDENCY_GLFW_SHARED: ${MDL_DEPENDENCY_GLFW_SHARED}")
+
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_INCLUDE:        ${MDL_DEPENDENCY_GLFW_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_LIBS:           ${MDL_DEPENDENCY_GLFW_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_SHARED:         ${MDL_DEPENDENCY_GLFW_SHARED}")
+    endif()
 
 endfunction()

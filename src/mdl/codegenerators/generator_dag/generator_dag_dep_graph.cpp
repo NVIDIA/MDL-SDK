@@ -1360,6 +1360,7 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
         }
 
         // check for preset
+        idef = module->get_original_definition(def);
         IDefinition const *preset_def = skip_presets(idef, owner);
         if (preset_def != idef) {
             dag_preset_name =

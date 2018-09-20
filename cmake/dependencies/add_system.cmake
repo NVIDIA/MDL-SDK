@@ -7,23 +7,30 @@
 # - __TARGET_ADD_DEPENDENCY_NO_LINKING
 # -------------------------------------------------------------------------------------------------
 
-# handling of common system dependencies
-foreach (system_component ${__TARGET_ADD_DEPENDENCY_COMPONENTS})
+# if available on the current platform, 
+# we add these libraries/options for every shared object and executable
 
-    # ld
-    if(${system_component} STREQUAL ld AND LINUX)
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                 ${CMAKE_DL_LIBS}
-            )
-
-    # thread
-    elseif(${system_component} STREQUAL threads)
-        find_package(Threads REQUIRED QUITE)
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                  ${CMAKE_THREAD_LIBS_INIT}
-            )
-
+# dl
+if(CMAKE_DL_LIBS)
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "- depends on:     * ${CMAKE_DL_LIBS}")
     endif()
-endforeach()
+    target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+        PRIVATE
+            ${CMAKE_DL_LIBS}
+        )
+endif()
+
+# threads
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED QUITE)
+if(CMAKE_THREAD_LIBS_INIT)
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "- depends on:     * ${CMAKE_THREAD_LIBS_INIT}")
+    endif()
+    target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+        PRIVATE
+            ${CMAKE_THREAD_LIBS_INIT}
+        )
+endif()

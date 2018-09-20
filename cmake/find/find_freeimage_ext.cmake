@@ -36,7 +36,7 @@ function(FIND_FREEIMAGE_EXT)
                     ${FREEIMAGE_DIR}/Dist/x64
                 )
 
-        elseif(LINUX)
+        elseif(LINUX OR MACOSX)
             # assuming the 'freeimage-dev' package is installed
             # or freeimage was build manually and follows a common folder structure
             set(_FREEIMAGE_LIB "") # not used
@@ -51,6 +51,7 @@ function(FIND_FREEIMAGE_EXT)
                     /usr/lib64
                     /usr/lib/x86_64-linux-gnu
                     /usr/lib
+                    /usr/local/lib
                 )
 
             if(NOT EXISTS ${_FREEIMAGE_SHARED})
@@ -74,5 +75,11 @@ function(FIND_FREEIMAGE_EXT)
     set(MDL_DEPENDENCY_FREEIMAGE_LIBS ${_FREEIMAGE_LIB} CACHE INTERNAL "freeimage libs")
     set(MDL_DEPENDENCY_FREEIMAGE_SHARED ${_FREEIMAGE_SHARED} CACHE INTERNAL "freeimage shared libs")
     set(MDL_FREEIMAGE_FOUND ON CACHE INTERNAL "")
+
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "[INFO] MDL_DEPENDENCY_FREEIMAGE_INCLUDE:   ${MDL_DEPENDENCY_FREEIMAGE_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_FREEIMAGE_LIBS:      ${MDL_DEPENDENCY_FREEIMAGE_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_FREEIMAGE_SHARED:    ${MDL_DEPENDENCY_FREEIMAGE_SHARED}")
+    endif()
 
 endfunction()

@@ -136,6 +136,33 @@ public:
         char const                       *base_fname,
         bool                              include_geometry_normal);
 
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// For each distribution function it results in four functions, suffixed with \c "_init", 
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application, 
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param material                     The compiled MDL material.
+    /// \param function_descriptions        The list of descriptions of function to translate.
+    /// \param lfunction_count              The size of the list of descriptions.
+    /// \param include_geometry_normal      If true, the \c "geometry.normal" field will be applied
+    ///                                     to the MDL state prior to evaluation of the given DF.
+    /// \returns             A return code. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: An error occurred while processing the entries in the list.
+    ///                            For more detailed error information, each list entry contains
+    ///                            the error code of the corresponding function type 
+    ///                            (see the return codes of \c add_material_expression and 
+    ///                            \c add_material_df). In case of an error, rely only on the first
+    ///                            return code different from 0.
+    virtual mi::Sint32 add_material(
+        MDL::Mdl_compiled_material const                   *i_material,
+        mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
+        mi::Size                                            function_count,
+        bool                                                include_geometry_normal);
+
     /// Get the number of functions inside this link unit.
     mi::Size get_num_functions() const;
 
@@ -146,11 +173,18 @@ public:
     /// \return the name of the i'th function or NULL if the index is out of range
     char const *get_function_name(mi::Size i) const;
 
-    /// Get the kind of the i'th function inside this link unit.
+    /// Get the distribution kind of the i'th function inside this link unit.
     ///
     /// \param i  the index of the function
     ///
-    /// \return the kind of the function or \c FK_INVALID if \p i was invalid.
+    /// \return the distribution kind of the function or \c FK_INVALID if \p i was invalid.
+    mi::neuraylib::ITarget_code::Distribution_kind get_distribution_kind(mi::Size i) const;
+
+    /// Get the function kind of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return the function kind of the function or \c FK_INVALID if \p i was invalid.
     mi::neuraylib::ITarget_code::Function_kind get_function_kind(mi::Size i) const;
 
     /// Get the index of the target argument block layout for the i'th function inside this link
@@ -219,6 +253,9 @@ private:
 
     /// Next bsdf measurement index.
     size_t m_bm_idx;
+
+    /// Counter that is appended to functions without specified base name
+    size_t m_gen_base_name_suffix_counter;
 
     /// If true, compile pure constants into functions.
     bool m_compile_consts;

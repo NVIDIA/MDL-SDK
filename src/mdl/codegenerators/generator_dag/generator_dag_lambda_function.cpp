@@ -2028,9 +2028,10 @@ public:
         if (mat_root_node == NULL || df_node == NULL)
             return IDistribution_function::EC_INVALID_PARAMETERS;
 
-        // check whether node really is a DF (currently only BSDFs are supported)
-        if (!is<IType_bsdf>(df_node->get_type()->skip_type_alias()))
-            return IDistribution_function::EC_NOT_A_BSDF;
+        // check whether node really is a DF (currently only BSDFs and EDFs are supported)
+        if (!is<IType_bsdf>(df_node->get_type()->skip_type_alias()) &&
+                !is<IType_edf>(df_node->get_type()->skip_type_alias()))
+            return IDistribution_function::EC_UNSUPPORTED_BSDF;
 
         mi::base::Handle<ILambda_function> main_df(dist_func->get_main_df());
 

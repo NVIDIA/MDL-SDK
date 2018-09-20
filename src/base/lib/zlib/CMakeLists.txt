@@ -2,6 +2,21 @@
 set(PROJECT_NAME base-lib-zlib)
 
 # collect sources
+set(PROJECT_HEADERS
+    "crc32.h"
+    "deflate.h"
+    "gzguts.h"
+    "inffast.h"
+    "inffixed.h"
+    "inflate.h"
+    "inftrees.h"
+    "i_zlib.h"
+    "trees.h"
+    "zconf.h"
+    "zlib.h"
+    "zutil.h"
+    )
+
 set(PROJECT_SOURCES 
     "zlib_wrapper.cpp"
     "adler32.c"
@@ -19,6 +34,7 @@ set(PROJECT_SOURCES
     "gzwrite.c"
     "gzclose.c"
     "gzlib.c"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template

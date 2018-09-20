@@ -47,6 +47,14 @@ BSDF_INLINE void absorb(BSDF_pdf_data *data)
     data->pdf  = 0.0f;
 }
 
+BSDF_INLINE void copy_data(BSDF_pdf_data *pdf_data, const BSDF_sample_data *sample_data)
+{
+    pdf_data->ior1 = sample_data->ior1;
+    pdf_data->ior2 = sample_data->ior2;
+    pdf_data->k1 = sample_data->k1;
+    pdf_data->k2 = sample_data->k2;
+}
+
 // using color IORs would require some sort of spectral rendering, as of now libbsdf
 // reduces that to scalar by averaging
 template<typename Data>

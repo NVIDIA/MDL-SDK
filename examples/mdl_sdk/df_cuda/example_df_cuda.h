@@ -49,6 +49,42 @@ struct Env_accel {
     float pdf;
 };
 
+namespace
+{
+    #if defined(__CUDA_ARCH__)
+        __host__ __device__
+    #endif
+    inline uint2 make_invalid()
+    {
+        uint2 index_pair;
+        index_pair.x = ~0;
+        index_pair.y = ~0;
+        return index_pair;
+    }
+}
+
+struct Df_cuda_material
+{
+    #if defined(__CUDA_ARCH__)
+        __host__ __device__
+    #endif
+        Df_cuda_material()
+        : compiled_material_index(0)
+        , argument_block_index(0) // (1 based) zero means that no arguments are used
+        , bsdf(make_invalid())
+        , edf(make_invalid())
+        , emission_intensity(make_invalid())
+    {
+    }
+
+    unsigned int compiled_material_index; // used on host side only
+    unsigned int argument_block_index; /* not used at the moment, as each function get its own */
+    uint2 bsdf;   // pair of target_code_index and function_index to identify the bsdf
+    uint2 edf;    // pair of target_code_index and function_index to identify the edf
+    uint2 emission_intensity;  // pair of target_code_index and function_index for intensity
+};
+
+
 struct Kernel_params {
     // display
     uint2 resolution;
@@ -60,6 +96,7 @@ struct Kernel_params {
     unsigned int iteration_start;
     unsigned int iteration_num;
     unsigned int mdl_test_type;
+    unsigned int max_path_length;
 
     // camera
     float3 cam_pos;
@@ -81,6 +118,7 @@ struct Kernel_params {
     Target_code_data *tc_data;
     char const **arg_block_list;
     unsigned int current_material;
+    Df_cuda_material* material_buffer;
 };
 
 #endif // EXAMPLE_DF_CUDA_H

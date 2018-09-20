@@ -41,7 +41,7 @@
 #include <boost/core/noncopyable.hpp>
 #include <base/system/main/access_module.h>
 
-namespace mi { namespace neuraylib { class INeuray; } }
+namespace mi { class IArray; namespace neuraylib { class INeuray; } }
 
 namespace MI {
 
@@ -126,6 +126,8 @@ public:
     mi::Uint32 get_components_per_pixel( const char* pixel_type) const;
 
     mi::Uint32 get_bytes_per_component( const char* pixel_type) const;
+
+    mi::IArray* create_mipmaps(const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
 
     // internal methods
 

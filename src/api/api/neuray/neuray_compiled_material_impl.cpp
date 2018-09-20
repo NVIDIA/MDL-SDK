@@ -38,6 +38,7 @@
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
+#include "neuray_string_impl.h"
 
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
 #include <io/scene/scene/i_scene_journal_types.h>
@@ -159,11 +160,39 @@ const mi::neuraylib::IExpression* Compiled_material_impl::lookup_sub_expression(
     return ef->create( result_int.get(), this->cast_to_major());
 }
 
-const mi::neuraylib::IValue_list* Compiled_material_impl::get_arguments() const
+const mi::IString* Compiled_material_impl::get_connected_function_db_name(
+    const char* material_instance_name,
+    mi::Size parameter_index,
+    mi::Sint32* errors) const
 {
-    mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
-    mi::base::Handle<const MDL::IValue_list> result_list( get_db_element()->get_arguments());
-    return vf->create_value_list( result_list.get(), this->cast_to_major());
+    mi::Sint32 dummy_error = 0;
+    if (!errors) errors = &dummy_error;
+
+    if (!material_instance_name) {
+        *errors = -1;
+        return NULL;
+    }
+    if (parameter_index >= get_parameter_count()) {
+        *errors = -2;
+        return NULL;
+    }
+    MI::DB::Transaction* transaction = get_db_transaction();
+    DB::Tag material_instance_tag = transaction->name_to_tag(material_instance_name);
+    if (material_instance_tag.is_invalid()) {
+        *errors = -1;
+        return NULL;
+    }
+    DB::Tag call_tag = get_db_element()->get_connected_function_db_name(
+        transaction, material_instance_tag, get_parameter_name(parameter_index));
+    if (call_tag.is_invalid()) {
+        *errors = -3;
+        return NULL;
+    }
+    mi::IString* result = new String_impl();
+    result->set_c_str(transaction->tag_to_name(call_tag));
+
+    *errors = 0;
+    return result;
 }
 
 void Compiled_material_impl::swap( MDL::Mdl_compiled_material& rhs)

@@ -322,20 +322,24 @@ llvm::Function::arg_iterator Function_context::get_first_parameter()
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
     }
-    if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
         ++arg_it;
-    }
-    if (m_flags & LLVM_context_data::FL_HAS_RES) {
-        ++arg_it;
-    }
-    if (m_flags & LLVM_context_data::FL_HAS_EXC) {
-        ++arg_it;
-    }
-    if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
-        ++arg_it;
-    }
-    if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
-        ++arg_it;
+    } else {
+        if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+            ++arg_it;
+        }
+        if (m_flags & LLVM_context_data::FL_HAS_RES) {
+            ++arg_it;
+        }
+        if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+            ++arg_it;
+        }
+        if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
+            ++arg_it;
+        }
+        if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
+            ++arg_it;
+        }
     }
     if (m_flags & LLVM_context_data::FL_HAS_OBJ_ID) {
         ++arg_it;
@@ -347,6 +351,18 @@ llvm::Function::arg_iterator Function_context::get_first_parameter()
    return arg_it;
 }
 
+// Get the exec_ctx parameter of the current function.
+llvm::Value *Function_context::get_exec_ctx_parameter()
+{
+    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_EXEC_CTX);
+
+    llvm::Function::arg_iterator arg_it = m_function->arg_begin();
+    if (m_flags & LLVM_context_data::FL_SRET) {
+        ++arg_it;
+    }
+    return arg_it;
+}
+
 // Get the state parameter of the current function.
 llvm::Value *Function_context::get_state_parameter()
 {
@@ -355,6 +371,10 @@ llvm::Value *Function_context::get_state_parameter()
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
+    }
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
+        llvm::Value *exec_ctx = arg_it;
+        return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 0u));
     }
     return arg_it;
 }
@@ -367,6 +387,10 @@ llvm::Value *Function_context::get_resource_data_parameter()
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
+    }
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
+        llvm::Value *exec_ctx = arg_it;
+        return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 1u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
         ++arg_it;
@@ -382,6 +406,10 @@ llvm::Value *Function_context::get_exc_state_parameter()
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
+    }
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
+        llvm::Value *exec_ctx = arg_it;
+        return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 2u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
         ++arg_it;
@@ -400,6 +428,10 @@ llvm::Value *Function_context::get_cap_args_parameter()
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
+    }
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
+        llvm::Value *exec_ctx = arg_it;
+        return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 3u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
         ++arg_it;
@@ -424,6 +456,10 @@ llvm::Value *Function_context::get_lambda_results_parameter()
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
         ++arg_it;
+    }
+    if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
+        llvm::Value *exec_ctx = arg_it;
+        return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 4u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
         ++arg_it;
@@ -464,20 +500,24 @@ llvm::Value *Function_context::get_object_id_value()
         if (m_flags & LLVM_context_data::FL_SRET) {
             ++arg_it;
         }
-        if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+        if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
             ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_RES) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_EXC) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
-            ++arg_it;
+        } else {
+            if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_RES) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
+                ++arg_it;
+            }
         }
         return arg_it;
     } else {
@@ -496,20 +536,24 @@ llvm::Value *Function_context::get_w2o_transform_value()
         if (m_flags & LLVM_context_data::FL_SRET) {
             ++arg_it;
         }
-        if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+        if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
             ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_RES) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_EXC) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
-            ++arg_it;
+        } else {
+            if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_RES) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
+                ++arg_it;
+            }
         }
         if (m_flags & LLVM_context_data::FL_HAS_OBJ_ID) {
             ++arg_it;
@@ -531,20 +575,24 @@ llvm::Value *Function_context::get_o2w_transform_value()
         if (m_flags & LLVM_context_data::FL_SRET) {
             ++arg_it;
         }
-        if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+        if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
             ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_RES) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_EXC) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
-            ++arg_it;
-        }
-        if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
-            ++arg_it;
+        } else {
+            if (m_flags & LLVM_context_data::FL_HAS_STATE) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_RES) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
+                ++arg_it;
+            }
+            if (m_flags & LLVM_context_data::FL_HAS_LMBD_RES) {
+                ++arg_it;
+            }
         }
         if (m_flags & LLVM_context_data::FL_HAS_OBJ_ID) {
             ++arg_it;

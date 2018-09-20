@@ -31,6 +31,8 @@
 #include "i_mdl_elements_compiled_material.h"
 
 #include "i_mdl_elements_utilities.h"
+#include "i_mdl_elements_material_instance.h"
+#include "i_mdl_elements_function_call.h"
 #include "mdl_elements_utilities.h"
 
 #include <sstream>
@@ -45,6 +47,10 @@
 #include <base/data/db/i_db_access.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
+
+#include <boost/algorithm/string.hpp>
+#include <boost/tokenizer.hpp>
+
 
 namespace MI {
 
@@ -290,6 +296,73 @@ const IExpression* Mdl_compiled_material::lookup_sub_expression(
 const IExpression* Mdl_compiled_material::lookup_sub_expression( const char* path) const
 {
     return lookup_sub_expression( 0, path, 0, 0);
+}
+
+namespace {
+
+template<class T>
+DB::Tag get_next_call(const T* mdl_instance, const std::string& parameter_name)
+{
+    const DB::Tag invalid;
+
+    mi::Size p_index = mdl_instance->get_parameter_index(parameter_name.c_str());
+    if (p_index == static_cast<mi::Size>(-1))
+        return invalid;
+    mi::base::Handle<const IExpression_list> arguments(mdl_instance->get_arguments());
+    mi::base::Handle<const IExpression> expr(arguments->get_expression(p_index));
+    mi::base::Handle<const IExpression_call> expr_call(
+        expr->get_interface<const IExpression_call>());
+
+    if (!expr_call)
+        return invalid;
+
+    return expr_call->get_call();
+}
+
+}
+
+DB::Tag Mdl_compiled_material::get_connected_function_db_name(
+    DB::Transaction* transaction,
+    DB::Tag material_instance_tag,
+    const std::string& parameter_name) const
+{
+    DB::Access<Mdl_material_instance> material_instance(material_instance_tag, transaction);
+    ASSERT(M_SCENE, material_instance.is_valid());
+
+    std::vector <std::string> path_tokens;
+    boost::split(path_tokens, parameter_name, boost::is_any_of("."));
+
+    // there need to be at least two items, last one is the param name
+    if (path_tokens.size() < 2) 
+        return DB::Tag();
+
+    DB::Tag call_tag = material_instance_tag;
+    for (std::size_t i = 0; i < path_tokens.size() - 1; ++i)
+    {
+        SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
+        if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
+
+            DB::Access<Mdl_material_instance> mdl_instance(call_tag, transaction);
+            ASSERT(M_SCENE, mdl_instance.is_valid());
+
+            call_tag = get_next_call(mdl_instance.get_ptr(), path_tokens[i]);
+        }
+        else if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
+
+            DB::Access<Mdl_function_call> mdl_instance(call_tag, transaction);
+            ASSERT(M_SCENE, mdl_instance.is_valid());
+
+            call_tag = get_next_call(mdl_instance.get_ptr(), path_tokens[i]);
+        }
+        else {
+            ASSERT(M_SCENE, false);
+            return  DB::Tag();
+        }
+
+        if (call_tag.is_invalid())
+            return DB::Tag();
+    }
+    return call_tag;
 }
 
 namespace {

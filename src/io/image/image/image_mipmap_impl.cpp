@@ -34,6 +34,7 @@
 
 #include <mi/base/handle.h>
 #include <mi/math/color.h>
+#include <mi/base/types.h>
 #include <mi/math/function.h>
 #include <mi/neuraylib/itile.h>
 #include <mi/neuraylib/iimage_plugin.h>
@@ -44,6 +45,7 @@
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
+
 
 namespace MI {
 
@@ -339,12 +341,16 @@ const mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) const
     if( level >= m_nr_of_levels)
         return 0;
 
+    SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);
 
     // create miplevels if needed
     for( mi::Uint32 i = m_last_created_level+1; i <= level; ++i) {
-        create_miplevel( i);
-        ASSERT( M_IMAGE, m_last_created_level == i);
+
+        m_levels[i] = mi::base::make_handle(image_module->create_miplevel(
+            m_levels[i-1].get(), m_levels[i-1]->get_gamma()));
+
+        m_last_created_level = i;
     }
 
     ASSERT( M_IMAGE, m_last_created_level >= level);
@@ -358,12 +364,16 @@ mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) //-V659 PVS
     if( level >= m_nr_of_levels)
         return 0;
 
+    SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);
 
     // create miplevels if needed
     for( mi::Uint32 i = m_last_created_level+1; i <= level; ++i) {
-        create_miplevel( i);
-        ASSERT( M_IMAGE, m_last_created_level == i);
+
+        m_levels[i] = mi::base::make_handle(image_module->create_miplevel(
+            m_levels[i - 1].get(), m_levels[i - 1]->get_gamma()));
+
+        m_last_created_level = i;
     }
     ASSERT( M_IMAGE, m_last_created_level >= level);
 
@@ -401,138 +411,6 @@ mi::Size Mipmap_impl::get_size() const
     }
 
     return size;
-}
-
-void Mipmap_impl::create_miplevel( mi::Uint32 level) const
-{
-    // NOTE: This implementation creates the new miplevel tile by tile. For each tile, it retrieves
-    // the at most four needed tiles from the previous miplevel *once* (and not for every pixel).
-    // Remember that tile lookups require locks (and reference counts).
-
-    ASSERT( M_IMAGE, level > 0);
-    ASSERT( M_IMAGE, m_last_created_level == level-1);
-
-    mi::neuraylib::ICanvas* prev_canvas = m_levels[level-1].get();
-    ASSERT( M_IMAGE, prev_canvas);
-
-    // Get properties of previous miplevel
-    mi::Uint32 prev_width       = prev_canvas->get_resolution_x();
-    mi::Uint32 prev_height      = prev_canvas->get_resolution_y();
-    mi::Uint32 prev_layers      = prev_canvas->get_layers_size();
-    mi::Uint32 prev_tile_width  = prev_canvas->get_tile_resolution_x();
-    mi::Uint32 prev_tile_height = prev_canvas->get_tile_resolution_y();
-    Pixel_type prev_pixel_type
-        = convert_pixel_type_string_to_enum( prev_canvas->get_type());
-    mi::Float32 prev_gamma      =  prev_canvas->get_gamma();
-
-    // Compute properties of this miplevel
-    mi::Uint32 width            = std::max( prev_width  / 2, 1u);
-    mi::Uint32 height           = std::max( prev_height / 2, 1u);
-    mi::Uint32 layers           = prev_layers;
-    mi::Uint32 tile_width       = std::min( prev_tile_width,  width);
-    mi::Uint32 tile_height      = std::min( prev_tile_height, height);
-    Pixel_type pixel_type       = prev_pixel_type;
-    mi::Float32 gamma           = prev_gamma;
-
-    // The last level is just a single pixel in at least one dimension (maybe with multiple layers).
-    ASSERT( M_IMAGE, (width == 1 || height == 1) || (level < m_nr_of_levels-1));
-
-    // Create the miplevel
-    mi::neuraylib::ICanvas* canvas = new Canvas_impl(
-        pixel_type, width, height, tile_width, tile_height, layers, m_is_cubemap, gamma);
-
-    mi::Uint32 nr_of_tiles_x = (width  + tile_width  - 1) / tile_width;
-    mi::Uint32 nr_of_tiles_y = (height + tile_height - 1) / tile_height;
-
-    mi::Uint32 offsets_x[4] = { 0, 1, 0, 1};
-    mi::Uint32 offsets_y[4] = { 0, 0, 1, 1};
-
-    // Loop over the tiles and compute the pixel data for each tile
-    for( mi::Uint32 tile_z = 0; tile_z < layers; ++tile_z)
-        for( mi::Uint32 tile_y = 0; tile_y < nr_of_tiles_y; ++tile_y)
-            for( mi::Uint32 tile_x = 0; tile_x < nr_of_tiles_x; ++tile_x) {
-
-                // The current tile covers pixels in the range [x_begin,x_end) x [y_begin,y_end)
-                // from the canvas for this miplevel.
-                mi::Uint32 x_begin = tile_x * tile_width;
-                mi::Uint32 y_begin = tile_y * tile_height;
-                mi::Uint32 x_end   = std::min( x_begin + tile_width,  width);
-                mi::Uint32 y_end   = std::min( y_begin + tile_height, height);
-
-                // Lookup tile for this miplevel
-                mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( x_begin, y_begin));
-
-                // The current tile corresponds to the range
-                // [prev_x_begin,prev_x_end) x [prev_y_begin,prev_y_end) in the previous miplevel.
-                mi::Uint32 prev_x_begin = 2 * x_begin;
-                mi::Uint32 prev_y_begin = 2 * y_begin;
-                mi::Uint32 prev_x_end   = std::min( 2*x_end, 2*x_begin + prev_width);
-                mi::Uint32 prev_y_end   = std::min( 2*y_end, 2*y_begin + prev_height);
-
-                // Lookup involved tiles from the previous miplevel (note that these tiles are not
-                // necessarily distinct).
-                mi::base::Handle<mi::neuraylib::ITile> prev_tiles[4];
-                prev_tiles[0] = prev_canvas->get_tile( prev_x_begin, prev_y_begin);
-                prev_tiles[1] = prev_canvas->get_tile( prev_x_end-1, prev_y_begin);
-                prev_tiles[2] = prev_canvas->get_tile( prev_x_begin, prev_y_end-1);
-                prev_tiles[3] = prev_canvas->get_tile( prev_x_end-1, prev_y_end-1);
-                ASSERT( M_IMAGE, prev_tiles[0].is_valid_interface());
-                ASSERT( M_IMAGE, prev_tiles[1].is_valid_interface());
-                ASSERT( M_IMAGE, prev_tiles[2].is_valid_interface());
-                ASSERT( M_IMAGE, prev_tiles[3].is_valid_interface());
-
-                // Loop over the pixels of this tile and compute the value for each pixel
-                for( mi::Uint32 y = 0; y < y_end - y_begin; ++y)
-                    for( mi::Uint32 x = 0; x < x_end - x_begin; ++x) {
-
-                        // The current pixel (x,y) corresponds to the four pixels
-                        // [prev_x, prev_x+1] x [prev_y,prev_y+1] in the tiles of the previous
-                        // layer. Note that all four pixels might actually be in a different tile.
-                        mi::Uint32 prev_x = 2 * x;
-                        mi::Uint32 prev_y = 2 * y;
-
-                        mi::math::Color color( 0.0f, 0.0f, 0.0f, 0.0f);
-                        mi::Uint32 nr_of_summands = 0;
-
-                        // Loop over the at most four pixels corresponding to pixel (x,y)
-                        for( mi::Uint32 i = 0; i < 4; ++i) {
-
-                            // Find tile of pixel
-                            // (prev_x + offsets_x[i], prev_y + offsets_y[i]) and its coordinates
-                            // with respect to that tile.
-                            mi::Uint32 prev_tile_id = 0; // the ID is the index for prev_tiles
-                            mi::Uint32 prev_actual_x = prev_x + offsets_x[i];
-                            if( prev_x_begin + prev_actual_x >= prev_width)
-                                continue;
-                            if( prev_actual_x >= prev_tile_width) {
-                                prev_actual_x -= prev_tile_width;
-                                prev_tile_id += 1;
-                            }
-                            mi::Uint32 prev_actual_y = prev_y + offsets_y[i];
-                            if( prev_y_begin + prev_actual_y >= prev_height)
-                                continue;
-                            if( prev_actual_y >= prev_tile_height) {
-                                prev_actual_y -= prev_tile_height;
-                                prev_tile_id += 2;
-                            }
-
-                            // The pixel (prev_x + offsets_x[i], prev_y + offsets_y[i]) actually
-                            // is pixel (prev_actual_x, prev_actual_y) in tile
-                            // prev_tiles[prev_tile_id].
-                            mi::math::Color prev_color;
-                            prev_tiles[prev_tile_id]->get_pixel(
-                                prev_actual_x, prev_actual_y, &prev_color.r);
-                            color += prev_color;
-                            nr_of_summands += 1;
-                        }
-
-                        color /= static_cast<mi::Float32>( nr_of_summands);
-                        tile->set_pixel( x, y, &color.r);
-                    }
-            }
-
-    m_levels[level] = canvas;
-    m_last_created_level = level;
 }
 
 } // namespace IMAGE

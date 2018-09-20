@@ -64,6 +64,7 @@ namespace llvm {
 namespace mi {
 namespace mdl {
 
+class Bsdf_component_info;
 class DAG_call;
 class DAG_node;
 class Function_context;
@@ -312,6 +313,10 @@ public:
         FL_HAS_OBJ_ID     = 1 << 6,   ///< Has object_id parameter.
         FL_HAS_TRANSFORMS = 1 << 7,   ///< Has transform (matrix) parameters
         FL_UNALIGNED_RET  = 1 << 8,   ///< The address for the struct return is might be unaligned.
+        FL_HAS_EXEC_CTX   = 1 << 9,   ///< The state, resource_data, exc_state, captured_arguments
+                                      ///< and lambda_results parameter is provided in an execution
+                                      ///< context parameter. The other flags should also be set
+                                      ///< to indicate, that the information is available.
     };  // can be or'ed
 
     typedef unsigned Flags;
@@ -380,6 +385,10 @@ public:
     /// Returns true if the current function uses struct return.
     bool is_sret_return() const { return (u.f.m_flags & FL_SRET) != 0; }
 
+    /// Returns true if the current function has an execution context parameter
+    /// containing the state, resource_data, exc_state, lambda_results and captured arguments.
+    bool has_exec_ctx_param() const { return (u.f.m_flags & FL_HAS_EXEC_CTX) != 0; }
+
     /// Returns true if the current function has a state parameter.
     bool has_state_param() const { return (u.f.m_flags & FL_HAS_STATE) != 0; }
 
@@ -428,11 +437,14 @@ public:
     size_t get_func_param_offset() const {
         size_t ofs = 0;
         if (u.f.m_flags & FL_SRET)           ++ofs;
-        if (u.f.m_flags & FL_HAS_STATE)      ++ofs;
-        if (u.f.m_flags & FL_HAS_RES)        ++ofs;
-        if (u.f.m_flags & FL_HAS_EXC)        ++ofs;
-        if (u.f.m_flags & FL_HAS_CAP_ARGS)   ++ofs;
-        if (u.f.m_flags & FL_HAS_LMBD_RES)   ++ofs;
+        if (u.f.m_flags & FL_HAS_EXEC_CTX) ++ofs;
+        else {
+            if (u.f.m_flags & FL_HAS_STATE)      ++ofs;
+            if (u.f.m_flags & FL_HAS_RES)        ++ofs;
+            if (u.f.m_flags & FL_HAS_EXC)        ++ofs;
+            if (u.f.m_flags & FL_HAS_CAP_ARGS)   ++ofs;
+            if (u.f.m_flags & FL_HAS_LMBD_RES)   ++ofs;
+        }
         if (u.f.m_flags & FL_HAS_OBJ_ID)     ++ofs;
         if (u.f.m_flags & FL_HAS_TRANSFORMS) ofs += 2;
         return ofs;
@@ -689,6 +701,7 @@ class LLVM_code_generator
     friend class MDL_runtime_creator;
     friend class Code_generator_jit;
     friend class Function_context;
+    friend class Bsdf_component_info;
 public:
     static char const MESSAGE_CLASS = 'J';
 
@@ -1308,6 +1321,13 @@ private:
         llvm::Function          *func,
         LLVM_context_data const *ctx);
 
+    /// Optimize an LLVM function.
+    ///
+    /// \param func  The LLVM function to optimize.
+    ///
+    /// \return true if function was modified, false otherwise
+    bool optimize(llvm::Function *func);
+
     /// Optimize LLVM code.
     ///
     /// \param module  The LLVM module to optimize.
@@ -1719,9 +1739,19 @@ private:
         Function_context &ctx,
         ICall_expr const *call_expr);
 
+    /// Returns the BSDF function name suffix for the current distribution function state.
+    static char const *get_dist_func_state_suffix(Distribution_function_state state);
 
     /// Returns the BSDF function name suffix for the current distribution function state.
-    char const *get_dist_func_state_suffix();
+    char const *get_dist_func_state_suffix() const
+    {
+        return get_dist_func_state_suffix(m_dist_func_state);
+    }
+
+    /// Returns the distribution function state requested by the given call.
+    ///
+    /// \param call  the LLVM call instruction calling a BSDF member function
+    Distribution_function_state get_dist_func_state_from_call(llvm::CallInst *call);
 
     /// Get the BSDF function for the given semantics and the current distribution function state
     /// from the BSDF library.
@@ -1749,15 +1779,6 @@ private:
         size_t           lambda_index,
         llvm::Type       *expected_type);
 
-    /// Generates a switch function calling the BSDF function identified by the last parameter
-    /// with the provided arguments.
-    ///
-    /// \param funcs  the function array
-    ///
-    /// \returns the generated switch function
-    llvm::Function *generate_bsdf_switch_func(
-        llvm::ArrayRef<llvm::Function *> const &funcs);
-
     /// Get the BSDF parameter ID metadata for an instruction.
     ///
     /// \param inst  the instruction for which the metadata should be retrieved
@@ -1766,21 +1787,18 @@ private:
     int get_metadata_bsdf_param_id(llvm::Instruction *inst);
 
     /// Rewrite all usages of a BSDF component variable using the given weight array and the
-    /// BSDF function, which can either be a switch function depending on the array index
-    /// or the same function for all indices.
+    /// BSDF component information.
     ///
     /// \param ctx             the function context
     /// \param inst            the alloca instruction representing the array parameter
     /// \param weight_array    the array containing the component weights, can be local or global
-    /// \param bsdf_func       the bsdf function to use for the replacements
-    /// \param is_switch_func  true, if bsdf_func is a switch function with index as last parameter
+    /// \param comp_info       the bsdf component information to use for the replacements
     /// \param delete_list     list of instructions to be deleted when function is fully processed
     void rewrite_bsdf_component_usages(
         Function_context                           &ctx,
         llvm::AllocaInst                           *inst,
         llvm::Value                                *weight_array,
-        llvm::Function                             *bsdf_func,
-        bool                                       is_switch_func,
+        Bsdf_component_info                        &comp_info,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
     /// Rewrite the address of a memcpy from a color_bsdf_component to the given weight array.
@@ -2314,6 +2332,12 @@ private:
     /// \param compiler  the MDL compiler
     void create_bsdf_function_types();
 
+    /// Create the EDF function types using the EDF data types from the already linked libbsdf
+    /// module.
+    ///
+    /// \param compiler  the MDL compiler
+    void create_edf_function_types();
+
     /// Load the libbsdf LLVM module.
     ///
     /// \param llvm_context  the context for the loader
@@ -2720,6 +2744,24 @@ private:
 
     /// Return type of the BSDF PDF function.
     llvm::Type *m_type_bsdf_pdf_data;
+
+    /// Function type of the EDF sample function.
+    llvm::FunctionType *m_type_edf_sample_func;
+
+    /// Return type of the EDF sample function.
+    llvm::Type *m_type_edf_sample_data;
+
+    /// Function type of the EDF evaluate function.
+    llvm::FunctionType *m_type_edf_evaluate_func;
+
+    /// Return type of the EDF evaluate function.
+    llvm::Type *m_type_edf_evaluate_data;
+
+    /// Function type of the EDF pdf function.
+    llvm::FunctionType *m_type_edf_pdf_func;
+
+    /// Return type of the EDF PDF function.
+    llvm::Type *m_type_edf_pdf_data;
 
     /// The LLVM metadata kind ID for the BSDF parameter information attached to allocas.
     unsigned m_bsdf_param_metadata_id;

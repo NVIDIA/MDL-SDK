@@ -501,6 +501,60 @@ inline bool is_df_semantics(IDefinition::Semantics sema)
         sema <= IDefinition::DS_INTRINSIC_DF_LAST;
 }
 
+/// Check if the given semantics is an elemental distribution function (i.e. not a modifier or
+/// combiner).
+inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
+{
+    if (!is_df_semantics(sema)) return false;
+
+    switch (sema) {
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_EDF:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
+    case IDefinition::DS_INTRINSIC_DF_SPOT_EDF:
+    case IDefinition::DS_INTRINSIC_DF_ANISOTROPIC_VDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+        return true;
+
+    case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
+    case IDefinition::DS_INTRINSIC_DF_TINT:
+    case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+
+    case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_POWER:
+    case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:
+    case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
+    case IDefinition::DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID:
+        return false;
+
+    default:
+        return false;
+    }
+}
+
+
 /// Check if the given semantics is a generated DAG intrinsic.
 ///
 /// \param sema  the semantics

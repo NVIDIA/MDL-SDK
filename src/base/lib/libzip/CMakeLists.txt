@@ -2,6 +2,14 @@
 set(PROJECT_NAME base-lib-libzip)
 
 # collect sources
+set(PROJECT_HEADERS
+    "compat.h"
+    "config.h"
+    "zip.h"
+    "zipconf.h"
+    "zipint.h"
+    )
+
 set(PROJECT_SOURCES 
     "zip_add.c"
     "zip_add_dir.c"
@@ -109,6 +117,7 @@ set(PROJECT_SOURCES
     "zip_unchange_archive.c"
     "zip_unchange_data.c"
     "zip_utf-8.c"
+    ${PROJECT_HEADERS}
     )
 
 # platform depenedent sources
@@ -118,6 +127,7 @@ if(WIN32)
         "zip_source_win32utf8.c"
         "zip_source_win32w.c"
         "mkstemp.c"
+        "zipwin32.h"
         )
 else()
     list(APPEND PROJECT_SOURCES

@@ -70,18 +70,18 @@ struct RGB_color {
 };
 
 #if (defined(MDL_CORE_TARGET_CODE_USE_CUDA_TYPES) || defined(__CUDA_ARCH__))
-/// Inside CUDA, remap the CUDA floatX type to our Target_floatX types.
+/// Inside CUDA, remap the CUDA floatX type to our tct_floatX types.
 /// \{
-typedef float2 Target_float2;
-typedef float3 Target_float3;
-typedef float4 Target_float4;
+typedef float2 tct_float2;
+typedef float3 tct_float3;
+typedef float4 tct_float4;
 /// \}
 #else
-/// On native code, use our simple struct type to represent Target_floatX types.
+/// On native code, use our simple struct type to represent tct_floatX types.
 /// \{
-typedef Float2_struct Target_float2;
-typedef Float3_struct Target_float3;
-typedef Float4_struct Target_float4;
+typedef Float2_struct tct_float2;
+typedef Float3_struct tct_float3;
+typedef Float4_struct tct_float4;
 /// \}
 #endif
 
@@ -101,7 +101,7 @@ typedef Float4_struct Target_float4;
 struct Shading_state_environment {
     /// The result of state::direction().
     /// It represents the lookup direction for the environment lookup.
-    Target_float3 direction;
+    tct_float3 direction;
 };
 
 /// The MDL material state structure inside MDL Core is a representation of the renderer state
@@ -134,15 +134,15 @@ struct Shading_state_material {
     /// It represents the shading normal as determined by the renderer.
     /// This field will be updated to the result of \c "geometry.normal" by BSDF init functions,
     /// if requested during code generation.
-    Target_float3       normal;
+    tct_float3          normal;
 
     /// The result of state::geometry_normal().
     /// It represents the geometry normal as determined by the renderer.
-    Target_float3       geom_normal;
+    tct_float3          geom_normal;
 
     /// The result of state::position().
     /// It represents the position where the material should be evaluated.
-    Target_float3       position;
+    tct_float3          position;
 
     /// The result of state::animation_time().
     /// It represents the time of the current sample in seconds.
@@ -151,26 +151,26 @@ struct Shading_state_material {
     /// An array containing the results of state::texture_coordinate(i).
     /// The i-th entry represents the texture coordinates of the i-th texture space at the
     /// current position.
-    Target_float3 const *text_coords;
+    tct_float3 const    *text_coords;
 
     /// An array containing the results of state::texture_tangent_u(i).
     /// The i-th entry represents the texture tangent vector of the i-th texture space at the
     /// current position, which points in the direction of the projection of the tangent to the
     /// positive u axis of this texture space onto the plane defined by the original
     /// surface normal.
-    Target_float3 const  *tangent_u;
+    tct_float3 const    *tangent_u;
 
     /// An array containing the results of state::texture_tangent_v(i).
     /// The i-th entry represents the texture bitangent vector of the i-th texture space at the
     /// current position, which points in the general direction of the positive v axis of this
     /// texture space, but is orthogonal to both the original surface normal and the tangent
     /// of this texture space.
-    Target_float3 const  *tangent_v;
+    tct_float3 const    *tangent_v;
 
     /// The texture results lookup table.
     /// Values will be modified by BSDF init functions to avoid duplicate texture fetches
     /// and duplicate calculation of values.
-    Target_float4 const  *text_results;
+    tct_float4 const    *text_results;
 
     /// A pointer to a read-only data segment.
     /// For "PTX" and "native" JIT backend:
@@ -185,19 +185,19 @@ struct Shading_state_material {
     ///   this may require copying the data to the GPU.
     ///
     /// For other backends, this should be NULL.
-    unsigned char const *ro_data_segment;
+    char const          *ro_data_segment;
 
     // these fields are used only if the uniform state is included
 
     /// A 4x4 transformation matrix transforming from world to object coordinates.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    Target_float4 const  *world_to_object;
+    tct_float4 const    *world_to_object;
 
     /// A 4x4 transformation matrix transforming from object to world coordinates.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    Target_float4 const  *object_to_world;
+    tct_float4 const    *object_to_world;
 
     /// The result of state::object_id().
     /// It is an application-specific identifier of the hit object as provided in a scene.
@@ -240,15 +240,15 @@ struct Shading_state_material_bitangent {
     /// It represents the shading normal as determined by the renderer.
     /// This field will be updated to the result of \c "geometry.normal" by BSDF init functions,
     /// if requested during code generation.
-    Target_float3       normal;
+    tct_float3          normal;
 
     /// The result of state::geometry_normal().
     /// It represents the geometry normal as determined by the renderer.
-    Target_float3       geom_normal;
+    tct_float3          geom_normal;
 
     /// The result of state::position().
     /// It represents the position where the material should be evaluated.
-    Target_float3       position;
+    tct_float3          position;
 
     /// The result of state::animation_time().
     /// It represents the time of the current sample in seconds.
@@ -257,19 +257,19 @@ struct Shading_state_material_bitangent {
     /// An array containing the results of state::texture_coordinate(i).
     /// The i-th entry represents the texture coordinates of the i-th texture space at the
     /// current position.
-    Target_float3 const *text_coords;
+    tct_float3 const    *text_coords;
 
     /// An array containing the combined results of state::texture_tangent[_u|_v](i).
     /// The i-th entry represents the texture tangent vector of the i-th texture space at the
     /// current position, which points in the direction of the projection of the tangent to the
     /// positive u/v axis of this texture space onto the plane defined by the original
     /// surface normal.
-    Target_float4 const  *tangents_bitangentssign;
+    tct_float4 const    *tangents_bitangentssign;
 
     /// The texture results lookup table.
     /// Values will be modified by BSDF init functions to avoid duplicate texture fetches
     /// and duplicate calculation of values.
-    Target_float4 const  *text_results;
+    tct_float4 const    *text_results;
 
     /// A pointer to a read-only data segment.
     /// For "PTX" and "native" JIT backend:
@@ -284,19 +284,19 @@ struct Shading_state_material_bitangent {
     ///   this may require copying the data to the GPU.
     ///
     /// For other backends, this should be NULL.
-    unsigned char const *ro_data_segment;
+    char const          *ro_data_segment;
 
     // these fields are used only if the uniform state is included
 
     /// A 4x4 transformation matrix transforming from world to object coordinates.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    Target_float4 const  *world_to_object;
+    tct_float4 const    *world_to_object;
 
     /// A 4x4 transformation matrix transforming from object to world coordinates.
     /// It is used by the state::transform_*() methods.
     /// This field is only used if the uniform state is included.
-    Target_float4 const  *object_to_world;
+    tct_float4 const    *object_to_world;
 
     /// The result of state::object_id().
     /// It is an application-specific identifier of the hit object as provided in a scene.
@@ -443,38 +443,38 @@ enum Bsdf_event_type {
 /// Input and output structure for BSDF sampling data.
 struct Bsdf_sample_data {
     // Input fields
-    Target_float3    ior1;           ///< IOR current medium
-    Target_float3    ior2;           ///< IOR other side
-    Target_float3    k1;             ///< outgoing direction
-    Target_float3    xi;             ///< pseudo-random sample number
+    tct_float3      ior1;           ///< IOR current medium
+    tct_float3      ior2;           ///< IOR other side
+    tct_float3      k1;             ///< outgoing direction
+    tct_float3      xi;             ///< pseudo-random sample number
 
     // Output fields
-    Target_float3   k2;             ///< incoming direction
+    tct_float3      k2;             ///< incoming direction
     float           pdf;            ///< pdf (non-projected hemisphere)
-    Target_float3   bsdf_over_pdf;  ///< bsdf * dot(normal, k2) / pdf
+    tct_float3      bsdf_over_pdf;  ///< bsdf * dot(normal, k2) / pdf
     Bsdf_event_type event_type;     ///< the type of event for the generated sample
 };
 
 /// Input and output structure for BSDF evaluation data.
 struct Bsdf_evaluate_data {
     // Input fields
-    Target_float3    ior1;           ///< IOR current medium
-    Target_float3    ior2;           ///< IOR other side
-    Target_float3    k1;             ///< outgoing direction
-    Target_float3    k2;             ///< incoming direction
+    tct_float3      ior1;           ///< IOR current medium
+    tct_float3      ior2;           ///< IOR other side
+    tct_float3      k1;             ///< outgoing direction
+    tct_float3      k2;             ///< incoming direction
 
     // Output fields
-    Target_float3   bsdf;           ///< bsdf * dot(normal, k2)
+    tct_float3      bsdf;           ///< bsdf * dot(normal, k2)
     float           pdf;            ///< pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
 struct Bsdf_pdf_data {
     // Input fields
-    Target_float3    ior1;           ///< IOR current medium
-    Target_float3    ior2;           ///< IOR other side
-    Target_float3    k1;             ///< outgoing direction
-    Target_float3    k2;             ///< incoming direction
+    tct_float3      ior1;           ///< IOR current medium
+    tct_float3      ior2;           ///< IOR other side
+    tct_float3      k1;             ///< outgoing direction
+    tct_float3      k2;             ///< incoming direction
 
     // Output fields
     float           pdf;            ///< pdf (non-projected hemisphere)
@@ -548,6 +548,8 @@ typedef void (Lambda_generic_function)(
     void const             *exception_state,
     char const             *arg_block_data);
 
+typedef Lambda_generic_function Material_expr_function;
+
 /// Signature of the initialization function for material distribution functions created via
 /// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu(),
 /// #mi::mdl::ICode_generator_jit::compile_distribution_function_gpu() and
@@ -613,6 +615,123 @@ typedef void (Bsdf_evaluate_function)(
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_pdf_function)(
     Bsdf_pdf_data                *data,
+    Shading_state_material const *state,
+    Resource_data const          *res_data,
+    void const                   *exception_state,
+    char const                   *arg_block_data);
+
+
+/// The type of events created by EDF importance sampling.
+enum Edf_event_type
+{
+    EDF_EVENT_NONE = 0,
+    EDF_EVENT_EMISSION = 1,
+
+    BSF_EVENT_FORCE_32_BIT = 0xffffffffU
+};
+
+
+/// Input and output structure for EDF sampling data.
+struct Edf_sample_data
+{
+    // Input fields
+    tct_float3      xi;             ///< pseudo-random sample number
+
+    // Output fields
+    tct_float3      k1;             /// < outgoing direction
+    float           pdf;            /// < pdf (non-projected hemisphere)
+    tct_float3      edf_over_pdf;   /// < edf * dot(normal,k1) / pdf
+    Edf_event_type  event_type;
+};
+
+/// Input and output structure for EDF evaluation data.
+struct Edf_evaluate_data
+{
+    // Input fields
+    tct_float3      k1;            ///< outgoing direction
+
+    // Output fields
+    float           cos;            ///< dot(normal, k1)
+    tct_float3      edf;            ///< edf
+    float           pdf;            ///< pdf (non-projected hemisphere)
+};
+
+/// Input and output structure for EDF PDF calculation data.
+struct Edf_pdf_data
+{
+    // Input fields
+    tct_float3      k1;             ///< outgoing direction
+
+    // Output fields
+    float           pdf;            ///< pdf (non-projected hemisphere)
+};
+
+
+/// Signature of the initialization function for material distribution functions created via
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu(),
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_gpu() and
+/// #mi::mdl::ILink_unit::add() for distribution functions.
+///
+/// This function updates the normal field of the shading state with the result of
+/// \c "geometry.normal" and, if the \c "num_texture_results" backend option has been set to
+/// non-zero, fills the text_results fields of the state.
+///
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_init_function)(
+    Shading_state_material *state,
+    Resource_data const    *res_data,
+    void const             *exception_state,
+    char const             *arg_block_data);
+
+/// Signature of the importance sampling function for material distribution functions created via
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu() and
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_gpu() and
+/// #mi::mdl::ILink_unit::add() for distribution functions.
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_sample_function)(
+    Edf_sample_data             *data,
+    Shading_state_material const *state,
+    Resource_data const          *res_data,
+    void const                   *exception_state,
+    char const                   *arg_block_data);
+
+/// Signature of the evaluation function for material distribution functions created via
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu() and
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_gpu() and
+/// #mi::mdl::ILink_unit::add() for distribution functions.
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_evaluate_function)(
+    Edf_evaluate_data           *data,
+    Shading_state_material const *state,
+    Resource_data const          *res_data,
+    void const                   *exception_state,
+    char const                   *arg_block_data);
+
+/// Signature of the probability density function for material distribution functions created via
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu() and
+/// #mi::mdl::ICode_generator_jit::compile_distribution_function_gpu() and
+/// #mi::mdl::ILink_unit::add() for distribution functions.
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_pdf_function)(
+    Edf_pdf_data                *data,
     Shading_state_material const *state,
     Resource_data const          *res_data,
     void const                   *exception_state,

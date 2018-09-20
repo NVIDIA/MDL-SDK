@@ -223,12 +223,12 @@ public:
         return m_own_arg_blocks.size();
     }
 
-    // Get the argument block of the i'th distribution function.
-    // If the distribution function has no target argument block, size_t(~0) is returned.
-    size_t get_df_argument_block_index(size_t i) const
+    // Get the argument block of the i'th BSDF.
+    // If the BSDF has no target argument block, size_t(~0) is returned.
+    size_t get_bsdf_argument_block_index(size_t i) const
     {
-        if (i >= m_df_arg_block_indices.size()) return size_t(~0);
-        return m_df_arg_block_indices[i];
+        if (i >= m_bsdf_arg_block_indices.size()) return size_t(~0);
+        return m_bsdf_arg_block_indices[i];
     }
 
     // Get a writable copy of the i'th target argument block.
@@ -275,8 +275,8 @@ private:
     // List of all local, writable copies of the target argument blocks.
     std::vector<mi::base::Handle<mi::neuraylib::ITarget_argument_block> > m_own_arg_blocks;
 
-    // List of argument block indices per material df.
-    std::vector<size_t> m_df_arg_block_indices;
+    // List of argument block indices per material BSDF.
+    std::vector<size_t> m_bsdf_arg_block_indices;
 
     // List of all target argument block layouts.
     std::vector<mi::base::Handle<mi::neuraylib::ITarget_value_layout const> > m_arg_block_layouts;
@@ -528,13 +528,17 @@ bool Material_gpu_context::prepare_target_code_data(
             mi::base::make_handle(target_code->get_argument_block_layout(i)));
     }
 
-    // Collect all target argument block indices of the distribution functions.
+    // Collect all target argument block indices of the BSDFs.
     for (mi::Size i = 0, num = target_code->get_callable_function_count(); i < num; ++i) {
         mi::neuraylib::ITarget_code::Function_kind kind =
             target_code->get_callable_function_kind(i);
-        if (kind != mi::neuraylib::ITarget_code::FK_DF_INIT) continue;
+        mi::neuraylib::ITarget_code::Distribution_kind df_kind =
+            target_code->get_callable_function_distribution_kind(i);
+        if (kind != mi::neuraylib::ITarget_code::FK_DF_INIT ||
+                df_kind != mi::neuraylib::ITarget_code::DK_BSDF)
+            continue;
 
-        m_df_arg_block_indices.push_back(
+        m_bsdf_arg_block_indices.push_back(
             size_t(target_code->get_callable_function_argument_block_index(i)));
     }
 
@@ -561,23 +565,22 @@ void Material_gpu_context::update_device_argument_block(size_t i)
 //------------------------------------------------------------------------------
 
 class Material_compiler {
-private:
+public:
+    // Constructor.
+    Material_compiler(
+        mi::neuraylib::IMdl_compiler* mdl_compiler,
+        mi::neuraylib::ITransaction* transaction,
+        unsigned num_texture_results);
+
     // Helper function to extract the module name from a fully-qualified material name.
     static std::string get_module_name(const std::string& material_name);
 
     // Helper function to extract the material name from a fully-qualified material name.
     static std::string get_material_name(const std::string& material_name);
 
-    // Creates an instance of the given material.
-    mi::neuraylib::IMaterial_instance* create_material_instance(
-        const std::string& material_name);
+    // Return the list of all material names in the given MDL module.
+    std::vector<std::string> get_material_names(const std::string& module_name);
 
-    // Compiles the given material instance in the given compilation modes.
-    mi::neuraylib::ICompiled_material* compile_material_instance(
-        mi::neuraylib::IMaterial_instance* material_instance,
-        bool class_compilation);
-
-public:
     // Add a subexpression of a given material to the link unit.
     // path is the path of the sub-expression.
     // fname is the function name in the generated code.
@@ -598,14 +601,21 @@ public:
         const char* base_fname,
         bool class_compilation=false);
 
+    // Add (multiple) MDL distribution function and expressions of a material to this link unit.
+    // For each distribution function it results in four functions, suffixed with \c "_init",
+    // \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a
+    // a list of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    // of the expression that should be translated. After calling this function, each element of
+    // the list will contain information for later usage in the application,
+    // e.g., the \c argument_block_index and the \c function_index.
+    bool add_material(
+        const std::string& material_name,
+        mi::neuraylib::Target_function_description* function_descriptions,
+        mi::Size description_count,
+        bool class_compilation = false);
+
     // Generates CUDA PTX target code for the current link unit.
     mi::base::Handle<const mi::neuraylib::ITarget_code> generate_cuda_ptx();
-
-    // Constructor.
-    Material_compiler(
-        mi::neuraylib::IMdl_compiler* mdl_compiler,
-        mi::neuraylib::ITransaction* transaction,
-        unsigned num_texture_results);
 
     // Get the list of used material definitions.
     // There will be one entry per add_* call.
@@ -623,6 +633,16 @@ public:
     }
 
 private:
+    // Creates an instance of the given material.
+    mi::neuraylib::IMaterial_instance* create_material_instance(
+        const std::string& material_name);
+
+    // Compiles the given material instance in the given compilation modes.
+    mi::neuraylib::ICompiled_material* compile_material_instance(
+        mi::neuraylib::IMaterial_instance* material_instance,
+        bool class_compilation);
+
+private:
     mi::base::Handle<mi::neuraylib::IMdl_compiler> m_mdl_compiler;
     mi::base::Handle<mi::neuraylib::IMdl_backend>  m_be_cuda_ptx;
     mi::base::Handle<mi::neuraylib::ITransaction>  m_transaction;
@@ -632,6 +652,37 @@ private:
     std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> > m_material_defs;
     std::vector<mi::base::Handle<mi::neuraylib::ICompiled_material> > m_compiled_materials;
 };
+
+// Constructor.
+Material_compiler::Material_compiler(
+    mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::ITransaction* transaction,
+    unsigned num_texture_results)
+    : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
+    , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
+    , m_transaction(mi::base::make_handle_dup(transaction))
+    , m_link_unit()
+{
+    check_success(m_be_cuda_ptx->set_option("num_texture_spaces", "1") == 0);
+
+    // Option "enable_ro_segment": Default is disabled.
+    // If you have a lot of big arrays, enabling this might speed up compilation.
+    // check_success(m_be_cuda_ptx->set_option("enable_ro_segment", "on") == 0);
+
+    // Option "tex_lookup_call_mode": Default mode is vtable mode.
+    // You can switch to the slower vtable mode by commenting out the next line.
+    check_success(m_be_cuda_ptx->set_option("tex_lookup_call_mode", "direct_call") == 0);
+
+    // Option "num_texture_results": Default is 0.
+    // Set the size of a renderer provided array for texture results in the MDL SDK state in number
+    // of float4 elements processed by the init() function.
+    check_success(m_be_cuda_ptx->set_option(
+        "num_texture_results",
+        to_string(num_texture_results).c_str()) == 0);
+
+    // After we set the options, we can create the link unit
+    m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, NULL));
+}
 
 // Helper function to extract the module name from a fully-qualified material name.
 std::string Material_compiler::get_module_name(const std::string& material_name)
@@ -647,6 +698,24 @@ std::string Material_compiler::get_material_name(const std::string& material_nam
     if (p == std::string::npos)
         return material_name;
     return material_name.substr(p + 2, material_name.size() - p);
+}
+
+// Return the list of all material names in the given MDL module.
+std::vector<std::string> Material_compiler::get_material_names(const std::string& module_name)
+{
+    check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str()) >= 0);
+
+    const char *prefix = (module_name.find("::") == 0) ? "mdl" : "mdl::";
+
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        m_transaction->access<mi::neuraylib::IModule>((prefix + module_name).c_str()));
+
+    mi::Size num_materials = module->get_material_count();
+    std::vector<std::string> material_names(num_materials);
+    for (mi::Size i = 0; i < num_materials; ++i) {
+        material_names[i] = module->get_material(i);
+    }
+    return material_names;
 }
 
 // Creates an instance of the given material.
@@ -755,36 +824,38 @@ bool Material_compiler::add_material_df(
         compiled_material.get(), path, base_fname, /*include_geometry_normal=*/true) >= 0;
 }
 
-// Constructor.
-Material_compiler::Material_compiler(
-    mi::neuraylib::IMdl_compiler* mdl_compiler,
-    mi::neuraylib::ITransaction* transaction,
-    unsigned num_texture_results)
-    : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
-    , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
-    , m_transaction(mi::base::make_handle_dup(transaction))
-    , m_link_unit()
+// Add (multiple) MDL distribution function and expressions of a material to this link unit.
+// For each distribution function it results in four functions, suffixed with \c "_init",
+// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a
+// a list of \c Target_function_description. Each of them needs to define the \c path, the root
+// of the expression that should be translated. After calling this function, each element of
+// the list will contain information for later usage in the application,
+// e.g., the \c argument_block_index and the \c function_index.
+bool Material_compiler::add_material(
+    const std::string& material_name,
+    mi::neuraylib::Target_function_description* function_descriptions,
+    mi::Size description_count,
+    bool class_compilation)
 {
-    check_success(m_be_cuda_ptx->set_option("num_texture_spaces", "1") == 0);
+    // Load the given module and create a material instance
+    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
+        create_material_instance(material_name.c_str()));
 
-    // Option "enable_ro_segment": Default is disabled.
-    // If you have a lot of big arrays, enabling this might speed up compilation.
-    // check_success(m_be_cuda_ptx->set_option("enable_ro_segment", "on") == 0);
+    // Compile the material instance in instance compilation mode
+    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
+        compile_material_instance(material_instance.get(), class_compilation));
 
-    // Option "tex_lookup_call_mode": Default mode is vtable mode.
-    // You can switch to the slower vtable mode by commenting out the next line.
-    check_success(m_be_cuda_ptx->set_option("tex_lookup_call_mode", "direct_call") == 0);
+    bool res = m_link_unit->add_material(
+        compiled_material.get(), function_descriptions, description_count,
+        /*include_geometry_normal=*/true) >= 0;
 
-    // Option "num_texture_results": Default is 0.
-    // Set the size of a renderer provided array for texture results in the MDL SDK state in number
-    // of float4 elements processed by the init() function.
-    check_success(m_be_cuda_ptx->set_option(
-        "num_texture_results",
-        to_string(num_texture_results).c_str()) == 0);
+    if (res)
+        for (size_t i = 0; i < description_count; ++i)
+            function_descriptions[i].argument_block_index++;  // 1-based in the example
 
-    // After we set the options, we can create the link unit
-    m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, NULL));
+    return res;
 }
+
 
 //------------------------------------------------------------------------------
 //
@@ -832,62 +903,48 @@ std::string generate_func_array_ptx(
     // Also used for "empty" function arrays.
     src += ".func dummy_func() { ret; }\n";
 
-    const char *suffixes[5] = {"", "_init", "_evaluate", "_sample", "_pdf"};
-    std::string kind_funcs[5];
-    unsigned    expr_count = 0, df_count = 0;
-    std::string expr_tc_indices, df_tc_indices;
-    std::string expr_block_indices, df_block_indices;
+    std::string tc_offsets;
+    std::string function_names;
+    std::string tc_indices;
+    std::string ab_indices;
+    unsigned f_count = 0;
 
     // Iterate over all target codes
-    for (size_t i = 0, num = target_codes.size(); i < num; ++i) {
-        mi::base::Handle<const mi::neuraylib::ITarget_code> const &target_code = target_codes[i];
+    for (size_t tc_index = 0, num = target_codes.size(); tc_index < num; ++tc_index)
+    {
+        mi::base::Handle<const mi::neuraylib::ITarget_code> const &target_code = 
+            target_codes[tc_index];
+
+        // in case of multiple target codes, we need to address the functions by a pair of 
+        // target_code_index and function_index.
+        // the elements in the resulting function array can then be index by offset + func_index.
+        if(!tc_offsets.empty())
+            tc_offsets += ", ";
+        tc_offsets += to_string(f_count);
 
         // Collect all names and prototypes of callable functions within the current target code
         for (size_t func_index = 0, func_count = target_code->get_callable_function_count();
-                func_index < func_count; ++func_index) {
-            unsigned kind_index;
-            switch (target_code->get_callable_function_kind(func_index)) {
-                case mi::neuraylib::ITarget_code::FK_LAMBDA:      kind_index = 0; break;
-                case mi::neuraylib::ITarget_code::FK_DF_INIT:     kind_index = 1; break;
-                case mi::neuraylib::ITarget_code::FK_DF_EVALUATE: kind_index = 2; break;
-                case mi::neuraylib::ITarget_code::FK_DF_SAMPLE:   kind_index = 3; break;
-                case mi::neuraylib::ITarget_code::FK_DF_PDF:      kind_index = 4; break;
-                default:
-                    std::cerr << "Unsupported callable function kind: "
-                        << int(target_code->get_callable_function_kind(func_index)) << std::endl;
-                    return "";
+             func_index < func_count; ++func_index)
+        {
+            // add to function list
+            if (!tc_indices.empty())
+            {
+                tc_indices += ", ";
+                function_names += ", ";
+                ab_indices += ", ";
             }
 
-            // Add function name to per kind list
-            if (!kind_funcs[kind_index].empty())
-                kind_funcs[kind_index] += ", ";
-            kind_funcs[kind_index] += target_code->get_callable_function(func_index);
+            // target code index in case of multiple link units
+            tc_indices += to_string(tc_index);
+
+            // name of the function
+            function_names += target_code->get_callable_function(func_index);
 
             // Get argument block index and translate to 1 based list index (-> 0 = not-used)
-            mi::Size arg_block_index = target_code->get_callable_function_argument_block_index(
-                func_index);
-            if (arg_block_index == mi::Size(~0)) arg_block_index = 0;
-            else ++arg_block_index;
-
-            // Add indices to the corresponding list
-            if (kind_index == 0) {
-                if (!expr_tc_indices.empty()) expr_tc_indices += ", ";
-                expr_tc_indices += to_string(i);
-
-                if (!expr_block_indices.empty()) expr_block_indices += ", ";
-                expr_block_indices += to_string(arg_block_index);
-
-                ++expr_count;
-            } else if (kind_index == 1) {
-                if (!df_tc_indices.empty()) df_tc_indices += ", ";
-                df_tc_indices += to_string(i);
-
-                if (!df_block_indices.empty()) df_block_indices += ", ";
-                df_block_indices += to_string(arg_block_index);
-
-                ++df_count;
-            }
-
+            mi::Size ab_index = target_code->get_callable_function_argument_block_index(func_index);
+            ab_indices += to_string(ab_index == mi::Size(~0) ? 0 : (ab_index + 1));
+            f_count++;
+            
             // Add prototype declaration
             src += target_code->get_callable_function_prototype(
                 func_index, mi::neuraylib::ITarget_code::SL_PTX);
@@ -895,26 +952,18 @@ std::string generate_func_array_ptx(
         }
     }
 
-    // Create arrays for all function kinds
-    for (unsigned kind_index = 0; kind_index < 5; ++kind_index) {
-        if (kind_index == 0) {
-            src += std::string(".visible .const .align 4 .u32 mdl_expr_functions_count = ")
-                + to_string(expr_count) + ";\n";
-            print_array_u32(src, "mdl_expr_target_code_indices", expr_count, expr_tc_indices);
-            print_array_u32(src, "mdl_expr_arg_block_indices", expr_count, expr_block_indices);
-        } else if (kind_index == 1) {
-            src += std::string(".visible .const .align 4 .u32 mdl_df_functions_count = ")
-                + to_string(df_count) + ";\n";
-            print_array_u32(src, "mdl_df_target_code_indices", df_count, df_tc_indices);
-            print_array_u32(src, "mdl_df_arg_block_indices", df_count, df_block_indices);
-        }
+    // infos per target code (link unit)
+    src += std::string(".visible .const .align 4 .u32 mdl_target_code_count = ")
+        + to_string(target_codes.size()) + ";\n";
+    print_array_u32(
+        src, std::string("mdl_target_code_offsets"), unsigned(target_codes.size()), tc_offsets);
 
-        if (kind_index == 0)
-            print_array_func(src, "mdl_expr_functions", expr_count, kind_funcs[0]);
-        else
-            print_array_func(src, std::string("mdl_df_functions") + suffixes[kind_index],
-                df_count, kind_funcs[kind_index]);
-    }
+    // infos per function
+    src += std::string(".visible .const .align 4 .u32 mdl_functions_count = ") 
+        + to_string(f_count) + ";\n";
+    print_array_func(src, std::string("mdl_functions"), f_count, function_names);
+    print_array_u32(src, std::string("mdl_arg_block_indices"), f_count, ab_indices);
+    print_array_u32(src, std::string("mdl_target_code_indices"), f_count, tc_indices);
 
     return src;
 }

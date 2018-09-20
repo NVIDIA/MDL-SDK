@@ -36,6 +36,17 @@
 
 #include "texture_support_cuda.h"
 
+ // To reuse this sample code for the MDL SDK and MDL Core the corresponding namespaces are used.
+
+ // when this CUDA code is used in the context of an SDK sample.
+#if defined(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR)
+    #define BSDF_USE_MATERIAL_IOR MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR
+    using namespace mi::neuraylib;
+// when this CUDA code is used in the context of an Core sample.
+#elif defined(MDL_CORE_BSDF_USE_MATERIAL_IOR)
+    #define BSDF_USE_MATERIAL_IOR MDL_CORE_BSDF_USE_MATERIAL_IOR
+    using namespace mi::mdl;
+#endif
 
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
@@ -47,18 +58,22 @@ struct Target_code_data
 
 
 // The number of generated MDL sub-expression functions available.
-extern __constant__ unsigned int     mdl_expr_functions_count;
-
-// The target code indices for the generated MDL sub-expression functions.
-extern __constant__ unsigned int     mdl_expr_target_code_indices[];
+extern __constant__ unsigned int     mdl_functions_count;
 
 // The target argument block indices for the generated MDL sub-expression functions.
 // Note: the original indices are incremented by one to allow us to use 0 as "not-used".
-extern __constant__ unsigned int     mdl_expr_arg_block_indices[];
+extern __constant__ unsigned int     mdl_arg_block_indices[];
 
 // The function pointers of the generated MDL sub-expression functions.
-extern __constant__ mi::neuraylib::Material_expr_function *mdl_expr_functions[];
+// In this example it is assumed that only expressions are added to the link unit.
+// For a more complex use case, see also example df_cuda.
+extern __constant__ Material_expr_function *mdl_functions[];
 
+// The target code indices for the generated MDL sub-expression functions.
+// In contrast to the df_cuda sample, this example simply iterates over all generated expressions.
+// Therefore, no target_code_indices and function_indices are passed from the host side.
+// Instead, this additional array allows the mapping to target_code_index. 
+extern __constant__ unsigned int     mdl_target_code_indices[];
 
 // Identity matrix.
 __constant__ const float4 identity[4] = {
@@ -107,16 +122,16 @@ extern "C" __global__ void evaluate_mat_expr(
 
     // Assign materials in a checkerboard pattern
     unsigned int material_index =
-        ((unsigned int)(tex_x * 4) ^ (unsigned int)(tex_y * 4)) % mdl_expr_functions_count;
-    unsigned int tc_idx = mdl_expr_target_code_indices[material_index];
-    char const *arg_block = arg_block_list[mdl_expr_arg_block_indices[material_index]];
+        ((unsigned int)(tex_x * 4) ^ (unsigned int)(tex_y * 4)) % mdl_functions_count;
+    unsigned int tc_idx = mdl_target_code_indices[material_index];
+    char const *arg_block = arg_block_list[mdl_arg_block_indices[material_index]];
 
     // Setup MDL material state (with only one texture space)
     float3 texture_coords[1]    = { { tex_x, tex_y, 0.0f } };
     float3 texture_tangent_u[1] = { { 1.0f, 0.0f, 0.0f } };
     float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
-    mi::neuraylib::Shading_state_material mdl_state = {
+    Shading_state_material mdl_state = {
         /*normal=*/           { 0.0f, 0.0f, 1.0f },
         /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
         /*position=*/         { pos_x, pos_y, 0.0f },
@@ -130,13 +145,13 @@ extern "C" __global__ void evaluate_mat_expr(
         /*object_to_world=*/  identity,
         /*object_id=*/        0
     };
-
+    
     Texture_handler tex_handler;
     tex_handler.vtable       = &tex_vtable;   // only required in 'vtable' mode, otherwise NULL
     tex_handler.num_textures = tc_data_list[tc_idx].num_textures;
     tex_handler.textures     = tc_data_list[tc_idx].textures;
 
-    mi::neuraylib::Resource_data res_data_pair = { NULL, &tex_handler };
+    Resource_data res_data_pair = { NULL, &tex_handler };
 
     // Super-sample the current texel with the given number of samples
     float3 res = make_float3(0, 0, 0);
@@ -153,7 +168,7 @@ extern "C" __global__ void evaluate_mat_expr(
 
         // Add result for current sample
         float3 cur_res;
-        mdl_expr_functions[material_index](&cur_res, &mdl_state, &res_data_pair, NULL, arg_block);
+        mdl_functions[material_index](&cur_res, &mdl_state, &res_data_pair, NULL, arg_block);
         res.x += cur_res.x;
         res.y += cur_res.y;
         res.z += cur_res.z;

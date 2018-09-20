@@ -1881,12 +1881,17 @@ string DAG_builder::get_binary_name(IExpression_binary const *binary) const
                     if (name[0] == ':' && name[1] == ':') {
                         // for array index functions, overwrite any existing module prefix with
                         // the current module name to make the function accessible via Neuray DB
-                        size_t next_colon = name.find(':', 2);
-                        if (next_colon != name.npos)
-                            name = string(module->get_name(), get_allocator()) +
-                                name.substr(next_colon);
-                        else {
-                            MDL_ASSERT(!"Second colon group not found");
+                        size_t lparen = name.find('(', 2);
+                        if (lparen != name.npos) {
+                            size_t module_colon = name.rfind(':', lparen - 1);
+                            if (module_colon != name.npos)
+                                name = string(module->get_name(), get_allocator()) +
+                                    name.substr(module_colon - 1);
+                            else {
+                                MDL_ASSERT(!"Last colon group before left parenthesis not found");
+                            }
+                        } else {
+                            MDL_ASSERT(!"Left parenthesis not found");
                         }
                     }
                     else

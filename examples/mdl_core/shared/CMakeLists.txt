@@ -1,9 +1,7 @@
-cmake_minimum_required(VERSION 3.5.0 FATAL_ERROR)
-
 # name of the target and the resulting library
 set(PROJECT_NAME mdl_core_shared)
 
-# add dummy-source to create a dummy-lib that
+# add dummy-source to create a dummy-lib
 set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
 if(NOT EXISTS ${DUMMY_CPP})
     file(WRITE ${DUMMY_CPP} "")
@@ -25,9 +23,9 @@ create_from_base_preset(
 )
 
 # inject the MDL_SAMPLES_ROOT path
-target_compile_options(${PROJECT_NAME} 
+target_compile_definitions(${PROJECT_NAME} 
     PUBLIC
-        "-DMDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
+        "MDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
     )
 
 # add dependencies
