@@ -44,14 +44,14 @@ TEST_F(RegexTest, Basics) {
   EXPECT_EQ("513", Matches[2].str());
 
   Regex r4("a[^b]+b");
-  MISTD::string String="axxb";
+  std::string String="axxb";
   String[2] = '\0';
   EXPECT_FALSE(r4.match("abb"));
   EXPECT_TRUE(r4.match(String, &Matches));
   EXPECT_EQ(1u, Matches.size());
   EXPECT_EQ(String, Matches[0].str());
 
-  MISTD::string NulPattern="X[0-9]+X([a-f])?:([0-9]+)";
+  std::string NulPattern="X[0-9]+X([a-f])?:([0-9]+)";
   String="YX99a:513b";
   NulPattern[7] = '\0';
   Regex r5(NulPattern);
@@ -84,7 +84,7 @@ TEST_F(RegexTest, Backreferences) {
 }
 
 TEST_F(RegexTest, Substitution) {
-  MISTD::string Error;
+  std::string Error;
 
   EXPECT_EQ("aNUMber", Regex("[0-9]+").sub("NUM", "a1234ber"));
 
@@ -128,7 +128,7 @@ TEST_F(RegexTest, IsLiteralERE) {
 }
 
 TEST_F(RegexTest, IsValid) {
-  MISTD::string Error;
+  std::string Error;
   EXPECT_FALSE(Regex("(foo").isValid(Error));
   EXPECT_EQ("parentheses not balanced", Error);
   EXPECT_FALSE(Regex("a[b-").isValid(Error));

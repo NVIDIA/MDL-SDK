@@ -63,7 +63,7 @@ int MCRegisterInfo::getDwarfRegNum(unsigned RegNum, bool isEH) const {
   unsigned Size = isEH ? EHL2DwarfRegsSize : L2DwarfRegsSize;
 
   DwarfLLVMRegPair Key = { RegNum, 0 };
-  const DwarfLLVMRegPair *I = MISTD::lower_bound(M, M+Size, Key);
+  const DwarfLLVMRegPair *I = std::lower_bound(M, M+Size, Key);
   if (I == M+Size || I->FromReg != RegNum)
     return -1;
   return I->ToReg;
@@ -74,7 +74,7 @@ int MCRegisterInfo::getLLVMRegNum(unsigned RegNum, bool isEH) const {
   unsigned Size = isEH ? EHDwarf2LRegsSize : Dwarf2LRegsSize;
 
   DwarfLLVMRegPair Key = { RegNum, 0 };
-  const DwarfLLVMRegPair *I = MISTD::lower_bound(M, M+Size, Key);
+  const DwarfLLVMRegPair *I = std::lower_bound(M, M+Size, Key);
   assert(I != M+Size && I->FromReg == RegNum && "Invalid RegNum");
   return I->ToReg;
 }

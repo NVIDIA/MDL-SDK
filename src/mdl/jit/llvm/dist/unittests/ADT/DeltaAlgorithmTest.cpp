@@ -13,12 +13,12 @@
 #include <cstdarg>
 using namespace llvm;
 
-namespace MISTD {
+namespace std {
 
-MISTD::ostream &operator<<(MISTD::ostream &OS,
-                         const MISTD::set<unsigned> &S) {
+std::ostream &operator<<(std::ostream &OS,
+                         const std::set<unsigned> &S) {
   OS << "{";
-  for (MISTD::set<unsigned>::const_iterator it = S.begin(),
+  for (std::set<unsigned>::const_iterator it = S.begin(),
          ie = S.end(); it != ie; ++it) {
     if (it != S.begin())
       OS << ",";
@@ -39,7 +39,7 @@ class FixedDeltaAlgorithm : public DeltaAlgorithm {
 protected:
   virtual bool ExecuteOneTest(const changeset_ty &Changes) {
     ++NumTests;
-    return MISTD::includes(Changes.begin(), Changes.end(),
+    return std::includes(Changes.begin(), Changes.end(),
                          FailingSet.begin(), FailingSet.end());
   }
 
@@ -51,8 +51,8 @@ public:
   unsigned getNumTests() const { return NumTests; }
 };
 
-MISTD::set<unsigned> fixed_set(unsigned N, ...) {
-  MISTD::set<unsigned> S;
+std::set<unsigned> fixed_set(unsigned N, ...) {
+  std::set<unsigned> S;
   va_list ap;
   va_start(ap, N);
   for (unsigned i = 0; i != N; ++i)
@@ -61,21 +61,21 @@ MISTD::set<unsigned> fixed_set(unsigned N, ...) {
   return S;
 }
 
-MISTD::set<unsigned> range(unsigned Start, unsigned End) {
-  MISTD::set<unsigned> S;
+std::set<unsigned> range(unsigned Start, unsigned End) {
+  std::set<unsigned> S;
   while (Start != End)
     S.insert(Start++);
   return S;
 }
 
-MISTD::set<unsigned> range(unsigned N) {
+std::set<unsigned> range(unsigned N) {
   return range(0, N);
 }
 
 TEST(DeltaAlgorithmTest, Basic) {
   // P = {3,5,7} \in S
   //   [0, 20) should minimize to {3,5,7} in a reasonable number of tests.
-  MISTD::set<unsigned> Fails = fixed_set(3, 3, 5, 7);
+  std::set<unsigned> Fails = fixed_set(3, 3, 5, 7);
   FixedDeltaAlgorithm FDA(Fails);
   EXPECT_EQ(fixed_set(3, 3, 5, 7), FDA.Run(range(20)));
   EXPECT_GE(33U, FDA.getNumTests());

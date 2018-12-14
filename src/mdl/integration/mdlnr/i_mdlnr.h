@@ -90,16 +90,6 @@ public:
     /// The type of the callback used to register MDL types with the API.
     typedef void Register_mdl_type_with_api(const MDL::IType*);
 
-    /// Sets the callback to register MDL types with the API.
-    ///
-    /// The value \c NULL can be passed to clear the callback.
-    virtual void set_register_mdl_type_with_api_callback(Register_mdl_type_with_api* callback) = 0;
-
-    /// Returns the callback to register MDL types with the API.
-    ///
-    /// The value \c NULL is returned if the callback is not available (neuray API not present).
-    virtual Register_mdl_type_with_api* get_register_mdl_type_with_api_callback() const = 0;
-
     /// Sets whether the MDL integration is to be used by the Iray SDK or MDL SDK.
     ///
     /// Can be set only once.

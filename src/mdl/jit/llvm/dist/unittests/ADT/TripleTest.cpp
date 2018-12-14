@@ -133,13 +133,13 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::UnknownArch, T.getArch());
 }
 
-static MISTD::string Join(StringRef A, StringRef B, StringRef C) {
-  MISTD::string Str = A; Str += '-'; Str += B; Str += '-'; Str += C;
+static std::string Join(StringRef A, StringRef B, StringRef C) {
+  std::string Str = A; Str += '-'; Str += B; Str += '-'; Str += C;
   return Str;
 }
 
-static MISTD::string Join(StringRef A, StringRef B, StringRef C, StringRef D) {
-  MISTD::string Str = A; Str += '-'; Str += B; Str += '-'; Str += C; Str += '-';
+static std::string Join(StringRef A, StringRef B, StringRef C, StringRef D) {
+  std::string Str = A; Str += '-'; Str += B; Str += '-'; Str += C; Str += '-';
   Str += D; return Str;
 }
 
@@ -192,7 +192,7 @@ TEST(TripleTest, Normalization) {
       for (int OS = 1+Triple::UnknownOS; OS <= Triple::Minix; ++OS) {
         C[2] = Triple::getOSTypeName(Triple::OSType(OS));
 
-        MISTD::string E = Join(C[0], C[1], C[2]);
+        std::string E = Join(C[0], C[1], C[2]);
         EXPECT_EQ(E, Triple::normalize(Join(C[0], C[1], C[2])));
 
         EXPECT_EQ(E, Triple::normalize(Join(C[0], C[2], C[1])));
@@ -205,7 +205,7 @@ TEST(TripleTest, Normalization) {
              ++Env) {
           C[3] = Triple::getEnvironmentTypeName(Triple::EnvironmentType(Env));
 
-          MISTD::string F = Join(C[0], C[1], C[2], C[3]);
+          std::string F = Join(C[0], C[1], C[2], C[3]);
           EXPECT_EQ(F, Triple::normalize(Join(C[0], C[1], C[2], C[3])));
 
           EXPECT_EQ(F, Triple::normalize(Join(C[0], C[1], C[3], C[2])));

@@ -610,7 +610,7 @@ bool StructType::isLayoutIdentical(StructType *Other) const {
       getNumElements() != Other->getNumElements())
     return false;
   
-  return MISTD::equal(element_begin(), element_end(), Other->element_begin());
+  return std::equal(element_begin(), element_end(), Other->element_begin());
 }
 
 /// getTypeByName - Return the type with the specified name, or null if there
@@ -682,7 +682,7 @@ ArrayType *ArrayType::get(Type *elementType, uint64_t NumElements) {
     
   LLVMContextImpl *pImpl = ElementType->getContext().pImpl;
   ArrayType *&Entry = 
-    pImpl->ArrayTypes[MISTD::make_pair(ElementType, NumElements)];
+    pImpl->ArrayTypes[std::make_pair(ElementType, NumElements)];
   
   if (Entry == 0)
     Entry = new (pImpl->TypeAllocator) ArrayType(ElementType, NumElements);
@@ -711,7 +711,7 @@ VectorType *VectorType::get(Type *elementType, unsigned NumElements) {
   
   LLVMContextImpl *pImpl = ElementType->getContext().pImpl;
   VectorType *&Entry = ElementType->getContext().pImpl
-    ->VectorTypes[MISTD::make_pair(ElementType, NumElements)];
+    ->VectorTypes[std::make_pair(ElementType, NumElements)];
   
   if (Entry == 0)
     Entry = new (pImpl->TypeAllocator) VectorType(ElementType, NumElements);
@@ -735,7 +735,7 @@ PointerType *PointerType::get(Type *EltTy, unsigned AddressSpace) {
   
   // Since AddressSpace #0 is the common case, we special case it.
   PointerType *&Entry = AddressSpace == 0 ? CImpl->PointerTypes[EltTy]
-     : CImpl->ASPointerTypes[MISTD::make_pair(EltTy, AddressSpace)];
+     : CImpl->ASPointerTypes[std::make_pair(EltTy, AddressSpace)];
 
   if (Entry == 0)
     Entry = new (CImpl->TypeAllocator) PointerType(EltTy, AddressSpace);

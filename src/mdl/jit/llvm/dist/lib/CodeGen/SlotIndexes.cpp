@@ -86,7 +86,7 @@ bool SlotIndexes::runOnMachineFunction(MachineFunction &fn) {
       indexList.push_back(createEntry(mi, index += SlotIndex::InstrDist));
 
       // Save this base index in the maps.
-      mi2iMap.insert(MISTD::make_pair(mi, SlotIndex(&indexList.back(),
+      mi2iMap.insert(std::make_pair(mi, SlotIndex(&indexList.back(),
                                                   SlotIndex::Slot_Block)));
     }
 
@@ -100,7 +100,7 @@ bool SlotIndexes::runOnMachineFunction(MachineFunction &fn) {
   }
 
   // Sort the Idx2MBBMap
-  MISTD::sort(idx2MBBMap.begin(), idx2MBBMap.end(), Idx2MBBCompare());
+  std::sort(idx2MBBMap.begin(), idx2MBBMap.end(), Idx2MBBCompare());
 
   DEBUG(mf->print(dbgs(), this));
 

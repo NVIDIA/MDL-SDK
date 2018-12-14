@@ -120,6 +120,8 @@ public:
     }
 
     /// Set the resource restriction handler.
+    ///
+    /// \param rrh  the resource restriction handler
     void set_resource_restriction_handler(IResource_restriction_handler *rrh) {
         m_rrh = rrh;
     }
@@ -130,8 +132,31 @@ public:
     }
 
     /// Set the front path.
+    ///
+    /// \param front_path   the new front path
+    ///
+    /// If non-NULL, this path is added silently in front of all other search paths,
+    /// so the entity resolver will first look for an entity here
     void set_front_path(char const *front_path) {
         m_front_path = front_path == NULL ? "" : front_path;
+    }
+
+    /// Set the module replacement path.
+    ///
+    /// \param module_name  an absolute module name
+    /// \param file_name    the file name that should be used to resolve the module
+    void set_module_replacement_path(
+        char const *module_name,
+        char const *file_name);
+
+    /// Get the replacement module name if any.
+    char const *get_replacement_module_name() const {
+        return m_repl_module_name.empty() ? NULL : m_repl_module_name.c_str();
+    }
+
+    /// Get the replacement file name if any.
+    char const *get_replacement_file_name() const {
+        return m_repl_file_name.empty() ? NULL : m_repl_file_name.c_str();
     }
 
 private:
@@ -159,6 +184,12 @@ private:
 
     /// Front path.
     string m_front_path;
+
+    /// Module replacement: absolute module name
+    string m_repl_module_name;
+
+    /// Module replacement: file name
+    string m_repl_file_name;
 };
 
 }  // mdl

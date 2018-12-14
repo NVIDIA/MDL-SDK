@@ -416,7 +416,7 @@ Value *InstCombiner::SimplifyUsingDistributiveLaws(BinaryOperator &I) {
       // commutative case, "(A op' B) op (C op' A)"?
       if (A == C || (InnerCommutative && A == D)) {
         if (A != C)
-          MISTD::swap(C, D);
+          std::swap(C, D);
         // Consider forming "A op' (B op D)".
         // If "B op D" simplifies then it can be formed with no cost.
         Value *V = SimplifyBinOp(TopLevelOpcode, B, D, TD);
@@ -438,7 +438,7 @@ Value *InstCombiner::SimplifyUsingDistributiveLaws(BinaryOperator &I) {
       // commutative case, "(A op' B) op (B op' D)"?
       if (B == D || (InnerCommutative && B == C)) {
         if (B != D)
-          MISTD::swap(C, D);
+          std::swap(C, D);
         // Consider forming "(A op C) op' B".
         // If "A op C" simplifies then it can be formed with no cost.
         Value *V = SimplifyBinOp(TopLevelOpcode, A, C, TD);
@@ -564,7 +564,7 @@ static Value *FoldOperationIntoSelectOperand(Instruction &I, Value *SO,
 
   Value *Op0 = SO, *Op1 = ConstOperand;
   if (!ConstIsRHS)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I))
     return IC->Builder->CreateBinOp(BO->getOpcode(), Op0, Op1,
@@ -876,7 +876,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
   // Parent - initially null, but after drilling down notes where Op came from.
   // In the example above, Parent is (Val, 0) when Op is M1, because M1 is the
   // 0'th operand of Val.
-  MISTD::pair<Instruction*, unsigned> Parent;
+  std::pair<Instruction*, unsigned> Parent;
 
   // RequireNoSignedWrap - Set if the transform requires a descaling at deeper
   // levels that doesn't overflow.
@@ -927,7 +927,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
           if (!Op->hasOneUse())
             return 0;
 
-          Parent = MISTD::make_pair(BO, 1);
+          Parent = std::make_pair(BO, 1);
           continue;
         }
 
@@ -936,7 +936,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
         if (!Op->hasOneUse())
           return 0;
 
-        Parent = MISTD::make_pair(BO, 0);
+        Parent = std::make_pair(BO, 0);
         continue;
       }
 
@@ -963,7 +963,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
 
         // Multiplication by more than the scale.  Reduce the multiplying amount
         // by the scale in the parent.
-        Parent = MISTD::make_pair(BO, 1);
+        Parent = std::make_pair(BO, 1);
         Op = ConstantInt::get(BO->getType(), Amt - logScale);
         break;
       }
@@ -990,7 +990,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
         RequireNoSignedWrap = true;
 
         // Drill down through the cast.
-        Parent = MISTD::make_pair(Cast, 0);
+        Parent = std::make_pair(Cast, 0);
         Scale = SmallScale;
         continue;
       }
@@ -1007,7 +1007,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
 
         // Drill down through the cast.
         unsigned LargeSize = Cast->getSrcTy()->getPrimitiveSizeInBits();
-        Parent = MISTD::make_pair(Cast, 0);
+        Parent = std::make_pair(Cast, 0);
         Scale = Scale.sext(LargeSize);
         if (logScale + 1 == (int32_t)Cast->getType()->getPrimitiveSizeInBits())
           logScale = -1;
@@ -2029,7 +2029,7 @@ Instruction *InstCombiner::visitLandingPadInst(LandingPadInst &LI) {
       if (shorter_filter(NewClauses[k+1], NewClauses[k])) {
         // Not sorted, so sort the filters now.  Doing an unstable sort would be
         // correct too but reordering filters pointlessly might confuse users.
-        MISTD::stable_sort(NewClauses.begin() + i, NewClauses.begin() + j,
+        std::stable_sort(NewClauses.begin() + i, NewClauses.begin() + j,
                          shorter_filter);
         MakeNewInstruction = true;
         break;
@@ -2419,7 +2419,7 @@ bool InstCombiner::DoOneIteration(Function &F, unsigned Iteration) {
     Builder->SetCurrentDebugLocation(I->getDebugLoc());
 
 #ifndef NDEBUG
-    MISTD::string OrigI;
+    std::string OrigI;
 #endif
     DEBUG(raw_string_ostream SS(OrigI); I->print(SS); OrigI = SS.str(););
     DEBUG(dbgs() << "IC: Visiting: " << OrigI << '\n');

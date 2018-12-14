@@ -67,7 +67,7 @@ EEVT::TypeSet::TypeSet(ArrayRef<MVT::SimpleValueType> VTList) {
 
   // Verify no duplicates.
   array_pod_sort(TypeVec.begin(), TypeVec.end());
-  assert(MISTD::unique(TypeVec.begin(), TypeVec.end()) == TypeVec.end());
+  assert(std::unique(TypeVec.begin(), TypeVec.end()) == TypeVec.end());
 }
 
 /// FillWithPossibleTypes - Set to all legal types and return true, only valid
@@ -89,7 +89,7 @@ bool EEVT::TypeSet::FillWithPossibleTypes(TreePattern &TP,
   // If we have nothing that matches the predicate, bail out.
   if (TypeVec.empty()) {
     TP.error("Type inference contradiction found, no " +
-             MISTD::string(PredicateName) + " types found");
+             std::string(PredicateName) + " types found");
     return false;
   }
   // No need to sort with one element.
@@ -97,7 +97,7 @@ bool EEVT::TypeSet::FillWithPossibleTypes(TreePattern &TP,
 
   // Remove duplicates.
   array_pod_sort(TypeVec.begin(), TypeVec.end());
-  TypeVec.erase(MISTD::unique(TypeVec.begin(), TypeVec.end()), TypeVec.end());
+  TypeVec.erase(std::unique(TypeVec.begin(), TypeVec.end()), TypeVec.end());
 
   return true;
 }
@@ -130,13 +130,13 @@ bool EEVT::TypeSet::hasVectorTypes() const {
 }
 
 
-MISTD::string EEVT::TypeSet::getName() const {
+std::string EEVT::TypeSet::getName() const {
   if (TypeVec.empty()) return "<empty>";
 
-  MISTD::string Result;
+  std::string Result;
 
   for (unsigned i = 0, e = TypeVec.size(); i != e; ++i) {
-    MISTD::string VTName = llvm::getEnumName(TypeVec[i]);
+    std::string VTName = llvm::getEnumName(TypeVec[i]);
     // Strip off MVT:: prefix if present.
     if (VTName.substr(0,5) == "MVT::")
       VTName = VTName.substr(5);
@@ -610,7 +610,7 @@ bool EEVT::TypeSet::EnforceVectorSubVectorTypeIs(EEVT::TypeSet &VTOperand,
 // Helpers for working with extended types.
 
 /// Dependent variable map for CodeGenDAGPattern variant generation
-typedef MISTD::map<MISTD::string, int> DepVarMap;
+typedef std::map<std::string, int> DepVarMap;
 
 /// Const iterator shorthand for DepVarMap
 typedef DepVarMap::const_iterator DepVarMap_citer;
@@ -630,7 +630,7 @@ static void FindDepVars(TreePatternNode *N, MultipleUseVarSet &DepVars) {
   DepVarMap depcounts;
   FindDepVarsOf(N, depcounts);
   for (DepVarMap_citer i = depcounts.begin(); i != depcounts.end(); ++i) {
-    if (i->second > 1)            // MISTD::pair<MISTD::string, int>
+    if (i->second > 1)            // std::pair<std::string, int>
       DepVars.insert(i->first);
   }
 }
@@ -662,11 +662,11 @@ TreePredicateFn::TreePredicateFn(TreePattern *N) : PatFragRec(N) {
         ".td file corrupt: can't have a node predicate *and* an imm predicate");
 }
 
-MISTD::string TreePredicateFn::getPredCode() const {
+std::string TreePredicateFn::getPredCode() const {
   return PatFragRec->getRecord()->getValueAsString("PredicateCode");
 }
 
-MISTD::string TreePredicateFn::getImmCode() const {
+std::string TreePredicateFn::getImmCode() const {
   return PatFragRec->getRecord()->getValueAsString("ImmediateCode");
 }
 
@@ -678,7 +678,7 @@ bool TreePredicateFn::isAlwaysTrue() const {
 
 /// Return the name to use in the generated code to reference this, this is
 /// "Predicate_foo" if from a pattern fragment "foo".
-MISTD::string TreePredicateFn::getFnName() const {
+std::string TreePredicateFn::getFnName() const {
   return "Predicate_" + PatFragRec->getRecord()->getName();
 }
 
@@ -686,25 +686,25 @@ MISTD::string TreePredicateFn::getFnName() const {
 /// evaluates this predicate.  The argument is expected to be in "Node",
 /// not N.  This handles casting and conversion to a concrete node type as
 /// appropriate.
-MISTD::string TreePredicateFn::getCodeToRunOnSDNode() const {
+std::string TreePredicateFn::getCodeToRunOnSDNode() const {
   // Handle immediate predicates first.
-  MISTD::string ImmCode = getImmCode();
+  std::string ImmCode = getImmCode();
   if (!ImmCode.empty()) {
-    MISTD::string Result =
+    std::string Result =
       "    int64_t Imm = cast<ConstantSDNode>(Node)->getSExtValue();\n";
     return Result + ImmCode;
   }
   
   // Handle arbitrary node predicates.
   assert(!getPredCode().empty() && "Don't have any predicate code!");
-  MISTD::string ClassName;
+  std::string ClassName;
   if (PatFragRec->getOnlyTree()->isLeaf())
     ClassName = "SDNode";
   else {
     Record *Op = PatFragRec->getOnlyTree()->getOperator();
     ClassName = PatFragRec->getDAGPatterns().getSDNodeInfo(Op).getSDClassName();
   }
-  MISTD::string Result;
+  std::string Result;
   if (ClassName == "SDNode")
     Result = "    SDNode *N = Node;\n";
   else
@@ -773,8 +773,8 @@ getPatternComplexity(const CodeGenDAGPatterns &CGP) const {
 /// getPredicateCheck - Return a single string containing all of this
 /// pattern's predicates concatenated with "&&" operators.
 ///
-MISTD::string PatternToMatch::getPredicateCheck() const {
-  MISTD::string PredicateCheck;
+std::string PatternToMatch::getPredicateCheck() const {
+  std::string PredicateCheck;
   for (unsigned i = 0, e = Predicates->getSize(); i != e; ++i) {
     if (DefInit *Pred = dyn_cast<DefInit>(Predicates->getElement(i))) {
       Record *Def = Pred->getDef();
@@ -999,7 +999,7 @@ SDNodeInfo::SDNodeInfo(Record *R) : Def(R) {
 
   // Parse the properties.
   Properties = 0;
-  MISTD::vector<Record*> PropList = R->getValueAsListOfDefs("Properties");
+  std::vector<Record*> PropList = R->getValueAsListOfDefs("Properties");
   for (unsigned i = 0, e = PropList.size(); i != e; ++i) {
     if (PropList[i]->getName() == "SDNPCommutative") {
       Properties |= 1 << SDNPCommutative;
@@ -1032,7 +1032,7 @@ SDNodeInfo::SDNodeInfo(Record *R) : Def(R) {
 
 
   // Parse the type constraints.
-  MISTD::vector<Record*> ConstraintList =
+  std::vector<Record*> ConstraintList =
     TypeProfile->getValueAsListOfDefs("Constraints");
   TypeConstraints.assign(ConstraintList.begin(), ConstraintList.end());
 }
@@ -1195,7 +1195,7 @@ TreePatternNode *TreePatternNode::clone() const {
   if (isLeaf()) {
     New = new TreePatternNode(getLeafValue(), getNumTypes());
   } else {
-    MISTD::vector<TreePatternNode*> CChildren;
+    std::vector<TreePatternNode*> CChildren;
     CChildren.reserve(Children.size());
     for (unsigned i = 0, e = getNumChildren(); i != e; ++i)
       CChildren.push_back(getChild(i)->clone());
@@ -1221,7 +1221,7 @@ void TreePatternNode::RemoveAllTypes() {
 /// SubstituteFormalArguments - Replace the formal arguments in this tree
 /// with actual values specified by ArgMap.
 void TreePatternNode::
-SubstituteFormalArguments(MISTD::map<MISTD::string, TreePatternNode*> &ArgMap) {
+SubstituteFormalArguments(std::map<std::string, TreePatternNode*> &ArgMap) {
   if (isLeaf()) return;
 
   for (unsigned i = 0, e = getNumChildren(); i != e; ++i) {
@@ -1291,7 +1291,7 @@ TreePatternNode *TreePatternNode::InlinePatternFragments(TreePattern &TP) {
   // Resolve formal arguments to their actual value.
   if (Frag->getNumArgs()) {
     // Compute the map of formal to actual arguments.
-    MISTD::map<MISTD::string, TreePatternNode*> ArgMap;
+    std::map<std::string, TreePatternNode*> ArgMap;
     for (unsigned i = 0, e = Frag->getNumArgs(); i != e; ++i)
       ArgMap[Frag->getArgName(i)] = getChild(i)->InlinePatternFragments(TP);
 
@@ -1758,7 +1758,7 @@ static bool OnlyOnRHSOfCommutative(TreePatternNode *N) {
 /// used as a sanity check for .td files (to prevent people from writing stuff
 /// that can never possibly work), and to prevent the pattern permuter from
 /// generating stuff that is useless.
-bool TreePatternNode::canPatternMatch(MISTD::string &Reason,
+bool TreePatternNode::canPatternMatch(std::string &Reason,
                                       const CodeGenDAGPatterns &CDP) {
   if (isLeaf()) return true;
 
@@ -1816,7 +1816,7 @@ TreePattern::TreePattern(Record *TheRec, TreePatternNode *Pat, bool isInput,
   Trees.push_back(Pat);
 }
 
-void TreePattern::error(const MISTD::string &Msg) {
+void TreePattern::error(const std::string &Msg) {
   if (HasError)
     return;
   dump();
@@ -1848,7 +1848,7 @@ TreePatternNode *TreePattern::ParseTreePattern(Init *TheInit, StringRef OpName){
     if (R->isSubClassOf("SDNode") || R->isSubClassOf("PatFrag"))
       return ParseTreePattern(
         DagInit::get(DI, "",
-                     MISTD::vector<MISTD::pair<Init*, MISTD::string> >()),
+                     std::vector<std::pair<Init*, std::string> >()),
         OpName);
 
     // Input argument?
@@ -1947,7 +1947,7 @@ TreePatternNode *TreePattern::ParseTreePattern(Init *TheInit, StringRef OpName){
       error("Cannot use '" + Operator->getName() + "' in an output pattern!");
   }
 
-  MISTD::vector<TreePatternNode*> Children;
+  std::vector<TreePatternNode*> Children;
 
   // Parse all the operands.
   for (unsigned i = 0, e = Dag->getNumArgs(); i != e; ++i)
@@ -2153,7 +2153,7 @@ CodeGenDAGPatterns::~CodeGenDAGPatterns() {
 }
 
 
-Record *CodeGenDAGPatterns::getSDNodeNamed(const MISTD::string &Name) const {
+Record *CodeGenDAGPatterns::getSDNodeNamed(const std::string &Name) const {
   Record *N = Records.getDef(Name);
   if (!N || !N->isSubClassOf("SDNode")) {
     errs() << "Error getting SDNode '" << Name << "'!\n";
@@ -2164,9 +2164,9 @@ Record *CodeGenDAGPatterns::getSDNodeNamed(const MISTD::string &Name) const {
 
 // Parse all of the SDNode definitions for the target, populating SDNodes.
 void CodeGenDAGPatterns::ParseNodeInfo() {
-  MISTD::vector<Record*> Nodes = Records.getAllDerivedDefinitions("SDNode");
+  std::vector<Record*> Nodes = Records.getAllDerivedDefinitions("SDNode");
   while (!Nodes.empty()) {
-    SDNodes.insert(MISTD::make_pair(Nodes.back(), Nodes.back()));
+    SDNodes.insert(std::make_pair(Nodes.back(), Nodes.back()));
     Nodes.pop_back();
   }
 
@@ -2179,21 +2179,21 @@ void CodeGenDAGPatterns::ParseNodeInfo() {
 /// ParseNodeTransforms - Parse all SDNodeXForm instances into the SDNodeXForms
 /// map, and emit them to the file as functions.
 void CodeGenDAGPatterns::ParseNodeTransforms() {
-  MISTD::vector<Record*> Xforms = Records.getAllDerivedDefinitions("SDNodeXForm");
+  std::vector<Record*> Xforms = Records.getAllDerivedDefinitions("SDNodeXForm");
   while (!Xforms.empty()) {
     Record *XFormNode = Xforms.back();
     Record *SDNode = XFormNode->getValueAsDef("Opcode");
-    MISTD::string Code = XFormNode->getValueAsString("XFormFunction");
-    SDNodeXForms.insert(MISTD::make_pair(XFormNode, NodeXForm(SDNode, Code)));
+    std::string Code = XFormNode->getValueAsString("XFormFunction");
+    SDNodeXForms.insert(std::make_pair(XFormNode, NodeXForm(SDNode, Code)));
 
     Xforms.pop_back();
   }
 }
 
 void CodeGenDAGPatterns::ParseComplexPatterns() {
-  MISTD::vector<Record*> AMs = Records.getAllDerivedDefinitions("ComplexPattern");
+  std::vector<Record*> AMs = Records.getAllDerivedDefinitions("ComplexPattern");
   while (!AMs.empty()) {
-    ComplexPatterns.insert(MISTD::make_pair(AMs.back(), AMs.back()));
+    ComplexPatterns.insert(std::make_pair(AMs.back(), AMs.back()));
     AMs.pop_back();
   }
 }
@@ -2205,7 +2205,7 @@ void CodeGenDAGPatterns::ParseComplexPatterns() {
 /// inside a pattern fragment to a pattern fragment.
 ///
 void CodeGenDAGPatterns::ParsePatternFragments() {
-  MISTD::vector<Record*> Fragments = Records.getAllDerivedDefinitions("PatFrag");
+  std::vector<Record*> Fragments = Records.getAllDerivedDefinitions("PatFrag");
 
   // First step, parse all of the fragments.
   for (unsigned i = 0, e = Fragments.size(); i != e; ++i) {
@@ -2214,8 +2214,8 @@ void CodeGenDAGPatterns::ParsePatternFragments() {
     PatternFragments[Fragments[i]] = P;
 
     // Validate the argument list, converting it to set, to discard duplicates.
-    MISTD::vector<MISTD::string> &Args = P->getArgList();
-    MISTD::set<MISTD::string> OperandsSet(Args.begin(), Args.end());
+    std::vector<std::string> &Args = P->getArgList();
+    std::set<std::string> OperandsSet(Args.begin(), Args.end());
 
     if (OperandsSet.count(""))
       P->error("Cannot have unnamed 'node' values in pattern fragment!");
@@ -2280,7 +2280,7 @@ void CodeGenDAGPatterns::ParsePatternFragments() {
 }
 
 void CodeGenDAGPatterns::ParseDefaultOperands() {
-  MISTD::vector<Record*> DefaultOps;
+  std::vector<Record*> DefaultOps;
   DefaultOps = Records.getAllDerivedDefinitions("OperandWithDefaultOps");
 
   // Find some SDNode.
@@ -2292,9 +2292,9 @@ void CodeGenDAGPatterns::ParseDefaultOperands() {
 
     // Clone the DefaultInfo dag node, changing the operator from 'ops' to
     // SomeSDnode so that we can parse this.
-    MISTD::vector<MISTD::pair<Init*, MISTD::string> > Ops;
+    std::vector<std::pair<Init*, std::string> > Ops;
     for (unsigned op = 0, e = DefaultInfo->getNumArgs(); op != e; ++op)
-      Ops.push_back(MISTD::make_pair(DefaultInfo->getArg(op),
+      Ops.push_back(std::make_pair(DefaultInfo->getArg(op),
                                    DefaultInfo->getArgName(op)));
     DagInit *DI = DagInit::get(SomeSDNode, "", Ops);
 
@@ -2326,7 +2326,7 @@ void CodeGenDAGPatterns::ParseDefaultOperands() {
 /// HandleUse - Given "Pat" a leaf in the pattern, check to see if it is an
 /// instruction input.  Return true if this is a real use.
 static bool HandleUse(TreePattern *I, TreePatternNode *Pat,
-                      MISTD::map<MISTD::string, TreePatternNode*> &InstInputs) {
+                      std::map<std::string, TreePatternNode*> &InstInputs) {
   // No name -> not interesting.
   if (Pat->getName().empty()) {
     if (Pat->isLeaf()) {
@@ -2377,9 +2377,9 @@ static bool HandleUse(TreePattern *I, TreePatternNode *Pat,
 /// the pattern.  Report errors if we see anything naughty.
 void CodeGenDAGPatterns::
 FindPatternInputsAndOutputs(TreePattern *I, TreePatternNode *Pat,
-                            MISTD::map<MISTD::string, TreePatternNode*> &InstInputs,
-                            MISTD::map<MISTD::string, TreePatternNode*>&InstResults,
-                            MISTD::vector<Record*> &InstImpResults) {
+                            std::map<std::string, TreePatternNode*> &InstInputs,
+                            std::map<std::string, TreePatternNode*>&InstResults,
+                            std::vector<Record*> &InstImpResults) {
   if (Pat->isLeaf()) {
     bool isUse = HandleUse(I, Pat, InstInputs);
     if (!isUse && Pat->getTransformFn())
@@ -2692,13 +2692,13 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
 
     // InstInputs - Keep track of all of the inputs of the instruction, along
     // with the record they are declared as.
-    MISTD::map<MISTD::string, TreePatternNode*> InstInputs;
+    std::map<std::string, TreePatternNode*> InstInputs;
 
     // InstResults - Keep track of all the virtual registers that are 'set'
     // in the instruction, including what reg class they are.
-    MISTD::map<MISTD::string, TreePatternNode*> InstResults;
+    std::map<std::string, TreePatternNode*> InstResults;
 
-    MISTD::vector<Record*> InstImpResults;
+    std::vector<Record*> InstImpResults;
 
     // Verify that the top-level forms in the instruction are of void type, and
     // fill in the InstResults map.
@@ -2722,13 +2722,13 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
     assert(I->getArgList().empty() && "Args list should still be empty here!");
 
     // Check that all of the results occur first in the list.
-    MISTD::vector<Record*> Results;
+    std::vector<Record*> Results;
     TreePatternNode *Res0Node = 0;
     for (unsigned i = 0; i != NumResults; ++i) {
       if (i == CGI.Operands.size())
         I->error("'" + InstResults.begin()->first +
                  "' set but does not appear in operand list!");
-      const MISTD::string &OpName = CGI.Operands[i].Name;
+      const std::string &OpName = CGI.Operands[i].Name;
 
       // Check that it exists in InstResults.
       TreePatternNode *RNode = InstResults[OpName];
@@ -2754,13 +2754,13 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
 
     // Loop over the inputs next.  Make a copy of InstInputs so we can destroy
     // the copy while we're checking the inputs.
-    MISTD::map<MISTD::string, TreePatternNode*> InstInputsCheck(InstInputs);
+    std::map<std::string, TreePatternNode*> InstInputsCheck(InstInputs);
 
-    MISTD::vector<TreePatternNode*> ResultNodeOperands;
-    MISTD::vector<Record*> Operands;
+    std::vector<TreePatternNode*> ResultNodeOperands;
+    std::vector<Record*> Operands;
     for (unsigned i = NumResults, e = CGI.Operands.size(); i != e; ++i) {
       CGIOperandList::OperandInfo &Op = CGI.Operands[i];
-      const MISTD::string &OpName = Op.Name;
+      const std::string &OpName = Op.Name;
       if (OpName.empty())
         I->error("Operand #" + utostr(i) + " in operands list has no name!");
 
@@ -2796,7 +2796,7 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
       // Promote the xform function to be an explicit node if set.
       if (Record *Xform = OpNode->getTransformFn()) {
         OpNode->setTransformFn(0);
-        MISTD::vector<TreePatternNode*> Children;
+        std::vector<TreePatternNode*> Children;
         Children.push_back(OpNode);
         OpNode = new TreePatternNode(Xform, Children, OpNode->getNumTypes());
       }
@@ -2818,7 +2818,7 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
     // Create and insert the instruction.
     // FIXME: InstImpResults should not be part of DAGInstruction.
     DAGInstruction TheInst(I, Results, Operands, InstImpResults);
-    DAGInsts.insert(MISTD::make_pair(I->getRecord(), TheInst));
+    DAGInsts.insert(std::make_pair(I->getRecord(), TheInst));
 
     // Use a temporary tree pattern to infer all types and make sure that the
     // constructed result is correct.  This depends on the instruction already
@@ -2836,7 +2836,7 @@ const DAGInstruction &CodeGenDAGPatterns::parseInstructionPattern(
 /// any fragments involved.  This populates the Instructions list with fully
 /// resolved instructions.
 void CodeGenDAGPatterns::ParseInstructions() {
-  MISTD::vector<Record*> Instrs = Records.getAllDerivedDefinitions("Instruction");
+  std::vector<Record*> Instrs = Records.getAllDerivedDefinitions("Instruction");
 
   for (unsigned i = 0, e = Instrs.size(); i != e; ++i) {
     ListInit *LI = 0;
@@ -2851,8 +2851,8 @@ void CodeGenDAGPatterns::ParseInstructions() {
     // is from a multiclass expansion w/ a SDPatternOperator passed in as
     // null_frag.
     if (!LI || LI->getSize() == 0 || hasNullFragReference(LI)) {
-      MISTD::vector<Record*> Results;
-      MISTD::vector<Record*> Operands;
+      std::vector<Record*> Results;
+      std::vector<Record*> Operands;
 
       CodeGenInstruction &InstInfo = Target.getInstruction(Instrs[i]);
 
@@ -2872,8 +2872,8 @@ void CodeGenDAGPatterns::ParseInstructions() {
       }
 
       // Create and insert the instruction.
-      MISTD::vector<Record*> ImpResults;
-      Instructions.insert(MISTD::make_pair(Instrs[i],
+      std::vector<Record*> ImpResults;
+      Instructions.insert(std::make_pair(Instrs[i],
                           DAGInstruction(0, Results, Operands, ImpResults)));
       continue;  // no pattern.
     }
@@ -2886,7 +2886,7 @@ void CodeGenDAGPatterns::ParseInstructions() {
   }
 
   // If we can, convert the instructions to be patterns that are matched!
-  for (MISTD::map<Record*, DAGInstruction, LessRecordByID>::iterator II =
+  for (std::map<Record*, DAGInstruction, LessRecordByID>::iterator II =
         Instructions.begin(),
        E = Instructions.end(); II != E; ++II) {
     DAGInstruction &TheInst = II->second;
@@ -2917,10 +2917,10 @@ void CodeGenDAGPatterns::ParseInstructions() {
 }
 
 
-typedef MISTD::pair<const TreePatternNode*, unsigned> NameRecord;
+typedef std::pair<const TreePatternNode*, unsigned> NameRecord;
 
 static void FindNames(const TreePatternNode *P,
-                      MISTD::map<MISTD::string, NameRecord> &Names,
+                      std::map<std::string, NameRecord> &Names,
                       TreePattern *PatternTop) {
   if (!P->getName().empty()) {
     NameRecord &Rec = Names[P->getName()];
@@ -2941,7 +2941,7 @@ static void FindNames(const TreePatternNode *P,
 void CodeGenDAGPatterns::AddPatternToMatch(TreePattern *Pattern,
                                            const PatternToMatch &PTM) {
   // Do some sanity checking on the pattern we're about to match.
-  MISTD::string Reason;
+  std::string Reason;
   if (!PTM.getSrcPattern()->canPatternMatch(Reason, *this)) {
     PrintWarning(Pattern->getRecord()->getLoc(),
       Twine("Pattern can never match: ") + Reason);
@@ -2959,13 +2959,13 @@ void CodeGenDAGPatterns::AddPatternToMatch(TreePattern *Pattern,
 
   // Find all of the named values in the input and output, ensure they have the
   // same type.
-  MISTD::map<MISTD::string, NameRecord> SrcNames, DstNames;
+  std::map<std::string, NameRecord> SrcNames, DstNames;
   FindNames(PTM.getSrcPattern(), SrcNames, Pattern);
   FindNames(PTM.getDstPattern(), DstNames, Pattern);
 
   // Scan all of the named values in the destination pattern, rejecting them if
   // they don't exist in the input pattern.
-  for (MISTD::map<MISTD::string, NameRecord>::iterator
+  for (std::map<std::string, NameRecord>::iterator
        I = DstNames.begin(), E = DstNames.end(); I != E; ++I) {
     if (SrcNames[I->first].first == 0)
       Pattern->error("Pattern has input without matching name in output: $" +
@@ -2974,7 +2974,7 @@ void CodeGenDAGPatterns::AddPatternToMatch(TreePattern *Pattern,
 
   // Scan all of the named values in the source pattern, rejecting them if the
   // name isn't used in the dest, and isn't used to tie two values together.
-  for (MISTD::map<MISTD::string, NameRecord>::iterator
+  for (std::map<std::string, NameRecord>::iterator
        I = SrcNames.begin(), E = SrcNames.end(); I != E; ++I)
     if (DstNames[I->first].first == 0 && SrcNames[I->first].second == 1)
       Pattern->error("Pattern has dead named input: $" + I->first);
@@ -2985,7 +2985,7 @@ void CodeGenDAGPatterns::AddPatternToMatch(TreePattern *Pattern,
 
 
 void CodeGenDAGPatterns::InferInstructionFlags() {
-  const MISTD::vector<const CodeGenInstruction*> &Instructions =
+  const std::vector<const CodeGenInstruction*> &Instructions =
     Target.getInstructionsByEnumValue();
 
   // First try to infer flags from the primary instruction pattern, if any.
@@ -3099,7 +3099,7 @@ void CodeGenDAGPatterns::VerifyInstructionFlags() {
     PatInfo.Analyze(&PTM);
 
     // Collect error messages.
-    SmallVector<MISTD::string, 4> Msgs;
+    SmallVector<std::string, 4> Msgs;
 
     // Check for missing flags in the output.
     // Permit extra flags for now at least.
@@ -3169,7 +3169,7 @@ static bool ForceArbitraryInstResultType(TreePatternNode *N, TreePattern &TP) {
 }
 
 void CodeGenDAGPatterns::ParsePatterns() {
-  MISTD::vector<Record*> Patterns = Records.getAllDerivedDefinitions("Pattern");
+  std::vector<Record*> Patterns = Records.getAllDerivedDefinitions("Pattern");
 
   for (unsigned i = 0, e = Patterns.size(); i != e; ++i) {
     Record *CurPattern = Patterns[i];
@@ -3216,7 +3216,7 @@ void CodeGenDAGPatterns::ParsePatterns() {
       // resolve cases where the input type is known to be a pointer type (which
       // is considered resolved), but the result knows it needs to be 32- or
       // 64-bits.  Infer the other way for good measure.
-      for (unsigned i = 0, e = MISTD::min(Result->getTree(0)->getNumTypes(),
+      for (unsigned i = 0, e = std::min(Result->getTree(0)->getNumTypes(),
                                         Pattern->getTree(0)->getNumTypes());
            i != e; ++i) {
         IterateInference = Pattern->getTree(0)->
@@ -3250,9 +3250,9 @@ void CodeGenDAGPatterns::ParsePatterns() {
     }
 
     // Validate that the input pattern is correct.
-    MISTD::map<MISTD::string, TreePatternNode*> InstInputs;
-    MISTD::map<MISTD::string, TreePatternNode*> InstResults;
-    MISTD::vector<Record*> InstImpResults;
+    std::map<std::string, TreePatternNode*> InstInputs;
+    std::map<std::string, TreePatternNode*> InstResults;
+    std::vector<Record*> InstImpResults;
     for (unsigned j = 0, ee = Pattern->getNumTrees(); j != ee; ++j)
       FindPatternInputsAndOutputs(Pattern, Pattern->getTree(j),
                                   InstInputs, InstResults,
@@ -3260,12 +3260,12 @@ void CodeGenDAGPatterns::ParsePatterns() {
 
     // Promote the xform function to be an explicit node if set.
     TreePatternNode *DstPattern = Result->getOnlyTree();
-    MISTD::vector<TreePatternNode*> ResultNodeOperands;
+    std::vector<TreePatternNode*> ResultNodeOperands;
     for (unsigned ii = 0, ee = DstPattern->getNumChildren(); ii != ee; ++ii) {
       TreePatternNode *OpNode = DstPattern->getChild(ii);
       if (Record *Xform = OpNode->getTransformFn()) {
         OpNode->setTransformFn(0);
-        MISTD::vector<TreePatternNode*> Children;
+        std::vector<TreePatternNode*> Children;
         Children.push_back(OpNode);
         OpNode = new TreePatternNode(Xform, Children, OpNode->getNumTypes());
       }
@@ -3297,8 +3297,8 @@ void CodeGenDAGPatterns::ParsePatterns() {
 /// CombineChildVariants - Given a bunch of permutations of each child of the
 /// 'operator' node, put them together in all possible ways.
 static void CombineChildVariants(TreePatternNode *Orig,
-               const MISTD::vector<MISTD::vector<TreePatternNode*> > &ChildVariants,
-                                 MISTD::vector<TreePatternNode*> &OutVariants,
+               const std::vector<std::vector<TreePatternNode*> > &ChildVariants,
+                                 std::vector<TreePatternNode*> &OutVariants,
                                  CodeGenDAGPatterns &CDP,
                                  const MultipleUseVarSet &DepVars) {
   // Make sure that each operand has at least one variant to choose from.
@@ -3307,7 +3307,7 @@ static void CombineChildVariants(TreePatternNode *Orig,
       return;
 
   // The end result is an all-pairs construction of the resultant pattern.
-  MISTD::vector<unsigned> Idxs;
+  std::vector<unsigned> Idxs;
   Idxs.resize(ChildVariants.size());
   bool NotDone;
   do {
@@ -3321,7 +3321,7 @@ static void CombineChildVariants(TreePatternNode *Orig,
           });
 #endif
     // Create the variant and add it to the output list.
-    MISTD::vector<TreePatternNode*> NewChildren;
+    std::vector<TreePatternNode*> NewChildren;
     for (unsigned i = 0, e = ChildVariants.size(); i != e; ++i)
       NewChildren.push_back(ChildVariants[i][Idxs[i]]);
     TreePatternNode *R = new TreePatternNode(Orig->getOperator(), NewChildren,
@@ -3335,7 +3335,7 @@ static void CombineChildVariants(TreePatternNode *Orig,
       R->setType(i, Orig->getExtType(i));
 
     // If this pattern cannot match, do not include it as a variant.
-    MISTD::string ErrString;
+    std::string ErrString;
     if (!R->canPatternMatch(ErrString, CDP)) {
       delete R;
     } else {
@@ -3374,12 +3374,12 @@ static void CombineChildVariants(TreePatternNode *Orig,
 /// CombineChildVariants - A helper function for binary operators.
 ///
 static void CombineChildVariants(TreePatternNode *Orig,
-                                 const MISTD::vector<TreePatternNode*> &LHS,
-                                 const MISTD::vector<TreePatternNode*> &RHS,
-                                 MISTD::vector<TreePatternNode*> &OutVariants,
+                                 const std::vector<TreePatternNode*> &LHS,
+                                 const std::vector<TreePatternNode*> &RHS,
+                                 std::vector<TreePatternNode*> &OutVariants,
                                  CodeGenDAGPatterns &CDP,
                                  const MultipleUseVarSet &DepVars) {
-  MISTD::vector<MISTD::vector<TreePatternNode*> > ChildVariants;
+  std::vector<std::vector<TreePatternNode*> > ChildVariants;
   ChildVariants.push_back(LHS);
   ChildVariants.push_back(RHS);
   CombineChildVariants(Orig, ChildVariants, OutVariants, CDP, DepVars);
@@ -3387,7 +3387,7 @@ static void CombineChildVariants(TreePatternNode *Orig,
 
 
 static void GatherChildrenOfAssociativeOpcode(TreePatternNode *N,
-                                     MISTD::vector<TreePatternNode *> &Children) {
+                                     std::vector<TreePatternNode *> &Children) {
   assert(N->getNumChildren()==2 &&"Associative but doesn't have 2 children!");
   Record *Operator = N->getOperator();
 
@@ -3413,7 +3413,7 @@ static void GatherChildrenOfAssociativeOpcode(TreePatternNode *N,
 /// the (potentially recursive) pattern by using algebraic laws.
 ///
 static void GenerateVariantsOf(TreePatternNode *N,
-                               MISTD::vector<TreePatternNode*> &OutVariants,
+                               std::vector<TreePatternNode*> &OutVariants,
                                CodeGenDAGPatterns &CDP,
                                const MultipleUseVarSet &DepVars) {
   // We cannot permute leaves.
@@ -3428,14 +3428,14 @@ static void GenerateVariantsOf(TreePatternNode *N,
   // If this node is associative, re-associate.
   if (NodeInfo.hasProperty(SDNPAssociative)) {
     // Re-associate by pulling together all of the linked operators
-    MISTD::vector<TreePatternNode*> MaximalChildren;
+    std::vector<TreePatternNode*> MaximalChildren;
     GatherChildrenOfAssociativeOpcode(N, MaximalChildren);
 
     // Only handle child sizes of 3.  Otherwise we'll end up trying too many
     // permutations.
     if (MaximalChildren.size() == 3) {
       // Find the variants of all of our maximal children.
-      MISTD::vector<TreePatternNode*> AVariants, BVariants, CVariants;
+      std::vector<TreePatternNode*> AVariants, BVariants, CVariants;
       GenerateVariantsOf(MaximalChildren[0], AVariants, CDP, DepVars);
       GenerateVariantsOf(MaximalChildren[1], BVariants, CDP, DepVars);
       GenerateVariantsOf(MaximalChildren[2], CVariants, CDP, DepVars);
@@ -3445,12 +3445,12 @@ static void GenerateVariantsOf(TreePatternNode *N,
       // Within these forms, we can also permute A/B/C.
 
       // Generate legal pair permutations of A/B/C.
-      MISTD::vector<TreePatternNode*> ABVariants;
-      MISTD::vector<TreePatternNode*> BAVariants;
-      MISTD::vector<TreePatternNode*> ACVariants;
-      MISTD::vector<TreePatternNode*> CAVariants;
-      MISTD::vector<TreePatternNode*> BCVariants;
-      MISTD::vector<TreePatternNode*> CBVariants;
+      std::vector<TreePatternNode*> ABVariants;
+      std::vector<TreePatternNode*> BAVariants;
+      std::vector<TreePatternNode*> ACVariants;
+      std::vector<TreePatternNode*> CAVariants;
+      std::vector<TreePatternNode*> BCVariants;
+      std::vector<TreePatternNode*> CBVariants;
       CombineChildVariants(N, AVariants, BVariants, ABVariants, CDP, DepVars);
       CombineChildVariants(N, BVariants, AVariants, BAVariants, CDP, DepVars);
       CombineChildVariants(N, AVariants, CVariants, ACVariants, CDP, DepVars);
@@ -3478,7 +3478,7 @@ static void GenerateVariantsOf(TreePatternNode *N,
   }
 
   // Compute permutations of all children.
-  MISTD::vector<MISTD::vector<TreePatternNode*> > ChildVariants;
+  std::vector<std::vector<TreePatternNode*> > ChildVariants;
   ChildVariants.resize(N->getNumChildren());
   for (unsigned i = 0, e = N->getNumChildren(); i != e; ++i)
     GenerateVariantsOf(N->getChild(i), ChildVariants[i], CDP, DepVars);
@@ -3510,7 +3510,7 @@ static void GenerateVariantsOf(TreePatternNode *N,
       // after those.
       assert(NC >= 3 &&
              "Commutative intrinsic should have at least 3 childrean!");
-      MISTD::vector<MISTD::vector<TreePatternNode*> > Variants;
+      std::vector<std::vector<TreePatternNode*> > Variants;
       Variants.push_back(ChildVariants[0]); // Intrinsic id.
       Variants.push_back(ChildVariants[2]);
       Variants.push_back(ChildVariants[1]);
@@ -3540,7 +3540,7 @@ void CodeGenDAGPatterns::GenerateVariants() {
   //
   for (unsigned i = 0, e = PatternsToMatch.size(); i != e; ++i) {
     MultipleUseVarSet             DepVars;
-    MISTD::vector<TreePatternNode*> Variants;
+    std::vector<TreePatternNode*> Variants;
     FindDepVars(PatternsToMatch[i].getSrcPattern(), DepVars);
     DEBUG(errs() << "Dependent/multiply used variables: ");
     DEBUG(DumpDepVars(DepVars));

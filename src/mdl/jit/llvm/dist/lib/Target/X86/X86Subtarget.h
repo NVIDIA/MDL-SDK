@@ -209,8 +209,8 @@ public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
   ///
-  X86Subtarget(const MISTD::string &TT, const MISTD::string &CPU,
-               const MISTD::string &FS,
+  X86Subtarget(const std::string &TT, const std::string &CPU,
+               const std::string &FS,
                unsigned StackAlignOverride, bool is64Bit);
 
   /// getStackAlignment - Returns the minimum alignment known to hold of the

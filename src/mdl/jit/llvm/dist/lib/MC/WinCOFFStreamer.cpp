@@ -137,7 +137,7 @@ void WinCOFFStreamer::AddCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                       unsigned ByteAlignment, bool External) {
   assert(!Symbol->isInSection() && "Symbol must not already have a section!");
 
-  MISTD::string SectionName(".bss$linkonce");
+  std::string SectionName(".bss$linkonce");
   SectionName.append(Symbol->getName().begin(), Symbol->getName().end());
 
   MCSymbolData &SymbolData = getAssembler().getOrCreateSymbolData(*Symbol);

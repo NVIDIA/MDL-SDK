@@ -339,7 +339,12 @@ public:
     /// \param t  the light profile resource or an invalid_ref
     virtual void light_profile(mi::mdl::IValue const *t) override
     {
+        auto lp = mi::mdl::as<mi::mdl::IValue_light_profile>(t);
+
         // not supported in this example
+        std::cerr << "warning: Light profiles are not supported by the MDL Core examples.\n"
+                     "         However, the loaded material references the light profile:\n" 
+                  << "         " << lp->get_string_value() << "\n";
         (void) t;
     }
 
@@ -348,7 +353,12 @@ public:
     /// \param t  the bsdf measurement resource or an invalid_ref
     virtual void bsdf_measurement(mi::mdl::IValue const *t) override
     {
+        auto bm = mi::mdl::as<mi::mdl::IValue_bsdf_measurement>(t);
+
         // not supported in this example
+        std::cerr << "warning: Measured BSDFs are not supported by the MDL Core examples.\n"
+                     "         However, the loaded material references the BSDF measurement:\n"
+                  << "         " << bm->get_string_value() << "\n";
         (void) t;
     }
 
@@ -866,8 +876,9 @@ class Material_gpu_context
 {
 public:
     // Constructor.
-    Material_gpu_context()
-        : m_device_target_code_data_list(0)
+    Material_gpu_context(bool enable_derivatives)
+        : m_enable_derivatives(enable_derivatives)
+        , m_device_target_code_data_list(0)
         , m_device_target_argument_block_list(0)
     {
         // Use first entry as "not-used" block
@@ -929,12 +940,22 @@ public:
     // block returned by get_argument_block().
     void update_device_argument_block(size_t i);
 private:
+    // Generate the next mip map level data, returns a pointer to a newly allocated buffer
+    // and updates the width and height parameters with the new data.
+    float4 *gen_mip_level(
+        float4 *prev_data,
+        unsigned &cur_width,
+        unsigned &cur_height);
+
     // Prepare the texture identified by the texture_index for use by the texture access functions
     // on the GPU.
     bool prepare_texture(
         Ptx_code const       *code_ptx,
         size_t                texture_index,
         std::vector<Texture> &textures);
+
+    // If true, mipmaps will be generated for all 2D textures.
+    bool m_enable_derivatives;
 
     // The device pointer of the target code data list.
     CUdeviceptr m_device_target_code_data_list;
@@ -962,6 +983,9 @@ private:
 
     // List of all CUDA arrays owned by this context.
     std::vector<cudaArray_t> m_all_texture_arrays;
+
+    // List of all CUDA mipmapped arrays owned by this context.
+    std::vector<cudaMipmappedArray_t> m_all_texture_mipmapped_arrays;
 };
 
 // Free all acquired resources.
@@ -970,6 +994,10 @@ Material_gpu_context::~Material_gpu_context()
     for (std::vector<cudaArray_t>::iterator it = m_all_texture_arrays.begin(),
             end = m_all_texture_arrays.end(); it != end; ++it) {
         check_cuda_success(cudaFreeArray(*it));
+    }
+    for (std::vector<cudaMipmappedArray_t>::iterator it = m_all_texture_mipmapped_arrays.begin(),
+            end = m_all_texture_mipmapped_arrays.end(); it != end; ++it) {
+        check_cuda_success(cudaFreeMipmappedArray(*it));
     }
     for (std::vector<Texture>::iterator it = m_all_textures.begin(),
             end = m_all_textures.end(); it != end; ++it) {
@@ -1007,6 +1035,61 @@ CUdeviceptr Material_gpu_context::get_device_target_argument_block_list()
     return m_device_target_argument_block_list;
 }
 
+// Generate the next mip map level data, returns a pointer to a newly allocated buffer
+// and updates the width and height parameters with the new data.
+float4 *Material_gpu_context::gen_mip_level(
+    float4 *prev_data,
+    unsigned &cur_width,
+    unsigned &cur_height)
+{
+    unsigned offsets_x[4] = { 0, 1, 0, 1 };
+    unsigned offsets_y[4] = { 0, 0, 1, 1 };
+
+    unsigned prev_width = cur_width, prev_height = cur_height;
+    unsigned width  = std::max(prev_width / 2, 1u);
+    unsigned height = std::max(prev_height / 2, 1u);
+
+    float4 *data = static_cast<float4 *>(malloc(width * height * sizeof(float4)));
+
+    for (unsigned y = 0; y < height; ++y) {
+        for (unsigned x = 0; x < width; ++x) {
+            // The current pixel (x,y) corresponds to the four pixels
+            // [prev_x, prev_x+1] x [prev_y,prev_y+1] in the the previous layer.
+            unsigned prev_x = 2 * x, prev_y = 2 * y;
+
+            unsigned num_summands = 0;
+            float4 sum = { 0 };
+
+            // Loop over the at most four pixels corresponding to pixel (x,y)
+            for (unsigned i = 0; i < 4; ++i) {
+                unsigned cur_prev_x = prev_x + offsets_x[i];
+                unsigned cur_prev_y = prev_y + offsets_y[i];
+
+                if (cur_prev_x >= prev_width || cur_prev_y >= prev_height)
+                    continue;
+
+                float4 *prev_ptr = prev_data + cur_prev_y * prev_width + cur_prev_x;
+                sum.x += prev_ptr->x;
+                sum.y += prev_ptr->y;
+                sum.z += prev_ptr->z;
+                sum.w += prev_ptr->w;
+                ++num_summands;
+            }
+            float4 *data_ptr = data + y * width + x;
+            data_ptr->x = sum.x / num_summands;
+            data_ptr->y = sum.y / num_summands;
+            data_ptr->z = sum.z / num_summands;
+            data_ptr->w = sum.w / num_summands;
+        }
+    }
+
+    // update width and height
+    cur_width = width;
+    cur_height = height;
+
+    return data;
+}
+
 // Prepare the texture identified by the texture_index for use by the texture access functions
 // on the GPU.
 // Note: Currently no support for 3D textures, Udim textures, PTEX and cubemaps.
@@ -1019,6 +1102,8 @@ bool Material_gpu_context::prepare_texture(
     if (!tex->is_valid())
         return false;
 
+    unsigned width = tex->get_width(), height = tex->get_height();
+
     // For simplicity, the texture access functions are only implemented for float4 and gamma
     // is pre-applied here (all images are converted to linear space).
 
@@ -1030,7 +1115,7 @@ bool Material_gpu_context::prepare_texture(
     }
 
     // This example expects, that there is no additional padding per image line
-    if (FreeImage_GetPitch(dib) != unsigned(tex->get_width() * 4 * sizeof(float))) {
+    if (FreeImage_GetPitch(dib) != unsigned(width * 4 * sizeof(float))) {
         if (own_dib)
             FreeImage_Unload(own_dib);
         return false;
@@ -1047,7 +1132,7 @@ bool Material_gpu_context::prepare_texture(
         // so we need to do it ourselves
 
         float *data = reinterpret_cast<float *>(FreeImage_GetBits(dib));
-        for (size_t i = 0, n = tex->get_width() * tex->get_height() * 4; i < n; i += 4) {
+        for (size_t i = 0, n = width * height * 4; i < n; i += 4) {
             // Only adjust r, g and b, not alpha
             data[i] = std::pow(data[i], 2.2f);
             data[i + 1] = std::pow(data[i + 1], 2.2f);
@@ -1055,31 +1140,70 @@ bool Material_gpu_context::prepare_texture(
         }
     }
 
-    // Copy image data to GPU array depending on texture shape
     cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
-    cudaArray_t device_tex_data;
-
-    // 2D texture objects use CUDA arrays
-    check_cuda_success(cudaMallocArray(
-        &device_tex_data, &channel_desc, tex->get_width(), tex->get_height()));
-
-    BYTE const *data = FreeImage_GetBits(dib);
-    check_cuda_success(cudaMemcpyToArray(device_tex_data, 0, 0, data,
-        tex->get_width() * tex->get_height() * sizeof(float) * 4, cudaMemcpyHostToDevice));
-
-    m_all_texture_arrays.push_back(device_tex_data);
-
-    // Create filtered texture object
     cudaResourceDesc res_desc;
     memset(&res_desc, 0, sizeof(res_desc));
-    res_desc.resType = cudaResourceTypeArray;
-    res_desc.res.array.array = device_tex_data;
+
+    // Copy image data to GPU array depending on texture shape (currently only 2D textures)
+    if (tex->get_shape() != mi::mdl::IType_texture::TS_2D) {
+        std::cerr << "Currently only 2D textures are supported!" << std::endl;
+        return false;
+    } else if (m_enable_derivatives) {
+        // mipmapped textures use CUDA mipmapped arrays
+        unsigned num_levels = 1 + unsigned(std::log2f(float(std::min(width, height))));
+        cudaExtent extent = make_cudaExtent(width, height, 0);
+        cudaMipmappedArray_t device_tex_miparray;
+        check_cuda_success(cudaMallocMipmappedArray(
+            &device_tex_miparray, &channel_desc, extent, num_levels));
+
+        unsigned cur_width = width, cur_height = height;
+        float4 *prev_data = nullptr;
+
+        // create all mipmap levels and copy them to the CUDA arrays in the mipmapped array
+        for (unsigned level = 0; level < num_levels; ++level) {
+            float4 *cur_data;
+            if (level == 0)
+                cur_data = reinterpret_cast<float4 *>(FreeImage_GetBits(dib));
+            else
+                cur_data = gen_mip_level(prev_data, cur_width, cur_height);
+
+            cudaArray_t device_cur_level_array;
+            cudaGetMipmappedArrayLevel(&device_cur_level_array, device_tex_miparray, level);
+            check_cuda_success(cudaMemcpyToArray(device_cur_level_array, 0, 0, cur_data,
+                cur_width * cur_height * sizeof(float4), cudaMemcpyHostToDevice));
+
+            if (level >= 2)
+                free(prev_data);
+            prev_data = cur_data;
+        }
+        if (num_levels >= 2)
+            free(prev_data);
+
+        res_desc.resType = cudaResourceTypeMipmappedArray;
+        res_desc.res.mipmap.mipmap = device_tex_miparray;
+
+        m_all_texture_mipmapped_arrays.push_back(device_tex_miparray);
+    } else {
+        // 2D texture objects use CUDA arrays
+        cudaArray_t device_tex_data;
+        check_cuda_success(cudaMallocArray(&device_tex_data, &channel_desc, width, height));
+
+        BYTE const *data = FreeImage_GetBits(dib);
+        check_cuda_success(cudaMemcpyToArray(device_tex_data, 0, 0, data,
+            width * height * sizeof(float) * 4, cudaMemcpyHostToDevice));
+
+        res_desc.resType = cudaResourceTypeArray;
+        res_desc.res.array.array = device_tex_data;
+
+        m_all_texture_arrays.push_back(device_tex_data);
+    }
 
     // For cube maps we need clamped address mode to avoid artifacts in the corners
     cudaTextureAddressMode addr_mode =
         tex->get_shape() == mi::mdl::IType_texture::TS_CUBE
         ? cudaAddressModeClamp : cudaAddressModeWrap;
 
+    // Create filtered texture object
     cudaTextureDesc tex_desc;
     memset(&tex_desc, 0, sizeof(tex_desc));
     tex_desc.addressMode[0]   = addr_mode;
@@ -1088,6 +1212,12 @@ bool Material_gpu_context::prepare_texture(
     tex_desc.filterMode       = cudaFilterModeLinear;
     tex_desc.readMode         = cudaReadModeElementType;
     tex_desc.normalizedCoords = 1;
+    if (res_desc.resType == cudaResourceTypeMipmappedArray) {
+        tex_desc.mipmapFilterMode = cudaFilterModeLinear;
+        tex_desc.maxAnisotropy = 16;
+        tex_desc.minMipmapLevelClamp = 0.f;
+        tex_desc.maxMipmapLevelClamp = 1000.f;  // default value in OpenGL
+    }
 
     cudaTextureObject_t tex_obj = 0;
     check_cuda_success(cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, nullptr));
@@ -1205,14 +1335,18 @@ public:
     /// \param num_texture_results  the size of a renderer provided array for texture results
     ///                             in the MDL shading state in number of float4 elements
     ///                             processed by the init() function of distribution functions
+    /// \param enable_derivatives   If true, the generated code will expect the renderer to provide
+    ///                             a state and a texture runtime with derivatives
     Material_ptx_compiler(
         mi::mdl::IMDL       *mdl_compiler,
-        unsigned             num_texture_results)
+        unsigned             num_texture_results,
+        bool                 enable_derivatives=false)
     : Material_compiler(mdl_compiler)
     , m_jit_be(mi::base::make_handle(mdl_compiler->load_code_generator("jit"))
         .get_interface<mi::mdl::ICode_generator_jit>())
     , m_link_unit()
     , m_res_col(mdl_compiler)
+    , m_enable_derivatives(enable_derivatives)
     , m_gen_base_name_suffix_counter(0)
     {
         // Set the JIT backend options
@@ -1221,6 +1355,12 @@ public:
         // Option "enable_ro_segment": Default is disabled.
         // If you have a lot of big arrays, enabling this might speed up compilation.
         options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, "true");
+
+        if (enable_derivatives) {
+            // Option "jit_tex_runtime_with_derivs": Default is disabled.
+            // We enable it to get coordinates with derivatives for texture lookup functions.
+            options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, "true");
+        }
 
         // Option "jit_tex_lookup_call_mode": Default mode is vtable mode.
         // You can switch to the slower vtable mode by commenting out the next line.
@@ -1330,6 +1470,7 @@ protected:
     std::vector<Material_instance>         m_mat_instances;
     std::vector<size_t>                    m_arg_block_indexes;
     std::vector<Argument_block>            m_arg_blocks;
+    bool                                   m_enable_derivatives;
     size_t                                 m_gen_base_name_suffix_counter;
 };
 
@@ -1577,20 +1718,16 @@ bool Material_ptx_compiler::add_material(
                 }
 
                 // Import full material into the main lambda 
-                // and access the requested distribution function node
                 mi::mdl::DAG_node const *material_constructor =
                     main_df->import_expr(mat_instance->get_constructor());
-                mi::mdl::DAG_node const *df_node = 
-                    get_dag_arg(material_constructor, tokens_c, main_df.get());
-                if (!df_node)
-                    return false;
 
                 // Initialize the distribution function
                 if (dist_func->initialize(
-                    material_constructor,
-                    df_node,
-                    /*include_geometry_normal=*/true,
-                    &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
+                        material_constructor,
+                        function_descriptions[i].path,
+                        /*include_geometry_normal=*/ true,
+                        /*calc_derivatives=*/ m_enable_derivatives,
+                        &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
                     return false;
 
                 // Collect the resources of the distribution function and the material arguments
@@ -1636,6 +1773,9 @@ bool Material_ptx_compiler::add_material(
                 // (making sure the expression is owned by it).
                 expr_node = lambda->import_expr(expr_node);
                 lambda->set_body(expr_node);
+
+                if (m_enable_derivatives)
+                    lambda->initialize_derivative_infos(&m_module_manager);
 
                 // Collect the resources of the lambda and the material arguments
                 m_res_col.collect(lambda.get());

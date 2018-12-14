@@ -25,7 +25,7 @@ namespace {
 class ELFAsmParser : public MCAsmParserExtension {
   template<bool (ELFAsmParser::*HandlerMethod)(StringRef, SMLoc)>
   void addDirectiveHandler(StringRef Directive) {
-    MCAsmParser::ExtensionDirectiveHandler Handler = MISTD::make_pair(
+    MCAsmParser::ExtensionDirectiveHandler Handler = std::make_pair(
         this, HandleDirective<ELFAsmParser, HandlerMethod>);
 
     getParser().addDirectiveHandler(Directive, Handler);

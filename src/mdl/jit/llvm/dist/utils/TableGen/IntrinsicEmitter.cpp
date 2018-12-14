@@ -26,7 +26,7 @@ namespace {
 class IntrinsicEmitter {
   RecordKeeper &Records;
   bool TargetOnly;
-  MISTD::string TargetPrefix;
+  std::string TargetPrefix;
 
 public:
   IntrinsicEmitter(RecordKeeper &R, bool T)
@@ -36,24 +36,24 @@ public:
 
   void EmitPrefix(raw_ostream &OS);
 
-  void EmitEnumInfo(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitEnumInfo(const std::vector<CodeGenIntrinsic> &Ints,
                     raw_ostream &OS);
 
-  void EmitFnNameRecognizer(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitFnNameRecognizer(const std::vector<CodeGenIntrinsic> &Ints,
                             raw_ostream &OS);
-  void EmitIntrinsicToNameTable(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitIntrinsicToNameTable(const std::vector<CodeGenIntrinsic> &Ints,
                                 raw_ostream &OS);
-  void EmitIntrinsicToOverloadTable(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitIntrinsicToOverloadTable(const std::vector<CodeGenIntrinsic> &Ints,
                                     raw_ostream &OS);
-  void EmitVerifier(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitVerifier(const std::vector<CodeGenIntrinsic> &Ints,
                     raw_ostream &OS);
-  void EmitGenerator(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitGenerator(const std::vector<CodeGenIntrinsic> &Ints,
                      raw_ostream &OS);
-  void EmitAttributes(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitAttributes(const std::vector<CodeGenIntrinsic> &Ints,
                       raw_ostream &OS);
-  void EmitModRefBehavior(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitModRefBehavior(const std::vector<CodeGenIntrinsic> &Ints,
                           raw_ostream &OS);
-  void EmitIntrinsicToGCCBuiltinMap(const MISTD::vector<CodeGenIntrinsic> &Ints,
+  void EmitIntrinsicToGCCBuiltinMap(const std::vector<CodeGenIntrinsic> &Ints,
                                     raw_ostream &OS);
   void EmitSuffix(raw_ostream &OS);
 };
@@ -66,7 +66,7 @@ public:
 void IntrinsicEmitter::run(raw_ostream &OS) {
   emitSourceFileHeader("Intrinsic Function Source Fragment", OS);
 
-  MISTD::vector<CodeGenIntrinsic> Ints = LoadIntrinsics(Records, TargetOnly);
+  std::vector<CodeGenIntrinsic> Ints = LoadIntrinsics(Records, TargetOnly);
 
   if (TargetOnly && !Ints.empty())
     TargetPrefix = Ints[0].TargetPrefix;
@@ -118,7 +118,7 @@ void IntrinsicEmitter::EmitSuffix(raw_ostream &OS) {
         "#endif\n\n";
 }
 
-void IntrinsicEmitter::EmitEnumInfo(const MISTD::vector<CodeGenIntrinsic> &Ints,
+void IntrinsicEmitter::EmitEnumInfo(const std::vector<CodeGenIntrinsic> &Ints,
                                     raw_ostream &OS) {
   OS << "// Enum values for Intrinsics.h\n";
   OS << "#ifdef GET_INTRINSIC_ENUM_VALUES\n";
@@ -126,14 +126,14 @@ void IntrinsicEmitter::EmitEnumInfo(const MISTD::vector<CodeGenIntrinsic> &Ints,
     OS << "    " << Ints[i].EnumName;
     OS << ((i != e-1) ? ", " : "  ");
     if (Ints[i].EnumName.size() < 40)
-      OS << MISTD::string(40-Ints[i].EnumName.size(), ' ');
+      OS << std::string(40-Ints[i].EnumName.size(), ' ');
     OS << " // " << Ints[i].Name << "\n";
   }
   OS << "#endif\n\n";
 }
 
 struct IntrinsicNameSorter {
-  IntrinsicNameSorter(const MISTD::vector<CodeGenIntrinsic> &I)
+  IntrinsicNameSorter(const std::vector<CodeGenIntrinsic> &I)
   : Ints(I) {}
 
   // Sort in reverse order of intrinsic name so "abc.def" appears after
@@ -143,14 +143,14 @@ struct IntrinsicNameSorter {
   }
 
 private:
-  const MISTD::vector<CodeGenIntrinsic> &Ints;
+  const std::vector<CodeGenIntrinsic> &Ints;
 };
 
 void IntrinsicEmitter::
-EmitFnNameRecognizer(const MISTD::vector<CodeGenIntrinsic> &Ints,
+EmitFnNameRecognizer(const std::vector<CodeGenIntrinsic> &Ints,
                      raw_ostream &OS) {
   // Build a 'first character of function name' -> intrinsic # mapping.
-  MISTD::map<char, MISTD::vector<unsigned> > IntMapping;
+  std::map<char, std::vector<unsigned> > IntMapping;
   for (unsigned i = 0, e = Ints.size(); i != e; ++i)
     IntMapping[Ints[i].Name[5]].push_back(i);
 
@@ -161,30 +161,30 @@ EmitFnNameRecognizer(const MISTD::vector<CodeGenIntrinsic> &Ints,
   OS << "  default: break;\n";
   IntrinsicNameSorter Sorter(Ints);
   // Emit the intrinsic matching stuff by first letter.
-  for (MISTD::map<char, MISTD::vector<unsigned> >::iterator I = IntMapping.begin(),
+  for (std::map<char, std::vector<unsigned> >::iterator I = IntMapping.begin(),
        E = IntMapping.end(); I != E; ++I) {
     OS << "  case '" << I->first << "':\n";
-    MISTD::vector<unsigned> &IntList = I->second;
+    std::vector<unsigned> &IntList = I->second;
 
     // Sort intrinsics in reverse order of their names
-    MISTD::sort(IntList.begin(), IntList.end(), Sorter);
+    std::sort(IntList.begin(), IntList.end(), Sorter);
 
     // Emit all the overloaded intrinsics first, build a table of the
     // non-overloaded ones.
-    MISTD::vector<StringMatcher::StringPair> MatchTable;
+    std::vector<StringMatcher::StringPair> MatchTable;
 
     for (unsigned i = 0, e = IntList.size(); i != e; ++i) {
       unsigned IntNo = IntList[i];
-      MISTD::string Result = "return " + TargetPrefix + "Intrinsic::" +
+      std::string Result = "return " + TargetPrefix + "Intrinsic::" +
         Ints[IntNo].EnumName + ";";
 
       if (!Ints[IntNo].isOverloaded) {
-        MatchTable.push_back(MISTD::make_pair(Ints[IntNo].Name.substr(6),Result));
+        MatchTable.push_back(std::make_pair(Ints[IntNo].Name.substr(6),Result));
         continue;
       }
 
       // For overloaded intrinsics, only the prefix needs to match
-      MISTD::string TheStr = Ints[IntNo].Name.substr(6);
+      std::string TheStr = Ints[IntNo].Name.substr(6);
       TheStr += '.';  // Require "bswap." instead of bswap.
       OS << "    if (NameR.startswith(\"" << TheStr << "\")) "
          << Result << '\n';
@@ -200,7 +200,7 @@ EmitFnNameRecognizer(const MISTD::vector<CodeGenIntrinsic> &Ints,
 }
 
 void IntrinsicEmitter::
-EmitIntrinsicToNameTable(const MISTD::vector<CodeGenIntrinsic> &Ints,
+EmitIntrinsicToNameTable(const std::vector<CodeGenIntrinsic> &Ints,
                          raw_ostream &OS) {
   OS << "// Intrinsic ID to name table\n";
   OS << "#ifdef GET_INTRINSIC_NAME_TABLE\n";
@@ -211,7 +211,7 @@ EmitIntrinsicToNameTable(const MISTD::vector<CodeGenIntrinsic> &Ints,
 }
 
 void IntrinsicEmitter::
-EmitIntrinsicToOverloadTable(const MISTD::vector<CodeGenIntrinsic> &Ints,
+EmitIntrinsicToOverloadTable(const std::vector<CodeGenIntrinsic> &Ints,
                          raw_ostream &OS) {
   OS << "// Intrinsic ID to overload bitset\n";
   OS << "#ifdef GET_INTRINSIC_OVERLOAD_TABLE\n";
@@ -268,7 +268,7 @@ enum IIT_Info {
 
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
-                                 MISTD::vector<unsigned char> &Sig) {
+                                 std::vector<unsigned char> &Sig) {
   if (EVT(VT).isInteger()) {
     unsigned BitWidth = EVT(VT).getSizeInBits();
     switch (BitWidth) {
@@ -299,8 +299,8 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
 #pragma optimize("",off) // MSVC 2010 optimizer can't deal with this function.
 #endif
 
-static void EncodeFixedType(Record *R, MISTD::vector<unsigned char> &ArgCodes,
-                            MISTD::vector<unsigned char> &Sig) {
+static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
+                            std::vector<unsigned char> &Sig) {
 
   if (R->isSubClassOf("LLVMMatchType")) {
     unsigned Number = R->getValueAsInt("Number");
@@ -377,8 +377,8 @@ static void EncodeFixedType(Record *R, MISTD::vector<unsigned char> &ArgCodes,
 /// ComputeFixedEncoding - If we can encode the type signature for this
 /// intrinsic into 32 bits, return it.  If not, return ~0U.
 static void ComputeFixedEncoding(const CodeGenIntrinsic &Int,
-                                 MISTD::vector<unsigned char> &TypeSig) {
-  MISTD::vector<unsigned char> ArgCodes;
+                                 std::vector<unsigned char> &TypeSig) {
+  std::vector<unsigned char> ArgCodes;
 
   if (Int.IS.RetVTs.empty())
     TypeSig.push_back(IIT_Done);
@@ -407,15 +407,15 @@ static void printIITEntry(raw_ostream &OS, unsigned char X) {
   OS << (unsigned)X;
 }
 
-void IntrinsicEmitter::EmitGenerator(const MISTD::vector<CodeGenIntrinsic> &Ints,
+void IntrinsicEmitter::EmitGenerator(const std::vector<CodeGenIntrinsic> &Ints,
                                      raw_ostream &OS) {
   // If we can compute a 32-bit fixed encoding for this intrinsic, do so and
   // capture it in this vector, otherwise store a ~0U.
-  MISTD::vector<unsigned> FixedEncodings;
+  std::vector<unsigned> FixedEncodings;
 
-  SequenceToOffsetTable<MISTD::vector<unsigned char> > LongEncodingTable;
+  SequenceToOffsetTable<std::vector<unsigned char> > LongEncodingTable;
 
-  MISTD::vector<unsigned char> TypeSig;
+  std::vector<unsigned char> TypeSig;
 
   // Compute the unique argument type info.
   for (unsigned i = 0, e = Ints.size(); i != e; ++i) {
@@ -533,7 +533,7 @@ struct AttributeComparator {
 
 /// EmitAttributes - This emits the Intrinsic::getAttributes method.
 void IntrinsicEmitter::
-EmitAttributes(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS) {
+EmitAttributes(const std::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS) {
   OS << "// Add parameter attributes that are not common to all intrinsics.\n";
   OS << "#ifdef GET_INTRINSIC_ATTRIBUTES\n";
   if (TargetOnly)
@@ -543,7 +543,7 @@ EmitAttributes(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS) {
     OS << "AttributeSet Intrinsic::getAttributes(LLVMContext &C, ID id) {\n";
 
   // Compute the maximum number of attribute arguments and the map
-  typedef MISTD::map<const CodeGenIntrinsic*, unsigned,
+  typedef std::map<const CodeGenIntrinsic*, unsigned,
                    AttributeComparator> UniqAttrMapTy;
   UniqAttrMapTy UniqAttributes;
   unsigned maxArgAttrs = 0;
@@ -551,7 +551,7 @@ EmitAttributes(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS) {
   for (unsigned i = 0, e = Ints.size(); i != e; ++i) {
     const CodeGenIntrinsic &intrinsic = Ints[i];
     maxArgAttrs =
-      MISTD::max(maxArgAttrs, unsigned(intrinsic.ArgumentAttributes.size()));
+      std::max(maxArgAttrs, unsigned(intrinsic.ArgumentAttributes.size()));
     unsigned &N = UniqAttributes[&intrinsic];
     if (N) continue;
     assert(AttrNum < 256 && "Too many unique attributes for table!");
@@ -681,7 +681,7 @@ EmitAttributes(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS) {
 
 /// EmitModRefBehavior - Determine intrinsic alias analysis mod/ref behavior.
 void IntrinsicEmitter::
-EmitModRefBehavior(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS){
+EmitModRefBehavior(const std::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS){
   OS << "// Determine intrinsic alias analysis mod/ref behavior.\n"
      << "#ifdef GET_INTRINSIC_MODREF_BEHAVIOR\n"
      << "assert(iid <= Intrinsic::" << Ints.back().EnumName << " && "
@@ -716,15 +716,15 @@ EmitModRefBehavior(const MISTD::vector<CodeGenIntrinsic> &Ints, raw_ostream &OS)
 
 /// EmitTargetBuiltins - All of the builtins in the specified map are for the
 /// same target, and we already checked it.
-static void EmitTargetBuiltins(const MISTD::map<MISTD::string, MISTD::string> &BIM,
-                               const MISTD::string &TargetPrefix,
+static void EmitTargetBuiltins(const std::map<std::string, std::string> &BIM,
+                               const std::string &TargetPrefix,
                                raw_ostream &OS) {
 
-  MISTD::vector<StringMatcher::StringPair> Results;
+  std::vector<StringMatcher::StringPair> Results;
 
-  for (MISTD::map<MISTD::string, MISTD::string>::const_iterator I = BIM.begin(),
+  for (std::map<std::string, std::string>::const_iterator I = BIM.begin(),
        E = BIM.end(); I != E; ++I) {
-    MISTD::string ResultCode =
+    std::string ResultCode =
     "return " + TargetPrefix + "Intrinsic::" + I->second + ";";
     Results.push_back(StringMatcher::StringPair(I->first, ResultCode));
   }
@@ -734,16 +734,16 @@ static void EmitTargetBuiltins(const MISTD::map<MISTD::string, MISTD::string> &B
 
 
 void IntrinsicEmitter::
-EmitIntrinsicToGCCBuiltinMap(const MISTD::vector<CodeGenIntrinsic> &Ints,
+EmitIntrinsicToGCCBuiltinMap(const std::vector<CodeGenIntrinsic> &Ints,
                              raw_ostream &OS) {
-  typedef MISTD::map<MISTD::string, MISTD::map<MISTD::string, MISTD::string> > BIMTy;
+  typedef std::map<std::string, std::map<std::string, std::string> > BIMTy;
   BIMTy BuiltinMap;
   for (unsigned i = 0, e = Ints.size(); i != e; ++i) {
     if (!Ints[i].GCCBuiltinName.empty()) {
       // Get the map for this target prefix.
-      MISTD::map<MISTD::string, MISTD::string> &BIM =BuiltinMap[Ints[i].TargetPrefix];
+      std::map<std::string, std::string> &BIM =BuiltinMap[Ints[i].TargetPrefix];
 
-      if (!BIM.insert(MISTD::make_pair(Ints[i].GCCBuiltinName,
+      if (!BIM.insert(std::make_pair(Ints[i].GCCBuiltinName,
                                      Ints[i].EnumName)).second)
         PrintFatalError("Intrinsic '" + Ints[i].TheDef->getName() +
               "': duplicate GCC builtin name!");

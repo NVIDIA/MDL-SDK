@@ -135,7 +135,7 @@ MemoryBuffer *MemoryBuffer::getNewUninitMemBuffer(size_t Size,
     RoundUpToAlignment(sizeof(MemoryBufferMem) + BufferName.size() + 1,
                        sizeof(void*)); // TODO: Is sizeof(void*) enough?
   size_t RealLen = AlignedStringLen + Size + 1;
-  char *Mem = static_cast<char*>(operator new(RealLen, MISTD::nothrow));
+  char *Mem = static_cast<char*>(operator new(RealLen, std::nothrow));
   if (!Mem) return 0;
 
   // The name is stored after the class itself.
@@ -364,7 +364,7 @@ static error_code getOpenFileImpl(int FD, const char *Filename,
   MemoryBuffer *Buf = MemoryBuffer::getNewUninitMemBuffer(MapSize, Filename);
   if (!Buf) {
     // Failed to create a buffer. The only way it can fail is if
-    // new(MISTD::nothrow) returns 0.
+    // new(std::nothrow) returns 0.
     return make_error_code(errc::not_enough_memory);
   }
 

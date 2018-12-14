@@ -26,7 +26,7 @@ static bool isIdentChar(char C) {
   C == '_';
 }
 
-MISTD::string AsmWriterOperand::getCode() const {
+std::string AsmWriterOperand::getCode() const {
   if (OperandType == isLiteralTextOperand) {
     if (Str.size() == 1)
       return "O << '" + Str + "'; ";
@@ -36,7 +36,7 @@ MISTD::string AsmWriterOperand::getCode() const {
   if (OperandType == isLiteralStatementOperand)
     return Str;
 
-  MISTD::string Result = Str + "(MI";
+  std::string Result = Str + "(MI";
   if (MIOpNo != ~0U)
     Result += ", " + utostr(MIOpNo);
   Result += ", O";
@@ -61,12 +61,12 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
   // NOTE: Any extensions to this code need to be mirrored in the
   // AsmPrinter::printInlineAsm code that executes as compile time (assuming
   // that inline asm strings should also get the new feature)!
-  MISTD::string AsmString = CGI.FlattenAsmStringVariants(CGI.AsmString, Variant);
-  MISTD::string::size_type LastEmitted = 0;
+  std::string AsmString = CGI.FlattenAsmStringVariants(CGI.AsmString, Variant);
+  std::string::size_type LastEmitted = 0;
   while (LastEmitted != AsmString.size()) {
-    MISTD::string::size_type DollarPos =
+    std::string::size_type DollarPos =
       AsmString.find_first_of("$\\", LastEmitted);
-    if (DollarPos == MISTD::string::npos) DollarPos = AsmString.size();
+    if (DollarPos == std::string::npos) DollarPos = AsmString.size();
 
     // Emit a constant string fragment.
     if (DollarPos != LastEmitted) {
@@ -98,7 +98,7 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
             AddLiteralString("\\\\");
             break;
           default:
-            AddLiteralString(MISTD::string(1, AsmString[LastEmitted]));
+            AddLiteralString(std::string(1, AsmString[LastEmitted]));
             break;
         }
     } else if (AsmString[DollarPos] == '\\') {
@@ -120,9 +120,9 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
             AsmWriterOperand("O.PadToColumn(" + utostr(DestColumn) + ");\n",
                              AsmWriterOperand::isLiteralStatementOperand));
           break;
-        } else if (MISTD::string("${|}\\").find(AsmString[DollarPos+1])
-                   != MISTD::string::npos) {
-          AddLiteralString(MISTD::string(1, AsmString[DollarPos+1]));
+        } else if (std::string("${|}\\").find(AsmString[DollarPos+1])
+                   != std::string::npos) {
+          AddLiteralString(std::string(1, AsmString[DollarPos+1]));
         } else {
           PrintFatalError("Non-supported escaped character found in instruction '" +
             CGI.TheDef->getName() + "'!");
@@ -136,7 +136,7 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
       LastEmitted = DollarPos+2;
     } else {
       // Get the name of the variable.
-      MISTD::string::size_type VarEnd = DollarPos+1;
+      std::string::size_type VarEnd = DollarPos+1;
 
       // handle ${foo}bar as $foo by detecting whether the character following
       // the dollar sign is a curly brace.  If so, advance VarEnd and DollarPos
@@ -150,13 +150,13 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
 
       while (VarEnd < AsmString.size() && isIdentChar(AsmString[VarEnd]))
         ++VarEnd;
-      MISTD::string VarName(AsmString.begin()+DollarPos+1,
+      std::string VarName(AsmString.begin()+DollarPos+1,
                           AsmString.begin()+VarEnd);
 
       // Modifier - Support ${foo:modifier} syntax, where "modifier" is passed
       // into printOperand.  Also support ${:feature}, which is passed into
       // PrintSpecial.
-      MISTD::string Modifier;
+      std::string Modifier;
 
       // In order to avoid starting the next string at the terminating curly
       // brace, advance the end position past it if we found an opening curly
@@ -176,7 +176,7 @@ AsmWriterInst::AsmWriterInst(const CodeGenInstruction &CGI,
           unsigned ModifierStart = VarEnd;
           while (VarEnd < AsmString.size() && isIdentChar(AsmString[VarEnd]))
             ++VarEnd;
-          Modifier = MISTD::string(AsmString.begin()+ModifierStart,
+          Modifier = std::string(AsmString.begin()+ModifierStart,
                                  AsmString.begin()+VarEnd);
           if (Modifier.empty())
             PrintFatalError("Bad operand modifier name in '"+ CGI.TheDef->getName() + "'");

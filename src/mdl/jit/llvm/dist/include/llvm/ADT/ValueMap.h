@@ -84,7 +84,7 @@ class ValueMap {
 public:
   typedef KeyT key_type;
   typedef ValueT mapped_type;
-  typedef MISTD::pair<KeyT, ValueT> value_type;
+  typedef std::pair<KeyT, ValueT> value_type;
 
   explicit ValueMap(unsigned NumInitBuckets = 64)
     : Map(NumInitBuckets), Data() {}
@@ -130,10 +130,10 @@ public:
   // Inserts key,value pair into the map if the key isn't already in the map.
   // If the key is already in the map, it returns false and doesn't update the
   // value.
-  MISTD::pair<iterator, bool> insert(const MISTD::pair<KeyT, ValueT> &KV) {
-    MISTD::pair<typename MapT::iterator, bool> map_result=
-      Map.insert(MISTD::make_pair(Wrap(KV.first), KV.second));
-    return MISTD::make_pair(iterator(map_result.first), map_result.second);
+  std::pair<iterator, bool> insert(const std::pair<KeyT, ValueT> &KV) {
+    std::pair<typename MapT::iterator, bool> map_result=
+      Map.insert(std::make_pair(Wrap(KV.first), KV.second));
+    return std::make_pair(iterator(map_result.first), map_result.second);
   }
 
   /// insert - Range insertion of pairs.
@@ -239,7 +239,7 @@ public:
       if (I != Copy.Map->Map.end()) {
         ValueT Target(I->second);
         Copy.Map->Map.erase(I);  // Definitely destroys *this.
-        Copy.Map->insert(MISTD::make_pair(typed_new_key, Target));
+        Copy.Map->insert(std::make_pair(typed_new_key, Target));
       }
     }
     if (M)
@@ -275,8 +275,8 @@ struct DenseMapInfo<ValueMapCallbackVH<KeyT, ValueT, Config> > {
 
 template<typename DenseMapT, typename KeyT>
 class ValueMapIterator :
-    public MISTD::iterator<MISTD::forward_iterator_tag,
-                         MISTD::pair<KeyT, typename DenseMapT::mapped_type>,
+    public std::iterator<std::forward_iterator_tag,
+                         std::pair<KeyT, typename DenseMapT::mapped_type>,
                          ptrdiff_t> {
   typedef typename DenseMapT::iterator BaseT;
   typedef typename DenseMapT::mapped_type ValueT;
@@ -292,8 +292,8 @@ public:
     const KeyT first;
     ValueT& second;
     ValueTypeProxy *operator->() { return this; }
-    operator MISTD::pair<KeyT, ValueT>() const {
-      return MISTD::make_pair(first, second);
+    operator std::pair<KeyT, ValueT>() const {
+      return std::make_pair(first, second);
     }
   };
 
@@ -324,8 +324,8 @@ public:
 
 template<typename DenseMapT, typename KeyT>
 class ValueMapConstIterator :
-    public MISTD::iterator<MISTD::forward_iterator_tag,
-                         MISTD::pair<KeyT, typename DenseMapT::mapped_type>,
+    public std::iterator<std::forward_iterator_tag,
+                         std::pair<KeyT, typename DenseMapT::mapped_type>,
                          ptrdiff_t> {
   typedef typename DenseMapT::const_iterator BaseT;
   typedef typename DenseMapT::mapped_type ValueT;
@@ -342,8 +342,8 @@ public:
     const KeyT first;
     const ValueT& second;
     ValueTypeProxy *operator->() { return this; }
-    operator MISTD::pair<KeyT, ValueT>() const {
-      return MISTD::make_pair(first, second);
+    operator std::pair<KeyT, ValueT>() const {
+      return std::make_pair(first, second);
     }
   };
 

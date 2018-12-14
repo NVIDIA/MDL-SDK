@@ -22,8 +22,8 @@ using namespace llvm;
 static cl::opt<bool> ViewBackground("view-background", cl::Hidden,
   cl::desc("Execute graph viewer in the background. Creates tmp file litter."));
 
-MISTD::string llvm::DOT::EscapeString(const MISTD::string &Label) {
-  MISTD::string Str(Label);
+std::string llvm::DOT::EscapeString(const std::string &Label) {
+  std::string Str(Label);
   for (unsigned i = 0; i != Str.length(); ++i)
   switch (Str[i]) {
     case '\n':
@@ -65,7 +65,7 @@ StringRef llvm::DOT::getColorString(unsigned ColorNumber) {
   return Colors[ColorNumber % NumColors];
 }
 
-MISTD::string llvm::createGraphFilename(const Twine &Name, int &FD) {
+std::string llvm::createGraphFilename(const Twine &Name, int &FD) {
   FD = -1;
   SmallString<128> Filename;
   error_code EC = sys::fs::createTemporaryFile(Name, "dot", FD, Filename);
@@ -80,8 +80,8 @@ MISTD::string llvm::createGraphFilename(const Twine &Name, int &FD) {
 
 // Execute the graph viewer. Return true if successful.
 static bool LLVM_ATTRIBUTE_UNUSED
-ExecGraphViewer(StringRef ExecPath, MISTD::vector<const char*> &args,
-                StringRef Filename, bool wait, MISTD::string &ErrMsg) {
+ExecGraphViewer(StringRef ExecPath, std::vector<const char*> &args,
+                StringRef Filename, bool wait, std::string &ErrMsg) {
   if (wait) {
     if (sys::ExecuteAndWait(ExecPath, &args[0],0,0,0,0,&ErrMsg)) {
       errs() << "Error: " << ErrMsg << "\n";
@@ -100,13 +100,13 @@ ExecGraphViewer(StringRef ExecPath, MISTD::vector<const char*> &args,
 
 void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
                         GraphProgram::Name program) {
-  MISTD::string Filename = FilenameRef;
+  std::string Filename = FilenameRef;
   wait &= !ViewBackground;
-  MISTD::string ErrMsg;
+  std::string ErrMsg;
 #if HAVE_GRAPHVIZ
-  MISTD::string Graphviz(LLVM_PATH_GRAPHVIZ);
+  std::string Graphviz(LLVM_PATH_GRAPHVIZ);
 
-  MISTD::vector<const char*> args;
+  std::vector<const char*> args;
   args.push_back(Graphviz.c_str());
   args.push_back(Filename.c_str());
   args.push_back(0);
@@ -116,7 +116,7 @@ void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
     return;
 
 #elif HAVE_XDOT
-  MISTD::vector<const char*> args;
+  std::vector<const char*> args;
   args.push_back(LLVM_PATH_XDOT);
   args.push_back(Filename.c_str());
 
@@ -136,8 +136,8 @@ void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
 
 #elif (HAVE_GV && (HAVE_DOT || HAVE_FDP || HAVE_NEATO || \
                    HAVE_TWOPI || HAVE_CIRCO))
-  MISTD::string PSFilename = Filename + ".ps";
-  MISTD::string prog;
+  std::string PSFilename = Filename + ".ps";
+  std::string prog;
 
   // Set default grapher
 #if HAVE_CIRCO
@@ -178,7 +178,7 @@ void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
     prog = LLVM_PATH_CIRCO;
 #endif
 
-  MISTD::vector<const char*> args;
+  std::vector<const char*> args;
   args.push_back(prog.c_str());
   args.push_back("-Tps");
   args.push_back("-Nfontname=Courier");
@@ -193,7 +193,7 @@ void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
   if (!ExecGraphViewer(prog, args, Filename, wait, ErrMsg))
     return;
 
-  MISTD::string gv(LLVM_PATH_GV);
+  std::string gv(LLVM_PATH_GV);
   args.clear();
   args.push_back(gv.c_str());
   args.push_back(PSFilename.c_str());
@@ -205,9 +205,9 @@ void llvm::DisplayGraph(StringRef FilenameRef, bool wait,
     return;
 
 #elif HAVE_DOTTY
-  MISTD::string dotty(LLVM_PATH_DOTTY);
+  std::string dotty(LLVM_PATH_DOTTY);
 
-  MISTD::vector<const char*> args;
+  std::vector<const char*> args;
   args.push_back(dotty.c_str());
   args.push_back(Filename.c_str());
   args.push_back(0);

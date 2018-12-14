@@ -48,8 +48,8 @@ public:
   typedef Arg * const *                 value_type;
   typedef Arg * const &                 reference;
   typedef Arg * const *                 pointer;
-  typedef MISTD::forward_iterator_tag   iterator_category;
-  typedef MISTD::ptrdiff_t              difference_type;
+  typedef std::forward_iterator_tag   iterator_category;
+  typedef std::ptrdiff_t              difference_type;
 
   arg_iterator(SmallVectorImpl<Arg*>::const_iterator it,
                 const ArgList &_Args, OptSpecifier _Id0 = 0U,
@@ -210,7 +210,7 @@ public:
 
   /// getAllArgValues - Get the values of all instances of the given argument
   /// as strings.
-  MISTD::vector<MISTD::string> getAllArgValues(OptSpecifier Id) const;
+  std::vector<std::string> getAllArgValues(OptSpecifier Id) const;
 
   /// @}
   /// @name Translation Utilities
@@ -271,7 +271,7 @@ public:
   const char *MakeArgString(const char *Str) const {
     return MakeArgString(StringRef(Str));
   }
-  const char *MakeArgString(MISTD::string Str) const {
+  const char *MakeArgString(std::string Str) const {
     return MakeArgString(StringRef(Str));
   }
   const char *MakeArgString(const Twine &Str) const;
@@ -298,7 +298,7 @@ private:
   /// This is mutable since we treat the ArgList as being the list
   /// of Args, and allow routines to add new strings (to have a
   /// convenient place to store the memory) via MakeIndex.
-  mutable MISTD::list<MISTD::string> SynthesizedStrings;
+  mutable std::list<std::string> SynthesizedStrings;
 
   /// The number of original input argument strings.
   unsigned NumInputArgStrings;

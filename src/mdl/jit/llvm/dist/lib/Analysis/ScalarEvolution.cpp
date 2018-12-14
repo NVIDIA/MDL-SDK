@@ -644,12 +644,12 @@ static void GroupByComplexity(SmallVectorImpl<const SCEV *> &Ops,
     // Special case it.
     const SCEV *&LHS = Ops[0], *&RHS = Ops[1];
     if (SCEVComplexityCompare(LI)(RHS, LHS))
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
     return;
   }
 
   // Do the rough sort by complexity.
-  MISTD::stable_sort(Ops.begin(), Ops.end(), SCEVComplexityCompare(LI));
+  std::stable_sort(Ops.begin(), Ops.end(), SCEVComplexityCompare(LI));
 
   // Now that we are sorted by complexity, group elements of the same
   // complexity.  Note that this is, at worst, N^2, but the vector is likely to
@@ -664,7 +664,7 @@ static void GroupByComplexity(SmallVectorImpl<const SCEV *> &Ops,
     for (unsigned j = i+1; j != e && Ops[j]->getSCEVType() == Complexity; ++j) {
       if (Ops[j] == S) { // Found a duplicate.
         // Move it to immediately after i'th element.
-        MISTD::swap(Ops[i+1], Ops[j]);
+        std::swap(Ops[i+1], Ops[j]);
         ++i;   // no need to rescan it.
         if (i == e-2) return;  // Done!
       }
@@ -1419,8 +1419,8 @@ CollectAddOperandsWithScales(DenseMap<const SCEV *, APInt> &M,
         // the map.
         SmallVector<const SCEV *, 4> MulOps(Mul->op_begin()+1, Mul->op_end());
         const SCEV *Key = SE.getMulExpr(MulOps);
-        MISTD::pair<DenseMap<const SCEV *, APInt>::iterator, bool> Pair =
-          M.insert(MISTD::make_pair(Key, NewScale));
+        std::pair<DenseMap<const SCEV *, APInt>::iterator, bool> Pair =
+          M.insert(std::make_pair(Key, NewScale));
         if (Pair.second) {
           NewOps.push_back(Pair.first->first);
         } else {
@@ -1432,8 +1432,8 @@ CollectAddOperandsWithScales(DenseMap<const SCEV *, APInt> &M,
       }
     } else {
       // An ordinary operand. Update the map.
-      MISTD::pair<DenseMap<const SCEV *, APInt>::iterator, bool> Pair =
-        M.insert(MISTD::make_pair(Ops[i], Scale));
+      std::pair<DenseMap<const SCEV *, APInt>::iterator, bool> Pair =
+        M.insert(std::make_pair(Ops[i], Scale));
       if (Pair.second) {
         NewOps.push_back(Pair.first->first);
       } else {
@@ -1630,7 +1630,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
       // Some interesting folding opportunity is present, so its worthwhile to
       // re-generate the operands list. Group the operands by constant scale,
       // to avoid multiplying by the same constant scale multiple times.
-      MISTD::map<APInt, SmallVector<const SCEV *, 4>, APIntCompare> MulOpLists;
+      std::map<APInt, SmallVector<const SCEV *, 4>, APIntCompare> MulOpLists;
       for (SmallVectorImpl<const SCEV *>::const_iterator I = NewOps.begin(),
            E = NewOps.end(); I != E; ++I)
         MulOpLists[M.find(*I)->second].push_back(*I);
@@ -1638,7 +1638,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
       Ops.clear();
       if (AccumulatedConstant != 0)
         Ops.push_back(getConstant(AccumulatedConstant));
-      for (MISTD::map<APInt, SmallVector<const SCEV *, 4>, APIntCompare>::iterator
+      for (std::map<APInt, SmallVector<const SCEV *, 4>, APIntCompare>::iterator
            I = MulOpLists.begin(), E = MulOpLists.end(); I != E; ++I)
         if (I->first != 0)
           Ops.push_back(getMulExpr(getConstant(I->first),
@@ -1818,7 +1818,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
     static_cast<SCEVAddExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
   if (!S) {
     const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
-    MISTD::uninitialized_copy(Ops.begin(), Ops.end(), O);
+    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
     S = new (SCEVAllocator) SCEVAddExpr(ID.Intern(SCEVAllocator),
                                         O, Ops.size());
     UniqueSCEVs.InsertNode(S, IP);
@@ -2064,8 +2064,8 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
           const SCEV *Term = getConstant(Ty, 0);
           for (int y = x, ye = 2*x+1; y != ye && !Overflow; ++y) {
             uint64_t Coeff1 = Choose(x, 2*x - y, Overflow);
-            for (int z = MISTD::max(y-x, y-(int)AddRec->getNumOperands()+1),
-                   ze = MISTD::min(x+1, (int)OtherAddRec->getNumOperands());
+            for (int z = std::max(y-x, y-(int)AddRec->getNumOperands()+1),
+                   ze = std::min(x+1, (int)OtherAddRec->getNumOperands());
                  z < ze && !Overflow; ++z) {
               uint64_t Coeff2 = Choose(2*x - y, x-z, Overflow);
               uint64_t Coeff;
@@ -2112,7 +2112,7 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
     static_cast<SCEVMulExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
   if (!S) {
     const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
-    MISTD::uninitialized_copy(Ops.begin(), Ops.end(), O);
+    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
     S = new (SCEVAllocator) SCEVMulExpr(ID.Intern(SCEVAllocator),
                                         O, Ops.size());
     UniqueSCEVs.InsertNode(S, IP);
@@ -2361,7 +2361,7 @@ ScalarEvolution::getAddRecExpr(SmallVectorImpl<const SCEV *> &Operands,
     static_cast<SCEVAddRecExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
   if (!S) {
     const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Operands.size());
-    MISTD::uninitialized_copy(Operands.begin(), Operands.end(), O);
+    std::uninitialized_copy(Operands.begin(), Operands.end(), O);
     S = new (SCEVAllocator) SCEVAddRecExpr(ID.Intern(SCEVAllocator),
                                            O, Operands.size(), L);
     UniqueSCEVs.InsertNode(S, IP);
@@ -2467,7 +2467,7 @@ ScalarEvolution::getSMaxExpr(SmallVectorImpl<const SCEV *> &Ops) {
   void *IP = 0;
   if (const SCEV *S = UniqueSCEVs.FindNodeOrInsertPos(ID, IP)) return S;
   const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
-  MISTD::uninitialized_copy(Ops.begin(), Ops.end(), O);
+  std::uninitialized_copy(Ops.begin(), Ops.end(), O);
   SCEV *S = new (SCEVAllocator) SCEVSMaxExpr(ID.Intern(SCEVAllocator),
                                              O, Ops.size());
   UniqueSCEVs.InsertNode(S, IP);
@@ -2571,7 +2571,7 @@ ScalarEvolution::getUMaxExpr(SmallVectorImpl<const SCEV *> &Ops) {
   void *IP = 0;
   if (const SCEV *S = UniqueSCEVs.FindNodeOrInsertPos(ID, IP)) return S;
   const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
-  MISTD::uninitialized_copy(Ops.begin(), Ops.end(), O);
+  std::uninitialized_copy(Ops.begin(), Ops.end(), O);
   SCEV *S = new (SCEVAllocator) SCEVUMaxExpr(ID.Intern(SCEVAllocator),
                                              O, Ops.size());
   UniqueSCEVs.InsertNode(S, IP);
@@ -2756,7 +2756,7 @@ const SCEV *ScalarEvolution::getSCEV(Value *V) {
   // to have been created, so it's necessary to insert the new entry
   // from scratch, rather than trying to remember the insert position
   // above.
-  ValueExprMap.insert(MISTD::make_pair(SCEVCallbackVH(V, this), S));
+  ValueExprMap.insert(std::make_pair(SCEVCallbackVH(V, this), S));
   return S;
 }
 
@@ -3044,7 +3044,7 @@ const SCEV *ScalarEvolution::createNodeForPHI(PHINode *PN) {
         const SCEV *SymbolicName = getUnknown(PN);
         assert(ValueExprMap.find_as(PN) == ValueExprMap.end() &&
                "PHI node already processed?");
-        ValueExprMap.insert(MISTD::make_pair(SCEVCallbackVH(PN, this), SymbolicName));
+        ValueExprMap.insert(std::make_pair(SCEVCallbackVH(PN, this), SymbolicName));
 
         // Using this symbolic name for the PHI, analyze the value coming around
         // the back-edge.
@@ -3233,7 +3233,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     return C->getValue()->getValue().countTrailingZeros();
 
   if (const SCEVTruncateExpr *T = dyn_cast<SCEVTruncateExpr>(S))
-    return MISTD::min(GetMinTrailingZeros(T->getOperand()),
+    return std::min(GetMinTrailingZeros(T->getOperand()),
                     (uint32_t)getTypeSizeInBits(T->getType()));
 
   if (const SCEVZeroExtendExpr *E = dyn_cast<SCEVZeroExtendExpr>(S)) {
@@ -3252,7 +3252,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     // The result is the min of all operands results.
     uint32_t MinOpRes = GetMinTrailingZeros(A->getOperand(0));
     for (unsigned i = 1, e = A->getNumOperands(); MinOpRes && i != e; ++i)
-      MinOpRes = MISTD::min(MinOpRes, GetMinTrailingZeros(A->getOperand(i)));
+      MinOpRes = std::min(MinOpRes, GetMinTrailingZeros(A->getOperand(i)));
     return MinOpRes;
   }
 
@@ -3262,7 +3262,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     uint32_t BitWidth = getTypeSizeInBits(M->getType());
     for (unsigned i = 1, e = M->getNumOperands();
          SumOpRes != BitWidth && i != e; ++i)
-      SumOpRes = MISTD::min(SumOpRes + GetMinTrailingZeros(M->getOperand(i)),
+      SumOpRes = std::min(SumOpRes + GetMinTrailingZeros(M->getOperand(i)),
                           BitWidth);
     return SumOpRes;
   }
@@ -3271,7 +3271,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     // The result is the min of all operands results.
     uint32_t MinOpRes = GetMinTrailingZeros(A->getOperand(0));
     for (unsigned i = 1, e = A->getNumOperands(); MinOpRes && i != e; ++i)
-      MinOpRes = MISTD::min(MinOpRes, GetMinTrailingZeros(A->getOperand(i)));
+      MinOpRes = std::min(MinOpRes, GetMinTrailingZeros(A->getOperand(i)));
     return MinOpRes;
   }
 
@@ -3279,7 +3279,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     // The result is the min of all operands results.
     uint32_t MinOpRes = GetMinTrailingZeros(M->getOperand(0));
     for (unsigned i = 1, e = M->getNumOperands(); MinOpRes && i != e; ++i)
-      MinOpRes = MISTD::min(MinOpRes, GetMinTrailingZeros(M->getOperand(i)));
+      MinOpRes = std::min(MinOpRes, GetMinTrailingZeros(M->getOperand(i)));
     return MinOpRes;
   }
 
@@ -3287,7 +3287,7 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     // The result is the min of all operands results.
     uint32_t MinOpRes = GetMinTrailingZeros(M->getOperand(0));
     for (unsigned i = 1, e = M->getNumOperands(); MinOpRes && i != e; ++i)
-      MinOpRes = MISTD::min(MinOpRes, GetMinTrailingZeros(M->getOperand(i)));
+      MinOpRes = std::min(MinOpRes, GetMinTrailingZeros(M->getOperand(i)));
     return MinOpRes;
   }
 
@@ -3871,7 +3871,7 @@ const SCEV *ScalarEvolution::createSCEV(Value *V) {
       switch (ICI->getPredicate()) {
       case ICmpInst::ICMP_SLT:
       case ICmpInst::ICMP_SLE:
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
         // fall through
       case ICmpInst::ICMP_SGT:
       case ICmpInst::ICMP_SGE:
@@ -3894,7 +3894,7 @@ const SCEV *ScalarEvolution::createSCEV(Value *V) {
         break;
       case ICmpInst::ICMP_ULT:
       case ICmpInst::ICMP_ULE:
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
         // fall through
       case ICmpInst::ICMP_UGT:
       case ICmpInst::ICMP_UGE:
@@ -4089,8 +4089,8 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
   // update the value. The temporary CouldNotCompute value tells SCEV
   // code elsewhere that it shouldn't attempt to request a new
   // backedge-taken count, which could result in infinite recursion.
-  MISTD::pair<DenseMap<const Loop *, BackedgeTakenInfo>::iterator, bool> Pair =
-    BackedgeTakenCounts.insert(MISTD::make_pair(L, BackedgeTakenInfo()));
+  std::pair<DenseMap<const Loop *, BackedgeTakenInfo>::iterator, bool> Pair =
+    BackedgeTakenCounts.insert(std::make_pair(L, BackedgeTakenInfo()));
   if (!Pair.second)
     return Pair.first->second;
 
@@ -4297,7 +4297,7 @@ bool ScalarEvolution::BackedgeTakenInfo::hasOperand(const SCEV *S,
 /// Allocate memory for BackedgeTakenInfo and copy the not-taken count of each
 /// computable exit into a persistent ExitNotTakenInfo array.
 ScalarEvolution::BackedgeTakenInfo::BackedgeTakenInfo(
-  SmallVectorImpl< MISTD::pair<BasicBlock *, const SCEV *> > &ExitCounts,
+  SmallVectorImpl< std::pair<BasicBlock *, const SCEV *> > &ExitCounts,
   bool Complete, const SCEV *MaxCount) : Max(MaxCount) {
 
   if (!Complete)
@@ -4338,7 +4338,7 @@ ScalarEvolution::ComputeBackedgeTakenCount(const Loop *L) {
   // Examine all exits and pick the most conservative values.
   const SCEV *MaxBECount = getCouldNotCompute();
   bool CouldComputeBECount = true;
-  SmallVector<MISTD::pair<BasicBlock *, const SCEV *>, 4> ExitCounts;
+  SmallVector<std::pair<BasicBlock *, const SCEV *>, 4> ExitCounts;
   for (unsigned i = 0, e = ExitingBlocks.size(); i != e; ++i) {
     ExitLimit EL = ComputeExitLimit(L, ExitingBlocks[i]);
     if (EL.Exact == getCouldNotCompute())
@@ -4346,7 +4346,7 @@ ScalarEvolution::ComputeBackedgeTakenCount(const Loop *L) {
       // we won't be able to compute an exact value for the loop.
       CouldComputeBECount = false;
     else
-      ExitCounts.push_back(MISTD::make_pair(ExitingBlocks[i], EL.Exact));
+      ExitCounts.push_back(std::make_pair(ExitingBlocks[i], EL.Exact));
 
     if (MaxBECount == getCouldNotCompute())
       MaxBECount = EL.Max;
@@ -4578,7 +4578,7 @@ ScalarEvolution::ComputeExitLimitFromICmp(const Loop *L,
   // loop the predicate will return true for these inputs.
   if (isLoopInvariant(LHS, L) && !isLoopInvariant(RHS, L)) {
     // If there is a loop-invariant, force it into the RHS.
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Cond = ICmpInst::getSwappedPredicate(Cond);
   }
 
@@ -4676,7 +4676,7 @@ ScalarEvolution::ComputeLoadConstantCompareExitLimit(
 
   // Okay, we allow one non-constant index into the GEP instruction.
   Value *VarIdx = 0;
-  MISTD::vector<Constant*> Indexes;
+  std::vector<Constant*> Indexes;
   unsigned VarIdxNum = 0;
   for (unsigned i = 2, e = GEP->getNumOperands(); i != e; ++i)
     if (ConstantInt *CI = dyn_cast<ConstantInt>(GEP->getOperand(i))) {
@@ -4848,7 +4848,7 @@ static Constant *EvaluateExpression(Value *V, const Loop *L,
   // couldn't compute the evolution of this particular PHI last time.
   if (isa<PHINode>(I)) return 0;
 
-  MISTD::vector<Constant*> Operands(I->getNumOperands());
+  std::vector<Constant*> Operands(I->getNumOperands());
 
   for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i) {
     Instruction *Operand = dyn_cast<Instruction>(I->getOperand(i));
@@ -4937,16 +4937,16 @@ ScalarEvolution::getConstantEvolutionLoopExitValue(PHINode *PN,
     // Also evaluate the other PHI nodes.  However, we don't get to stop if we
     // cease to be able to evaluate one of them or if they stop evolving,
     // because that doesn't necessarily prevent us from computing PN.
-    SmallVector<MISTD::pair<PHINode *, Constant *>, 8> PHIsToCompute;
+    SmallVector<std::pair<PHINode *, Constant *>, 8> PHIsToCompute;
     for (DenseMap<Instruction *, Constant *>::const_iterator
            I = CurrentIterVals.begin(), E = CurrentIterVals.end(); I != E; ++I){
       PHINode *PHI = dyn_cast<PHINode>(I->first);
       if (!PHI || PHI == PN || PHI->getParent() != Header) continue;
-      PHIsToCompute.push_back(MISTD::make_pair(PHI, I->second));
+      PHIsToCompute.push_back(std::make_pair(PHI, I->second));
     }
     // We use two distinct loops because EvaluateExpression may invalidate any
     // iterators into CurrentIterVals.
-    for (SmallVectorImpl<MISTD::pair<PHINode *, Constant*> >::const_iterator
+    for (SmallVectorImpl<std::pair<PHINode *, Constant*> >::const_iterator
              I = PHIsToCompute.begin(), E = PHIsToCompute.end(); I != E; ++I) {
       PHINode *PHI = I->first;
       Constant *&NextPHI = NextIterVals[PHI];
@@ -5059,15 +5059,15 @@ const SCEV *ScalarEvolution::ComputeExitCountExhaustively(const Loop *L,
 /// original value V is returned.
 const SCEV *ScalarEvolution::getSCEVAtScope(const SCEV *V, const Loop *L) {
   // Check to see if we've folded this expression at this loop before.
-  SmallVector<MISTD::pair<const Loop *, const SCEV *>, 2> &Values = ValuesAtScopes[V];
+  SmallVector<std::pair<const Loop *, const SCEV *>, 2> &Values = ValuesAtScopes[V];
   for (unsigned u = 0; u < Values.size(); u++) {
     if (Values[u].first == L)
       return Values[u].second ? Values[u].second : V;
   }
-  Values.push_back(MISTD::make_pair(L, static_cast<const SCEV *>(0)));
+  Values.push_back(std::make_pair(L, static_cast<const SCEV *>(0)));
   // Otherwise compute it.
   const SCEV *C = computeSCEVAtScope(V, L);
-  SmallVector<MISTD::pair<const Loop *, const SCEV *>, 2> &Values2 = ValuesAtScopes[V];
+  SmallVector<std::pair<const Loop *, const SCEV *>, 2> &Values2 = ValuesAtScopes[V];
   for (unsigned u = Values2.size(); u > 0; u--) {
     if (Values2[u - 1].first == L) {
       Values2[u - 1].second = C;
@@ -5124,7 +5124,7 @@ static Constant *BuildConstantFromSCEV(const SCEV *V) {
           // First pointer!
           if (!C->getType()->isPointerTy() && C2->getType()->isPointerTy()) {
             unsigned AS = C2->getType()->getPointerAddressSpace();
-            MISTD::swap(C, C2);
+            std::swap(C, C2);
             Type *DestPtrTy = Type::getInt8PtrTy(C->getContext(), AS);
             // The offsets have been converted to bytes.  We can add bytes to an
             // i8* by GEP with the byte count in the first index.
@@ -5426,7 +5426,7 @@ static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const APInt &B,
 /// given quadratic chrec {L,+,M,+,N}.  This returns either the two roots (which
 /// might be the same) or two SCEVCouldNotCompute objects.
 ///
-static MISTD::pair<const SCEV *,const SCEV *>
+static std::pair<const SCEV *,const SCEV *>
 SolveQuadraticEquation(const SCEVAddRecExpr *AddRec, ScalarEvolution &SE) {
   assert(AddRec->getNumOperands() == 3 && "This is not a quadratic chrec!");
   const SCEVConstant *LC = dyn_cast<SCEVConstant>(AddRec->getOperand(0));
@@ -5436,7 +5436,7 @@ SolveQuadraticEquation(const SCEVAddRecExpr *AddRec, ScalarEvolution &SE) {
   // We currently can only solve this if the coefficients are constants.
   if (!LC || !MC || !NC) {
     const SCEV *CNC = SE.getCouldNotCompute();
-    return MISTD::make_pair(CNC, CNC);
+    return std::make_pair(CNC, CNC);
   }
 
   uint32_t BitWidth = LC->getValue()->getValue().getBitWidth();
@@ -5465,7 +5465,7 @@ SolveQuadraticEquation(const SCEVAddRecExpr *AddRec, ScalarEvolution &SE) {
     if (SqrtTerm.isNegative()) {
       // The loop is provably infinite.
       const SCEV *CNC = SE.getCouldNotCompute();
-      return MISTD::make_pair(CNC, CNC);
+      return std::make_pair(CNC, CNC);
     }
 
     // Compute sqrt(B^2-4ac). This is guaranteed to be the nearest
@@ -5478,7 +5478,7 @@ SolveQuadraticEquation(const SCEVAddRecExpr *AddRec, ScalarEvolution &SE) {
     APInt TwoA(A << 1);
     if (TwoA.isMinValue()) {
       const SCEV *CNC = SE.getCouldNotCompute();
-      return MISTD::make_pair(CNC, CNC);
+      return std::make_pair(CNC, CNC);
     }
 
     LLVMContext &Context = SE.getContext();
@@ -5488,7 +5488,7 @@ SolveQuadraticEquation(const SCEVAddRecExpr *AddRec, ScalarEvolution &SE) {
     ConstantInt *Solution2 =
       ConstantInt::get(Context, (NegB - SqrtVal).sdiv(TwoA));
 
-    return MISTD::make_pair(SE.getConstant(Solution1),
+    return std::make_pair(SE.getConstant(Solution1),
                           SE.getConstant(Solution2));
   } // end APIntOps namespace
 }
@@ -5516,7 +5516,7 @@ ScalarEvolution::HowFarToZero(const SCEV *V, const Loop *L, bool IsSubExpr) {
   // If this is a quadratic (3-term) AddRec {L,+,M,+,N}, find the roots of
   // the quadratic equation to solve it.
   if (AddRec->isQuadratic() && AddRec->getType()->isIntegerTy()) {
-    MISTD::pair<const SCEV *,const SCEV *> Roots =
+    std::pair<const SCEV *,const SCEV *> Roots =
       SolveQuadraticEquation(AddRec, *this);
     const SCEVConstant *R1 = dyn_cast<SCEVConstant>(Roots.first);
     const SCEVConstant *R2 = dyn_cast<SCEVConstant>(Roots.second);
@@ -5531,7 +5531,7 @@ ScalarEvolution::HowFarToZero(const SCEV *V, const Loop *L, bool IsSubExpr) {
                                                       R1->getValue(),
                                                       R2->getValue()))) {
         if (CB->getZExtValue() == false)
-          MISTD::swap(R1, R2);   // R1 is the minimum root now.
+          std::swap(R1, R2);   // R1 is the minimum root now.
 
         // We can only use this value if the chrec ends up with an exact zero
         // value at this index.  When solving for "X*X != 5", for example, we
@@ -5648,21 +5648,21 @@ ScalarEvolution::HowFarToNonZero(const SCEV *V, const Loop *L) {
 /// successor from which BB is reachable, or null if no such block is
 /// found.
 ///
-MISTD::pair<BasicBlock *, BasicBlock *>
+std::pair<BasicBlock *, BasicBlock *>
 ScalarEvolution::getPredecessorWithUniqueSuccessorForBB(BasicBlock *BB) {
   // If the block has a unique predecessor, then there is no path from the
   // predecessor to the block that does not go through the direct edge
   // from the predecessor to the block.
   if (BasicBlock *Pred = BB->getSinglePredecessor())
-    return MISTD::make_pair(Pred, BB);
+    return std::make_pair(Pred, BB);
 
   // A loop's header is defined to be a block that dominates the loop.
   // If the header has a unique predecessor outside the loop, it must be
   // a block that has exactly one successor that can reach the loop.
   if (Loop *L = LI->getLoopFor(BB))
-    return MISTD::make_pair(L->getLoopPredecessor(), L->getHeader());
+    return std::make_pair(L->getLoopPredecessor(), L->getHeader());
 
-  return MISTD::pair<BasicBlock *, BasicBlock *>();
+  return std::pair<BasicBlock *, BasicBlock *>();
 }
 
 /// HasSameValue - SCEV structural equivalence is usually sufficient for
@@ -5712,7 +5712,7 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
         goto trivially_true;
     }
     // Otherwise swap the operands to put the constant on the right.
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Pred = ICmpInst::getSwappedPredicate(Pred);
     Changed = true;
   }
@@ -5723,7 +5723,7 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
   if (const SCEVAddRecExpr *AR = dyn_cast<SCEVAddRecExpr>(RHS)) {
     const Loop *L = AR->getLoop();
     if (isLoopInvariant(LHS, L) && properlyDominates(LHS, L->getHeader())) {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
       Pred = ICmpInst::getSwappedPredicate(Pred);
       Changed = true;
     }
@@ -6025,7 +6025,7 @@ ScalarEvolution::isKnownPredicateWithRanges(ICmpInst::Predicate Pred,
     llvm_unreachable("Unexpected ICmpInst::Predicate value!");
   case ICmpInst::ICMP_SGT:
     Pred = ICmpInst::ICMP_SLT;
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   case ICmpInst::ICMP_SLT: {
     ConstantRange LHSRange = getSignedRange(LHS);
     ConstantRange RHSRange = getSignedRange(RHS);
@@ -6037,7 +6037,7 @@ ScalarEvolution::isKnownPredicateWithRanges(ICmpInst::Predicate Pred,
   }
   case ICmpInst::ICMP_SGE:
     Pred = ICmpInst::ICMP_SLE;
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   case ICmpInst::ICMP_SLE: {
     ConstantRange LHSRange = getSignedRange(LHS);
     ConstantRange RHSRange = getSignedRange(RHS);
@@ -6049,7 +6049,7 @@ ScalarEvolution::isKnownPredicateWithRanges(ICmpInst::Predicate Pred,
   }
   case ICmpInst::ICMP_UGT:
     Pred = ICmpInst::ICMP_ULT;
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   case ICmpInst::ICMP_ULT: {
     ConstantRange LHSRange = getUnsignedRange(LHS);
     ConstantRange RHSRange = getUnsignedRange(RHS);
@@ -6061,7 +6061,7 @@ ScalarEvolution::isKnownPredicateWithRanges(ICmpInst::Predicate Pred,
   }
   case ICmpInst::ICMP_UGE:
     Pred = ICmpInst::ICMP_ULE;
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   case ICmpInst::ICMP_ULE: {
     ConstantRange LHSRange = getUnsignedRange(LHS);
     ConstantRange RHSRange = getUnsignedRange(RHS);
@@ -6130,7 +6130,7 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
   // Starting at the loop predecessor, climb up the predecessor chain, as long
   // as there are predecessors that can be found that have unique successors
   // leading to the original header.
-  for (MISTD::pair<BasicBlock *, BasicBlock *>
+  for (std::pair<BasicBlock *, BasicBlock *>
          Pair(L->getLoopPredecessor(), L->getHeader());
        Pair.first;
        Pair = getPredecessorWithUniqueSuccessorForBB(Pair.first)) {
@@ -6239,10 +6239,10 @@ bool ScalarEvolution::isImpliedCond(ICmpInst::Predicate Pred,
   // Check to see if we can make the LHS or RHS match.
   if (LHS == FoundRHS || RHS == FoundLHS) {
     if (isa<SCEVConstant>(RHS)) {
-      MISTD::swap(FoundLHS, FoundRHS);
+      std::swap(FoundLHS, FoundRHS);
       FoundPred = ICmpInst::getSwappedPredicate(FoundPred);
     } else {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
       Pred = ICmpInst::getSwappedPredicate(Pred);
     }
   }
@@ -6633,7 +6633,7 @@ const SCEV *SCEVAddRecExpr::getNumIterationsInRange(ConstantRange Range,
                                              FlagAnyWrap);
 
     // Next, solve the constructed addrec
-    MISTD::pair<const SCEV *,const SCEV *> Roots =
+    std::pair<const SCEV *,const SCEV *> Roots =
       SolveQuadraticEquation(cast<SCEVAddRecExpr>(NewAddRec), SE);
     const SCEVConstant *R1 = dyn_cast<SCEVConstant>(Roots.first);
     const SCEVConstant *R2 = dyn_cast<SCEVConstant>(Roots.second);
@@ -6643,7 +6643,7 @@ const SCEV *SCEVAddRecExpr::getNumIterationsInRange(ConstantRange Range,
           dyn_cast<ConstantInt>(ConstantExpr::getICmp(ICmpInst::ICMP_ULT,
                          R1->getValue(), R2->getValue()))) {
         if (CB->getZExtValue() == false)
-          MISTD::swap(R1, R2);   // R1 is the minimum root now.
+          std::swap(R1, R2);   // R1 is the minimum root now.
 
         // Make sure the root is not off by one.  The returned iteration should
         // not be in the range, but the previous one should be.  When solving
@@ -7398,14 +7398,14 @@ void ScalarEvolution::print(raw_ostream &OS, const Module *) const {
 
 ScalarEvolution::LoopDisposition
 ScalarEvolution::getLoopDisposition(const SCEV *S, const Loop *L) {
-  SmallVector<MISTD::pair<const Loop *, LoopDisposition>, 2> &Values = LoopDispositions[S];
+  SmallVector<std::pair<const Loop *, LoopDisposition>, 2> &Values = LoopDispositions[S];
   for (unsigned u = 0; u < Values.size(); u++) {
     if (Values[u].first == L)
       return Values[u].second;
   }
-  Values.push_back(MISTD::make_pair(L, LoopVariant));
+  Values.push_back(std::make_pair(L, LoopVariant));
   LoopDisposition D = computeLoopDisposition(S, L);
-  SmallVector<MISTD::pair<const Loop *, LoopDisposition>, 2> &Values2 = LoopDispositions[S];
+  SmallVector<std::pair<const Loop *, LoopDisposition>, 2> &Values2 = LoopDispositions[S];
   for (unsigned u = Values2.size(); u > 0; u--) {
     if (Values2[u - 1].first == L) {
       Values2[u - 1].second = D;
@@ -7504,14 +7504,14 @@ bool ScalarEvolution::hasComputableLoopEvolution(const SCEV *S, const Loop *L) {
 
 ScalarEvolution::BlockDisposition
 ScalarEvolution::getBlockDisposition(const SCEV *S, const BasicBlock *BB) {
-  SmallVector<MISTD::pair<const BasicBlock *, BlockDisposition>, 2> &Values = BlockDispositions[S];
+  SmallVector<std::pair<const BasicBlock *, BlockDisposition>, 2> &Values = BlockDispositions[S];
   for (unsigned u = 0; u < Values.size(); u++) {
     if (Values[u].first == BB)
       return Values[u].second;
   }
-  Values.push_back(MISTD::make_pair(BB, DoesNotDominateBlock));
+  Values.push_back(std::make_pair(BB, DoesNotDominateBlock));
   BlockDisposition D = computeBlockDisposition(S, BB);
-  SmallVector<MISTD::pair<const BasicBlock *, BlockDisposition>, 2> &Values2 = BlockDispositions[S];
+  SmallVector<std::pair<const BasicBlock *, BlockDisposition>, 2> &Values2 = BlockDispositions[S];
   for (unsigned u = Values2.size(); u > 0; u--) {
     if (Values2[u - 1].first == BB) {
       Values2[u - 1].second = D;
@@ -7635,12 +7635,12 @@ void ScalarEvolution::forgetMemoizedResults(const SCEV *S) {
   }
 }
 
-typedef DenseMap<const Loop *, MISTD::string> VerifyMap;
+typedef DenseMap<const Loop *, std::string> VerifyMap;
 
 /// replaceSubString - Replaces all occurences of From in Str with To.
-static void replaceSubString(MISTD::string &Str, StringRef From, StringRef To) {
+static void replaceSubString(std::string &Str, StringRef From, StringRef To) {
   size_t Pos = 0;
-  while ((Pos = Str.find(From, Pos)) != MISTD::string::npos) {
+  while ((Pos = Str.find(From, Pos)) != std::string::npos) {
     Str.replace(Pos, From.size(), To.data(), To.size());
     Pos += To.size();
   }
@@ -7652,7 +7652,7 @@ getLoopBackedgeTakenCounts(Loop *L, VerifyMap &Map, ScalarEvolution &SE) {
   for (Loop::reverse_iterator I = L->rbegin(), E = L->rend(); I != E; ++I) {
     getLoopBackedgeTakenCounts(*I, Map, SE); // recurse.
 
-    MISTD::string &S = Map[L];
+    std::string &S = Map[L];
     if (S.empty()) {
       raw_string_ostream OS(S);
       SE.getBackedgeTakenCount(L)->print(OS);
@@ -7704,8 +7704,8 @@ void ScalarEvolution::verifyAnalysis() const {
     // means that a pass is buggy or SCEV has to learn a new pattern but is
     // usually not harmful.
     if (OldI->second != NewI->second &&
-        OldI->second.find("undef") == MISTD::string::npos &&
-        NewI->second.find("undef") == MISTD::string::npos &&
+        OldI->second.find("undef") == std::string::npos &&
+        NewI->second.find("undef") == std::string::npos &&
         OldI->second != "***COULDNOTCOMPUTE***" &&
         NewI->second != "***COULDNOTCOMPUTE***") {
       dbgs() << "SCEVValidator: SCEV for loop '"

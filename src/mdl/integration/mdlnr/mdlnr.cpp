@@ -387,7 +387,7 @@ private:
     mutable Cache_entry *m_head;
     mutable Cache_entry *m_tail;
 
-    typedef MISTD::map<Key, Cache_entry *> Search_map;
+    typedef std::map<Key, Cache_entry *> Search_map;
 
     /// The map of all cache entry to speed up searches.
     mutable Search_map m_search_map;
@@ -410,7 +410,6 @@ Module_registration_entry *Mdlc_module::get_instance()
 
 Mdlc_module_impl::Mdlc_module_impl()
   : m_mdl(0)
-  , m_callback(0)
   , m_used_with_mdl_sdk(false) /*arbitrary*/
   , m_used_with_mdl_sdk_set(false)
   , m_code_cache(0)
@@ -459,7 +458,7 @@ bool Mdlc_module_impl::init()
         int opt_level = 0;
         if (registry.get_value("mdl_opt_level", opt_level)) {
             options.set_option(
-                mi::mdl::MDL::option_opt_level, MISTD::to_string(opt_level).c_str());
+                mi::mdl::MDL::option_opt_level, std::to_string(opt_level).c_str());
         }
 
         // neuray always runs in "relaxed" mode for compatibility with old releases
@@ -537,17 +536,6 @@ mi::mdl::ILambda_function *Mdlc_module_impl::deserialize_lambda_function(
 {
     MDL_deserializer mdl_deserializer(m_allocator.get(), deserializer);
     return m_mdl->deserialize_lambda(&mdl_deserializer);
-}
-
-void Mdlc_module_impl::set_register_mdl_type_with_api_callback(Register_mdl_type_with_api* callback)
-{
-    m_callback = callback;
-}
-
-Mdlc_module_impl::Register_mdl_type_with_api*
-Mdlc_module_impl::get_register_mdl_type_with_api_callback() const
-{
-    return m_callback;
 }
 
 void Mdlc_module_impl::set_used_with_mdl_sdk(bool flag)

@@ -74,15 +74,15 @@ unsigned ComputeEditDistance(ArrayRef<T> FromArray, ArrayRef<T> ToArray,
 
     for (typename ArrayRef<T>::size_type x = 1; x <= n; ++x) {
       if (AllowReplacements) {
-        Current[x] = MISTD::min(
+        Current[x] = std::min(
             Previous[x-1] + (FromArray[y-1] == ToArray[x-1] ? 0u : 1u),
-            MISTD::min(Current[x-1], Previous[x])+1);
+            std::min(Current[x-1], Previous[x])+1);
       }
       else {
         if (FromArray[y-1] == ToArray[x-1]) Current[x] = Previous[x-1];
-        else Current[x] = MISTD::min(Current[x-1], Previous[x]) + 1;
+        else Current[x] = std::min(Current[x-1], Previous[x]) + 1;
       }
-      BestThisRow = MISTD::min(BestThisRow, Current[x]);
+      BestThisRow = std::min(BestThisRow, Current[x]);
     }
 
     if (MaxEditDistance && BestThisRow > MaxEditDistance)

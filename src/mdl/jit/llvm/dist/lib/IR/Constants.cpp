@@ -364,7 +364,7 @@ Constant::PossibleRelocationsTy Constant::getRelocationInfo() const {
 
   PossibleRelocationsTy Result = NoRelocation;
   for (unsigned i = 0, e = getNumOperands(); i != e; ++i)
-    Result = MISTD::max(Result,
+    Result = std::max(Result,
                       cast<Constant>(getOperand(i))->getRelocationInfo());
 
   return Result;
@@ -739,7 +739,7 @@ ConstantArray::ConstantArray(ArrayType *T, ArrayRef<Constant *> V)
   for (unsigned i = 0, e = V.size(); i != e; ++i)
     assert(V[i]->getType() == T->getElementType() &&
            "Initializer for array element doesn't match array element type!");
-  MISTD::copy(V.begin(), V.end(), op_begin());
+  std::copy(V.begin(), V.end(), op_begin());
 }
 
 Constant *ConstantArray::get(ArrayType *Ty, ArrayRef<Constant*> V) {
@@ -867,7 +867,7 @@ ConstantStruct::ConstantStruct(StructType *T, ArrayRef<Constant *> V)
   for (unsigned i = 0, e = V.size(); i != e; ++i)
     assert((T->isOpaque() || V[i]->getType() == T->getElementType(i)) &&
            "Initializer for struct element doesn't match struct element type!");
-  MISTD::copy(V.begin(), V.end(), op_begin());
+  std::copy(V.begin(), V.end(), op_begin());
 }
 
 // ConstantStruct accessors.
@@ -916,7 +916,7 @@ ConstantVector::ConstantVector(VectorType *T, ArrayRef<Constant *> V)
   for (size_t i = 0, e = V.size(); i != e; i++)
     assert(V[i]->getType() == T->getElementType() &&
            "Initializer for vector element doesn't match vector element type!");
-  MISTD::copy(V.begin(), V.end(), op_begin());
+  std::copy(V.begin(), V.end(), op_begin());
 }
 
 // ConstantVector accessors.
@@ -1357,7 +1357,7 @@ BlockAddress *BlockAddress::get(BasicBlock *BB) {
 
 BlockAddress *BlockAddress::get(Function *F, BasicBlock *BB) {
   BlockAddress *&BA =
-    F->getContext().pImpl->BlockAddresses[MISTD::make_pair(F, BB)];
+    F->getContext().pImpl->BlockAddresses[std::make_pair(F, BB)];
   if (BA == 0)
     BA = new BlockAddress(F, BB);
 
@@ -1378,7 +1378,7 @@ BlockAddress::BlockAddress(Function *F, BasicBlock *BB)
 //
 void BlockAddress::destroyConstant() {
   getFunction()->getType()->getContext().pImpl
-    ->BlockAddresses.erase(MISTD::make_pair(getFunction(), getBasicBlock()));
+    ->BlockAddresses.erase(std::make_pair(getFunction(), getBasicBlock()));
   getBasicBlock()->AdjustBlockAddressRefCount(-1);
   destroyConstantImpl();
 }
@@ -1397,13 +1397,13 @@ void BlockAddress::replaceUsesOfWithOnConstant(Value *From, Value *To, Use *U) {
   // See if the 'new' entry already exists, if not, just update this in place
   // and return early.
   BlockAddress *&NewBA =
-    getContext().pImpl->BlockAddresses[MISTD::make_pair(NewF, NewBB)];
+    getContext().pImpl->BlockAddresses[std::make_pair(NewF, NewBB)];
   if (NewBA == 0) {
     getBasicBlock()->AdjustBlockAddressRefCount(-1);
 
     // Remove the old entry, this can't cause the map to rehash (just a
     // tombstone will get added).
-    getContext().pImpl->BlockAddresses.erase(MISTD::make_pair(getFunction(),
+    getContext().pImpl->BlockAddresses.erase(std::make_pair(getFunction(),
                                                             getBasicBlock()));
     NewBA = this;
     setOperand(0, NewF);
@@ -1858,7 +1858,7 @@ Constant *ConstantExpr::getGetElementPtr(Constant *C, ArrayRef<Value *> Idxs,
     ReqTy = VectorType::get(ReqTy, VecTy->getNumElements());
 
   // Look up the constant in the table first to ensure uniqueness
-  MISTD::vector<Constant*> ArgVec;
+  std::vector<Constant*> ArgVec;
   ArgVec.reserve(1 + Idxs.size());
   ArgVec.push_back(C);
   for (unsigned i = 0, e = Idxs.size(); i != e; ++i) {

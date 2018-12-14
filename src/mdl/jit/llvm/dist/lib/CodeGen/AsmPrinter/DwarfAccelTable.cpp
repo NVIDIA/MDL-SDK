@@ -41,13 +41,13 @@ void DwarfAccelTable::AddName(StringRef Name, DIE *die, char Flags) {
 
 void DwarfAccelTable::ComputeBucketCount(void) {
   // First get the number of unique hashes.
-  MISTD::vector<uint32_t> uniques(Data.size());
+  std::vector<uint32_t> uniques(Data.size());
   for (size_t i = 0, e = Data.size(); i < e; ++i)
     uniques[i] = Data[i]->HashValue;
   array_pod_sort(uniques.begin(), uniques.end());
-  MISTD::vector<uint32_t>::iterator p =
-      MISTD::unique(uniques.begin(), uniques.end());
-  uint32_t num = MISTD::distance(uniques.begin(), p);
+  std::vector<uint32_t>::iterator p =
+      std::unique(uniques.begin(), uniques.end());
+  uint32_t num = std::distance(uniques.begin(), p);
 
   // Then compute the bucket size, minimum of 1 bucket.
   if (num > 1024)
@@ -72,8 +72,8 @@ void DwarfAccelTable::FinalizeTable(AsmPrinter *Asm, StringRef Prefix) {
        EI != EE; ++EI) {
 
     // Unique the entries.
-    MISTD::stable_sort(EI->second.begin(), EI->second.end(), compareDIEs);
-    EI->second.erase(MISTD::unique(EI->second.begin(), EI->second.end()),
+    std::stable_sort(EI->second.begin(), EI->second.end(), compareDIEs);
+    EI->second.erase(std::unique(EI->second.begin(), EI->second.end()),
                      EI->second.end());
 
     HashData *Entry = new (Allocator) HashData(EI->getKey(), EI->second);
@@ -249,7 +249,7 @@ void DwarfAccelTable::print(raw_ostream &O) {
       (*HI)->print(O);
 
   O << "Data: \n";
-  for (MISTD::vector<HashData *>::const_iterator DI = Data.begin(),
+  for (std::vector<HashData *>::const_iterator DI = Data.begin(),
                                                DE = Data.end();
        DI != DE; ++DI)
     (*DI)->print(O);

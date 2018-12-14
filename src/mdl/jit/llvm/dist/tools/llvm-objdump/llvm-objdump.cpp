@@ -66,7 +66,7 @@
 using namespace llvm;
 using namespace object;
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFilenames(cl::Positional, cl::desc("<input object files>"),cl::ZeroOrMore);
 
 static cl::opt<bool>
@@ -90,11 +90,11 @@ MachOOpt("macho", cl::desc("Use MachO specific object file parser"));
 static cl::alias
 MachOm("m", cl::desc("Alias for --macho"), cl::aliasopt(MachOOpt));
 
-cl::opt<MISTD::string>
+cl::opt<std::string>
 llvm::TripleName("triple", cl::desc("Target triple to disassemble for, "
                                     "see -version for available targets"));
 
-cl::opt<MISTD::string>
+cl::opt<std::string>
 llvm::ArchName("arch", cl::desc("Target arch to disassemble for, "
                                 "see -version for available targets"));
 
@@ -108,7 +108,7 @@ static cl::alias
 SectionHeadersShorter("h", cl::desc("Alias for --section-headers"),
                       cl::aliasopt(SectionHeaders));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 MAttrs("mattr",
   cl::CommaSeparated,
   cl::desc("Target specific attributes"),
@@ -142,7 +142,7 @@ CFG("cfg", cl::desc("Create a CFG for every function found in the object"
                       " and write it to a graphviz file"));
 
 // FIXME: Does it make sense to have a dedicated tool for yaml cfg output?
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 YAMLCFG("yaml-cfg",
         cl::desc("Create a CFG and write it as a YAML MCModule."),
         cl::value_desc("yaml output file"));
@@ -172,7 +172,7 @@ static const Target *getTarget(const ObjectFile *Obj = NULL) {
     TheTriple.setTriple(Triple::normalize(TripleName));
 
   // Get the target specific parser.
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(ArchName, TheTriple,
                                                          Error);
   if (!TheTarget) {
@@ -190,7 +190,7 @@ static const Target *getTarget(const ObjectFile *Obj = NULL) {
 static void emitDOTFile(const char *FileName, const MCFunction &f,
                         MCInstPrinter *IP) {
   // Start a new dot file.
-  MISTD::string Error;
+  std::string Error;
   raw_fd_ostream Out(FileName, Error);
   if (!Error.empty()) {
     errs() << "llvm-objdump: warning: " << Error << '\n';
@@ -216,7 +216,7 @@ static void emitDOTFile(const char *FileName, const MCFunction &f,
         Out << "<o>";
 
       // Escape special chars and print the instruction in mnemonic form.
-      MISTD::string Str;
+      std::string Str;
       raw_string_ostream OS(Str);
       IP->printInst(&(*i)->getInsts()->at(ii).Inst, OS, "");
       Out << DOT::EscapeString(OS.str());
@@ -273,7 +273,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     return;
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
   if (MAttrs.size()) {
     SubtargetFeatures Features;
     for (unsigned i = 0; i != MAttrs.size(); ++i)
@@ -371,7 +371,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
       }
     }
     if (!YAMLCFG.empty()) {
-      MISTD::string Error;
+      std::string Error;
       raw_fd_ostream YAMLOut(YAMLCFG.c_str(), Error);
       if (!Error.empty()) {
         errs() << ToolName << ": warning: " << Error << '\n';
@@ -395,7 +395,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     if (error(i->getAddress(SectionAddr))) break;
 
     // Make a list of all the symbols in this section.
-    MISTD::vector<MISTD::pair<uint64_t, StringRef> > Symbols;
+    std::vector<std::pair<uint64_t, StringRef> > Symbols;
     for (symbol_iterator si = Obj->begin_symbols(),
                          se = Obj->end_symbols();
                          si != se; si.increment(ec)) {
@@ -408,7 +408,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 
         StringRef Name;
         if (error(si->getName(Name))) break;
-        Symbols.push_back(MISTD::make_pair(Address, Name));
+        Symbols.push_back(std::make_pair(Address, Name));
       }
     }
 
@@ -416,7 +416,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     array_pod_sort(Symbols.begin(), Symbols.end());
 
     // Make a list of all the relocations for this section.
-    MISTD::vector<RelocationRef> Rels;
+    std::vector<RelocationRef> Rels;
     if (InlineRelocs) {
       for (relocation_iterator ri = i->begin_relocations(),
                                re = i->end_relocations();
@@ -427,7 +427,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     }
 
     // Sort relocations by address.
-    MISTD::sort(Rels.begin(), Rels.end(), RelocAddressLess);
+    std::sort(Rels.begin(), Rels.end(), RelocAddressLess);
 
     StringRef SegmentName = "";
     if (const MachOObjectFile *MachO =
@@ -445,7 +445,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     // If the section has no symbols just insert a dummy one and disassemble
     // the whole section.
     if (Symbols.empty())
-      Symbols.push_back(MISTD::make_pair(0, name));
+      Symbols.push_back(std::make_pair(0, name));
 
 
     SmallString<40> Comments;
@@ -459,8 +459,8 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     uint64_t SectSize;
     if (error(i->getSize(SectSize))) break;
 
-    MISTD::vector<RelocationRef>::const_iterator rel_cur = Rels.begin();
-    MISTD::vector<RelocationRef>::const_iterator rel_end = Rels.end();
+    std::vector<RelocationRef>::const_iterator rel_cur = Rels.begin();
+    std::vector<RelocationRef>::const_iterator rel_end = Rels.end();
     // Disassemble symbol by symbol.
     for (unsigned si = 0, se = Symbols.size(); si != se; ++si) {
       uint64_t Start = Symbols[si].first;
@@ -581,7 +581,7 @@ static void PrintSectionHeaders(const ObjectFile *o) {
     if (error(si->isText(Text))) return;
     if (error(si->isData(Data))) return;
     if (error(si->isBSS(BSS))) return;
-    MISTD::string Type = (MISTD::string(Text ? "TEXT " : "") +
+    std::string Type = (std::string(Text ? "TEXT " : "") +
                         (Data ? "DATA " : "") + (BSS ? "BSS" : ""));
     outs() << format("%3d %-13s %08" PRIx64 " %016" PRIx64 " %s\n",
                      i, Name.str().c_str(), Size, Address, Type.c_str());
@@ -613,10 +613,10 @@ static void PrintSectionContents(const ObjectFile *o) {
     }
 
     // Dump out the content as hex and printable ascii characters.
-    for (MISTD::size_t addr = 0, end = Contents.size(); addr < end; addr += 16) {
+    for (std::size_t addr = 0, end = Contents.size(); addr < end; addr += 16) {
       outs() << format(" %04" PRIx64 " ", BaseAddr + addr);
       // Dump line of hex.
-      for (MISTD::size_t i = 0; i < 16; ++i) {
+      for (std::size_t i = 0; i < 16; ++i) {
         if (i != 0 && i % 4 == 0)
           outs() << ' ';
         if (addr + i < end)
@@ -627,8 +627,8 @@ static void PrintSectionContents(const ObjectFile *o) {
       }
       // Print ascii.
       outs() << "  ";
-      for (MISTD::size_t i = 0; i < 16 && addr + i < end; ++i) {
-        if (MISTD::isprint(static_cast<unsigned char>(Contents[addr + i]) & 0xFF))
+      for (std::size_t i = 0; i < 16 && addr + i < end; ++i) {
+        if (std::isprint(static_cast<unsigned char>(Contents[addr + i]) & 0xFF))
           outs() << Contents[addr + i];
         else
           outs() << ".";
@@ -882,7 +882,7 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  MISTD::for_each(InputFilenames.begin(), InputFilenames.end(),
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
                 DumpInput);
 
   return 0;

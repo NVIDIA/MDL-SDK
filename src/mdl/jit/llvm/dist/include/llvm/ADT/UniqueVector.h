@@ -24,11 +24,11 @@ namespace llvm {
 template<class T> class UniqueVector {
 private:
   // Map - Used to handle the correspondence of entry to ID.
-  MISTD::map<T, unsigned> Map;
+  std::map<T, unsigned> Map;
 
   // Vector - ID ordered vector of entries. Entries can be indexed by ID - 1.
   //
-  MISTD::vector<T> Vector;
+  std::vector<T> Vector;
 
 public:
   /// insert - Append entry to the vector if it doesn't already exist.  Returns
@@ -52,7 +52,7 @@ public:
   /// not found.
   unsigned idFor(const T &Entry) const {
     // Search for entry in the map.
-    typename MISTD::map<T, unsigned>::const_iterator MI = Map.find(Entry);
+    typename std::map<T, unsigned>::const_iterator MI = Map.find(Entry);
 
     // See if entry exists, if so return ID.
     if (MI != Map.end()) return MI->second;

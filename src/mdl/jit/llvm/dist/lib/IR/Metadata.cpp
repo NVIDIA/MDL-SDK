@@ -612,7 +612,7 @@ void Instruction::setMetadata(unsigned KindID, MDNode *Node) {
     }
 
     // No replacement, just add it to the list.
-    Info.push_back(MISTD::make_pair(KindID, Node));
+    Info.push_back(std::make_pair(KindID, Node));
     return;
   }
 
@@ -659,13 +659,13 @@ MDNode *Instruction::getMetadataImpl(unsigned KindID) const {
   return 0;
 }
 
-void Instruction::getAllMetadataImpl(SmallVectorImpl<MISTD::pair<unsigned,
+void Instruction::getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned,
                                        MDNode*> > &Result) const {
   Result.clear();
   
   // Handle 'dbg' as a special case since it is not stored in the hash table.
   if (!DbgLoc.isUnknown()) {
-    Result.push_back(MISTD::make_pair((unsigned)LLVMContext::MD_dbg,
+    Result.push_back(std::make_pair((unsigned)LLVMContext::MD_dbg,
                                     DbgLoc.getAsMDNode(getContext())));
     if (!hasMetadataHashEntry()) return;
   }
@@ -685,7 +685,7 @@ void Instruction::getAllMetadataImpl(SmallVectorImpl<MISTD::pair<unsigned,
 }
 
 void Instruction::
-getAllMetadataOtherThanDebugLocImpl(SmallVectorImpl<MISTD::pair<unsigned,
+getAllMetadataOtherThanDebugLocImpl(SmallVectorImpl<std::pair<unsigned,
                                     MDNode*> > &Result) const {
   Result.clear();
   assert(hasMetadataHashEntry() &&

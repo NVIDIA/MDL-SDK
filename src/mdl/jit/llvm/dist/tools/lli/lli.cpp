@@ -61,10 +61,10 @@
 using namespace llvm;
 
 namespace {
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   InputFile(cl::desc("<input bitcode>"), cl::Positional, cl::init("-"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   InputArgv(cl::ConsumeAfter, cl::desc("<program arguments>..."));
 
   cl::opt<bool> ForceInterpreter("force-interpreter",
@@ -90,7 +90,7 @@ namespace {
   // the simulated remote execution that allocates address space for child
   // execution. The child process will be executed and will communicate with
   // lli via stdin/stdout pipes.
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   MCJITRemoteProcess("mcjit-remote-process",
             cl::desc("Specify the filename of the process to launch "
                      "for remote MCJIT execution.  If none is specified,"
@@ -107,38 +107,38 @@ namespace {
            cl::ZeroOrMore,
            cl::init(' '));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   TargetTriple("mtriple", cl::desc("Override target triple for module"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   MArch("march",
         cl::desc("Architecture to generate assembly for (see --version)"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   MCPU("mcpu",
        cl::desc("Target a specific cpu type (-mcpu=help for details)"),
        cl::value_desc("cpu-name"),
        cl::init(""));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   MAttrs("mattr",
          cl::CommaSeparated,
          cl::desc("Target specific attributes (-mattr=help for details)"),
          cl::value_desc("a1,+a2,-a3,..."));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   EntryFunc("entry-function",
             cl::desc("Specify the entry function (default = 'main') "
                      "of the executable"),
             cl::value_desc("function"),
             cl::init("main"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   ExtraModules("extra-module",
          cl::desc("Extra modules to be loaded"),
          cl::value_desc("input bitcode"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   FakeArgv0("fake-argv0",
             cl::desc("Override the 'argv[0]' value passed into the executing"
                      " program"), cl::value_desc("executable"));
@@ -301,7 +301,7 @@ int main(int argc, char **argv, char * const *envp) {
   }
 
   // If not jitting lazily, load the whole bitcode file eagerly too.
-  MISTD::string ErrorMsg;
+  std::string ErrorMsg;
   if (NoLazyCompilation) {
     if (Mod->MaterializeAllPermanently(&ErrorMsg)) {
       errs() << argv[0] << ": bitcode didn't read correctly.\n";
@@ -488,7 +488,7 @@ int main(int argc, char **argv, char * const *envp) {
     // If the program didn't call exit explicitly, we should call it now.
     // This ensures that any atexit handlers get called correctly.
     if (Function *ExitF = dyn_cast<Function>(Exit)) {
-      MISTD::vector<GenericValue> Args;
+      std::vector<GenericValue> Args;
       GenericValue ResultGV;
       ResultGV.IntVal = APInt(32, Result);
       Args.push_back(ResultGV);
@@ -518,7 +518,7 @@ int main(int argc, char **argv, char * const *envp) {
                << "  Defaulting to simulated remote execution\n";
         Target.reset(RemoteTarget::createRemoteTarget());
       } else {
-        MISTD::string ChildEXE = sys::FindProgramByName(MCJITRemoteProcess);
+        std::string ChildEXE = sys::FindProgramByName(MCJITRemoteProcess);
         if (ChildEXE == "") {
           errs() << "Unable to find child target: '\''" << MCJITRemoteProcess << "\'\n";
           return -1;

@@ -61,7 +61,7 @@ void SplitAnalysis::clear() {
 SlotIndex SplitAnalysis::computeLastSplitPoint(unsigned Num) {
   const MachineBasicBlock *MBB = MF.getBlockNumbered(Num);
   const MachineBasicBlock *LPad = MBB->getLandingPadSuccessor();
-  MISTD::pair<SlotIndex, SlotIndex> &LSP = LastSplitPoint[Num];
+  std::pair<SlotIndex, SlotIndex> &LSP = LastSplitPoint[Num];
   SlotIndex MBBEnd = LIS.getMBBEndIdx(MBB);
 
   // Compute split points on the first call. The pair is independent of the
@@ -141,7 +141,7 @@ void SplitAnalysis::analyzeUses() {
 
   // Remove duplicates, keeping the smaller slot for each instruction.
   // That is what we want for early clobbers.
-  UseSlots.erase(MISTD::unique(UseSlots.begin(), UseSlots.end(),
+  UseSlots.erase(std::unique(UseSlots.begin(), UseSlots.end(),
                              SlotIndex::isSameInstr),
                  UseSlots.end());
 
@@ -383,8 +383,8 @@ VNInfo *SplitEditor::defValue(unsigned RegIdx,
   VNInfo *VNI = LI->getNextValue(Idx, LIS.getVNInfoAllocator());
 
   // Use insert for lookup, so we can add missing values with a second lookup.
-  MISTD::pair<ValueMap::iterator, bool> InsP =
-    Values.insert(MISTD::make_pair(MISTD::make_pair(RegIdx, ParentVNI->id),
+  std::pair<ValueMap::iterator, bool> InsP =
+    Values.insert(std::make_pair(std::make_pair(RegIdx, ParentVNI->id),
                                  ValueForcePair(VNI, false)));
 
   // This was the first time (RegIdx, ParentVNI) was mapped.
@@ -409,7 +409,7 @@ VNInfo *SplitEditor::defValue(unsigned RegIdx,
 
 void SplitEditor::forceRecompute(unsigned RegIdx, const VNInfo *ParentVNI) {
   assert(ParentVNI && "Mapping  NULL value");
-  ValueForcePair &VFP = Values[MISTD::make_pair(RegIdx, ParentVNI->id)];
+  ValueForcePair &VFP = Values[std::make_pair(RegIdx, ParentVNI->id)];
   VNInfo *VNI = VFP.getPointer();
 
   // ParentVNI was either unmapped or already complex mapped. Either way, just
@@ -736,7 +736,7 @@ void SplitEditor::hoistCopiesForSize() {
 
   // Track the nearest common dominator for all back-copies for each ParentVNI,
   // indexed by ParentVNI->id.
-  typedef MISTD::pair<MachineBasicBlock*, SlotIndex> DomPair;
+  typedef std::pair<MachineBasicBlock*, SlotIndex> DomPair;
   SmallVector<DomPair, 8> NearestDom(Parent->getNumValNums());
 
   // Find the nearest common dominator for parent values with multiple
@@ -767,7 +767,7 @@ void SplitEditor::hoistCopiesForSize() {
     }
     // Skip the singly mapped values.  There is nothing to gain from hoisting a
     // single back-copy.
-    if (Values.lookup(MISTD::make_pair(0, ParentVNI->id)).getPointer()) {
+    if (Values.lookup(std::make_pair(0, ParentVNI->id)).getPointer()) {
       DEBUG(dbgs() << "Single complement def at " << VNI->def << '\n');
       continue;
     }
@@ -857,7 +857,7 @@ bool SplitEditor::transferValues() {
         }
       } else {
         RegIdx = 0;
-        End = MISTD::min(End, AssignI.start());
+        End = std::min(End, AssignI.start());
       }
 
       // The interval [Start;End) is continuously mapped to RegIdx, ParentVNI.
@@ -865,7 +865,7 @@ bool SplitEditor::transferValues() {
       LiveRange &LR = LIS.getInterval(Edit->get(RegIdx));
 
       // Check for a simply defined value that can be blitted directly.
-      ValueForcePair VFP = Values.lookup(MISTD::make_pair(RegIdx, ParentVNI->id));
+      ValueForcePair VFP = Values.lookup(std::make_pair(RegIdx, ParentVNI->id));
       if (VNInfo *VNI = VFP.getPointer()) {
         DEBUG(dbgs() << ':' << VNI->id);
         LR.addSegment(LiveInterval::Segment(Start, End, VNI));
@@ -892,7 +892,7 @@ bool SplitEditor::transferValues() {
 
       // The first block may be live-in, or it may have its own def.
       if (Start != BlockStart) {
-        VNInfo *VNI = LR.extendInBlock(BlockStart, MISTD::min(BlockEnd, End));
+        VNInfo *VNI = LR.extendInBlock(BlockStart, std::min(BlockEnd, End));
         assert(VNI && "Missing def for complex mapped value");
         DEBUG(dbgs() << ':' << VNI->id << "*BB#" << MBB->getNumber());
         // MBB has its own def. Is it also live-out?
@@ -912,7 +912,7 @@ bool SplitEditor::transferValues() {
         if (BlockStart == ParentVNI->def) {
           // This block has the def of a parent PHI, so it isn't live-in.
           assert(ParentVNI->isPHIDef() && "Non-phi defined at block start?");
-          VNInfo *VNI = LR.extendInBlock(BlockStart, MISTD::min(BlockEnd, End));
+          VNInfo *VNI = LR.extendInBlock(BlockStart, std::min(BlockEnd, End));
           assert(VNI && "Missing def for complex mapped parent PHI");
           if (End >= BlockEnd)
             LRC.setLiveOutValue(MBB, VNI); // Live-out as well.
@@ -1155,7 +1155,7 @@ bool SplitAnalysis::shouldSplitSingleBlock(const BlockInfo &BI,
 void SplitEditor::splitSingleBlock(const SplitAnalysis::BlockInfo &BI) {
   openIntv();
   SlotIndex LastSplitPoint = SA.getLastSplitPoint(BI.MBB->getNumber());
-  SlotIndex SegStart = enterIntvBefore(MISTD::min(BI.FirstInstr,
+  SlotIndex SegStart = enterIntvBefore(std::min(BI.FirstInstr,
     LastSplitPoint));
   if (!BI.LiveOut || BI.LastInstr < LastSplitPoint) {
     useIntv(SegStart, leaveIntvAfter(BI.LastInstr));
@@ -1368,7 +1368,7 @@ void SplitEditor::splitRegInBlock(const SplitAnalysis::BlockInfo &BI,
   //
   SlotIndex To = leaveIntvBefore(LSP);
   overlapIntv(To, BI.LastInstr);
-  SlotIndex From = enterIntvBefore(MISTD::min(To, LeaveBefore));
+  SlotIndex From = enterIntvBefore(std::min(To, LeaveBefore));
   useIntv(From, To);
   selectIntv(IntvIn);
   useIntv(Start, From);
@@ -1411,7 +1411,7 @@ void SplitEditor::splitRegOutBlock(const SplitAnalysis::BlockInfo &BI,
     //    ____=========    Enter IntvOut before first use.
     //
     selectIntv(IntvOut);
-    SlotIndex Idx = enterIntvBefore(MISTD::min(LSP, BI.FirstInstr));
+    SlotIndex Idx = enterIntvBefore(std::min(LSP, BI.FirstInstr));
     useIntv(Idx, Stop);
     assert((!EnterAfter || Idx >= EnterAfter) && "Interference");
     return;
@@ -1432,6 +1432,6 @@ void SplitEditor::splitRegOutBlock(const SplitAnalysis::BlockInfo &BI,
   assert((!EnterAfter || Idx >= EnterAfter) && "Interference");
 
   openIntv();
-  SlotIndex From = enterIntvBefore(MISTD::min(Idx, BI.FirstInstr));
+  SlotIndex From = enterIntvBefore(std::min(Idx, BI.FirstInstr));
   useIntv(From, Idx);
 }

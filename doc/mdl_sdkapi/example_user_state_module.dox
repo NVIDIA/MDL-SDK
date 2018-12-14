@@ -29,7 +29,7 @@
 /*! \page mi_neuray_example_user_state_module Example for User-Defined State Modules
 
 <div align="right">
-    [\link mi_neuray_example_df_cuda Previous\endlink]
+    [\link mi_neuray_example_derivatives Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_traversal Next\endlink]
 </div>
@@ -173,7 +173,7 @@ You can create an LLVM IR assembly text file \c "state.ll" with this command lin
 \include user_modules/mdl_runtime.h
 
 <div align="right">
-    [\link mi_neuray_example_df_cuda Previous\endlink]
+    [\link mi_neuray_example_derivatives Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_traversal Next\endlink]
 </div>

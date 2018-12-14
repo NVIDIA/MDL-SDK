@@ -67,7 +67,7 @@ namespace {
                          clEnumValEnd),
                      cl::init(AutoPick));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   SafeInterpreterPath("safe-path",
                    cl::desc("Specify the path to the \"safe\" backend program"),
                    cl::init(""));
@@ -77,25 +77,25 @@ namespace {
       cl::desc("Append the exit code to the output so it gets diff'd too"),
       cl::init(false));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   InputFile("input", cl::init("/dev/null"),
             cl::desc("Filename to pipe in as stdin (default: /dev/null)"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   AdditionalSOs("additional-so",
                 cl::desc("Additional shared objects to load "
                          "into executing programs"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   AdditionalLinkerArgs("Xlinker",
       cl::desc("Additional arguments to pass to the linker"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   CustomCompileCommand("compile-command", cl::init("llc"),
       cl::desc("Command to compile the bitcode (use with -compile-custom) "
                "(default: llc)"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   CustomExecCommand("exec-command", cl::init("simulate"),
       cl::desc("Command to execute the bitcode (use with -run-custom) "
                "(default: simulate)"));
@@ -104,30 +104,30 @@ namespace {
 namespace llvm {
   // Anything specified after the --args option are taken as arguments to the
   // program being debugged.
-  cl::list<MISTD::string>
+  cl::list<std::string>
   InputArgv("args", cl::Positional, cl::desc("<program arguments>..."),
             cl::ZeroOrMore, cl::PositionalEatsArgs);
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   OutputPrefix("output-prefix", cl::init("bugpoint"),
             cl::desc("Prefix to use for outputs (default: 'bugpoint')"));
 }
 
 namespace {
-  cl::list<MISTD::string>
+  cl::list<std::string>
   ToolArgv("tool-args", cl::Positional, cl::desc("<tool arguments>..."),
            cl::ZeroOrMore, cl::PositionalEatsArgs);
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   SafeToolArgv("safe-tool-args", cl::Positional,
                cl::desc("<safe-tool arguments>..."),
                cl::ZeroOrMore, cl::PositionalEatsArgs);
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   GCCBinary("gcc", cl::init("gcc"),
               cl::desc("The gcc binary to use. (default 'gcc')"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   GCCToolArgv("gcc-tool-args", cl::Positional,
               cl::desc("<gcc-tool arguments>..."),
               cl::ZeroOrMore, cl::PositionalEatsArgs);
@@ -146,7 +146,7 @@ bool BugDriver::initializeExecutionEnvironment() {
   // Create an instance of the AbstractInterpreter interface as specified on
   // the command line
   SafeInterpreter = 0;
-  MISTD::string Message;
+  std::string Message;
 
   switch (InterpreterSel) {
   case AutoPick:
@@ -201,10 +201,10 @@ bool BugDriver::initializeExecutionEnvironment() {
   else // Display informational messages on stdout instead of stderr
     outs() << Message;
 
-  MISTD::string Path = SafeInterpreterPath;
+  std::string Path = SafeInterpreterPath;
   if (Path.empty())
     Path = getToolName();
-  MISTD::vector<MISTD::string> SafeToolArgs = SafeToolArgv;
+  std::vector<std::string> SafeToolArgs = SafeToolArgv;
   switch (SafeInterpreterSel) {
   case AutoPick:
     // In "llc-safe" mode, default to using LLC as the "safe" backend.
@@ -263,7 +263,7 @@ bool BugDriver::initializeExecutionEnvironment() {
 /// setting Error if an error occurs.  This is used for code generation
 /// crash testing.
 ///
-void BugDriver::compileProgram(Module *M, MISTD::string *Error) const {
+void BugDriver::compileProgram(Module *M, std::string *Error) const {
   // Emit the program to a bitcode file...
   SmallString<128> BitcodeFile;
   int BitcodeFD;
@@ -292,12 +292,12 @@ void BugDriver::compileProgram(Module *M, MISTD::string *Error) const {
 /// program to a file, returning the filename of the file.  A recommended
 /// filename may be optionally specified.
 ///
-MISTD::string BugDriver::executeProgram(const Module *Program,
-                                      MISTD::string OutputFile,
-                                      MISTD::string BitcodeFile,
-                                      const MISTD::string &SharedObj,
+std::string BugDriver::executeProgram(const Module *Program,
+                                      std::string OutputFile,
+                                      std::string BitcodeFile,
+                                      const std::string &SharedObj,
                                       AbstractInterpreter *AI,
-                                      MISTD::string *Error) const {
+                                      std::string *Error) const {
   if (AI == 0) AI = Interpreter;
   assert(AI && "Interpreter should have been created already!");
   bool CreatedBitcode = false;
@@ -323,7 +323,7 @@ MISTD::string BugDriver::executeProgram(const Module *Program,
   }
 
   // Remove the temporary bitcode file when we are done.
-  MISTD::string BitcodePath(BitcodeFile);
+  std::string BitcodePath(BitcodeFile);
   FileRemover BitcodeFileRemover(BitcodePath,
     CreatedBitcode && !SaveTemps);
 
@@ -340,7 +340,7 @@ MISTD::string BugDriver::executeProgram(const Module *Program,
   OutputFile = UniqueFile.str();
 
   // Figure out which shared objects to run, if any.
-  MISTD::vector<MISTD::string> SharedObjs(AdditionalSOs);
+  std::vector<std::string> SharedObjs(AdditionalSOs);
   if (!SharedObj.empty())
     SharedObjs.push_back(SharedObj);
 
@@ -364,7 +364,7 @@ MISTD::string BugDriver::executeProgram(const Module *Program,
   }
 
   if (AppendProgramExitCode) {
-    MISTD::ofstream outFile(OutputFile.c_str(), MISTD::ios_base::app);
+    std::ofstream outFile(OutputFile.c_str(), std::ios_base::app);
     outFile << "exit " << RetVal << '\n';
     outFile.close();
   }
@@ -376,16 +376,16 @@ MISTD::string BugDriver::executeProgram(const Module *Program,
 /// executeProgramSafely - Used to create reference output with the "safe"
 /// backend, if reference output is not provided.
 ///
-MISTD::string BugDriver::executeProgramSafely(const Module *Program,
-                                            MISTD::string OutputFile,
-                                            MISTD::string *Error) const {
+std::string BugDriver::executeProgramSafely(const Module *Program,
+                                            std::string OutputFile,
+                                            std::string *Error) const {
   return executeProgram(Program, OutputFile, "", "", SafeInterpreter, Error);
 }
 
-MISTD::string BugDriver::compileSharedObject(const MISTD::string &BitcodeFile,
-                                           MISTD::string &Error) {
+std::string BugDriver::compileSharedObject(const std::string &BitcodeFile,
+                                           std::string &Error) {
   assert(Interpreter && "Interpreter should have been created already!");
-  MISTD::string OutputFile;
+  std::string OutputFile;
 
   // Using the known-good backend.
   GCC::FileType FT = SafeInterpreter->OutputCode(BitcodeFile, OutputFile,
@@ -393,7 +393,7 @@ MISTD::string BugDriver::compileSharedObject(const MISTD::string &BitcodeFile,
   if (!Error.empty())
     return "";
 
-  MISTD::string SharedObjectFile;
+  std::string SharedObjectFile;
   bool Failure = gcc->MakeSharedObject(OutputFile, FT, SharedObjectFile,
                                        AdditionalLinkerArgs, Error);
   if (!Error.empty())
@@ -412,8 +412,8 @@ MISTD::string BugDriver::compileSharedObject(const MISTD::string &BitcodeFile,
 /// otherwise. Note: initializeExecutionEnvironment should be called BEFORE
 /// this function.
 ///
-bool BugDriver::createReferenceFile(Module *M, const MISTD::string &Filename) {
-  MISTD::string Error;
+bool BugDriver::createReferenceFile(Module *M, const std::string &Filename) {
+  std::string Error;
   compileProgram(Program, &Error);
   if (!Error.empty())
     return false;
@@ -439,17 +439,17 @@ bool BugDriver::createReferenceFile(Module *M, const MISTD::string &Filename) {
 /// generator (e.g., llc crashes), this will set ErrMsg.
 ///
 bool BugDriver::diffProgram(const Module *Program,
-                            const MISTD::string &BitcodeFile,
-                            const MISTD::string &SharedObject,
+                            const std::string &BitcodeFile,
+                            const std::string &SharedObject,
                             bool RemoveBitcode,
-                            MISTD::string *ErrMsg) const {
+                            std::string *ErrMsg) const {
   // Execute the program, generating an output file...
-  MISTD::string Output(
+  std::string Output(
       executeProgram(Program, "", BitcodeFile, SharedObject, 0, ErrMsg));
   if (!ErrMsg->empty())
     return false;
 
-  MISTD::string Error;
+  std::string Error;
   bool FilesDifferent = false;
   if (int Diff = DiffFilesWithTolerance(ReferenceOutputFile,
                                         Output,

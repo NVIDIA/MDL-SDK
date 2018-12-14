@@ -37,7 +37,7 @@ Regex::~Regex() {
   delete preg;
 }
 
-bool Regex::isValid(MISTD::string &Error) {
+bool Regex::isValid(std::string &Error) {
   if (!error)
     return true;
   
@@ -93,8 +93,8 @@ bool Regex::match(StringRef String, SmallVectorImpl<StringRef> *Matches){
   return true;
 }
 
-MISTD::string Regex::sub(StringRef Repl, StringRef String,
-                       MISTD::string *Error) {
+std::string Regex::sub(StringRef Repl, StringRef String,
+                       std::string *Error) {
   SmallVector<StringRef, 8> Matches;
 
   // Reset error, if given.
@@ -106,12 +106,12 @@ MISTD::string Regex::sub(StringRef Repl, StringRef String,
 
   // Otherwise splice in the replacement string, starting with the prefix before
   // the match.
-  MISTD::string Res(String.begin(), Matches[0].begin());
+  std::string Res(String.begin(), Matches[0].begin());
 
   // Then the replacement string, honoring possible substitutions.
   while (!Repl.empty()) {
     // Skip to the next escape.
-    MISTD::pair<StringRef, StringRef> Split = Repl.split('\\');
+    std::pair<StringRef, StringRef> Split = Repl.split('\\');
 
     // Add the skipped substring.
     Res += Split.first;

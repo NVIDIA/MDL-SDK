@@ -38,7 +38,7 @@ static cl::opt<bool>
 FindBugs("find-bugs", cl::desc("Run many different optimization sequences "
                                "on program to find bugs"), cl::init(false));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFilenames(cl::Positional, cl::OneOrMore,
                cl::desc("<input llvm ll/bc files>"));
 
@@ -82,7 +82,7 @@ static cl::opt<bool>
 OptLevelO3("O3",
            cl::desc("Optimization level 3. Similar to llvm-gcc -O3"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OverrideTriple("mtriple", cl::desc("Override target triple for module"));
 
 /// BugpointIsInterrupted - Set to true when the user presses ctrl-c.
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
     Builder.populateModulePassManager(PM);
   }
 
-  for (MISTD::vector<const PassInfo*>::iterator I = PassList.begin(),
+  for (std::vector<const PassInfo*>::iterator I = PassList.begin(),
          E = PassList.end();
        I != E; ++I) {
     const PassInfo* PI = *I;
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
   sys::Process::PreventCoreFiles();
 #endif
 
-  MISTD::string Error;
+  std::string Error;
   bool Failure = D.run(Error);
   if (!Error.empty()) {
     errs() << Error;

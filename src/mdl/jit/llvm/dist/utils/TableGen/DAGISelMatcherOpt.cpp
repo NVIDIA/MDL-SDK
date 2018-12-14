@@ -447,12 +447,12 @@ static void FactorNodes(OwningPtr<Matcher> &MatcherPtr) {
   // If all the options are CheckOpcode's, we can form the SwitchOpcode, woot.
   if (AllOpcodeChecks) {
     StringSet<> Opcodes;
-    SmallVector<MISTD::pair<const SDNodeInfo*, Matcher*>, 8> Cases;
+    SmallVector<std::pair<const SDNodeInfo*, Matcher*>, 8> Cases;
     for (unsigned i = 0, e = NewOptionsToMatch.size(); i != e; ++i) {
       CheckOpcodeMatcher *COM = cast<CheckOpcodeMatcher>(NewOptionsToMatch[i]);
       assert(Opcodes.insert(COM->getOpcode().getEnumName()) &&
              "Duplicate opcodes not factored?");
-      Cases.push_back(MISTD::make_pair(&COM->getOpcode(), COM->getNext()));
+      Cases.push_back(std::make_pair(&COM->getOpcode(), COM->getNext()));
     }
     
     MatcherPtr.reset(new SwitchOpcodeMatcher(&Cases[0], Cases.size()));
@@ -462,7 +462,7 @@ static void FactorNodes(OwningPtr<Matcher> &MatcherPtr) {
   // If all the options are CheckType's, we can form the SwitchType, woot.
   if (AllTypeChecks) {
     DenseMap<unsigned, unsigned> TypeEntry;
-    SmallVector<MISTD::pair<MVT::SimpleValueType, Matcher*>, 8> Cases;
+    SmallVector<std::pair<MVT::SimpleValueType, Matcher*>, 8> Cases;
     for (unsigned i = 0, e = NewOptionsToMatch.size(); i != e; ++i) {
       CheckTypeMatcher *CTM =
         cast_or_null<CheckTypeMatcher>(FindNodeWithKind(NewOptionsToMatch[i],
@@ -487,7 +487,7 @@ static void FactorNodes(OwningPtr<Matcher> &MatcherPtr) {
       }
       
       Entry = Cases.size()+1;
-      Cases.push_back(MISTD::make_pair(CTMTy, MatcherWithoutCTM));
+      Cases.push_back(std::make_pair(CTMTy, MatcherWithoutCTM));
     }
     
     if (Cases.size() != 1) {

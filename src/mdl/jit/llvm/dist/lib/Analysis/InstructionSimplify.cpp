@@ -436,7 +436,7 @@ static Value *ThreadCmpOverSelect(CmpInst::Predicate Pred, Value *LHS,
 
   // Make sure the select is on the LHS.
   if (!isa<SelectInst>(LHS)) {
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Pred = CmpInst::getSwappedPredicate(Pred);
   }
   assert(isa<SelectInst>(LHS) && "Not comparing with a select instruction!");
@@ -560,7 +560,7 @@ static Value *ThreadCmpOverPHI(CmpInst::Predicate Pred, Value *LHS, Value *RHS,
 
   // Make sure the phi is on the LHS.
   if (!isa<PHINode>(LHS)) {
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Pred = CmpInst::getSwappedPredicate(Pred);
   }
   assert(isa<PHINode>(LHS) && "Not comparing with a phi instruction!");
@@ -599,7 +599,7 @@ static Value *SimplifyAddInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // X + undef -> undef
@@ -875,7 +875,7 @@ static Value *SimplifyFAddInst(Value *Op0, Value *Op1, FastMathFlags FMF,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // fadd X, -0 ==> X
@@ -955,7 +955,7 @@ static Value *SimplifyFMulInst(Value *Op0, Value *Op1,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
  }
 
  // fmul X, 1.0 ==> X
@@ -981,7 +981,7 @@ static Value *SimplifyMulInst(Value *Op0, Value *Op1, const Query &Q,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // X * undef -> 0
@@ -1100,7 +1100,7 @@ static Value *SimplifyDiv(Instruction::BinaryOps Opcode, Value *Op0, Value *Op1,
   // (X * Y) / Y -> X if the multiplication does not overflow.
   Value *X = 0, *Y = 0;
   if (match(Op0, m_Mul(m_Value(X), m_Value(Y))) && (X == Op1 || Y == Op1)) {
-    if (Y != Op1) MISTD::swap(X, Y); // Ensure expression is (X * Y) / Y, Y = Op1
+    if (Y != Op1) std::swap(X, Y); // Ensure expression is (X * Y) / Y, Y = Op1
     OverflowingBinaryOperator *Mul = cast<OverflowingBinaryOperator>(Op0);
     // If the Mul knows it does not overflow, then we are good to go.
     if ((isSigned && Mul->hasNoSignedWrap()) ||
@@ -1437,7 +1437,7 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const Query &Q,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // X & undef -> 0
@@ -1536,7 +1536,7 @@ static Value *SimplifyOrInst(Value *Op0, Value *Op1, const Query &Q,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // X | undef -> -1
@@ -1630,7 +1630,7 @@ static Value *SimplifyXorInst(Value *Op0, Value *Op1, const Query &Q,
     }
 
     // Canonicalize the constant to the RHS.
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   }
 
   // A ^ undef -> undef
@@ -1868,7 +1868,7 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
       return ConstantFoldCompareInstOperands(Pred, CLHS, CRHS, Q.TD, Q.TLI);
 
     // If we have a constant, make sure it is on the RHS.
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Pred = CmpInst::getSwappedPredicate(Pred);
   }
 
@@ -2364,26 +2364,26 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
 
   // Signed variants on "max(a,b)>=a -> true".
   if (match(LHS, m_SMax(m_Value(A), m_Value(B))) && (A == RHS || B == RHS)) {
-    if (A != RHS) MISTD::swap(A, B); // smax(A, B) pred A.
+    if (A != RHS) std::swap(A, B); // smax(A, B) pred A.
     EqP = CmpInst::ICMP_SGE; // "A == smax(A, B)" iff "A sge B".
     // We analyze this as smax(A, B) pred A.
     P = Pred;
   } else if (match(RHS, m_SMax(m_Value(A), m_Value(B))) &&
              (A == LHS || B == LHS)) {
-    if (A != LHS) MISTD::swap(A, B); // A pred smax(A, B).
+    if (A != LHS) std::swap(A, B); // A pred smax(A, B).
     EqP = CmpInst::ICMP_SGE; // "A == smax(A, B)" iff "A sge B".
     // We analyze this as smax(A, B) swapped-pred A.
     P = CmpInst::getSwappedPredicate(Pred);
   } else if (match(LHS, m_SMin(m_Value(A), m_Value(B))) &&
              (A == RHS || B == RHS)) {
-    if (A != RHS) MISTD::swap(A, B); // smin(A, B) pred A.
+    if (A != RHS) std::swap(A, B); // smin(A, B) pred A.
     EqP = CmpInst::ICMP_SLE; // "A == smin(A, B)" iff "A sle B".
     // We analyze this as smax(-A, -B) swapped-pred -A.
     // Note that we do not need to actually form -A or -B thanks to EqP.
     P = CmpInst::getSwappedPredicate(Pred);
   } else if (match(RHS, m_SMin(m_Value(A), m_Value(B))) &&
              (A == LHS || B == LHS)) {
-    if (A != LHS) MISTD::swap(A, B); // A pred smin(A, B).
+    if (A != LHS) std::swap(A, B); // A pred smin(A, B).
     EqP = CmpInst::ICMP_SLE; // "A == smin(A, B)" iff "A sle B".
     // We analyze this as smax(-A, -B) pred -A.
     // Note that we do not need to actually form -A or -B thanks to EqP.
@@ -2434,26 +2434,26 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
   // Unsigned variants on "max(a,b)>=a -> true".
   P = CmpInst::BAD_ICMP_PREDICATE;
   if (match(LHS, m_UMax(m_Value(A), m_Value(B))) && (A == RHS || B == RHS)) {
-    if (A != RHS) MISTD::swap(A, B); // umax(A, B) pred A.
+    if (A != RHS) std::swap(A, B); // umax(A, B) pred A.
     EqP = CmpInst::ICMP_UGE; // "A == umax(A, B)" iff "A uge B".
     // We analyze this as umax(A, B) pred A.
     P = Pred;
   } else if (match(RHS, m_UMax(m_Value(A), m_Value(B))) &&
              (A == LHS || B == LHS)) {
-    if (A != LHS) MISTD::swap(A, B); // A pred umax(A, B).
+    if (A != LHS) std::swap(A, B); // A pred umax(A, B).
     EqP = CmpInst::ICMP_UGE; // "A == umax(A, B)" iff "A uge B".
     // We analyze this as umax(A, B) swapped-pred A.
     P = CmpInst::getSwappedPredicate(Pred);
   } else if (match(LHS, m_UMin(m_Value(A), m_Value(B))) &&
              (A == RHS || B == RHS)) {
-    if (A != RHS) MISTD::swap(A, B); // umin(A, B) pred A.
+    if (A != RHS) std::swap(A, B); // umin(A, B) pred A.
     EqP = CmpInst::ICMP_ULE; // "A == umin(A, B)" iff "A ule B".
     // We analyze this as umax(-A, -B) swapped-pred -A.
     // Note that we do not need to actually form -A or -B thanks to EqP.
     P = CmpInst::getSwappedPredicate(Pred);
   } else if (match(RHS, m_UMin(m_Value(A), m_Value(B))) &&
              (A == LHS || B == LHS)) {
-    if (A != LHS) MISTD::swap(A, B); // A pred umin(A, B).
+    if (A != LHS) std::swap(A, B); // A pred umin(A, B).
     EqP = CmpInst::ICMP_ULE; // "A == umin(A, B)" iff "A ule B".
     // We analyze this as umax(-A, -B) pred -A.
     // Note that we do not need to actually form -A or -B thanks to EqP.
@@ -2607,7 +2607,7 @@ static Value *SimplifyFCmpInst(unsigned Predicate, Value *LHS, Value *RHS,
       return ConstantFoldCompareInstOperands(Pred, CLHS, CRHS, Q.TD, Q.TLI);
 
     // If we have a constant, make sure it is on the RHS.
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     Pred = CmpInst::getSwappedPredicate(Pred);
   }
 
@@ -2972,7 +2972,7 @@ static Value *SimplifyIntrinsic(Intrinsic::ID IID, IterTy ArgBegin, IterTy ArgEn
     return 0;
 
   // Unary Ops
-  if (MISTD::distance(ArgBegin, ArgEnd) == 1)
+  if (std::distance(ArgBegin, ArgEnd) == 1)
     if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(*ArgBegin))
       if (II->getIntrinsicID() == IID)
         return II;

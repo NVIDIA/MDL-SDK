@@ -24,7 +24,7 @@ class FixedDAGDeltaAlgorithm : public DAGDeltaAlgorithm {
 protected:
   virtual bool ExecuteOneTest(const changeset_ty &Changes) {
     ++NumTests;
-    return MISTD::includes(Changes.begin(), Changes.end(),
+    return std::includes(Changes.begin(), Changes.end(),
                          FailingSet.begin(), FailingSet.end());
   }
 
@@ -36,8 +36,8 @@ public:
   unsigned getNumTests() const { return NumTests; }
 };
 
-MISTD::set<unsigned> fixed_set(unsigned N, ...) {
-  MISTD::set<unsigned> S;
+std::set<unsigned> fixed_set(unsigned N, ...) {
+  std::set<unsigned> S;
   va_list ap;
   va_start(ap, N);
   for (unsigned i = 0; i != N; ++i)
@@ -46,24 +46,24 @@ MISTD::set<unsigned> fixed_set(unsigned N, ...) {
   return S;
 }
 
-MISTD::set<unsigned> range(unsigned Start, unsigned End) {
-  MISTD::set<unsigned> S;
+std::set<unsigned> range(unsigned Start, unsigned End) {
+  std::set<unsigned> S;
   while (Start != End)
     S.insert(Start++);
   return S;
 }
 
-MISTD::set<unsigned> range(unsigned N) {
+std::set<unsigned> range(unsigned N) {
   return range(0, N);
 }
 
 TEST(DAGDeltaAlgorithmTest, Basic) {
-  MISTD::vector<edge_ty> Deps;
+  std::vector<edge_ty> Deps;
 
   // Dependencies:
   //  1 - 3
   Deps.clear();
-  Deps.push_back(MISTD::make_pair(3, 1));
+  Deps.push_back(std::make_pair(3, 1));
 
   // P = {3,5,7} \in S,
   //   [0, 20),
@@ -77,10 +77,10 @@ TEST(DAGDeltaAlgorithmTest, Basic) {
   //  \- 2 - 3
   //  \- 4
   Deps.clear();
-  Deps.push_back(MISTD::make_pair(1, 0));
-  Deps.push_back(MISTD::make_pair(2, 0));
-  Deps.push_back(MISTD::make_pair(4, 0));
-  Deps.push_back(MISTD::make_pair(3, 2));
+  Deps.push_back(std::make_pair(1, 0));
+  Deps.push_back(std::make_pair(2, 0));
+  Deps.push_back(std::make_pair(4, 0));
+  Deps.push_back(std::make_pair(3, 2));
 
   // This is a case where we must hold required changes.
   //

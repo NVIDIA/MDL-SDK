@@ -115,7 +115,7 @@ bool ConstantMerge::runOnModule(Module &M) {
   DenseMap<PointerIntPair<Constant*, 1, bool>, GlobalVariable*> CMap;
 
   // Replacements - This vector contains a list of replacements to perform.
-  SmallVector<MISTD::pair<GlobalVariable*, GlobalVariable*>, 32> Replacements;
+  SmallVector<std::pair<GlobalVariable*, GlobalVariable*>, 32> Replacements;
 
   bool MadeChange = false;
 
@@ -199,7 +199,7 @@ bool ConstantMerge::runOnModule(Module &M) {
         Slot->setUnnamedAddr(false);
 
       // Make all uses of the duplicate constant use the canonical version.
-      Replacements.push_back(MISTD::make_pair(GV, Slot));
+      Replacements.push_back(std::make_pair(GV, Slot));
     }
 
     if (Replacements.empty())
@@ -214,7 +214,7 @@ bool ConstantMerge::runOnModule(Module &M) {
       if (Replacements[i].first->getAlignment() ||
           Replacements[i].second->getAlignment()) {
         Replacements[i].second->setAlignment(
-            MISTD::max(getAlignment(Replacements[i].first),
+            std::max(getAlignment(Replacements[i].first),
                      getAlignment(Replacements[i].second)));
       }
 

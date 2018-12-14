@@ -287,7 +287,7 @@ SelectSectionForGlobal(const GlobalValue *GV, SectionKind Kind,
       assert(Kind.isMergeable1ByteCString() && "unknown string width");
 
 
-    MISTD::string Name = SizeSpec + utostr(Align);
+    std::string Name = SizeSpec + utostr(Align);
     return getContext().getELFSection(Name, ELF::SHT_PROGBITS,
                                       ELF::SHF_ALLOC |
                                       ELF::SHF_MERGE |
@@ -351,12 +351,12 @@ TargetLoweringObjectFileELF::getStaticCtorSection(unsigned Priority) const {
     return StaticCtorSection;
 
   if (UseInitArray) {
-    MISTD::string Name = MISTD::string(".init_array.") + utostr(Priority);
+    std::string Name = std::string(".init_array.") + utostr(Priority);
     return getContext().getELFSection(Name, ELF::SHT_INIT_ARRAY,
                                       ELF::SHF_ALLOC | ELF::SHF_WRITE,
                                       SectionKind::getDataRel());
   } else {
-    MISTD::string Name = MISTD::string(".ctors.") + utostr(65535 - Priority);
+    std::string Name = std::string(".ctors.") + utostr(65535 - Priority);
     return getContext().getELFSection(Name, ELF::SHT_PROGBITS,
                                       ELF::SHF_ALLOC |ELF::SHF_WRITE,
                                       SectionKind::getDataRel());
@@ -371,12 +371,12 @@ TargetLoweringObjectFileELF::getStaticDtorSection(unsigned Priority) const {
     return StaticDtorSection;
 
   if (UseInitArray) {
-    MISTD::string Name = MISTD::string(".fini_array.") + utostr(Priority);
+    std::string Name = std::string(".fini_array.") + utostr(Priority);
     return getContext().getELFSection(Name, ELF::SHT_FINI_ARRAY,
                                       ELF::SHF_ALLOC | ELF::SHF_WRITE,
                                       SectionKind::getDataRel());
   } else {
-    MISTD::string Name = MISTD::string(".dtors.") + utostr(65535 - Priority);
+    std::string Name = std::string(".dtors.") + utostr(65535 - Priority);
     return getContext().getELFSection(Name, ELF::SHT_PROGBITS,
                                       ELF::SHF_ALLOC |ELF::SHF_WRITE,
                                       SectionKind::getDataRel());
@@ -443,7 +443,7 @@ emitModuleFlags(MCStreamer &Streamer,
   if (LinkerOptions) {
     for (unsigned i = 0, e = LinkerOptions->getNumOperands(); i != e; ++i) {
       MDNode *MDOptions = cast<MDNode>(LinkerOptions->getOperand(i));
-      SmallVector<MISTD::string, 4> StrOptions;
+      SmallVector<std::string, 4> StrOptions;
 
       // Convert to strings.
       for (unsigned ii = 0, ie = MDOptions->getNumOperands(); ii != ie; ++ii) {
@@ -461,7 +461,7 @@ emitModuleFlags(MCStreamer &Streamer,
   StringRef Segment, Section;
   unsigned TAA = 0, StubSize = 0;
   bool TAAParsed;
-  MISTD::string ErrorCode =
+  std::string ErrorCode =
     MCSectionMachO::ParseSectionSpecifier(SectionVal, Segment, Section,
                                           TAA, TAAParsed, StubSize);
   if (!ErrorCode.empty())
@@ -488,7 +488,7 @@ getExplicitSectionGlobal(const GlobalValue *GV, SectionKind Kind,
   StringRef Segment, Section;
   unsigned TAA = 0, StubSize = 0;
   bool TAAParsed;
-  MISTD::string ErrorCode =
+  std::string ErrorCode =
     MCSectionMachO::ParseSectionSpecifier(GV->getSection(), Segment, Section,
                                           TAA, TAAParsed, StubSize);
   if (!ErrorCode.empty()) {
@@ -817,7 +817,7 @@ emitModuleFlags(MCStreamer &Streamer,
       MDString *MDOption = cast<MDString>(MDOptions->getOperand(ii));
       StringRef Op = MDOption->getString();
       // Lead with a space for consistency with our dllexport implementation.
-      MISTD::string Escaped(" ");
+      std::string Escaped(" ");
       if (Op.find(" ") != StringRef::npos) {
         // The PE-COFF spec says args with spaces must be quoted.  It doesn't say
         // how to escape quotes, but it probably uses this algorithm:

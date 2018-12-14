@@ -56,7 +56,7 @@ void configure(mi::neuraylib::INeuray* neuray, const vector<string> &roots)
     {
         mi::Sint32 res = mdl_compiler->add_module_path(roots[p].c_str());
         if ( res != 0)
-            std::cout << "Error: Issue with adding path " << roots[p] << "\n";
+            std::cerr << "Error: Issue with adding path " << roots[p] << "\n";
     }
 }
 
@@ -148,7 +148,7 @@ void log_api_package(const IMdl_info* info, int level)
             return;
     }
 
-    cout << "\n Unhandled IMdl_info::Kind found!\n";
+    cerr << "\n Unhandled IMdl_info::Kind found!\n";
 }
 
 
@@ -194,7 +194,7 @@ int main(int argc, char* argv[])
         end = chrono::system_clock::now();
         chrono::duration<double> elapsed_seconds = end - start;
 
-        if (disc_result != NULL)
+        if (disc_result != nullptr)
         {
             const mi::base::Handle<const mi::neuraylib::IMdl_package_info> root(
                 disc_result->get_graph());
@@ -220,10 +220,10 @@ int main(int argc, char* argv[])
             for (size_t p = 0; p < search_paths.size(); ++p)
                 m << search_paths[p] << " ";
             m << "in " << elapsed_seconds.count() << " seconds \n\n";
-            cout << m.str();
+            cerr << m.str();
         }
         else
-            cout << "Failed to create collapsing graph out of search path"<<search_paths[0]<<"\n";
+            cerr << "Failed to create collapsing graph out of search path"<<search_paths[0]<<"\n";
 
         discovery_api = 0;
     }

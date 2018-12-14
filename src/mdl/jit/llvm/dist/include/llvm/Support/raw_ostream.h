@@ -172,7 +172,7 @@ public:
     return this->operator<<(StringRef(Str));
   }
 
-  raw_ostream &operator<<(const MISTD::string &Str) {
+  raw_ostream &operator<<(const std::string &Str) {
     // Avoid the fast path, it would only increase code size for a marginal win.
     return write(Str.data(), Str.length());
   }
@@ -196,7 +196,7 @@ public:
   raw_ostream &write_hex(unsigned long long N);
 
   /// write_escaped - Output \p Str, turning '\\', '\t', '\n', '"', and
-  /// anything that doesn't satisfy MISTD::isprint into an escape sequence.
+  /// anything that doesn't satisfy std::isprint into an escape sequence.
   raw_ostream &write_escaped(StringRef Str, bool UseHexEscapes = false);
 
   raw_ostream &write(unsigned char C);
@@ -346,7 +346,7 @@ public:
   /// itself to own the file descriptor. In particular, it will close the
   /// file descriptor when it is done (this is necessary to detect
   /// output errors).
-  raw_fd_ostream(const char *Filename, MISTD::string &ErrorInfo,
+  raw_fd_ostream(const char *Filename, std::string &ErrorInfo,
                  sys::fs::OpenFlags Flags = sys::fs::F_None);
 
   /// raw_fd_ostream ctor - FD is the file descriptor that this writes to.  If
@@ -421,10 +421,10 @@ raw_ostream &nulls();
 // Output Stream Adaptors
 //===----------------------------------------------------------------------===//
 
-/// raw_string_ostream - A raw_ostream that writes to an MISTD::string.  This is a
+/// raw_string_ostream - A raw_ostream that writes to an std::string.  This is a
 /// simple adaptor class. This class does not encounter output errors.
 class raw_string_ostream : public raw_ostream {
-  MISTD::string &OS;
+  std::string &OS;
 
   /// write_impl - See raw_ostream::write_impl.
   virtual void write_impl(const char *Ptr, size_t Size) LLVM_OVERRIDE;
@@ -433,12 +433,12 @@ class raw_string_ostream : public raw_ostream {
   /// counting the bytes currently in the buffer.
   virtual uint64_t current_pos() const LLVM_OVERRIDE { return OS.size(); }
 public:
-  explicit raw_string_ostream(MISTD::string &O) : OS(O) {}
+  explicit raw_string_ostream(std::string &O) : OS(O) {}
   ~raw_string_ostream();
 
   /// str - Flushes the stream contents to the target string and returns
   ///  the string's reference.
-  MISTD::string& str() {
+  std::string& str() {
     flush();
     return OS;
   }

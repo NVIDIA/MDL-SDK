@@ -255,8 +255,8 @@ INITIALIZE_PASS_END(MachineBlockPlacement, "block-placement2",
 /// \brief Helper to print the name of a MBB.
 ///
 /// Only used by debug logging.
-static MISTD::string getBlockName(MachineBasicBlock *BB) {
-  MISTD::string Result;
+static std::string getBlockName(MachineBasicBlock *BB) {
+  std::string Result;
   raw_string_ostream OS(Result);
   OS << "BB#" << BB->getNumber()
      << " (derived from LLVM BB '" << BB->getName() << "')";
@@ -267,8 +267,8 @@ static MISTD::string getBlockName(MachineBasicBlock *BB) {
 /// \brief Helper to print the number of a MBB.
 ///
 /// Only used by debug logging.
-static MISTD::string getBlockNum(MachineBasicBlock *BB) {
-  MISTD::string Result;
+static std::string getBlockNum(MachineBasicBlock *BB) {
+  std::string Result;
   raw_string_ostream OS(Result);
   OS << "BB#" << BB->getNumber();
   OS.flush();
@@ -435,7 +435,7 @@ MachineBasicBlock *MachineBlockPlacement::selectBestCandidateBlock(
   // worklist of already placed entries.
   // FIXME: If this shows up on profiles, it could be folded (at the cost of
   // some code complexity) into the loop below.
-  WorkList.erase(MISTD::remove_if(WorkList.begin(), WorkList.end(),
+  WorkList.erase(std::remove_if(WorkList.begin(), WorkList.end(),
                                 IsBlockPlaced(Chain, BlockToChain)),
                  WorkList.end());
 
@@ -766,12 +766,12 @@ void MachineBlockPlacement::rotateLoop(BlockChain &LoopChain,
     }
   }
 
-  BlockChain::iterator ExitIt = MISTD::find(LoopChain.begin(), LoopChain.end(),
+  BlockChain::iterator ExitIt = std::find(LoopChain.begin(), LoopChain.end(),
                                           ExitingBB);
   if (ExitIt == LoopChain.end())
     return;
 
-  MISTD::rotate(LoopChain.begin(), llvm::next(ExitIt), LoopChain.end());
+  std::rotate(LoopChain.begin(), llvm::next(ExitIt), LoopChain.end());
 }
 
 /// \brief Forms basic block chains from the natural loop structures.

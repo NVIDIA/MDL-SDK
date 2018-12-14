@@ -64,7 +64,7 @@ class File : public IFile
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const MISTD::string& path,
+	const std::string& path,
 	IFile::Mode mode = M_READ);
 
     /// Close the file.
@@ -98,7 +98,7 @@ class File : public IFile
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     virtual bool read_line(
-	MISTD::string& line,
+	std::string& line,
 	bool strip=true);
 
     /// Write raw data to a file
@@ -197,7 +197,7 @@ class File : public IFile
     virtual int get_file_descriptor() const;
 
   private:
-    MISTD::string	m_path;			///< last path passed to open()
+    std::string	m_path;			///< last path passed to open()
     int			m_error;		///< last error, 0 if none
     FILE*		m_fp;			///< open file, 0 if not open
     IFile::Mode 	m_mode;			///< current opend mode

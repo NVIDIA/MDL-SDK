@@ -70,7 +70,7 @@ protected:
   unsigned Alignment : 16;    // Alignment of this symbol, must be power of two
   unsigned UnnamedAddr : 1;   // This value's address is not significant
   Module *Parent;             // The containing module.
-  MISTD::string Section;        // Section to emit this into, empty mean default
+  std::string Section;        // Section to emit this into, empty mean default
 public:
   ~GlobalValue() {
     removeDeadConstantUsers();   // remove any dead constants using this.
@@ -93,7 +93,7 @@ public:
   void setVisibility(VisibilityTypes V) { Visibility = V; }
   
   bool hasSection() const { return !Section.empty(); }
-  const MISTD::string &getSection() const { return Section; }
+  const std::string &getSection() const { return Section; }
   void setSection(StringRef S) { Section = S; }
   
   /// If the usage is empty (except transitively dead constants), then this
@@ -257,7 +257,7 @@ public:
   /// Materialize - make sure this GlobalValue is fully read.  If the module is
   /// corrupt, this returns true and fills in the optional string with
   /// information about the problem.  If successful, this returns false.
-  bool Materialize(MISTD::string *ErrInfo = 0);
+  bool Materialize(std::string *ErrInfo = 0);
 
   /// Dematerialize - If this GlobalValue is read in, and if the GVMaterializer
   /// supports it, release the memory for the function, and set it up to be

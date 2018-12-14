@@ -235,7 +235,7 @@ public:
   }
 
   /// createPrinterPass - Get a function printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const {
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
     return createPrintFunctionPass(Banner, &O);
   }
 
@@ -295,7 +295,7 @@ public:
 
   // Delete on the fly managers.
   virtual ~MPPassManager() {
-    for (MISTD::map<Pass *, FunctionPassManagerImpl *>::iterator
+    for (std::map<Pass *, FunctionPassManagerImpl *>::iterator
            I = OnTheFlyManagers.begin(), E = OnTheFlyManagers.end();
          I != E; ++I) {
       FunctionPassManagerImpl *FPP = I->second;
@@ -304,7 +304,7 @@ public:
   }
 
   /// createPrinterPass - Get a module printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const {
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
     return createPrintModulePass(&O, false, Banner);
   }
 
@@ -351,7 +351,7 @@ public:
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
       ModulePass *MP = getContainedPass(Index);
       MP->dumpPassStructure(Offset + 1);
-      MISTD::map<Pass *, FunctionPassManagerImpl *>::const_iterator I =
+      std::map<Pass *, FunctionPassManagerImpl *>::const_iterator I =
         OnTheFlyManagers.find(MP);
       if (I != OnTheFlyManagers.end())
         I->second->dumpPassStructure(Offset + 2);
@@ -371,7 +371,7 @@ public:
  private:
   /// Collection of on the fly FPPassManagers. These managers manage
   /// function passes that are required by module passes.
-  MISTD::map<Pass *, FunctionPassManagerImpl *> OnTheFlyManagers;
+  std::map<Pass *, FunctionPassManagerImpl *> OnTheFlyManagers;
 };
 
 char MPPassManager::ID = 0;
@@ -404,7 +404,7 @@ public:
   }
 
   /// createPrinterPass - Get a module printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const {
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
     return createPrintModulePass(&O, false, Banner);
   }
 
@@ -678,7 +678,7 @@ void PMTopLevelManager::schedulePass(Pass *P) {
 
   if (PI && !PI->isAnalysis() && ShouldPrintBeforePass(PI)) {
     Pass *PP = P->createPrinterPass(
-      dbgs(), MISTD::string("*** IR Dump Before ") + P->getPassName() + " ***");
+      dbgs(), std::string("*** IR Dump Before ") + P->getPassName() + " ***");
     PP->assignPassManager(activeStack, getTopLevelPassManagerType());
   }
 
@@ -687,7 +687,7 @@ void PMTopLevelManager::schedulePass(Pass *P) {
 
   if (PI && !PI->isAnalysis() && ShouldPrintAfterPass(PI)) {
     Pass *PP = P->createPrinterPass(
-      dbgs(), MISTD::string("*** IR Dump After ") + P->getPassName() + " ***");
+      dbgs(), std::string("*** IR Dump After ") + P->getPassName() + " ***");
     PP->assignPassManager(activeStack, getTopLevelPassManagerType());
   }
 }
@@ -722,9 +722,9 @@ Pass *PMTopLevelManager::findAnalysisPass(AnalysisID AID) {
     const PassInfo *PassInf =
       PassRegistry::getPassRegistry()->getPassInfo(PI);
     assert(PassInf && "Expected all immutable passes to be initialized");
-    const MISTD::vector<const PassInfo*> &ImmPI =
+    const std::vector<const PassInfo*> &ImmPI =
       PassInf->getInterfacesImplemented();
-    for (MISTD::vector<const PassInfo*>::const_iterator II = ImmPI.begin(),
+    for (std::vector<const PassInfo*>::const_iterator II = ImmPI.begin(),
          EE = ImmPI.end(); II != EE; ++II) {
       if ((*II)->getTypeInfo() == AID)
         return *I;
@@ -829,7 +829,7 @@ void PMDataManager::recordAvailableAnalysis(Pass *P) {
   // implements as well.
   const PassInfo *PInf = PassRegistry::getPassRegistry()->getPassInfo(PI);
   if (PInf == 0) return;
-  const MISTD::vector<const PassInfo*> &II = PInf->getInterfacesImplemented();
+  const std::vector<const PassInfo*> &II = PInf->getInterfacesImplemented();
   for (unsigned i = 0, e = II.size(); i != e; ++i)
     AvailableAnalysis[II[i]->getTypeInfo()] = P;
 }
@@ -846,7 +846,7 @@ bool PMDataManager::preserveHigherLevelAnalysis(Pass *P) {
          E = HigherLevelAnalysis.end(); I  != E; ++I) {
     Pass *P1 = *I;
     if (P1->getAsImmutablePass() == 0 &&
-        MISTD::find(PreservedSet.begin(), PreservedSet.end(),
+        std::find(PreservedSet.begin(), PreservedSet.end(),
                   P1->getPassID()) ==
            PreservedSet.end())
       return false;
@@ -886,7 +886,7 @@ void PMDataManager::removeNotPreservedAnalysis(Pass *P) {
          E = AvailableAnalysis.end(); I != E; ) {
     DenseMap<AnalysisID, Pass*>::iterator Info = I++;
     if (Info->second->getAsImmutablePass() == 0 &&
-        MISTD::find(PreservedSet.begin(), PreservedSet.end(), Info->first) ==
+        std::find(PreservedSet.begin(), PreservedSet.end(), Info->first) ==
         PreservedSet.end()) {
       // Remove this analysis
       if (PassDebugging >= Details) {
@@ -910,7 +910,7 @@ void PMDataManager::removeNotPreservedAnalysis(Pass *P) {
            E = InheritedAnalysis[Index]->end(); I != E; ) {
       DenseMap<AnalysisID, Pass *>::iterator Info = I++;
       if (Info->second->getAsImmutablePass() == 0 &&
-          MISTD::find(PreservedSet.begin(), PreservedSet.end(), Info->first) ==
+          std::find(PreservedSet.begin(), PreservedSet.end(), Info->first) ==
              PreservedSet.end()) {
         // Remove this analysis
         if (PassDebugging >= Details) {
@@ -966,7 +966,7 @@ void PMDataManager::freePass(Pass *P, StringRef Msg,
 
     // Remove all interfaces this pass implements, for which it is also
     // listed as the available implementation.
-    const MISTD::vector<const PassInfo*> &II = PInf->getInterfacesImplemented();
+    const std::vector<const PassInfo*> &II = PInf->getInterfacesImplemented();
     for (unsigned i = 0, e = II.size(); i != e; ++i) {
       DenseMap<AnalysisID, Pass*>::iterator Pos =
         AvailableAnalysis.find(II[i]->getTypeInfo());
@@ -1133,7 +1133,7 @@ void PMDataManager::dumpLastUses(Pass *P, unsigned Offset) const{
 
   for (SmallVectorImpl<Pass *>::iterator I = LUses.begin(),
          E = LUses.end(); I != E; ++I) {
-    llvm::dbgs() << "--" << MISTD::string(Offset*2, ' ');
+    llvm::dbgs() << "--" << std::string(Offset*2, ' ');
     (*I)->dumpPassStructure(0);
   }
 }
@@ -1156,7 +1156,7 @@ void PMDataManager::dumpPassInfo(Pass *P, enum PassDebuggingString S1,
                                  StringRef Msg) {
   if (PassDebugging < Executions)
     return;
-  dbgs() << (void*)this << MISTD::string(getDepth()*2+1, ' ');
+  dbgs() << (void*)this << std::string(getDepth()*2+1, ' ');
   switch (S1) {
   case EXECUTION_MSG:
     dbgs() << "Executing Pass '" << P->getPassName();
@@ -1217,7 +1217,7 @@ void PMDataManager::dumpAnalysisUsage(StringRef Msg, const Pass *P,
   assert(PassDebugging >= Details);
   if (Set.empty())
     return;
-  dbgs() << (const void*)P << MISTD::string(getDepth()*2+3, ' ') << Msg << " Analyses:";
+  dbgs() << (const void*)P << std::string(getDepth()*2+3, ' ') << Msg << " Analyses:";
   for (unsigned i = 0; i != Set.size(); ++i) {
     if (i) dbgs() << ',';
     const PassInfo *PInf = PassRegistry::getPassRegistry()->getPassInfo(Set[i]);
@@ -1400,7 +1400,7 @@ void FunctionPassManager::add(Pass *P) {
 ///
 bool FunctionPassManager::run(Function &F) {
   if (F.isMaterializable()) {
-    MISTD::string errstr;
+    std::string errstr;
     if (F.Materialize(&errstr))
       report_fatal_error("Error reading bitcode file: " + Twine(errstr));
   }
@@ -1589,7 +1589,7 @@ MPPassManager::runOnModule(Module &M) {
   bool Changed = false;
 
   // Initialize on-the-fly passes
-  for (MISTD::map<Pass *, FunctionPassManagerImpl *>::iterator
+  for (std::map<Pass *, FunctionPassManagerImpl *>::iterator
        I = OnTheFlyManagers.begin(), E = OnTheFlyManagers.end();
        I != E; ++I) {
     FunctionPassManagerImpl *FPP = I->second;
@@ -1633,7 +1633,7 @@ MPPassManager::runOnModule(Module &M) {
     Changed |= getContainedPass(Index)->doFinalization(M);
 
   // Finalize on-the-fly passes
-  for (MISTD::map<Pass *, FunctionPassManagerImpl *>::iterator
+  for (std::map<Pass *, FunctionPassManagerImpl *>::iterator
        I = OnTheFlyManagers.begin(), E = OnTheFlyManagers.end();
        I != E; ++I) {
     FunctionPassManagerImpl *FPP = I->second;
@@ -1813,7 +1813,7 @@ void PMStack::push(PMDataManager *PM) {
 
 // Dump content of the pass manager stack.
 void PMStack::dump() const {
-  for (MISTD::vector<PMDataManager *>::const_iterator I = S.begin(),
+  for (std::vector<PMDataManager *>::const_iterator I = S.begin(),
          E = S.end(); I != E; ++I)
     dbgs() << (*I)->getAsPass()->getPassName() << ' ';
 

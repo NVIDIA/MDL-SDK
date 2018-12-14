@@ -37,7 +37,7 @@ export float3 motion() varying [[ intrinsic() ]];
 
 export int texture_space_max() varying [[ intrinsic() ]];
 
-export float3 texture_coordinate(int index) varying [[ intrinsic(), throws() ]];
+export float3 [[ derivable() ]] texture_coordinate(int index) varying [[ intrinsic(), throws() ]];
 
 export float3 texture_tangent_u(int index) varying [[ intrinsic(), throws() ]];
 

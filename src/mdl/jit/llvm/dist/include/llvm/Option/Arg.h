@@ -123,7 +123,7 @@ public:
 
   /// \brief Return a formatted version of the argument and
   /// its values, for debugging and diagnostics.
-  MISTD::string getAsString(const ArgList &Args) const;
+  std::string getAsString(const ArgList &Args) const;
 };
 
 } // end namespace opt

@@ -275,7 +275,7 @@ void MachineFunction::verify(Pass *p, const char *Banner) const {
 bool MachineVerifier::runOnMachineFunction(MachineFunction &MF) {
   raw_ostream *OutFile = 0;
   if (OutFileName) {
-    MISTD::string ErrorInfo;
+    std::string ErrorInfo;
     OutFile = new raw_fd_ostream(OutFileName, ErrorInfo, sys::fs::F_Append);
     if (!ErrorInfo.empty()) {
       errs() << "Error opening '" << OutFileName << "': " << ErrorInfo << '\n';
@@ -998,7 +998,7 @@ void MachineVerifier::checkLiveness(const MachineOperand *MO, unsigned MONum) {
     if (LiveVars && TargetRegisterInfo::isVirtualRegister(Reg) &&
         MO->isKill()) {
       LiveVariables::VarInfo &VI = LiveVars->getVarInfo(Reg);
-      if (MISTD::find(VI.Kills.begin(), VI.Kills.end(), MI) == VI.Kills.end())
+      if (std::find(VI.Kills.begin(), VI.Kills.end(), MI) == VI.Kills.end())
         report("Kill missing from LiveVariables", MO, MONum);
     }
 
@@ -1060,7 +1060,7 @@ void MachineVerifier::checkLiveness(const MachineOperand *MO, unsigned MONum) {
         if (MInfo.regsKilled.count(Reg))
           report("Using a killed virtual register", MO, MONum);
         else if (!MI->isPHI())
-          MInfo.vregsLiveIn.insert(MISTD::make_pair(Reg, MI));
+          MInfo.vregsLiveIn.insert(std::make_pair(Reg, MI));
       }
     }
   }

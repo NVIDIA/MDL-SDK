@@ -224,16 +224,16 @@ private:
   // Output Variables
   TableHeader Header;
   TableHeaderData HeaderData;
-  MISTD::vector<HashData *> Data;
+  std::vector<HashData *> Data;
 
   // String Data
-  typedef MISTD::vector<HashDataContents *> DataArray;
+  typedef std::vector<HashDataContents *> DataArray;
   typedef StringMap<DataArray, BumpPtrAllocator &> StringEntries;
   StringEntries Entries;
 
   // Buckets/Hashes/Offsets
-  typedef MISTD::vector<HashData *> HashList;
-  typedef MISTD::vector<HashList> BucketList;
+  typedef std::vector<HashData *> HashList;
+  typedef std::vector<HashList> BucketList;
   BucketList Buckets;
   HashList Hashes;
 

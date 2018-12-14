@@ -65,15 +65,15 @@
 #include "gtest/gtest-typed-test.h"
 
 // Depending on the platform, different string classes are available.
-// On Linux, in addition to ::MISTD::string, Google also makes use of
-// class ::string, which has the same interface as ::MISTD::string, but
+// On Linux, in addition to ::std::string, Google also makes use of
+// class ::string, which has the same interface as ::std::string, but
 // has a different implementation.
 //
 // The user can define GTEST_HAS_GLOBAL_STRING to 1 to indicate that
-// ::string is available AND is a distinct type to ::MISTD::string, or
+// ::string is available AND is a distinct type to ::std::string, or
 // define it to 0 to indicate otherwise.
 //
-// If the user's ::MISTD::string and ::string are the same class due to
+// If the user's ::std::string and ::string are the same class due to
 // aliasing, he should define GTEST_HAS_GLOBAL_STRING to 0.
 //
 // If the user doesn't define GTEST_HAS_GLOBAL_STRING, it is defined
@@ -163,7 +163,7 @@ void ReportFailureInUnknownLocation(TestPartResult::Type result_type,
 
 // Converts a streamable value to a String.  A NULL pointer is
 // converted to "(null)".  When the input value is a ::string,
-// ::MISTD::string, ::wstring, or ::MISTD::wstring object, each NUL
+// ::std::string, ::wstring, or ::std::wstring object, each NUL
 // character in it is replaced with "\\0".
 // Declared in gtest-internal.h but defined here, so that it has access
 // to the definition of the Message class, required by the ARM
@@ -296,7 +296,7 @@ class GTEST_API_ AssertionResult {
   // Allows streaming basic output manipulators such as endl or flush into
   // this object.
   AssertionResult& operator<<(
-      ::MISTD::ostream& (*basic_manipulator)(::MISTD::ostream& stream)) {
+      ::std::ostream& (*basic_manipulator)(::std::ostream& stream)) {
     AppendMessage(Message() << basic_manipulator);
     return *this;
   }
@@ -305,7 +305,7 @@ class GTEST_API_ AssertionResult {
   // Appends the contents of message to message_.
   void AppendMessage(const Message& a_message) {
     if (message_.get() == NULL)
-      message_.reset(new ::MISTD::string);
+      message_.reset(new ::std::string);
     message_->append(a_message.GetString().c_str());
   }
 
@@ -315,7 +315,7 @@ class GTEST_API_ AssertionResult {
   // construct is not satisfied with the predicate's outcome.
   // Referenced via a pointer to avoid taking too much stack frame space
   // with test assertions.
-  internal::scoped_ptr< ::MISTD::string> message_;
+  internal::scoped_ptr< ::std::string> message_;
 
   GTEST_DISALLOW_ASSIGN_(AssertionResult);
 };
@@ -555,12 +555,12 @@ class GTEST_API_ TestResult {
   friend class internal::WindowsDeathTest;
 
   // Gets the vector of TestPartResults.
-  const MISTD::vector<TestPartResult>& test_part_results() const {
+  const std::vector<TestPartResult>& test_part_results() const {
     return test_part_results_;
   }
 
   // Gets the vector of TestProperties.
-  const MISTD::vector<TestProperty>& test_properties() const {
+  const std::vector<TestProperty>& test_properties() const {
     return test_properties_;
   }
 
@@ -599,9 +599,9 @@ class GTEST_API_ TestResult {
   internal::Mutex test_properites_mutex_;
 
   // The vector of TestPartResults
-  MISTD::vector<TestPartResult> test_part_results_;
+  std::vector<TestPartResult> test_part_results_;
   // The vector of TestProperties
-  MISTD::vector<TestProperty> test_properties_;
+  std::vector<TestProperty> test_properties_;
   // Running count of death tests.
   int death_test_count_;
   // The elapsed time, in milliseconds.
@@ -711,14 +711,14 @@ class GTEST_API_ TestInfo {
   }
 
   // These fields are immutable properties of the test.
-  const MISTD::string test_case_name_;     // Test case name
-  const MISTD::string name_;               // Test name
+  const std::string test_case_name_;     // Test case name
+  const std::string name_;               // Test name
   // Name of the parameter type, or NULL if this is not a typed or a
   // type-parameterized test.
-  const internal::scoped_ptr<const ::MISTD::string> type_param_;
+  const internal::scoped_ptr<const ::std::string> type_param_;
   // Text representation of the value parameter, or NULL if this is not a
   // value-parameterized test.
-  const internal::scoped_ptr<const ::MISTD::string> value_param_;
+  const internal::scoped_ptr<const ::std::string> value_param_;
   const internal::TypeId fixture_class_id_;   // ID of the test fixture class
   bool should_run_;                 // True iff this test should run
   bool is_disabled_;                // True iff this test is disabled
@@ -805,10 +805,10 @@ class GTEST_API_ TestCase {
   friend class internal::UnitTestImpl;
 
   // Gets the (mutable) vector of TestInfos in this TestCase.
-  MISTD::vector<TestInfo*>& test_info_list() { return test_info_list_; }
+  std::vector<TestInfo*>& test_info_list() { return test_info_list_; }
 
   // Gets the (immutable) vector of TestInfos in this TestCase.
-  const MISTD::vector<TestInfo*>& test_info_list() const {
+  const std::vector<TestInfo*>& test_info_list() const {
     return test_info_list_;
   }
 
@@ -872,14 +872,14 @@ class GTEST_API_ TestCase {
   internal::String name_;
   // Name of the parameter type, or NULL if this is not a typed or a
   // type-parameterized test.
-  const internal::scoped_ptr<const ::MISTD::string> type_param_;
+  const internal::scoped_ptr<const ::std::string> type_param_;
   // The vector of TestInfos in their original order.  It owns the
   // elements in the vector.
-  MISTD::vector<TestInfo*> test_info_list_;
+  std::vector<TestInfo*> test_info_list_;
   // Provides a level of indirection for the test list to allow easy
   // shuffling and restoring the test order.  The i-th element in this
   // vector is the index of the i-th test in the shuffled test list.
-  MISTD::vector<int> test_indices_;
+  std::vector<int> test_indices_;
   // Pointer to the function that sets up the test case.
   Test::SetUpTestCaseFunc set_up_tc_;
   // Pointer to the function that tears down the test case.
@@ -1287,7 +1287,7 @@ namespace internal {
 // of the other operand may affect the format.  This allows us to
 // print a char* as a raw pointer when it is compared against another
 // char*, and print it as a C string when it is compared against an
-// MISTD::string object, for example.
+// std::string object, for example.
 //
 // The default implementation ignores the type of the other operand.
 // Some specialized versions are used to handle formatting wide or
@@ -1530,18 +1530,18 @@ GTEST_API_ AssertionResult IsNotSubstring(
     const wchar_t* needle, const wchar_t* haystack);
 GTEST_API_ AssertionResult IsSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::string& needle, const ::MISTD::string& haystack);
+    const ::std::string& needle, const ::std::string& haystack);
 GTEST_API_ AssertionResult IsNotSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::string& needle, const ::MISTD::string& haystack);
+    const ::std::string& needle, const ::std::string& haystack);
 
 #if GTEST_HAS_STD_WSTRING
 GTEST_API_ AssertionResult IsSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::wstring& needle, const ::MISTD::wstring& haystack);
+    const ::std::wstring& needle, const ::std::wstring& haystack);
 GTEST_API_ AssertionResult IsNotSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::wstring& needle, const ::MISTD::wstring& haystack);
+    const ::std::wstring& needle, const ::std::wstring& haystack);
 #endif  // GTEST_HAS_STD_WSTRING
 
 namespace internal {
@@ -1564,12 +1564,12 @@ AssertionResult CmpHelperFloatingPointEQ(const char* expected_expression,
     return AssertionSuccess();
   }
 
-  ::MISTD::stringstream expected_ss;
-  expected_ss << MISTD::setprecision(MISTD::numeric_limits<RawType>::digits10 + 2)
+  ::std::stringstream expected_ss;
+  expected_ss << std::setprecision(std::numeric_limits<RawType>::digits10 + 2)
               << expected;
 
-  ::MISTD::stringstream actual_ss;
-  actual_ss << MISTD::setprecision(MISTD::numeric_limits<RawType>::digits10 + 2)
+  ::std::stringstream actual_ss;
+  actual_ss << std::setprecision(std::numeric_limits<RawType>::digits10 + 2)
             << actual;
 
   return EqFailure(expected_expression,
@@ -2033,7 +2033,7 @@ GTEST_API_ AssertionResult DoubleLE(const char* expr1, const char* expr2,
 // message generated by code in the current scope.  The effect is
 // undone when the control leaves the current scope.
 //
-// The message argument can be anything streamable to MISTD::ostream.
+// The message argument can be anything streamable to std::ostream.
 //
 // In the implementation, we include the current line number as part
 // of the dummy variable name, thus allowing multiple SCOPED_TRACE()s

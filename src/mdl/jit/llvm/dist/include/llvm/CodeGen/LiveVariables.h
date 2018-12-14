@@ -86,14 +86,14 @@ public:
     /// Kills - List of MachineInstruction's which are the last use of this
     /// virtual register (kill it) in their basic block.
     ///
-    MISTD::vector<MachineInstr*> Kills;
+    std::vector<MachineInstr*> Kills;
 
     /// removeKill - Delete a kill corresponding to the specified
     /// machine instruction. Returns true if there was a kill
     /// corresponding to this instruction, false otherwise.
     bool removeKill(MachineInstr *MI) {
-      MISTD::vector<MachineInstr*>::iterator
-        I = MISTD::find(Kills.begin(), Kills.end(), MI);
+      std::vector<MachineInstr*>::iterator
+        I = std::find(Kills.begin(), Kills.end(), MI);
       if (I == Kills.end())
         return false;
       Kills.erase(I);
@@ -273,7 +273,7 @@ public:
                                MachineBasicBlock *BB);
   void MarkVirtRegAliveInBlock(VarInfo& VRInfo, MachineBasicBlock* DefBlock,
                                MachineBasicBlock *BB,
-                               MISTD::vector<MachineBasicBlock*> &WorkList);
+                               std::vector<MachineBasicBlock*> &WorkList);
   void HandleVirtRegDef(unsigned reg, MachineInstr *MI);
   void HandleVirtRegUse(unsigned reg, MachineBasicBlock *MBB,
                         MachineInstr *MI);

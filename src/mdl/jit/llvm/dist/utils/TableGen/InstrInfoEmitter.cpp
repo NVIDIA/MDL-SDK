@@ -44,35 +44,35 @@ public:
 private:
   void emitEnums(raw_ostream &OS);
 
-  typedef MISTD::map<MISTD::vector<MISTD::string>, unsigned> OperandInfoMapTy;
+  typedef std::map<std::vector<std::string>, unsigned> OperandInfoMapTy;
 
   /// The keys of this map are maps which have OpName enum values as their keys
   /// and instruction operand indices as their values.  The values of this map
   /// are lists of instruction names.
-  typedef MISTD::map<MISTD::map<unsigned, unsigned>,
-                   MISTD::vector<MISTD::string> > OpNameMapTy;
-  typedef MISTD::map<MISTD::string, unsigned>::iterator StrUintMapIter;
+  typedef std::map<std::map<unsigned, unsigned>,
+                   std::vector<std::string> > OpNameMapTy;
+  typedef std::map<std::string, unsigned>::iterator StrUintMapIter;
   void emitRecord(const CodeGenInstruction &Inst, unsigned Num,
                   Record *InstrInfo,
-                  MISTD::map<MISTD::vector<Record*>, unsigned> &EL,
+                  std::map<std::vector<Record*>, unsigned> &EL,
                   const OperandInfoMapTy &OpInfo,
                   raw_ostream &OS);
   void emitOperandTypesEnum(raw_ostream &OS, const CodeGenTarget &Target);
   void initOperandMapData(
-             const MISTD::vector<const CodeGenInstruction *> NumberedInstructions,
-             const MISTD::string &Namespace,
-             MISTD::map<MISTD::string, unsigned> &Operands,
+             const std::vector<const CodeGenInstruction *> NumberedInstructions,
+             const std::string &Namespace,
+             std::map<std::string, unsigned> &Operands,
              OpNameMapTy &OperandMap);
   void emitOperandNameMappings(raw_ostream &OS, const CodeGenTarget &Target,
-            const MISTD::vector<const CodeGenInstruction*> &NumberedInstructions);
+            const std::vector<const CodeGenInstruction*> &NumberedInstructions);
 
   // Operand information.
   void EmitOperandInfo(raw_ostream &OS, OperandInfoMapTy &OperandInfoIDs);
-  MISTD::vector<MISTD::string> GetOperandInfo(const CodeGenInstruction &Inst);
+  std::vector<std::string> GetOperandInfo(const CodeGenInstruction &Inst);
 };
 } // End anonymous namespace
 
-static void PrintDefList(const MISTD::vector<Record*> &Uses,
+static void PrintDefList(const std::vector<Record*> &Uses,
                          unsigned Num, raw_ostream &OS) {
   OS << "static const uint16_t ImplicitList" << Num << "[] = { ";
   for (unsigned i = 0, e = Uses.size(); i != e; ++i)
@@ -84,14 +84,14 @@ static void PrintDefList(const MISTD::vector<Record*> &Uses,
 // Operand Info Emission.
 //===----------------------------------------------------------------------===//
 
-MISTD::vector<MISTD::string>
+std::vector<std::string>
 InstrInfoEmitter::GetOperandInfo(const CodeGenInstruction &Inst) {
-  MISTD::vector<MISTD::string> Result;
+  std::vector<std::string> Result;
 
   for (unsigned i = 0, e = Inst.Operands.size(); i != e; ++i) {
     // Handle aggregate operands and normal operands the same way by expanding
     // either case into a list of operands for this op.
-    MISTD::vector<CGIOperandList::OperandInfo> OperandList;
+    std::vector<CGIOperandList::OperandInfo> OperandList;
 
     // This might be a multiple operand thing.  Targets like X86 have
     // registers in their multi-operand operands.  It may also be an anonymous
@@ -113,7 +113,7 @@ InstrInfoEmitter::GetOperandInfo(const CodeGenInstruction &Inst) {
 
     for (unsigned j = 0, e = OperandList.size(); j != e; ++j) {
       Record *OpR = OperandList[j].Rec;
-      MISTD::string Res;
+      std::string Res;
 
       if (OpR->isSubClassOf("RegisterOperand"))
         OpR = OpR->getValueAsDef("RegClass");
@@ -173,13 +173,13 @@ void InstrInfoEmitter::EmitOperandInfo(raw_ostream &OS,
                                        OperandInfoMapTy &OperandInfoIDs) {
   // ID #0 is for no operand info.
   unsigned OperandListNum = 0;
-  OperandInfoIDs[MISTD::vector<MISTD::string>()] = ++OperandListNum;
+  OperandInfoIDs[std::vector<std::string>()] = ++OperandListNum;
 
   OS << "\n";
   const CodeGenTarget &Target = CDP.getTargetInfo();
   for (CodeGenTarget::inst_iterator II = Target.inst_begin(),
        E = Target.inst_end(); II != E; ++II) {
-    MISTD::vector<MISTD::string> OperandInfo = GetOperandInfo(**II);
+    std::vector<std::string> OperandInfo = GetOperandInfo(**II);
     unsigned &N = OperandInfoIDs[OperandInfo];
     if (N != 0) continue;
 
@@ -200,9 +200,9 @@ void InstrInfoEmitter::EmitOperandInfo(raw_ostream &OS,
 ///        each instructions.  This is used to generate the OperandMap table as
 ///        well as the getNamedOperandIdx() function.
 void InstrInfoEmitter::initOperandMapData(
-        const MISTD::vector<const CodeGenInstruction *> NumberedInstructions,
-        const MISTD::string &Namespace,
-        MISTD::map<MISTD::string, unsigned> &Operands,
+        const std::vector<const CodeGenInstruction *> NumberedInstructions,
+        const std::string &Namespace,
+        std::map<std::string, unsigned> &Operands,
         OpNameMapTy &OperandMap) {
 
   unsigned NumOperands = 0;
@@ -211,14 +211,14 @@ void InstrInfoEmitter::initOperandMapData(
     if (!Inst->TheDef->getValueAsBit("UseNamedOperandTable")) {
       continue;
     }
-    MISTD::map<unsigned, unsigned> OpList;
+    std::map<unsigned, unsigned> OpList;
     for (unsigned j = 0, je = Inst->Operands.size(); j != je; ++j) {
       const CGIOperandList::OperandInfo &Info = Inst->Operands[j];
       StrUintMapIter I = Operands.find(Info.Name);
 
       if (I == Operands.end()) {
         I = Operands.insert(Operands.begin(),
-                    MISTD::pair<MISTD::string, unsigned>(Info.Name, NumOperands++));
+                    std::pair<std::string, unsigned>(Info.Name, NumOperands++));
       }
       OpList[I->second] = Info.MIOperandNo;
     }
@@ -239,13 +239,13 @@ void InstrInfoEmitter::initOperandMapData(
 ///   OpName enum
 void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
            const CodeGenTarget &Target,
-           const MISTD::vector<const CodeGenInstruction*> &NumberedInstructions) {
+           const std::vector<const CodeGenInstruction*> &NumberedInstructions) {
 
-  const MISTD::string &Namespace = Target.getInstNamespace();
-  MISTD::string OpNameNS = "OpName";
+  const std::string &Namespace = Target.getInstNamespace();
+  std::string OpNameNS = "OpName";
   // Map of operand names to their enumeration value.  This will be used to
   // generate the OpName enum.
-  MISTD::map<MISTD::string, unsigned> Operands;
+  std::map<std::string, unsigned> Operands;
   OpNameMapTy OperandMap;
 
   initOperandMapData(NumberedInstructions, Namespace, Operands, OperandMap);
@@ -276,7 +276,7 @@ void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
        << "] = {\n";
     for (OpNameMapTy::iterator i = OperandMap.begin(), e = OperandMap.end();
                                                        i != e; ++i) {
-      const MISTD::map<unsigned, unsigned> &OpList = i->first;
+      const std::map<unsigned, unsigned> &OpList = i->first;
       OS << "{";
 
       // Emit a row of the OperandMap table
@@ -292,7 +292,7 @@ void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
     unsigned TableIndex = 0;
     for (OpNameMapTy::iterator i = OperandMap.begin(), e = OperandMap.end();
                                                        i != e; ++i) {
-      MISTD::vector<MISTD::string> &OpcodeList = i->second;
+      std::vector<std::string> &OpcodeList = i->second;
 
       for (unsigned ii = 0, ie = OpcodeList.size(); ii != ie; ++ii)
         OS << "  case " << OpcodeList[ii] << ":\n";
@@ -318,8 +318,8 @@ void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
 void InstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
                                             const CodeGenTarget &Target) {
 
-  const MISTD::string &Namespace = Target.getInstNamespace();
-  MISTD::vector<Record *> Operands = Records.getAllDerivedDefinitions("Operand");
+  const std::string &Namespace = Target.getInstNamespace();
+  std::vector<Record *> Operands = Records.getAllDerivedDefinitions("Operand");
 
   OS << "\n#ifdef GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
   OS << "#undef GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
@@ -357,23 +357,23 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OS << "namespace llvm {\n\n";
 
   CodeGenTarget &Target = CDP.getTargetInfo();
-  const MISTD::string &TargetName = Target.getName();
+  const std::string &TargetName = Target.getName();
   Record *InstrInfo = Target.getInstructionSet();
 
   // Keep track of all of the def lists we have emitted already.
-  MISTD::map<MISTD::vector<Record*>, unsigned> EmittedLists;
+  std::map<std::vector<Record*>, unsigned> EmittedLists;
   unsigned ListNumber = 0;
 
   // Emit all of the instruction's implicit uses and defs.
   for (CodeGenTarget::inst_iterator II = Target.inst_begin(),
          E = Target.inst_end(); II != E; ++II) {
     Record *Inst = (*II)->TheDef;
-    MISTD::vector<Record*> Uses = Inst->getValueAsListOfDefs("Uses");
+    std::vector<Record*> Uses = Inst->getValueAsListOfDefs("Uses");
     if (!Uses.empty()) {
       unsigned &IL = EmittedLists[Uses];
       if (!IL) PrintDefList(Uses, IL = ++ListNumber, OS);
     }
-    MISTD::vector<Record*> Defs = Inst->getValueAsListOfDefs("Defs");
+    std::vector<Record*> Defs = Inst->getValueAsListOfDefs("Defs");
     if (!Defs.empty()) {
       unsigned &IL = EmittedLists[Defs];
       if (!IL) PrintDefList(Defs, IL = ++ListNumber, OS);
@@ -388,7 +388,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   // Emit all of the MCInstrDesc records in their ENUM ordering.
   //
   OS << "\nextern const MCInstrDesc " << TargetName << "Insts[] = {\n";
-  const MISTD::vector<const CodeGenInstruction*> &NumberedInstructions =
+  const std::vector<const CodeGenInstruction*> &NumberedInstructions =
     Target.getInstructionsByEnumValue();
 
   for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i)
@@ -397,7 +397,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OS << "};\n\n";
 
   // Build an array of instruction names
-  SequenceToOffsetTable<MISTD::string> InstrNames;
+  SequenceToOffsetTable<std::string> InstrNames;
   for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i) {
     const CodeGenInstruction *Instr = NumberedInstructions[i];
     InstrNames.add(Instr->TheDef->getName());
@@ -433,7 +433,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OS << "\n#ifdef GET_INSTRINFO_HEADER\n";
   OS << "#undef GET_INSTRINFO_HEADER\n";
 
-  MISTD::string ClassName = TargetName + "GenInstrInfo";
+  std::string ClassName = TargetName + "GenInstrInfo";
   OS << "namespace llvm {\n";
   OS << "struct " << ClassName << " : public TargetInstrInfo {\n"
      << "  explicit " << ClassName << "(int SO = -1, int DO = -1);\n"
@@ -467,7 +467,7 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
 
 void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
                                   Record *InstrInfo,
-                         MISTD::map<MISTD::vector<Record*>, unsigned> &EmittedLists,
+                         std::map<std::vector<Record*>, unsigned> &EmittedLists,
                                   const OperandInfoMapTy &OpInfo,
                                   raw_ostream &OS) {
   int MinOperands = 0;
@@ -528,20 +528,20 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   OS << "ULL, ";
 
   // Emit the implicit uses and defs lists...
-  MISTD::vector<Record*> UseList = Inst.TheDef->getValueAsListOfDefs("Uses");
+  std::vector<Record*> UseList = Inst.TheDef->getValueAsListOfDefs("Uses");
   if (UseList.empty())
     OS << "NULL, ";
   else
     OS << "ImplicitList" << EmittedLists[UseList] << ", ";
 
-  MISTD::vector<Record*> DefList = Inst.TheDef->getValueAsListOfDefs("Defs");
+  std::vector<Record*> DefList = Inst.TheDef->getValueAsListOfDefs("Defs");
   if (DefList.empty())
     OS << "NULL, ";
   else
     OS << "ImplicitList" << EmittedLists[DefList] << ", ";
 
   // Emit the operand info.
-  MISTD::vector<MISTD::string> OperandInfo = GetOperandInfo(Inst);
+  std::vector<std::string> OperandInfo = GetOperandInfo(Inst);
   if (OperandInfo.empty())
     OS << "0";
   else
@@ -574,14 +574,14 @@ void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
   CodeGenTarget Target(Records);
 
   // We must emit the PHI opcode first...
-  MISTD::string Namespace = Target.getInstNamespace();
+  std::string Namespace = Target.getInstNamespace();
 
   if (Namespace.empty()) {
     fprintf(stderr, "No instructions defined!\n");
     exit(1);
   }
 
-  const MISTD::vector<const CodeGenInstruction*> &NumberedInstructions =
+  const std::vector<const CodeGenInstruction*> &NumberedInstructions =
     Target.getInstructionsByEnumValue();
 
   OS << "namespace " << Namespace << " {\n";

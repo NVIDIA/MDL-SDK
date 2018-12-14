@@ -61,10 +61,10 @@ class SpecialCaseList {
   /// Parses the special case list from a file. If Path is empty, returns
   /// an empty special case list. On failure, returns 0 and writes an error
   /// message to string.
-  static SpecialCaseList *create(const StringRef Path, MISTD::string &Error);
+  static SpecialCaseList *create(const StringRef Path, std::string &Error);
   /// Parses the special case list from a memory buffer. On failure, returns
   /// 0 and writes an error message to string.
-  static SpecialCaseList *create(const MemoryBuffer *MB, MISTD::string &Error);
+  static SpecialCaseList *create(const MemoryBuffer *MB, std::string &Error);
   /// Parses the special case list from a file. On failure, reports a fatal
   /// error.
   static SpecialCaseList *createOrDie(const StringRef Path);
@@ -101,7 +101,7 @@ class SpecialCaseList {
 
   SpecialCaseList();
   /// Parses just-constructed SpecialCaseList entries from a memory buffer.
-  bool parse(const MemoryBuffer *MB, MISTD::string &Error);
+  bool parse(const MemoryBuffer *MB, std::string &Error);
 
   bool inSectionCategory(const StringRef Section, const StringRef Query,
                          const StringRef Category) const;

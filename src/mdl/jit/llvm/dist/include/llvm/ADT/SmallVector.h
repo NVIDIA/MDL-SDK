@@ -98,8 +98,8 @@ public:
   typedef T *iterator;
   typedef const T *const_iterator;
 
-  typedef MISTD::reverse_iterator<const_iterator> const_reverse_iterator;
-  typedef MISTD::reverse_iterator<iterator> reverse_iterator;
+  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+  typedef std::reverse_iterator<iterator> reverse_iterator;
 
   typedef T &reference;
   typedef const T &const_reference;
@@ -178,30 +178,30 @@ protected:
 
   /// move - Use move-assignment to move the range [I, E) onto the
   /// objects starting with "Dest".  This is just <memory>'s
-  /// MISTD::move, but not all stdlibs actually provide that.
+  /// std::move, but not all stdlibs actually provide that.
   template<typename It1, typename It2>
   static It2 move(It1 I, It1 E, It2 Dest) {
 #if LLVM_HAS_RVALUE_REFERENCES
     for (; I != E; ++I, ++Dest)
-      *Dest = ::MISTD::move(*I);
+      *Dest = ::std::move(*I);
     return Dest;
 #else
-    return ::MISTD::copy(I, E, Dest);
+    return ::std::copy(I, E, Dest);
 #endif
   }
 
   /// move_backward - Use move-assignment to move the range
   /// [I, E) onto the objects ending at "Dest", moving objects
   /// in reverse order.  This is just <algorithm>'s
-  /// MISTD::move_backward, but not all stdlibs actually provide that.
+  /// std::move_backward, but not all stdlibs actually provide that.
   template<typename It1, typename It2>
   static It2 move_backward(It1 I, It1 E, It2 Dest) {
 #if LLVM_HAS_RVALUE_REFERENCES
     while (I != E)
-      *--Dest = ::MISTD::move(*--E);
+      *--Dest = ::std::move(*--E);
     return Dest;
 #else
-    return ::MISTD::copy_backward(I, E, Dest);
+    return ::std::copy_backward(I, E, Dest);
 #endif
   }
 
@@ -211,9 +211,9 @@ protected:
   static void uninitialized_move(It1 I, It1 E, It2 Dest) {
 #if LLVM_HAS_RVALUE_REFERENCES
     for (; I != E; ++I, ++Dest)
-      ::new ((void*) &*Dest) T(::MISTD::move(*I));
+      ::new ((void*) &*Dest) T(::std::move(*I));
 #else
-    ::MISTD::uninitialized_copy(I, E, Dest);
+    ::std::uninitialized_copy(I, E, Dest);
 #endif
   }
 
@@ -221,7 +221,7 @@ protected:
   /// memory starting with "Dest", constructing elements as needed.
   template<typename It1, typename It2>
   static void uninitialized_copy(It1 I, It1 E, It2 Dest) {
-    MISTD::uninitialized_copy(I, E, Dest);
+    std::uninitialized_copy(I, E, Dest);
   }
 
   /// grow - Grow the allocated memory (without initializing new
@@ -246,7 +246,7 @@ public:
   void push_back(T &&Elt) {
     if (this->EndX < this->CapacityX) {
     Retry:
-      ::new ((void*) this->end()) T(::MISTD::move(Elt));
+      ::new ((void*) this->end()) T(::std::move(Elt));
       this->setEnd(this->end()+1);
       return;
     }
@@ -302,7 +302,7 @@ protected:
   /// objects starting with "Dest".  For PODs, this is just memcpy.
   template<typename It1, typename It2>
   static It2 move(It1 I, It1 E, It2 Dest) {
-    return ::MISTD::copy(I, E, Dest);
+    return ::std::copy(I, E, Dest);
   }
 
   /// move_backward - Use move-assignment to move the range
@@ -310,7 +310,7 @@ protected:
   /// in reverse order.
   template<typename It1, typename It2>
   static It2 move_backward(It1 I, It1 E, It2 Dest) {
-    return ::MISTD::copy_backward(I, E, Dest);
+    return ::std::copy_backward(I, E, Dest);
   }
 
   /// uninitialized_move - Move the range [I, E) onto the uninitialized memory
@@ -326,7 +326,7 @@ protected:
   template<typename It1, typename It2>
   static void uninitialized_copy(It1 I, It1 E, It2 Dest) {
     // Arbitrary iterator types; just use the basic implementation.
-    MISTD::uninitialized_copy(I, E, Dest);
+    std::uninitialized_copy(I, E, Dest);
   }
 
   /// uninitialized_copy - Copy the range [I, E) onto the uninitialized memory
@@ -334,7 +334,7 @@ protected:
   template<typename T1, typename T2>
   static void uninitialized_copy(T1 *I, T1 *E, T2 *Dest) {
     // Use memcpy for PODs iterated by pointers (which includes SmallVector
-    // iterators): MISTD::uninitialized_copy optimizes to memmove, but we can
+    // iterators): std::uninitialized_copy optimizes to memmove, but we can
     // use memcpy here.
     memcpy(Dest, I, (E-I)*sizeof(T));
   }
@@ -403,7 +403,7 @@ public:
     } else if (N > this->size()) {
       if (this->capacity() < N)
         this->grow(N);
-      MISTD::uninitialized_fill(this->end(), this->begin()+N, T());
+      std::uninitialized_fill(this->end(), this->begin()+N, T());
       this->setEnd(this->begin()+N);
     }
   }
@@ -415,7 +415,7 @@ public:
     } else if (N > this->size()) {
       if (this->capacity() < N)
         this->grow(N);
-      MISTD::uninitialized_fill(this->end(), this->begin()+N, NV);
+      std::uninitialized_fill(this->end(), this->begin()+N, NV);
       this->setEnd(this->begin()+N);
     }
   }
@@ -427,7 +427,7 @@ public:
 
   T LLVM_ATTRIBUTE_UNUSED_RESULT pop_back_val() {
 #if LLVM_HAS_RVALUE_REFERENCES
-    T Result = ::MISTD::move(this->back());
+    T Result = ::std::move(this->back());
 #else
     T Result = this->back();
 #endif
@@ -441,7 +441,7 @@ public:
   ///
   template<typename in_iter>
   void append(in_iter in_start, in_iter in_end) {
-    size_type NumInputs = MISTD::distance(in_start, in_end);
+    size_type NumInputs = std::distance(in_start, in_end);
     // Grow allocated space if needed.
     if (NumInputs > size_type(this->capacity_ptr()-this->end()))
       this->grow(this->size()+NumInputs);
@@ -449,7 +449,7 @@ public:
     // Copy the new elements over.
     // TODO: NEED To compile time dispatch on whether in_iter is a random access
     // iterator to use the fast uninitialized_copy.
-    MISTD::uninitialized_copy(in_start, in_end, this->end());
+    std::uninitialized_copy(in_start, in_end, this->end());
     this->setEnd(this->end() + NumInputs);
   }
 
@@ -461,7 +461,7 @@ public:
       this->grow(this->size()+NumInputs);
 
     // Copy the new elements over.
-    MISTD::uninitialized_fill_n(this->end(), NumInputs, Elt);
+    std::uninitialized_fill_n(this->end(), NumInputs, Elt);
     this->setEnd(this->end() + NumInputs);
   }
 
@@ -470,7 +470,7 @@ public:
     if (this->capacity() < NumElts)
       this->grow(NumElts);
     this->setEnd(this->begin()+NumElts);
-    MISTD::uninitialized_fill(this->begin(), this->end(), Elt);
+    std::uninitialized_fill(this->begin(), this->end(), Elt);
   }
 
   iterator erase(iterator I) {
@@ -502,7 +502,7 @@ public:
 #if LLVM_HAS_RVALUE_REFERENCES
   iterator insert(iterator I, T &&Elt) {
     if (I == this->end()) {  // Important special case for empty vector.
-      this->push_back(::MISTD::move(Elt));
+      this->push_back(::std::move(Elt));
       return this->end()-1;
     }
 
@@ -511,7 +511,7 @@ public:
 
     if (this->EndX < this->CapacityX) {
     Retry:
-      ::new ((void*) this->end()) T(::MISTD::move(this->back()));
+      ::new ((void*) this->end()) T(::std::move(this->back()));
       this->setEnd(this->end()+1);
       // Push everything else over.
       this->move_backward(I, this->end()-1, this->end());
@@ -522,7 +522,7 @@ public:
       if (I <= EltPtr && EltPtr < this->EndX)
         ++EltPtr;
 
-      *I = ::MISTD::move(*EltPtr);
+      *I = ::std::move(*EltPtr);
       return I;
     }
     size_t EltNo = I-this->begin();
@@ -592,7 +592,7 @@ public:
       // Copy the existing elements that get replaced.
       this->move_backward(I, OldEnd-NumToInsert, OldEnd);
 
-      MISTD::fill_n(I, NumToInsert, Elt);
+      std::fill_n(I, NumToInsert, Elt);
       return I;
     }
 
@@ -606,10 +606,10 @@ public:
     this->uninitialized_move(I, OldEnd, this->end()-NumOverwritten);
 
     // Replace the overwritten part.
-    MISTD::fill_n(I, NumOverwritten, Elt);
+    std::fill_n(I, NumOverwritten, Elt);
 
     // Insert the non-overwritten middle part.
-    MISTD::uninitialized_fill_n(OldEnd, NumToInsert-NumOverwritten, Elt);
+    std::uninitialized_fill_n(OldEnd, NumToInsert-NumOverwritten, Elt);
     return I;
   }
 
@@ -626,7 +626,7 @@ public:
     assert(I >= this->begin() && "Insertion iterator is out of bounds.");
     assert(I <= this->end() && "Inserting past the end of the vector.");
 
-    size_t NumToInsert = MISTD::distance(From, To);
+    size_t NumToInsert = std::distance(From, To);
 
     // Ensure there is enough space.
     reserve(static_cast<unsigned>(this->size() + NumToInsert));
@@ -645,7 +645,7 @@ public:
       // Copy the existing elements that get replaced.
       this->move_backward(I, OldEnd-NumToInsert, OldEnd);
 
-      MISTD::copy(From, To, I);
+      std::copy(From, To, I);
       return I;
     }
 
@@ -677,14 +677,14 @@ public:
 
   bool operator==(const SmallVectorImpl &RHS) const {
     if (this->size() != RHS.size()) return false;
-    return MISTD::equal(this->begin(), this->end(), RHS.begin());
+    return std::equal(this->begin(), this->end(), RHS.begin());
   }
   bool operator!=(const SmallVectorImpl &RHS) const {
     return !(*this == RHS);
   }
 
   bool operator<(const SmallVectorImpl &RHS) const {
-    return MISTD::lexicographical_compare(this->begin(), this->end(),
+    return std::lexicographical_compare(this->begin(), this->end(),
                                         RHS.begin(), RHS.end());
   }
 
@@ -710,9 +710,9 @@ void SmallVectorImpl<T>::swap(SmallVectorImpl<T> &RHS) {
 
   // We can only avoid copying elements if neither vector is small.
   if (!this->isSmall() && !RHS.isSmall()) {
-    MISTD::swap(this->BeginX, RHS.BeginX);
-    MISTD::swap(this->EndX, RHS.EndX);
-    MISTD::swap(this->CapacityX, RHS.CapacityX);
+    std::swap(this->BeginX, RHS.BeginX);
+    std::swap(this->EndX, RHS.EndX);
+    std::swap(this->CapacityX, RHS.CapacityX);
     return;
   }
   if (RHS.size() > this->capacity())
@@ -724,7 +724,7 @@ void SmallVectorImpl<T>::swap(SmallVectorImpl<T> &RHS) {
   size_t NumShared = this->size();
   if (NumShared > RHS.size()) NumShared = RHS.size();
   for (unsigned i = 0; i != static_cast<unsigned>(NumShared); ++i)
-    MISTD::swap((*this)[i], RHS[i]);
+    std::swap((*this)[i], RHS[i]);
 
   // Copy over the extra elts.
   if (this->size() > RHS.size()) {
@@ -756,7 +756,7 @@ SmallVectorImpl<T> &SmallVectorImpl<T>::
     // Assign common elements.
     iterator NewEnd;
     if (RHSSize)
-      NewEnd = MISTD::copy(RHS.begin(), RHS.begin()+RHSSize, this->begin());
+      NewEnd = std::copy(RHS.begin(), RHS.begin()+RHSSize, this->begin());
     else
       NewEnd = this->begin();
 
@@ -779,7 +779,7 @@ SmallVectorImpl<T> &SmallVectorImpl<T>::
     this->grow(RHSSize);
   } else if (CurSize) {
     // Otherwise, use assignment for the already-constructed elements.
-    MISTD::copy(RHS.begin(), RHS.begin()+CurSize, this->begin());
+    std::copy(RHS.begin(), RHS.begin()+CurSize, this->begin());
   }
 
   // Copy construct the new elements in place.
@@ -905,11 +905,11 @@ public:
 #if LLVM_HAS_RVALUE_REFERENCES
   SmallVector(SmallVector &&RHS) : SmallVectorImpl<T>(N) {
     if (!RHS.empty())
-      SmallVectorImpl<T>::operator=(::MISTD::move(RHS));
+      SmallVectorImpl<T>::operator=(::std::move(RHS));
   }
 
   const SmallVector &operator=(SmallVector &&RHS) {
-    SmallVectorImpl<T>::operator=(::MISTD::move(RHS));
+    SmallVectorImpl<T>::operator=(::std::move(RHS));
     return *this;
   }
 #endif
@@ -923,15 +923,15 @@ static inline size_t capacity_in_bytes(const SmallVector<T, N> &X) {
 
 } // End llvm namespace
 
-namespace MISTD {
-  /// Implement MISTD::swap in terms of SmallVector swap.
+namespace std {
+  /// Implement std::swap in terms of SmallVector swap.
   template<typename T>
   inline void
   swap(llvm::SmallVectorImpl<T> &LHS, llvm::SmallVectorImpl<T> &RHS) {
     LHS.swap(RHS);
   }
 
-  /// Implement MISTD::swap in terms of SmallVector swap.
+  /// Implement std::swap in terms of SmallVector swap.
   template<typename T, unsigned N>
   inline void
   swap(llvm::SmallVector<T, N> &LHS, llvm::SmallVector<T, N> &RHS) {

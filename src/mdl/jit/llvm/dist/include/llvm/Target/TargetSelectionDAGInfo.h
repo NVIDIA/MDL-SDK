@@ -100,13 +100,13 @@ public:
   /// returned SDValue is the result of the memcmp and the second is
   /// the chain.  Both SDValues can be null if a normal libcall should
   /// be used.
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForMemcmp(SelectionDAG &DAG, SDLoc dl,
                           SDValue Chain,
                           SDValue Op1, SDValue Op2,
                           SDValue Op3, MachinePointerInfo Op1PtrInfo,
                           MachinePointerInfo Op2PtrInfo) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
   /// EmitTargetCodeForMemchr - Emit target-specific code that performs a
@@ -114,11 +114,11 @@ public:
   /// returned SDValue is the result of the memchr and the second is
   /// the chain.  Both SDValues can be null if a normal libcall should
   /// be used.
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForMemchr(SelectionDAG &DAG, SDLoc dl, SDValue Chain,
                           SDValue Src, SDValue Char, SDValue Length,
                           MachinePointerInfo SrcPtrInfo) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
   /// EmitTargetCodeForStrcpy - Emit target-specific code that performs a
@@ -127,13 +127,13 @@ public:
   /// of the destination string for strcpy, a pointer to the null terminator
   /// for stpcpy) and the second is the chain.  Both SDValues can be null
   /// if a normal libcall should be used.
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForStrcpy(SelectionDAG &DAG, SDLoc DL, SDValue Chain,
                           SDValue Dest, SDValue Src,
                           MachinePointerInfo DestPtrInfo,
                           MachinePointerInfo SrcPtrInfo,
                           bool isStpcpy) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
   /// EmitTargetCodeForStrcmp - Emit target-specific code that performs a
@@ -141,26 +141,26 @@ public:
   /// returned SDValue is the result of the strcmp and the second is
   /// the chain.  Both SDValues can be null if a normal libcall should
   /// be used.
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForStrcmp(SelectionDAG &DAG, SDLoc dl,
                           SDValue Chain,
                           SDValue Op1, SDValue Op2,
                           MachinePointerInfo Op1PtrInfo,
                           MachinePointerInfo Op2PtrInfo) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForStrlen(SelectionDAG &DAG, SDLoc DL, SDValue Chain,
                           SDValue Src, MachinePointerInfo SrcPtrInfo) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
-  virtual MISTD::pair<SDValue, SDValue>
+  virtual std::pair<SDValue, SDValue>
   EmitTargetCodeForStrnlen(SelectionDAG &DAG, SDLoc DL, SDValue Chain,
                            SDValue Src, SDValue MaxLength,
                            MachinePointerInfo SrcPtrInfo) const {
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 };
 

@@ -20,6 +20,7 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
+    OUTPUT_NAME "mdlc"
     SOURCES ${PROJECT_SOURCES}
 )
 

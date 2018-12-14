@@ -66,10 +66,10 @@ public:
 
 
     /// A path is a string.
-    typedef MISTD::string Path;
+    typedef std::string Path;
 
     /// A search path is a sequence of paths.
-    typedef MISTD::vector<MISTD::string> Search_path;
+    typedef std::vector<std::string> Search_path;
 
 
 
@@ -134,7 +134,7 @@ public:
     /// and combines each of its paths with the relative file name in turn. As soon as the resulting
     /// file name references an accessible file, this file name is returned. Otherwise, the empty
     /// string is returned.
-    virtual MISTD::string search( Kind kind, const MISTD::string& file_name) const = 0;
+    virtual std::string search( Kind kind, const std::string& file_name) const = 0;
 };
 
 } // namespace PATH

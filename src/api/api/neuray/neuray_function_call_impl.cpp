@@ -43,7 +43,6 @@
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 
-
 namespace MI {
 
 namespace NEURAY {
@@ -182,8 +181,6 @@ mi::Sint32 Function_call_impl::set_argument(
     return result;
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

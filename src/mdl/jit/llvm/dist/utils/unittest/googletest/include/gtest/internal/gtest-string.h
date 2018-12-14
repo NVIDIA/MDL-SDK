@@ -56,13 +56,13 @@ namespace internal {
 
 // String - a UTF-8 string class.
 //
-// For historic reasons, we don't use MISTD::string.
+// For historic reasons, we don't use std::string.
 //
-// TODO(wan@google.com): replace this class with MISTD::string or
+// TODO(wan@google.com): replace this class with std::string or
 // implement it in terms of the latter.
 //
 // Note that String can represent both NULL and the empty string,
-// while MISTD::string cannot represent NULL.
+// while std::string cannot represent NULL.
 //
 // NULL and the empty string are considered different.  NULL is less
 // than anything (including the empty string) except itself.
@@ -72,7 +72,7 @@ namespace internal {
 // string class here.
 //
 // Since the purpose of this class is to provide a substitute for
-// MISTD::string on platforms where it cannot be used, we define a copy
+// std::string on platforms where it cannot be used, we define a copy
 // constructor and assignment operators such that we don't need
 // conditional compilation in a lot of places.
 //
@@ -217,17 +217,17 @@ class GTEST_API_ String {
   // doesn't need to be virtual.
   ~String() { delete[] c_str_; }
 
-  // Allows a String to be implicitly converted to an ::MISTD::string or
+  // Allows a String to be implicitly converted to an ::std::string or
   // ::string, and vice versa.  Converting a String containing a NULL
-  // pointer to ::MISTD::string or ::string is undefined behavior.
-  // Converting a ::MISTD::string or ::string containing an embedded NUL
+  // pointer to ::std::string or ::string is undefined behavior.
+  // Converting a ::std::string or ::string containing an embedded NUL
   // character to a String will result in the prefix up to the first
   // NUL character.
-  String(const ::MISTD::string& str) {
+  String(const ::std::string& str) {
     ConstructNonNull(str.c_str(), str.length());
   }
 
-  operator ::MISTD::string() const { return ::MISTD::string(c_str(), length()); }
+  operator ::std::string() const { return ::std::string(c_str(), length()); }
 
 #if GTEST_HAS_GLOBAL_STRING
   String(const ::string& str) {
@@ -313,7 +313,7 @@ class GTEST_API_ String {
 
 // Streams a String to an ostream.  Each '\0' character in the String
 // is replaced with "\\0".
-inline ::MISTD::ostream& operator<<(::MISTD::ostream& os, const String& str) {
+inline ::std::ostream& operator<<(::std::ostream& os, const String& str) {
   if (str.c_str() == NULL) {
     os << "(null)";
   } else {
@@ -331,11 +331,11 @@ inline ::MISTD::ostream& operator<<(::MISTD::ostream& os, const String& str) {
 
 // Gets the content of the stringstream's buffer as a String.  Each '\0'
 // character in the buffer is replaced with "\\0".
-GTEST_API_ String StringStreamToString(::MISTD::stringstream* stream);
+GTEST_API_ String StringStreamToString(::std::stringstream* stream);
 
 // Converts a streamable value to a String.  A NULL pointer is
 // converted to "(null)".  When the input value is a ::string,
-// ::MISTD::string, ::wstring, or ::MISTD::wstring object, each NUL
+// ::std::string, ::wstring, or ::std::wstring object, each NUL
 // character in it is replaced with "\\0".
 
 // Declared here but defined in gtest.h, so that it has access

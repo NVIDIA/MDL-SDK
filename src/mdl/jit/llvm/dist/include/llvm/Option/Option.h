@@ -121,8 +121,8 @@ public:
   }
 
   /// \brief Get the name of this option with the default prefix.
-  MISTD::string getPrefixedName() const {
-    MISTD::string Ret = getPrefix();
+  std::string getPrefixedName() const {
+    std::string Ret = getPrefix();
     Ret += getName();
     return Ret;
   }

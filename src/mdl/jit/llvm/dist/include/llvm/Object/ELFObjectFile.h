@@ -750,7 +750,7 @@ error_code ELFObjectFile<ELFT>::getRelocationValueString(
     case ELF::R_X86_64_PC8:
     case ELF::R_X86_64_PC16:
     case ELF::R_X86_64_PC32: {
-      MISTD::string fmtbuf;
+      std::string fmtbuf;
       raw_string_ostream fmt(fmtbuf);
       fmt << *SymName << (addend < 0 ? "" : "+") << addend << "-P";
       fmt.flush();
@@ -761,7 +761,7 @@ error_code ELFObjectFile<ELFT>::getRelocationValueString(
     case ELF::R_X86_64_32:
     case ELF::R_X86_64_32S:
     case ELF::R_X86_64_64: {
-      MISTD::string fmtbuf;
+      std::string fmtbuf;
       raw_string_ostream fmt(fmtbuf);
       fmt << *SymName << (addend < 0 ? "" : "+") << addend;
       fmt.flush();
@@ -772,7 +772,7 @@ error_code ELFObjectFile<ELFT>::getRelocationValueString(
     }
     break;
   case ELF::EM_AARCH64: {
-    MISTD::string fmtbuf;
+    std::string fmtbuf;
     raw_string_ostream fmt(fmtbuf);
     fmt << *SymName;
     if (addend != 0)

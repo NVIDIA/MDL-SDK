@@ -33,7 +33,7 @@
 namespace llvm {
 
 namespace DOT {  // Private functions...
-  MISTD::string EscapeString(const MISTD::string &Label);
+  std::string EscapeString(const std::string &Label);
 
   /// \brief Get a color string for this node number. Simply round-robin selects
   /// from a reasonable number of colors.
@@ -73,7 +73,7 @@ class GraphWriter {
     bool hasEdgeSourceLabels = false;
 
     for (unsigned i = 0; EI != EE && i != 64; ++EI, ++i) {
-      MISTD::string label = DTraits.getEdgeSourceLabel(Node, EI);
+      std::string label = DTraits.getEdgeSourceLabel(Node, EI);
 
       if (label.empty())
         continue;
@@ -97,7 +97,7 @@ public:
     DTraits = DOTTraits(SN);
   }
 
-  void writeGraph(const MISTD::string &Title = "") {
+  void writeGraph(const std::string &Title = "") {
     // Output the header for the graph...
     writeHeader(Title);
 
@@ -111,8 +111,8 @@ public:
     writeFooter();
   }
 
-  void writeHeader(const MISTD::string &Title) {
-    MISTD::string GraphName = DTraits.getGraphName(G);
+  void writeHeader(const std::string &Title) {
+    std::string GraphName = DTraits.getGraphName(G);
 
     if (!Title.empty())
       O << "digraph \"" << DOT::EscapeString(Title) << "\" {\n";
@@ -166,7 +166,7 @@ public:
   }
 
   void writeNode(NodeType *Node) {
-    MISTD::string NodeAttributes = DTraits.getNodeAttributes(Node, G);
+    std::string NodeAttributes = DTraits.getNodeAttributes(Node, G);
 
     O << "\tNode" << static_cast<const void*>(Node) << " [shape=record,";
     if (!NodeAttributes.empty()) O << NodeAttributes << ",";
@@ -179,12 +179,12 @@ public:
       if (DTraits.hasNodeAddressLabel(Node, G))
         O << "|" << static_cast<const void*>(Node);
 
-      MISTD::string NodeDesc = DTraits.getNodeDescription(Node, G);
+      std::string NodeDesc = DTraits.getNodeDescription(Node, G);
       if (!NodeDesc.empty())
         O << "|" << DOT::EscapeString(NodeDesc);
     }
 
-    MISTD::string edgeSourceLabels;
+    std::string edgeSourceLabels;
     raw_string_ostream EdgeSourceLabels(edgeSourceLabels);
     bool hasEdgeSourceLabels = getEdgeSourceLabels(EdgeSourceLabels, Node);
 
@@ -203,7 +203,7 @@ public:
       if (DTraits.hasNodeAddressLabel(Node, G))
         O << "|" << static_cast<const void*>(Node);
 
-      MISTD::string NodeDesc = DTraits.getNodeDescription(Node, G);
+      std::string NodeDesc = DTraits.getNodeDescription(Node, G);
       if (!NodeDesc.empty())
         O << "|" << DOT::EscapeString(NodeDesc);
     }
@@ -244,7 +244,7 @@ public:
 
         // Figure out which edge this targets...
         unsigned Offset =
-          (unsigned)MISTD::distance(GTraits::child_begin(TargetNode), TargetIt);
+          (unsigned)std::distance(GTraits::child_begin(TargetNode), TargetIt);
         DestPort = static_cast<int>(Offset);
       }
 
@@ -258,9 +258,9 @@ public:
   }
 
   /// emitSimpleNode - Outputs a simple (non-record) node
-  void emitSimpleNode(const void *ID, const MISTD::string &Attr,
-                      const MISTD::string &Label, unsigned NumEdgeSources = 0,
-                      const MISTD::vector<MISTD::string> *EdgeSourceLabels = 0) {
+  void emitSimpleNode(const void *ID, const std::string &Attr,
+                      const std::string &Label, unsigned NumEdgeSources = 0,
+                      const std::vector<std::string> *EdgeSourceLabels = 0) {
     O << "\tNode" << ID << "[ ";
     if (!Attr.empty())
       O << Attr << ",";
@@ -283,7 +283,7 @@ public:
   /// emitEdge - Output an edge from a simple node into the graph...
   void emitEdge(const void *SrcNodeID, int SrcNodePort,
                 const void *DestNodeID, int DestNodePort,
-                const MISTD::string &Attrs) {
+                const std::string &Attrs) {
     if (SrcNodePort  > 64) return;             // Eminating from truncated part?
     if (DestNodePort > 64) DestNodePort = 64;  // Targeting the truncated part?
 
@@ -319,13 +319,13 @@ raw_ostream &WriteGraph(raw_ostream &O, const GraphType &G,
   return O;
 }
 
-MISTD::string createGraphFilename(const Twine &Name, int &FD);
+std::string createGraphFilename(const Twine &Name, int &FD);
 
 template <typename GraphType>
-MISTD::string WriteGraph(const GraphType &G, const Twine &Name,
+std::string WriteGraph(const GraphType &G, const Twine &Name,
                        bool ShortNames = false, const Twine &Title = "") {
   int FD;
-  MISTD::string Filename = createGraphFilename(Name, FD);
+  std::string Filename = createGraphFilename(Name, FD);
   raw_fd_ostream O(FD, /*shouldClose=*/ true);
 
   if (FD == -1) {
@@ -346,7 +346,7 @@ template<typename GraphType>
 void ViewGraph(const GraphType &G, const Twine &Name,
                bool ShortNames = false, const Twine &Title = "",
                GraphProgram::Name Program = GraphProgram::DOT) {
-  MISTD::string Filename = llvm::WriteGraph(G, Name, ShortNames, Title);
+  std::string Filename = llvm::WriteGraph(G, Name, ShortNames, Title);
 
   if (Filename.empty())
     return;

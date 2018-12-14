@@ -409,7 +409,7 @@ void DIEHash::computeHash(const DIE &Die) {
   addAttributes(Die);
 
   // Then hash each of the children of the DIE.
-  for (MISTD::vector<DIE *>::const_iterator I = Die.getChildren().begin(),
+  for (std::vector<DIE *>::const_iterator I = Die.getChildren().begin(),
                                           E = Die.getChildren().end();
        I != E; ++I) {
     // 7.27 Step 7

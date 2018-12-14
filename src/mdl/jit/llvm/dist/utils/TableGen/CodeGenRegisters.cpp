@@ -45,8 +45,8 @@ CodeGenSubRegIndex::CodeGenSubRegIndex(StringRef N, StringRef Nspace,
     EnumValue(Enum), LaneMask(0), AllSuperRegsCovered(true) {
 }
 
-MISTD::string CodeGenSubRegIndex::getQualifiedName() const {
-  MISTD::string N = getNamespace();
+std::string CodeGenSubRegIndex::getQualifiedName() const {
+  std::string N = getNamespace();
   if (!N.empty())
     N += "::";
   N += getName();
@@ -57,7 +57,7 @@ void CodeGenSubRegIndex::updateComponents(CodeGenRegBank &RegBank) {
   if (!TheDef)
     return;
 
-  MISTD::vector<Record*> Comps = TheDef->getValueAsListOfDefs("ComposedOf");
+  std::vector<Record*> Comps = TheDef->getValueAsListOfDefs("ComposedOf");
   if (!Comps.empty()) {
     if (Comps.size() != 2)
       PrintFatalError(TheDef->getLoc(),
@@ -69,7 +69,7 @@ void CodeGenSubRegIndex::updateComponents(CodeGenRegBank &RegBank) {
       PrintFatalError(TheDef->getLoc(), "Ambiguous ComposedOf entries");
   }
 
-  MISTD::vector<Record*> Parts =
+  std::vector<Record*> Parts =
     TheDef->getValueAsListOfDefs("CoveringSubRegIndices");
   if (!Parts.empty()) {
     if (Parts.size() < 2)
@@ -115,8 +115,8 @@ CodeGenRegister::CodeGenRegister(Record *R, unsigned Enum)
 {}
 
 void CodeGenRegister::buildObjectGraph(CodeGenRegBank &RegBank) {
-  MISTD::vector<Record*> SRIs = TheDef->getValueAsListOfDefs("SubRegIndices");
-  MISTD::vector<Record*> SRs = TheDef->getValueAsListOfDefs("SubRegs");
+  std::vector<Record*> SRIs = TheDef->getValueAsListOfDefs("SubRegIndices");
+  std::vector<Record*> SRs = TheDef->getValueAsListOfDefs("SubRegs");
 
   if (SRIs.size() != SRs.size())
     PrintFatalError(TheDef->getLoc(),
@@ -137,7 +137,7 @@ void CodeGenRegister::buildObjectGraph(CodeGenRegBank &RegBank) {
 
   // Add ad hoc alias links. This is a symmetric relationship between two
   // registers, so build a symmetric graph by adding links in both ends.
-  MISTD::vector<Record*> Aliases = TheDef->getValueAsListOfDefs("Aliases");
+  std::vector<Record*> Aliases = TheDef->getValueAsListOfDefs("Aliases");
   for (unsigned i = 0, e = Aliases.size(); i != e; ++i) {
     CodeGenRegister *Reg = RegBank.getReg(Aliases[i]);
     ExplicitAliases.push_back(Reg);
@@ -145,7 +145,7 @@ void CodeGenRegister::buildObjectGraph(CodeGenRegBank &RegBank) {
   }
 }
 
-const MISTD::string &CodeGenRegister::getName() const {
+const std::string &CodeGenRegister::getName() const {
   return TheDef->getName();
 }
 
@@ -197,13 +197,13 @@ static void mergeRegUnits(CodeGenRegister::RegUnitList &MergedRU,
                           const CodeGenRegister::RegUnitList &RRU) {
   CodeGenRegister::RegUnitList LRU = MergedRU;
   MergedRU.clear();
-  MISTD::set_union(LRU.begin(), LRU.end(), RRU.begin(), RRU.end(),
-                 MISTD::back_inserter(MergedRU));
+  std::set_union(LRU.begin(), LRU.end(), RRU.begin(), RRU.end(),
+                 std::back_inserter(MergedRU));
 }
 
 // Return true of this unit appears in RegUnits.
 static bool hasRegUnit(CodeGenRegister::RegUnitList &RegUnits, unsigned Unit) {
-  return MISTD::count(RegUnits.begin(), RegUnits.end(), Unit);
+  return std::count(RegUnits.begin(), RegUnits.end(), Unit);
 }
 
 // Inherit register units from subregisters.
@@ -230,12 +230,12 @@ CodeGenRegister::computeSubRegs(CodeGenRegBank &RegBank) {
   for (unsigned i = 0, e = ExplicitSubRegs.size(); i != e; ++i) {
     CodeGenRegister *SR = ExplicitSubRegs[i];
     CodeGenSubRegIndex *Idx = ExplicitSubRegIndices[i];
-    if (!SubRegs.insert(MISTD::make_pair(Idx, SR)).second)
+    if (!SubRegs.insert(std::make_pair(Idx, SR)).second)
       PrintFatalError(TheDef->getLoc(), "SubRegIndex " + Idx->getName() +
                       " appears twice in Register " + getName());
     // Map explicit sub-registers first, so the names take precedence.
     // The inherited sub-registers are mapped below.
-    SubReg2Idx.insert(MISTD::make_pair(SR, Idx));
+    SubReg2Idx.insert(std::make_pair(SR, Idx));
   }
 
   // Keep track of inherited subregs and how they can be reached.
@@ -277,7 +277,7 @@ CodeGenRegister::computeSubRegs(CodeGenRegBank &RegBank) {
       if (SubRegs.count(I->second) || !Orphans.erase(SRI->second))
         continue;
       // We found a new name for the orphaned sub-register.
-      SubRegs.insert(MISTD::make_pair(I->second, SRI->second));
+      SubRegs.insert(std::make_pair(I->second, SRI->second));
       Indices.push_back(I->second);
     }
   }
@@ -325,7 +325,7 @@ CodeGenRegister::computeSubRegs(CodeGenRegBank &RegBank) {
 
     // Ensure that every sub-register has a unique name.
     DenseMap<const CodeGenRegister*, CodeGenSubRegIndex*>::iterator Ins =
-      SubReg2Idx.insert(MISTD::make_pair(SI->second, SI->first)).first;
+      SubReg2Idx.insert(std::make_pair(SI->second, SI->first)).first;
     if (Ins->second == SI->first)
       continue;
     // Trouble: Two different names for SI->second.
@@ -367,9 +367,9 @@ CodeGenRegister::computeSubRegs(CodeGenRegBank &RegBank) {
     // eliminated below.
     unsigned N = RegUnits.size();
     RegUnits.append(SR->RegUnits.begin(), SR->RegUnits.end());
-    MISTD::inplace_merge(RegUnits.begin(), RegUnits.begin() + N, RegUnits.end());
+    std::inplace_merge(RegUnits.begin(), RegUnits.begin() + N, RegUnits.end());
   }
-  RegUnits.erase(MISTD::unique(RegUnits.begin(), RegUnits.end()), RegUnits.end());
+  RegUnits.erase(std::unique(RegUnits.begin(), RegUnits.end()), RegUnits.end());
 
   // Absent any ad hoc aliasing, we create one register unit per leaf register.
   // These units correspond to the maximal cliques in the register overlap
@@ -456,7 +456,7 @@ void CodeGenRegister::computeSecondarySubRegs(CodeGenRegBank &RegBank) {
       // Each part of Cand is a sub-register of this. Make the full Cand also
       // a sub-register with a concatenated sub-register index.
       CodeGenSubRegIndex *Concat= RegBank.getConcatSubRegIndex(Parts);
-      NewSubRegs.push_back(MISTD::make_pair(Concat, Cand));
+      NewSubRegs.push_back(std::make_pair(Concat, Cand));
     }
   }
 
@@ -468,7 +468,7 @@ void CodeGenRegister::computeSecondarySubRegs(CodeGenRegBank &RegBank) {
 
     CodeGenSubRegIndex *NewIdx = NewSubRegs[i].first;
     CodeGenRegister *NewSubReg = NewSubRegs[i].second;
-    SubReg2Idx.insert(MISTD::make_pair(NewSubReg, NewIdx));
+    SubReg2Idx.insert(std::make_pair(NewSubReg, NewIdx));
   }
 
   // Create sub-register index composition maps for the synthesized indices.
@@ -551,7 +551,7 @@ unsigned CodeGenRegister::getWeight(const CodeGenRegBank &RegBank) const {
 namespace {
 struct TupleExpander : SetTheory::Expander {
   void expand(SetTheory &ST, Record *Def, SetTheory::RecSet &Elts) {
-    MISTD::vector<Record*> Indices = Def->getValueAsListOfDefs("SubRegIndices");
+    std::vector<Record*> Indices = Def->getValueAsListOfDefs("SubRegIndices");
     unsigned Dim = Indices.size();
     ListInit *SubRegs = Def->getValueAsListInit("SubRegs");
     if (Dim != SubRegs->getSize())
@@ -565,7 +565,7 @@ struct TupleExpander : SetTheory::Expander {
     SmallVector<SetTheory::RecSet, 4> Lists(Dim);
     for (unsigned i = 0; i != Dim; ++i) {
       ST.evaluate(SubRegs->getElement(i), Lists[i], Def->getLoc());
-      Length = MISTD::min(Length, unsigned(Lists[i].size()));
+      Length = std::min(Length, unsigned(Lists[i].size()));
     }
 
     if (Length == 0)
@@ -578,16 +578,16 @@ struct TupleExpander : SetTheory::Expander {
 
     // Zip them up.
     for (unsigned n = 0; n != Length; ++n) {
-      MISTD::string Name;
+      std::string Name;
       Record *Proto = Lists[0][n];
-      MISTD::vector<Init*> Tuple;
+      std::vector<Init*> Tuple;
       unsigned CostPerUse = 0;
       for (unsigned i = 0; i != Dim; ++i) {
         Record *Reg = Lists[i][n];
         if (i) Name += '_';
         Name += Reg->getName();
         Tuple.push_back(DefInit::get(Reg));
-        CostPerUse = MISTD::max(CostPerUse,
+        CostPerUse = std::max(CostPerUse,
                               unsigned(Reg->getValueAsInt("CostPerUse")));
       }
 
@@ -670,7 +670,7 @@ CodeGenRegisterClass::CodeGenRegisterClass(CodeGenRegBank &RegBank, Record *R)
     ++AnonCounter;
   }
 
-  MISTD::vector<Record*> TypeList = R->getValueAsListOfDefs("RegTypes");
+  std::vector<Record*> TypeList = R->getValueAsListOfDefs("RegTypes");
   for (unsigned i = 0, e = TypeList.size(); i != e; ++i) {
     Record *Type = TypeList[i];
     if (!Type->isSubClassOf("ValueType"))
@@ -802,7 +802,7 @@ static bool testSubClass(const CodeGenRegisterClass *A,
                          const CodeGenRegisterClass *B) {
   return A->SpillAlignment && B->SpillAlignment % A->SpillAlignment == 0 &&
     A->SpillSize <= B->SpillSize &&
-    MISTD::includes(A->getMembers().begin(), A->getMembers().end(),
+    std::includes(A->getMembers().begin(), A->getMembers().end(),
                   B->getMembers().begin(), B->getMembers().end(),
                   CodeGenRegister::Less());
 }
@@ -843,7 +843,7 @@ static int TopoOrderRC(CodeGenRegisterClass *const *PA,
   return StringRef(A->getName()).compare(B->getName());
 }
 
-MISTD::string CodeGenRegisterClass::getQualifiedName() const {
+std::string CodeGenRegisterClass::getQualifiedName() const {
   if (Namespace.empty())
     return getName();
   else
@@ -911,13 +911,13 @@ CodeGenRegisterClass::getSuperRegClasses(CodeGenSubRegIndex *SubIdx,
 
 // Populate a unique sorted list of units from a register set.
 void CodeGenRegisterClass::buildRegUnitSet(
-  MISTD::vector<unsigned> &RegUnits) const {
-  MISTD::vector<unsigned> TmpUnits;
+  std::vector<unsigned> &RegUnits) const {
+  std::vector<unsigned> TmpUnits;
   for (RegUnitIterator UnitI(Members); UnitI.isValid(); ++UnitI)
     TmpUnits.push_back(*UnitI);
-  MISTD::sort(TmpUnits.begin(), TmpUnits.end());
-  MISTD::unique_copy(TmpUnits.begin(), TmpUnits.end(),
-                   MISTD::back_inserter(RegUnits));
+  std::sort(TmpUnits.begin(), TmpUnits.end());
+  std::unique_copy(TmpUnits.begin(), TmpUnits.end(),
+                   std::back_inserter(RegUnits));
 }
 
 //===----------------------------------------------------------------------===//
@@ -932,8 +932,8 @@ CodeGenRegBank::CodeGenRegBank(RecordKeeper &Records) {
 
   // Read in the user-defined (named) sub-register indices.
   // More indices will be synthesized later.
-  MISTD::vector<Record*> SRIs = Records.getAllDerivedDefinitions("SubRegIndex");
-  MISTD::sort(SRIs.begin(), SRIs.end(), LessRecord());
+  std::vector<Record*> SRIs = Records.getAllDerivedDefinitions("SubRegIndex");
+  std::sort(SRIs.begin(), SRIs.end(), LessRecord());
   for (unsigned i = 0, e = SRIs.size(); i != e; ++i)
     getSubRegIdx(SRIs[i]);
   // Build composite maps from ComposedOf fields.
@@ -941,23 +941,23 @@ CodeGenRegBank::CodeGenRegBank(RecordKeeper &Records) {
     SubRegIndices[i]->updateComponents(*this);
 
   // Read in the register definitions.
-  MISTD::vector<Record*> Regs = Records.getAllDerivedDefinitions("Register");
-  MISTD::sort(Regs.begin(), Regs.end(), LessRecordRegister());
+  std::vector<Record*> Regs = Records.getAllDerivedDefinitions("Register");
+  std::sort(Regs.begin(), Regs.end(), LessRecordRegister());
   Registers.reserve(Regs.size());
   // Assign the enumeration values.
   for (unsigned i = 0, e = Regs.size(); i != e; ++i)
     getReg(Regs[i]);
 
   // Expand tuples and number the new registers.
-  MISTD::vector<Record*> Tups =
+  std::vector<Record*> Tups =
     Records.getAllDerivedDefinitions("RegisterTuples");
 
-  MISTD::vector<Record*> TupRegsCopy;
+  std::vector<Record*> TupRegsCopy;
   for (unsigned i = 0, e = Tups.size(); i != e; ++i) {
-    const MISTD::vector<Record*> *TupRegs = Sets.expand(Tups[i]);
+    const std::vector<Record*> *TupRegs = Sets.expand(Tups[i]);
     TupRegsCopy.reserve(TupRegs->size());
     TupRegsCopy.assign(TupRegs->begin(), TupRegs->end());
-    MISTD::sort(TupRegsCopy.begin(), TupRegsCopy.end(), LessRecordRegister());
+    std::sort(TupRegsCopy.begin(), TupRegsCopy.end(), LessRecordRegister());
     for (unsigned j = 0, je = TupRegsCopy.size(); j != je; ++j)
       getReg((TupRegsCopy)[j]);
     TupRegsCopy.clear();
@@ -994,9 +994,9 @@ CodeGenRegBank::CodeGenRegBank(RecordKeeper &Records) {
   NumNativeRegUnits = RegUnits.size();
 
   // Read in register class definitions.
-  MISTD::vector<Record*> RCs = Records.getAllDerivedDefinitions("RegisterClass");
+  std::vector<Record*> RCs = Records.getAllDerivedDefinitions("RegisterClass");
   if (RCs.empty())
-    PrintFatalError(MISTD::string("No 'RegisterClass' subclasses defined!"));
+    PrintFatalError(std::string("No 'RegisterClass' subclasses defined!"));
 
   // Allocate user-defined register classes.
   RegClasses.reserve(RCs.size());
@@ -1044,12 +1044,12 @@ void CodeGenRegBank::addToMaps(CodeGenRegisterClass *RC) {
   RegClasses.push_back(RC);
 
   if (Record *Def = RC->getDef())
-    Def2RC.insert(MISTD::make_pair(Def, RC));
+    Def2RC.insert(std::make_pair(Def, RC));
 
   // Duplicate classes are rejected by insert().
   // That's OK, we only care about the properties handled by CGRC::Key.
   CodeGenRegisterClass::Key K(*RC);
-  Key2RC.insert(MISTD::make_pair(K, RC));
+  Key2RC.insert(std::make_pair(K, RC));
 }
 
 // Create a synthetic sub-class if it is missing.
@@ -1085,7 +1085,7 @@ CodeGenRegBank::getCompositeSubRegIndex(CodeGenSubRegIndex *A,
     return Comp;
 
   // None exists, synthesize one.
-  MISTD::string Name = A->getName() + "_then_" + B->getName();
+  std::string Name = A->getName() + "_then_" + B->getName();
   Comp = createSubRegIndex(Name, A->getNamespace());
   A->addComposite(B, Comp);
   return Comp;
@@ -1101,7 +1101,7 @@ getConcatSubRegIndex(const SmallVector<CodeGenSubRegIndex *, 8> &Parts) {
     return Idx;
 
   // None exists, synthesize one.
-  MISTD::string Name = Parts.front()->getName();
+  std::string Name = Parts.front()->getName();
   // Determine whether all parts are contiguous.
   bool isContinuous = true;
   unsigned Size = Parts.front()->Size;
@@ -1244,11 +1244,11 @@ struct UberRegSet {
 // closure of the union of overlapping register classes.
 //
 // UberRegSets[0] is a special non-allocatable set.
-static void computeUberSets(MISTD::vector<UberRegSet> &UberSets,
-                            MISTD::vector<UberRegSet*> &RegSets,
+static void computeUberSets(std::vector<UberRegSet> &UberSets,
+                            std::vector<UberRegSet*> &RegSets,
                             CodeGenRegBank &RegBank) {
 
-  const MISTD::vector<CodeGenRegister*> &Registers = RegBank.getRegisters();
+  const std::vector<CodeGenRegister*> &Registers = RegBank.getRegisters();
 
   // The Register EnumValue is one greater than its index into Registers.
   assert(Registers.size() == Registers[Registers.size()-1]->EnumValue &&
@@ -1256,7 +1256,7 @@ static void computeUberSets(MISTD::vector<UberRegSet> &UberSets,
 
   // For simplicitly make the SetID the same as EnumValue.
   IntEqClasses UberSetIDs(Registers.size()+1);
-  MISTD::set<unsigned> AllocatableRegs;
+  std::set<unsigned> AllocatableRegs;
   for (unsigned i = 0, e = RegBank.getRegClasses().size(); i != e; ++i) {
 
     CodeGenRegisterClass *RegClass = RegBank.getRegClasses()[i];
@@ -1308,10 +1308,10 @@ static void computeUberSets(MISTD::vector<UberRegSet> &UberSets,
 }
 
 // Recompute each UberSet weight after changing unit weights.
-static void computeUberWeights(MISTD::vector<UberRegSet> &UberSets,
+static void computeUberWeights(std::vector<UberRegSet> &UberSets,
                                CodeGenRegBank &RegBank) {
   // Skip the first unallocatable set.
-  for (MISTD::vector<UberRegSet>::iterator I = llvm::next(UberSets.begin()),
+  for (std::vector<UberRegSet>::iterator I = llvm::next(UberSets.begin()),
          E = UberSets.end(); I != E; ++I) {
 
     // Initialize all unit weights in this set, and remember the max units/reg.
@@ -1367,9 +1367,9 @@ static void computeUberWeights(MISTD::vector<UberRegSet> &UberSets,
 // - increases the weight of "singular" units
 // - induces recomputation of UberWeights.
 static bool normalizeWeight(CodeGenRegister *Reg,
-                            MISTD::vector<UberRegSet> &UberSets,
-                            MISTD::vector<UberRegSet*> &RegSets,
-                            MISTD::set<unsigned> &NormalRegs,
+                            std::vector<UberRegSet> &UberSets,
+                            std::vector<UberRegSet*> &RegSets,
+                            std::set<unsigned> &NormalRegs,
                             CodeGenRegister::RegUnitList &NormalUnits,
                             CodeGenRegBank &RegBank) {
   bool Changed = false;
@@ -1428,8 +1428,8 @@ static bool normalizeWeight(CodeGenRegister *Reg,
 // The goal is that two registers in the same class will have the same weight,
 // where each register's weight is defined as sum of its units' weights.
 void CodeGenRegBank::computeRegUnitWeights() {
-  MISTD::vector<UberRegSet> UberSets;
-  MISTD::vector<UberRegSet*> RegSets(Registers.size());
+  std::vector<UberRegSet> UberSets;
+  std::vector<UberRegSet*> RegSets(Registers.size());
   computeUberSets(UberSets, RegSets, *this);
   // UberSets and RegSets are now immutable.
 
@@ -1443,7 +1443,7 @@ void CodeGenRegBank::computeRegUnitWeights() {
     Changed = false;
     for (unsigned i = 0, e = Registers.size(); i != e; ++i) {
       CodeGenRegister::RegUnitList NormalUnits;
-      MISTD::set<unsigned> NormalRegs;
+      std::set<unsigned> NormalRegs;
       Changed |= normalizeWeight(Registers[i], UberSets, RegSets,
                                  NormalRegs, NormalUnits, *this);
     }
@@ -1452,10 +1452,10 @@ void CodeGenRegBank::computeRegUnitWeights() {
 
 // Find a set in UniqueSets with the same elements as Set.
 // Return an iterator into UniqueSets.
-static MISTD::vector<RegUnitSet>::const_iterator
-findRegUnitSet(const MISTD::vector<RegUnitSet> &UniqueSets,
+static std::vector<RegUnitSet>::const_iterator
+findRegUnitSet(const std::vector<RegUnitSet> &UniqueSets,
                const RegUnitSet &Set) {
-  MISTD::vector<RegUnitSet>::const_iterator
+  std::vector<RegUnitSet>::const_iterator
     I = UniqueSets.begin(), E = UniqueSets.end();
   for(;I != E; ++I) {
     if (I->Units == Set.Units)
@@ -1465,9 +1465,9 @@ findRegUnitSet(const MISTD::vector<RegUnitSet> &UniqueSets,
 }
 
 // Return true if the RUSubSet is a subset of RUSuperSet.
-static bool isRegUnitSubSet(const MISTD::vector<unsigned> &RUSubSet,
-                            const MISTD::vector<unsigned> &RUSuperSet) {
-  return MISTD::includes(RUSuperSet.begin(), RUSuperSet.end(),
+static bool isRegUnitSubSet(const std::vector<unsigned> &RUSubSet,
+                            const std::vector<unsigned> &RUSuperSet) {
+  return std::includes(RUSuperSet.begin(), RUSuperSet.end(),
                        RUSubSet.begin(), RUSubSet.end());
 }
 
@@ -1492,7 +1492,7 @@ void CodeGenRegBank::pruneUnitSets() {
   assert(RegClassUnitSets.empty() && "this invalidates RegClassUnitSets");
 
   // Form an equivalence class of UnitSets with no significant difference.
-  MISTD::vector<unsigned> SuperSetIDs;
+  std::vector<unsigned> SuperSetIDs;
   for (unsigned SubIdx = 0, EndIdx = RegUnitSets.size();
        SubIdx != EndIdx; ++SubIdx) {
     const RegUnitSet &SubSet = RegUnitSets[SubIdx];
@@ -1516,7 +1516,7 @@ void CodeGenRegBank::pruneUnitSets() {
       SuperSetIDs.push_back(SubIdx);
   }
   // Populate PrunedUnitSets with each equivalence class's superset.
-  MISTD::vector<RegUnitSet> PrunedUnitSets(SuperSetIDs.size());
+  std::vector<RegUnitSet> PrunedUnitSets(SuperSetIDs.size());
   for (unsigned i = 0, e = SuperSetIDs.size(); i != e; ++i) {
     unsigned SuperIdx = SuperSetIDs[i];
     PrunedUnitSets[i].Name = RegUnitSets[SuperIdx].Name;
@@ -1550,7 +1550,7 @@ void CodeGenRegBank::computeRegUnitSets() {
     RegClasses[RCIdx]->buildRegUnitSet(RegUnitSets.back().Units);
 
     // Find an existing RegUnitSet.
-    MISTD::vector<RegUnitSet>::const_iterator SetI =
+    std::vector<RegUnitSet>::const_iterator SetI =
       findRegUnitSet(RegUnitSets, RegUnitSets.back());
     if (SetI != llvm::prior(RegUnitSets.end()))
       RegUnitSets.pop_back();
@@ -1593,12 +1593,12 @@ void CodeGenRegBank::computeRegUnitSets() {
     // Compare new sets with all original classes.
     for (unsigned SearchIdx = (Idx >= NumRegUnitSubSets) ? 0 : Idx+1;
          SearchIdx != EndIdx; ++SearchIdx) {
-      MISTD::set<unsigned> Intersection;
-      MISTD::set_intersection(RegUnitSets[Idx].Units.begin(),
+      std::set<unsigned> Intersection;
+      std::set_intersection(RegUnitSets[Idx].Units.begin(),
                             RegUnitSets[Idx].Units.end(),
                             RegUnitSets[SearchIdx].Units.begin(),
                             RegUnitSets[SearchIdx].Units.end(),
-                            MISTD::inserter(Intersection, Intersection.begin()));
+                            std::inserter(Intersection, Intersection.begin()));
       if (Intersection.empty())
         continue;
 
@@ -1607,15 +1607,15 @@ void CodeGenRegBank::computeRegUnitSets() {
       RegUnitSets.back().Name =
         RegUnitSets[Idx].Name + "+" + RegUnitSets[SearchIdx].Name;
 
-      MISTD::set_union(RegUnitSets[Idx].Units.begin(),
+      std::set_union(RegUnitSets[Idx].Units.begin(),
                      RegUnitSets[Idx].Units.end(),
                      RegUnitSets[SearchIdx].Units.begin(),
                      RegUnitSets[SearchIdx].Units.end(),
-                     MISTD::inserter(RegUnitSets.back().Units,
+                     std::inserter(RegUnitSets.back().Units,
                                    RegUnitSets.back().Units.begin()));
 
       // Find an existing RegUnitSet, or add the union to the unique sets.
-      MISTD::vector<RegUnitSet>::const_iterator SetI =
+      std::vector<RegUnitSet>::const_iterator SetI =
         findRegUnitSet(RegUnitSets, RegUnitSets.back());
       if (SetI != llvm::prior(RegUnitSets.end()))
         RegUnitSets.pop_back();
@@ -1651,7 +1651,7 @@ void CodeGenRegBank::computeRegUnitSets() {
       continue;
 
     // Recompute the sorted list of units in this class.
-    MISTD::vector<unsigned> RCRegUnits;
+    std::vector<unsigned> RCRegUnits;
     RegClasses[RCIdx]->buildRegUnitSet(RCRegUnits);
 
     // Don't increase pressure for unallocatable regclasses.
@@ -1681,10 +1681,10 @@ void CodeGenRegBank::computeRegUnitSets() {
   // "fake" register class.
   for (unsigned UnitIdx = 0, UnitEnd = NumNativeRegUnits;
        UnitIdx < UnitEnd; ++UnitIdx) {
-    MISTD::vector<unsigned> RUSets;
+    std::vector<unsigned> RUSets;
     for (unsigned i = 0, e = RegUnitSets.size(); i != e; ++i) {
       RegUnitSet &RUSet = RegUnitSets[i];
-      if (MISTD::find(RUSet.Units.begin(), RUSet.Units.end(), UnitIdx)
+      if (std::find(RUSet.Units.begin(), RUSet.Units.end(), UnitIdx)
           == RUSet.Units.end())
         continue;
       RUSets.push_back(i);
@@ -1736,7 +1736,7 @@ void CodeGenRegBank::computeDerivedInfo() {
   for (unsigned Idx = 0, EndIdx = RegUnitSets.size(); Idx != EndIdx; ++Idx)
     RegUnitSetOrder.push_back(Idx);
 
-  MISTD::stable_sort(RegUnitSetOrder.begin(), RegUnitSetOrder.end(),
+  std::stable_sort(RegUnitSetOrder.begin(), RegUnitSetOrder.end(),
                    LessUnits(*this));
   for (unsigned Idx = 0, EndIdx = RegUnitSets.size(); Idx != EndIdx; ++Idx) {
     RegUnitSets[RegUnitSetOrder[Idx]].Order = Idx;
@@ -1760,9 +1760,9 @@ void CodeGenRegBank::inferCommonSubClass(CodeGenRegisterClass *RC) {
     const CodeGenRegister::Set &Memb1 = RC1->getMembers();
     const CodeGenRegister::Set &Memb2 = RC2->getMembers();
     CodeGenRegister::Set Intersection;
-    MISTD::set_intersection(Memb1.begin(), Memb1.end(),
+    std::set_intersection(Memb1.begin(), Memb1.end(),
                           Memb2.begin(), Memb2.end(),
-                          MISTD::inserter(Intersection, Intersection.begin()),
+                          std::inserter(Intersection, Intersection.begin()),
                           CodeGenRegister::Less());
 
     // Skip disjoint class pairs.
@@ -1774,7 +1774,7 @@ void CodeGenRegBank::inferCommonSubClass(CodeGenRegisterClass *RC) {
     if (RC2->SpillSize > RC1->SpillSize ||
         (RC2->SpillSize == RC1->SpillSize &&
          RC2->SpillAlignment > RC1->SpillAlignment))
-      MISTD::swap(RC1, RC2);
+      std::swap(RC1, RC2);
 
     getOrCreateSubClass(RC1, &Intersection,
                         RC1->getName() + "_and_" + RC2->getName());
@@ -1789,7 +1789,7 @@ void CodeGenRegBank::inferCommonSubClass(CodeGenRegisterClass *RC) {
 //
 void CodeGenRegBank::inferSubClassWithSubReg(CodeGenRegisterClass *RC) {
   // Map SubRegIndex to set of registers in RC supporting that SubRegIndex.
-  typedef MISTD::map<CodeGenSubRegIndex*, CodeGenRegister::Set,
+  typedef std::map<CodeGenSubRegIndex*, CodeGenRegister::Set,
                    CodeGenSubRegIndex::Less> SubReg2SetMap;
 
   // Compute the set of registers supporting each SubRegIndex.
@@ -1832,7 +1832,7 @@ void CodeGenRegBank::inferSubClassWithSubReg(CodeGenRegisterClass *RC) {
 
 void CodeGenRegBank::inferMatchingSuperRegClass(CodeGenRegisterClass *RC,
                                                 unsigned FirstSubRegRC) {
-  SmallVector<MISTD::pair<const CodeGenRegister*,
+  SmallVector<std::pair<const CodeGenRegister*,
                         const CodeGenRegister*>, 16> SSPairs;
   BitVector TopoSigs(getNumTopoSigs());
 
@@ -1853,7 +1853,7 @@ void CodeGenRegBank::inferMatchingSuperRegClass(CodeGenRegisterClass *RC,
       const CodeGenRegister *Super = *RI;
       const CodeGenRegister *Sub = Super->getSubRegs().find(SubIdx)->second;
       assert(Sub && "Missing sub-register");
-      SSPairs.push_back(MISTD::make_pair(Super, Sub));
+      SSPairs.push_back(std::make_pair(Super, Sub));
       TopoSigs.set(Sub->getTopoSig());
     }
 

@@ -27,8 +27,8 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-static MISTD::string getTypeString(Type *T) {
-  MISTD::string Result;
+static std::string getTypeString(Type *T) {
+  std::string Result;
   raw_string_ostream Tmp(Result);
   Tmp << *T;
   return Tmp.str();
@@ -48,11 +48,11 @@ bool LLParser::Run() {
 bool LLParser::ValidateEndOfModule() {
   // Handle any instruction metadata forward references.
   if (!ForwardRefInstMetadata.empty()) {
-    for (DenseMap<Instruction*, MISTD::vector<MDRef> >::iterator
+    for (DenseMap<Instruction*, std::vector<MDRef> >::iterator
          I = ForwardRefInstMetadata.begin(), E = ForwardRefInstMetadata.end();
          I != E; ++I) {
       Instruction *Inst = I->first;
-      const MISTD::vector<MDRef> &MDList = I->second;
+      const std::vector<MDRef> &MDList = I->second;
 
       for (unsigned i = 0, e = MDList.size(); i != e; ++i) {
         unsigned SlotNo = MDList[i].MDSlot;
@@ -70,14 +70,14 @@ bool LLParser::ValidateEndOfModule() {
     UpgradeInstWithTBAATag(InstsWithTBAATag[I]);
 
   // Handle any function attribute group forward references.
-  for (MISTD::map<Value*, MISTD::vector<unsigned> >::iterator
+  for (std::map<Value*, std::vector<unsigned> >::iterator
          I = ForwardRefAttrGroups.begin(), E = ForwardRefAttrGroups.end();
          I != E; ++I) {
     Value *V = I->first;
-    MISTD::vector<unsigned> &Vec = I->second;
+    std::vector<unsigned> &Vec = I->second;
     AttrBuilder B;
 
-    for (MISTD::vector<unsigned>::iterator VI = Vec.begin(), VE = Vec.end();
+    for (std::vector<unsigned>::iterator VI = Vec.begin(), VE = Vec.end();
          VI != VE; ++VI)
       B.merge(NumberedAttrBuilders[*VI]);
 
@@ -156,7 +156,7 @@ bool LLParser::ValidateEndOfModule() {
       return Error(NumberedTypes[i].second,
                    "use of undefined type '%" + Twine(i) + "'");
 
-  for (StringMap<MISTD::pair<Type*, LocTy> >::iterator I =
+  for (StringMap<std::pair<Type*, LocTy> >::iterator I =
        NamedTypes.begin(), E = NamedTypes.end(); I != E; ++I)
     if (I->second.second.isValid())
       return Error(I->second.second,
@@ -188,7 +188,7 @@ bool LLParser::ValidateEndOfModule() {
 }
 
 bool LLParser::ResolveForwardRefBlockAddresses(Function *TheFn,
-                             MISTD::vector<MISTD::pair<ValID, GlobalValue*> > &Refs,
+                             std::vector<std::pair<ValID, GlobalValue*> > &Refs,
                                                PerFunctionState *PFS) {
   // Loop over all the references, resolving them.
   for (unsigned i = 0, e = Refs.size(); i != e; ++i) {
@@ -295,7 +295,7 @@ bool LLParser::ParseModuleAsm() {
   assert(Lex.getKind() == lltok::kw_module);
   Lex.Lex();
 
-  MISTD::string AsmStr;
+  std::string AsmStr;
   if (ParseToken(lltok::kw_asm, "expected 'module asm'") ||
       ParseStringConstant(AsmStr)) return true;
 
@@ -308,7 +308,7 @@ bool LLParser::ParseModuleAsm() {
 ///   ::= 'target' 'datalayout' '=' STRINGCONSTANT
 bool LLParser::ParseTargetDefinition() {
   assert(Lex.getKind() == lltok::kw_target);
-  MISTD::string Str;
+  std::string Str;
   switch (Lex.Lex()) {
   default: return TokError("unknown target property");
   case lltok::kw_triple:
@@ -343,7 +343,7 @@ bool LLParser::ParseDepLibs() {
     return false;
 
   do {
-    MISTD::string Str;
+    std::string Str;
     if (ParseStringConstant(Str)) return true;
   } while (EatIfPresent(lltok::comma));
 
@@ -369,7 +369,7 @@ bool LLParser::ParseUnnamedType() {
                             NumberedTypes[TypeID], Result)) return true;
 
   if (!isa<StructType>(Result)) {
-    MISTD::pair<Type*, LocTy> &Entry = NumberedTypes[TypeID];
+    std::pair<Type*, LocTy> &Entry = NumberedTypes[TypeID];
     if (Entry.first)
       return Error(TypeLoc, "non-struct types may not be recursive");
     Entry.first = Result;
@@ -383,7 +383,7 @@ bool LLParser::ParseUnnamedType() {
 /// toplevelentity
 ///   ::= LocalVar '=' 'type' type
 bool LLParser::ParseNamedType() {
-  MISTD::string Name = Lex.getStrVal();
+  std::string Name = Lex.getStrVal();
   LocTy NameLoc = Lex.getLoc();
   Lex.Lex();  // eat LocalVar.
 
@@ -396,7 +396,7 @@ bool LLParser::ParseNamedType() {
                             NamedTypes[Name], Result)) return true;
 
   if (!isa<StructType>(Result)) {
-    MISTD::pair<Type*, LocTy> &Entry = NamedTypes[Name];
+    std::pair<Type*, LocTy> &Entry = NamedTypes[Name];
     if (Entry.first)
       return Error(NameLoc, "non-struct types may not be recursive");
     Entry.first = Result;
@@ -451,7 +451,7 @@ bool LLParser::ParseGlobalType(bool &IsConstant) {
 ///   GlobalID '=' OptionalLinkage OptionalVisibility ...   -> global variable
 bool LLParser::ParseUnnamedGlobal() {
   unsigned VarID = NumberedVals.size();
-  MISTD::string Name;
+  std::string Name;
   LocTy NameLoc = Lex.getLoc();
 
   // Handle the GlobalID form.
@@ -482,7 +482,7 @@ bool LLParser::ParseUnnamedGlobal() {
 bool LLParser::ParseNamedGlobal() {
   assert(Lex.getKind() == lltok::GlobalVar);
   LocTy NameLoc = Lex.getLoc();
-  MISTD::string Name = Lex.getStrVal();
+  std::string Name = Lex.getStrVal();
   Lex.Lex();
 
   bool HasLinkage;
@@ -500,7 +500,7 @@ bool LLParser::ParseNamedGlobal() {
 // MDString:
 //   ::= '!' STRINGCONSTANT
 bool LLParser::ParseMDString(MDString *&Result) {
-  MISTD::string Str;
+  std::string Str;
   if (ParseStringConstant(Str)) return true;
   Result = MDString::get(Context, Str);
   return false;
@@ -533,7 +533,7 @@ bool LLParser::ParseMDNodeID(MDNode *&Result) {
 
   // Otherwise, create MDNode forward reference.
   MDNode *FwdNode = MDNode::getTemporary(Context, None);
-  ForwardRefMDNodes[MID] = MISTD::make_pair(FwdNode, Lex.getLoc());
+  ForwardRefMDNodes[MID] = std::make_pair(FwdNode, Lex.getLoc());
 
   if (NumberedMetadata.size() <= MID)
     NumberedMetadata.resize(MID+1);
@@ -546,7 +546,7 @@ bool LLParser::ParseMDNodeID(MDNode *&Result) {
 ///   !foo = !{ !1, !2 }
 bool LLParser::ParseNamedMetadata() {
   assert(Lex.getKind() == lltok::MetadataVar);
-  MISTD::string Name = Lex.getStrVal();
+  std::string Name = Lex.getStrVal();
   Lex.Lex();
 
   if (ParseToken(lltok::equal, "expected '=' here") ||
@@ -593,7 +593,7 @@ bool LLParser::ParseStandaloneMetadata() {
   MDNode *Init = MDNode::get(Context, Elts);
 
   // See if this was forward referenced, if so, handle it.
-  MISTD::map<unsigned, MISTD::pair<TrackingVH<MDNode>, LocTy> >::iterator
+  std::map<unsigned, std::pair<TrackingVH<MDNode>, LocTy> >::iterator
     FI = ForwardRefMDNodes.find(MetadataID);
   if (FI != ForwardRefMDNodes.end()) {
     MDNode *Temp = FI->second.first;
@@ -623,7 +623,7 @@ bool LLParser::ParseStandaloneMetadata() {
 ///
 /// Everything through visibility has already been parsed.
 ///
-bool LLParser::ParseAlias(const MISTD::string &Name, LocTy NameLoc,
+bool LLParser::ParseAlias(const std::string &Name, LocTy NameLoc,
                           unsigned Visibility) {
   assert(Lex.getKind() == lltok::kw_alias);
   Lex.Lex();
@@ -665,7 +665,7 @@ bool LLParser::ParseAlias(const MISTD::string &Name, LocTy NameLoc,
   if (GlobalValue *Val = M->getNamedValue(Name)) {
     // See if this was a redefinition.  If so, there is no entry in
     // ForwardRefVals.
-    MISTD::map<MISTD::string, MISTD::pair<GlobalValue*, LocTy> >::iterator
+    std::map<std::string, std::pair<GlobalValue*, LocTy> >::iterator
       I = ForwardRefVals.find(Name);
     if (I == ForwardRefVals.end())
       return Error(NameLoc, "redefinition of global named '@" + Name + "'");
@@ -700,7 +700,7 @@ bool LLParser::ParseAlias(const MISTD::string &Name, LocTy NameLoc,
 ///
 /// Everything through visibility has been parsed already.
 ///
-bool LLParser::ParseGlobal(const MISTD::string &Name, LocTy NameLoc,
+bool LLParser::ParseGlobal(const std::string &Name, LocTy NameLoc,
                            unsigned Linkage, bool HasLinkage,
                            unsigned Visibility) {
   unsigned AddrSpace;
@@ -745,7 +745,7 @@ bool LLParser::ParseGlobal(const MISTD::string &Name, LocTy NameLoc,
       GV = cast<GlobalVariable>(GVal);
     }
   } else {
-    MISTD::map<unsigned, MISTD::pair<GlobalValue*, LocTy> >::iterator
+    std::map<unsigned, std::pair<GlobalValue*, LocTy> >::iterator
       I = ForwardRefValIDs.find(NumberedVals.size());
     if (I != ForwardRefValIDs.end()) {
       GV = cast<GlobalVariable>(I->second.first);
@@ -809,7 +809,7 @@ bool LLParser::ParseUnnamedAttrGrp() {
 
   assert(Lex.getKind() == lltok::AttrGrpID);
   unsigned VarID = Lex.getUIntVal();
-  MISTD::vector<unsigned> unused;
+  std::vector<unsigned> unused;
   LocTy BuiltinLoc;
   Lex.Lex();
 
@@ -829,7 +829,7 @@ bool LLParser::ParseUnnamedAttrGrp() {
 /// ParseFnAttributeValuePairs
 ///   ::= <attr> | <attr> '=' <value>
 bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
-                                          MISTD::vector<unsigned> &FwdRefAttrGrps,
+                                          std::vector<unsigned> &FwdRefAttrGrps,
                                           bool inAttrGrp, LocTy &BuiltinLoc) {
   bool HaveError = false;
 
@@ -865,9 +865,9 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     }
     // Target-dependent attributes:
     case lltok::StringConstant: {
-      MISTD::string Attr = Lex.getStrVal();
+      std::string Attr = Lex.getStrVal();
       Lex.Lex();
-      MISTD::string Val;
+      std::string Val;
       if (EatIfPresent(lltok::equal) &&
           ParseStringConstant(Val))
         return true;
@@ -966,7 +966,7 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
 /// GetGlobalVal - Get a value with the specified name or ID, creating a
 /// forward reference record if needed.  This can return null if the value
 /// exists but does not have the right type.
-GlobalValue *LLParser::GetGlobalVal(const MISTD::string &Name, Type *Ty,
+GlobalValue *LLParser::GetGlobalVal(const std::string &Name, Type *Ty,
                                     LocTy Loc) {
   PointerType *PTy = dyn_cast<PointerType>(Ty);
   if (PTy == 0) {
@@ -981,7 +981,7 @@ GlobalValue *LLParser::GetGlobalVal(const MISTD::string &Name, Type *Ty,
   // If this is a forward reference for the value, see if we already created a
   // forward ref record.
   if (Val == 0) {
-    MISTD::map<MISTD::string, MISTD::pair<GlobalValue*, LocTy> >::iterator
+    std::map<std::string, std::pair<GlobalValue*, LocTy> >::iterator
       I = ForwardRefVals.find(Name);
     if (I != ForwardRefVals.end())
       Val = I->second.first;
@@ -1005,7 +1005,7 @@ GlobalValue *LLParser::GetGlobalVal(const MISTD::string &Name, Type *Ty,
                                 0, GlobalVariable::NotThreadLocal,
                                 PTy->getAddressSpace());
 
-  ForwardRefVals[Name] = MISTD::make_pair(FwdVal, Loc);
+  ForwardRefVals[Name] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
 
@@ -1021,7 +1021,7 @@ GlobalValue *LLParser::GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc) {
   // If this is a forward reference for the value, see if we already created a
   // forward ref record.
   if (Val == 0) {
-    MISTD::map<unsigned, MISTD::pair<GlobalValue*, LocTy> >::iterator
+    std::map<unsigned, std::pair<GlobalValue*, LocTy> >::iterator
       I = ForwardRefValIDs.find(ID);
     if (I != ForwardRefValIDs.end())
       Val = I->second.first;
@@ -1043,7 +1043,7 @@ GlobalValue *LLParser::GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc) {
     FwdVal = new GlobalVariable(*M, PTy->getElementType(), false,
                                 GlobalValue::ExternalWeakLinkage, 0, "");
 
-  ForwardRefValIDs[ID] = MISTD::make_pair(FwdVal, Loc);
+  ForwardRefValIDs[ID] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
 
@@ -1063,7 +1063,7 @@ bool LLParser::ParseToken(lltok::Kind T, const char *ErrMsg) {
 
 /// ParseStringConstant
 ///   ::= StringConstant
-bool LLParser::ParseStringConstant(MISTD::string &Result) {
+bool LLParser::ParseStringConstant(std::string &Result) {
   if (Lex.getKind() != lltok::StringConstant)
     return TokError("expected string constant");
   Result = Lex.getStrVal();
@@ -1392,7 +1392,7 @@ bool LLParser::ParseInstructionMetadata(Instruction *Inst,
     if (Lex.getKind() != lltok::MetadataVar)
       return TokError("expected metadata after comma");
 
-    MISTD::string Name = Lex.getStrVal();
+    std::string Name = Lex.getStrVal();
     unsigned MDK = M->getMDKindID(Name);
     Lex.Lex();
 
@@ -1588,7 +1588,7 @@ bool LLParser::ParseType(Type *&Result, bool AllowVoid) {
     break;
   case lltok::LocalVar: {
     // Type ::= %foo
-    MISTD::pair<Type*, LocTy> &Entry = NamedTypes[Lex.getStrVal()];
+    std::pair<Type*, LocTy> &Entry = NamedTypes[Lex.getStrVal()];
 
     // If the type hasn't been defined yet, create a forward definition and
     // remember where that forward def'n was seen (in case it never is defined).
@@ -1605,7 +1605,7 @@ bool LLParser::ParseType(Type *&Result, bool AllowVoid) {
     // Type ::= %4
     if (Lex.getUIntVal() >= NumberedTypes.size())
       NumberedTypes.resize(Lex.getUIntVal()+1);
-    MISTD::pair<Type*, LocTy> &Entry = NumberedTypes[Lex.getUIntVal()];
+    std::pair<Type*, LocTy> &Entry = NumberedTypes[Lex.getUIntVal()];
 
     // If the type hasn't been defined yet, create a forward definition and
     // remember where that forward def'n was seen (in case it never is defined).
@@ -1729,7 +1729,7 @@ bool LLParser::ParseArgumentList(SmallVectorImpl<ArgInfo> &ArgList,
     LocTy TypeLoc = Lex.getLoc();
     Type *ArgTy = 0;
     AttrBuilder Attrs;
-    MISTD::string Name;
+    std::string Name;
 
     if (ParseType(ArgTy) ||
         ParseOptionalParamAttrs(Attrs)) return true;
@@ -1826,7 +1826,7 @@ bool LLParser::ParseAnonStructType(Type *&Result, bool Packed) {
 
 /// ParseStructDefinition - Parse a struct in a 'type' definition.
 bool LLParser::ParseStructDefinition(SMLoc TypeLoc, StringRef Name,
-                                     MISTD::pair<Type*, LocTy> &Entry,
+                                     std::pair<Type*, LocTy> &Entry,
                                      Type *&ResultTy) {
   // If the type was already defined, diagnose the redefinition.
   if (Entry.first && !Entry.second.isValid())
@@ -1974,7 +1974,7 @@ LLParser::PerFunctionState::PerFunctionState(LLParser &p, Function &f,
 
 LLParser::PerFunctionState::~PerFunctionState() {
   // If there were any forward referenced non-basicblock values, delete them.
-  for (MISTD::map<MISTD::string, MISTD::pair<Value*, LocTy> >::iterator
+  for (std::map<std::string, std::pair<Value*, LocTy> >::iterator
        I = ForwardRefVals.begin(), E = ForwardRefVals.end(); I != E; ++I)
     if (!isa<BasicBlock>(I->second.first)) {
       I->second.first->replaceAllUsesWith(
@@ -1983,7 +1983,7 @@ LLParser::PerFunctionState::~PerFunctionState() {
       I->second.first = 0;
     }
 
-  for (MISTD::map<unsigned, MISTD::pair<Value*, LocTy> >::iterator
+  for (std::map<unsigned, std::pair<Value*, LocTy> >::iterator
        I = ForwardRefValIDs.begin(), E = ForwardRefValIDs.end(); I != E; ++I)
     if (!isa<BasicBlock>(I->second.first)) {
       I->second.first->replaceAllUsesWith(
@@ -2005,7 +2005,7 @@ bool LLParser::PerFunctionState::FinishFunction() {
       FunctionID.UIntVal = FunctionNumber;
     }
 
-    MISTD::map<ValID, MISTD::vector<MISTD::pair<ValID, GlobalValue*> > >::iterator
+    std::map<ValID, std::vector<std::pair<ValID, GlobalValue*> > >::iterator
       FRBAI = P.ForwardRefBlockAddresses.find(FunctionID);
     if (FRBAI != P.ForwardRefBlockAddresses.end()) {
       // Resolve all these references.
@@ -2031,7 +2031,7 @@ bool LLParser::PerFunctionState::FinishFunction() {
 /// GetVal - Get a value with the specified name or ID, creating a
 /// forward reference record if needed.  This can return null if the value
 /// exists but does not have the right type.
-Value *LLParser::PerFunctionState::GetVal(const MISTD::string &Name,
+Value *LLParser::PerFunctionState::GetVal(const std::string &Name,
                                           Type *Ty, LocTy Loc) {
   // Look this name up in the normal function symbol table.
   Value *Val = F.getValueSymbolTable().lookup(Name);
@@ -2039,7 +2039,7 @@ Value *LLParser::PerFunctionState::GetVal(const MISTD::string &Name,
   // If this is a forward reference for the value, see if we already created a
   // forward ref record.
   if (Val == 0) {
-    MISTD::map<MISTD::string, MISTD::pair<Value*, LocTy> >::iterator
+    std::map<std::string, std::pair<Value*, LocTy> >::iterator
       I = ForwardRefVals.find(Name);
     if (I != ForwardRefVals.end())
       Val = I->second.first;
@@ -2069,7 +2069,7 @@ Value *LLParser::PerFunctionState::GetVal(const MISTD::string &Name,
   else
     FwdVal = new Argument(Ty, Name);
 
-  ForwardRefVals[Name] = MISTD::make_pair(FwdVal, Loc);
+  ForwardRefVals[Name] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
 
@@ -2081,7 +2081,7 @@ Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty,
   // If this is a forward reference for the value, see if we already created a
   // forward ref record.
   if (Val == 0) {
-    MISTD::map<unsigned, MISTD::pair<Value*, LocTy> >::iterator
+    std::map<unsigned, std::pair<Value*, LocTy> >::iterator
       I = ForwardRefValIDs.find(ID);
     if (I != ForwardRefValIDs.end())
       Val = I->second.first;
@@ -2110,14 +2110,14 @@ Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty,
   else
     FwdVal = new Argument(Ty);
 
-  ForwardRefValIDs[ID] = MISTD::make_pair(FwdVal, Loc);
+  ForwardRefValIDs[ID] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
 
 /// SetInstName - After an instruction is parsed and inserted into its
 /// basic block, this installs its name.
 bool LLParser::PerFunctionState::SetInstName(int NameID,
-                                             const MISTD::string &NameStr,
+                                             const std::string &NameStr,
                                              LocTy NameLoc, Instruction *Inst) {
   // If this instruction has void type, it cannot have a name or ID specified.
   if (Inst->getType()->isVoidTy()) {
@@ -2137,7 +2137,7 @@ bool LLParser::PerFunctionState::SetInstName(int NameID,
       return P.Error(NameLoc, "instruction expected to be numbered '%" +
                      Twine(NumberedVals.size()) + "'");
 
-    MISTD::map<unsigned, MISTD::pair<Value*, LocTy> >::iterator FI =
+    std::map<unsigned, std::pair<Value*, LocTy> >::iterator FI =
       ForwardRefValIDs.find(NameID);
     if (FI != ForwardRefValIDs.end()) {
       if (FI->second.first->getType() != Inst->getType())
@@ -2153,7 +2153,7 @@ bool LLParser::PerFunctionState::SetInstName(int NameID,
   }
 
   // Otherwise, the instruction had a name.  Resolve forward refs and set it.
-  MISTD::map<MISTD::string, MISTD::pair<Value*, LocTy> >::iterator
+  std::map<std::string, std::pair<Value*, LocTy> >::iterator
     FI = ForwardRefVals.find(NameStr);
   if (FI != ForwardRefVals.end()) {
     if (FI->second.first->getType() != Inst->getType())
@@ -2175,7 +2175,7 @@ bool LLParser::PerFunctionState::SetInstName(int NameID,
 
 /// GetBB - Get a basic block with the specified name or ID, creating a
 /// forward reference record if needed.
-BasicBlock *LLParser::PerFunctionState::GetBB(const MISTD::string &Name,
+BasicBlock *LLParser::PerFunctionState::GetBB(const std::string &Name,
                                               LocTy Loc) {
   return cast_or_null<BasicBlock>(GetVal(Name,
                                         Type::getLabelTy(F.getContext()), Loc));
@@ -2189,7 +2189,7 @@ BasicBlock *LLParser::PerFunctionState::GetBB(unsigned ID, LocTy Loc) {
 /// DefineBB - Define the specified basic block, which is either named or
 /// unnamed.  If there is an error, this returns null otherwise it returns
 /// the block being defined.
-BasicBlock *LLParser::PerFunctionState::DefineBB(const MISTD::string &Name,
+BasicBlock *LLParser::PerFunctionState::DefineBB(const std::string &Name,
                                                  LocTy Loc) {
   BasicBlock *BB;
   if (Name.empty())
@@ -2405,7 +2405,7 @@ bool LLParser::ParseValID(ValID &ID, PerFunctionState *PFS) {
     GlobalVariable *FwdRef = new GlobalVariable(*M, Type::getInt8Ty(Context),
                                            false, GlobalValue::InternalLinkage,
                                                 0, "");
-    ForwardRefBlockAddresses[Fn].push_back(MISTD::make_pair(Label, FwdRef));
+    ForwardRefBlockAddresses[Fn].push_back(std::make_pair(Label, FwdRef));
     ID.ConstantVal = FwdRef;
     ID.Kind = ValID::t_Constant;
     return false;
@@ -2974,7 +2974,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
 
   LocTy NameLoc = Lex.getLoc();
 
-  MISTD::string FunctionName;
+  std::string FunctionName;
   if (Lex.getKind() == lltok::GlobalVar) {
     FunctionName = Lex.getStrVal();
   } else if (Lex.getKind() == lltok::GlobalID) {     // @42 is ok.
@@ -2995,11 +2995,11 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   SmallVector<ArgInfo, 8> ArgList;
   bool isVarArg;
   AttrBuilder FuncAttrs;
-  MISTD::vector<unsigned> FwdRefAttrGrps;
+  std::vector<unsigned> FwdRefAttrGrps;
   LocTy BuiltinLoc;
-  MISTD::string Section;
+  std::string Section;
   unsigned Alignment;
-  MISTD::string GC;
+  std::string GC;
   bool UnnamedAddr;
   LocTy UnnamedAddrLoc;
   Constant *Prefix = 0;
@@ -3029,7 +3029,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
 
   // Okay, if we got here, the function is syntactically valid.  Convert types
   // and do semantic checks.
-  MISTD::vector<Type*> ParamTypeList;
+  std::vector<Type*> ParamTypeList;
   SmallVector<AttributeSet, 8> Attrs;
 
   if (RetAttrs.hasAttributes())
@@ -3063,7 +3063,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   if (!FunctionName.empty()) {
     // If this was a definition of a forward reference, remove the definition
     // from the forward reference table and fill in the forward ref.
-    MISTD::map<MISTD::string, MISTD::pair<GlobalValue*, LocTy> >::iterator FRVI =
+    std::map<std::string, std::pair<GlobalValue*, LocTy> >::iterator FRVI =
       ForwardRefVals.find(FunctionName);
     if (FRVI != ForwardRefVals.end()) {
       Fn = M->getFunction(FunctionName);
@@ -3086,7 +3086,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   } else {
     // If this is a definition of a forward referenced function, make sure the
     // types agree.
-    MISTD::map<unsigned, MISTD::pair<GlobalValue*, LocTy> >::iterator I
+    std::map<unsigned, std::pair<GlobalValue*, LocTy> >::iterator I
       = ForwardRefValIDs.find(NumberedVals.size());
     if (I != ForwardRefValIDs.end()) {
       Fn = cast<Function>(I->second.first);
@@ -3165,7 +3165,7 @@ bool LLParser::ParseFunctionBody(Function &Fn) {
 ///   ::= LabelStr? Instruction*
 bool LLParser::ParseBasicBlock(PerFunctionState &PFS) {
   // If this basic block starts out with a name, remember it.
-  MISTD::string Name;
+  std::string Name;
   LocTy NameLoc = Lex.getLoc();
   if (Lex.getKind() == lltok::LabelStr) {
     Name = Lex.getStrVal();
@@ -3175,7 +3175,7 @@ bool LLParser::ParseBasicBlock(PerFunctionState &PFS) {
   BasicBlock *BB = PFS.DefineBB(Name, NameLoc);
   if (BB == 0) return true;
 
-  MISTD::string NameStr;
+  std::string NameStr;
 
   // Parse the instructions in this block until we get a terminator.
   Instruction *Inst;
@@ -3460,7 +3460,7 @@ bool LLParser::ParseSwitch(Instruction *&Inst, PerFunctionState &PFS) {
 
   // Parse the jump table pairs.
   SmallPtrSet<Value*, 32> SeenCases;
-  SmallVector<MISTD::pair<ConstantInt*, BasicBlock*>, 32> Table;
+  SmallVector<std::pair<ConstantInt*, BasicBlock*>, 32> Table;
   while (Lex.getKind() != lltok::rsquare) {
     Value *Constant;
     BasicBlock *DestBB;
@@ -3475,7 +3475,7 @@ bool LLParser::ParseSwitch(Instruction *&Inst, PerFunctionState &PFS) {
     if (!isa<ConstantInt>(Constant))
       return Error(CondLoc, "case value is not a constant integer");
 
-    Table.push_back(MISTD::make_pair(cast<ConstantInt>(Constant), DestBB));
+    Table.push_back(std::make_pair(cast<ConstantInt>(Constant), DestBB));
   }
 
   Lex.Lex();  // Eat the ']'.
@@ -3534,7 +3534,7 @@ bool LLParser::ParseIndirectBr(Instruction *&Inst, PerFunctionState &PFS) {
 bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
   LocTy CallLoc = Lex.getLoc();
   AttrBuilder RetAttrs, FnAttrs;
-  MISTD::vector<unsigned> FwdRefAttrGrps;
+  std::vector<unsigned> FwdRefAttrGrps;
   LocTy NoBuiltinLoc;
   CallingConv::ID CC;
   Type *RetType = 0;
@@ -3564,7 +3564,7 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
   if (!(PFTy = dyn_cast<PointerType>(RetType)) ||
       !(Ty = dyn_cast<FunctionType>(PFTy->getElementType()))) {
     // Pull out the types of all of the arguments...
-    MISTD::vector<Type*> ParamTypes;
+    std::vector<Type*> ParamTypes;
     for (unsigned i = 0, e = ArgList.size(); i != e; ++i)
       ParamTypes.push_back(ArgList[i].V->getType());
 
@@ -3857,9 +3857,9 @@ int LLParser::ParsePHI(Instruction *&Inst, PerFunctionState &PFS) {
     return true;
 
   bool AteExtraComma = false;
-  SmallVector<MISTD::pair<Value*, BasicBlock*>, 16> PHIVals;
+  SmallVector<std::pair<Value*, BasicBlock*>, 16> PHIVals;
   while (1) {
-    PHIVals.push_back(MISTD::make_pair(Op0, cast<BasicBlock>(Op1)));
+    PHIVals.push_back(std::make_pair(Op0, cast<BasicBlock>(Op1)));
 
     if (!EatIfPresent(lltok::comma))
       break;
@@ -3943,7 +3943,7 @@ bool LLParser::ParseLandingPad(Instruction *&Inst, PerFunctionState &PFS) {
 bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
                          bool isTail) {
   AttrBuilder RetAttrs, FnAttrs;
-  MISTD::vector<unsigned> FwdRefAttrGrps;
+  std::vector<unsigned> FwdRefAttrGrps;
   LocTy BuiltinLoc;
   CallingConv::ID CC;
   Type *RetType = 0;
@@ -3970,7 +3970,7 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
   if (!(PFTy = dyn_cast<PointerType>(RetType)) ||
       !(Ty = dyn_cast<FunctionType>(PFTy->getElementType()))) {
     // Pull out the types of all of the arguments...
-    MISTD::vector<Type*> ParamTypes;
+    std::vector<Type*> ParamTypes;
     for (unsigned i = 0, e = ArgList.size(); i != e; ++i)
       ParamTypes.push_back(ArgList[i].V->getType());
 

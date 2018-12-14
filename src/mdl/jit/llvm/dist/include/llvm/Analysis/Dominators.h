@@ -36,7 +36,7 @@ namespace llvm {
 template <class NodeT>
 class DominatorBase {
 protected:
-  MISTD::vector<NodeT*> Roots;
+  std::vector<NodeT*> Roots;
   const bool IsPostDominators;
   inline explicit DominatorBase(bool isPostDom) :
     Roots(), IsPostDominators(isPostDom) {}
@@ -46,7 +46,7 @@ public:
   /// multiple blocks if we are computing post dominators.  For forward
   /// dominators, this will always be a single block (the entry node).
   ///
-  inline const MISTD::vector<NodeT*> &getRoots() const { return Roots; }
+  inline const std::vector<NodeT*> &getRoots() const { return Roots; }
 
   /// isPostDominator - Returns true if analysis based of postdoms
   ///
@@ -64,14 +64,14 @@ template <class NodeT>
 class DomTreeNodeBase {
   NodeT *TheBB;
   DomTreeNodeBase<NodeT> *IDom;
-  MISTD::vector<DomTreeNodeBase<NodeT> *> Children;
+  std::vector<DomTreeNodeBase<NodeT> *> Children;
   int DFSNumIn, DFSNumOut;
 
   template<class N> friend class DominatorTreeBase;
   friend struct PostDominatorTree;
 public:
-  typedef typename MISTD::vector<DomTreeNodeBase<NodeT> *>::iterator iterator;
-  typedef typename MISTD::vector<DomTreeNodeBase<NodeT> *>::const_iterator
+  typedef typename std::vector<DomTreeNodeBase<NodeT> *>::iterator iterator;
+  typedef typename std::vector<DomTreeNodeBase<NodeT> *>::const_iterator
                    const_iterator;
 
   iterator begin()             { return Children.begin(); }
@@ -81,7 +81,7 @@ public:
 
   NodeT *getBlock() const { return TheBB; }
   DomTreeNodeBase<NodeT> *getIDom() const { return IDom; }
-  const MISTD::vector<DomTreeNodeBase<NodeT>*> &getChildren() const {
+  const std::vector<DomTreeNodeBase<NodeT>*> &getChildren() const {
     return Children;
   }
 
@@ -122,8 +122,8 @@ public:
   void setIDom(DomTreeNodeBase<NodeT> *NewIDom) {
     assert(IDom && "No immediate dominator?");
     if (IDom != NewIDom) {
-      typename MISTD::vector<DomTreeNodeBase<NodeT>*>::iterator I =
-                  MISTD::find(IDom->Children.begin(), IDom->Children.end(), this);
+      typename std::vector<DomTreeNodeBase<NodeT>*>::iterator I =
+                  std::find(IDom->Children.begin(), IDom->Children.end(), this);
       assert(I != IDom->Children.end() &&
              "Not in immediate dominator children set!");
       // I am no longer your child...
@@ -217,7 +217,7 @@ protected:
   DenseMap<NodeT*, NodeT*> IDoms;
 
   // Vertex - Map the DFS number to the BasicBlock*
-  MISTD::vector<NodeT*> Vertex;
+  std::vector<NodeT*> Vertex;
 
   // Info - Collection of information used during the computation of idoms.
   DenseMap<NodeT*, InfoRec> Info;
@@ -238,12 +238,12 @@ protected:
   template<class N, class GraphT>
   void Split(DominatorTreeBase<typename GraphT::NodeType>& DT,
              typename GraphT::NodeType* NewBB) {
-    assert(MISTD::distance(GraphT::child_begin(NewBB),
+    assert(std::distance(GraphT::child_begin(NewBB),
                          GraphT::child_end(NewBB)) == 1 &&
            "NewBB should have a single successor!");
     typename GraphT::NodeType* NewBBSucc = *GraphT::child_begin(NewBB);
 
-    MISTD::vector<typename GraphT::NodeType*> PredBlocks;
+    std::vector<typename GraphT::NodeType*> PredBlocks;
     typedef GraphTraits<Inverse<N> > InvTraits;
     for (typename InvTraits::ChildIteratorType PI =
          InvTraits::child_begin(NewBB),
@@ -526,8 +526,8 @@ public:
       // Remove node from immediate dominator's children list.
     DomTreeNodeBase<NodeT> *IDom = Node->getIDom();
     if (IDom) {
-      typename MISTD::vector<DomTreeNodeBase<NodeT>*>::iterator I =
-        MISTD::find(IDom->Children.begin(), IDom->Children.end(), Node);
+      typename std::vector<DomTreeNodeBase<NodeT>*>::iterator I =
+        std::find(IDom->Children.begin(), IDom->Children.end(), Node);
       assert(I != IDom->Children.end() &&
              "Not in immediate dominator children set!");
       // I am no longer your child...
@@ -593,7 +593,7 @@ protected:
   void updateDFSNumbers() {
     unsigned DFSNum = 0;
 
-    SmallVector<MISTD::pair<DomTreeNodeBase<NodeT>*,
+    SmallVector<std::pair<DomTreeNodeBase<NodeT>*,
                 typename DomTreeNodeBase<NodeT>::iterator>, 32> WorkStack;
 
     DomTreeNodeBase<NodeT> *ThisRoot = getRootNode();
@@ -605,7 +605,7 @@ protected:
     // nodes, do not iterate over all exits, but start from the virtual root
     // node. Otherwise bbs, that are not post dominated by any exit but by the
     // virtual root node, will never be assigned a DFS number.
-    WorkStack.push_back(MISTD::make_pair(ThisRoot, ThisRoot->begin()));
+    WorkStack.push_back(std::make_pair(ThisRoot, ThisRoot->begin()));
     ThisRoot->DFSNumIn = DFSNum++;
 
     while (!WorkStack.empty()) {
@@ -623,7 +623,7 @@ protected:
         DomTreeNodeBase<NodeT> *Child = *ChildIt;
         ++WorkStack.back().second;
 
-        WorkStack.push_back(MISTD::make_pair(Child, Child->begin()));
+        WorkStack.push_back(std::make_pair(Child, Child->begin()));
         Child->DFSNumIn = DFSNum++;
       }
     }
@@ -757,7 +757,7 @@ public:
   /// multiple blocks if we are computing post dominators.  For forward
   /// dominators, this will always be a single block (the entry node).
   ///
-  inline const MISTD::vector<BasicBlock*> &getRoots() const {
+  inline const std::vector<BasicBlock*> &getRoots() const {
     return DT->getRoots();
   }
 

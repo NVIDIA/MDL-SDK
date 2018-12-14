@@ -69,7 +69,7 @@ public:
 
     void* get_symbol( const char* symbol_name);
 
-    MISTD::string get_filename( const char* symbol_name);
+    std::string get_filename( const char* symbol_name);
 
 private:
     /// The OS-specific handle the the dynamic library.

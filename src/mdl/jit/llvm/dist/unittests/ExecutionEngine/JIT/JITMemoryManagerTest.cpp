@@ -21,7 +21,7 @@ using namespace llvm;
 namespace {
 
 Function *makeFakeFunction() {
-  MISTD::vector<Type*> params;
+  std::vector<Type*> params;
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(getGlobalContext()), params, false);
   return Function::Create(FTy, GlobalValue::ExternalLinkage);
@@ -34,7 +34,7 @@ TEST(JITMemoryManagerTest, NoAllocations) {
   OwningPtr<JITMemoryManager> MemMgr(
       JITMemoryManager::CreateDefaultMemManager());
   uintptr_t size;
-  MISTD::string Error;
+  std::string Error;
 
   // Allocate the functions.
   OwningPtr<Function> F1(makeFakeFunction());
@@ -73,7 +73,7 @@ TEST(JITMemoryManagerTest, TestCodeAllocation) {
   OwningPtr<JITMemoryManager> MemMgr(
       JITMemoryManager::CreateDefaultMemManager());
   uintptr_t size;
-  MISTD::string Error;
+  std::string Error;
 
   // Big functions are a little less than the largest block size.
   const uintptr_t smallFuncSize = 1024;

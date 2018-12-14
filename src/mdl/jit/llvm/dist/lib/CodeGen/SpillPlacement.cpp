@@ -83,7 +83,7 @@ struct SpillPlacement::Node {
   /// variable should go in a register through this bundle.
   int Value;
 
-  typedef SmallVector<MISTD::pair<BlockFrequency, unsigned>, 4> LinkVector;
+  typedef SmallVector<std::pair<BlockFrequency, unsigned>, 4> LinkVector;
 
   /// Links - (Weight, BundleNo) for all transparent blocks connecting to other
   /// bundles. The weights are all positive block frequencies.
@@ -126,7 +126,7 @@ struct SpillPlacement::Node {
         return;
       }
     // This must be the first link to b.
-    Links.push_back(MISTD::make_pair(w, b));
+    Links.push_back(std::make_pair(w, b));
   }
 
   /// addBias - Bias this node.

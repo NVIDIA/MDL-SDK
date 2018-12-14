@@ -178,8 +178,8 @@ public:
   typedef PtrTy                     value_type;
   typedef PtrTy                     reference;
   typedef PtrTy                     pointer;
-  typedef MISTD::ptrdiff_t            difference_type;
-  typedef MISTD::forward_iterator_tag iterator_category;
+  typedef std::ptrdiff_t            difference_type;
+  typedef std::forward_iterator_tag iterator_category;
   
   explicit SmallPtrSetIterator(const void *const *BP, const void *const *E)
     : SmallPtrSetIteratorImpl(BP, E) {}
@@ -296,8 +296,8 @@ public:
 
 }
 
-namespace MISTD {
-  /// Implement MISTD::swap in terms of SmallPtrSet swap.
+namespace std {
+  /// Implement std::swap in terms of SmallPtrSet swap.
   template<class T, unsigned N>
   inline void swap(llvm::SmallPtrSet<T, N> &LHS, llvm::SmallPtrSet<T, N> &RHS) {
     LHS.swap(RHS);

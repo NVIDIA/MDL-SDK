@@ -102,7 +102,7 @@ void LiveIntervalUnion::verify(LiveVirtRegBitSet& VisitedVRegs) {
 // quite small.
 bool LiveIntervalUnion::Query::isSeenInterference(LiveInterval *VirtReg) const {
   SmallVectorImpl<LiveInterval*>::const_iterator I =
-    MISTD::find(InterferingVRegs.begin(), InterferingVRegs.end(), VirtReg);
+    std::find(InterferingVRegs.begin(), InterferingVRegs.end(), VirtReg);
   return I != InterferingVRegs.end();
 }
 

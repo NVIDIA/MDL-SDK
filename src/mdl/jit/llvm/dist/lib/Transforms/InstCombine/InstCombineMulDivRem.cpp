@@ -407,7 +407,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
   Value *Op0 = I.getOperand(0), *Op1 = I.getOperand(1);
 
   if (isa<Constant>(Op0))
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   if (Value *V = SimplifyFMulInst(Op0, Op1, I.getFastMathFlags(), TD))
     return ReplaceInstUsesWith(I, V);
@@ -448,8 +448,8 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
         ConstantFP *C1 = dyn_cast<ConstantFP>(Opnd1);
         bool Swap = false;
         if (C0) {
-          MISTD::swap(C0, C1);
-          MISTD::swap(Opnd0, Opnd1);
+          std::swap(C0, C1);
+          std::swap(Opnd0, Opnd1);
           Swap = true;
         }
 
@@ -461,7 +461,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
                       0;
           if (M0 && M1) {
             if (Swap && FAddSub->getOpcode() == Instruction::FSub)
-              MISTD::swap(M0, M1);
+              std::swap(M0, M1);
 
             Instruction *RI = (FAddSub->getOpcode() == Instruction::FAdd)
                                   ? BinaryOperator::CreateFAdd(M0, M1)
@@ -562,7 +562,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
       Value *LHS = Op0, *RHS = Op1;
       Value *B, *C;
       if (!match(RHS, m_UIToFP(m_Value(C))))
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
 
       if (match(RHS, m_UIToFP(m_Value(C))) && C->getType()->isIntegerTy(1)) {
         B = LHS;
@@ -576,7 +576,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
       Value *LHS = Op0, *RHS = Op1;
       Value *A, *C;
       if (!match(RHS, m_FSub(m_FPOne(), m_UIToFP(m_Value(C)))))
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
 
       if (match(RHS, m_FSub(m_FPOne(), m_UIToFP(m_Value(C)))) &&
           C->getType()->isIntegerTy(1)) {
@@ -587,7 +587,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
     }
 
     if (!isa<Constant>(Op1))
-      MISTD::swap(Opnd0, Opnd1);
+      std::swap(Opnd0, Opnd1);
     else
       break;
   }

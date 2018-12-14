@@ -41,13 +41,13 @@ class Linker {
     /// If \p ErrorMsg is not null, information about any error is written
     /// to it.
     /// Returns true on error.
-    bool linkInModule(Module *Src, unsigned Mode, MISTD::string *ErrorMsg);
-    bool linkInModule(Module *Src, MISTD::string *ErrorMsg) {
+    bool linkInModule(Module *Src, unsigned Mode, std::string *ErrorMsg);
+    bool linkInModule(Module *Src, std::string *ErrorMsg) {
       return linkInModule(Src, Linker::DestroySource, ErrorMsg);
     }
 
     static bool LinkModules(Module *Dest, Module *Src, unsigned Mode,
-                            MISTD::string *ErrorMsg);
+                            std::string *ErrorMsg);
 
   private:
     Module *Composite;

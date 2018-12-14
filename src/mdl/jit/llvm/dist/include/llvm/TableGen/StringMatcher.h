@@ -31,22 +31,22 @@ namespace llvm {
 ///
 class StringMatcher {
 public:
-  typedef MISTD::pair<MISTD::string, MISTD::string> StringPair;
+  typedef std::pair<std::string, std::string> StringPair;
 private:
   StringRef StrVariableName;
-  const MISTD::vector<StringPair> &Matches;
+  const std::vector<StringPair> &Matches;
   raw_ostream &OS;
   
 public:
   StringMatcher(StringRef strVariableName, 
-                const MISTD::vector<StringPair> &matches, raw_ostream &os)
+                const std::vector<StringPair> &matches, raw_ostream &os)
     : StrVariableName(strVariableName), Matches(matches), OS(os) {}
   
   void Emit(unsigned Indent = 0) const;
   
   
 private:
-  bool EmitStringMatcherForChar(const MISTD::vector<const StringPair*> &Matches,
+  bool EmitStringMatcherForChar(const std::vector<const StringPair*> &Matches,
                                 unsigned CharNo, unsigned IndentCount) const;
 };
 

@@ -58,6 +58,9 @@ instructions on how to build \MDLCoreProductName and the examples.
 - \subpage mi_mdl_core_example_df_cuda <br>
   Uses compiled material distribution functions in a CUDA based renderer.
 
+- \subpage mi_mdl_core_example_derivatives <br>
+  Enable automatic derivatives for texture filtering.
+
 \subpage mi_mdl_core_example_topics
 
 */

@@ -41,8 +41,8 @@ struct FunctionFreedEvent {
 };
 
 struct RecordingJITEventListener : public JITEventListener {
-  MISTD::vector<FunctionEmittedEvent> EmittedEvents;
-  MISTD::vector<FunctionFreedEvent> FreedEvents;
+  std::vector<FunctionEmittedEvent> EmittedEvents;
+  std::vector<FunctionFreedEvent> FreedEvents;
 
   unsigned NextIndex;
 

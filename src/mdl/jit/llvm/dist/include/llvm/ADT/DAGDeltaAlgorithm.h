@@ -39,11 +39,11 @@ class DAGDeltaAlgorithm {
   virtual void anchor();
 public:
   typedef unsigned change_ty;
-  typedef MISTD::pair<change_ty, change_ty> edge_ty;
+  typedef std::pair<change_ty, change_ty> edge_ty;
 
   // FIXME: Use a decent data structure.
-  typedef MISTD::set<change_ty> changeset_ty;
-  typedef MISTD::vector<changeset_ty> changesetlist_ty;
+  typedef std::set<change_ty> changeset_ty;
+  typedef std::vector<changeset_ty> changesetlist_ty;
 
 public:
   virtual ~DAGDeltaAlgorithm() {}
@@ -61,7 +61,7 @@ public:
   /// \f$ x \in S \f$ implies \f$ y \in S \f$. It is an error to have cyclic
   /// dependencies.
   changeset_ty Run(const changeset_ty &Changes,
-                   const MISTD::vector<edge_ty> &Dependencies);
+                   const std::vector<edge_ty> &Dependencies);
 
   /// UpdatedSearchState - Callback used when the search state changes.
   virtual void UpdatedSearchState(const changeset_ty &Changes,

@@ -149,7 +149,7 @@ public:
   uint64_t DeprecatedFeatureMask;// Feature bits that this is deprecated on, if any
   // A complex method to determine is a certain is deprecated or not, and return
   // the reason for deprecation.
-  bool (*ComplexDeprecationInfo)(MCInst &, MCSubtargetInfo &, MISTD::string &);
+  bool (*ComplexDeprecationInfo)(MCInst &, MCSubtargetInfo &, std::string &);
 
   /// \brief Returns the value of the specific constraint if
   /// it is set. Returns -1 if it is not set.
@@ -166,7 +166,7 @@ public:
   /// \brief Returns true if a certain instruction is deprecated and if so
   /// returns the reason in \p Info.
   bool getDeprecatedInfo(MCInst &MI, MCSubtargetInfo &STI,
-                         MISTD::string &Info) const {
+                         std::string &Info) const {
     if (ComplexDeprecationInfo)
       return ComplexDeprecationInfo(MI, STI, Info);
     if ((DeprecatedFeatureMask & STI.getFeatureBits()) != 0) {

@@ -362,10 +362,10 @@ namespace {
   class ValueMaterializerTy : public ValueMaterializer {
     TypeMapTy &TypeMap;
     Module *DstM;
-    MISTD::vector<Function*> &LazilyLinkFunctions;
+    std::vector<Function*> &LazilyLinkFunctions;
   public:
     ValueMaterializerTy(TypeMapTy &TypeMap, Module *DstM,
-                        MISTD::vector<Function*> &LazilyLinkFunctions) :
+                        std::vector<Function*> &LazilyLinkFunctions) :
       ValueMaterializer(), TypeMap(TypeMap), DstM(DstM),
       LazilyLinkFunctions(LazilyLinkFunctions) {
     }
@@ -393,7 +393,7 @@ namespace {
       Constant *SrcInit;      // Old initializer from src module.
     };
     
-    MISTD::vector<AppendingVarInfo> AppendingVars;
+    std::vector<AppendingVarInfo> AppendingVars;
     
     unsigned Mode; // Mode to treat source module.
     
@@ -401,10 +401,10 @@ namespace {
     SmallPtrSet<const Value*, 16> DoNotLinkFromSource;
     
     // Vector of functions to lazily link in.
-    MISTD::vector<Function*> LazilyLinkFunctions;
+    std::vector<Function*> LazilyLinkFunctions;
     
   public:
-    MISTD::string ErrorMsg;
+    std::string ErrorMsg;
     
     ModuleLinker(Module *dstM, TypeSet &Set, Module *srcM, unsigned mode)
       : DstM(dstM), SrcM(srcM), TypeMap(Set),
@@ -490,7 +490,7 @@ static void forceRenaming(GlobalValue *GV, StringRef Name) {
 /// a GlobalValue) from the SrcGV to the DestGV.
 static void copyGVAttributes(GlobalValue *DestGV, const GlobalValue *SrcGV) {
   // Use the maximum alignment, rather than just copying the alignment of SrcGV.
-  unsigned Alignment = MISTD::max(DestGV->getAlignment(), SrcGV->getAlignment());
+  unsigned Alignment = std::max(DestGV->getAlignment(), SrcGV->getAlignment());
   DestGV->copyAttributesFrom(SrcGV);
   DestGV->setAlignment(Alignment);
   
@@ -1297,7 +1297,7 @@ bool ModuleLinker::run() {
   do {
     LinkedInAnyFunctions = false;
     
-    for(MISTD::vector<Function*>::iterator I = LazilyLinkFunctions.begin(),
+    for(std::vector<Function*>::iterator I = LazilyLinkFunctions.begin(),
         E = LazilyLinkFunctions.end(); I != E; ++I) {      
       Function *SF = *I;
       if (!SF)
@@ -1357,7 +1357,7 @@ void Linker::deleteModule() {
   Composite = NULL;
 }
 
-bool Linker::linkInModule(Module *Src, unsigned Mode, MISTD::string *ErrorMsg) {
+bool Linker::linkInModule(Module *Src, unsigned Mode, std::string *ErrorMsg) {
   ModuleLinker TheLinker(Composite, IdentifiedStructTypes, Src, Mode);
   if (TheLinker.run()) {
     if (ErrorMsg)
@@ -1377,7 +1377,7 @@ bool Linker::linkInModule(Module *Src, unsigned Mode, MISTD::string *ErrorMsg) {
 /// the problem.  Upon failure, the Dest module could be in a modified state,
 /// and shouldn't be relied on to be consistent.
 bool Linker::LinkModules(Module *Dest, Module *Src, unsigned Mode, 
-                         MISTD::string *ErrorMsg) {
+                         std::string *ErrorMsg) {
   Linker L(Dest);
   return L.linkInModule(Src, Mode, ErrorMsg);
 }
@@ -1388,7 +1388,7 @@ bool Linker::LinkModules(Module *Dest, Module *Src, unsigned Mode,
 
 LLVMBool LLVMLinkModules(LLVMModuleRef Dest, LLVMModuleRef Src,
                          LLVMLinkerMode Mode, char **OutMessages) {
-  MISTD::string Messages;
+  std::string Messages;
   LLVMBool Result = Linker::LinkModules(unwrap(Dest), unwrap(Src),
                                         Mode, OutMessages? &Messages : 0);
   if (OutMessages)

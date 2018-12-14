@@ -27,32 +27,32 @@
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
-//    MISTD::string wrapper for DenseMap purposes
+//    std::string wrapper for DenseMap purposes
 //===----------------------------------------------------------------------===//
 
 namespace llvm {
 
-/// TableGenStringKey - This is a wrapper for MISTD::string suitable for
+/// TableGenStringKey - This is a wrapper for std::string suitable for
 /// using as a key to a DenseMap.  Because there isn't a particularly
 /// good way to indicate tombstone or empty keys for strings, we want
-/// to wrap MISTD::string to indicate that this is a "special" string
+/// to wrap std::string to indicate that this is a "special" string
 /// not expected to take on certain values (those of the tombstone and
 /// empty keys).  This makes things a little safer as it clarifies
 /// that DenseMap is really not appropriate for general strings.
 
 class TableGenStringKey {
 public:
-  TableGenStringKey(const MISTD::string &str) : data(str) {}
+  TableGenStringKey(const std::string &str) : data(str) {}
   TableGenStringKey(const char *str) : data(str) {}
 
-  const MISTD::string &str() const { return data; }
+  const std::string &str() const { return data; }
 
   friend hash_code hash_value(const TableGenStringKey &Value) {
     using llvm::hash_value;
     return hash_value(Value.str());
   }
 private:
-  MISTD::string data;
+  std::string data;
 };
 
 /// Specialize DenseMapInfo for TableGenStringKey.
@@ -128,7 +128,7 @@ bool BitRecTy::baseClassOf(const RecTy *RHS) const{
 }
 
 BitsRecTy *BitsRecTy::get(unsigned Sz) {
-  static MISTD::vector<BitsRecTy*> Shared;
+  static std::vector<BitsRecTy*> Shared;
   if (Sz >= Shared.size())
     Shared.resize(Sz + 1);
   BitsRecTy *&Ty = Shared[Sz];
@@ -137,7 +137,7 @@ BitsRecTy *BitsRecTy::get(unsigned Sz) {
   return Ty;
 }
 
-MISTD::string BitsRecTy::getAsString() const {
+std::string BitsRecTy::getAsString() const {
   return "bits<" + utostr(Size) + ">";
 }
 
@@ -267,12 +267,12 @@ Init *StringRecTy::convertValue(TypedInit *TI) {
   return 0;
 }
 
-MISTD::string ListRecTy::getAsString() const {
+std::string ListRecTy::getAsString() const {
   return "list<" + Ty->getAsString() + ">";
 }
 
 Init *ListRecTy::convertValue(ListInit *LI) {
-  MISTD::vector<Init*> Elements;
+  std::vector<Init*> Elements;
 
   // Verify that all of the elements of the list are subclasses of the
   // appropriate class!
@@ -335,7 +335,7 @@ RecordRecTy *RecordRecTy::get(Record *R) {
   return dyn_cast<RecordRecTy>(R->getDefInit()->getType());
 }
 
-MISTD::string RecordRecTy::getAsString() const {
+std::string RecordRecTy::getAsString() const {
   return Rec->getName();
 }
 
@@ -363,7 +363,7 @@ bool RecordRecTy::baseClassOf(const RecTy *RHS) const{
   if (Rec == RTy->getRecord() || RTy->getRecord()->isSubClassOf(Rec))
     return true;
 
-  const MISTD::vector<Record*> &SC = Rec->getSuperClasses();
+  const std::vector<Record*> &SC = Rec->getSuperClasses();
   for (unsigned i = 0, e = SC.size(); i != e; ++i)
     if (RTy->getRecord()->isSubClassOf(SC[i]))
       return true;
@@ -383,9 +383,9 @@ RecTy *llvm::resolveTypes(RecTy *T1, RecTy *T2) {
   // If one is a Record type, check superclasses
   if (RecordRecTy *RecTy1 = dyn_cast<RecordRecTy>(T1)) {
     // See if T2 inherits from a type T1 also inherits from
-    const MISTD::vector<Record *> &T1SuperClasses =
+    const std::vector<Record *> &T1SuperClasses =
       RecTy1->getRecord()->getSuperClasses();
-    for(MISTD::vector<Record *>::const_iterator i = T1SuperClasses.begin(),
+    for(std::vector<Record *>::const_iterator i = T1SuperClasses.begin(),
           iend = T1SuperClasses.end();
         i != iend;
         ++i) {
@@ -401,9 +401,9 @@ RecTy *llvm::resolveTypes(RecTy *T1, RecTy *T2) {
   }
   if (RecordRecTy *RecTy2 = dyn_cast<RecordRecTy>(T2)) {
     // See if T1 inherits from a type T2 also inherits from
-    const MISTD::vector<Record *> &T2SuperClasses =
+    const std::vector<Record *> &T2SuperClasses =
       RecTy2->getRecord()->getSuperClasses();
-    for (MISTD::vector<Record *>::const_iterator i = T2SuperClasses.begin(),
+    for (std::vector<Record *>::const_iterator i = T2SuperClasses.begin(),
           iend = T2SuperClasses.end();
         i != iend;
         ++i) {
@@ -477,7 +477,7 @@ void BitsInit::Profile(FoldingSetNodeID &ID) const {
 }
 
 Init *
-BitsInit::convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const {
+BitsInit::convertInitializerBitRange(const std::vector<unsigned> &Bits) const {
   SmallVector<Init *, 16> NewBits(Bits.size());
 
   for (unsigned i = 0, e = Bits.size(); i != e; ++i) {
@@ -488,8 +488,8 @@ BitsInit::convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const 
   return BitsInit::get(NewBits);
 }
 
-MISTD::string BitsInit::getAsString() const {
-  MISTD::string Result = "{ ";
+std::string BitsInit::getAsString() const {
+  std::string Result = "{ ";
   for (unsigned i = 0, e = getNumBits(); i != e; ++i) {
     if (i) Result += ", ";
     if (Init *Bit = getBit(e-i-1))
@@ -580,12 +580,12 @@ IntInit *IntInit::get(int64_t V) {
   return I;
 }
 
-MISTD::string IntInit::getAsString() const {
+std::string IntInit::getAsString() const {
   return itostr(Value);
 }
 
 Init *
-IntInit::convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const {
+IntInit::convertInitializerBitRange(const std::vector<unsigned> &Bits) const {
   SmallVector<Init *, 16> NewBits(Bits.size());
 
   for (unsigned i = 0, e = Bits.size(); i != e; ++i) {
@@ -647,8 +647,8 @@ void ListInit::Profile(FoldingSetNodeID &ID) const {
 }
 
 Init *
-ListInit::convertInitListSlice(const MISTD::vector<unsigned> &Elements) const {
-  MISTD::vector<Init*> Vals;
+ListInit::convertInitListSlice(const std::vector<unsigned> &Elements) const {
+  std::vector<Init*> Vals;
   for (unsigned i = 0, e = Elements.size(); i != e; ++i) {
     if (Elements[i] >= getSize())
       return 0;
@@ -666,7 +666,7 @@ Record *ListInit::getElementAsRecord(unsigned i) const {
 }
 
 Init *ListInit::resolveReferences(Record &R, const RecordVal *RV) const {
-  MISTD::vector<Init*> Resolved;
+  std::vector<Init*> Resolved;
   Resolved.reserve(getSize());
   bool Changed = false;
 
@@ -700,8 +700,8 @@ Init *ListInit::resolveListElementReference(Record &R, const RecordVal *IRV,
   return 0;
 }
 
-MISTD::string ListInit::getAsString() const {
-  MISTD::string Result = "[";
+std::string ListInit::getAsString() const {
+  std::string Result = "[";
   for (unsigned i = 0, e = Values.size(); i != e; ++i) {
     if (i) Result += ", ";
     Result += Values[i]->getAsString();
@@ -738,10 +738,10 @@ Init *OpInit::getBit(unsigned Bit) const {
 }
 
 UnOpInit *UnOpInit::get(UnaryOp opc, Init *lhs, RecTy *Type) {
-  typedef MISTD::pair<MISTD::pair<unsigned, Init *>, RecTy *> Key;
+  typedef std::pair<std::pair<unsigned, Init *>, RecTy *> Key;
   static Pool<DenseMap<Key, UnOpInit *> > ThePool;
 
-  Key TheKey(MISTD::make_pair(MISTD::make_pair(opc, lhs), Type));
+  Key TheKey(std::make_pair(std::make_pair(opc, lhs), Type));
 
   UnOpInit *&I = ThePool[TheKey];
   if (!I) I = new UnOpInit(opc, lhs, Type);
@@ -762,7 +762,7 @@ Init *UnOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
         return StringInit::get(LHSi->getAsString());
     } else {
       if (StringInit *LHSs = dyn_cast<StringInit>(LHS)) {
-        MISTD::string Name = LHSs->getValue();
+        std::string Name = LHSs->getValue();
 
         // From TGParser::ParseIDValue
         if (CurRec) {
@@ -866,8 +866,8 @@ Init *UnOpInit::resolveReferences(Record &R, const RecordVal *RV) const {
   return Fold(&R, 0);
 }
 
-MISTD::string UnOpInit::getAsString() const {
-  MISTD::string Result;
+std::string UnOpInit::getAsString() const {
+  std::string Result;
   switch (Opc) {
   case CAST: Result = "!cast<" + getType()->getAsString() + ">"; break;
   case HEAD: Result = "!head"; break;
@@ -879,14 +879,14 @@ MISTD::string UnOpInit::getAsString() const {
 
 BinOpInit *BinOpInit::get(BinaryOp opc, Init *lhs,
                           Init *rhs, RecTy *Type) {
-  typedef MISTD::pair<
-    MISTD::pair<MISTD::pair<unsigned, Init *>, Init *>,
+  typedef std::pair<
+    std::pair<std::pair<unsigned, Init *>, Init *>,
     RecTy *
     > Key;
 
   static Pool<DenseMap<Key, BinOpInit *> > ThePool;
 
-  Key TheKey(MISTD::make_pair(MISTD::make_pair(MISTD::make_pair(opc, lhs), rhs),
+  Key TheKey(std::make_pair(std::make_pair(std::make_pair(opc, lhs), rhs),
                             Type));
 
   BinOpInit *&I = ThePool[TheKey];
@@ -904,8 +904,8 @@ Init *BinOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
       DefInit *ROp = dyn_cast<DefInit>(RHSs->getOperator());
       if (LOp == 0 || ROp == 0 || LOp->getDef() != ROp->getDef())
         PrintFatalError("Concated Dag operators do not match!");
-      MISTD::vector<Init*> Args;
-      MISTD::vector<MISTD::string> ArgNames;
+      std::vector<Init*> Args;
+      std::vector<std::string> ArgNames;
       for (unsigned i = 0, e = LHSs->getNumArgs(); i != e; ++i) {
         Args.push_back(LHSs->getArg(i));
         ArgNames.push_back(LHSs->getArgName(i));
@@ -978,8 +978,8 @@ Init *BinOpInit::resolveReferences(Record &R, const RecordVal *RV) const {
   return Fold(&R, 0);
 }
 
-MISTD::string BinOpInit::getAsString() const {
-  MISTD::string Result;
+std::string BinOpInit::getAsString() const {
+  std::string Result;
   switch (Opc) {
   case CONCAT: Result = "!con"; break;
   case ADD: Result = "!add"; break;
@@ -995,9 +995,9 @@ MISTD::string BinOpInit::getAsString() const {
 TernOpInit *TernOpInit::get(TernaryOp opc, Init *lhs,
                                   Init *mhs, Init *rhs,
                                   RecTy *Type) {
-  typedef MISTD::pair<
-    MISTD::pair<
-      MISTD::pair<MISTD::pair<unsigned, RecTy *>, Init *>,
+  typedef std::pair<
+    std::pair<
+      std::pair<std::pair<unsigned, RecTy *>, Init *>,
       Init *
       >,
     Init *
@@ -1006,7 +1006,7 @@ TernOpInit *TernOpInit::get(TernaryOp opc, Init *lhs,
   typedef DenseMap<Key, TernOpInit *> Pool;
   static Pool ThePool;
 
-  Key TheKey(MISTD::make_pair(MISTD::make_pair(MISTD::make_pair(MISTD::make_pair(opc,
+  Key TheKey(std::make_pair(std::make_pair(std::make_pair(std::make_pair(opc,
                                                                          Type),
                                                           lhs),
                                            mhs),
@@ -1023,7 +1023,7 @@ static Init *ForeachHelper(Init *LHS, Init *MHS, Init *RHS, RecTy *Type,
 static Init *EvaluateOperation(OpInit *RHSo, Init *LHS, Init *Arg,
                                RecTy *Type, Record *CurRec,
                                MultiClass *CurMultiClass) {
-  MISTD::vector<Init *> NewOperands;
+  std::vector<Init *> NewOperands;
 
   TypedInit *TArg = dyn_cast<TypedInit>(Arg);
 
@@ -1090,10 +1090,10 @@ static Init *ForeachHelper(Init *LHS, Init *MHS, Init *RHS, RecTy *Type,
         Val = Result;
       }
 
-      MISTD::vector<MISTD::pair<Init *, MISTD::string> > args;
+      std::vector<std::pair<Init *, std::string> > args;
       for (unsigned int i = 0; i < MHSd->getNumArgs(); ++i) {
         Init *Arg;
-        MISTD::string ArgName;
+        std::string ArgName;
         Arg = MHSd->getArg(i);
         ArgName = MHSd->getArgName(i);
 
@@ -1105,16 +1105,16 @@ static Init *ForeachHelper(Init *LHS, Init *MHS, Init *RHS, RecTy *Type,
         }
 
         // TODO: Process arg names
-        args.push_back(MISTD::make_pair(Arg, ArgName));
+        args.push_back(std::make_pair(Arg, ArgName));
       }
 
       return DagInit::get(Val, "", args);
     }
     if (MHSl) {
-      MISTD::vector<Init *> NewOperands;
-      MISTD::vector<Init *> NewList(MHSl->begin(), MHSl->end());
+      std::vector<Init *> NewOperands;
+      std::vector<Init *> NewList(MHSl->begin(), MHSl->end());
 
-      for (MISTD::vector<Init *>::iterator li = NewList.begin(),
+      for (std::vector<Init *>::iterator li = NewList.begin(),
              liend = NewList.end();
            li != liend;
            ++li) {
@@ -1167,24 +1167,24 @@ Init *TernOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
         return DefInit::get(Val);
       }
       if (RHSv) {
-        MISTD::string Val = RHSv->getName();
+        std::string Val = RHSv->getName();
         if (LHSv->getAsString() == RHSv->getAsString()) {
           Val = MHSv->getName();
         }
         return VarInit::get(Val, getType());
       }
       if (RHSs) {
-        MISTD::string Val = RHSs->getValue();
+        std::string Val = RHSs->getValue();
 
-        MISTD::string::size_type found;
-        MISTD::string::size_type idx = 0;
+        std::string::size_type found;
+        std::string::size_type idx = 0;
         do {
           found = Val.find(LHSs->getValue(), idx);
-          if (found != MISTD::string::npos) {
+          if (found != std::string::npos) {
             Val.replace(found, LHSs->getValue().size(), MHSs->getValue());
           }
           idx = found +  MHSs->getValue().size();
-        } while (found != MISTD::string::npos);
+        } while (found != std::string::npos);
 
         return StringInit::get(Val);
       }
@@ -1250,8 +1250,8 @@ Init *TernOpInit::resolveReferences(Record &R,
   return Fold(&R, 0);
 }
 
-MISTD::string TernOpInit::getAsString() const {
-  MISTD::string Result;
+std::string TernOpInit::getAsString() const {
+  std::string Result;
   switch (Opc) {
   case SUBST: Result = "!subst"; break;
   case FOREACH: Result = "!foreach"; break;
@@ -1261,7 +1261,7 @@ MISTD::string TernOpInit::getAsString() const {
     + RHS->getAsString() + ")";
 }
 
-RecTy *TypedInit::getFieldType(const MISTD::string &FieldName) const {
+RecTy *TypedInit::getFieldType(const std::string &FieldName) const {
   if (RecordRecTy *RecordType = dyn_cast<RecordRecTy>(getType()))
     if (RecordVal *Field = RecordType->getRecord()->getValue(FieldName))
       return Field->getType();
@@ -1269,7 +1269,7 @@ RecTy *TypedInit::getFieldType(const MISTD::string &FieldName) const {
 }
 
 Init *
-TypedInit::convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const {
+TypedInit::convertInitializerBitRange(const std::vector<unsigned> &Bits) const {
   BitsRecTy *T = dyn_cast<BitsRecTy>(getType());
   if (T == 0) return 0;  // Cannot subscript a non-bits variable.
   unsigned NumBits = T->getNumBits();
@@ -1285,14 +1285,14 @@ TypedInit::convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const
 }
 
 Init *
-TypedInit::convertInitListSlice(const MISTD::vector<unsigned> &Elements) const {
+TypedInit::convertInitListSlice(const std::vector<unsigned> &Elements) const {
   ListRecTy *T = dyn_cast<ListRecTy>(getType());
   if (T == 0) return 0;  // Cannot subscript a non-list variable.
 
   if (Elements.size() == 1)
     return VarListElementInit::get(const_cast<TypedInit *>(this), Elements[0]);
 
-  MISTD::vector<Init*> ListInits;
+  std::vector<Init*> ListInits;
   ListInits.reserve(Elements.size());
   for (unsigned i = 0, e = Elements.size(); i != e; ++i)
     ListInits.push_back(VarListElementInit::get(const_cast<TypedInit *>(this),
@@ -1301,23 +1301,23 @@ TypedInit::convertInitListSlice(const MISTD::vector<unsigned> &Elements) const {
 }
 
 
-VarInit *VarInit::get(const MISTD::string &VN, RecTy *T) {
+VarInit *VarInit::get(const std::string &VN, RecTy *T) {
   Init *Value = StringInit::get(VN);
   return VarInit::get(Value, T);
 }
 
 VarInit *VarInit::get(Init *VN, RecTy *T) {
-  typedef MISTD::pair<RecTy *, Init *> Key;
+  typedef std::pair<RecTy *, Init *> Key;
   static Pool<DenseMap<Key, VarInit *> > ThePool;
 
-  Key TheKey(MISTD::make_pair(T, VN));
+  Key TheKey(std::make_pair(T, VN));
 
   VarInit *&I = ThePool[TheKey];
   if (!I) I = new VarInit(VN, T);
   return I;
 }
 
-const MISTD::string &VarInit::getName() const {
+const std::string &VarInit::getName() const {
   StringInit *NameString = dyn_cast<StringInit>(getNameInit());
   assert(NameString && "VarInit name is not a string!");
   return NameString->getValue();
@@ -1356,7 +1356,7 @@ Init *VarInit::resolveListElementReference(Record &R,
 }
 
 
-RecTy *VarInit::getFieldType(const MISTD::string &FieldName) const {
+RecTy *VarInit::getFieldType(const std::string &FieldName) const {
   if (RecordRecTy *RTy = dyn_cast<RecordRecTy>(getType()))
     if (const RecordVal *RV = RTy->getRecord()->getValue(FieldName))
       return RV->getType();
@@ -1364,7 +1364,7 @@ RecTy *VarInit::getFieldType(const MISTD::string &FieldName) const {
 }
 
 Init *VarInit::getFieldInit(Record &R, const RecordVal *RV,
-                            const MISTD::string &FieldName) const {
+                            const std::string &FieldName) const {
   if (isa<RecordRecTy>(getType()))
     if (const RecordVal *Val = R.getValue(VarName)) {
       if (RV != Val && (RV || isa<UnsetInit>(Val->getValue())))
@@ -1392,19 +1392,19 @@ Init *VarInit::resolveReferences(Record &R, const RecordVal *RV) const {
 }
 
 VarBitInit *VarBitInit::get(TypedInit *T, unsigned B) {
-  typedef MISTD::pair<TypedInit *, unsigned> Key;
+  typedef std::pair<TypedInit *, unsigned> Key;
   typedef DenseMap<Key, VarBitInit *> Pool;
 
   static Pool ThePool;
 
-  Key TheKey(MISTD::make_pair(T, B));
+  Key TheKey(std::make_pair(T, B));
 
   VarBitInit *&I = ThePool[TheKey];
   if (!I) I = new VarBitInit(T, B);
   return I;
 }
 
-MISTD::string VarBitInit::getAsString() const {
+std::string VarBitInit::getAsString() const {
    return TI->getAsString() + "{" + utostr(Bit) + "}";
 }
 
@@ -1418,19 +1418,19 @@ Init *VarBitInit::resolveReferences(Record &R, const RecordVal *RV) const {
 
 VarListElementInit *VarListElementInit::get(TypedInit *T,
                                             unsigned E) {
-  typedef MISTD::pair<TypedInit *, unsigned> Key;
+  typedef std::pair<TypedInit *, unsigned> Key;
   typedef DenseMap<Key, VarListElementInit *> Pool;
 
   static Pool ThePool;
 
-  Key TheKey(MISTD::make_pair(T, E));
+  Key TheKey(std::make_pair(T, E));
 
   VarListElementInit *&I = ThePool[TheKey];
   if (!I) I = new VarListElementInit(T, E);
   return I;
 }
 
-MISTD::string VarListElementInit::getAsString() const {
+std::string VarListElementInit::getAsString() const {
   return TI->getAsString() + "[" + utostr(Element) + "]";
 }
 
@@ -1469,28 +1469,28 @@ DefInit *DefInit::get(Record *R) {
   return R->getDefInit();
 }
 
-RecTy *DefInit::getFieldType(const MISTD::string &FieldName) const {
+RecTy *DefInit::getFieldType(const std::string &FieldName) const {
   if (const RecordVal *RV = Def->getValue(FieldName))
     return RV->getType();
   return 0;
 }
 
 Init *DefInit::getFieldInit(Record &R, const RecordVal *RV,
-                            const MISTD::string &FieldName) const {
+                            const std::string &FieldName) const {
   return Def->getValue(FieldName)->getValue();
 }
 
 
-MISTD::string DefInit::getAsString() const {
+std::string DefInit::getAsString() const {
   return Def->getName();
 }
 
-FieldInit *FieldInit::get(Init *R, const MISTD::string &FN) {
-  typedef MISTD::pair<Init *, TableGenStringKey> Key;
+FieldInit *FieldInit::get(Init *R, const std::string &FN) {
+  typedef std::pair<Init *, TableGenStringKey> Key;
   typedef DenseMap<Key, FieldInit *> Pool;
   static Pool ThePool;  
 
-  Key TheKey(MISTD::make_pair(R, FN));
+  Key TheKey(std::make_pair(R, FN));
 
   FieldInit *&I = ThePool[TheKey];
   if (!I) I = new FieldInit(R, FN);
@@ -1534,14 +1534,14 @@ Init *FieldInit::resolveReferences(Record &R, const RecordVal *RV) const {
   return const_cast<FieldInit *>(this);
 }
 
-static void ProfileDagInit(FoldingSetNodeID &ID, Init *V, const MISTD::string &VN,
+static void ProfileDagInit(FoldingSetNodeID &ID, Init *V, const std::string &VN,
                            ArrayRef<Init *> ArgRange,
-                           ArrayRef<MISTD::string> NameRange) {
+                           ArrayRef<std::string> NameRange) {
   ID.AddPointer(V);
   ID.AddString(VN);
 
   ArrayRef<Init *>::iterator Arg  = ArgRange.begin();
-  ArrayRef<MISTD::string>::iterator  Name = NameRange.begin();
+  ArrayRef<std::string>::iterator  Name = NameRange.begin();
   while (Arg != ArgRange.end()) {
     assert(Name != NameRange.end() && "Arg name underflow!");
     ID.AddPointer(*Arg++);
@@ -1551,9 +1551,9 @@ static void ProfileDagInit(FoldingSetNodeID &ID, Init *V, const MISTD::string &V
 }
 
 DagInit *
-DagInit::get(Init *V, const MISTD::string &VN,
+DagInit::get(Init *V, const std::string &VN,
              ArrayRef<Init *> ArgRange,
-             ArrayRef<MISTD::string> NameRange) {
+             ArrayRef<std::string> NameRange) {
   typedef FoldingSet<DagInit> Pool;
   static Pool ThePool;  
 
@@ -1571,14 +1571,14 @@ DagInit::get(Init *V, const MISTD::string &VN,
 }
 
 DagInit *
-DagInit::get(Init *V, const MISTD::string &VN,
-             const MISTD::vector<MISTD::pair<Init*, MISTD::string> > &args) {
-  typedef MISTD::pair<Init*, MISTD::string> PairType;
+DagInit::get(Init *V, const std::string &VN,
+             const std::vector<std::pair<Init*, std::string> > &args) {
+  typedef std::pair<Init*, std::string> PairType;
 
-  MISTD::vector<Init *> Args;
-  MISTD::vector<MISTD::string> Names;
+  std::vector<Init *> Args;
+  std::vector<std::string> Names;
 
-  for (MISTD::vector<PairType>::const_iterator i = args.begin(),
+  for (std::vector<PairType>::const_iterator i = args.begin(),
          iend = args.end();
        i != iend;
        ++i) {
@@ -1594,7 +1594,7 @@ void DagInit::Profile(FoldingSetNodeID &ID) const {
 }
 
 Init *DagInit::resolveReferences(Record &R, const RecordVal *RV) const {
-  MISTD::vector<Init*> NewArgs;
+  std::vector<Init*> NewArgs;
   for (unsigned i = 0, e = Args.size(); i != e; ++i)
     NewArgs.push_back(Args[i]->resolveReferences(R, RV));
 
@@ -1607,8 +1607,8 @@ Init *DagInit::resolveReferences(Record &R, const RecordVal *RV) const {
 }
 
 
-MISTD::string DagInit::getAsString() const {
-  MISTD::string Result = "(" + Val->getAsString();
+std::string DagInit::getAsString() const {
+  std::string Result = "(" + Val->getAsString();
   if (!ValName.empty())
     Result += ":" + ValName;
   if (Args.size()) {
@@ -1633,13 +1633,13 @@ RecordVal::RecordVal(Init *N, RecTy *T, unsigned P)
   assert(Value && "Cannot create unset value for current type!");
 }
 
-RecordVal::RecordVal(const MISTD::string &N, RecTy *T, unsigned P)
+RecordVal::RecordVal(const std::string &N, RecTy *T, unsigned P)
   : Name(StringInit::get(N)), Ty(T), Prefix(P) {
   Value = Ty->convertValue(UnsetInit::get());
   assert(Value && "Cannot create unset value for current type!");
 }
 
-const MISTD::string &RecordVal::getName() const {
+const std::string &RecordVal::getName() const {
   StringInit *NameString = dyn_cast<StringInit>(Name);
   assert(NameString && "RecordVal name is not a string!");
   return NameString->getValue();
@@ -1683,7 +1683,7 @@ DefInit *Record::getDefInit() {
   return TheInit;
 }
 
-const MISTD::string &Record::getName() const {
+const std::string &Record::getName() const {
   const StringInit *NameString = dyn_cast<StringInit>(Name);
   assert(NameString && "Record name is not a string!");
   return NameString->getValue();
@@ -1712,7 +1712,7 @@ void Record::setName(Init *NewName) {
   // this.  See TGParser::ParseDef and TGParser::ParseDefm.
 }
 
-void Record::setName(const MISTD::string &Name) {
+void Record::setName(const std::string &Name) {
   setName(StringInit::get(Name));
 }
 
@@ -1747,7 +1747,7 @@ void Record::dump() const { errs() << *this; }
 raw_ostream &llvm::operator<<(raw_ostream &OS, const Record &R) {
   OS << R.getNameInitAsString();
 
-  const MISTD::vector<Init *> &TArgs = R.getTemplateArgs();
+  const std::vector<Init *> &TArgs = R.getTemplateArgs();
   if (!TArgs.empty()) {
     OS << "<";
     for (unsigned i = 0, e = TArgs.size(); i != e; ++i) {
@@ -1760,7 +1760,7 @@ raw_ostream &llvm::operator<<(raw_ostream &OS, const Record &R) {
   }
 
   OS << " {";
-  const MISTD::vector<Record*> &SC = R.getSuperClasses();
+  const std::vector<Record*> &SC = R.getSuperClasses();
   if (!SC.empty()) {
     OS << "\t//";
     for (unsigned i = 0, e = SC.size(); i != e; ++i)
@@ -1768,7 +1768,7 @@ raw_ostream &llvm::operator<<(raw_ostream &OS, const Record &R) {
   }
   OS << "\n";
 
-  const MISTD::vector<RecordVal> &Vals = R.getValues();
+  const std::vector<RecordVal> &Vals = R.getValues();
   for (unsigned i = 0, e = Vals.size(); i != e; ++i)
     if (Vals[i].getPrefix() && !R.isTemplateArg(Vals[i].getName()))
       OS << Vals[i];
@@ -1795,7 +1795,7 @@ Init *Record::getValueInit(StringRef FieldName) const {
 /// value as a string, aborts if the field does not exist or if
 /// the value is not a string.
 ///
-MISTD::string Record::getValueAsString(StringRef FieldName) const {
+std::string Record::getValueAsString(StringRef FieldName) const {
   const RecordVal *R = getValue(FieldName);
   if (R == 0 || R->getValue() == 0)
     PrintFatalError(getLoc(), "Record `" + getName() +
@@ -1843,10 +1843,10 @@ ListInit *Record::getValueAsListInit(StringRef FieldName) const {
 /// its value as a vector of records, aborting if the field does not exist
 /// or if the value is not the right type.
 ///
-MISTD::vector<Record*>
+std::vector<Record*>
 Record::getValueAsListOfDefs(StringRef FieldName) const {
   ListInit *List = getValueAsListInit(FieldName);
-  MISTD::vector<Record*> Defs;
+  std::vector<Record*> Defs;
   for (unsigned i = 0; i < List->getSize(); i++) {
     if (DefInit *DI = dyn_cast<DefInit>(List->getElement(i))) {
       Defs.push_back(DI->getDef());
@@ -1878,10 +1878,10 @@ int64_t Record::getValueAsInt(StringRef FieldName) const {
 /// its value as a vector of integers, aborting if the field does not exist or
 /// if the value is not the right type.
 ///
-MISTD::vector<int64_t>
+std::vector<int64_t>
 Record::getValueAsListOfInts(StringRef FieldName) const {
   ListInit *List = getValueAsListInit(FieldName);
-  MISTD::vector<int64_t> Ints;
+  std::vector<int64_t> Ints;
   for (unsigned i = 0; i < List->getSize(); i++) {
     if (IntInit *II = dyn_cast<IntInit>(List->getElement(i))) {
       Ints.push_back(II->getValue());
@@ -1897,10 +1897,10 @@ Record::getValueAsListOfInts(StringRef FieldName) const {
 /// returns its value as a vector of strings, aborting if the field does not
 /// exist or if the value is not the right type.
 ///
-MISTD::vector<MISTD::string>
+std::vector<std::string>
 Record::getValueAsListOfStrings(StringRef FieldName) const {
   ListInit *List = getValueAsListInit(FieldName);
-  MISTD::vector<MISTD::string> Strings;
+  std::vector<std::string> Strings;
   for (unsigned i = 0; i < List->getSize(); i++) {
     if (StringInit *II = dyn_cast<StringInit>(List->getElement(i))) {
       Strings.push_back(II->getValue());
@@ -1996,14 +1996,14 @@ void RecordKeeper::dump() const { errs() << *this; }
 
 raw_ostream &llvm::operator<<(raw_ostream &OS, const RecordKeeper &RK) {
   OS << "------------- Classes -----------------\n";
-  const MISTD::map<MISTD::string, Record*> &Classes = RK.getClasses();
-  for (MISTD::map<MISTD::string, Record*>::const_iterator I = Classes.begin(),
+  const std::map<std::string, Record*> &Classes = RK.getClasses();
+  for (std::map<std::string, Record*>::const_iterator I = Classes.begin(),
          E = Classes.end(); I != E; ++I)
     OS << "class " << *I->second;
 
   OS << "------------- Defs -----------------\n";
-  const MISTD::map<MISTD::string, Record*> &Defs = RK.getDefs();
-  for (MISTD::map<MISTD::string, Record*>::const_iterator I = Defs.begin(),
+  const std::map<std::string, Record*> &Defs = RK.getDefs();
+  for (std::map<std::string, Record*>::const_iterator I = Defs.begin(),
          E = Defs.end(); I != E; ++I)
     OS << "def " << *I->second;
   return OS;
@@ -2013,14 +2013,14 @@ raw_ostream &llvm::operator<<(raw_ostream &OS, const RecordKeeper &RK) {
 /// getAllDerivedDefinitions - This method returns all concrete definitions
 /// that derive from the specified class name.  If a class with the specified
 /// name does not exist, an error is printed and true is returned.
-MISTD::vector<Record*>
-RecordKeeper::getAllDerivedDefinitions(const MISTD::string &ClassName) const {
+std::vector<Record*>
+RecordKeeper::getAllDerivedDefinitions(const std::string &ClassName) const {
   Record *Class = getClass(ClassName);
   if (!Class)
     PrintFatalError("ERROR: Couldn't find the `" + ClassName + "' class!\n");
 
-  MISTD::vector<Record*> Defs;
-  for (MISTD::map<MISTD::string, Record*>::const_iterator I = getDefs().begin(),
+  std::vector<Record*> Defs;
+  for (std::map<std::string, Record*>::const_iterator I = getDefs().begin(),
          E = getDefs().end(); I != E; ++I)
     if (I->second->isSubClassOf(Class))
       Defs.push_back(I->second);
@@ -2031,7 +2031,7 @@ RecordKeeper::getAllDerivedDefinitions(const MISTD::string &ClassName) const {
 /// QualifyName - Return an Init with a qualifier prefix referring
 /// to CurRec's name.
 Init *llvm::QualifyName(Record &CurRec, MultiClass *CurMultiClass,
-                        Init *Name, const MISTD::string &Scoper) {
+                        Init *Name, const std::string &Scoper) {
   RecTy *Type = dyn_cast<TypedInit>(Name)->getType();
 
   BinOpInit *NewName =
@@ -2060,7 +2060,7 @@ Init *llvm::QualifyName(Record &CurRec, MultiClass *CurMultiClass,
 /// QualifyName - Return an Init with a qualifier prefix referring
 /// to CurRec's name.
 Init *llvm::QualifyName(Record &CurRec, MultiClass *CurMultiClass,
-                        const MISTD::string &Name,
-                        const MISTD::string &Scoper) {
+                        const std::string &Name,
+                        const std::string &Scoper) {
   return QualifyName(CurRec, CurMultiClass, StringInit::get(Name), Scoper);
 }

@@ -51,12 +51,12 @@ public:
 
   bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MI,
-                                 const MISTD::vector<CalleeSavedInfo> &CSI,
+                                 const std::vector<CalleeSavedInfo> &CSI,
                                  const TargetRegisterInfo *TRI) const;
 
   bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MI,
-                                   const MISTD::vector<CalleeSavedInfo> &CSI,
+                                   const std::vector<CalleeSavedInfo> &CSI,
                                    const TargetRegisterInfo *TRI) const;
 
   bool hasFP(const MachineFunction &MF) const;

@@ -154,7 +154,7 @@ PHINode *Loop::getCanonicalInductionVariable() const {
   if (contains(Incoming)) {
     if (contains(Backedge))
       return 0;
-    MISTD::swap(Incoming, Backedge);
+    std::swap(Incoming, Backedge);
   } else if (!contains(Backedge))
     return 0;
 
@@ -380,7 +380,7 @@ Loop::getUniqueExitBlocks(SmallVectorImpl<BasicBlock *> &ExitBlocks) const {
       // If a terminator has more then two successors, for example SwitchInst,
       // then it is possible that there are multiple edges from current block
       // to one exit block.
-      if (MISTD::distance(succ_begin(current), succ_end(current)) <= 2) {
+      if (std::distance(succ_begin(current), succ_end(current)) <= 2) {
         ExitBlocks.push_back(*I);
         continue;
       }
@@ -388,7 +388,7 @@ Loop::getUniqueExitBlocks(SmallVectorImpl<BasicBlock *> &ExitBlocks) const {
       // In case of multiple edges from current block to exit block, collect
       // only one edge in ExitBlocks. Use switchExitBlocks to keep track of
       // duplicate edges.
-      if (MISTD::find(switchExitBlocks.begin(), switchExitBlocks.end(), *I)
+      if (std::find(switchExitBlocks.begin(), switchExitBlocks.end(), *I)
           == switchExitBlocks.end()) {
         switchExitBlocks.push_back(*I);
         ExitBlocks.push_back(*I);
@@ -560,7 +560,7 @@ Loop *UnloopUpdater::getNearestLoop(BasicBlock *BB, Loop *BBLoop) {
     }
     // Get the current nearest parent of the Subloop exits, initially Unloop.
     NearLoop =
-      SubloopParents.insert(MISTD::make_pair(Subloop, Unloop)).first->second;
+      SubloopParents.insert(std::make_pair(Subloop, Unloop)).first->second;
   }
 
   succ_iterator I = succ_begin(BB), E = succ_end(BB);

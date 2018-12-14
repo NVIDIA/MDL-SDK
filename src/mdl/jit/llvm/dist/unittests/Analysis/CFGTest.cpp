@@ -37,7 +37,7 @@ protected:
     bool Parsed = ParseAssemblyString(Assembly, M.get(),
                                       Error, M->getContext()) == M.get();
 
-    MISTD::string errMsg;
+    std::string errMsg;
     raw_string_ostream os(errMsg);
     Error.print("", os);
 

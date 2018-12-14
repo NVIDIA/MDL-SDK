@@ -311,7 +311,7 @@ static bool GTestIsInitialized() { return g_init_gtest_count != 0; }
 // Iterates over a vector of TestCases, keeping a running sum of the
 // results of calling a given int-returning method on each.
 // Returns the sum.
-static int SumOverTestCaseList(const MISTD::vector<TestCase*>& case_list,
+static int SumOverTestCaseList(const std::vector<TestCase*>& case_list,
                                int (TestCase::*method)() const) {
   int sum = 0;
   for (size_t i = 0; i < case_list.size(); i++) {
@@ -907,7 +907,7 @@ bool String::CStringEquals(const char * lhs, const char * rhs) {
 static void StreamWideCharsToMessage(const wchar_t* wstr, size_t length,
                                      Message* msg) {
   // TODO(wan): consider allowing a testing::String object to
-  // contain '\0'.  This will make it behave more like MISTD::string,
+  // contain '\0'.  This will make it behave more like std::string,
   // and will allow ToUtf8String() to return the correct encoding
   // for '\0' s.t. we can get rid of the conditional here (and in
   // several other places).
@@ -930,7 +930,7 @@ static void StreamWideCharsToMessage(const wchar_t* wstr, size_t length,
 #if GTEST_HAS_STD_WSTRING
 // Converts the given wide string to a narrow string using the UTF-8
 // encoding, and streams the result to this Message object.
-Message& Message::operator <<(const ::MISTD::wstring& wstr) {
+Message& Message::operator <<(const ::std::wstring& wstr) {
   internal::StreamWideCharsToMessage(wstr.c_str(), wstr.length(), this);
   return *this;
 }
@@ -950,8 +950,8 @@ Message& Message::operator <<(const ::wstring& wstr) {
 AssertionResult::AssertionResult(const AssertionResult& other)
     : success_(other.success_),
       message_(other.message_.get() != NULL ?
-               new ::MISTD::string(*other.message_) :
-               static_cast< ::MISTD::string*>(NULL)) {
+               new ::std::string(*other.message_) :
+               static_cast< ::std::string*>(NULL)) {
 }
 
 // Returns the assertion's negation. Used with EXPECT/ASSERT_FALSE.
@@ -1074,12 +1074,12 @@ AssertionResult FloatingPointLE(const char* expr1,
   // val2 is NaN, as the IEEE floating-point standard requires that
   // any predicate involving a NaN must return false.
 
-  ::MISTD::stringstream val1_ss;
-  val1_ss << MISTD::setprecision(MISTD::numeric_limits<RawType>::digits10 + 2)
+  ::std::stringstream val1_ss;
+  val1_ss << std::setprecision(std::numeric_limits<RawType>::digits10 + 2)
           << val1;
 
-  ::MISTD::stringstream val2_ss;
-  val2_ss << MISTD::setprecision(MISTD::numeric_limits<RawType>::digits10 + 2)
+  ::std::stringstream val2_ss;
+  val2_ss << std::setprecision(std::numeric_limits<RawType>::digits10 + 2)
           << val2;
 
   return AssertionFailure()
@@ -1242,7 +1242,7 @@ bool IsSubstringPred(const wchar_t* needle, const wchar_t* haystack) {
   return wcsstr(haystack, needle) != NULL;
 }
 
-// StringType here can be either ::MISTD::string or ::MISTD::wstring.
+// StringType here can be either ::std::string or ::std::wstring.
 template <typename StringType>
 bool IsSubstringPred(const StringType& needle,
                      const StringType& haystack) {
@@ -1251,8 +1251,8 @@ bool IsSubstringPred(const StringType& needle,
 
 // This function implements either IsSubstring() or IsNotSubstring(),
 // depending on the value of the expected_to_be_substring parameter.
-// StringType here can be const char*, const wchar_t*, ::MISTD::string,
-// or ::MISTD::wstring.
+// StringType here can be const char*, const wchar_t*, ::std::string,
+// or ::std::wstring.
 template <typename StringType>
 AssertionResult IsSubstringImpl(
     bool expected_to_be_substring,
@@ -1303,26 +1303,26 @@ AssertionResult IsNotSubstring(
 
 AssertionResult IsSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::string& needle, const ::MISTD::string& haystack) {
+    const ::std::string& needle, const ::std::string& haystack) {
   return IsSubstringImpl(true, needle_expr, haystack_expr, needle, haystack);
 }
 
 AssertionResult IsNotSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::string& needle, const ::MISTD::string& haystack) {
+    const ::std::string& needle, const ::std::string& haystack) {
   return IsSubstringImpl(false, needle_expr, haystack_expr, needle, haystack);
 }
 
 #if GTEST_HAS_STD_WSTRING
 AssertionResult IsSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::wstring& needle, const ::MISTD::wstring& haystack) {
+    const ::std::wstring& needle, const ::std::wstring& haystack) {
   return IsSubstringImpl(true, needle_expr, haystack_expr, needle, haystack);
 }
 
 AssertionResult IsNotSubstring(
     const char* needle_expr, const char* haystack_expr,
-    const ::MISTD::wstring& needle, const ::MISTD::wstring& haystack) {
+    const ::std::wstring& needle, const ::std::wstring& haystack) {
   return IsSubstringImpl(false, needle_expr, haystack_expr, needle, haystack);
 }
 #endif  // GTEST_HAS_STD_WSTRING
@@ -1505,7 +1505,7 @@ String WideStringToUtf8(const wchar_t* str, int num_chars) {
   if (num_chars == -1)
     num_chars = static_cast<int>(wcslen(str));
 
-  ::MISTD::stringstream stream;
+  ::std::stringstream stream;
   for (int i = 0; i < num_chars; ++i) {
     UInt32 unicode_code_point;
 
@@ -1732,14 +1732,14 @@ String String::Format(const char * format, ...) {
 
 // Converts the buffer in a stringstream to a String, converting NUL
 // bytes to "\\0" along the way.
-String StringStreamToString(::MISTD::stringstream* ss) {
-  const ::MISTD::string& str = ss->str();
+String StringStreamToString(::std::stringstream* ss) {
+  const ::std::string& str = ss->str();
   const char* const start = str.c_str();
   const char* const end = start + str.length();
 
   // We need to use a helper stringstream to do this transformation
   // because String doesn't support push_back().
-  ::MISTD::stringstream helper;
+  ::std::stringstream helper;
   for (const char* ch = start; ch != end; ++ch) {
     if (*ch == '\0') {
       helper << "\\0";  // Replaces NUL with "\\0";
@@ -1816,8 +1816,8 @@ void TestResult::RecordProperty(const TestProperty& test_property) {
     return;
   }
   internal::MutexLock lock(&test_properites_mutex_);
-  const MISTD::vector<TestProperty>::iterator property_with_matching_key =
-      MISTD::find_if(test_properties_.begin(), test_properties_.end(),
+  const std::vector<TestProperty>::iterator property_with_matching_key =
+      std::find_if(test_properties_.begin(), test_properties_.end(),
                    internal::TestPropertyKeyIs(test_property.key()));
   if (property_with_matching_key == test_properties_.end()) {
     test_properties_.push_back(test_property);
@@ -2018,8 +2018,8 @@ bool Test::HasSameFixtureClass() {
 static internal::String* FormatSehExceptionMessage(DWORD exception_code,
                                                    const char* location) {
   Message message;
-  message << "SEH exception with code 0x" << MISTD::setbase(16) <<
-    exception_code << MISTD::setbase(10) << " thrown in " << location << ".";
+  message << "SEH exception with code 0x" << std::setbase(16) <<
+    exception_code << std::setbase(10) << " thrown in " << location << ".";
 
   return new internal::String(message.GetString());
 }
@@ -2047,14 +2047,14 @@ static internal::String PrintTestPartResultToString(
 
 // A failed Google Test assertion will throw an exception of this type when
 // GTEST_FLAG(throw_on_failure) is true (if exceptions are enabled).  We
-// derive it from MISTD::runtime_error, which is for errors presumably
-// detectable only at run time.  Since MISTD::runtime_error inherits from
-// MISTD::exception, many testing frameworks know how to extract and print the
+// derive it from std::runtime_error, which is for errors presumably
+// detectable only at run time.  Since std::runtime_error inherits from
+// std::exception, many testing frameworks know how to extract and print the
 // message inside it.
-class GoogleTestFailureException : public ::MISTD::runtime_error {
+class GoogleTestFailureException : public ::std::runtime_error {
  public:
   explicit GoogleTestFailureException(const TestPartResult& failure)
-      : ::MISTD::runtime_error(PrintTestPartResultToString(failure).c_str()) {}
+      : ::std::runtime_error(PrintTestPartResultToString(failure).c_str()) {}
 };
 #endif  // GTEST_HAS_EXCEPTIONS
 
@@ -2128,7 +2128,7 @@ Result HandleExceptionsInMethodIfSupported(
       // This exception doesn't originate in code under test. It makes no
       // sense to report it as a test failure.
       throw;
-    } catch (const MISTD::exception& e) {  // NOLINT
+    } catch (const std::exception& e) {  // NOLINT
       internal::ReportFailureInUnknownLocation(
           TestPartResult::kFatalFailure,
           FormatCxxExceptionMessage(e.what(), location));
@@ -2195,8 +2195,8 @@ TestInfo::TestInfo(const char* a_test_case_name,
                    internal::TestFactoryBase* factory)
     : test_case_name_(a_test_case_name),
       name_(a_name),
-      type_param_(a_type_param ? new MISTD::string(a_type_param) : NULL),
-      value_param_(a_value_param ? new MISTD::string(a_value_param) : NULL),
+      type_param_(a_type_param ? new std::string(a_type_param) : NULL),
+      value_param_(a_value_param ? new std::string(a_value_param) : NULL),
       fixture_class_id_(fixture_class_id),
       should_run_(false),
       is_disabled_(false),
@@ -2363,7 +2363,7 @@ TestCase::TestCase(const char* a_name, const char* a_type_param,
                    Test::SetUpTestCaseFunc set_up_tc,
                    Test::TearDownTestCaseFunc tear_down_tc)
     : name_(a_name),
-      type_param_(a_type_param ? new MISTD::string(a_type_param) : NULL),
+      type_param_(a_type_param ? new std::string(a_type_param) : NULL),
       set_up_tc_(set_up_tc),
       tear_down_tc_(tear_down_tc),
       should_run_(false),
@@ -2897,7 +2897,7 @@ class TestEventRepeater : public TestEventListener {
   // in death test child processes.
   bool forwarding_enabled_;
   // The list of listeners that receive events.
-  MISTD::vector<TestEventListener*> listeners_;
+  std::vector<TestEventListener*> listeners_;
 
   GTEST_DISALLOW_COPY_AND_ASSIGN_(TestEventRepeater);
 };
@@ -3015,10 +3015,10 @@ class XmlUnitTestResultPrinter : public EmptyTestEventListener {
   static String EscapeXmlText(const char* str) { return EscapeXml(str, false); }
 
   // Streams an XML CDATA section, escaping invalid CDATA sequences as needed.
-  static void OutputXmlCDataSection(::MISTD::ostream* stream, const char* data);
+  static void OutputXmlCDataSection(::std::ostream* stream, const char* data);
 
   // Streams an XML representation of a TestInfo object.
-  static void OutputXmlTestInfo(::MISTD::ostream* stream,
+  static void OutputXmlTestInfo(::std::ostream* stream,
                                 const char* test_case_name,
                                 const TestInfo& test_info);
 
@@ -3165,14 +3165,14 @@ string XmlUnitTestResultPrinter::RemoveInvalidXmlCharacters(const string& str) {
 // </testsuites>
 
 // Formats the given time in milliseconds as seconds.
-MISTD::string FormatTimeInMillisAsSeconds(TimeInMillis ms) {
-  ::MISTD::stringstream ss;
+std::string FormatTimeInMillisAsSeconds(TimeInMillis ms) {
+  ::std::stringstream ss;
   ss << ms/1000.0;
   return ss.str();
 }
 
 // Streams an XML CDATA section, escaping invalid CDATA sequences as needed.
-void XmlUnitTestResultPrinter::OutputXmlCDataSection(::MISTD::ostream* stream,
+void XmlUnitTestResultPrinter::OutputXmlCDataSection(::std::ostream* stream,
                                                      const char* data) {
   const char* segment = data;
   *stream << "<![CDATA[";
@@ -3180,7 +3180,7 @@ void XmlUnitTestResultPrinter::OutputXmlCDataSection(::MISTD::ostream* stream,
     const char* const next_segment = strstr(segment, "]]>");
     if (next_segment != NULL) {
       stream->write(
-          segment, static_cast<MISTD::streamsize>(next_segment - segment));
+          segment, static_cast<std::streamsize>(next_segment - segment));
       *stream << "]]>]]&gt;<![CDATA[";
       segment = next_segment + strlen("]]>");
     } else {
@@ -3193,7 +3193,7 @@ void XmlUnitTestResultPrinter::OutputXmlCDataSection(::MISTD::ostream* stream,
 
 // Prints an XML representation of a TestInfo object.
 // TODO(wan): There is also value in printing properties with the plain printer.
-void XmlUnitTestResultPrinter::OutputXmlTestInfo(::MISTD::ostream* stream,
+void XmlUnitTestResultPrinter::OutputXmlTestInfo(::std::ostream* stream,
                                                  const char* test_case_name,
                                                  const TestInfo& test_info) {
   const TestResult& result = *test_info.result();
@@ -3254,7 +3254,7 @@ void XmlUnitTestResultPrinter::PrintXmlTestCase(FILE* out,
           "errors=\"0\" time=\"%s\">\n",
           FormatTimeInMillisAsSeconds(test_case.elapsed_time()).c_str());
   for (int i = 0; i < test_case.total_test_count(); ++i) {
-    ::MISTD::stringstream stream;
+    ::std::stringstream stream;
     OutputXmlTestInfo(&stream, test_case.name(), *test_case.GetTestInfo(i));
     fprintf(out, "%s", StringStreamToString(&stream).c_str());
   }
@@ -4066,8 +4066,8 @@ TestCase* UnitTestImpl::GetTestCase(const char* test_case_name,
                                     Test::SetUpTestCaseFunc set_up_tc,
                                     Test::TearDownTestCaseFunc tear_down_tc) {
   // Can we find a TestCase with the given name?
-  const MISTD::vector<TestCase*>::const_iterator test_case =
-      MISTD::find_if(test_cases_.begin(), test_cases_.end(),
+  const std::vector<TestCase*>::const_iterator test_case =
+      std::find_if(test_cases_.begin(), test_cases_.end(),
                    TestCaseNameIs(test_case_name));
 
   if (test_case != test_cases_.end())
@@ -4208,7 +4208,7 @@ bool UnitTestImpl::RunAllTests() {
 
       // Tears down all environments in reverse order afterwards.
       repeater->OnEnvironmentsTearDownStart(*parent_);
-      MISTD::for_each(environments_.rbegin(), environments_.rend(),
+      std::for_each(environments_.rbegin(), environments_.rend(),
                     TearDownEnvironment);
       repeater->OnEnvironmentsTearDownEnd(*parent_);
     }

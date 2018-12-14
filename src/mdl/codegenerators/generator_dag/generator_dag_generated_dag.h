@@ -728,6 +728,9 @@ public:
         /// Get the instance properties.
         Properties get_properties() const MDL_FINAL;
 
+        /// Get the internal space.
+        char const *get_internal_space() const MDL_FINAL;
+
         // ------------------- non-interface methods -------------------
 
         /// Get the node factory of this instance.
@@ -1694,6 +1697,9 @@ public:
     /// \returns                        The annotation.
     DAG_node const *get_module_annotation(
         int annotation_index) const MDL_FINAL;
+
+    /// Get the internal space
+    char const *get_internal_space() const MDL_FINAL;
 
     // --------------------------- non interface methods ---------------------------
 

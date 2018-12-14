@@ -20,7 +20,7 @@ using namespace llvm;
 /// UpdatePosition - Examine the given char sequence and figure out which
 /// column we end up in after output, and how many line breaks are contained.
 ///
-static void UpdatePosition(MISTD::pair<unsigned, unsigned> &Position, const char *Ptr, size_t Size) {
+static void UpdatePosition(std::pair<unsigned, unsigned> &Position, const char *Ptr, size_t Size) {
   unsigned &Column = Position.first;
   unsigned &Line = Position.second;
 
@@ -68,7 +68,7 @@ formatted_raw_ostream &formatted_raw_ostream::PadToColumn(unsigned NewCol) {
   ComputePosition(getBufferStart(), GetNumBytesInBuffer());
 
   // Output spaces until we reach the desired column.
-  indent(MISTD::max(int(NewCol - getColumn()), 1));
+  indent(std::max(int(NewCol - getColumn()), 1));
   return *this;
 }
 

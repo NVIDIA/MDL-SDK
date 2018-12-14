@@ -86,7 +86,7 @@ public:
     virtual void write(const double* values, Size count) { do_write(values, count); }
     void write(const DB::Tag& value);
     void write(const char* value);
-    void write(const MISTD::string& value);
+    void write(const std::string& value);
     void write(const mi::math::Color& value);
     void write(const CONT::Bitvector& value);
     void write(const CONT::Dictionary& value);
@@ -113,7 +113,7 @@ protected:
     virtual void write_impl(const char* value, size_t count) = 0;
 
 private:
-    typedef MISTD::map<Uint64,Uint64> Id_map;
+    typedef std::map<Uint64,Uint64> Id_map;
     Id_map m_shared_id_map;
     Uint64 m_id_counter;
     Serializer_marker_helper m_helper;
@@ -180,7 +180,7 @@ public:
 
     void read(DB::Tag* value_pointer);
     void read(char** value_pointer);
-    void read(MISTD::string* value_pointer);
+    void read(std::string* value_pointer);
     void read(mi::math::Color* value_pointer);
     void read(CONT::Bitvector* value_type);
     void read(CONT::Dictionary* value_pointer);
@@ -208,7 +208,7 @@ protected:
     friend class Deserializer_marker_helper;
 
 private:
-    typedef MISTD::map<Uint64, Serializable*> Reference_map;
+    typedef std::map<Uint64, Serializable*> Reference_map;
     Reference_map m_objects;				// map of all known objects
     Deserialization_manager* m_deserialization_manager;	// for deserialization
     Deserializer_marker_helper m_helper;

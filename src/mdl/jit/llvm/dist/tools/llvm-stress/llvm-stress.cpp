@@ -37,7 +37,7 @@ static cl::opt<unsigned> SeedCL("seed",
 static cl::opt<unsigned> SizeCL("size",
   cl::desc("The estimated size of the generated function (# of instrs)"),
   cl::init(100));
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
@@ -96,7 +96,7 @@ private:
 /// Generate an empty function with a default argument list.
 Function *GenEmptyFunction(Module *M) {
   // Type Definitions
-  MISTD::vector<Type*> ArgsTy;
+  std::vector<Type*> ArgsTy;
   // Define a few arguments
   LLVMContext &Context = M->getContext();
   ArgsTy.push_back(PointerType::get(IntegerType::getInt8Ty(Context), 0));
@@ -108,7 +108,7 @@ Function *GenEmptyFunction(Module *M) {
 
   FunctionType *FuncTy = FunctionType::get(Type::getVoidTy(Context), ArgsTy, 0);
   // Pick a unique name to describe the input parameters
-  MISTD::stringstream ss;
+  std::stringstream ss;
   ss<<"autogen_SD"<<SeedCL;
   Function *Func = Function::Create(FuncTy, GlobalValue::ExternalLinkage,
                                     ss.str(), M);
@@ -121,7 +121,7 @@ Function *GenEmptyFunction(Module *M) {
 /// modifying and adding new random instructions.
 struct Modifier {
   /// Used to store the randomly generated values.
-  typedef MISTD::vector<Value*> PieceTable;
+  typedef std::vector<Value*> PieceTable;
 
 public:
   /// C'tor
@@ -180,7 +180,7 @@ protected:
     } else if (Tp->isVectorTy()) {
       VectorType *VTp = cast<VectorType>(Tp);
 
-      MISTD::vector<Constant*> TempValues;
+      std::vector<Constant*> TempValues;
       TempValues.reserve(VTp->getNumElements());
       for (unsigned i = 0; i < VTp->getNumElements(); ++i)
         TempValues.push_back(getRandomConstant(VTp->getScalarType()));
@@ -435,7 +435,7 @@ struct ShuffModifier: public Modifier {
     Value *Val1 = getRandomValue(Val0->getType());
 
     unsigned Width = cast<VectorType>(Val0->getType())->getNumElements();
-    MISTD::vector<Constant*> Idxs;
+    std::vector<Constant*> Idxs;
 
     Type *I32 = Type::getInt32Ty(BB->getContext());
     for (unsigned i=0; i<Width; ++i) {
@@ -624,7 +624,7 @@ static void FillFunction(Function *F, Random &R) {
     PT.push_back(it);
 
   // List of modifiers which add new random instructions.
-  MISTD::vector<Modifier*> Modifiers;
+  std::vector<Modifier*> Modifiers;
   OwningPtr<Modifier> LM(new LoadModifier(BB, &PT, &R));
   OwningPtr<Modifier> SM(new StoreModifier(BB, &PT, &R));
   OwningPtr<Modifier> EE(new ExtractElementModifier(BB, &PT, &R));
@@ -649,7 +649,7 @@ static void FillFunction(Function *F, Random &R) {
   ConstModifier COM(BB, &PT, &R);  COM.ActN(40); // Throw in a few constants
 
   for (unsigned i=0; i< SizeCL / Modifiers.size(); ++i)
-    for (MISTD::vector<Modifier*>::iterator it = Modifiers.begin(),
+    for (std::vector<Modifier*>::iterator it = Modifiers.begin(),
          e = Modifiers.end(); it != e; ++it) {
       (*it)->Act();
     }
@@ -658,16 +658,16 @@ static void FillFunction(Function *F, Random &R) {
 }
 
 static void IntroduceControlFlow(Function *F, Random &R) {
-  MISTD::vector<Instruction*> BoolInst;
+  std::vector<Instruction*> BoolInst;
   for (BasicBlock::iterator it = F->begin()->begin(),
        e = F->begin()->end(); it != e; ++it) {
     if (it->getType() == IntegerType::getInt1Ty(F->getContext()))
       BoolInst.push_back(it);
   }
 
-  MISTD::random_shuffle(BoolInst.begin(), BoolInst.end(), R);
+  std::random_shuffle(BoolInst.begin(), BoolInst.end(), R);
 
-  for (MISTD::vector<Instruction*>::iterator it = BoolInst.begin(),
+  for (std::vector<Instruction*>::iterator it = BoolInst.begin(),
        e = BoolInst.end(); it != e; ++it) {
     Instruction *Instr = *it;
     BasicBlock *Curr = Instr->getParent();
@@ -703,7 +703,7 @@ int main(int argc, char **argv) {
   if (OutputFilename.empty())
     OutputFilename = "-";
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
                                  sys::fs::F_Binary));
   if (!ErrorInfo.empty()) {

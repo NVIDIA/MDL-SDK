@@ -81,7 +81,7 @@ static const char *EndOfNumber(const char *Pos) {
 static bool CompareNumbers(const char *&F1P, const char *&F2P,
                            const char *F1End, const char *F2End,
                            double AbsTolerance, double RelTolerance,
-                           MISTD::string *ErrorMsg) {
+                           std::string *ErrorMsg) {
   const char *F1NumEnd, *F2NumEnd;
   double V1 = 0.0, V2 = 0.0;
 
@@ -137,20 +137,20 @@ static bool CompareNumbers(const char *&F1P, const char *&F2P,
   }
 
   // Check to see if these are inside the absolute tolerance
-  if (AbsTolerance < MISTD::abs(V1-V2)) {
+  if (AbsTolerance < std::abs(V1-V2)) {
     // Nope, check the relative tolerance...
     double Diff;
     if (V2)
-      Diff = MISTD::abs(V1/V2 - 1.0);
+      Diff = std::abs(V1/V2 - 1.0);
     else if (V1)
-      Diff = MISTD::abs(V2/V1 - 1.0);
+      Diff = std::abs(V2/V1 - 1.0);
     else
       Diff = 0;  // Both zero.
     if (Diff > RelTolerance) {
       if (ErrorMsg) {
         raw_string_ostream(*ErrorMsg)
           << "Compared: " << V1 << " and " << V2 << '\n'
-          << "abs. diff = " << MISTD::abs(V1-V2) << " rel.diff = " << Diff << '\n'
+          << "abs. diff = " << std::abs(V1-V2) << " rel.diff = " << Diff << '\n'
           << "Out of tolerance: rel/abs: " << RelTolerance << '/'
           << AbsTolerance;
       }
@@ -174,7 +174,7 @@ static bool CompareNumbers(const char *&F1P, const char *&F2P,
 int llvm::DiffFilesWithTolerance(StringRef NameA,
                                  StringRef NameB,
                                  double AbsTol, double RelTol,
-                                 MISTD::string *Error) {
+                                 std::string *Error) {
   // Now its safe to mmap the files into memory because both files
   // have a non-zero size.
   OwningPtr<MemoryBuffer> F1;

@@ -27,7 +27,7 @@
 
 using namespace llvm;
 
-typedef MISTD::vector<MISTD::pair<unsigned char, const char*> > ByteArrayTy;
+typedef std::vector<std::pair<unsigned char, const char*> > ByteArrayTy;
 
 namespace {
 class VectorMemoryObject : public MemoryObject {
@@ -144,7 +144,7 @@ static bool ByteArrayFromString(ByteArrayTy &ByteArray,
       continue;
     }
 
-    ByteArray.push_back(MISTD::make_pair((unsigned char)ByteVal, Value.data()));
+    ByteArray.push_back(std::make_pair((unsigned char)ByteVal, Value.data()));
     Str = Str.substr(Next);
   }
 
@@ -152,7 +152,7 @@ static bool ByteArrayFromString(ByteArrayTy &ByteArray,
 }
 
 int Disassembler::disassemble(const Target &T,
-                              const MISTD::string &Triple,
+                              const std::string &Triple,
                               MCSubtargetInfo &STI,
                               MCStreamer &Streamer,
                               MemoryBuffer &Buffer,

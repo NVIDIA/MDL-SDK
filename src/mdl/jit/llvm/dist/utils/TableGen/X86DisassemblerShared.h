@@ -17,7 +17,7 @@
   struct OperandSpecifier operands[X86_MAX_OPERANDS]; \
   bool                    filtered;        \
   InstructionContext      insnContext;     \
-  MISTD::string             name;            \
+  std::string             name;            \
                                            \
   InstructionSpecifier() {                 \
     filtered = false;                      \

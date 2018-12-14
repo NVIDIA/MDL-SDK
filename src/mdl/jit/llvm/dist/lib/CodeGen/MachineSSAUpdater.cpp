@@ -77,7 +77,7 @@ unsigned MachineSSAUpdater::GetValueAtEndOfBlock(MachineBasicBlock *BB) {
 
 static
 unsigned LookForIdenticalPHI(MachineBasicBlock *BB,
-        SmallVectorImpl<MISTD::pair<MachineBasicBlock*, unsigned> > &PredValues) {
+        SmallVectorImpl<std::pair<MachineBasicBlock*, unsigned> > &PredValues) {
   if (BB->empty())
     return 0;
 
@@ -154,7 +154,7 @@ unsigned MachineSSAUpdater::GetValueInMiddleOfBlock(MachineBasicBlock *BB) {
 
   // Otherwise, we have the hard case.  Get the live-in values for each
   // predecessor.
-  SmallVector<MISTD::pair<MachineBasicBlock*, unsigned>, 8> PredValues;
+  SmallVector<std::pair<MachineBasicBlock*, unsigned>, 8> PredValues;
   unsigned SingularValue = 0;
 
   bool isFirstPred = true;
@@ -162,7 +162,7 @@ unsigned MachineSSAUpdater::GetValueInMiddleOfBlock(MachineBasicBlock *BB) {
          E = BB->pred_end(); PI != E; ++PI) {
     MachineBasicBlock *PredBB = *PI;
     unsigned PredVal = GetValueAtEndOfBlockInternal(PredBB);
-    PredValues.push_back(MISTD::make_pair(PredBB, PredVal));
+    PredValues.push_back(std::make_pair(PredBB, PredVal));
 
     // Compute SingularValue.
     if (isFirstPred) {

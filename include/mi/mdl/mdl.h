@@ -39,6 +39,7 @@
 #include <mi/mdl/mdl_archiver.h>
 #include <mi/mdl/mdl_assert.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/mdl/mdl_comparator.h>
 #include <mi/mdl/mdl_declarations.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_entity_resolver.h>

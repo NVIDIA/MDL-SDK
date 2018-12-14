@@ -47,13 +47,13 @@ private:
   InlineAsm(const InlineAsm &) LLVM_DELETED_FUNCTION;
   void operator=(const InlineAsm&) LLVM_DELETED_FUNCTION;
 
-  MISTD::string AsmString, Constraints;
+  std::string AsmString, Constraints;
   bool HasSideEffects;
   bool IsAlignStack;
   AsmDialect Dialect;
 
-  InlineAsm(PointerType *Ty, const MISTD::string &AsmString,
-            const MISTD::string &Constraints, bool hasSideEffects,
+  InlineAsm(PointerType *Ty, const std::string &AsmString,
+            const std::string &Constraints, bool hasSideEffects,
             bool isAlignStack, AsmDialect asmDialect);
   virtual ~InlineAsm();
 
@@ -83,8 +83,8 @@ public:
   ///
   FunctionType *getFunctionType() const;
   
-  const MISTD::string &getAsmString() const { return AsmString; }
-  const MISTD::string &getConstraintString() const { return Constraints; }
+  const std::string &getAsmString() const { return AsmString; }
+  const std::string &getConstraintString() const { return Constraints; }
 
   /// Verify - This static method can be used by the parser to check to see if
   /// the specified constraint string is legal for the type.  This returns true
@@ -99,7 +99,7 @@ public:
     isClobber           // '~x'
   };
   
-  typedef MISTD::vector<MISTD::string> ConstraintCodeVector;
+  typedef std::vector<std::string> ConstraintCodeVector;
   
   struct SubConstraintInfo {
     /// MatchingInput - If this is not -1, this is an output constraint where an
@@ -114,9 +114,9 @@ public:
     SubConstraintInfo() : MatchingInput(-1) {}
   };
 
-  typedef MISTD::vector<SubConstraintInfo> SubConstraintInfoVector;
+  typedef std::vector<SubConstraintInfo> SubConstraintInfoVector;
   struct ConstraintInfo;
-  typedef MISTD::vector<ConstraintInfo> ConstraintInfoVector;
+  typedef std::vector<ConstraintInfo> ConstraintInfoVector;
   
   struct ConstraintInfo {
     /// Type - The basic type of the constraint: input/output/clobber

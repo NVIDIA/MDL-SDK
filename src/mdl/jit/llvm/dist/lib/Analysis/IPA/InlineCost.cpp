@@ -87,7 +87,7 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
   DenseMap<Value *, int> SROAArgCosts;
 
   // Keep track of values which map to a pointer base and constant offset.
-  DenseMap<Value *, MISTD::pair<Value *, APInt> > ConstantOffsetPtrs;
+  DenseMap<Value *, std::pair<Value *, APInt> > ConstantOffsetPtrs;
 
   // Custom simplification helper routines.
   bool isAllocaDerivedArg(Value *V);
@@ -333,7 +333,7 @@ bool CallAnalyzer::visitGetElementPtr(GetElementPtrInst &I) {
   if (TD && I.isInBounds()) {
     // Check if we have a base + offset for the pointer.
     Value *Ptr = I.getPointerOperand();
-    MISTD::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Ptr);
+    std::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Ptr);
     if (BaseAndOffset.first) {
       // Check if the offset of this GEP is constant, and if so accumulate it
       // into Offset.
@@ -382,7 +382,7 @@ bool CallAnalyzer::visitBitCast(BitCastInst &I) {
     }
 
   // Track base/offsets through casts
-  MISTD::pair<Value *, APInt> BaseAndOffset
+  std::pair<Value *, APInt> BaseAndOffset
     = ConstantOffsetPtrs.lookup(I.getOperand(0));
   // Casts don't change the offset, just wrap it up.
   if (BaseAndOffset.first)
@@ -413,7 +413,7 @@ bool CallAnalyzer::visitPtrToInt(PtrToIntInst &I) {
   // integer is large enough to represent the pointer.
   unsigned IntegerSize = I.getType()->getScalarSizeInBits();
   if (TD && IntegerSize >= TD->getPointerSizeInBits()) {
-    MISTD::pair<Value *, APInt> BaseAndOffset
+    std::pair<Value *, APInt> BaseAndOffset
       = ConstantOffsetPtrs.lookup(I.getOperand(0));
     if (BaseAndOffset.first)
       ConstantOffsetPtrs[&I] = BaseAndOffset;
@@ -450,7 +450,7 @@ bool CallAnalyzer::visitIntToPtr(IntToPtrInst &I) {
   Value *Op = I.getOperand(0);
   unsigned IntegerSize = Op->getType()->getScalarSizeInBits();
   if (TD && IntegerSize <= TD->getPointerSizeInBits()) {
-    MISTD::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Op);
+    std::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Op);
     if (BaseAndOffset.first)
       ConstantOffsetPtrs[&I] = BaseAndOffset;
   }
@@ -788,7 +788,7 @@ bool CallAnalyzer::visitCallSite(CallSite CS) {
   if (CA.analyzeCall(CS)) {
     // We were able to inline the indirect call! Subtract the cost from the
     // bonus we want to apply, but don't go below zero.
-    Cost -= MISTD::max(0, InlineConstants::IndirectCallThreshold - CA.getCost());
+    Cost -= std::max(0, InlineConstants::IndirectCallThreshold - CA.getCost());
   }
 
   return Base::visitCallSite(CS);
@@ -998,7 +998,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
       // FIXME: The maxStoresPerMemcpy setting from the target should be used
       // here instead of a magic number of 8, but it's not available via
       // DataLayout.
-      NumStores = MISTD::min(NumStores, 8U);
+      NumStores = std::min(NumStores, 8U);
 
       Cost -= 2 * NumStores * InlineConstants::InstrCost;
     } else {
@@ -1063,7 +1063,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
 
     Value *PtrArg = *CAI;
     if (ConstantInt *C = stripAndComputeInBoundsConstantOffsets(PtrArg)) {
-      ConstantOffsetPtrs[FAI] = MISTD::make_pair(PtrArg, C->getValue());
+      ConstantOffsetPtrs[FAI] = std::make_pair(PtrArg, C->getValue());
 
       // We can SROA any pointer arguments derived from alloca instructions.
       if (isa<AllocaInst>(PtrArg)) {

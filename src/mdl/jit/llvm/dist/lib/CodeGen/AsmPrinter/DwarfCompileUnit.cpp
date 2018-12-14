@@ -124,7 +124,7 @@ void CompileUnit::insertDIE(DIDescriptor Desc, DIE *D) {
     DD->insertDIE(Desc, D);
     return;
   }
-  MDNodeToDieMap.insert(MISTD::make_pair(Desc, D));
+  MDNodeToDieMap.insert(std::make_pair(Desc, D));
 }
 
 /// addFlag - Add a flag that is true.
@@ -912,7 +912,7 @@ DIE *CompileUnit::getOrCreateTypeDIE(const MDNode *TyNode) {
       IsImplementation = (CT.getRunTimeLang() == 0) || CT.isObjcClassComplete();
     }
     unsigned Flags = IsImplementation ? dwarf::DW_FLAG_type_implementation : 0;
-    addAccelType(Ty.getName(), MISTD::make_pair(TyDIE, Flags));
+    addAccelType(Ty.getName(), std::make_pair(TyDIE, Flags));
   }
 
   return TyDIE;
@@ -949,31 +949,31 @@ void CompileUnit::addType(DIE *Entity, DIType Ty, dwarf::Attribute Attribute) {
 // add may not only be identical to the names in the DIE.
 void CompileUnit::addAccelName(StringRef Name, DIE *Die) {
   DU->getStringPoolEntry(Name);
-  MISTD::vector<DIE *> &DIEs = AccelNames[Name];
+  std::vector<DIE *> &DIEs = AccelNames[Name];
   DIEs.push_back(Die);
 }
 
 void CompileUnit::addAccelObjC(StringRef Name, DIE *Die) {
   DU->getStringPoolEntry(Name);
-  MISTD::vector<DIE *> &DIEs = AccelObjC[Name];
+  std::vector<DIE *> &DIEs = AccelObjC[Name];
   DIEs.push_back(Die);
 }
 
 void CompileUnit::addAccelNamespace(StringRef Name, DIE *Die) {
   DU->getStringPoolEntry(Name);
-  MISTD::vector<DIE *> &DIEs = AccelNamespace[Name];
+  std::vector<DIE *> &DIEs = AccelNamespace[Name];
   DIEs.push_back(Die);
 }
 
-void CompileUnit::addAccelType(StringRef Name, MISTD::pair<DIE *, unsigned> Die) {
+void CompileUnit::addAccelType(StringRef Name, std::pair<DIE *, unsigned> Die) {
   DU->getStringPoolEntry(Name);
-  MISTD::vector<MISTD::pair<DIE *, unsigned> > &DIEs = AccelTypes[Name];
+  std::vector<std::pair<DIE *, unsigned> > &DIEs = AccelTypes[Name];
   DIEs.push_back(Die);
 }
 
 /// addGlobalName - Add a new global name to the compile unit.
 void CompileUnit::addGlobalName(StringRef Name, DIE *Die, DIScope Context) {
-  MISTD::string FullName = getParentContextString(Context) + Name.str();
+  std::string FullName = getParentContextString(Context) + Name.str();
   GlobalNames[FullName] = Die;
 }
 
@@ -985,7 +985,7 @@ void CompileUnit::addGlobalType(DIType Ty) {
       (!Context || Context.isCompileUnit() || Context.isFile() ||
        Context.isNameSpace()))
     if (DIEEntry *Entry = getDIEEntry(Ty)) {
-      MISTD::string FullName =
+      std::string FullName =
           getParentContextString(Context) + Ty.getName().str();
       GlobalTypes[FullName] = Entry->getEntry();
     }
@@ -996,7 +996,7 @@ void CompileUnit::addGlobalType(DIType Ty) {
 /// it as a string. This is done at the metadata level because DIEs may
 /// not currently have been added to the parent context and walking the
 /// DIEs looking for names is more expensive than walking the metadata.
-MISTD::string CompileUnit::getParentContextString(DIScope Context) const {
+std::string CompileUnit::getParentContextString(DIScope Context) const {
   if (!Context)
     return "";
 
@@ -1004,7 +1004,7 @@ MISTD::string CompileUnit::getParentContextString(DIScope Context) const {
   if (getLanguage() != dwarf::DW_LANG_C_plus_plus)
     return "";
 
-  MISTD::string CS;
+  std::string CS;
   SmallVector<DIScope, 1> Parents;
   while (!Context.isCompileUnit()) {
     Parents.push_back(Context);
@@ -1445,7 +1445,7 @@ DIE *CompileUnit::getOrCreateSubprogramDIE(DISubprogram SP) {
     addUInt(Block, dwarf::DW_FORM_udata, SP.getVirtualIndex());
     addBlock(SPDie, dwarf::DW_AT_vtable_elem_location, Block);
     ContainingTypeMap.insert(
-        MISTD::make_pair(SPDie, resolve(SP.getContainingType())));
+        std::make_pair(SPDie, resolve(SP.getContainingType())));
   }
 
   if (!SP.isDefinition()) {

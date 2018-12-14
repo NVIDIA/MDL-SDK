@@ -1291,7 +1291,7 @@ static bool needsLFTR(Loop *L, DominatorTree *DT) {
   if (!isLoopInvariant(RHS, L, DT)) {
     if (!isLoopInvariant(LHS, L, DT))
       return true;
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   }
   // Look for a simple IV counter LHS
   PHINode *Phi = dyn_cast<PHINode>(LHS);

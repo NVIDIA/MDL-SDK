@@ -47,18 +47,18 @@ void ObjectBufferStream::anchor() {}
 
 ExecutionEngine *(*ExecutionEngine::JITCtor)(
   Module *M,
-  MISTD::string *ErrorStr,
+  std::string *ErrorStr,
   JITMemoryManager *JMM,
   bool GVsWithCode,
   TargetMachine *TM) = 0;
 ExecutionEngine *(*ExecutionEngine::MCJITCtor)(
   Module *M,
-  MISTD::string *ErrorStr,
+  std::string *ErrorStr,
   RTDyldMemoryManager *MCJMM,
   bool GVsWithCode,
   TargetMachine *TM) = 0;
 ExecutionEngine *(*ExecutionEngine::InterpCtor)(Module *M,
-                                                MISTD::string *ErrorStr) = 0;
+                                                std::string *ErrorStr) = 0;
 
 ExecutionEngine::ExecutionEngine(Module *M)
   : EEState(*this),
@@ -237,11 +237,11 @@ const GlobalValue *ExecutionEngine::getGlobalValueAtAddress(void *Addr) {
     for (ExecutionEngineState::GlobalAddressMapTy::iterator
          I = EEState.getGlobalAddressMap(locked).begin(),
          E = EEState.getGlobalAddressMap(locked).end(); I != E; ++I)
-      EEState.getGlobalAddressReverseMap(locked).insert(MISTD::make_pair(
+      EEState.getGlobalAddressReverseMap(locked).insert(std::make_pair(
                                                           I->second, I->first));
   }
 
-  MISTD::map<void *, AssertingVH<const GlobalValue> >::iterator I =
+  std::map<void *, AssertingVH<const GlobalValue> >::iterator I =
     EEState.getGlobalAddressReverseMap(locked).find(Addr);
   return I != EEState.getGlobalAddressReverseMap(locked).end() ? I->second : 0;
 }
@@ -249,7 +249,7 @@ const GlobalValue *ExecutionEngine::getGlobalValueAtAddress(void *Addr) {
 namespace {
 class ArgvArray {
   char *Array;
-  MISTD::vector<char*> Values;
+  std::vector<char*> Values;
 public:
   ArgvArray() : Array(NULL) {}
   ~ArgvArray() { clear(); }
@@ -264,11 +264,11 @@ public:
   /// Turn a vector of strings into a nice argv style array of pointers to null
   /// terminated strings.
   void *reset(LLVMContext &C, ExecutionEngine *EE,
-              const MISTD::vector<MISTD::string> &InputArgv);
+              const std::vector<std::string> &InputArgv);
 };
 }  // anonymous namespace
 void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
-                       const MISTD::vector<MISTD::string> &InputArgv) {
+                       const std::vector<std::string> &InputArgv) {
   clear();  // Free the old contents.
   unsigned PtrSize = EE->getDataLayout()->getPointerSize();
   Array = new char[(InputArgv.size()+1)*PtrSize];
@@ -282,7 +282,7 @@ void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
     Values.push_back(Dest);
     DEBUG(dbgs() << "JIT: ARGV[" << i << "] = " << (void*)Dest << "\n");
 
-    MISTD::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest);
+    std::copy(InputArgv[i].begin(), InputArgv[i].end(), Dest);
     Dest[Size-1] = 0;
 
     // Endian safe: Array[i] = (PointerTy)Dest;
@@ -328,7 +328,7 @@ void ExecutionEngine::runStaticConstructorsDestructors(Module *module,
 
     // Execute the ctor/dtor function!
     if (Function *F = dyn_cast<Function>(FP))
-      runFunction(F, MISTD::vector<GenericValue>());
+      runFunction(F, std::vector<GenericValue>());
 
     // FIXME: It is marginally lame that we just do nothing here if we see an
     // entry we don't recognize. It might not be unreasonable for the verifier
@@ -354,9 +354,9 @@ static bool isTargetNullPtr(ExecutionEngine *EE, void *Loc) {
 #endif
 
 int ExecutionEngine::runFunctionAsMain(Function *Fn,
-                                       const MISTD::vector<MISTD::string> &argv,
+                                       const std::vector<std::string> &argv,
                                        const char * const * envp) {
-  MISTD::vector<GenericValue> GVArgs;
+  std::vector<GenericValue> GVArgs;
   GenericValue GVArgc;
   GVArgc.IntVal = APInt(32, argv.size());
 
@@ -388,7 +388,7 @@ int ExecutionEngine::runFunctionAsMain(Function *Fn,
       assert(!isTargetNullPtr(this, GVTOP(GVArgs[1])) &&
              "argv[0] was null after CreateArgv");
       if (NumArgs > 2) {
-        MISTD::vector<MISTD::string> EnvVars;
+        std::vector<std::string> EnvVars;
         for (unsigned i = 0; envp[i]; ++i)
           EnvVars.push_back(envp[i]);
         // Arg #2 = envp.
@@ -402,7 +402,7 @@ int ExecutionEngine::runFunctionAsMain(Function *Fn,
 
 ExecutionEngine *ExecutionEngine::create(Module *M,
                                          bool ForceInterpreter,
-                                         MISTD::string *ErrorStr,
+                                         std::string *ErrorStr,
                                          CodeGenOpt::Level OptLevel,
                                          bool GVsWithCode) {
   EngineBuilder EB =  EngineBuilder(M)
@@ -420,7 +420,7 @@ ExecutionEngine *ExecutionEngine::create(Module *M,
 /// machine, it does not fall back to the interpreter.  This takes ownership
 /// of the module.
 ExecutionEngine *ExecutionEngine::createJIT(Module *M,
-                                            MISTD::string *ErrorStr,
+                                            std::string *ErrorStr,
                                             JITMemoryManager *JMM,
                                             CodeGenOpt::Level OL,
                                             bool GVsWithCode,
@@ -772,7 +772,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
           case Instruction::FDiv:
             GV.FloatVal = LHS.FloatVal / RHS.FloatVal; break;
           case Instruction::FRem:
-            GV.FloatVal = MISTD::fmod(LHS.FloatVal,RHS.FloatVal); break;
+            GV.FloatVal = std::fmod(LHS.FloatVal,RHS.FloatVal); break;
         }
         break;
       case Type::DoubleTyID:
@@ -787,7 +787,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
           case Instruction::FDiv:
             GV.DoubleVal = LHS.DoubleVal / RHS.DoubleVal; break;
           case Instruction::FRem:
-            GV.DoubleVal = MISTD::fmod(LHS.DoubleVal,RHS.DoubleVal); break;
+            GV.DoubleVal = std::fmod(LHS.DoubleVal,RHS.DoubleVal); break;
         }
         break;
       case Type::X86_FP80TyID:
@@ -891,7 +891,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       if (CAZ) {
         GenericValue floatZero;
         floatZero.FloatVal = 0.f;
-        MISTD::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
+        std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   floatZero);
         break;
       }
@@ -913,7 +913,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       if (CAZ) {
         GenericValue doubleZero;
         doubleZero.DoubleVal = 0.0;
-        MISTD::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
+        std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   doubleZero);
         break;
       }
@@ -935,7 +935,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       if (CAZ) {
         GenericValue intZero;     
         intZero.IntVal = APInt(ElemTy->getScalarSizeInBits(), 0ull);
-        MISTD::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
+        std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   intZero);
         break;
       }
@@ -1042,7 +1042,7 @@ void ExecutionEngine::StoreValueToMemory(const GenericValue &Val,
 
   if (sys::IsLittleEndianHost != getDataLayout()->isLittleEndian())
     // Host and target are different endian - reverse the stored bytes.
-    MISTD::reverse((uint8_t*)Ptr, StoreBytes + (uint8_t*)Ptr);
+    std::reverse((uint8_t*)Ptr, StoreBytes + (uint8_t*)Ptr);
 }
 
 /// LoadIntFromMemory - Loads the integer stored in the LoadBytes bytes starting
@@ -1195,7 +1195,7 @@ void ExecutionEngine::emitGlobals() {
   // Loop over all of the global variables in the program, allocating the memory
   // to hold them.  If there is more than one module, do a prepass over globals
   // to figure out how the different modules should link together.
-  MISTD::map<MISTD::pair<MISTD::string, Type*>,
+  std::map<std::pair<std::string, Type*>,
            const GlobalValue*> LinkedGlobalsMap;
 
   if (Modules.size() != 1) {
@@ -1209,7 +1209,7 @@ void ExecutionEngine::emitGlobals() {
           continue;// Ignore external globals and globals with internal linkage.
 
         const GlobalValue *&GVEntry =
-          LinkedGlobalsMap[MISTD::make_pair(GV->getName(), GV->getType())];
+          LinkedGlobalsMap[std::make_pair(GV->getName(), GV->getType())];
 
         // If this is the first time we've seen this global, it is the canonical
         // version.
@@ -1232,7 +1232,7 @@ void ExecutionEngine::emitGlobals() {
     }
   }
 
-  MISTD::vector<const GlobalValue*> NonCanonicalGlobals;
+  std::vector<const GlobalValue*> NonCanonicalGlobals;
   for (unsigned m = 0, e = Modules.size(); m != e; ++m) {
     Module &M = *Modules[m];
     for (Module::const_global_iterator I = M.global_begin(), E = M.global_end();
@@ -1240,7 +1240,7 @@ void ExecutionEngine::emitGlobals() {
       // In the multi-module case, see what this global maps to.
       if (!LinkedGlobalsMap.empty()) {
         if (const GlobalValue *GVEntry =
-              LinkedGlobalsMap[MISTD::make_pair(I->getName(), I->getType())]) {
+              LinkedGlobalsMap[std::make_pair(I->getName(), I->getType())]) {
           // If something else is the canonical global, ignore this one.
           if (GVEntry != &*I) {
             NonCanonicalGlobals.push_back(I);
@@ -1270,7 +1270,7 @@ void ExecutionEngine::emitGlobals() {
       for (unsigned i = 0, e = NonCanonicalGlobals.size(); i != e; ++i) {
         const GlobalValue *GV = NonCanonicalGlobals[i];
         const GlobalValue *CGV =
-          LinkedGlobalsMap[MISTD::make_pair(GV->getName(), GV->getType())];
+          LinkedGlobalsMap[std::make_pair(GV->getName(), GV->getType())];
         void *Ptr = getPointerToGlobalIfAvailable(CGV);
         assert(Ptr && "Canonical global wasn't codegen'd!");
         addGlobalMapping(GV, Ptr);
@@ -1284,7 +1284,7 @@ void ExecutionEngine::emitGlobals() {
       if (!I->isDeclaration()) {
         if (!LinkedGlobalsMap.empty()) {
           if (const GlobalValue *GVEntry =
-                LinkedGlobalsMap[MISTD::make_pair(I->getName(), I->getType())])
+                LinkedGlobalsMap[std::make_pair(I->getName(), I->getType())])
             if (GVEntry != &*I)  // Not the canonical variable.
               continue;
         }

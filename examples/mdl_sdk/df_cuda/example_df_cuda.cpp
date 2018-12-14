@@ -64,11 +64,6 @@
 // Vector helper functions //
 /////////////////////////////
 
-inline float3 operator-(const float3& a, const float3& b)
-{
-    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
 inline float length(const float3 &d)
 {
     return sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
@@ -97,7 +92,7 @@ static GLFWwindow *init_opengl()
 
     // Create an OpenGL window and a context
     GLFWwindow *window = glfwCreateWindow(
-        1024, 768, WINDOW_TITLE, NULL, NULL);
+        1024, 768, WINDOW_TITLE, nullptr, nullptr);
     if (!window) {
         std::cerr << "Error creating OpenGL window!" << std::endl;
         terminate();
@@ -127,7 +122,7 @@ static void dump_info(GLuint shader, const char* text)
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
     if (length > 0) {
         GLchar *log = new GLchar[length + 1];
-        glGetShaderInfoLog(shader, length + 1, NULL, log);
+        glGetShaderInfoLog(shader, length + 1, nullptr, log);
         std::cerr << text << log << std::endl;
         delete [] log;
     } else {
@@ -140,7 +135,7 @@ static void add_shader(GLenum shader_type, const std::string& source_code, GLuin
     const GLchar* src_buffers[1] = { source_code.c_str() };
     GLuint shader = glCreateShader(shader_type);
     check_success(shader);
-    glShaderSource(shader, 1, src_buffers, NULL);
+    glShaderSource(shader, 1, src_buffers, nullptr);
     glCompileShader(shader);
 
     GLint success;
@@ -344,7 +339,7 @@ static void resize_buffers(
 {
     // Allocate GL display buffer
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, display_buffer);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_COPY);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, nullptr, GL_DYNAMIC_COPY);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     check_success(glGetError() == GL_NO_ERROR);
@@ -449,7 +444,7 @@ static void create_environment(
     tex_desc.readMode         = cudaReadModeElementType;
     tex_desc.normalizedCoords = 1;
 
-    check_cuda_success(cudaCreateTextureObject(env_tex, &res_desc, &tex_desc, NULL));
+    check_cuda_success(cudaCreateTextureObject(env_tex, &res_desc, &tex_desc, nullptr));
 
     // Create importance sampling data
     Env_accel *env_accel_host = static_cast<Env_accel *>(malloc(rx * ry * sizeof(Env_accel)));
@@ -506,6 +501,8 @@ struct Options {
     float gui_scale;
     bool opengl;
     bool use_class_compilation;
+    bool no_aa;
+    bool enable_derivatives;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
@@ -521,6 +518,30 @@ struct Options {
     std::string outputfile;
     std::vector<std::string> material_names;
     std::vector<std::string> mdl_paths;
+
+    // Default constructor, sets default values.
+    Options()
+    : gui_scale(1.0f)
+    , opengl(true)
+    , use_class_compilation(true)
+    , no_aa(false)
+    , enable_derivatives(false)
+    , res_x(1024)
+    , res_y(1024)
+    , iterations(4096)
+    , samples_per_iteration(8)
+    , mdl_test_type(MDL_TEST_MIS)
+    , max_path_length(4)
+    , fov(96.0f)
+    , exposure(0.0f)
+    , cam_pos(make_float3(0, 0, 3))
+    , light_pos(make_float3(0, 0, 0))
+    , light_intensity(make_float3(0, 0, 0))
+    , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
+    , outputfile("output.exr")
+    , material_names()
+    , mdl_paths()
+    {}
 };
 
 // Possible enum values if any.
@@ -538,6 +559,7 @@ struct Enum_value {
 struct Enum_type_info {
     std::vector<Enum_value> values;
 
+    // Adds a enum value and its integer value to the enum type info.
     void add(const std::string &name, int value) {
         values.push_back(Enum_value(name, value));
     }
@@ -556,7 +578,10 @@ public:
         PK_COLOR,
         PK_BOOL,
         PK_ENUM,
-        PK_STRING
+        PK_STRING,
+        PK_TEXTURE,
+        PK_LIGHT_PROFILE,
+        PK_BSDF_MEASUREMENT
     };
 
     Param_info(
@@ -566,7 +591,7 @@ public:
         char const *group_name,
         Param_kind kind,
         char *data_ptr,
-        const Enum_type_info *enum_info = NULL)
+        const Enum_type_info *enum_info = nullptr)
     : m_index(index)
     , m_name(name)
     , m_display_name(display_name)
@@ -624,11 +649,11 @@ public:
     // end of the list, if no group name is available.
     void add_sorted_by_group(const Param_info &info) {
         bool group_found = false;
-        if (info.group_name() != NULL) {
+        if (info.group_name() != nullptr) {
             for (std::list<Param_info>::iterator it = params().begin(); it != params().end(); ++it)
             {
                 const bool same_group =
-                    it->group_name() != NULL && strcmp(it->group_name(), info.group_name()) == 0;
+                    it->group_name() != nullptr && strcmp(it->group_name(), info.group_name()) == 0;
                 if (group_found && !same_group) {
                     m_params.insert(it, info);
                     return;
@@ -650,7 +675,7 @@ public:
         Enum_type_map::const_iterator it = enum_types.find(name);
         if (it != enum_types.end())
             return it->second.get();
-        return NULL;
+        return nullptr;
     }
 
     // Get the name of the material.
@@ -670,6 +695,100 @@ private:
 
     // used enum types of the material
     Enum_type_map enum_types;
+};
+
+// Helper class to handle Resource tables of the target code.
+class Resource_table
+{
+    typedef std::map<std::string, unsigned> Resource_id_map;
+public:
+    enum Kind {
+        RESOURCE_TEXTURE,
+        RESOURCE_LIGHT_PROFILE,
+        RESOURCE_BSDF_MEASUREMENT
+    };
+
+    // Constructor.
+    Resource_table(
+        mi::base::Handle<mi::neuraylib::ITarget_code const> target_code,
+        mi::base::Handle<mi::neuraylib::ITransaction>       transaction,
+        Kind                                                kind)
+    : m_max_len(0u)
+    {
+        read_resources(target_code, transaction, kind);
+    }
+
+    // Get the length of the longest URL in the resource table.
+    size_t get_max_length() const { return m_max_len; }
+
+    // Get all urls.
+    std::vector<std::string> const &get_urls() const { return m_urls; }
+
+private:
+    void read_resources(
+        mi::base::Handle<mi::neuraylib::ITarget_code const> target_code,
+        mi::base::Handle<mi::neuraylib::ITransaction>       transaction,
+        Kind                                                kind)
+    {
+        m_urls.push_back("<unset>");
+        switch (kind) {
+        case RESOURCE_TEXTURE:
+            for (mi::Size i = 1, n = target_code->get_texture_count(); i < n; ++i) {
+                const char *s = target_code->get_texture(i);
+                mi::base::Handle<mi::neuraylib::ITexture const> tex(
+                    transaction->access<mi::neuraylib::ITexture>(s));
+                char const *url = nullptr;
+                if (char const *img = tex->get_image()) {
+                    mi::base::Handle<mi::neuraylib::IImage const> image(
+                        transaction->access<mi::neuraylib::IImage>(img));
+                    url = image->get_filename();
+                }
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        case RESOURCE_LIGHT_PROFILE:
+            for (mi::Size i = 1, n = target_code->get_light_profile_count(); i < n; ++i) {
+                const char *s = target_code->get_light_profile(i);
+                mi::base::Handle<mi::neuraylib::ILightprofile const> lp(
+                    transaction->access<mi::neuraylib::ILightprofile>(s));
+                char const *url = lp->get_filename();
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        case RESOURCE_BSDF_MEASUREMENT:
+            for (mi::Size i = 1, n = target_code->get_bsdf_measurement_count(); i < n; ++i) {
+                const char *s = target_code->get_bsdf_measurement(i);
+                mi::base::Handle<mi::neuraylib::IBsdf_measurement const> bm(
+                    transaction->access<mi::neuraylib::IBsdf_measurement>(s));
+                char const *url = bm->get_filename();
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        }
+    }
+
+private:
+    Resource_id_map          m_resource_map;
+    std::vector<std::string> m_urls;
+    size_t                   m_max_len;
 };
 
 // Helper class to handle the string table of a target code.
@@ -706,10 +825,10 @@ public:
     // Get the length of the longest string in the string constant table.
     size_t get_max_length() const { return m_max_len; }
 
-    // Get the string for a given ID, or NULL if this ID does not exists.
+    // Get the string for a given ID, or nullptr if this ID does not exists.
     const char *get_string(unsigned id) {
         if (id == 0 || id - 1 >= m_strings.size())
-            return NULL;
+            return nullptr;
         return m_strings[id - 1].c_str();
     }
 
@@ -763,6 +882,32 @@ static void update_camera(
     kernel_params.cam_pos.z = -kernel_params.cam_dir.z * dist;
 }
 
+// Add a combobox for the given resource parameter to the GUI
+static bool handle_resource(
+    Param_info           &param,
+    Resource_table const &res_table)
+{
+    bool changed = false;
+    std::vector<std::string> const &urls = res_table.get_urls();
+    int id = param.data<int>();
+    std::string cur_url = urls[id];
+
+    if (ImGui::BeginCombo(param.display_name(), cur_url.c_str())) {
+        for (size_t i = 0, n = urls.size(); i < n; ++i) {
+            const std::string &name = urls[i];
+            bool is_selected = (cur_url == name);
+            if (ImGui::Selectable(name.c_str(), is_selected)) {
+                param.data<int>() = int(i);
+                changed = true;
+            }
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
 // Progressively render scene
 static void render_scene(
     const Options &options,
@@ -782,7 +927,7 @@ static void render_scene(
     GLuint program = 0;
     GLuint quad_vertex_buffer = 0;
     GLuint quad_vao = 0;
-    GLFWwindow *window = NULL;
+    GLFWwindow *window = nullptr;
     int width = -1;
     int height = -1;
 
@@ -797,7 +942,7 @@ static void render_scene(
         glfwSetCharCallback(window, ImGui_ImplGlfwGL3_CharCallback);
 
         ImGui_ImplGlfwGL3_Init(window, false);
-        ImGui::GetIO().IniFilename = NULL;       // disable creating imgui.ini
+        ImGui::GetIO().IniFilename = nullptr;       // disable creating imgui.ini
         ImGui::GetStyle().ScaleAllSizes(options.gui_scale);
 
         glGenBuffers(1, &display_buffer);
@@ -815,7 +960,7 @@ static void render_scene(
     CUcontext cuda_context = init_cuda(options.opengl);
 
     CUdeviceptr accum_buffer = 0;
-    CUgraphicsResource display_buffer_cuda = NULL;
+    CUgraphicsResource display_buffer_cuda = nullptr;
     if (!options.opengl) {
         width = options.res_x;
         height = options.res_y;
@@ -833,6 +978,8 @@ static void render_scene(
     kernel_params.mdl_test_type = options.mdl_test_type;
     kernel_params.max_path_length = options.max_path_length;
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
+    kernel_params.disable_aa = options.no_aa;
+    kernel_params.use_derivatives = options.enable_derivatives;
 
     // Setup camera
     float base_dist = length(options.cam_pos);
@@ -849,9 +996,11 @@ static void render_scene(
     std::vector<mi::base::Handle<const mi::neuraylib::ITarget_code> > target_codes;
     target_codes.push_back(target_code);
     CUfunction  cuda_function;
+    char const *ptx_name = options.enable_derivatives ?
+        "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + "example_df_cuda.ptx").c_str(),
+        (get_executable_folder() + ptx_name).c_str(),
         "render_sphere_kernel",
         &cuda_function);
 
@@ -890,7 +1039,7 @@ static void render_scene(
     // Scope for material context resources
     {
         // Prepare the needed data of all target codes for the GPU
-        Material_gpu_context material_gpu_context;
+        Material_gpu_context material_gpu_context(options.enable_derivatives);
         if (!material_gpu_context.prepare_target_code_data(
                 transaction.get(), image_api.get(), target_code.get()))
             terminate();
@@ -900,6 +1049,10 @@ static void render_scene(
             material_gpu_context.get_device_target_argument_block_list());
 
         String_constant_table constant_table(target_code);
+        Resource_table texture_table(target_code, transaction, Resource_table::RESOURCE_TEXTURE);
+        Resource_table lp_table(target_code, transaction, Resource_table::RESOURCE_LIGHT_PROFILE);
+        Resource_table bm_table(
+            target_code, transaction, Resource_table::RESOURCE_BSDF_MEASUREMENT);
 
         // Collect information about the arguments of the compiled materials
         std::vector<Material_info> mat_infos;
@@ -916,19 +1069,19 @@ static void render_scene(
                 material_gpu_context.get_argument_block_layout(arg_block_index));
             mi::base::Handle<mi::neuraylib::ITarget_argument_block> arg_block(
                 material_gpu_context.get_argument_block(arg_block_index));
-            char *arg_block_data = arg_block != NULL ? arg_block->get_data() : NULL;
+            char *arg_block_data = arg_block != nullptr ? arg_block->get_data() : nullptr;
 
             Material_info mat_info(cur_def->get_mdl_name());
             for (mi::Size j = 0, num_params = cur_mat->get_parameter_count(); j < num_params; ++j) {
                 const char *name = cur_mat->get_parameter_name(j);
-                if (name == NULL) continue;
+                if (name == nullptr) continue;
 
                 // Determine the type of the argument
                 mi::base::Handle<mi::neuraylib::IValue const> arg(cur_mat->get_argument(j));
                 mi::neuraylib::IValue::Kind kind = arg->get_kind();
 
                 Param_info::Param_kind param_kind = Param_info::PK_UNKNOWN;
-                const Enum_type_info *enum_type = NULL;
+                const Enum_type_info *enum_type = nullptr;
 
                 switch (kind) {
                 case mi::neuraylib::IValue::VK_FLOAT:
@@ -965,7 +1118,7 @@ static void render_scene(
 
                         // prepare info for this enum type if not seen so far
                         const Enum_type_info *info = mat_info.get_enum_type(val_type->get_symbol());
-                        if (info == NULL) {
+                        if (info == nullptr) {
                             std::shared_ptr<Enum_type_info> p(new Enum_type_info());
 
                             for (mi::Size i = 0, n = val_type->get_size(); i < n; ++i) {
@@ -982,6 +1135,15 @@ static void render_scene(
                 case mi::neuraylib::IValue::VK_STRING:
                     param_kind = Param_info::PK_STRING;
                     break;
+                case mi::neuraylib::IValue::VK_TEXTURE:
+                    param_kind = Param_info::PK_TEXTURE;
+                    break;
+                case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
+                    param_kind = Param_info::PK_LIGHT_PROFILE;
+                    break;
+                case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
+                    param_kind = Param_info::PK_BSDF_MEASUREMENT;
+                    break;
                 default:
                     // Unsupported? -> skip
                     continue;
@@ -995,7 +1157,7 @@ static void render_scene(
                 check_success(kind == kind2);
 
                 Param_info param_info(
-                    j, name, name, /*group_name=*/NULL, param_kind, arg_block_data + offset,
+                    j, name, name, /*group_name=*/nullptr, param_kind, arg_block_data + offset,
                     enum_type);
 
                 // Check for annotation info
@@ -1108,7 +1270,7 @@ static void render_scene(
                 ImGui::Text("%s", mat_info.name());
 
                 bool changed = false;
-                const char *group_name = NULL;
+                const char *group_name = nullptr;
                 int id = 0;
                 for (std::list<Param_info>::iterator it = mat_info.params().begin(),
                     end = mat_info.params().end(); it != end; ++it, ++id)
@@ -1124,7 +1286,7 @@ static void render_scene(
                             (!group_name || strcmp(group_name, param.group_name()) != 0)))
                     {
                         ImGui::Separator();
-                        if (param.group_name() != NULL)
+                        if (param.group_name() != nullptr)
                             ImGui::Text("%s", param.group_name());
                         group_name = param.group_name();
                     }
@@ -1203,7 +1365,7 @@ static void render_scene(
                             // fill the current value
                             unsigned curr_index = param.data<unsigned>();
                             const char *opt = constant_table.get_string(curr_index);
-                            strcpy(buf.data(), opt != NULL ? opt : "");
+                            strcpy(buf.data(), opt != nullptr ? opt : "");
 
                             if (ImGui::InputText(
                                 param.display_name(),
@@ -1217,11 +1379,29 @@ static void render_scene(
                             }
                         }
                         break;
+                    case Param_info::PK_TEXTURE:
+                        changed |= handle_resource(param, texture_table);
+                        break;
+                    case Param_info::PK_LIGHT_PROFILE:
+                        changed |= handle_resource(param, lp_table);
+                        break;
+                    case Param_info::PK_BSDF_MEASUREMENT:
+                        changed |= handle_resource(param, bm_table);
+                        break;
                     case Param_info::PK_UNKNOWN:
                         break;
                     }
 
                     ImGui::PopID();
+                }
+
+                if (options.enable_derivatives) {
+                    ImGui::Separator();
+                    bool b = kernel_params.use_derivatives != 0;
+                    if (ImGui::Checkbox("Use derivatives", &b)) {
+                        kernel_params.iteration_start = 0;
+                        kernel_params.use_derivatives = b;
+                    }
                 }
 
                 ImGui::PopItemWidth();
@@ -1250,7 +1430,7 @@ static void render_scene(
                     kernel_params.iteration_start = 0;
 
                     // Update change material
-                    const int num_materials = static_cast<int>(material_bundle.size());
+                    const unsigned num_materials = unsigned(material_bundle.size());
                     kernel_params.current_material = (kernel_params.current_material +
                         ctx->material_index_delta + num_materials) % num_materials;
                     ctx->material_index_delta = 0;
@@ -1299,7 +1479,6 @@ static void render_scene(
             }
 
 
-
             // Launch kernel
             dim3 threads_per_block(16, 16);
             dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
@@ -1308,11 +1487,12 @@ static void render_scene(
                 cuda_function,
                 num_blocks.x, num_blocks.y, num_blocks.z,
                 threads_per_block.x, threads_per_block.y, threads_per_block.z,
-                0, NULL, params, NULL));
+                0, nullptr, params, nullptr));
+
 
             kernel_params.iteration_start += kernel_params.iteration_num;
 
-            // make sure, any debug::print()s are written to the console
+            // Make sure, any debug::print()s are written to the console
             check_cuda_success(cuStreamSynchronize(0));
 
             if (options.opengl)
@@ -1324,7 +1504,7 @@ static void render_scene(
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, display_buffer);
                 glBindTexture(GL_TEXTURE_2D, display_tex);
                 glTexImage2D(
-                    GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+                    GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -1406,6 +1586,9 @@ Df_cuda_material create_cuda_material(
     mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
     mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
 
+    mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
+    mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
+
     return mat;
 }
 
@@ -1436,9 +1619,10 @@ static void usage(const char *name)
         << "--mdl_path <path>           MDL search path, can occur multiple times.\n"
         << "--max_path_length <num>     maximum path length, default 4 (up to one total internal\n"
         << "                            reflection), clamped to 2..100\n"
+        << "--noaa                      disable pixel oversampling\n"
+        << "-d                          enable use of derivatives\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n";
-    
 
     exit(EXIT_FAILURE);
 }
@@ -1447,21 +1631,6 @@ int main(int argc, char* argv[])
 {
     // Parse commandline options
     Options options;
-    options.gui_scale = 1.0f;
-    options.opengl = true;
-    options.use_class_compilation = true;
-    options.res_x = options.res_y = 1024;
-    options.iterations = 4096;
-    options.samples_per_iteration = 8;
-    options.mdl_test_type = MDL_TEST_MIS;
-    options.max_path_length = 4;
-    options.fov = 96.0f;
-    options.exposure = 0.0f;
-    options.cam_pos = make_float3(0, 0, 3);
-    options.light_pos = make_float3(0, 0, 0);
-    options.light_intensity = make_float3(0, 0, 0);
-    options.hdrfile = "nvidia/sdk_examples/resources/environment.hdr";
-    options.outputfile = "output.exr";
 
     for (int i = 1; i < argc; ++i) {
         const char *opt = argv[i];
@@ -1509,6 +1678,10 @@ int main(int argc, char* argv[])
                 options.mdl_paths.push_back(argv[++i]);
             } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
                 options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
+            } else if (strcmp(opt, "--noaa") == 0) {
+                options.no_aa = true;
+            } else if (strcmp(opt, "-d") == 0) {
+                options.enable_derivatives = true;
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
@@ -1532,13 +1705,13 @@ int main(int argc, char* argv[])
 
     // Set the MDL and texture search paths
     const std::string root = get_samples_mdl_root();
-    check_success(mdl_compiler->add_resource_path(root.c_str()) == 0);
     check_success(mdl_compiler->add_module_path(root.c_str()) == 0);
+    check_success(mdl_compiler->add_resource_path(root.c_str()) == 0);
 
     for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
         check_success(mdl_compiler->add_module_path(options.mdl_paths[i].c_str()) == 0);
 
-    // Use default material, if non was provided via command line
+    // Use default material, if none was provided via command line
     if (options.material_names.empty())
         options.material_names.push_back("::nvidia::sdk_examples::tutorials::example_df");
 
@@ -1552,10 +1725,16 @@ int main(int argc, char* argv[])
             neuray->get_api_component<mi::neuraylib::IDatabase>());
         mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
         mi::base::Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
-
+        mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+            neuray->get_api_component<mi::neuraylib::IMdl_factory>());
         {
             // Initialize the material compiler with 16 result buffer slots ("texture results")
-            Material_compiler mc(mdl_compiler.get(), transaction.get(), 16);
+            Material_compiler mc(
+                mdl_compiler.get(),
+                mdl_factory.get(),
+                transaction.get(),
+                16,
+                options.enable_derivatives);
 
             // List of materials in the scene
             std::vector<Df_cuda_material> material_bundle;
@@ -1568,6 +1747,8 @@ int main(int argc, char* argv[])
                 mi::neuraylib::Target_function_description("surface.emission.emission"));
             descs.push_back(
                 mi::neuraylib::Target_function_description("surface.emission.intensity"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("volume.absorption_coefficient"));
 
             // Generate code for all materials
             std::vector<std::string> used_material_names;
@@ -1661,3 +1842,4 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+

@@ -49,7 +49,6 @@
 #include <base/lib/log/i_log_logger.h>
 #include <base/data/attr/attr.h>
 #include <base/data/db/i_db_transaction.h>
-#include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/scene/i_scene_attr_resv_id.h>
 #include <io/scene/mdl_elements/i_mdl_elements_type.h>
@@ -61,9 +60,8 @@
 #include "neuray_transaction_impl.h"
 #include "neuray_type_utilities.h"
 
-
 // Enable to trace calls of Attribute_set_impl_helper::register_decls()
-// #define MI_API_API_NEURAY_TRACE_MDL_TYPE_REGISTRATION
+// #define MI_API_API_NEURAY_TRACE_TYPE_REGISTRATION
 
 namespace MI {
 
@@ -129,22 +127,19 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
     IDb_element* db_element,
     const char* name,
     const char* type_name,
-    bool skip_type_check,
-    bool warn_for_typed_refs)
+    bool skip_type_check)
 {
     if( !name || !type_name)
         return 0;
     ASSERT( M_NEURAY_API, attribute_set);
 
-    // Warn for disabled type names. Note that the legacy MDL API still uses them on attribute
-    // containes. Also there is no warning for complex types (arrays of such types).
-    if( warn_for_typed_refs
-        && (   strcmp( type_name, "Ref<Texture>") == 0
-            || strcmp( type_name, "Ref<Lightprofile>") == 0
-            || strcmp( type_name, "Ref<Bsdf_measurement>") == 0)) {
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Using attributes of type \"%s\" is deprecated. Use type \"Ref\" instead.",
+    if(    strcmp( type_name, "Ref<Texture>") == 0
+        || strcmp( type_name, "Ref<Lightprofile>") == 0
+        || strcmp( type_name, "Ref<Bsdf_measurement>") == 0) {
+        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+            "Using attributes of type \"%s\" is no longer supported. Use type \"Ref\" instead.",
             type_name);
+        return 0;
     }
 
     std::string name_str( name);
@@ -385,19 +380,6 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
     return get_attribute( transaction, owner, attribute_name, attribute_type, pointer);
 }
 
-void Attribute_set_impl_helper::register_mdl_callback()
-{
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
-    mdlc_module->set_register_mdl_type_with_api_callback(
-        &Attribute_set_impl_helper::register_decls);
-}
-
-void Attribute_set_impl_helper::unregister_mdl_callback()
-{
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
-    mdlc_module->set_register_mdl_type_with_api_callback( 0);
-}
-
 mi::IData* Attribute_set_impl_helper::get_attribute(
     mi::neuraylib::ITransaction* transaction,
     const mi::base::IInterface* owner,
@@ -466,7 +448,6 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         argv[2] = name.get();
         attribute_proxy = transaction->create<IProxy>( "__Structure_proxy", 3, argv);
 
-
     // enum attribute types
     } else if( attribute_type_code == ATTR::TYPE_ENUM) {
         mi::base::Handle<const mi::IEnum_decl> decl( get_enum_decl( *attribute_type));
@@ -503,7 +484,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         // handle IRef
         else if( attribute_type_name.substr( 0, 3) == "Ref")
             proxy_type_name = "__Ref_proxy" + attribute_type_name.substr( 3);
-        // handle INumber, IString, IParameter
+        // handle INumber, IString
         else
             proxy_type_name = "__" + attribute_type_name + "_proxy";
         attribute_proxy = transaction->create<IProxy>( proxy_type_name.c_str());
@@ -566,7 +547,6 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         attribute_type_name += " }";
         return attribute_type_name;
     }
-
 
     // enum attribute types
     if( type_code == ATTR::TYPE_ENUM) {
@@ -654,7 +634,6 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         }
         return structure_type;
 
-
     // enum attribute types
     } else if( type_code == ATTR::TYPE_ENUM) {
         mi::base::Handle<const mi::IEnum_decl> decl(
@@ -731,7 +710,6 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
             decl->add_member( member_decl->get_structure_type_name(), member_type->get_name());
             member_type = member_type->get_next();
 
-
         // enum attribute types
         } else if( member_type_code == ATTR::TYPE_ENUM) {
             mi::base::Handle<const mi::IEnum_decl> member_decl(
@@ -774,23 +752,17 @@ const mi::IEnum_decl* Attribute_set_impl_helper::create_enum_decl( const ATTR::T
 }
 
 namespace {
-#ifdef MI_API_API_NEURAY_TRACE_MDL_TYPE_REGISTRATION
+#ifdef MI_API_API_NEURAY_TRACE_TYPE_REGISTRATION
 void trace( const char* text, const char* name)
 {
     LOG::mod_log->info( M_NEURAY_API, LOG::Mod_log::C_DATABASE, text, name);
 }
-#else // MI_API_API_NEURAY_TRACE_MDL_TYPE_REGISTRATION
+#else // MI_API_API_NEURAY_TRACE_TYPE_REGISTRATION
 void trace( const char* text, const char* name) { }
-#endif // MI_API_API_NEURAY_TRACE_MDL_TYPE_REGISTRATION
+#endif // MI_API_API_NEURAY_TRACE_TYPE_REGISTRATION
 } // namespace
 
 void Attribute_set_impl_helper::register_decls( const ATTR::Type& type)
-{
-    mi::base::Lock::Block block( &s_register_decls_lock);
-    return register_decls_locked( type);
-}
-
-void Attribute_set_impl_helper::register_decls( const MDL::IType* type)
 {
     mi::base::Lock::Block block( &s_register_decls_lock);
     return register_decls_locked( type);
@@ -870,7 +842,6 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
         ASSERT( M_NEURAY_API, result == 0 || result == -1);
         boost::ignore_unused( result);
 
-
     // enum types
     } else if( type_code == ATTR::TYPE_ENUM) {
 
@@ -931,10 +902,6 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
     } else {
         // nothing to do
     }
-}
-
-void Attribute_set_impl_helper::register_decls_locked( const MDL::IType* type)
-{
 }
 
 bool Attribute_set_impl_helper::type_matches_structure_decl(
@@ -1087,4 +1054,3 @@ DB::Journal_type Attribute_set_impl_helper::compute_journal_flags(
 } // namespace NEURAY
 
 } // namespace MI
-

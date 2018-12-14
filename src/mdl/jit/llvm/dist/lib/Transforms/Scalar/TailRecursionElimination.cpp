@@ -568,7 +568,7 @@ bool TailCallElim::EliminateRecursiveTailCall(CallInst *CI, ReturnInst *Ret,
     pred_iterator PB = pred_begin(OldEntry), PE = pred_end(OldEntry);
     PHINode *AccPN =
       PHINode::Create(AccumulatorRecursionEliminationInitVal->getType(),
-                      MISTD::distance(PB, PE) + 1,
+                      std::distance(PB, PE) + 1,
                       "accumulator.tr", OldEntry->begin());
 
     // Loop over all of the predecessors of the tail recursion block.  For the

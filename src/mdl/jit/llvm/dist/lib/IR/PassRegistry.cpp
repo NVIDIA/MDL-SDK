@@ -57,8 +57,8 @@ struct PassRegistryImpl {
   };
   DenseMap<const PassInfo*, AnalysisGroupInfo> AnalysisGroupInfoMap;
   
-  MISTD::vector<const PassInfo*> ToFree;
-  MISTD::vector<PassRegistrationListener*> Listeners;
+  std::vector<const PassInfo*> ToFree;
+  std::vector<PassRegistrationListener*> Listeners;
 };
 } // end anonymous namespace
 
@@ -76,7 +76,7 @@ PassRegistry::~PassRegistry() {
   sys::SmartScopedWriter<true> Guard(*Lock);
   PassRegistryImpl *Impl = static_cast<PassRegistryImpl*>(pImpl);
   
-  for (MISTD::vector<const PassInfo*>::iterator I = Impl->ToFree.begin(),
+  for (std::vector<const PassInfo*>::iterator I = Impl->ToFree.begin(),
        E = Impl->ToFree.end(); I != E; ++I)
     delete *I;
   
@@ -107,13 +107,13 @@ void PassRegistry::registerPass(const PassInfo &PI, bool ShouldFree) {
   sys::SmartScopedWriter<true> Guard(*Lock);
   PassRegistryImpl *Impl = static_cast<PassRegistryImpl*>(getImpl());
   bool Inserted =
-    Impl->PassInfoMap.insert(MISTD::make_pair(PI.getTypeInfo(),&PI)).second;
+    Impl->PassInfoMap.insert(std::make_pair(PI.getTypeInfo(),&PI)).second;
   assert(Inserted && "Pass registered multiple times!");
   (void)Inserted;
   Impl->PassInfoStringMap[PI.getPassArgument()] = &PI;
   
   // Notify any listeners.
-  for (MISTD::vector<PassRegistrationListener*>::iterator
+  for (std::vector<PassRegistrationListener*>::iterator
        I = Impl->Listeners.begin(), E = Impl->Listeners.end(); I != E; ++I)
     (*I)->passRegistered(&PI);
   
@@ -202,8 +202,8 @@ void PassRegistry::removeRegistrationListener(PassRegistrationListener *L) {
   if (!pImpl) return;
   
   PassRegistryImpl *Impl = static_cast<PassRegistryImpl*>(getImpl());
-  MISTD::vector<PassRegistrationListener*>::iterator I =
-    MISTD::find(Impl->Listeners.begin(), Impl->Listeners.end(), L);
+  std::vector<PassRegistrationListener*>::iterator I =
+    std::find(Impl->Listeners.begin(), Impl->Listeners.end(), L);
   assert(I != Impl->Listeners.end() &&
          "PassRegistrationListener not registered!");
   Impl->Listeners.erase(I);

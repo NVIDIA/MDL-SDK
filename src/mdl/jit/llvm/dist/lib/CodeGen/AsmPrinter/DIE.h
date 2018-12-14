@@ -122,7 +122,7 @@ namespace llvm {
 
     /// Children DIEs.
     ///
-    MISTD::vector<DIE *> Children;
+    std::vector<DIE *> Children;
 
     DIE *Parent;
 
@@ -143,7 +143,7 @@ namespace llvm {
     dwarf::Tag getTag() const { return Abbrev.getTag(); }
     unsigned getOffset() const { return Offset; }
     unsigned getSize() const { return Size; }
-    const MISTD::vector<DIE *> &getChildren() const { return Children; }
+    const std::vector<DIE *> &getChildren() const { return Children; }
     const SmallVectorImpl<DIEValue*> &getValues() const { return Values; }
     DIE *getParent() const { return Parent; }
     /// Climb up the parent chain to get the compile unit DIE this DIE belongs

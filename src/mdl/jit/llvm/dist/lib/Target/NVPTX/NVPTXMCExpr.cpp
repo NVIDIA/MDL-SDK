@@ -39,8 +39,8 @@ void NVPTXFloatMCExpr::PrintImpl(raw_ostream &OS) const {
   }
 
   APInt API = APF.bitcastToAPInt();
-  MISTD::string HexStr(utohexstr(API.getZExtValue()));
+  std::string HexStr(utohexstr(API.getZExtValue()));
   if (HexStr.length() < NumHex)
-    OS << MISTD::string(NumHex - HexStr.length(), '0');
+    OS << std::string(NumHex - HexStr.length(), '0');
   OS << utohexstr(API.getZExtValue());
 }

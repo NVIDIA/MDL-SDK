@@ -306,7 +306,7 @@ namespace {
   class ArgumentGraph {
     // We store pointers to ArgumentGraphNode objects, so it's important that
     // that they not move around upon insert.
-    typedef MISTD::map<Argument*, ArgumentGraphNode> ArgumentMapTy;
+    typedef std::map<Argument*, ArgumentGraphNode> ArgumentMapTy;
 
     ArgumentMapTy ArgumentMap;
 
@@ -601,7 +601,7 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
 
   for (scc_iterator<ArgumentGraph*> I = scc_begin(&AG), E = scc_end(&AG);
        I != E; ++I) {
-    MISTD::vector<ArgumentGraphNode*> &ArgumentSCC = *I;
+    std::vector<ArgumentGraphNode*> &ArgumentSCC = *I;
     if (ArgumentSCC.size() == 1) {
       if (!ArgumentSCC[0]->Definition) continue;  // synthetic root node
 
@@ -617,7 +617,7 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
     }
 
     bool SCCCaptured = false;
-    for (MISTD::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
+    for (std::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
            E = ArgumentSCC.end(); I != E && !SCCCaptured; ++I) {
       ArgumentGraphNode *Node = *I;
       if (Node->Uses.empty()) {
@@ -630,12 +630,12 @@ bool FunctionAttrs::AddArgumentAttrs(const CallGraphSCC &SCC) {
     SmallPtrSet<Argument*, 8> ArgumentSCCNodes;
     // Fill ArgumentSCCNodes with the elements of the ArgumentSCC.  Used for
     // quickly looking up whether a given Argument is in this ArgumentSCC.
-    for (MISTD::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
+    for (std::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
            E = ArgumentSCC.end(); I != E; ++I) {
       ArgumentSCCNodes.insert((*I)->Definition);
     }
 
-    for (MISTD::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
+    for (std::vector<ArgumentGraphNode*>::iterator I = ArgumentSCC.begin(),
            E = ArgumentSCC.end(); I != E && !SCCCaptured; ++I) {
       ArgumentGraphNode *N = *I;
       for (SmallVectorImpl<ArgumentGraphNode*>::iterator UI = N->Uses.begin(),

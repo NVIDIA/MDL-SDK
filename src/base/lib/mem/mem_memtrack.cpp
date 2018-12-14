@@ -444,8 +444,8 @@ void stamp(void* p, const Context& context, const char* type_name)
     if (strncmp(recorded_type_name, s2, strlen(s2)) == 0)
         recorded_type_name += strlen (s2);
     
-    // 3. Aggregate top-level classes in MISTD::priv.
-    const char* s3 = "MISTD::priv::";
+    // 3. Aggregate top-level classes in std::priv.
+    const char* s3 = "std::priv::";
     if (strncmp(recorded_type_name, s3, strlen(s3)) == 0) {
         char* pos = index(recorded_type_name + strlen(s3), '<');
         *pos = '\0';
@@ -539,7 +539,7 @@ void list_memory_usage()
     Block_list::get_blocks(pointers);
 
     // Sort the blocks by type name.
-    MISTD::sort(pointers, pointers + num_blocks, Block_list::type_greater_than);
+    std::sort(pointers, pointers + num_blocks, Block_list::type_greater_than);
 
     // Find out how many unique types we have.
     size_t num_unique_types = 1;
@@ -568,7 +568,7 @@ void list_memory_usage()
     assert(current_digest == num_unique_types);
 
     // Sort the digests by total memory usage.
-    MISTD::sort(digests, digests + num_unique_types, Mem_digest::total_size_greater_than);
+    std::sort(digests, digests + num_unique_types, Mem_digest::total_size_greater_than);
 
     // Compute the grand total memory usage.
     size_t grand_total_num_blocks = 0;
@@ -618,7 +618,7 @@ void list_memory_usage()
 
 /// redefinition of global operator new
 ///
-/// Note: we really need std::bad_alloc here, not MISTD::bad_alloc.
+/// Note: we really need std::bad_alloc here, not std::bad_alloc.
 void* operator new(size_t size) throw (st""d::bad_alloc)
 {
     void* p = MI::MEM::track_allocation(size);
@@ -634,7 +634,7 @@ void operator delete (void* p) throw()
 
 /// redefinition of global operator new[]
 ///
-/// Note: we really need std::bad_alloc here, not MISTD::bad_alloc.
+/// Note: we really need std::bad_alloc here, not std::bad_alloc.
 void* operator new[](size_t size) throw (st""d::bad_alloc)
 {
     void* p = MI::MEM::track_allocation(size);

@@ -44,7 +44,12 @@
 namespace MI {
 
 namespace DB { class Transaction; }
-namespace MDL { class Mdl_function_call; class Mdl_compiled_material; class IValue_list; };
+namespace MDL {
+class Mdl_function_call;
+class Mdl_compiled_material;
+class IValue_list;
+class Execution_context; 
+};
 
 namespace BACKENDS {
 
@@ -67,14 +72,20 @@ public:
 
     /// Add an MDL environment function call as a function to this link unit.
     ///
-    /// \param i_call                     The MDL function call for the environment.
-    /// \param fname                      The name of the function that is created.
-    /// \param mdl_meters_per_scene_unit  The conversion ratio between meters and scene units
-    ///                                   for this environment function.
-    /// \param mdl_wavelength_min         The smallest supported wavelength, typical value: 380.
-    /// \param mdl_wavelength_max         The largest supported wavelength, typical value: 780.
+    /// \param i_call                      The MDL function call for the environment.
+    /// \param fname                       The name of the function that is created.
+    /// \param[inout] context              An pointer to an
+    ///                                    #MDL::Execution_context which can be used
+    ///                                    to pass compilation options to the MDL compiler. The 
+    ///                                    following options are supported for this operation:
+    ///                                    - Float32 "mdl_meters_per_scene_unit" (default 1.0f)
+    ///                                    - Float32 "mdl_wavelength_min" (default 380.f)
+    ///                                    - Float32 "mdl_wavelength_max" (default 780.f)
+    ///                                    During material compilation messages like errors and 
+    ///                                    warnings will be passed to the context for 
+    ///                                    later evaluation by the caller.
     ///
-    /// \return           A return code.  The return codes have the following meaning:
+    /// \return           A return code. The return codes have the following meaning:
     ///                   -  0: Success.
     ///                   - -1: The JIT backend is not available.
     ///                   - -2: Invalid expression.
@@ -83,9 +94,7 @@ public:
     mi::Sint32 add_environment(
         MDL::Mdl_function_call const *i_call,
         char const                   *fname,
-        mi::Float32                  mdl_meters_per_scene_unit,
-        mi::Float32                  mdl_wavelength_min,
-        mi::Float32                  mdl_wavelength_max);
+        MDL::Execution_context*      context);
 
     /// Add an expression that is part of an MDL material instance as a function to this
     /// link unit.
@@ -94,74 +103,80 @@ public:
     /// \param path        The path from the material root to the expression that should be
     ///                    translated, e.g., \c "geometry.displacement".
     /// \param fname       The name of the function that is created.
+    /// \param context     Pointer to an
+    ///                    #mi::nueraylib::IMdl_execution_context which can be used
+    ///                    to pass compilation options to the MDL compiler.
+    ///                    Currently, no options are supported by this operation.
+    ///                    During material compilation messages like errors and
+    ///                    warnings will be passed to the context for
+    ///                    later evaluation by the caller.
     ///
     /// \return            A return code.  The return codes have the following meaning:
     ///                    -  0: Success.
-    ///                    - -1: The JIT backend is not available.
-    ///                    - -2: Invalid field name (non-existing).
-    ///                    - -3: invalid function name.
-    ///                    - -4: The JIT backend failed to compile the function.
-    ///                    - -5: The requested expression is a constant.
-    ///                    - -6: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
-    ///                          compiled.
+    ///                    - -1: An error occured. Please check the execution context for details.
+
     mi::Sint32 add_material_expression(
         MDL::Mdl_compiled_material const *i_material,
         char const                       *path,
-        char const                       *fname);
+        char const                       *fname,
+        MDL::Execution_context           *context);
 
     /// Add an MDL distribution function to this link unit.
     /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
     /// \c "_evaluate" and \c "_pdf".
     ///
-    /// \param i_material               The compiled MDL material.
-    /// \param path                     The path from the material root to the expression that
-    ///                                 should be translated, e.g., \c "surface.scattering".
-    /// \param base_fname               The base name of the generated functions.
-    ///                                 If \c NULL is passed, \c "lambda" will be used.
-    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
-    ///                                 to the MDL state prior to evaluation of the given DF.
-    /// \returns             A return code. The error codes have the following meaning:
+    /// \param i_material   The compiled MDL material.
+    /// \param path         The path from the material root to the expression that
+    ///                     should be translated, e.g., \c "surface.scattering".
+    /// \param base_fname   The base name of the generated functions.
+    /// \param context      Pointer to an #mi::nueraylib::IMdl_execution_context which can be used
+    ///                     to pass compilation options to the MDL compiler.
+    ///                     The following options are supported by this operation:
+    ///                     - bool "include_geometry_normal" If true, the \c "geometry.normal"
+    ///                       field will be applied to the MDL state prior to evaluation of the
+    ///                       given DF (default: true).
+    ///                     During material compilation messages like errors and
+    ///                     warnings will be passed to the context for
+    ///                     later evaluation by the caller.
+    /// \returns            A return code. The error codes have the following meaning:
     ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: Invalid path (non-existing).
-    ///                      - -3: The backend failed to generate target code for the material.
-    ///                      - -4: The requested expression is a constant.
-    ///                      - -5: Only distribution functions are allowed.
-    ///                      - -6: The backend does not support compiled MDL materials obtained
-    ///                            from class compilation mode.
-    ///                      - -7: The backend does not implement this function, yet.
+    ///                     - -1: An error occurred. Please check the execution context for details.
+
     mi::Sint32 add_material_df(
         MDL::Mdl_compiled_material const *i_material,
         char const                       *path,
         char const                       *base_fname,
-        bool                              include_geometry_normal);
+        MDL::Execution_context           *context);
 
     /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
-    /// For each distribution function it results in four functions, suffixed with \c "_init", 
+    /// For each distribution function it results in four functions, suffixed with \c "_init",
     /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
     /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
     /// of the expression that should be translated. After calling this function, each element of
     /// the list will contain information for later usage in the application, 
     /// e.g., the \c argument_block_index and the \c function_index.
     ///
-    /// \param material                     The compiled MDL material.
-    /// \param function_descriptions        The list of descriptions of function to translate.
-    /// \param lfunction_count              The size of the list of descriptions.
-    /// \param include_geometry_normal      If true, the \c "geometry.normal" field will be applied
-    ///                                     to the MDL state prior to evaluation of the given DF.
+    /// \param material              The compiled MDL material.
+    /// \param function_descriptions The list of descriptions of function to translate.
+    /// \param lfunction_count       The size of the list of descriptions.
+    /// \param context               Pointer to an #mi::nueraylib::IMdl_execution_context which can
+    ///                              be used to pass compilation options to the MDL compiler.
+    ///                              The following options are supported by this operation:
+    ///                              - bool "include_geometry_normal" If true, the
+    ///                                \c "geometry.normal" field will be applied to the MDL state
+    ///                                prior to evaluation of the given DF (default: true).
+    ///                              During material compilation messages like errors and
+    ///                              warnings will be passed to the context for
+    ///                              later evaluation by the caller.
     /// \returns             A return code. The error codes have the following meaning:
     ///                      -  0: Success.
     ///                      - -1: An error occurred while processing the entries in the list.
-    ///                            For more detailed error information, each list entry contains
-    ///                            the error code of the corresponding function type 
-    ///                            (see the return codes of \c add_material_expression and 
-    ///                            \c add_material_df). In case of an error, rely only on the first
-    ///                            return code different from 0.
+    ///                            Please check the execution context for details.
     virtual mi::Sint32 add_material(
         MDL::Mdl_compiled_material const                   *i_material,
         mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
         mi::Size                                            function_count,
-        bool                                                include_geometry_normal);
+        MDL::Execution_context                             *context);
 
     /// Get the number of functions inside this link unit.
     mi::Size get_num_functions() const;
@@ -218,8 +233,13 @@ public:
     Target_code_register const *get_tc_reg() const { return m_tc_reg; }
 
     /// Get the list of arguments required for the target argument blocks.
-    MISTD::vector<mi::base::Handle<MDL::IValue_list const> > const &
+    std::vector<mi::base::Handle<MDL::IValue_list const> > const &
         get_arg_block_comp_material_args() const { return m_arg_block_comp_material_args; }
+
+    /// Get the internal space used in this link unit
+    const char* get_internal_space() const {
+        return m_internal_space.c_str();
+    }
 
     /// Destructor.
     ~Link_unit();
@@ -240,7 +260,7 @@ private:
     /// Registrar for resources of this link unit.
     Target_code_register *m_tc_reg;
 
-    typedef MISTD::map<MISTD::string, size_t> Resource_index_map;
+    typedef std::map<std::string, size_t> Resource_index_map;
 
     /// The resource index map to keep track of used resources and its indexes.
     Resource_index_map m_res_index_map;
@@ -263,9 +283,14 @@ private:
     /// If true, string argument values are mapped to string identifiers.
     bool m_strings_mapped_to_ids;
 
+    /// If true, derivatives should be calculated.
+    bool m_calc_derivatives;
+
     /// The arguments of the compiled materials for which target argument blocks should be
     /// created.
-    MISTD::vector<mi::base::Handle<MDL::IValue_list const> > m_arg_block_comp_material_args;
+    std::vector<mi::base::Handle<MDL::IValue_list const> > m_arg_block_comp_material_args;
+
+    std::string m_internal_space;
 };
 
 } // namespace BACKENDS

@@ -37,9 +37,11 @@ namespace mdl {
 // Constructor from a function definition.
 Function_instance::Function_instance(
     IDefinition const     *def,
-    Array_instances const &arg_instances)
+    Array_instances const &arg_instances,
+    bool                   return_derivs)
 : m_key(def)
 , m_array_instances(arg_instances)
+, m_return_derivs(return_derivs)
 , m_kind(KI_DEFINITION)
 {
     MDL_ASSERT(def->get_kind() == IDefinition::DK_FUNCTION);
@@ -48,9 +50,13 @@ Function_instance::Function_instance(
 // Constructor from a function definition.
 Function_instance::Function_instance(
     IAllocator        *alloc,
-    IDefinition const *def)
+    IDefinition const *def,
+    bool               return_derivs)
 : m_key(def)
 , m_array_instances(alloc)
+, m_return_derivs(
+    return_derivs ||
+    (def != NULL ? impl_cast<Definition>(def)->has_flag(Definition::DEF_IS_DERIVABLE) : false))
 , m_kind(KI_DEFINITION)
 {
     // def might be NULL for intrinsic functions
@@ -63,6 +69,7 @@ Function_instance::Function_instance(
     ILambda_function const *lambda)
 : m_key(lambda)
 , m_array_instances(alloc)
+, m_return_derivs(false)
 , m_kind(KI_LAMBDA)
 {
 }
@@ -73,6 +80,7 @@ Function_instance::Function_instance(
     size_t           code)
 : m_key(Key_t(code))
 , m_array_instances(alloc)
+, m_return_derivs(false)
 , m_kind(KI_PROTOTYPE_CODE)
 {
     // zero is reserved

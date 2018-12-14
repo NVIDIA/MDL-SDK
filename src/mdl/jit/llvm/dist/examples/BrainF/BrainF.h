@@ -39,7 +39,7 @@ class BrainF {
     /// containing the resulting code.
     /// On error, it calls abort.
     /// The caller must delete the returned module.
-    Module *parse(MISTD::istream *in1, int mem, CompileFlags cf,
+    Module *parse(std::istream *in1, int mem, CompileFlags cf,
                   LLVMContext& C);
 
   protected:
@@ -76,7 +76,7 @@ class BrainF {
     /// Constants during parsing
     int memtotal;
     CompileFlags comflag;
-    MISTD::istream *in;
+    std::istream *in;
     Module *module;
     Function *brainf_func;
     Function *getchar_func;

@@ -842,7 +842,7 @@ namespace llvm {
 
     /// getEVTString - This function returns value type as a string,
     /// e.g. "i32".
-    MISTD::string getEVTString() const;
+    std::string getEVTString() const;
 
     /// getTypeForEVT - This method returns an LLVM type corresponding to the
     /// specified EVT.  For integer types, this returns an unsigned type.  Note

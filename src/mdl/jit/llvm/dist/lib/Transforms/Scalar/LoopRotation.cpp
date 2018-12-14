@@ -330,7 +330,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
   BasicBlock *Exit = BI->getSuccessor(0);
   BasicBlock *NewHeader = BI->getSuccessor(1);
   if (L->contains(Exit))
-    MISTD::swap(Exit, NewHeader);
+    std::swap(Exit, NewHeader);
   assert(NewHeader && "Unable to determine new loop header");
   assert(L->contains(NewHeader) && !L->contains(Exit) &&
          "Unable to determine loop header and exit blocks");

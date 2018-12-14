@@ -90,7 +90,7 @@ public:
   RecTy(RecTyKind K) : Kind(K), ListTy(0) {}
   virtual ~RecTy() {}
 
-  virtual MISTD::string getAsString() const = 0;
+  virtual std::string getAsString() const = 0;
   void print(raw_ostream &OS) const { OS << getAsString(); }
   void dump() const;
 
@@ -166,7 +166,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const { return "bit"; }
+  virtual std::string getAsString() const { return "bit"; }
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -205,7 +205,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -242,7 +242,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const { return "int"; }
+  virtual std::string getAsString() const { return "int"; }
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -280,7 +280,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const { return "string"; }
+  virtual std::string getAsString() const { return "string"; }
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -318,7 +318,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -355,7 +355,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const { return "dag"; }
+  virtual std::string getAsString() const { return "dag"; }
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -395,7 +395,7 @@ public:
   virtual Init *convertValue(   VarInit *VI) { return RecTy::convertValue(VI);}
   virtual Init *convertValue( FieldInit *FI) { return RecTy::convertValue(FI);}
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   virtual bool typeIsConvertibleTo(const RecTy *RHS) const {
     return RHS->baseClassOf(this);
@@ -472,12 +472,12 @@ public:
   void print(raw_ostream &OS) const { OS << getAsString(); }
 
   /// getAsString - Convert this value to a string form.
-  virtual MISTD::string getAsString() const = 0;
+  virtual std::string getAsString() const = 0;
   /// getAsUnquotedString - Convert this value to a string form,
   /// without adding quote markers.  This primaruly affects
   /// StringInits where we will not surround the string value with
   /// quotes.
-  virtual MISTD::string getAsUnquotedString() const { return getAsString(); }
+  virtual std::string getAsUnquotedString() const { return getAsString(); }
 
   /// dump - Debugging method that may be called through a debugger, just
   /// invokes print on stderr.
@@ -495,7 +495,7 @@ public:
   /// the bit subscript operator on this initializer, return null.
   ///
   virtual Init *
-  convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const {
+  convertInitializerBitRange(const std::vector<unsigned> &Bits) const {
     return 0;
   }
 
@@ -505,7 +505,7 @@ public:
   /// to take a slice of this, return null.
   ///
   virtual Init *
-  convertInitListSlice(const MISTD::vector<unsigned> &Elements) const {
+  convertInitListSlice(const std::vector<unsigned> &Elements) const {
     return 0;
   }
 
@@ -513,14 +513,14 @@ public:
   /// Implementors of this method should return the type of the named field if
   /// they are of record type.
   ///
-  virtual RecTy *getFieldType(const MISTD::string &FieldName) const { return 0; }
+  virtual RecTy *getFieldType(const std::string &FieldName) const { return 0; }
 
   /// getFieldInit - This method complements getFieldType to return the
   /// initializer for the specified field.  If getFieldType returns non-null
   /// this method should return non-null, otherwise it returns null.
   ///
   virtual Init *getFieldInit(Record &R, const RecordVal *RV,
-                             const MISTD::string &FieldName) const {
+                             const std::string &FieldName) const {
     return 0;
   }
 
@@ -570,15 +570,15 @@ public:
   RecTy *getType() const { return Ty; }
 
   virtual Init *
-  convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const;
+  convertInitializerBitRange(const std::vector<unsigned> &Bits) const;
   virtual Init *
-  convertInitListSlice(const MISTD::vector<unsigned> &Elements) const;
+  convertInitListSlice(const std::vector<unsigned> &Elements) const;
 
   /// getFieldType - This method is used to implement the FieldInit class.
   /// Implementors of this method should return the type of the named field if
   /// they are of record type.
   ///
-  virtual RecTy *getFieldType(const MISTD::string &FieldName) const;
+  virtual RecTy *getFieldType(const std::string &FieldName) const;
 
   /// resolveListElementReference - This method is used to implement
   /// VarListElementInit::resolveReferences.  If the list element is resolvable
@@ -611,7 +611,7 @@ public:
   }
 
   virtual bool isComplete() const { return false; }
-  virtual MISTD::string getAsString() const { return "?"; }
+  virtual std::string getAsString() const { return "?"; }
 };
 
 
@@ -642,14 +642,14 @@ public:
     return const_cast<BitInit*>(this);
   }
 
-  virtual MISTD::string getAsString() const { return Value ? "1" : "0"; }
+  virtual std::string getAsString() const { return Value ? "1" : "0"; }
 };
 
 /// BitsInit - { a, b, c } - Represents an initializer for a BitsRecTy value.
 /// It contains a vector of bits, whose size is determined by the type.
 ///
 class BitsInit : public Init, public FoldingSetNode {
-  MISTD::vector<Init*> Bits;
+  std::vector<Init*> Bits;
 
   BitsInit(ArrayRef<Init *> Range)
     : Init(IK_BitsInit), Bits(Range.begin(), Range.end()) {}
@@ -671,7 +671,7 @@ public:
     return Ty->convertValue(const_cast<BitsInit *>(this));
   }
   virtual Init *
-  convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const;
+  convertInitializerBitRange(const std::vector<unsigned> &Bits) const;
 
   virtual bool isComplete() const {
     for (unsigned i = 0; i != getNumBits(); ++i)
@@ -683,7 +683,7 @@ public:
       if (getBit(i)->isComplete()) return false;
     return true;
   }
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
@@ -717,9 +717,9 @@ public:
     return Ty->convertValue(const_cast<IntInit *>(this));
   }
   virtual Init *
-  convertInitializerBitRange(const MISTD::vector<unsigned> &Bits) const;
+  convertInitializerBitRange(const std::vector<unsigned> &Bits) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   /// resolveListElementReference - This method is used to implement
   /// VarListElementInit::resolveReferences.  If the list element is resolvable
@@ -738,9 +738,9 @@ public:
 /// StringInit - "foo" - Represent an initialization by a string value.
 ///
 class StringInit : public TypedInit {
-  MISTD::string Value;
+  std::string Value;
 
-  explicit StringInit(const MISTD::string &V)
+  explicit StringInit(const std::string &V)
     : TypedInit(IK_StringInit, StringRecTy::get()), Value(V) {}
 
   StringInit(const StringInit &Other) LLVM_DELETED_FUNCTION;
@@ -753,14 +753,14 @@ public:
   }
   static StringInit *get(StringRef);
 
-  const MISTD::string &getValue() const { return Value; }
+  const std::string &getValue() const { return Value; }
 
   virtual Init *convertInitializerTo(RecTy *Ty) const {
     return Ty->convertValue(const_cast<StringInit *>(this));
   }
 
-  virtual MISTD::string getAsString() const { return "\"" + Value + "\""; }
-  virtual MISTD::string getAsUnquotedString() const { return Value; }
+  virtual std::string getAsString() const { return "\"" + Value + "\""; }
+  virtual std::string getAsUnquotedString() const { return Value; }
 
   /// resolveListElementReference - This method is used to implement
   /// VarListElementInit::resolveReferences.  If the list element is resolvable
@@ -778,9 +778,9 @@ public:
 /// ListInit - [AL, AH, CL] - Represent a list of defs
 ///
 class ListInit : public TypedInit, public FoldingSetNode {
-  MISTD::vector<Init*> Values;
+  std::vector<Init*> Values;
 public:
-  typedef MISTD::vector<Init*>::const_iterator const_iterator;
+  typedef std::vector<Init*>::const_iterator const_iterator;
 
 private:
   explicit ListInit(ArrayRef<Init *> Range, RecTy *EltTy)
@@ -807,7 +807,7 @@ public:
   Record *getElementAsRecord(unsigned i) const;
 
   virtual Init *
-    convertInitListSlice(const MISTD::vector<unsigned> &Elements) const;
+    convertInitListSlice(const std::vector<unsigned> &Elements) const;
 
   virtual Init *convertInitializerTo(RecTy *Ty) const {
     return Ty->convertValue(const_cast<ListInit *>(this));
@@ -820,7 +820,7 @@ public:
   ///
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   ArrayRef<Init*> getValues() const { return Values; }
 
@@ -857,7 +857,7 @@ public:
            I->getKind() <= IK_LastOpInit;
   }
   // Clone - Clone this operator, replacing arguments with the new list
-  virtual OpInit *clone(MISTD::vector<Init *> &Operands) const = 0;
+  virtual OpInit *clone(std::vector<Init *> &Operands) const = 0;
 
   virtual int getNumOperands() const = 0;
   virtual Init *getOperand(int i) const = 0;
@@ -899,7 +899,7 @@ public:
   static UnOpInit *get(UnaryOp opc, Init *lhs, RecTy *Type);
 
   // Clone - Clone this operator, replacing arguments with the new list
-  virtual OpInit *clone(MISTD::vector<Init *> &Operands) const {
+  virtual OpInit *clone(std::vector<Init *> &Operands) const {
     assert(Operands.size() == 1 &&
            "Wrong number of operands for unary operation");
     return UnOpInit::get(getOpcode(), *Operands.begin(), getType());
@@ -920,7 +920,7 @@ public:
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 };
 
 /// BinOpInit - !op (X, Y) - Combine two inits.
@@ -946,7 +946,7 @@ public:
                         RecTy *Type);
 
   // Clone - Clone this operator, replacing arguments with the new list
-  virtual OpInit *clone(MISTD::vector<Init *> &Operands) const {
+  virtual OpInit *clone(std::vector<Init *> &Operands) const {
     assert(Operands.size() == 2 &&
            "Wrong number of operands for binary operation");
     return BinOpInit::get(getOpcode(), Operands[0], Operands[1], getType());
@@ -972,7 +972,7 @@ public:
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 };
 
 /// TernOpInit - !op (X, Y, Z) - Combine two inits.
@@ -1000,7 +1000,7 @@ public:
                          RecTy *Type);
 
   // Clone - Clone this operator, replacing arguments with the new list
-  virtual OpInit *clone(MISTD::vector<Init *> &Operands) const {
+  virtual OpInit *clone(std::vector<Init *> &Operands) const {
     assert(Operands.size() == 3 &&
            "Wrong number of operands for ternary operation");
     return TernOpInit::get(getOpcode(), Operands[0], Operands[1], Operands[2],
@@ -1033,7 +1033,7 @@ public:
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 };
 
 
@@ -1042,7 +1042,7 @@ public:
 class VarInit : public TypedInit {
   Init *VarName;
 
-  explicit VarInit(const MISTD::string &VN, RecTy *T)
+  explicit VarInit(const std::string &VN, RecTy *T)
       : TypedInit(IK_VarInit, T), VarName(StringInit::get(VN)) {}
   explicit VarInit(Init *VN, RecTy *T)
       : TypedInit(IK_VarInit, T), VarName(VN) {}
@@ -1054,25 +1054,25 @@ public:
   static bool classof(const Init *I) {
     return I->getKind() == IK_VarInit;
   }
-  static VarInit *get(const MISTD::string &VN, RecTy *T);
+  static VarInit *get(const std::string &VN, RecTy *T);
   static VarInit *get(Init *VN, RecTy *T);
 
   virtual Init *convertInitializerTo(RecTy *Ty) const {
     return Ty->convertValue(const_cast<VarInit *>(this));
   }
 
-  const MISTD::string &getName() const;
+  const std::string &getName() const;
   Init *getNameInit() const { return VarName; }
-  MISTD::string getNameInitAsString() const {
+  std::string getNameInitAsString() const {
     return getNameInit()->getAsUnquotedString();
   }
 
   virtual Init *resolveListElementReference(Record &R, const RecordVal *RV,
                                             unsigned Elt) const;
 
-  virtual RecTy *getFieldType(const MISTD::string &FieldName) const;
+  virtual RecTy *getFieldType(const std::string &FieldName) const;
   virtual Init *getFieldInit(Record &R, const RecordVal *RV,
-                             const MISTD::string &FieldName) const;
+                             const std::string &FieldName) const;
 
   /// resolveReferences - This method is used by classes that refer to other
   /// variables which may not be defined at the time they expression is formed.
@@ -1083,7 +1083,7 @@ public:
 
   virtual Init *getBit(unsigned Bit) const;
 
-  virtual MISTD::string getAsString() const { return getName(); }
+  virtual std::string getAsString() const { return getName(); }
 };
 
 
@@ -1117,7 +1117,7 @@ public:
   virtual Init *getBitVar() const { return TI; }
   virtual unsigned getBitNum() const { return Bit; }
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
   virtual Init *getBit(unsigned B) const {
@@ -1163,7 +1163,7 @@ public:
                                             const RecordVal *RV,
                                             unsigned Elt) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
   virtual Init *getBit(unsigned Bit) const;
@@ -1192,13 +1192,13 @@ public:
 
   Record *getDef() const { return Def; }
 
-  //virtual Init *convertInitializerBitRange(const MISTD::vector<unsigned> &Bits);
+  //virtual Init *convertInitializerBitRange(const std::vector<unsigned> &Bits);
 
-  virtual RecTy *getFieldType(const MISTD::string &FieldName) const;
+  virtual RecTy *getFieldType(const std::string &FieldName) const;
   virtual Init *getFieldInit(Record &R, const RecordVal *RV,
-                             const MISTD::string &FieldName) const;
+                             const std::string &FieldName) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
   virtual Init *getBit(unsigned Bit) const {
     llvm_unreachable("Illegal bit reference off def");
@@ -1218,9 +1218,9 @@ public:
 ///
 class FieldInit : public TypedInit {
   Init *Rec;                // Record we are referring to
-  MISTD::string FieldName;    // Field we are accessing
+  std::string FieldName;    // Field we are accessing
 
-  FieldInit(Init *R, const MISTD::string &FN)
+  FieldInit(Init *R, const std::string &FN)
       : TypedInit(IK_FieldInit, R->getFieldType(FN)), Rec(R), FieldName(FN) {
     assert(getType() && "FieldInit with non-record type!");
   }
@@ -1232,7 +1232,7 @@ public:
   static bool classof(const Init *I) {
     return I->getKind() == IK_FieldInit;
   }
-  static FieldInit *get(Init *R, const MISTD::string &FN);
+  static FieldInit *get(Init *R, const std::string &FN);
   static FieldInit *get(Init *R, const Init *FN);
 
   virtual Init *convertInitializerTo(RecTy *Ty) const {
@@ -1247,7 +1247,7 @@ public:
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const {
+  virtual std::string getAsString() const {
     return Rec->getAsString() + "." + FieldName;
   }
 };
@@ -1258,13 +1258,13 @@ public:
 ///
 class DagInit : public TypedInit, public FoldingSetNode {
   Init *Val;
-  MISTD::string ValName;
-  MISTD::vector<Init*> Args;
-  MISTD::vector<MISTD::string> ArgNames;
+  std::string ValName;
+  std::vector<Init*> Args;
+  std::vector<std::string> ArgNames;
 
-  DagInit(Init *V, const MISTD::string &VN,
+  DagInit(Init *V, const std::string &VN,
           ArrayRef<Init *> ArgRange,
-          ArrayRef<MISTD::string> NameRange)
+          ArrayRef<std::string> NameRange)
       : TypedInit(IK_DagInit, DagRecTy::get()), Val(V), ValName(VN),
           Args(ArgRange.begin(), ArgRange.end()),
           ArgNames(NameRange.begin(), NameRange.end()) {}
@@ -1276,12 +1276,12 @@ public:
   static bool classof(const Init *I) {
     return I->getKind() == IK_DagInit;
   }
-  static DagInit *get(Init *V, const MISTD::string &VN,
+  static DagInit *get(Init *V, const std::string &VN,
                       ArrayRef<Init *> ArgRange,
-                      ArrayRef<MISTD::string> NameRange);
-  static DagInit *get(Init *V, const MISTD::string &VN,
-                      const MISTD::vector<
-                        MISTD::pair<Init*, MISTD::string> > &args);
+                      ArrayRef<std::string> NameRange);
+  static DagInit *get(Init *V, const std::string &VN,
+                      const std::vector<
+                        std::pair<Init*, std::string> > &args);
 
   void Profile(FoldingSetNodeID &ID) const;
 
@@ -1291,24 +1291,24 @@ public:
 
   Init *getOperator() const { return Val; }
 
-  const MISTD::string &getName() const { return ValName; }
+  const std::string &getName() const { return ValName; }
 
   unsigned getNumArgs() const { return Args.size(); }
   Init *getArg(unsigned Num) const {
     assert(Num < Args.size() && "Arg number out of range!");
     return Args[Num];
   }
-  const MISTD::string &getArgName(unsigned Num) const {
+  const std::string &getArgName(unsigned Num) const {
     assert(Num < ArgNames.size() && "Arg number out of range!");
     return ArgNames[Num];
   }
 
   virtual Init *resolveReferences(Record &R, const RecordVal *RV) const;
 
-  virtual MISTD::string getAsString() const;
+  virtual std::string getAsString() const;
 
-  typedef MISTD::vector<Init*>::const_iterator       const_arg_iterator;
-  typedef MISTD::vector<MISTD::string>::const_iterator const_name_iterator;
+  typedef std::vector<Init*>::const_iterator       const_arg_iterator;
+  typedef std::vector<std::string>::const_iterator const_name_iterator;
 
   inline const_arg_iterator  arg_begin() const { return Args.begin(); }
   inline const_arg_iterator  arg_end  () const { return Args.end();   }
@@ -1343,11 +1343,11 @@ class RecordVal {
   Init *Value;
 public:
   RecordVal(Init *N, RecTy *T, unsigned P);
-  RecordVal(const MISTD::string &N, RecTy *T, unsigned P);
+  RecordVal(const std::string &N, RecTy *T, unsigned P);
 
-  const MISTD::string &getName() const;
+  const std::string &getName() const;
   const Init *getNameInit() const { return Name; }
-  MISTD::string getNameInitAsString() const {
+  std::string getNameInitAsString() const {
     return getNameInit()->getAsUnquotedString();
   }
 
@@ -1382,10 +1382,10 @@ class Record {
   // Location where record was instantiated, followed by the location of
   // multiclass prototypes used.
   SmallVector<SMLoc, 4> Locs;
-  MISTD::vector<Init *> TemplateArgs;
-  MISTD::vector<RecordVal> Values;
-  MISTD::vector<Record *> SuperClasses;
-  MISTD::vector<SMRange> SuperClassRanges;
+  std::vector<Init *> TemplateArgs;
+  std::vector<RecordVal> Values;
+  std::vector<Record *> SuperClasses;
+  std::vector<SMRange> SuperClassRanges;
 
   // Tracks Record instances. Not owned by Record.
   RecordKeeper &TrackedRecords;
@@ -1399,7 +1399,7 @@ class Record {
 public:
 
   // Constructs a record.
-  explicit Record(const MISTD::string &N, ArrayRef<SMLoc> locs,
+  explicit Record(const std::string &N, ArrayRef<SMLoc> locs,
                   RecordKeeper &records, bool Anonymous = false) :
     ID(LastID++), Name(StringInit::get(N)), Locs(locs.begin(), locs.end()),
     TrackedRecords(records), TheInit(0), IsAnonymous(Anonymous) {
@@ -1428,27 +1428,27 @@ public:
 
   unsigned getID() const { return ID; }
 
-  const MISTD::string &getName() const;
+  const std::string &getName() const;
   Init *getNameInit() const {
     return Name;
   }
-  const MISTD::string getNameInitAsString() const {
+  const std::string getNameInitAsString() const {
     return getNameInit()->getAsUnquotedString();
   }
 
   void setName(Init *Name);               // Also updates RecordKeeper.
-  void setName(const MISTD::string &Name);  // Also updates RecordKeeper.
+  void setName(const std::string &Name);  // Also updates RecordKeeper.
 
   ArrayRef<SMLoc> getLoc() const { return Locs; }
 
   /// get the corresponding DefInit.
   DefInit *getDefInit();
 
-  const MISTD::vector<Init *> &getTemplateArgs() const {
+  const std::vector<Init *> &getTemplateArgs() const {
     return TemplateArgs;
   }
-  const MISTD::vector<RecordVal> &getValues() const { return Values; }
-  const MISTD::vector<Record*>   &getSuperClasses() const { return SuperClasses; }
+  const std::vector<RecordVal> &getValues() const { return Values; }
+  const std::vector<Record*>   &getSuperClasses() const { return SuperClasses; }
   ArrayRef<SMRange> getSuperClassRanges() const { return SuperClassRanges; }
 
   bool isTemplateArg(Init *Name) const {
@@ -1494,7 +1494,7 @@ public:
       // naturally.  Tests can use CHECK-NEXT to look for Record
       // fields they expect to see after a def.  They can't do that if
       // NAME is the first Record field.
-      MISTD::swap(Values[Values.size() - 2], Values[Values.size() - 1]);
+      std::swap(Values[Values.size() - 2], Values[Values.size() - 1]);
   }
 
   void removeValue(Init *Name) {
@@ -1568,7 +1568,7 @@ public:
   /// its value as a string, throwing an exception if the field does not exist
   /// or if the value is not a string.
   ///
-  MISTD::string getValueAsString(StringRef FieldName) const;
+  std::string getValueAsString(StringRef FieldName) const;
 
   /// getValueAsBitsInit - This method looks up the specified field and returns
   /// its value as a BitsInit, throwing an exception if the field does not exist
@@ -1586,19 +1586,19 @@ public:
   /// returns its value as a vector of records, throwing an exception if the
   /// field does not exist or if the value is not the right type.
   ///
-  MISTD::vector<Record*> getValueAsListOfDefs(StringRef FieldName) const;
+  std::vector<Record*> getValueAsListOfDefs(StringRef FieldName) const;
 
   /// getValueAsListOfInts - This method looks up the specified field and
   /// returns its value as a vector of integers, throwing an exception if the
   /// field does not exist or if the value is not the right type.
   ///
-  MISTD::vector<int64_t> getValueAsListOfInts(StringRef FieldName) const;
+  std::vector<int64_t> getValueAsListOfInts(StringRef FieldName) const;
 
   /// getValueAsListOfStrings - This method looks up the specified field and
   /// returns its value as a vector of strings, throwing an exception if the
   /// field does not exist or if the value is not the right type.
   ///
-  MISTD::vector<MISTD::string> getValueAsListOfStrings(StringRef FieldName) const;
+  std::vector<std::string> getValueAsListOfStrings(StringRef FieldName) const;
 
   /// getValueAsDef - This method looks up the specified field and returns its
   /// value as a Record, throwing an exception if the field does not exist or if
@@ -1635,59 +1635,59 @@ raw_ostream &operator<<(raw_ostream &OS, const Record &R);
 
 struct MultiClass {
   Record Rec;  // Placeholder for template args and Name.
-  typedef MISTD::vector<Record*> RecordVector;
+  typedef std::vector<Record*> RecordVector;
   RecordVector DefPrototypes;
 
   void dump() const;
 
-  MultiClass(const MISTD::string &Name, SMLoc Loc, RecordKeeper &Records) :
+  MultiClass(const std::string &Name, SMLoc Loc, RecordKeeper &Records) :
     Rec(Name, Loc, Records) {}
 };
 
 class RecordKeeper {
-  MISTD::map<MISTD::string, Record*> Classes, Defs;
+  std::map<std::string, Record*> Classes, Defs;
 
 public:
   ~RecordKeeper() {
-    for (MISTD::map<MISTD::string, Record*>::iterator I = Classes.begin(),
+    for (std::map<std::string, Record*>::iterator I = Classes.begin(),
            E = Classes.end(); I != E; ++I)
       delete I->second;
-    for (MISTD::map<MISTD::string, Record*>::iterator I = Defs.begin(),
+    for (std::map<std::string, Record*>::iterator I = Defs.begin(),
            E = Defs.end(); I != E; ++I)
       delete I->second;
   }
 
-  const MISTD::map<MISTD::string, Record*> &getClasses() const { return Classes; }
-  const MISTD::map<MISTD::string, Record*> &getDefs() const { return Defs; }
+  const std::map<std::string, Record*> &getClasses() const { return Classes; }
+  const std::map<std::string, Record*> &getDefs() const { return Defs; }
 
-  Record *getClass(const MISTD::string &Name) const {
-    MISTD::map<MISTD::string, Record*>::const_iterator I = Classes.find(Name);
+  Record *getClass(const std::string &Name) const {
+    std::map<std::string, Record*>::const_iterator I = Classes.find(Name);
     return I == Classes.end() ? 0 : I->second;
   }
-  Record *getDef(const MISTD::string &Name) const {
-    MISTD::map<MISTD::string, Record*>::const_iterator I = Defs.find(Name);
+  Record *getDef(const std::string &Name) const {
+    std::map<std::string, Record*>::const_iterator I = Defs.find(Name);
     return I == Defs.end() ? 0 : I->second;
   }
   void addClass(Record *R) {
-    bool Ins = Classes.insert(MISTD::make_pair(R->getName(), R)).second;
+    bool Ins = Classes.insert(std::make_pair(R->getName(), R)).second;
     (void)Ins;
     assert(Ins && "Class already exists");
   }
   void addDef(Record *R) {
-    bool Ins = Defs.insert(MISTD::make_pair(R->getName(), R)).second;
+    bool Ins = Defs.insert(std::make_pair(R->getName(), R)).second;
     (void)Ins;
     assert(Ins && "Record already exists");
   }
 
   /// removeClass - Remove, but do not delete, the specified record.
   ///
-  void removeClass(const MISTD::string &Name) {
+  void removeClass(const std::string &Name) {
     assert(Classes.count(Name) && "Class does not exist!");
     Classes.erase(Name);
   }
   /// removeDef - Remove, but do not delete, the specified record.
   ///
-  void removeDef(const MISTD::string &Name) {
+  void removeDef(const std::string &Name) {
     assert(Defs.count(Name) && "Def does not exist!");
     Defs.erase(Name);
   }
@@ -1698,8 +1698,8 @@ public:
   /// getAllDerivedDefinitions - This method returns all concrete definitions
   /// that derive from the specified class name.  If a class with the specified
   /// name does not exist, an exception is thrown.
-  MISTD::vector<Record*>
-  getAllDerivedDefinitions(const MISTD::string &ClassName) const;
+  std::vector<Record*>
+  getAllDerivedDefinitions(const std::string &ClassName) const;
 
   void dump() const;
 };
@@ -1736,7 +1736,7 @@ struct LessRecordRegister {
   static bool ascii_isdigit(char x) { return x >= '0' && x <= '9'; }
 
   struct RecordParts {
-    SmallVector<MISTD::pair< bool, StringRef>, 4> Parts;
+    SmallVector<std::pair< bool, StringRef>, 4> Parts;
 
     RecordParts(StringRef Rec) {
       if (Rec.empty())
@@ -1749,19 +1749,19 @@ struct LessRecordRegister {
       for (size_t I = 0, E = Rec.size(); I != E; ++I, ++Len) {
         bool isDigit = ascii_isdigit(Curr[I]);
         if (isDigit != isDigitPart) {
-          Parts.push_back(MISTD::make_pair(isDigitPart, StringRef(Start, Len)));
+          Parts.push_back(std::make_pair(isDigitPart, StringRef(Start, Len)));
           Len = 0;
           Start = &Curr[I];
           isDigitPart = ascii_isdigit(Curr[I]);
         }
       }
       // Push the last part.
-      Parts.push_back(MISTD::make_pair(isDigitPart, StringRef(Start, Len)));
+      Parts.push_back(std::make_pair(isDigitPart, StringRef(Start, Len)));
     }
 
     size_t size() { return Parts.size(); }
 
-    MISTD::pair<bool, StringRef> getPart(size_t i) {
+    std::pair<bool, StringRef> getPart(size_t i) {
       assert (i < Parts.size() && "Invalid idx!");
       return Parts[i];
     }
@@ -1780,8 +1780,8 @@ struct LessRecordRegister {
 
     // We expect the registers to be of the form [_a-zA-z]+([0-9]*[_a-zA-Z]*)*.
     for (size_t I = 0, E = LHSNumParts; I < E; I+=2) {
-      MISTD::pair<bool, StringRef> LHSPart = LHSParts.getPart(I);
-      MISTD::pair<bool, StringRef> RHSPart = RHSParts.getPart(I);
+      std::pair<bool, StringRef> LHSPart = LHSParts.getPart(I);
+      std::pair<bool, StringRef> RHSPart = RHSParts.getPart(I);
       // Expect even part to always be alpha.
       assert (LHSPart.first == false && RHSPart.first == false &&
               "Expected both parts to be alpha.");
@@ -1789,8 +1789,8 @@ struct LessRecordRegister {
         return Res < 0;
     }
     for (size_t I = 1, E = LHSNumParts; I < E; I+=2) {
-      MISTD::pair<bool, StringRef> LHSPart = LHSParts.getPart(I);
-      MISTD::pair<bool, StringRef> RHSPart = RHSParts.getPart(I);
+      std::pair<bool, StringRef> LHSPart = LHSParts.getPart(I);
+      std::pair<bool, StringRef> RHSPart = RHSParts.getPart(I);
       // Expect odd part to always be numeric.
       assert (LHSPart.first == true && RHSPart.first == true &&
               "Expected both parts to be numeric.");
@@ -1816,12 +1816,12 @@ raw_ostream &operator<<(raw_ostream &OS, const RecordKeeper &RK);
 /// QualifyName - Return an Init with a qualifier prefix referring
 /// to CurRec's name.
 Init *QualifyName(Record &CurRec, MultiClass *CurMultiClass,
-                  Init *Name, const MISTD::string &Scoper);
+                  Init *Name, const std::string &Scoper);
 
 /// QualifyName - Return an Init with a qualifier prefix referring
 /// to CurRec's name.
 Init *QualifyName(Record &CurRec, MultiClass *CurMultiClass,
-                  const MISTD::string &Name, const MISTD::string &Scoper);
+                  const std::string &Name, const std::string &Scoper);
 
 } // End llvm namespace
 

@@ -80,21 +80,21 @@ public:
     Time   operator/  (const double & scalar) const;
 
     // Convert a time value to a human readable string.
-    MISTD::string to_string() const { return to_string_rfc_2822(); }
+    std::string to_string() const { return to_string_rfc_2822(); }
 
     // Convert a time value to a human readable string as specified in RFC 2822.
     //
     // Uses timezone settings. Example: Wed, 30 Nov 2016 11:19:37 +0100
 #ifndef WIN_NT
-    MISTD::string to_string_rfc_2822() const { return to_string("%a, %d %b %Y %H:%M:%S %z",false); }
+    std::string to_string_rfc_2822() const { return to_string("%a, %d %b %Y %H:%M:%S %z",false); }
 #else
-    MISTD::string to_string_rfc_2822() const;
+    std::string to_string_rfc_2822() const;
 #endif
 
     // Convert a time value to a human readable string as specified in RFC 2616.
     //
     // Always uses GMT, independent of timezone settings. Example: Wed, 30 Nov 2016 10:19:37 GMT
-    MISTD::string to_string_rfc_2616() const { return to_string("%a, %d %b %Y %H:%M:%S GMT",true); }
+    std::string to_string_rfc_2616() const { return to_string("%a, %d %b %Y %H:%M:%S GMT",true); }
 
     // Convert a time value to a human readable string.
     //
@@ -105,11 +105,11 @@ public:
     // Note that strftime() on Windows handles %z/%Z differently from what's mandated by the
     // C++11/C99 standard. We could implement our own handling of %z/%Z on Windows (that's what
     // e.g. Python does), or use Boost instead.
-    MISTD::string to_string(const char* format, bool gmt) const;
+    std::string to_string(const char* format, bool gmt) const;
 
     // Convert a time value to a readable string. The time value is considered
     // being an interval and not an absolute moment in time.
-    MISTD::string interval_to_string() const;
+    std::string interval_to_string() const;
 
     // Create time.
     static Time mktime(

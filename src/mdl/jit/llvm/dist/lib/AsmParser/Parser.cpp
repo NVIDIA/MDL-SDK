@@ -40,7 +40,7 @@ Module *llvm::ParseAssembly(MemoryBuffer *F,
   return M2.take();
 }
 
-Module *llvm::ParseAssemblyFile(const MISTD::string &Filename, SMDiagnostic &Err,
+Module *llvm::ParseAssemblyFile(const std::string &Filename, SMDiagnostic &Err,
                                 LLVMContext &Context) {
   OwningPtr<MemoryBuffer> File;
   if (error_code ec = MemoryBuffer::getFileOrSTDIN(Filename, File)) {

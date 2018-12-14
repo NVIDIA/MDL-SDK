@@ -124,7 +124,7 @@ namespace mi {
     <tr><td>\c "Float64"           </td><td>yes</td><td>#mi::IFloat64 </td><td>mi::Float64 </td>
                                         <td>64-bit IEEE-754 double-precision floating-point number
                                         </td></tr>
-    <tr><td>\c "Difference         </td><td>no</td><td>#mi::IDifference</td><td>mi::Difference</td>
+    <tr><td>\c "Difference"        </td><td>no</td><td>#mi::IDifference</td><td>mi::Difference</td>
                                         <td>Signed 32-bit or 64-bit integer, depending on the
                                         architecture</td></tr>
     <tr><td>\c "Size"              </td><td>no</td><td>#mi::ISize</td><td>mi::Size</td>
@@ -145,7 +145,7 @@ namespace mi {
                                         <td>Subsets of mi::Sint32 values, identified by strings
                                         </td></tr>
     \ifnot DICE_API
-    <tr><td>\c "Ref" or \c "Ref<T>"</td><td>yes (2)</td><td>#mi::IRef</td><td>-</td>
+    <tr><td>\c "Ref"               </td><td>yes</td><td>#mi::IRef</td><td>-</td>
                                         <td>Reference to another database element</td></tr>
     \endif
     </table>
@@ -153,7 +153,6 @@ namespace mi {
         pattern as for the other simple types. \ifnot MDL_SDK_API User-defined enum types require
         the registration of a corresponding enum declaration with a type name (see
         #mi::neuraylib::IExtension_api::register_enum_decl()). \endif
-    \ifnot DICE_API (2) For attributes, only the type \c "Ref" is supported. \endif
 
     \par Collections
 
@@ -173,24 +172,24 @@ namespace mi {
         <th>C++ class</th>
         <th>Description</th>
     </tr>
-    <tr><td>\c "T[N]"        </td><td>yes (3)(4)</td><td>#mi::IArray</td>
+    <tr><td>\c "T[N]"        </td><td>yes (2)(3)</td><td>#mi::IArray</td>
                                   <td>-</td>
                                   <td>Static array of N elements of type T, N > 0</td></tr>
-    <tr><td>\c "T[]"         </td><td>yes (3)</td><td>#mi::IDynamic_array</td>
+    <tr><td>\c "T[]"         </td><td>yes (2)</td><td>#mi::IDynamic_array</td>
                                   <td>-</td>
                                   <td>Dynamic array of elements of type T</td></tr>
     <tr><td>\c "Map<T>"      </td><td>no</td><td>#mi::IMap</td>
                                   <td>-</td>
                                   <td>Set of key-value pairs, values are of type T</td></tr>
-    <tr><td>as registered (5)</td><td>yes</td><td>#mi::IStructure</td>
+    <tr><td>as registered (4)</td><td>yes</td><td>#mi::IStructure</td>
                                   <td>-</td>
                                   <td>Ordered set of key-value pairs, values are of arbitrary
                                       types</td></tr>
     </table>
-    (3) For attributes, the type of array elements must not be an array (but it can be a structure
+    (2) For attributes, the type of array elements must not be an array (but it can be a structure
         with arrays as members). \n
-    (4) For attributes, the array length N must not be zero. \n
-    (5) The type name of a structure is specific to the actual structure type. There is no naming
+    (3) For attributes, the array length N must not be zero. \n
+    (4) The type name of a structure is specific to the actual structure type. There is no naming
         pattern as for arrays or maps. \ifnot MDL_SDK_API User-defined structure types require the
         registration of a corresponding structure declaration with a type name (see
         #mi::neuraylib::IExtension_api::register_structure_decl()). \n \endif \ifnot DICE_API

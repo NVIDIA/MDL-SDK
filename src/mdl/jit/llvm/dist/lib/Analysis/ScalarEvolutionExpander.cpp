@@ -628,8 +628,8 @@ static const Loop *PickMostRelevantLoop(const Loop *A, const Loop *B,
 /// expression, according to PickMostRelevantLoop.
 const Loop *SCEVExpander::getRelevantLoop(const SCEV *S) {
   // Test whether we've already computed the most relevant loop for this SCEV.
-  MISTD::pair<DenseMap<const SCEV *, const Loop *>::iterator, bool> Pair =
-    RelevantLoops.insert(MISTD::make_pair(S, static_cast<const Loop *>(0)));
+  std::pair<DenseMap<const SCEV *, const Loop *>::iterator, bool> Pair =
+    RelevantLoops.insert(std::make_pair(S, static_cast<const Loop *>(0)));
   if (!Pair.second)
     return Pair.first->second;
 
@@ -673,8 +673,8 @@ class LoopCompare {
 public:
   explicit LoopCompare(DominatorTree &dt) : DT(dt) {}
 
-  bool operator()(MISTD::pair<const Loop *, const SCEV *> LHS,
-                  MISTD::pair<const Loop *, const SCEV *> RHS) const {
+  bool operator()(std::pair<const Loop *, const SCEV *> LHS,
+                  std::pair<const Loop *, const SCEV *> RHS) const {
     // Keep pointer operands sorted at the end.
     if (LHS.second->getType()->isPointerTy() !=
         RHS.second->getType()->isPointerTy())
@@ -707,19 +707,19 @@ Value *SCEVExpander::visitAddExpr(const SCEVAddExpr *S) {
   // Iterate in reverse so that constants are emitted last, all else equal, and
   // so that pointer operands are inserted first, which the code below relies on
   // to form more involved GEPs.
-  SmallVector<MISTD::pair<const Loop *, const SCEV *>, 8> OpsAndLoops;
-  for (MISTD::reverse_iterator<SCEVAddExpr::op_iterator> I(S->op_end()),
+  SmallVector<std::pair<const Loop *, const SCEV *>, 8> OpsAndLoops;
+  for (std::reverse_iterator<SCEVAddExpr::op_iterator> I(S->op_end()),
        E(S->op_begin()); I != E; ++I)
-    OpsAndLoops.push_back(MISTD::make_pair(getRelevantLoop(*I), *I));
+    OpsAndLoops.push_back(std::make_pair(getRelevantLoop(*I), *I));
 
   // Sort by loop. Use a stable sort so that constants follow non-constants and
   // pointer operands precede non-pointer operands.
-  MISTD::stable_sort(OpsAndLoops.begin(), OpsAndLoops.end(), LoopCompare(*SE.DT));
+  std::stable_sort(OpsAndLoops.begin(), OpsAndLoops.end(), LoopCompare(*SE.DT));
 
   // Emit instructions to add all the operands. Hoist as much as possible
   // out of loops, and form meaningful getelementptrs where possible.
   Value *Sum = 0;
-  for (SmallVectorImpl<MISTD::pair<const Loop *, const SCEV *> >::iterator
+  for (SmallVectorImpl<std::pair<const Loop *, const SCEV *> >::iterator
        I = OpsAndLoops.begin(), E = OpsAndLoops.end(); I != E; ) {
     const Loop *CurLoop = I->first;
     const SCEV *Op = I->second;
@@ -762,7 +762,7 @@ Value *SCEVExpander::visitAddExpr(const SCEVAddExpr *S) {
       Value *W = expandCodeFor(Op, Ty);
       Sum = InsertNoopCastOfTo(Sum, Ty);
       // Canonicalize a constant to the RHS.
-      if (isa<Constant>(Sum)) MISTD::swap(Sum, W);
+      if (isa<Constant>(Sum)) std::swap(Sum, W);
       Sum = InsertBinop(Instruction::Add, Sum, W);
       ++I;
     }
@@ -776,18 +776,18 @@ Value *SCEVExpander::visitMulExpr(const SCEVMulExpr *S) {
 
   // Collect all the mul operands in a loop, along with their associated loops.
   // Iterate in reverse so that constants are emitted last, all else equal.
-  SmallVector<MISTD::pair<const Loop *, const SCEV *>, 8> OpsAndLoops;
-  for (MISTD::reverse_iterator<SCEVMulExpr::op_iterator> I(S->op_end()),
+  SmallVector<std::pair<const Loop *, const SCEV *>, 8> OpsAndLoops;
+  for (std::reverse_iterator<SCEVMulExpr::op_iterator> I(S->op_end()),
        E(S->op_begin()); I != E; ++I)
-    OpsAndLoops.push_back(MISTD::make_pair(getRelevantLoop(*I), *I));
+    OpsAndLoops.push_back(std::make_pair(getRelevantLoop(*I), *I));
 
   // Sort by loop. Use a stable sort so that constants follow non-constants.
-  MISTD::stable_sort(OpsAndLoops.begin(), OpsAndLoops.end(), LoopCompare(*SE.DT));
+  std::stable_sort(OpsAndLoops.begin(), OpsAndLoops.end(), LoopCompare(*SE.DT));
 
   // Emit instructions to mul all the operands. Hoist as much as possible
   // out of loops.
   Value *Prod = 0;
-  for (SmallVectorImpl<MISTD::pair<const Loop *, const SCEV *> >::iterator
+  for (SmallVectorImpl<std::pair<const Loop *, const SCEV *> >::iterator
        I = OpsAndLoops.begin(), E = OpsAndLoops.end(); I != E; ) {
     const SCEV *Op = I->second;
     if (!Prod) {
@@ -804,7 +804,7 @@ Value *SCEVExpander::visitMulExpr(const SCEVMulExpr *S) {
       Value *W = expandCodeFor(Op, Ty);
       Prod = InsertNoopCastOfTo(Prod, Ty);
       // Canonicalize a constant to the RHS.
-      if (isa<Constant>(Prod)) MISTD::swap(Prod, W);
+      if (isa<Constant>(Prod)) std::swap(Prod, W);
       Prod = InsertBinop(Instruction::Mul, Prod, W);
       ++I;
     }
@@ -1107,7 +1107,7 @@ SCEVExpander::getAddRecExprPHILiterally(const SCEVAddRecExpr *Normalized,
   BasicBlock *Header = L->getHeader();
   Builder.SetInsertPoint(Header, Header->begin());
   pred_iterator HPB = pred_begin(Header), HPE = pred_end(Header);
-  PHINode *PN = Builder.CreatePHI(ExpandTy, MISTD::distance(HPB, HPE),
+  PHINode *PN = Builder.CreatePHI(ExpandTy, std::distance(HPB, HPE),
                                   Twine(IVName) + ".iv");
   rememberInstruction(PN);
 
@@ -1325,7 +1325,7 @@ Value *SCEVExpander::visitAddRecExpr(const SCEVAddRecExpr *S) {
     // specified loop.
     BasicBlock *Header = L->getHeader();
     pred_iterator HPB = pred_begin(Header), HPE = pred_end(Header);
-    CanonicalIV = PHINode::Create(Ty, MISTD::distance(HPB, HPE), "indvar",
+    CanonicalIV = PHINode::Create(Ty, std::distance(HPB, HPE), "indvar",
                                   Header->begin());
     rememberInstruction(CanonicalIV);
 
@@ -1513,8 +1513,8 @@ Value *SCEVExpander::expand(const SCEV *S) {
     }
 
   // Check to see if we already expanded this here.
-  MISTD::map<MISTD::pair<const SCEV *, Instruction *>, TrackingVH<Value> >::iterator
-    I = InsertedExpressions.find(MISTD::make_pair(S, InsertPt));
+  std::map<std::pair<const SCEV *, Instruction *>, TrackingVH<Value> >::iterator
+    I = InsertedExpressions.find(std::make_pair(S, InsertPt));
   if (I != InsertedExpressions.end())
     return I->second;
 
@@ -1530,7 +1530,7 @@ Value *SCEVExpander::expand(const SCEV *S) {
   // the expression at this insertion point. If the mapped value happened to be
   // a postinc expansion, it could be reused by a non postinc user, but only if
   // its insertion point was already at the head of the loop.
-  InsertedExpressions[MISTD::make_pair(S, InsertPt)] = V;
+  InsertedExpressions[std::make_pair(S, InsertPt)] = V;
   return V;
 }
 
@@ -1587,7 +1587,7 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
     Phis.push_back(Phi);
   }
   if (TTI)
-    MISTD::sort(Phis.begin(), Phis.end(), width_descending);
+    std::sort(Phis.begin(), Phis.end(), width_descending);
 
   unsigned NumElim = 0;
   DenseMap<const SCEV *, PHINode *> ExprToIVMap;
@@ -1644,8 +1644,8 @@ unsigned SCEVExpander::replaceCongruentIVs(Loop *L, const DominatorTree *DT,
                || isExpandedAddRecExprPHI(OrigPhiRef, OrigInc, L))
           && (ChainedPhis.count(Phi)
               || isExpandedAddRecExprPHI(Phi, IsomorphicInc, L))) {
-        MISTD::swap(OrigPhiRef, Phi);
-        MISTD::swap(OrigInc, IsomorphicInc);
+        std::swap(OrigPhiRef, Phi);
+        std::swap(OrigInc, IsomorphicInc);
       }
       // Replacing the congruent phi is sufficient because acyclic redundancy
       // elimination, CSE/GVN, should handle the rest. However, once SCEV proves

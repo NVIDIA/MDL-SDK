@@ -38,7 +38,7 @@ protected:
 
   typedef OwningPtr<MemoryBuffer> OwningBuffer;
 
-  MISTD::string data;
+  std::string data;
 };
 
 TEST_F(MemoryBufferTest, get) {

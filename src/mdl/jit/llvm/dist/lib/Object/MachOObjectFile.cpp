@@ -980,7 +980,7 @@ MachOObjectFile::getRelocationValueString(DataRefImpl Rel,
 
   unsigned Arch = this->getArch();
 
-  MISTD::string fmtbuf;
+  std::string fmtbuf;
   raw_string_ostream fmt(fmtbuf);
   unsigned Type = this->getAnyRelocationType(RE);
   bool IsPCRel = this->getAnyRelocationPCRel(RE);

@@ -240,7 +240,7 @@ SDValue DAGTypeLegalizer::PromoteIntRes_BITCAST(SDNode *N) {
     Hi = BitConvertToInteger(Hi);
 
     if (TLI.isBigEndian())
-      MISTD::swap(Lo, Hi);
+      std::swap(Lo, Hi);
 
     InOp = DAG.getNode(ISD::ANY_EXTEND, dl,
                        EVT::getIntegerVT(*DAG.getContext(),
@@ -727,7 +727,7 @@ SDValue DAGTypeLegalizer::PromoteIntRes_VAARG(SDNode *N) {
 
   // Handle endianness of the load.
   if (TLI.isBigEndian())
-    MISTD::reverse(Parts.begin(), Parts.end());
+    std::reverse(Parts.begin(), Parts.end());
 
   // Assemble the parts in the promoted type.
   EVT NVT = TLI.getTypeToTransformTo(*DAG.getContext(), N->getValueType(0));
@@ -1136,7 +1136,7 @@ void DAGTypeLegalizer::ExpandIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::ATOMIC_LOAD_UMAX:
   case ISD::ATOMIC_SWAP:
   case ISD::ATOMIC_CMP_SWAP: {
-    MISTD::pair<SDValue, SDValue> Tmp = ExpandAtomic(N);
+    std::pair<SDValue, SDValue> Tmp = ExpandAtomic(N);
     SplitInteger(Tmp.first, Lo, Hi);
     ReplaceValueWith(SDValue(N, 1), Tmp.second);
     break;
@@ -1173,7 +1173,7 @@ void DAGTypeLegalizer::ExpandIntegerResult(SDNode *N, unsigned ResNo) {
 }
 
 /// Lower an atomic node to the appropriate builtin call.
-MISTD::pair <SDValue, SDValue> DAGTypeLegalizer::ExpandAtomic(SDNode *Node) {
+std::pair <SDValue, SDValue> DAGTypeLegalizer::ExpandAtomic(SDNode *Node) {
   unsigned Opc = Node->getOpcode();
   MVT VT = cast<AtomicSDNode>(Node)->getMemoryVT().getSimpleVT();
   RTLIB::Libcall LC;
@@ -1426,7 +1426,7 @@ ExpandShiftWithKnownAmountBit(SDNode *N, SDValue &Lo, SDValue &Hi) {
 
     // When shifting right the arithmetic for Lo and Hi is swapped.
     if (N->getOpcode() != ISD::SHL)
-      MISTD::swap(InL, InH);
+      std::swap(InL, InH);
 
     // Use a little trick to get the bits that move from Lo to Hi. First
     // shift by one bit.
@@ -1438,7 +1438,7 @@ ExpandShiftWithKnownAmountBit(SDNode *N, SDValue &Lo, SDValue &Hi) {
     Hi = DAG.getNode(ISD::OR, dl, NVT, DAG.getNode(Op1, dl, NVT, InH, Amt),Sh2);
 
     if (N->getOpcode() != ISD::SHL)
-      MISTD::swap(Hi, Lo);
+      std::swap(Hi, Lo);
     return true;
   }
 
@@ -2358,7 +2358,7 @@ void DAGTypeLegalizer::ExpandIntRes_XMULO(SDNode *N,
                        /*isTailCall=*/false,
                        /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                        Func, Args, DAG, dl);
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   SplitInteger(CallInfo.first, Lo, Hi);
   SDValue Temp2 = DAG.getLoad(PtrVT, dl, CallInfo.second, Temp,
@@ -2841,13 +2841,13 @@ SDValue DAGTypeLegalizer::ExpandIntOp_UINT_TO_FP(SDNode *N) {
     // Get a pointer to FF if the sign bit was set, or to 0 otherwise.
     SDValue Zero = DAG.getIntPtrConstant(0);
     SDValue Four = DAG.getIntPtrConstant(4);
-    if (TLI.isBigEndian()) MISTD::swap(Zero, Four);
+    if (TLI.isBigEndian()) std::swap(Zero, Four);
     SDValue Offset = DAG.getSelect(dl, Zero.getValueType(), SignSet,
                                    Zero, Four);
     unsigned Alignment = cast<ConstantPoolSDNode>(FudgePtr)->getAlignment();
     FudgePtr = DAG.getNode(ISD::ADD, dl, FudgePtr.getValueType(),
                            FudgePtr, Offset);
-    Alignment = MISTD::min(Alignment, 4u);
+    Alignment = std::min(Alignment, 4u);
 
     // Load the value out, extending it from f32 to the destination float type.
     // FIXME: Avoid the extend by constructing the right constant pool?

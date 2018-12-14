@@ -25,7 +25,7 @@
 namespace llvm {
 
 class RemoteTarget {
-  MISTD::string ErrorMsg;
+  std::string ErrorMsg;
   bool IsRunning;
 
   SmallVector<sys::MemoryBlock, 16> Allocations;
@@ -99,7 +99,7 @@ public:
 
   // Create an instance of the system-specific remote target class.
   static RemoteTarget *createRemoteTarget();
-  static RemoteTarget *createExternalRemoteTarget(MISTD::string &ChildName);
+  static RemoteTarget *createExternalRemoteTarget(std::string &ChildName);
   static bool hostSupportsExternalRemoteTarget(); 
 private:
   // Main processing function for the remote target process. Command messages

@@ -44,7 +44,7 @@ namespace LOG {
 namespace MESSAGE {
 
 
-class Base : public MISTD::ostringstream
+class Base : public std::ostringstream
 {
 public:
     typedef MI::SYSTEM::Module_id       Module_id;
@@ -63,7 +63,7 @@ struct Fatal : public Base
     Fatal(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Fatal()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->fatal(m_mid, m_cid, 0, "%s", s.c_str());
     }
@@ -75,7 +75,7 @@ struct Error : public Base
     Error(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Error()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->error(m_mid, m_cid, 0, "%s", s.c_str());
     }
@@ -87,7 +87,7 @@ struct Warning : public Base
     Warning(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Warning()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->warning(m_mid, m_cid, 0, "%s", s.c_str());
     }
@@ -99,7 +99,7 @@ struct Stat : public Base
     Stat(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Stat()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->stat(m_mid, m_cid, "%s", s.c_str());
     }
@@ -111,7 +111,7 @@ struct Vstat : public Base
     Vstat(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Vstat()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->vstat(m_mid, m_cid, "%s", s.c_str());
     }
@@ -123,7 +123,7 @@ struct Progress : public Base
     Progress(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Progress()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->progress(m_mid, m_cid, 0, "%s", s.c_str());
     }
@@ -135,7 +135,7 @@ struct Info : public Base
     Info(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Info()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->info(m_mid, m_cid, "%s", s.c_str());
     }
@@ -147,7 +147,7 @@ struct Debug : public Base
     Debug(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Debug()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->debug(m_mid, m_cid, "%s", s.c_str());
     }
@@ -159,7 +159,7 @@ struct Vdebug : public Base
     Vdebug(Module_id mid, Category_id cid) : Base(mid, cid) { }
     ~Vdebug()
     {
-        const MISTD::string& s = str();
+        const std::string& s = str();
         if (!s.empty())
             mod_log->vdebug(m_mid, m_cid, "%s", s.c_str());
     }

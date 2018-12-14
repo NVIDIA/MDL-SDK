@@ -860,7 +860,7 @@ NVPTXTargetLowering::LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getNode(NVPTXISD::Wrapper, dl, getPointerTy(), Op);
 }
 
-MISTD::string
+std::string
 NVPTXTargetLowering::getPrototype(Type *retTy, const ArgListTy &Args,
                                   const SmallVectorImpl<ISD::OutputArg> &Outs,
                                   unsigned retAlignment,
@@ -872,7 +872,7 @@ NVPTXTargetLowering::getPrototype(Type *retTy, const ArgListTy &Args,
   if (!isABI)
     return "";
 
-  MISTD::stringstream O;
+  std::stringstream O;
   O << "prototype_" << uniqueCallSite << " : .callprototype ";
 
   if (retTy->getTypeID() == Type::VoidTyID) {
@@ -1379,7 +1379,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // The prototype is embedded in a string and put as the operand for a
     // CallPrototype SDNode which will print out to the value of the string.
     SDVTList ProtoVTs = DAG.getVTList(MVT::Other, MVT::Glue);
-    MISTD::string Proto = getPrototype(retTy, Args, Outs, retAlignment, CS, uniqueCallSite);
+    std::string Proto = getPrototype(retTy, Args, Outs, retAlignment, CS, uniqueCallSite);
     const char *ProtoStr =
       nvTM->getManagedStrPool()->getManagedString(Proto.c_str())->c_str();
     SDValue ProtoOps[] = {
@@ -1451,7 +1451,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
       if (NumElts == 1) {
         // Just a simple load
-        MISTD::vector<EVT> LoadRetVTs;
+        std::vector<EVT> LoadRetVTs;
         if (EltVT == MVT::i1 || EltVT == MVT::i8) {
           // If loading i1/i8 result, generate
           //   load.b8 i16
@@ -1462,7 +1462,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
           LoadRetVTs.push_back(EltVT);
         LoadRetVTs.push_back(MVT::Other);
         LoadRetVTs.push_back(MVT::Glue);
-        MISTD::vector<SDValue> LoadRetOps;
+        std::vector<SDValue> LoadRetOps;
         LoadRetOps.push_back(Chain);
         LoadRetOps.push_back(DAG.getConstant(1, MVT::i32));
         LoadRetOps.push_back(DAG.getConstant(0, MVT::i32));
@@ -1479,7 +1479,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         InVals.push_back(Ret0);
       } else if (NumElts == 2) {
         // LoadV2
-        MISTD::vector<EVT> LoadRetVTs;
+        std::vector<EVT> LoadRetVTs;
         if (EltVT == MVT::i1 || EltVT == MVT::i8) {
           // If loading i1/i8 result, generate
           //   load.b8 i16
@@ -1493,7 +1493,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         }
         LoadRetVTs.push_back(MVT::Other);
         LoadRetVTs.push_back(MVT::Glue);
-        MISTD::vector<SDValue> LoadRetOps;
+        std::vector<SDValue> LoadRetOps;
         LoadRetOps.push_back(Chain);
         LoadRetOps.push_back(DAG.getConstant(1, MVT::i32));
         LoadRetOps.push_back(DAG.getConstant(0, MVT::i32));
@@ -1964,8 +1964,8 @@ SDValue NVPTXTargetLowering::LowerSTOREi1(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue NVPTXTargetLowering::getExtSymb(SelectionDAG &DAG, const char *inname,
                                         int idx, EVT v) const {
-  MISTD::string *name = nvTM->getManagedStrPool()->getManagedString(inname);
-  MISTD::stringstream suffix;
+  std::string *name = nvTM->getManagedStrPool()->getManagedString(inname);
+  std::stringstream suffix;
   suffix << idx;
   *name += suffix.str();
   return DAG.getTargetExternalSymbol(name->c_str(), v);
@@ -1973,13 +1973,13 @@ SDValue NVPTXTargetLowering::getExtSymb(SelectionDAG &DAG, const char *inname,
 
 SDValue
 NVPTXTargetLowering::getParamSymbol(SelectionDAG &DAG, int idx, EVT v) const {
-  MISTD::string ParamSym;
+  std::string ParamSym;
   raw_string_ostream ParamStr(ParamSym);
 
   ParamStr << DAG.getMachineFunction().getName() << "_param_" << idx;
   ParamStr.flush();
 
-  MISTD::string *SavedStr =
+  std::string *SavedStr =
     nvTM->getManagedStrPool()->getManagedString(ParamSym.c_str());
   return DAG.getTargetExternalSymbol(SavedStr->c_str(), v);
 }
@@ -2005,7 +2005,7 @@ bool llvm::isImageOrSamplerVal(const Value *arg, const Module *context) {
     return false;
 
   const StructType *STy = dyn_cast<StructType>(PTy->getElementType());
-  const MISTD::string TypeName = STy && !STy->isLiteral() ? STy->getName() : "";
+  const std::string TypeName = STy && !STy->isLiteral() ? STy->getName() : "";
 
   for (int i = 0, e = array_lengthof(specialTypes); i != e; ++i)
     if (TypeName == specialTypes[i])
@@ -2026,7 +2026,7 @@ SDValue NVPTXTargetLowering::LowerFormalArguments(
   const TargetLowering *TLI = nvTM->getTargetLowering();
 
   SDValue Root = DAG.getRoot();
-  MISTD::vector<SDValue> OutChains;
+  std::vector<SDValue> OutChains;
 
   bool isKernel = NVVM.isKernelFunction(*F);
   bool isABI = (nvptxSubtarget.getSmVersion() >= 20);
@@ -2034,8 +2034,8 @@ SDValue NVPTXTargetLowering::LowerFormalArguments(
   if (!isABI)
     return Chain;
 
-  MISTD::vector<Type *> argTypes;
-  MISTD::vector<const Argument *> theArgs;
+  std::vector<Type *> argTypes;
+  std::vector<const Argument *> theArgs;
   for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end();
        I != E; ++I) {
     theArgs.push_back(I);
@@ -2497,7 +2497,7 @@ NVPTXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
 
 void NVPTXTargetLowering::LowerAsmOperandForConstraint(
-    SDValue Op, MISTD::string &Constraint, MISTD::vector<SDValue> &Ops,
+    SDValue Op, std::string &Constraint, std::vector<SDValue> &Ops,
     SelectionDAG &DAG) const {
   if (Constraint.length() > 1)
     return;
@@ -3750,7 +3750,7 @@ bool NVPTXTargetLowering::isLegalAddressingMode(const AddrMode &AM,
 /// getConstraintType - Given a constraint letter, return the type of
 /// constraint it is for this target.
 NVPTXTargetLowering::ConstraintType
-NVPTXTargetLowering::getConstraintType(const MISTD::string &Constraint) const {
+NVPTXTargetLowering::getConstraintType(const std::string &Constraint) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     default:
@@ -3770,26 +3770,26 @@ NVPTXTargetLowering::getConstraintType(const MISTD::string &Constraint) const {
   return TargetLowering::getConstraintType(Constraint);
 }
 
-MISTD::pair<unsigned, const TargetRegisterClass *>
-NVPTXTargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
+std::pair<unsigned, const TargetRegisterClass *>
+NVPTXTargetLowering::getRegForInlineAsmConstraint(const std::string &Constraint,
                                                   MVT VT) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'b':
-      return MISTD::make_pair(0U, &NVPTX::Int1RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Int1RegsRegClass);
     case 'c':
-      return MISTD::make_pair(0U, &NVPTX::Int16RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Int16RegsRegClass);
     case 'h':
-      return MISTD::make_pair(0U, &NVPTX::Int16RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Int16RegsRegClass);
     case 'r':
-      return MISTD::make_pair(0U, &NVPTX::Int32RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Int32RegsRegClass);
     case 'l':
     case 'N':
-      return MISTD::make_pair(0U, &NVPTX::Int64RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Int64RegsRegClass);
     case 'f':
-      return MISTD::make_pair(0U, &NVPTX::Float32RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Float32RegsRegClass);
     case 'd':
-      return MISTD::make_pair(0U, &NVPTX::Float64RegsRegClass);
+      return std::make_pair(0U, &NVPTX::Float64RegsRegClass);
     }
   }
   return TargetLowering::getRegForInlineAsmConstraint(Constraint, VT);
@@ -3968,7 +3968,7 @@ static SDValue PerformANDCombine(SDNode *N,
   SDValue Mask = N->getOperand(1);
 
   if (isa<ConstantSDNode>(Val)) {
-    MISTD::swap(Val, Mask);
+    std::swap(Val, Mask);
   }
 
   SDValue AExt;
@@ -4128,7 +4128,7 @@ static SDValue TryMULWIDECombine(SDNode *N,
   // Canonicalize the multiply so the constant (if any) is on the right
   if (N->getOpcode() == ISD::MUL) {
     if (isa<ConstantSDNode>(LHS)) {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
     }
   }
 

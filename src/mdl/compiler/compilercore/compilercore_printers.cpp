@@ -2442,6 +2442,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_4:
                 print(" Since MDL 1.4");
                 break;
+            case IMDL::MDL_VERSION_1_5:
+                print(" Since MDL 1.5");
+                break;
             }
             switch (rem) {
             case IMDL::MDL_VERSION_1_0:
@@ -2457,6 +2460,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_4:
                 print(" Removed in MDL 1.4");
+                break;
+            case IMDL::MDL_VERSION_1_5:
+                print(" Removed in MDL 1.5");
                 break;
             }
             print(insert ? " */" : "\n");

@@ -55,8 +55,8 @@ namespace {
         Low(low), High(high), BB(bb) { }
     };
 
-    typedef MISTD::vector<CaseRange>           CaseVector;
-    typedef MISTD::vector<CaseRange>::iterator CaseItr;
+    typedef std::vector<CaseRange>           CaseVector;
+    typedef std::vector<CaseRange>::iterator CaseItr;
   private:
     void processSwitchInst(SwitchInst *SI);
 
@@ -137,9 +137,9 @@ BasicBlock* LowerSwitch::switchConvert(CaseItr Begin, CaseItr End,
     return newLeafBlock(*Begin, Val, OrigBlock, Default);
 
   unsigned Mid = Size / 2;
-  MISTD::vector<CaseRange> LHS(Begin, Begin + Mid);
+  std::vector<CaseRange> LHS(Begin, Begin + Mid);
   DEBUG(dbgs() << "LHS: " << LHS << "\n");
-  MISTD::vector<CaseRange> RHS(Begin + Mid, End);
+  std::vector<CaseRange> RHS(Begin + Mid, End);
   DEBUG(dbgs() << "RHS: " << RHS << "\n");
 
   CaseRange& Pivot = *(Begin + Mid);
@@ -241,7 +241,7 @@ unsigned LowerSwitch::Clusterify(CaseVector& Cases, SwitchInst *SI) {
     Cases.push_back(CaseRange(i.getCaseValue(), i.getCaseValue(),
                               i.getCaseSuccessor()));
   
-  MISTD::sort(Cases.begin(), Cases.end(), CaseCmp());
+  std::sort(Cases.begin(), Cases.end(), CaseCmp());
 
   // Merge case into clusters
   if (Cases.size()>=2)

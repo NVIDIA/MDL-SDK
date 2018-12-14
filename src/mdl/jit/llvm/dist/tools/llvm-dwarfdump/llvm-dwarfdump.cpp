@@ -35,7 +35,7 @@
 using namespace llvm;
 using namespace object;
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFilenames(cl::Positional, cl::desc("<input object files>"),
                cl::ZeroOrMore);
 
@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
   if (InputFilenames.size() == 0)
     InputFilenames.push_back("a.out");
 
-  MISTD::for_each(InputFilenames.begin(), InputFilenames.end(), DumpInput);
+  std::for_each(InputFilenames.begin(), InputFilenames.end(), DumpInput);
 
   return 0;
 }

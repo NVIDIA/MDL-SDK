@@ -110,7 +110,7 @@ class AliasSet : public ilist_node<AliasSet> {
   AliasSet *Forward;             // Forwarding pointer.
 
   // All instructions without a specific address in this alias set.
-  MISTD::vector<AssertingVH<Instruction> > UnknownInsts;
+  std::vector<AssertingVH<Instruction> > UnknownInsts;
 
   // RefCount - Number of nodes pointing to this AliasSet plus the number of
   // AliasSets forwarding to it.
@@ -180,7 +180,7 @@ public:
   void dump() const;
 
   /// Define an iterator for alias sets... this is just a forward iterator.
-  class iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+  class iterator : public std::iterator<std::forward_iterator_tag,
                                         PointerRec, ptrdiff_t> {
     PointerRec *CurNode;
   public:

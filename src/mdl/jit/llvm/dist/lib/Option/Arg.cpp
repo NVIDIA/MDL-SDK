@@ -61,7 +61,7 @@ void Arg::dump() const {
   llvm::errs() << "]>\n";
 }
 
-MISTD::string Arg::getAsString(const ArgList &Args) const {
+std::string Arg::getAsString(const ArgList &Args) const {
   SmallString<256> Res;
   llvm::raw_svector_ostream OS(Res);
 

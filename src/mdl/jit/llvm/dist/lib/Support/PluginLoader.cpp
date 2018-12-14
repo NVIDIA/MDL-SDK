@@ -20,12 +20,12 @@
 #include <vector>
 using namespace llvm;
 
-static ManagedStatic<MISTD::vector<MISTD::string> > Plugins;
+static ManagedStatic<std::vector<std::string> > Plugins;
 static ManagedStatic<sys::SmartMutex<true> > PluginsLock;
 
-void PluginLoader::operator=(const MISTD::string &Filename) {
+void PluginLoader::operator=(const std::string &Filename) {
   sys::SmartScopedLock<true> Lock(*PluginsLock);
-  MISTD::string Error;
+  std::string Error;
   if (sys::DynamicLibrary::LoadLibraryPermanently(Filename.c_str(), &Error)) {
     errs() << "Error opening '" << Filename << "': " << Error
            << "\n  -load request ignored.\n";
@@ -39,7 +39,7 @@ unsigned PluginLoader::getNumPlugins() {
   return Plugins.isConstructed() ? Plugins->size() : 0;
 }
 
-MISTD::string &PluginLoader::getPlugin(unsigned num) {
+std::string &PluginLoader::getPlugin(unsigned num) {
   sys::SmartScopedLock<true> Lock(*PluginsLock);
   assert(Plugins.isConstructed() && num < Plugins->size() &&
          "Asking for an out of bounds plugin");

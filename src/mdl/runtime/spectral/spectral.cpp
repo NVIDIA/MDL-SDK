@@ -56,7 +56,7 @@ float get_value_lerp(
     MDL_ASSERT(num_values > 1);
 
     const float f = (lambda - lambda_min) / (lambda_max - lambda_min) * (float)(num_values - 1);
-    unsigned int b0 = (unsigned int)(MISTD::max(floorf(f), 0.0f));
+    unsigned int b0 = (unsigned int)(std::max(floorf(f), 0.0f));
     if (b0 >= num_values)
         b0 = num_values - 1;
     const unsigned int b1 = (b0 == num_values - 1) ? b0 : b0 + 1;
@@ -356,9 +356,9 @@ void mdl_blackbody(float sRGB[3], float kelvin)
 
     convert_XYZ_to_cs(sRGB, XYZ, CS_sRGB);
 
-    sRGB[0] = MISTD::max(sRGB[0], 0.0f);
-    sRGB[1] = MISTD::max(sRGB[1], 0.0f);
-    sRGB[2] = MISTD::max(sRGB[2], 0.0f);
+    sRGB[0] = std::max(sRGB[0], 0.0f);
+    sRGB[1] = std::max(sRGB[1], 0.0f);
+    sRGB[2] = std::max(sRGB[2], 0.0f);
 }
 
 
@@ -443,7 +443,7 @@ static void cs_refl_to_spectrum_smits(
     float col[3] = { color[0], color[1], color[2] };
 
     // for now simply Smits' method with sRGB tables
-    const float c111 = MISTD::min(col[0], MISTD::min(col[1], col[2]));
+    const float c111 = std::min(col[0], std::min(col[1], col[2]));
 
     for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
         values[i] = c111;
@@ -453,21 +453,21 @@ static void cs_refl_to_spectrum_smits(
     col[2] -= c111;
 
     if (col[0] > 0.0f && col[1] > 0.0f) {
-        const float c110 = MISTD::min(col[0], col[1]);
+        const float c110 = std::min(col[0], col[1]);
         for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
             values[i] += c110 * srgb_relative_s110[i];
         col[0] -= c110;
         col[1] -= c110;
     }
     else if (col[0] > 0.0f && col[2] > 0.0f) {
-        const float c101 = MISTD::min(col[0], col[2]);
+        const float c101 = std::min(col[0], col[2]);
         for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
             values[i] += c101 * srgb_relative_s101[i];
         col[0] -= c101;
         col[2] -= c101;
     }
     else {
-        const float c011 = MISTD::min(col[1], col[2]);
+        const float c011 = std::min(col[1], col[2]);
         for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
             values[i] += c011 * srgb_relative_s011[i];
         col[1] -= c011;
@@ -572,10 +572,10 @@ void cs_refl_to_spectrum(
     else
     {
         const float max_scale = max_refl > 0.0f ? 1.0f / max_refl : 0.0f;
-        scale = MISTD::min(scale, max_scale);
+        scale = std::min(scale, max_scale);
 
         for (unsigned int j = 0; j < SPECTRAL_XYZ_RES; ++j)
-            values[j] = MISTD::min(1.0f, values[j] * scale); //!! paranoia clamp to 1.0
+            values[j] = std::min(1.0f, values[j] * scale); //!! paranoia clamp to 1.0
     }
 }
 

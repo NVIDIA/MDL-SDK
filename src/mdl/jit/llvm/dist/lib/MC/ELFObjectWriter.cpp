@@ -86,7 +86,7 @@ class ELFObjectWriter : public MCObjectWriter {
     DenseMap<const MCSymbol *, const MCSymbol *> Renames;
 
     llvm::DenseMap<const MCSectionData*,
-                   MISTD::vector<ELFRelocationEntry> > Relocations;
+                   std::vector<ELFRelocationEntry> > Relocations;
     DenseMap<const MCSection*, uint64_t> SectionStringTableIndex;
 
     /// @}
@@ -94,10 +94,10 @@ class ELFObjectWriter : public MCObjectWriter {
     /// @{
 
     SmallString<256> StringTable;
-    MISTD::vector<uint64_t> FileSymbolData;
-    MISTD::vector<ELFSymbolData> LocalSymbolData;
-    MISTD::vector<ELFSymbolData> ExternalSymbolData;
-    MISTD::vector<ELFSymbolData> UndefinedSymbolData;
+    std::vector<uint64_t> FileSymbolData;
+    std::vector<ELFSymbolData> LocalSymbolData;
+    std::vector<ELFSymbolData> ExternalSymbolData;
+    std::vector<ELFSymbolData> UndefinedSymbolData;
 
     /// @}
 
@@ -309,7 +309,7 @@ class ELFObjectWriter : public MCObjectWriter {
                             const SectionOffsetMapTy &SectionOffsetMap);
 
     void ComputeSectionOrder(MCAssembler &Asm,
-                             MISTD::vector<const MCSectionELF*> &Sections);
+                             std::vector<const MCSectionELF*> &Sections);
 
     void WriteSecHdrEntry(uint32_t Name, uint32_t Type, uint64_t Flags,
                           uint64_t Address, uint64_t Offset,
@@ -528,7 +528,7 @@ void ELFObjectWriter::ExecutePostLayoutBinding(MCAssembler &Asm,
         !Rest.startswith("@@@"))
       report_fatal_error("A @@ version cannot be undefined");
 
-    Renames.insert(MISTD::make_pair(&Symbol, &Alias));
+    Renames.insert(std::make_pair(&Symbol, &Alias));
   }
 }
 
@@ -1011,7 +1011,7 @@ void ELFObjectWriter::CreateRelocationSections(MCAssembler &Asm,
       static_cast<const MCSectionELF&>(SD.getSection());
 
     const StringRef SectionName = Section.getSectionName();
-    MISTD::string RelaSectionName = hasRelocationAddend() ? ".rela" : ".rel";
+    std::string RelaSectionName = hasRelocationAddend() ? ".rela" : ".rel";
     RelaSectionName += SectionName;
 
     unsigned EntrySize;
@@ -1077,7 +1077,7 @@ void ELFObjectWriter::WriteSecHdrEntry(uint32_t Name, uint32_t Type,
 void ELFObjectWriter::WriteRelocationsFragment(const MCAssembler &Asm,
                                                MCDataFragment *F,
                                                const MCSectionData *SD) {
-  MISTD::vector<ELFRelocationEntry> &Relocs = Relocations[SD];
+  std::vector<ELFRelocationEntry> &Relocs = Relocations[SD];
 
   // Sort the relocation entries. Most targets just sort by r_offset, but some
   // (e.g., MIPS) have additional constraints.
@@ -1128,7 +1128,7 @@ static int compareBySuffix(const MCSectionELF *const *a,
   const StringRef &NameB = (*b)->getSectionName();
   const unsigned sizeA = NameA.size();
   const unsigned sizeB = NameB.size();
-  const unsigned len = MISTD::min(sizeA, sizeB);
+  const unsigned len = std::min(sizeA, sizeB);
   for (unsigned int i = 0; i < len; ++i) {
     char ca = NameA[sizeA - i - 1];
     char cb = NameB[sizeB - i - 1];
@@ -1197,7 +1197,7 @@ void ELFObjectWriter::CreateMetadataSections(MCAssembler &Asm,
 
   F = new MCDataFragment(&ShstrtabSD);
 
-  MISTD::vector<const MCSectionELF*> Sections;
+  std::vector<const MCSectionELF*> Sections;
   for (MCAssembler::const_iterator it = Asm.begin(),
          ie = Asm.end(); it != ie; ++it) {
     const MCSectionELF &Section =
@@ -1442,12 +1442,12 @@ void ELFObjectWriter::WriteSectionHeader(MCAssembler &Asm,
                                    const SectionOffsetMapTy &SectionOffsetMap) {
   const unsigned NumSections = Asm.size() + 1;
 
-  MISTD::vector<const MCSectionELF*> Sections;
+  std::vector<const MCSectionELF*> Sections;
   Sections.resize(NumSections - 1);
 
   for (SectionIndexMapTy::const_iterator i=
          SectionIndexMap.begin(), e = SectionIndexMap.end(); i != e; ++i) {
-    const MISTD::pair<const MCSectionELF*, uint32_t> &p = *i;
+    const std::pair<const MCSectionELF*, uint32_t> &p = *i;
     Sections[p.second - 1] = p.first;
   }
 
@@ -1477,7 +1477,7 @@ void ELFObjectWriter::WriteSectionHeader(MCAssembler &Asm,
 }
 
 void ELFObjectWriter::ComputeSectionOrder(MCAssembler &Asm,
-                                  MISTD::vector<const MCSectionELF*> &Sections) {
+                                  std::vector<const MCSectionELF*> &Sections) {
   for (MCAssembler::iterator it = Asm.begin(),
          ie = Asm.end(); it != ie; ++it) {
     const MCSectionELF &Section =
@@ -1541,7 +1541,7 @@ void ELFObjectWriter::WriteObject(MCAssembler &Asm,
                                     sizeof(ELF::Elf32_Ehdr);
   uint64_t FileOff = HeaderSize;
 
-  MISTD::vector<const MCSectionELF*> Sections;
+  std::vector<const MCSectionELF*> Sections;
   ComputeSectionOrder(Asm, Sections);
   unsigned NumSections = Sections.size();
   SectionOffsetMapTy SectionOffsetMap;

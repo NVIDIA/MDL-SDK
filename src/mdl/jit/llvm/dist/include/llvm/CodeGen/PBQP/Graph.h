@@ -34,7 +34,7 @@ namespace PBQP {
 
   private:
 
-    typedef MISTD::set<NodeId> AdjEdgeList;
+    typedef std::set<NodeId> AdjEdgeList;
 
   public:
 
@@ -89,13 +89,13 @@ namespace PBQP {
 
     // ----- MEMBERS -----
 
-    typedef MISTD::vector<NodeEntry> NodeVector;
-    typedef MISTD::vector<NodeId> FreeNodeVector;
+    typedef std::vector<NodeEntry> NodeVector;
+    typedef std::vector<NodeId> FreeNodeVector;
     NodeVector nodes;
     FreeNodeVector freeNodes;
 
-    typedef MISTD::vector<EdgeEntry> EdgeVector;
-    typedef MISTD::vector<EdgeId> FreeEdgeVector;
+    typedef std::vector<EdgeEntry> EdgeVector;
+    typedef std::vector<EdgeId> FreeEdgeVector;
     EdgeVector edges;
     FreeEdgeVector freeEdges;
 
@@ -167,7 +167,7 @@ namespace PBQP {
     private:
       NodeId findNextInUse(NodeId n) const {
         while (n < endNodeId &&
-               MISTD::find(freeNodes.begin(), freeNodes.end(), n) !=
+               std::find(freeNodes.begin(), freeNodes.end(), n) !=
                  freeNodes.end()) {
           ++n;
         }
@@ -193,7 +193,7 @@ namespace PBQP {
     private:
       EdgeId findNextInUse(EdgeId n) const {
         while (n < endEdgeId &&
-               MISTD::find(freeEdges.begin(), freeEdges.end(), n) !=
+               std::find(freeEdges.begin(), freeEdges.end(), n) !=
                  freeEdges.end()) {
           ++n;
         }
@@ -341,7 +341,7 @@ namespace PBQP {
     }
 
     EdgeId invalidEdgeId() const {
-      return MISTD::numeric_limits<EdgeId>::max();
+      return std::numeric_limits<EdgeId>::max();
     }
 
     /// \brief Get the edge connecting two nodes.
@@ -463,7 +463,7 @@ namespace PBQP {
   };
 
 //  void Graph::copyFrom(const Graph &other) {
-//     MISTD::map<Graph::ConstNodeItr, Graph::NodeItr,
+//     std::map<Graph::ConstNodeItr, Graph::NodeItr,
 //              NodeItrComparator> nodeMap;
 
 //      for (Graph::ConstNodeItr nItr = other.nodesBegin(),

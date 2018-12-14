@@ -46,6 +46,7 @@
 #include <mi/mdl/mdl_types.h>
 #include <mi/mdl/mdl_declarations.h>
 #include <mi/mdl/mdl_generated_dag.h>
+#include <mdl/compiler/compilercore/compilercore_bitset.h>
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
 
@@ -62,11 +63,14 @@ namespace llvm {
 }  // llvm
 
 namespace mi {
+
 namespace mdl {
 
-class Bsdf_component_info;
+class Df_component_info;
 class DAG_call;
 class DAG_node;
+class Derivative_infos;
+class Func_deriv_info;
 class Function_context;
 class Function_instance;
 class ICall_name_resolver;
@@ -182,18 +186,51 @@ public:
         FL_HAS_STATE      = 1 << 1,   ///< Has state parameter.
         FL_HAS_RES        = 1 << 2,   ///< Has resource_data parameter.
         FL_HAS_EXC        = 1 << 3,   ///< Has exc_state parameter.
-        FL_HAS_OBJ_ID     = 1 << 4,   ///< Has object_id parameter.
-        FL_HAS_TRANSFORMS = 1 << 5,   ///< Has transform (matrix) parameters
-        FL_UNALIGNED_RET  = 1 << 6,   ///< The address for the struct return is might be unaligned.
+        FL_HAS_CAP_ARGS   = 1 << 4,   ///< Has captured arguments parameter.
+        FL_HAS_LMBD_RES   = 1 << 5,   ///< Has lambda_results parameter (libbsdf).
+        FL_HAS_OBJ_ID     = 1 << 6,   ///< Has object_id parameter.
+        FL_HAS_TRANSFORMS = 1 << 7,   ///< Has transform (matrix) parameters.
+        FL_UNALIGNED_RET  = 1 << 8,   ///< The address for the struct return is might be unaligned.
+        FL_HAS_EXEC_CTX   = 1 << 9,   ///< The state, resource_data, exc_state, captured_arguments
+                                      ///< and lambda_results parameter is provided in an execution
+                                      ///< context parameter. The other flags should also be set
+                                      ///< to indicate, that the information is available.
     };  // can be or'ed
 
     typedef unsigned Flags;
 
     enum Kind {
-        KI_STATE_SET_NORMAL,          ///< Kind of state::set_normal(float3)
-        KI_STATE_GET_TEXTURE_RESULTS, ///< Kind of state::get_texture_results()
-        KI_STATE_GET_RO_DATA_SEGMENT, ///< Kind of state::get_ro_data_segment()
-        KI_STATE_OBJECT_ID,           ///< Kind of state::object_id()
+        KI_STATE_SET_NORMAL,                    ///< Kind of state::set_normal(float3)
+        KI_STATE_GET_TEXTURE_RESULTS,           ///< Kind of state::get_texture_results()
+        KI_STATE_GET_ARG_BLOCK,                 ///< Kind of state::get_arg_block()
+        KI_STATE_GET_RO_DATA_SEGMENT,           ///< Kind of state::get_ro_data_segment()
+        KI_STATE_OBJECT_ID,                     ///< Kind of state::object_id()
+        KI_STATE_CALL_LAMBDA_FLOAT,             ///< Kind of state::call_lambda_float(int)
+        KI_STATE_CALL_LAMBDA_FLOAT3,            ///< Kind of state::call_lambda_float3(int)
+        
+        /// Kind of df::bsdf_measurement_resolution(int,int)
+        KI_DF_BSDF_MEASUREMENT_RESOLUTION,      
+
+        /// Kind of df::bsdf_measurement_evaluate(int,float2,float2,int)
+        KI_DF_BSDF_MEASUREMENT_EVALUATE,
+
+        /// Kind of df::bsdf_measurement_sample(int,float2,float3,int)
+        KI_DF_BSDF_MEASUREMENT_SAMPLE,
+
+        /// Kind of df::bsdf_measurement_pdf(int,float2,float2,int)
+        KI_DF_BSDF_MEASUREMENT_PDF,
+
+        /// Kind of df::bsdf_measurement_albedos(int,float2)
+        KI_DF_BSDF_MEASUREMENT_ALBEDOS,
+
+        /// Kind of df::_light_profile_evaluate(int,float2)
+        KI_DF_LIGHT_PROFILE_EVALUATE,
+
+        /// Kind of df::_light_profile_sample(int,float3)
+        KI_DF_LIGHT_PROFILE_SAMPLE,
+
+        /// Kind of df::_light_profile_pdf(int,float2)
+        KI_DF_LIGHT_PROFILE_PDF,
 
         KI_NUM_INTERNAL_FUNCTIONS
     };
@@ -398,6 +435,9 @@ public:
     /// Returns true if the current function has a exc_state parameter.
     bool has_exc_state_param() const { return (u.f.m_flags & FL_HAS_EXC) != 0; }
 
+    /// Returns true if the current function has a captured_arguments parameter.
+    bool has_captured_args_param() const { return (u.f.m_flags & FL_HAS_CAP_ARGS) != 0; }
+
     /// Returns true if the current function has a lambda_results parameter.
     bool has_lambda_results_param() const { return (u.f.m_flags & FL_HAS_LMBD_RES) != 0; }
 
@@ -524,6 +564,41 @@ public:
         }
     }
 
+    /// Ensures that the expression result is a derivative value or not, by stripping or zero
+    /// extending.
+    ///
+    /// \param context                the function context
+    /// \param should_be_deriv_value  if true, the expression result value will be zero extended
+    ///                               to a derivative value, if necessary,
+    ///                               if false, any derivative information will be stripped
+    void ensure_deriv_result(Function_context &context, bool should_be_deriv_value)
+    {
+        if (should_be_deriv_value) {
+            if (!is_deriv_value(context)) {
+                llvm::Value *val = as_value(context);
+                m_is_value = true;
+                m_content = context.get_dual(val);
+            }
+        } else {
+            if (m_is_value) {
+                m_content = context.get_dual_val(m_content);
+            } else {
+                if (context.is_deriv_type(m_content->getType()->getPointerElementType())) {
+                    // change pointer to dual into pointer to value component of dual
+                    m_content = context.get_dual_val_ptr(m_content);
+                }
+            }
+        }
+    }
+
+    /// Returns true, if the expression result is a derivative value or a pointer to such value.
+    bool is_deriv_value(Function_context &context) {
+        if (m_is_value)
+            return context.is_deriv_type(m_content->getType());
+        else
+            return context.is_deriv_type(m_content->getType()->getPointerElementType());
+    }
+
     /// Returns true if this expression result is a constant.
     bool is_constant() const {
         if (m_is_value) {
@@ -541,6 +616,14 @@ public:
 
     /// Return true if this expression result represents a value.
     bool is_value() const { return m_is_value; }
+
+    /// Return the type of the value.
+    llvm::Type *get_value_type() const {
+        if (m_is_value)
+            return m_content->getType();
+        else
+            return m_content->getType()->getPointerElementType();
+    }
 
 private:
     /// Constructor.
@@ -582,21 +665,40 @@ public:
 
     /// Translate the i'th argument.
     ///
-    /// \param code_gen  the LLVM code generator
-    /// \param ctx       the current function context
-    /// \param i         the argument index
+    /// \param code_gen       the LLVM code generator
+    /// \param ctx            the current function context
+    /// \param i              the argument index
+    /// \param return_derivs  true, iff the user of the argument expects a derivative value
     virtual Expression_result translate_argument(
         LLVM_code_generator &code_gen,
         Function_context    &ctx,
-        size_t              i) const = 0;
+        size_t              i,
+        bool                return_derivs) const = 0;
+
+    /// Translate the i'th argument.
+    ///
+    /// \param code_gen       the LLVM code generator
+    /// \param ctx            the current function context
+    /// \param i              the argument index
+    /// \param return_derivs  true, iff the user of the argument expects a derivative value
+    llvm::Value *translate_argument_value(
+        LLVM_code_generator &code_gen,
+        Function_context    &ctx,
+        size_t              i,
+        bool                return_derivs) const
+    {
+        return translate_argument(code_gen, ctx, i, return_derivs).as_value(ctx);
+    }
 
     /// Get the LLVM context data of the callee.
     ///
-    /// \param code_gen  the LLVM code generator
-    /// \param args      the argument mappings for this function call
+    /// \param code_gen       the LLVM code generator
+    /// \param args           the argument mappings for this function call
+    /// \param return_derivs  if true, the function should return derivatives
     virtual LLVM_context_data *get_callee_context(
         LLVM_code_generator                      &code_gen,
-        Function_instance::Array_instances const &arg) const = 0;
+        Function_instance::Array_instances const &arg,
+        bool                                     return_derivs) const = 0;
 
     /// Get the result type of the call.
     virtual mi::mdl::IType const *get_type() const = 0;
@@ -620,7 +722,9 @@ public:
     virtual mi::mdl::IValue const *get_const_argument(size_t i) const = 0;
 
     /// If this is a DS_INTRINSIC_DAG_FIELD_ACCESS, the accessed field index, else -1.
-    virtual int get_field_index(mi::mdl::IAllocator *alloc) const = 0;
+    virtual int get_field_index(
+        LLVM_code_generator &code_gen,
+        mi::mdl::IAllocator *alloc) const = 0;
 
     /// Assume the first argument is a boolean branch condition and translate it.
     ///
@@ -637,8 +741,16 @@ public:
     /// If possible, convert into a DAG_call node.
     virtual mi::mdl::DAG_call const *as_dag_call() const = 0;
 
+    /// If possible, convert into an AST expression.
+    virtual mi::mdl::IExpression_call const *as_expr_call() const = 0;
+
     /// Get the source position of this call itself.
     virtual mi::mdl::Position const *get_position() const = 0;
+
+    /// Returns true, if the call should return derivatives.
+    ///
+    /// \param code_gen  the LLVM code generator
+    virtual bool returns_derivatives(LLVM_code_generator &code_gen) const = 0;
 };
 
 /// Helper struct for a texture attribute entry.
@@ -701,7 +813,8 @@ class LLVM_code_generator
     friend class MDL_runtime_creator;
     friend class Code_generator_jit;
     friend class Function_context;
-    friend class Bsdf_component_info;
+    friend class Df_component_info;
+    friend class Derivative_infos;
 public:
     static char const MESSAGE_CLASS = 'J';
 
@@ -1033,19 +1146,23 @@ public:
 
     /// Translate an expression to LLVM IR, returning its value.
     ///
-    /// \param ctx    the function context
-    /// \param expr   the expression to translate
+    /// \param ctx            the function context
+    /// \param expr           the expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     llvm::Value *translate_expression_value(
         Function_context           &ctx,
-        mi::mdl::IExpression const *expr);
+        mi::mdl::IExpression const *expr,
+        bool                       return_derivs);
 
     /// Translate an (r-value) expression to LLVM IR.
     ///
-    /// \param ctx    the function context
-    /// \param expr   the expression to translate
+    /// \param ctx            the function context
+    /// \param expr           the expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_expression(
         Function_context           &ctx,
-        mi::mdl::IExpression const *expr);
+        mi::mdl::IExpression const *expr,
+        bool                       return_derivs);
 
     /// Translate a DAG node into LLVM IR.
     ///
@@ -1107,11 +1224,13 @@ public:
 
     /// Create an LLVM context data for an existing LLVM function.
     ///
-    /// \param def        the function definition
-    /// \param func       the LLVM function
+    /// \param def            the function definition
+    /// \param return_derivs  if true, the function returns derivatives
+    /// \param func           the LLVM function
     LLVM_context_data *create_context_data(
         IDefinition const *def,
-        llvm::Function *func);
+        bool               return_derivs,
+        llvm::Function    *func);
 
     /// Create an LLVM context data for an existing LLVM function.
     ///
@@ -1280,6 +1399,35 @@ public:
     llvm::Type *lookup_type(
         mdl::IType const *type,
         int              arr_size = -1);
+
+    /// Get an LLVM type for the result of a call expression.
+    /// If necessary, a derivative type will be used.
+    ///
+    /// \param ctx        the context data of current function
+    /// \param call_expr  the call expression
+    llvm::Type *lookup_type_or_deriv_type(
+        Function_context &ctx,
+        mi::mdl::ICall_expr const *call_expr);
+
+    /// Get an LLVM type for the result of a expression.
+    /// If necessary, a derivative type will be used.
+    ///
+    /// \param ctx        the context data of current function
+    /// \param expr       the expression
+    llvm::Type *lookup_type_or_deriv_type(
+        Function_context &ctx,
+        mi::mdl::IExpression const *expr);
+
+    /// Returns true if for the given expression derivatives should be calculated.
+    bool is_deriv_expr(mi::mdl::IExpression const *expr) const;
+
+    /// Returns true if for the given variable derivatives should be calculated.
+    bool is_deriv_var(mi::mdl::IDefinition const *def) const;
+
+    /// Returns whether the texture runtime uses derivatives.
+    bool is_texruntime_with_derivs() const {
+        return m_texruntime_with_derivs;
+    }
 
     /// Drop an LLVM module and clear the layout cache.
     void drop_llvm_module(llvm::Module *module);
@@ -1527,6 +1675,30 @@ private:
         llvm::Value             *index,
         mi::mdl::Position const *index_pos);
 
+    /// Translate a dual l-value index expression to LLVM IR.
+    ///
+    /// \param ctx           the function context
+    /// \param comp_type     the type of the compound object that is indexed
+    /// \param comp_val_ptr  the pointer to the value component of the compound object
+    /// \param comp_dx_ptr   the pointer to the dx component of the compound object
+    /// \param comp_dy_ptr   the pointer to the dy component of the compound object
+    /// \param index         the index value (in MDL an signed integer)
+    /// \param index_pos     the source position of the index expression for bound checks
+    /// \param[out] adr_val  a reference for the resulting address of the value component
+    /// \param[out] adr_dx   a reference for the resulting address of the dx component
+    /// \param[out] adr_dy   a reference for the resulting address of the dy component
+    void translate_lval_index_expression_dual(
+        Function_context        &ctx,
+        mi::mdl::IType const    *comp_type,
+        llvm::Value             *comp_val_ptr,
+        llvm::Value             *comp_dx_ptr,
+        llvm::Value             *comp_dy_ptr,
+        llvm::Value             *index,
+        mi::mdl::Position const *index_pos,
+        llvm::Value             *&adr_val,
+        llvm::Value             *&adr_dx,
+        llvm::Value             *&adr_dy);
+
     /// Translate an r-value index expression to LLVM IR.
     ///
     /// \param ctx        the function context
@@ -1548,6 +1720,20 @@ private:
     llvm::Value *translate_lval_expression(
         Function_context           &ctx,
         mi::mdl::IExpression const *expr);
+
+    /// Translate a dual l-value expression to LLVM IR.
+    ///
+    /// \param      ctx      the function context
+    /// \param      expr     the expression to translate
+    /// \param[out] adr_val  a reference for the resulting address of the value component
+    /// \param[out] adr_dx   a reference for the resulting address of the dx component
+    /// \param[out] adr_dy   a reference for the resulting address of the dy component
+    void translate_lval_expression_dual(
+        Function_context           &ctx,
+        mi::mdl::IExpression const *expr,
+        llvm::Value                *&adr_val,
+        llvm::Value                *&adr_dx,
+        llvm::Value                *&adr_dy);
 
     /// Append the given value to the RO data segment.
     ///
@@ -1596,11 +1782,13 @@ private:
 
     /// Translate an unary expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param un_expr   the unary expression to translate
+    /// \param ctx            the function context
+    /// \param un_expr        the unary expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_unary(
         Function_context                 &ctx,
-        mi::mdl::IExpression_unary const *un_expr);
+        mi::mdl::IExpression_unary const *un_expr,
+        bool                             return_derivs);
 
     /// Helper for pre/post inc/decrement.
     ///
@@ -1630,17 +1818,21 @@ private:
     ///
     /// \param ctx       the function context
     /// \param bin_expr  the binary expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_binary(
         Function_context                  &ctx,
-        mi::mdl::IExpression_binary const *bin_expr);
+        mi::mdl::IExpression_binary const *bin_expr,
+        bool                              return_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
     /// \param ctx       the function context
     /// \param bin_expr  the binary expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     llvm::Value *translate_binary_no_side_effect(
         Function_context                  &ctx,
-        mi::mdl::IExpression_binary const *bin_expr);
+        mi::mdl::IExpression_binary const *bin_expr,
+        bool                              return_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
@@ -1667,15 +1859,15 @@ private:
 
     /// Translate a multiplication expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param res_type  the MDL result type of the expression
-    /// \param l_type    the MDL type of the left hand side expression
-    /// \param lhs       the left hand side expression
-    /// \param rhs       the MDL type of the right hand side expression
-    /// \param rhs       the right hand side expression
+    /// \param ctx            the function context
+    /// \param res_llvm_type  the LLVM result type of the expression
+    /// \param l_type         the MDL type of the left hand side expression
+    /// \param lhs            the left hand side expression
+    /// \param rhs            the MDL type of the right hand side expression
+    /// \param rhs            the right hand side expression
     llvm::Value *translate_multiply(
         Function_context           &ctx,
-        mi::mdl::IType const       *res_type,
+        llvm::Type                 *res_llvm_type,
         mi::mdl::IType const       *l_type,
         llvm::Value                *l,
         mi::mdl::IType const       *r_type,
@@ -1683,23 +1875,27 @@ private:
 
     /// Translate a multiplication expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param res_type  the MDL result type of the expression
-    /// \param lhs       the left hand side expression
-    /// \param rhs       the right hand side expression
+    /// \param ctx            the function context
+    /// \param res_llvm_type  the LLVM result type of the expression
+    /// \param lhs            the left hand side expression
+    /// \param rhs            the right hand side expression
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     llvm::Value *translate_multiply(
         Function_context           &ctx,
-        mi::mdl::IType const       *res_type,
+        llvm::Type                 *res_llvm_type,
         mi::mdl::IExpression const *lhs,
-        mi::mdl::IExpression const *rhs);
+        mi::mdl::IExpression const *rhs,
+        bool                       return_derivs);
 
     /// Translate an assign expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param bin_expr  the assign expression to translate
+    /// \param ctx            the function context
+    /// \param bin_expr       the assign expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_assign(
         Function_context                  &ctx,
-        mi::mdl::IExpression_binary const *bin_expr);
+        mi::mdl::IExpression_binary const *bin_expr,
+        bool                              return_derivs);
 
     /// Translate a binary compare expression to LLVM IR.
     ///
@@ -1721,9 +1917,11 @@ private:
     ///
     /// \param ctx        the function context
     /// \param cond_expr  the conditional expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_conditional(
         Function_context                       &ctx,
-        mi::mdl::IExpression_conditional const *cond_expr);
+        mi::mdl::IExpression_conditional const *cond_expr,
+        bool                                   return_derivs);
 
     /// Create the float4x4 identity matrix.
     ///
@@ -1755,7 +1953,9 @@ private:
 
     /// Get the BSDF function for the given semantics and the current distribution function state
     /// from the BSDF library.
-    llvm::Function *get_libbsdf_function(IDefinition::Semantics sema);
+    llvm::Function *get_libbsdf_function(
+        IDefinition::Semantics sema, 
+        IType::Kind kind);
 
     /// Generate a call to an expression lambda function.
     ///
@@ -1781,12 +1981,15 @@ private:
 
     /// Get the BSDF parameter ID metadata for an instruction.
     ///
-    /// \param inst  the instruction for which the metadata should be retrieved
+    /// \param inst            the instruction for which the metadata should be retrieved
+    /// \param kind            kind of distribution function TK_BSDF, TK_EDF, ...
     ///
     /// \returns the ID or a negative value (-1) if instruction does not have this metadata
-    int get_metadata_bsdf_param_id(llvm::Instruction *inst);
+    int get_metadata_df_param_id(
+        llvm::Instruction   *inst, 
+        IType::Kind         kind);
 
-    /// Rewrite all usages of a BSDF component variable using the given weight array and the
+    /// Rewrite all usages of a DF component variable using the given weight array and the
     /// BSDF component information.
     ///
     /// \param ctx             the function context
@@ -1794,11 +1997,11 @@ private:
     /// \param weight_array    the array containing the component weights, can be local or global
     /// \param comp_info       the bsdf component information to use for the replacements
     /// \param delete_list     list of instructions to be deleted when function is fully processed
-    void rewrite_bsdf_component_usages(
+    void rewrite_df_component_usages(
         Function_context                           &ctx,
         llvm::AllocaInst                           *inst,
         llvm::Value                                *weight_array,
-        Bsdf_component_info                        &comp_info,
+        Df_component_info                        &comp_info,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
     /// Rewrite the address of a memcpy from a color_bsdf_component to the given weight array.
@@ -1823,27 +2026,28 @@ private:
     /// \param inst         the alloca instruction representing the array parameter
     /// \param arg          the DAG node of the BSDF array parameter
     /// \param delete_list  list of instructions to be deleted when function is fully processed
-    void handle_bsdf_array_parameter(
+    void handle_df_array_parameter(
         Function_context                           &ctx,
         llvm::AllocaInst                           *inst,
         DAG_node const                             *arg,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
-    /// Recursively instantiate a BSDF from the given DAG node from code in the BSDF library
+    /// Recursively instantiate a DF from the given DAG node from code in the DF library
     /// according to current distribution function state.
     ///
-    /// \param node  the DAG call with DF semantics or a BSDF constant node.
-    ///              For a DAG call, the arguments will be used to instantiate the BSDF.
-    llvm::Function *instantiate_bsdf(
+    /// \param node  the DAG call with DF semantics or a DF constant node.
+    ///              For a DAG call, the arguments will be used to instantiate the DF.
+    llvm::Function *instantiate_df(
         DAG_node const *node);
 
-    /// Recursively instantiate a ternary operator of type BSDF.
+    /// Recursively instantiate a ternary operator of type DF.
     ///
     /// \param node  the DAG call of the ternary operator
     ///
     /// \returns a function implementing the ternary operator.
-    llvm::Function *instantiate_ternary_bsdf(
+    llvm::Function *instantiate_ternary_df(
         DAG_call const *dag_call);
+
 
     /// Translate the current distribution function to LLVM IR.
     ///
@@ -1949,8 +2153,11 @@ private:
 
     /// Get the intrinsic LLVM function for a MDL function.
     ///
-    /// \param def  the definition of the MDL function
-    llvm::Function *get_intrinsic_function(IDefinition const *def);
+    /// \param def            the definition of the MDL function
+    /// \param return_derivs  if true, derivatives will be generated for the return value
+    llvm::Function *get_intrinsic_function(
+        IDefinition const *def,
+        bool               return_derivs);
 
     /// Get the LLVM function for an internal function.
     ///
@@ -2073,11 +2280,13 @@ private:
 
     /// Translate a let expression to LLVM IR.
     ///
-    /// \param ctx        the function context
-    /// \param let_expr   the let expression to translate
+    /// \param ctx            the function context
+    /// \param let_expr       the let expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
     Expression_result translate_let(
-        Function_context                &ctx,
-        mi::mdl::IExpression_let const *let_expr);
+        Function_context               &ctx,
+        mi::mdl::IExpression_let const *let_expr,
+        bool                           return_derivs);
 
     /// Create a matrix by matrix multiplication.
     ///
@@ -2120,7 +2329,7 @@ private:
     /// \param l         the left NxM matrix
     /// \param r         the right vector
     /// \param N         number of rows of the left matrix
-    /// \param M         number of columns of the left and size of the right vector
+    /// \param M         number of columns of the left matrix and size of the right vector
     llvm::Value *do_matrix_multiplication_MxV(
         Function_context &ctx,
         llvm::Type       *res_type,
@@ -2187,7 +2396,7 @@ private:
     ///
     /// \param code    the code of the error message
     /// \param param   a string parameter for the error message
-    void error(int code, MISTD::string const &str_param)
+    void error(int code, std::string const &str_param)
     {
         error(code, str_param.c_str());
     }
@@ -2300,6 +2509,7 @@ private:
     /// Creates the string table finally.
     void create_string_table();
 
+
     /// Get libdevice as LLVM bitcode.
     ///
     /// \param[in]  arch             the architecture
@@ -2370,12 +2580,17 @@ private:
         llvm::BasicBlock::iterator &ii,
         Function_context &ctx);
 
-    /// Transitively walk over the uses of the given argument and mark any calls as BSDF calls,
-    /// storing the provided parameter index as "libbsdf.bsdf_param" metadata.
+    /// Transitively walk over the uses of the given argument and mark any calls as DF calls,
+    /// storing the provided parameter index as "libbsdf.bsdf_param" or "libbsdf.edf_param" 
+    /// or ... metadata.
     ///
     /// \param arg             the argument to be followed
-    /// \param bsdf_param_idx  the BSDF parameter index of the argument
-    void mark_bsdf_calls(llvm::Argument *arg, int bsdf_param_idx);
+    /// \param df_param_idx    the DF parameter index of the argument
+    /// \param kind            kind of distribution function TK_BSDF, TK_EDF, ...
+    void mark_df_calls(
+        llvm::Argument *arg,        
+        int df_param_idx,
+        IType::Kind kind);
 
     /// Load and link libbsdf into the current LLVM module.
     /// It maps the types from libbsdf to our types and resolves referenced API functions
@@ -2477,6 +2692,7 @@ private:
     /// If true, reciprocal math transformations are enabled (i.e. a/b = a * 1/b).
     bool m_reciprocal_math;
 
+
     /// The runtime creator.
     MDL_runtime_creator *m_runtime;
 
@@ -2512,8 +2728,8 @@ private:
     typedef mi::mdl::hash_map<
         Function_instance,
         LLVM_context_data *,
-        Function_instance::Hash,
-        Function_instance::Equal>::Type Context_data_map;
+        Function_instance::Hash<>,
+        Function_instance::Equal<> >::Type Context_data_map;
 
     /// The map storing context data for definitions.
     Context_data_map m_context_data;
@@ -2695,7 +2911,17 @@ private:
     /// If true, this code generator will allow incremental compilation.
     bool m_incremental;
 
-    /// If true, use direct tex_lookup calls instead of indirect through vtable.
+    /// If true, the texture lookup functions with derivatives will be used.
+    bool m_texruntime_with_derivs;
+
+    /// If non-null, the derivative analysis information.
+    Derivative_infos const *m_deriv_infos;
+
+    /// If non-null, the derivative analysis information of the current function.
+    /// Used during compilation of waiting functions.
+    Func_deriv_info const *m_cur_func_deriv_info;
+
+    /// The call mode for texture lookup functions.
     Function_context::Tex_lookup_call_mode m_tex_calls_mode;
 
     /// Current distribution function.
@@ -2726,6 +2952,7 @@ private:
 
     /// A float3 struct type used in libbsdf.
     llvm::StructType *m_float3_struct_type;
+
 
     /// Function type of the BSDF sample function.
     llvm::FunctionType *m_type_bsdf_sample_func;
@@ -2763,8 +2990,12 @@ private:
     /// Return type of the EDF PDF function.
     llvm::Type *m_type_edf_pdf_data;
 
+
     /// The LLVM metadata kind ID for the BSDF parameter information attached to allocas.
     unsigned m_bsdf_param_metadata_id;
+
+    /// The LLVM metadata kind ID for the EDF parameter information attached to allocas.
+    unsigned m_edf_param_metadata_id;
 
     /// The internal state::set_normal(float3) function, only available for libbsdf.
     Internal_function *m_int_func_state_set_normal;
@@ -2772,11 +3003,51 @@ private:
     /// The internal state::get_texture_results() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_texture_results;
 
-    /// The internal state::get_ro_data_segment() function.
+    /// The internal state::get_texture_results() function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_arg_block;
+
+    /// The internal state::get_ro_data_segment() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_ro_data_segment;
 
     /// The internal implementation of the state::object_id() function.
     Internal_function *m_int_func_state_object_id;
+
+    /// The internal state::call_lambda_float(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_call_lambda_float;
+
+    /// The internal state::call_lambda_float3(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_call_lambda_float3;
+
+    /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
+    Internal_function *m_int_func_df_bsdf_measurement_resolution;
+
+    /// The internal df::bsdf_measurement_evaluate(int,float2,float2,int) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_bsdf_measurement_evaluate;
+
+    /// The internal df::bsdf_measurement_sample(int,float2,float3,int) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_bsdf_measurement_sample;
+
+    /// The internal df::bsdf_measurement_pdf(int,float2,float2,int) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_bsdf_measurement_pdf;
+
+    /// The internal df::bsdf_measurement_albedos(int,float2) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_bsdf_measurement_albedos;
+
+    /// The internal df::light_profile_evaluate(int,float2) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_light_profile_evaluate;
+
+    /// The internal df::light_profile_sample(int,float3) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_light_profile_sample;
+
+    /// The internal df::light_profile_pdf(int,float2) function,
+    /// only available for libbsdf.
+    Internal_function *m_int_func_df_light_profile_pdf;
 };
 
 /// copysignf implementation for windows runtime.
@@ -2786,3 +3057,4 @@ float copysignf(const float x, const float y);
 }  // mi
 
 #endif // MDL_GENERATOR_JIT_LLVM_H
+

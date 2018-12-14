@@ -51,12 +51,12 @@ TEMPLATE_INSTANTIATION(class basic_parser<unsigned>);
 TEMPLATE_INSTANTIATION(class basic_parser<unsigned long long>);
 TEMPLATE_INSTANTIATION(class basic_parser<double>);
 TEMPLATE_INSTANTIATION(class basic_parser<float>);
-TEMPLATE_INSTANTIATION(class basic_parser<MISTD::string>);
+TEMPLATE_INSTANTIATION(class basic_parser<std::string>);
 TEMPLATE_INSTANTIATION(class basic_parser<char>);
 
 TEMPLATE_INSTANTIATION(class opt<unsigned>);
 TEMPLATE_INSTANTIATION(class opt<int>);
-TEMPLATE_INSTANTIATION(class opt<MISTD::string>);
+TEMPLATE_INSTANTIATION(class opt<std::string>);
 TEMPLATE_INSTANTIATION(class opt<char>);
 TEMPLATE_INSTANTIATION(class opt<bool>);
 } } // end namespace llvm::cl
@@ -64,7 +64,7 @@ TEMPLATE_INSTANTIATION(class opt<bool>);
 // Pin the vtables to this file.
 void GenericOptionValue::anchor() {}
 void OptionValue<boolOrDefault>::anchor() {}
-void OptionValue<MISTD::string>::anchor() {}
+void OptionValue<std::string>::anchor() {}
 void Option::anchor() {}
 void basic_parser_impl::anchor() {}
 void parser<bool>::anchor() {}
@@ -74,7 +74,7 @@ void parser<unsigned>::anchor() {}
 void parser<unsigned long long>::anchor() {}
 void parser<double>::anchor() {}
 void parser<float>::anchor() {}
-void parser<MISTD::string>::anchor() {}
+void parser<std::string>::anchor() {}
 void parser<char>::anchor() {}
 void StringSaver::anchor() {}
 
@@ -86,7 +86,7 @@ static char ProgramName[80] = "<premain>";
 static const char *ProgramOverview = 0;
 
 // This collects additional help to be printed.
-static ManagedStatic<MISTD::vector<const char*> > MoreHelp;
+static ManagedStatic<std::vector<const char*> > MoreHelp;
 
 extrahelp::extrahelp(const char *Help)
   : morehelp(Help) {
@@ -169,7 +169,7 @@ static void GetOptionInfo(SmallVectorImpl<Option*> &PositionalOpts,
     PositionalOpts.push_back(CAOpt);
 
   // Make sure that they are in order of registration not backwards.
-  MISTD::reverse(PositionalOpts.begin(), PositionalOpts.end());
+  std::reverse(PositionalOpts.begin(), PositionalOpts.end());
 }
 
 
@@ -207,12 +207,12 @@ static Option *LookupOption(StringRef &Arg, StringRef &Value,
 /// have already been stripped.
 static Option *LookupNearestOption(StringRef Arg,
                                    const StringMap<Option*> &OptionsMap,
-                                   MISTD::string &NearestString) {
+                                   std::string &NearestString) {
   // Reject all dashes.
   if (Arg.empty()) return 0;
 
   // Split on any equal sign.
-  MISTD::pair<StringRef, StringRef> SplitArg = Arg.split('=');
+  std::pair<StringRef, StringRef> SplitArg = Arg.split('=');
   StringRef &LHS = SplitArg.first;  // LHS == Arg when no '=' is present.
   StringRef &RHS = SplitArg.second;
 
@@ -239,7 +239,7 @@ static Option *LookupNearestOption(StringRef Arg,
         if (RHS.empty() || !PermitValue)
           NearestString = OptionNames[i];
         else
-          NearestString = MISTD::string(OptionNames[i]) + "=" + RHS.str();
+          NearestString = std::string(OptionNames[i]) + "=" + RHS.str();
       }
     }
   }
@@ -617,7 +617,7 @@ static bool ExpandResponseFile(const char *FName, StringSaver &Saver,
 
   // If we have a UTF-16 byte order mark, convert to UTF-8 for parsing.
   ArrayRef<char> BufRef(MemBuf->getBufferStart(), MemBuf->getBufferEnd());
-  MISTD::string UTF8Buf;
+  std::string UTF8Buf;
   if (hasUTF16ByteOrderMark(BufRef)) {
     if (!convertUTF16ToUTF8String(BufRef, UTF8Buf))
       return false;
@@ -667,10 +667,10 @@ bool cl::ExpandResponseFiles(StringSaver &Saver, TokenizerCallback Tokenizer,
 
 namespace {
   class StrDupSaver : public StringSaver {
-    MISTD::vector<char*> Dups;
+    std::vector<char*> Dups;
   public:
     ~StrDupSaver() {
-      for (MISTD::vector<char *>::iterator I = Dups.begin(), E = Dups.end();
+      for (std::vector<char *>::iterator I = Dups.begin(), E = Dups.end();
            I != E; ++I) {
         char *Dup = *I;
         free(Dup);
@@ -734,8 +734,8 @@ void cl::ParseCommandLineOptions(int argc, const char * const *argv,
   argc = static_cast<int>(newArgv.size());
 
   // Copy the program name into ProgName, making sure not to overflow it.
-  MISTD::string ProgName = sys::path::filename(argv[0]);
-  size_t Len = MISTD::min(ProgName.size(), size_t(79));
+  std::string ProgName = sys::path::filename(argv[0]);
+  size_t Len = std::min(ProgName.size(), size_t(79));
   memcpy(ProgramName, ProgName.data(), Len);
   ProgramName[Len] = '\0';
 
@@ -789,7 +789,7 @@ void cl::ParseCommandLineOptions(int argc, const char * const *argv,
   // PositionalVals - A vector of "positional" arguments we accumulate into
   // the process at the end.
   //
-  SmallVector<MISTD::pair<StringRef,unsigned>, 4> PositionalVals;
+  SmallVector<std::pair<StringRef,unsigned>, 4> PositionalVals;
 
   // If the program has named positional arguments, and the name has been run
   // across, keep track of which positional argument was named.  Otherwise put
@@ -801,7 +801,7 @@ void cl::ParseCommandLineOptions(int argc, const char * const *argv,
   for (int i = 1; i < argc; ++i) {
     Option *Handler = 0;
     Option *NearestHandler = 0;
-    MISTD::string NearestHandlerString;
+    std::string NearestHandlerString;
     StringRef Value;
     StringRef ArgName = "";
 
@@ -828,7 +828,7 @@ void cl::ParseCommandLineOptions(int argc, const char * const *argv,
       }
 
       if (!PositionalOpts.empty()) {
-        PositionalVals.push_back(MISTD::make_pair(argv[i],i));
+        PositionalVals.push_back(std::make_pair(argv[i],i));
 
         // All of the positional arguments have been fulfulled, give the rest to
         // the consume after option... if it's specified...
@@ -836,7 +836,7 @@ void cl::ParseCommandLineOptions(int argc, const char * const *argv,
         if (PositionalVals.size() >= NumPositionalRequired &&
             ConsumeAfterOpt != 0) {
           for (++i; i < argc; ++i)
-            PositionalVals.push_back(MISTD::make_pair(argv[i],i));
+            PositionalVals.push_back(std::make_pair(argv[i],i));
           break;   // Handle outside of the argument processing loop...
         }
 
@@ -1084,7 +1084,7 @@ size_t alias::getOptionWidth() const {
 
 static void printHelpStr(StringRef HelpStr, size_t Indent,
                          size_t FirstLineIndentedBy) {
-  MISTD::pair<StringRef, StringRef> Split = HelpStr.split('\n');
+  std::pair<StringRef, StringRef> Split = HelpStr.split('\n');
   outs().indent(Indent - FirstLineIndentedBy) << " - " << Split.first << "\n";
   while (!Split.second.empty()) {
     Split = Split.second.split('\n');
@@ -1249,12 +1249,12 @@ size_t generic_parser_base::getOptionWidth(const Option &O) const {
   if (O.hasArgStr()) {
     size_t Size = strlen(O.ArgStr)+6;
     for (unsigned i = 0, e = getNumOptions(); i != e; ++i)
-      Size = MISTD::max(Size, strlen(getOption(i))+8);
+      Size = std::max(Size, strlen(getOption(i))+8);
     return Size;
   } else {
     size_t BaseSize = 0;
     for (unsigned i = 0, e = getNumOptions(); i != e; ++i)
-      BaseSize = MISTD::max(BaseSize, strlen(getOption(i))+8);
+      BaseSize = std::max(BaseSize, strlen(getOption(i))+8);
     return BaseSize;
   }
 }
@@ -1324,7 +1324,7 @@ printGenericOptionDiff(const Option &O, const GenericOptionValue &Value,
   printOptionDiff(const Option &O, T V, OptionValue<T> D,               \
                   size_t GlobalWidth) const {                           \
     printOptionName(O, GlobalWidth);                                    \
-    MISTD::string Str;                                                    \
+    std::string Str;                                                    \
     {                                                                   \
       raw_string_ostream SS(Str);                                       \
       SS << V;                                                          \
@@ -1348,8 +1348,8 @@ PRINT_OPT_DIFF(double)
 PRINT_OPT_DIFF(float)
 PRINT_OPT_DIFF(char)
 
-void parser<MISTD::string>::
-printOptionDiff(const Option &O, StringRef V, OptionValue<MISTD::string> D,
+void parser<std::string>::
+printOptionDiff(const Option &O, StringRef V, OptionValue<std::string> D,
                 size_t GlobalWidth) const {
   printOptionName(O, GlobalWidth);
   outs() << "= " << V;
@@ -1374,7 +1374,7 @@ printOptionNoValue(const Option &O, size_t GlobalWidth) const {
 //
 
 static int OptNameCompare(const void *LHS, const void *RHS) {
-  typedef MISTD::pair<const char *, Option*> pair_ty;
+  typedef std::pair<const char *, Option*> pair_ty;
 
   return strcmp(((const pair_ty*)LHS)->first, ((const pair_ty*)RHS)->first);
 }
@@ -1382,7 +1382,7 @@ static int OptNameCompare(const void *LHS, const void *RHS) {
 // Copy Options into a vector so we can sort them as we like.
 static void
 sortOpts(StringMap<Option*> &OptMap,
-         SmallVectorImpl< MISTD::pair<const char *, Option*> > &Opts,
+         SmallVectorImpl< std::pair<const char *, Option*> > &Opts,
          bool ShowHidden) {
   SmallPtrSet<Option*, 128> OptionSet;  // Duplicate option detection.
 
@@ -1400,7 +1400,7 @@ sortOpts(StringMap<Option*> &OptMap,
     if (!OptionSet.insert(I->second))
       continue;
 
-    Opts.push_back(MISTD::pair<const char *, Option*>(I->getKey().data(),
+    Opts.push_back(std::pair<const char *, Option*>(I->getKey().data(),
                                                     I->second));
   }
 
@@ -1413,7 +1413,7 @@ namespace {
 class HelpPrinter {
 protected:
   const bool ShowHidden;
-  typedef SmallVector<MISTD::pair<const char *, Option*>,128> StrOptionPairVector;
+  typedef SmallVector<std::pair<const char *, Option*>,128> StrOptionPairVector;
   // Print the options. Opts is assumed to be alphabetically sorted.
   virtual void printOptions(StrOptionPairVector &Opts, size_t MaxArgLen) {
     for (size_t i = 0, e = Opts.size(); i != e; ++i)
@@ -1462,13 +1462,13 @@ public:
     // Compute the maximum argument length...
     size_t MaxArgLen = 0;
     for (size_t i = 0, e = Opts.size(); i != e; ++i)
-      MaxArgLen = MISTD::max(MaxArgLen, Opts[i].second->getOptionWidth());
+      MaxArgLen = std::max(MaxArgLen, Opts[i].second->getOptionWidth());
 
     outs() << "OPTIONS:\n";
     printOptions(Opts, MaxArgLen);
 
     // Print any extra help the user has declared.
-    for (MISTD::vector<const char *>::iterator I = MoreHelp->begin(),
+    for (std::vector<const char *>::iterator I = MoreHelp->begin(),
                                              E = MoreHelp->end();
          I != E; ++I)
       outs() << *I;
@@ -1497,8 +1497,8 @@ public:
 
 protected:
   virtual void printOptions(StrOptionPairVector &Opts, size_t MaxArgLen) {
-    MISTD::vector<OptionCategory *> SortedCategories;
-    MISTD::map<OptionCategory *, MISTD::vector<Option *> > CategorizedOptions;
+    std::vector<OptionCategory *> SortedCategories;
+    std::map<OptionCategory *, std::vector<Option *> > CategorizedOptions;
 
     // Collect registered option categories into vector in preperation for
     // sorting.
@@ -1509,15 +1509,15 @@ protected:
 
     // Sort the different option categories alphabetically.
     assert(SortedCategories.size() > 0 && "No option categories registered!");
-    MISTD::sort(SortedCategories.begin(), SortedCategories.end(),
+    std::sort(SortedCategories.begin(), SortedCategories.end(),
               OptionCategoryCompare);
 
     // Create map to empty vectors.
-    for (MISTD::vector<OptionCategory *>::const_iterator
+    for (std::vector<OptionCategory *>::const_iterator
              I = SortedCategories.begin(),
              E = SortedCategories.end();
          I != E; ++I)
-      CategorizedOptions[*I] = MISTD::vector<Option *>();
+      CategorizedOptions[*I] = std::vector<Option *>();
 
     // Walk through pre-sorted options and assign into categories.
     // Because the options are already alphabetically sorted the
@@ -1530,7 +1530,7 @@ protected:
     }
 
     // Now do printing.
-    for (MISTD::vector<OptionCategory *>::const_iterator
+    for (std::vector<OptionCategory *>::const_iterator
              Category = SortedCategories.begin(),
              E = SortedCategories.end();
          Category != E; ++Category) {
@@ -1556,7 +1556,7 @@ protected:
         continue;
       }
       // Loop over the options in the category and print.
-      for (MISTD::vector<Option *>::const_iterator
+      for (std::vector<Option *>::const_iterator
                Opt = CategorizedOptions[*Category].begin(),
                E = CategorizedOptions[*Category].end();
            Opt != E; ++Opt)
@@ -1663,13 +1663,13 @@ void cl::PrintOptionValues() {
   StringMap<Option*> OptMap;
   GetOptionInfo(PositionalOpts, SinkOpts, OptMap);
 
-  SmallVector<MISTD::pair<const char *, Option*>, 128> Opts;
+  SmallVector<std::pair<const char *, Option*>, 128> Opts;
   sortOpts(OptMap, Opts, /*ShowHidden*/true);
 
   // Compute the maximum argument length...
   size_t MaxArgLen = 0;
   for (size_t i = 0, e = Opts.size(); i != e; ++i)
-    MaxArgLen = MISTD::max(MaxArgLen, Opts[i].second->getOptionWidth());
+    MaxArgLen = std::max(MaxArgLen, Opts[i].second->getOptionWidth());
 
   for (size_t i = 0, e = Opts.size(); i != e; ++i)
     Opts[i].second->printOptionValue(MaxArgLen, PrintAllOptions);
@@ -1677,7 +1677,7 @@ void cl::PrintOptionValues() {
 
 static void (*OverrideVersionPrinter)() = 0;
 
-static MISTD::vector<void (*)()>* ExtraVersionPrinters = 0;
+static std::vector<void (*)()>* ExtraVersionPrinters = 0;
 
 namespace {
 class VersionPrinter {
@@ -1698,7 +1698,7 @@ public:
 #ifndef NDEBUG
     OS << " with assertions";
 #endif
-    MISTD::string CPU = sys::getHostCPUName();
+    std::string CPU = sys::getHostCPUName();
     if (CPU == "generic") CPU = "(unknown)";
     OS << ".\n"
 #if (ENABLE_TIMESTAMPS == 1)
@@ -1720,7 +1720,7 @@ public:
     // information.
     if (ExtraVersionPrinters != 0) {
       outs() << '\n';
-      for (MISTD::vector<void (*)()>::iterator I = ExtraVersionPrinters->begin(),
+      for (std::vector<void (*)()>::iterator I = ExtraVersionPrinters->begin(),
                                              E = ExtraVersionPrinters->end();
            I != E; ++I)
         (*I)();
@@ -1769,7 +1769,7 @@ void cl::SetVersionPrinter(void (*func)()) {
 
 void cl::AddExtraVersionPrinter(void (*func)()) {
   if (ExtraVersionPrinters == 0)
-    ExtraVersionPrinters = new MISTD::vector<void (*)()>;
+    ExtraVersionPrinters = new std::vector<void (*)()>;
 
   ExtraVersionPrinters->push_back(func);
 }

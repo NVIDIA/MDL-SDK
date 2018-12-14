@@ -39,7 +39,7 @@ namespace {
   // otherwise the raw input run through an interpreter is used as the reference
   // source.
   //
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   OutputFile("output", cl::desc("Specify a reference program output "
                                 "(for miscompilation detection)"));
 }
@@ -56,8 +56,8 @@ void BugDriver::setNewProgram(Module *M) {
 /// getPassesString - Turn a list of passes into a string which indicates the
 /// command line options that must be passed to add the passes.
 ///
-MISTD::string llvm::getPassesString(const MISTD::vector<MISTD::string> &Passes) {
-  MISTD::string Result;
+std::string llvm::getPassesString(const std::vector<std::string> &Passes) {
+  std::string Result;
   for (unsigned i = 0, e = Passes.size(); i != e; ++i) {
     if (i) Result += " ";
     Result += "-";
@@ -82,7 +82,7 @@ BugDriver::~BugDriver() {
 /// ParseInputFile - Given a bitcode or assembly input filename, parse and
 /// return it, or return null if not possible.
 ///
-Module *llvm::ParseInputFile(const MISTD::string &Filename,
+Module *llvm::ParseInputFile(const std::string &Filename,
                              LLVMContext& Ctxt) {
   SMDiagnostic Err;
   Module *Result = ParseIRFile(Filename, Err, Ctxt);
@@ -111,7 +111,7 @@ Module *llvm::ParseInputFile(const MISTD::string &Filename,
 // true on failure (if, for example, an input bitcode file could not be
 // parsed), and false on success.
 //
-bool BugDriver::addSources(const MISTD::vector<MISTD::string> &Filenames) {
+bool BugDriver::addSources(const std::vector<std::string> &Filenames) {
   assert(Program == 0 && "Cannot call addSources multiple times!");
   assert(!Filenames.empty() && "Must specify at least on input filename!");
 
@@ -126,7 +126,7 @@ bool BugDriver::addSources(const MISTD::vector<MISTD::string> &Filenames) {
     if (M.get() == 0) return true;
 
     outs() << "Linking in input file: '" << Filenames[i] << "'\n";
-    MISTD::string ErrorMessage;
+    std::string ErrorMessage;
     if (Linker::LinkModules(Program, M.get(), Linker::DestroySource,
                             &ErrorMessage)) {
       errs() << ToolName << ": error linking in '" << Filenames[i] << "': "
@@ -146,7 +146,7 @@ bool BugDriver::addSources(const MISTD::vector<MISTD::string> &Filenames) {
 /// run - The top level method that is invoked after all of the instance
 /// variables are set up from command line arguments.
 ///
-bool BugDriver::run(MISTD::string &ErrMsg) {
+bool BugDriver::run(std::string &ErrMsg) {
   if (run_find_bugs) {
     // Rearrange the passes and apply them to the program. Repeat this process
     // until the user kills the program or we find a bug.
@@ -171,7 +171,7 @@ bool BugDriver::run(MISTD::string &ErrMsg) {
 
   // Test to see if we have a code generator crash.
   outs() << "Running the code generator to test for a crash: ";
-  MISTD::string Error;
+  std::string Error;
   compileProgram(Program, &Error);
   if (!Error.empty()) {
     outs() << Error;
@@ -194,7 +194,7 @@ bool BugDriver::run(MISTD::string &ErrMsg) {
 
   // Make sure the reference output file gets deleted on exit from this
   // function, if appropriate.
-  MISTD::string ROF(ReferenceOutputFile);
+  std::string ROF(ReferenceOutputFile);
   FileRemover RemoverInstance(ROF, CreatedOutput && !SaveTemps);
 
   // Diff the output of the raw program against the reference output.  If it
@@ -226,7 +226,7 @@ bool BugDriver::run(MISTD::string &ErrMsg) {
   return Failure;
 }
 
-void llvm::PrintFunctionList(const MISTD::vector<Function*> &Funcs) {
+void llvm::PrintFunctionList(const std::vector<Function*> &Funcs) {
   unsigned NumPrint = Funcs.size();
   if (NumPrint > 10) NumPrint = 10;
   for (unsigned i = 0; i != NumPrint; ++i)
@@ -236,7 +236,7 @@ void llvm::PrintFunctionList(const MISTD::vector<Function*> &Funcs) {
   outs().flush();
 }
 
-void llvm::PrintGlobalVariableList(const MISTD::vector<GlobalVariable*> &GVs) {
+void llvm::PrintGlobalVariableList(const std::vector<GlobalVariable*> &GVs) {
   unsigned NumPrint = GVs.size();
   if (NumPrint > 10) NumPrint = 10;
   for (unsigned i = 0; i != NumPrint; ++i)

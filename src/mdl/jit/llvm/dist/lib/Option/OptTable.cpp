@@ -148,7 +148,7 @@ OptTable::OptTable(const Info *_OptionInfos, unsigned _NumOptionInfos,
     StringRef Prefix = I->getKey();
     for (StringRef::const_iterator C = Prefix.begin(), CE = Prefix.end();
                                    C != CE; ++C)
-      if (MISTD::find(PrefixChars.begin(), PrefixChars.end(), *C)
+      if (std::find(PrefixChars.begin(), PrefixChars.end(), *C)
             == PrefixChars.end())
         PrefixChars.push_back(*C);
   }
@@ -208,7 +208,7 @@ Arg *OptTable::ParseOneArg(const ArgList &Args, unsigned &Index,
   StringRef Name = StringRef(Str).ltrim(PrefixChars);
 
   // Search for the first next option which could be a prefix.
-  Start = MISTD::lower_bound(Start, End, Name.data());
+  Start = std::lower_bound(Start, End, Name.data());
 
   // Options are stored in sorted order, with '\0' at the end of the
   // alphabet. Since the only options which can accept a string must
@@ -290,9 +290,9 @@ InputArgList *OptTable::ParseArgs(const char *const *ArgBegin,
   return Args;
 }
 
-static MISTD::string getOptionHelpName(const OptTable &Opts, OptSpecifier Id) {
+static std::string getOptionHelpName(const OptTable &Opts, OptSpecifier Id) {
   const Option O = Opts.getOption(Id);
-  MISTD::string Name = O.getPrefixedName();
+  std::string Name = O.getPrefixedName();
 
   // Add metavar, if used.
   switch (O.getKind()) {
@@ -322,7 +322,7 @@ static MISTD::string getOptionHelpName(const OptTable &Opts, OptSpecifier Id) {
 }
 
 static void PrintHelpOptionList(raw_ostream &OS, StringRef Title,
-                                MISTD::vector<MISTD::pair<MISTD::string,
+                                std::vector<std::pair<std::string,
                                 const char*> > &OptionHelp) {
   OS << Title << ":\n";
 
@@ -336,12 +336,12 @@ static void PrintHelpOptionList(raw_ostream &OS, StringRef Title,
     // Limit the amount of padding we are willing to give up for alignment.
     unsigned Length = OptionHelp[i].first.size();
     if (Length <= 23)
-      OptionFieldWidth = MISTD::max(OptionFieldWidth, Length);
+      OptionFieldWidth = std::max(OptionFieldWidth, Length);
   }
 
   const unsigned InitialPad = 2;
   for (unsigned i = 0, e = OptionHelp.size(); i != e; ++i) {
-    const MISTD::string &Option = OptionHelp[i].first;
+    const std::string &Option = OptionHelp[i].first;
     int Pad = OptionFieldWidth - int(Option.size());
     OS.indent(InitialPad) << Option;
 
@@ -389,8 +389,8 @@ void OptTable::PrintHelp(raw_ostream &OS, const char *Name, const char *Title,
 
   // Render help text into a map of group-name to a list of (option, help)
   // pairs.
-  typedef MISTD::map<MISTD::string,
-                 MISTD::vector<MISTD::pair<MISTD::string, const char*> > > helpmap_ty;
+  typedef std::map<std::string,
+                 std::vector<std::pair<std::string, const char*> > > helpmap_ty;
   helpmap_ty GroupedOptionHelp;
 
   for (unsigned i = 0, e = getNumOptions(); i != e; ++i) {
@@ -408,8 +408,8 @@ void OptTable::PrintHelp(raw_ostream &OS, const char *Name, const char *Title,
 
     if (const char *Text = getOptionHelpText(Id)) {
       const char *HelpGroup = getOptionHelpGroup(*this, Id);
-      const MISTD::string &OptName = getOptionHelpName(*this, Id);
-      GroupedOptionHelp[HelpGroup].push_back(MISTD::make_pair(OptName, Text));
+      const std::string &OptName = getOptionHelpName(*this, Id);
+      GroupedOptionHelp[HelpGroup].push_back(std::make_pair(OptName, Text));
     }
   }
 

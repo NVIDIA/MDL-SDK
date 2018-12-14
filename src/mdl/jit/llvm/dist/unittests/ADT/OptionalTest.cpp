@@ -221,7 +221,7 @@ TEST_F(OptionalTest, MoveOnlyConstruction) {
 TEST_F(OptionalTest, MoveOnlyMoveConstruction) {
   Optional<MoveOnly> A(MoveOnly(3));
   MoveOnly::ResetCounts();
-  Optional<MoveOnly> B(MISTD::move(A));
+  Optional<MoveOnly> B(std::move(A));
   EXPECT_FALSE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);
@@ -245,7 +245,7 @@ TEST_F(OptionalTest, MoveOnlyInitializingAssignment) {
   Optional<MoveOnly> A(MoveOnly(3));
   Optional<MoveOnly> B;
   MoveOnly::ResetCounts();
-  B = MISTD::move(A);
+  B = std::move(A);
   EXPECT_FALSE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);
@@ -258,7 +258,7 @@ TEST_F(OptionalTest, MoveOnlyNullingAssignment) {
   Optional<MoveOnly> A;
   Optional<MoveOnly> B(MoveOnly(3));
   MoveOnly::ResetCounts();
-  B = MISTD::move(A);
+  B = std::move(A);
   EXPECT_FALSE((bool)A);
   EXPECT_FALSE((bool)B);
   EXPECT_EQ(0u, MoveOnly::MoveConstructions);
@@ -270,7 +270,7 @@ TEST_F(OptionalTest, MoveOnlyAssigningAssignment) {
   Optional<MoveOnly> A(MoveOnly(3));
   Optional<MoveOnly> B(MoveOnly(4));
   MoveOnly::ResetCounts();
-  B = MISTD::move(A);
+  B = std::move(A);
   EXPECT_FALSE((bool)A);
   EXPECT_TRUE((bool)B);
   EXPECT_EQ(3, B->val);

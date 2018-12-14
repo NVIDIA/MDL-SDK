@@ -45,7 +45,7 @@ DwarfException::~DwarfException() {}
 /// SharedTypeIds - How many leading type ids two landing pads have in common.
 unsigned DwarfException::SharedTypeIds(const LandingPadInfo *L,
                                        const LandingPadInfo *R) {
-  const MISTD::vector<int> &LIds = L->TypeIds, &RIds = R->TypeIds;
+  const std::vector<int> &LIds = L->TypeIds, &RIds = R->TypeIds;
   unsigned LSize = LIds.size(), RSize = RIds.size();
   unsigned MinSize = LSize < RSize ? LSize : RSize;
   unsigned Count = 0;
@@ -59,7 +59,7 @@ unsigned DwarfException::SharedTypeIds(const LandingPadInfo *L,
 
 /// PadLT - Order landing pads lexicographically by type id.
 bool DwarfException::PadLT(const LandingPadInfo *L, const LandingPadInfo *R) {
-  const MISTD::vector<int> &LIds = L->TypeIds, &RIds = R->TypeIds;
+  const std::vector<int> &LIds = L->TypeIds, &RIds = R->TypeIds;
   unsigned LSize = LIds.size(), RSize = RIds.size();
   unsigned MinSize = LSize < RSize ? LSize : RSize;
 
@@ -100,12 +100,12 @@ ComputeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
   // output using a fixed width encoding.  FilterOffsets[i] holds the byte
   // offset corresponding to FilterIds[i].
 
-  const MISTD::vector<unsigned> &FilterIds = MMI->getFilterIds();
+  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
   SmallVector<int, 16> FilterOffsets;
   FilterOffsets.reserve(FilterIds.size());
   int Offset = -1;
 
-  for (MISTD::vector<unsigned>::const_iterator
+  for (std::vector<unsigned>::const_iterator
          I = FilterIds.begin(), E = FilterIds.end(); I != E; ++I) {
     FilterOffsets.push_back(Offset);
     Offset -= MCAsmInfo::getULEB128Size(*I);
@@ -120,7 +120,7 @@ ComputeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
   for (SmallVectorImpl<const LandingPadInfo *>::const_iterator
          I = LandingPads.begin(), E = LandingPads.end(); I != E; ++I) {
     const LandingPadInfo *LPI = *I;
-    const MISTD::vector<int> &TypeIds = LPI->TypeIds;
+    const std::vector<int> &TypeIds = LPI->TypeIds;
     unsigned NumShared = PrevLPI ? SharedTypeIds(LPI, PrevLPI) : 0;
     unsigned SizeSiteActions = 0;
 
@@ -345,9 +345,9 @@ ComputeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
 ///  3. Type ID table contains references to all the C++ typeinfo for all
 ///     catches in the function.  This tables is reverse indexed base 1.
 void DwarfException::EmitExceptionTable() {
-  const MISTD::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
-  const MISTD::vector<unsigned> &FilterIds = MMI->getFilterIds();
-  const MISTD::vector<LandingPadInfo> &PadInfos = MMI->getLandingPads();
+  const std::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
+  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
+  const std::vector<LandingPadInfo> &PadInfos = MMI->getLandingPads();
 
   // Sort the landing pads in order of their type ids.  This is used to fold
   // duplicate actions.
@@ -357,7 +357,7 @@ void DwarfException::EmitExceptionTable() {
   for (unsigned i = 0, N = PadInfos.size(); i != N; ++i)
     LandingPads.push_back(&PadInfos[i]);
 
-  MISTD::sort(LandingPads.begin(), LandingPads.end(), PadLT);
+  std::sort(LandingPads.begin(), LandingPads.end(), PadLT);
 
   // Compute the actions table and gather the first action index for each
   // landing pad site.
@@ -677,8 +677,8 @@ void DwarfException::EmitExceptionTable() {
 }
 
 void DwarfException::EmitTypeInfos(unsigned TTypeEncoding) {
-  const MISTD::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
-  const MISTD::vector<unsigned> &FilterIds = MMI->getFilterIds();
+  const std::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
+  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
 
   bool VerboseAsm = Asm->OutStreamer.isVerboseAsm();
 
@@ -690,7 +690,7 @@ void DwarfException::EmitTypeInfos(unsigned TTypeEncoding) {
     Entry = TypeInfos.size();
   }
 
-  for (MISTD::vector<const GlobalVariable *>::const_reverse_iterator
+  for (std::vector<const GlobalVariable *>::const_reverse_iterator
          I = TypeInfos.rbegin(), E = TypeInfos.rend(); I != E; ++I) {
     const GlobalVariable *GV = *I;
     if (VerboseAsm)
@@ -704,7 +704,7 @@ void DwarfException::EmitTypeInfos(unsigned TTypeEncoding) {
     Asm->OutStreamer.AddBlankLine();
     Entry = 0;
   }
-  for (MISTD::vector<unsigned>::const_iterator
+  for (std::vector<unsigned>::const_iterator
          I = FilterIds.begin(), E = FilterIds.end(); I < E; ++I) {
     unsigned TypeID = *I;
     if (VerboseAsm) {

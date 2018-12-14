@@ -120,7 +120,7 @@ namespace sys {
     /// @brief Allocate Read/Write/Execute memory.
     static MemoryBlock AllocateRWX(size_t NumBytes,
                                    const MemoryBlock *NearBlock,
-                                   MISTD::string *ErrMsg = 0);
+                                   std::string *ErrMsg = 0);
 
     /// This method releases a block of Read/Write/Execute memory that was
     /// allocated with the AllocateRWX method. It should not be used to
@@ -129,7 +129,7 @@ namespace sys {
     /// On success, this returns false, otherwise it returns true and fills
     /// in *ErrMsg.
     /// @brief Release Read/Write/Execute memory.
-    static bool ReleaseRWX(MemoryBlock &block, MISTD::string *ErrMsg = 0);
+    static bool ReleaseRWX(MemoryBlock &block, std::string *ErrMsg = 0);
 
 
     /// InvalidateInstructionCache - Before the JIT can run a block of code
@@ -140,12 +140,12 @@ namespace sys {
     /// setExecutable - Before the JIT can run a block of code, it has to be
     /// given read and executable privilege. Return true if it is already r-x
     /// or the system is able to change its previlege.
-    static bool setExecutable(MemoryBlock &M, MISTD::string *ErrMsg = 0);
+    static bool setExecutable(MemoryBlock &M, std::string *ErrMsg = 0);
 
     /// setWritable - When adding to a block of code, the JIT may need
     /// to mark a block of code as RW since the protections are on page
     /// boundaries, and the JIT internal allocations are not page aligned.
-    static bool setWritable(MemoryBlock &M, MISTD::string *ErrMsg = 0);
+    static bool setWritable(MemoryBlock &M, std::string *ErrMsg = 0);
 
     /// setRangeExecutable - Mark the page containing a range of addresses
     /// as executable.

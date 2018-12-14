@@ -72,7 +72,7 @@ namespace detail
 /// modules might register before the set-like structure gets constructed, whiping out the initially
 /// registered data. One easier solution would be a Module_manager, which checks after main() if
 /// it has translated this static structure into its own dynamic member, eg
-/// MISTD::map<string, Module_registration_entry>. This would open the way for (un)registration
+/// std::map<string, Module_registration_entry>. This would open the way for (un)registration
 /// during run-time. But all in all, for now the name-lookup requires linear time.
 class Linked_list
 {

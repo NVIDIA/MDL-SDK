@@ -55,21 +55,6 @@ namespace MI {
 
 namespace NEURAY {
 
-/// This enum is used as template parameter for Ref_impl to distinguish the different
-/// implementations.
-enum Ref_type {
-    REF_UNTYPED,
-    REF_TEXTURE,
-    REF_TEXTURE_1D,
-    REF_TEXTURE_2D,
-    REF_TEXTURE_3D,
-    REF_TEXTURE_CUBEMAP,
-    REF_LIGHT,
-    REF_LIGHTPROFILE,
-    REF_SHADER,
-    REF_BSDF_MEASUREMENT
-};
-
 class Transaction_impl;
 
 /// Default implementation of IRef
@@ -77,10 +62,6 @@ class Transaction_impl;
 /// The default implementation Ref_impl of IRef owns the memory used to store the actual
 /// value. See the proxy implementation Ref_impl_proxy for a variant that does not own the
 /// memory.
-///
-/// Note that only a fixed set of types is permitted for the template parameter T.
-/// Hence we use explicit template instantiation in the corresponding .cpp file.
-template <Ref_type T>
 class Ref_impl
   : public mi::base::Interface_implement<mi::IRef>,
     public boost::noncopyable
@@ -114,12 +95,6 @@ public:
     mi::neuraylib::ITransaction* get_transaction() const;
 
 private:
-    /// Indicates whether the given tag has the correct type.
-    ///
-    /// Returns always \c true for untyped references. The method is supposed to be only called
-    /// for valid tags (invalid tags are always permissible and handled elsewhere).
-    bool is_valid_reference_type( DB::Tag tag) const;
-
     /// Storage
     DB::Tag m_storage;
 
@@ -135,10 +110,6 @@ private:
 ///
 /// Users are not supposed to construct instances of this class directly. They might get
 /// an instance of this class though, e.g., when accessing attributes.
-///
-/// Note that only a fixed set of types is permitted for the template parameter T.
-/// Hence we use explicit template instantiation in the corresponding .cpp file.
-template <Ref_type T>
 class Ref_impl_proxy
   : public mi::base::Interface_merger<mi::base::Interface_implement<mi::IRef>, IProxy>,
     public boost::noncopyable
@@ -178,12 +149,6 @@ public:
     mi::neuraylib::ITransaction* get_transaction() const;
 
 private:
-    /// Indicates whether the given tag has the correct type.
-    ///
-    /// Returns always \c true for untyped references. The method is supposed to be only called
-    /// for valid tags (invalid tags are always permissible and handled elsewhere).
-    bool is_valid_reference_type( DB::Tag tag) const;
-
     /// Pointer to the storage
     DB::Tag* m_pointer;
 

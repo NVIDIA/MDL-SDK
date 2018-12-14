@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
 
     // Access the MDL SDK
     mi::base::Handle<mi::neuraylib::INeuray> neuray(load_and_get_ineuray());
-    check_success( neuray.is_valid_interface());
+    check_success(neuray.is_valid_interface());
 
     // Configure the MDL SDK
     configure(neuray.get());
@@ -93,15 +93,20 @@ int main(int argc, char* argv[])
                 mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
                      neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
 
+                // Create execution context
+                mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+                    factory->create_execution_context());
+
                 // load the selected module
                 if (mdl_compiler->load_module(
-                    transaction.get(), g_qualified_module_name.c_str()) < 0)
+                    transaction.get(), g_qualified_module_name.c_str(), context.get()) < 0)
                 {
                     std::cerr << "[EXAMPLE] error: Failed to load the module '"
                               << g_qualified_module_name << "'." << std::endl
                               << "                 Please make sure to specify a qualified name." 
                               << std::endl;
 
+                    print_messages(context.get());
                     print_help();
                     keep_console_open();
                     return EXIT_FAILURE;
@@ -143,7 +148,7 @@ int main(int argc, char* argv[])
                         transaction.get(), material_name.c_str(), factory.get());
 
                     mi::base::Handle<mi::neuraylib::IScene_element> material_instance_se(
-                        definition_wrapper.create_instance(NULL, &result));
+                        definition_wrapper.create_instance(nullptr, &result));
 
                     if (result < 0)
                     {
@@ -162,9 +167,9 @@ int main(int argc, char* argv[])
 
                     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
                         material_instance->create_compiled_material(
-                            flags, 1.0f, 380.0f, 780.0f, &result));
+                            flags));
 
-                    if (result < 0)
+                    if (!material_instance)
                     {
                         std::cerr << "[EXAMPLE] error: Failed to compile material instance of '" 
                                   << material_name << "'\n";
@@ -262,11 +267,11 @@ int main(int argc, char* argv[])
     }
 
     // Shut down the MDL SDK
-    check_success( neuray->shutdown() == 0);
+    check_success(neuray->shutdown() == 0);
     neuray = 0;
 
     // Unload the MDL SDK
-    check_success( unload());
+    check_success(unload());
 
     keep_console_open();
     return EXIT_SUCCESS;
@@ -281,7 +286,7 @@ void print_help()
     std::cerr << std::endl;
     std::cerr << "-------------------------------------------------------------------------------";
     std::cerr << std::endl 
-              << "Usage: example_traversal <qualified_module_name> [-class|-instance] [-keep]"
+              << "Usage: example_traversal <qualified_module_name> [--class|--instance] [--keep]"
               << std::endl;
     std::cerr << "-------------------------------------------------------------------------------";
 
@@ -307,25 +312,25 @@ bool consume_cmd_options(int argc, char *argv[])
         if (argv[i][0] == '-')
         {
             // compilation mode. "-class" or "-instance", while "-class" is default
-            if (cmd == "-instance")
+            if (cmd == "--instance")
             {
                 g_use_class_compilation = false;
                 continue;
             }
-            else if (cmd == "-class")
+            else if (cmd == "--class")
             {
                 g_use_class_compilation = true; // also default
                 continue;
             }
 
             // keep the structure produced by the compiler (output may not compile!)
-            if (cmd == "-keep")
+            if (cmd == "--keep")
             {
                 g_keep_compiled_structure = true; // default is false
                 continue;
             }
 
-            if (cmd == "-help" || cmd == "--help" || cmd == "-h")
+            if (cmd == "--help" || cmd == "-h")
             {
                 print_help();
                 return false;

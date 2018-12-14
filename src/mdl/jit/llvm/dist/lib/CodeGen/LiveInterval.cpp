@@ -32,8 +32,8 @@
 using namespace llvm;
 
 LiveRange::iterator LiveRange::find(SlotIndex Pos) {
-  // This algorithm is basically MISTD::upper_bound.
-  // Unfortunately, MISTD::upper_bound cannot be used with mixed types until we
+  // This algorithm is basically std::upper_bound.
+  // Unfortunately, std::upper_bound cannot be used with mixed types until we
   // adopt C++0x. Many libraries can do it, but not all.
   if (empty() || Pos >= endIndex())
     return end();
@@ -66,7 +66,7 @@ VNInfo *LiveRange::createDeadDef(SlotIndex Def,
     // possible to specify in inline assembly.
     //
     // Just convert everything to early-clobber.
-    Def = MISTD::min(Def, I->start);
+    Def = std::min(Def, I->start);
     if (Def != I->start)
       I->start = I->valno->def = Def;
     return I->valno;
@@ -107,13 +107,13 @@ bool LiveRange::overlapsFrom(const LiveRange& other,
          StartPos != other.end() && "Bogus start position hint!");
 
   if (i->start < j->start) {
-    i = MISTD::upper_bound(i, ie, j->start);
+    i = std::upper_bound(i, ie, j->start);
     if (i != begin()) --i;
   } else if (j->start < i->start) {
     ++StartPos;
     if (StartPos != other.end() && StartPos->start <= i->start) {
       assert(StartPos < other.end() && i < end());
-      j = MISTD::upper_bound(j, je, i->start);
+      j = std::upper_bound(j, je, i->start);
       if (j != other.begin()) --j;
     }
   } else {
@@ -124,8 +124,8 @@ bool LiveRange::overlapsFrom(const LiveRange& other,
 
   while (i != ie) {
     if (i->start > j->start) {
-      MISTD::swap(i, j);
-      MISTD::swap(ie, je);
+      std::swap(i, j);
+      std::swap(ie, je);
     }
 
     if (i->end > j->start)
@@ -158,7 +158,7 @@ bool LiveRange::overlaps(const LiveRange &Other, const CoalescerPair &CP,
     // Check for an overlap.
     if (J->start < I->end) {
       // I and J are overlapping. Find the later start.
-      SlotIndex Def = MISTD::max(I->start, J->start);
+      SlotIndex Def = std::max(I->start, J->start);
       // Allow the overlap if Def is a coalescable copy.
       if (Def.isBlock() ||
           !CP.isCoalescable(Indexes.getInstructionFromIndex(Def)))
@@ -166,8 +166,8 @@ bool LiveRange::overlaps(const LiveRange &Other, const CoalescerPair &CP,
     }
     // Advance the iterator that ends first to check for more overlaps.
     if (J->end > I->end) {
-      MISTD::swap(I, J);
-      MISTD::swap(IE, JE);
+      std::swap(I, J);
+      std::swap(IE, JE);
     }
     // Advance J until J->end >= I->start.
     do
@@ -181,7 +181,7 @@ bool LiveRange::overlaps(const LiveRange &Other, const CoalescerPair &CP,
 /// by [Start, End).
 bool LiveRange::overlaps(SlotIndex Start, SlotIndex End) const {
   assert(Start < End && "Invalid range");
-  const_iterator I = MISTD::lower_bound(begin(), end(), End);
+  const_iterator I = std::lower_bound(begin(), end(), End);
   return I != begin() && (--I)->end > Start;
 }
 
@@ -228,7 +228,7 @@ void LiveRange::extendSegmentEndTo(iterator I, SlotIndex NewEnd) {
   }
 
   // If NewEnd was in the middle of a segment, make sure to get its endpoint.
-  I->end = MISTD::max(NewEnd, prior(MergeTo)->end);
+  I->end = std::max(NewEnd, prior(MergeTo)->end);
 
   // If the newly formed segment now touches the segment after it and if they
   // have the same value number, merge the two segments into one segment.
@@ -280,7 +280,7 @@ LiveRange::extendSegmentStartTo(iterator I, SlotIndex NewStart) {
 
 LiveRange::iterator LiveRange::addSegmentFrom(Segment S, iterator From) {
   SlotIndex Start = S.start, End = S.end;
-  iterator it = MISTD::upper_bound(From, end(), Start);
+  iterator it = std::upper_bound(From, end(), Start);
 
   // If the inserted segment starts in the middle or right at the end of
   // another segment, just extend that segment to contain the segment of S.
@@ -332,7 +332,7 @@ LiveRange::iterator LiveRange::addSegmentFrom(Segment S, iterator From) {
 VNInfo *LiveRange::extendInBlock(SlotIndex StartIdx, SlotIndex Kill) {
   if (empty())
     return 0;
-  iterator I = MISTD::upper_bound(begin(), end(), Kill.getPrevSlot());
+  iterator I = std::upper_bound(begin(), end(), Kill.getPrevSlot());
   if (I == begin())
     return 0;
   --I;
@@ -526,7 +526,7 @@ VNInfo *LiveRange::MergeValueNumberInto(VNInfo *V1, VNInfo *V2) {
   // Make sure V2 is smaller than V1.
   if (V1->id < V2->id) {
     V1->copyFrom(*V2);
-    MISTD::swap(V1, V2);
+    std::swap(V1, V2);
   }
 
   // Merge V1 segments into V2.
@@ -764,20 +764,20 @@ void LiveRangeUpdater::add(LiveRange::Segment Seg) {
 
   // Coalesce as much as possible from ReadI into Seg.
   while (ReadI != E && coalescable(Seg, *ReadI)) {
-    Seg.end = MISTD::max(Seg.end, ReadI->end);
+    Seg.end = std::max(Seg.end, ReadI->end);
     ++ReadI;
   }
 
   // Try coalescing Spills.back() into Seg.
   if (!Spills.empty() && coalescable(Spills.back(), Seg)) {
     Seg.start = Spills.back().start;
-    Seg.end = MISTD::max(Spills.back().end, Seg.end);
+    Seg.end = std::max(Spills.back().end, Seg.end);
     Spills.pop_back();
   }
 
   // Try coalescing Seg into WriteI[-1].
   if (WriteI != LR->begin() && coalescable(WriteI[-1], Seg)) {
-    WriteI[-1].end = MISTD::max(WriteI[-1].end, Seg.end);
+    WriteI[-1].end = std::max(WriteI[-1].end, Seg.end);
     return;
   }
 
@@ -800,7 +800,7 @@ void LiveRangeUpdater::add(LiveRange::Segment Seg) {
 void LiveRangeUpdater::mergeSpills() {
   // Perform a backwards merge of Spills and [SpillI;WriteI).
   size_t GapSize = ReadI - WriteI;
-  size_t NumMoved = MISTD::min(Spills.size(), GapSize);
+  size_t NumMoved = std::min(Spills.size(), GapSize);
   LiveRange::iterator Src = WriteI;
   LiveRange::iterator Dst = Src + NumMoved;
   LiveRange::iterator SpillSrc = Spills.end();

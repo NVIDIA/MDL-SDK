@@ -302,7 +302,7 @@ TYPED_TEST(SmallVectorTest, SwapTest) {
   SCOPED_TRACE("SwapTest");
 
   this->makeSequence(this->theVector, 1, 2);
-  MISTD::swap(this->theVector, this->otherVector);
+  std::swap(this->theVector, this->otherVector);
 
   this->assertEmpty(this->theVector);
   this->assertValuesInOrder(this->otherVector, 2u, 1, 2);
@@ -469,7 +469,7 @@ TYPED_TEST(SmallVectorTest, DirectVectorTest) {
 }
 
 TYPED_TEST(SmallVectorTest, IteratorTest) {
-  MISTD::list<int> L;
+  std::list<int> L;
   this->theVector.insert(this->theVector.end(), L.begin(), L.end());
 }
 

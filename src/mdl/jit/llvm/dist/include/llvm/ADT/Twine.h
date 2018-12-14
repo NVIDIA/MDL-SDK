@@ -94,7 +94,7 @@ namespace llvm {
       /// A pointer to a C string instance.
       CStringKind,
 
-      /// A pointer to an MISTD::string instance.
+      /// A pointer to an std::string instance.
       StdStringKind,
 
       /// A pointer to a StringRef instance.
@@ -134,7 +134,7 @@ namespace llvm {
     {
       const Twine *twine;
       const char *cString;
-      const MISTD::string *stdString;
+      const std::string *stdString;
       const StringRef *stringRef;
       char character;
       unsigned int decUI;
@@ -271,8 +271,8 @@ namespace llvm {
       assert(isValid() && "Invalid twine!");
     }
 
-    /// Construct from an MISTD::string.
-    /*implicit*/ Twine(const MISTD::string &Str)
+    /// Construct from an std::string.
+    /*implicit*/ Twine(const std::string &Str)
       : LHSKind(StdStringKind), RHSKind(EmptyKind) {
       LHS.stdString = &Str;
       assert(isValid() && "Invalid twine!");
@@ -414,8 +414,8 @@ namespace llvm {
     /// @name Output & Conversion.
     /// @{
 
-    /// str - Return the twine contents as a MISTD::string.
-    MISTD::string str() const;
+    /// str - Return the twine contents as a std::string.
+    std::string str() const;
 
     /// toVector - Write the concatenated string into the given SmallString or
     /// SmallVector.

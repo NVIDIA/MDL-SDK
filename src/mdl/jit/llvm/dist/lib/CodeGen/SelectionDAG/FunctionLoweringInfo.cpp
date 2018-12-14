@@ -79,7 +79,7 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf) {
         Type *Ty = AI->getAllocatedType();
         uint64_t TySize = TLI->getDataLayout()->getTypeAllocSize(Ty);
         unsigned Align =
-          MISTD::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
+          std::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
                    AI->getAlignment());
 
         TySize *= CUI->getZExtValue();   // Get total allocated size.
@@ -335,7 +335,7 @@ void FunctionLoweringInfo::ComputePHILiveOutRegInfo(const PHINode *PN) {
 
     if (ConstantInt *CI = dyn_cast<ConstantInt>(V)) {
       APInt Val = CI->getValue().zextOrTrunc(BitWidth);
-      DestLOI.NumSignBits = MISTD::min(DestLOI.NumSignBits, Val.getNumSignBits());
+      DestLOI.NumSignBits = std::min(DestLOI.NumSignBits, Val.getNumSignBits());
       DestLOI.KnownZero &= ~Val;
       DestLOI.KnownOne &= Val;
       continue;
@@ -353,7 +353,7 @@ void FunctionLoweringInfo::ComputePHILiveOutRegInfo(const PHINode *PN) {
       DestLOI.IsValid = false;
       return;
     }
-    DestLOI.NumSignBits = MISTD::min(DestLOI.NumSignBits, SrcLOI->NumSignBits);
+    DestLOI.NumSignBits = std::min(DestLOI.NumSignBits, SrcLOI->NumSignBits);
     DestLOI.KnownZero &= SrcLOI->KnownZero;
     DestLOI.KnownOne &= SrcLOI->KnownOne;
   }
@@ -416,7 +416,7 @@ void llvm::AddCatchInfo(const CallInst &I, MachineModuleInfo *MMI,
 
   // Gather all the type infos for this landing pad and pass them along to
   // MachineModuleInfo.
-  MISTD::vector<const GlobalVariable *> TyInfo;
+  std::vector<const GlobalVariable *> TyInfo;
   unsigned N = I.getNumArgOperands();
 
   for (unsigned i = N - 1; i > 1; --i) {

@@ -510,6 +510,12 @@ public:
     /// \param i  the material parameter index
     /// \param j  the lambda parameter index
     virtual void set_parameter_mapping(size_t i, size_t j) = 0;
+
+    /// Initialize the derivative information for this lambda function.
+    /// This rewrites the body/sub-expressions with derivative types.
+    ///
+    /// \param resolver  the call name resolver
+    virtual void initialize_derivative_infos(ICall_name_resolver const *resolver) = 0;
 };
 
 /// An interface used to manage the DF and non-DF parts of an MDL material surface.
@@ -552,6 +558,8 @@ public:
     enum Error_code {
         EC_NONE,                            ///< No error.
         EC_INVALID_PARAMETERS,              ///< Invalid parameters were provided.
+        EC_INVALID_PATH,                    ///< The path could not be resolved with the given
+                                            ///< material constructor.
         EC_UNSUPPORTED_DISTRIBUTION_TYPE,   ///< Currently only BSDFs and EDFs are supported.
         EC_UNSUPPORTED_BSDF,                ///< An unsupported BSDF was provided.
         EC_UNSUPPORTED_EDF,                 ///< An unsupported EDF was provided.
@@ -564,15 +572,17 @@ public:
     /// The DAG nodes must already be owned by the main DF lambda.
     ///
     /// \param material_constructor     the DAG node of the material constructor
-    /// \param df_node                  the DAG node of the distribution function
+    /// \param path                     the path of the distribution function
     /// \param include_geometry_normal  if true, the geometry normal will be handled
+    /// \param calc_derivative_infos    if true, derivative information will be calculated
     /// \param name_resolver            the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     virtual Error_code initialize(
         DAG_node const            *material_constructor,
-        DAG_node const            *df_node,
+        char const                *path,
         bool                       include_geometry_normal,
+        bool                       calc_derivative_infos,
         ICall_name_resolver const *name_resolver) = 0;
 
     /// Get the main DF function representing a DF DAG call.
@@ -874,8 +884,12 @@ class ICode_generator_jit : public
     /// The name of the option that steers the call mode for the GPU texture lookup.
     #define MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE "jit_tex_lookup_call_mode"
 
+    /// The name of the option stating whether the texture runtime uses derivatives.
+    #define MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES "jit_tex_runtime_with_derivs"
+
     /// The name of the option to use bitangent instead of tangent_u, tangent_v in the MDL state.
     #define MDL_JIT_OPTION_USE_BITANGENT "jit_use_bitangent"
+
 
     /// The name of the option to let the the JIT code generator create a LLVM bitcode
     /// instead of LLVM IR (ascii) code
@@ -1151,18 +1165,19 @@ These options are specific to the MDL DAG code generator:
 
 These options are specific to the MDL JIT code generator:
 
-- \ref mdl_option_jit_disable_exceptions     "jit_disable_exceptions"
-- \ref mdl_option_jit_enable_ro_segment      "jit_enable_ro_segment"
-- \ref mdl_option_jit_fast_math              "jit_fast_math"
-- \ref mdl_option_jit_include_uniform_state  "jit_include_uniform_state"
-- \ref mdl_option_jit_link_libdevice         "jit_link_libdevice"
-- \ref mdl_option_jit_llvm_state_module      "jit_llvm_state_module"
-- \ref mdl_option_jit_map_strings_to_ids     "jit_map_strings_to_ids"
-- \ref mdl_option_jit_opt_level              "jit_opt_level"
-- \ref mdl_option_jit_tex_lookup_call_mode   "jit_tex_lookup_call_mode"
-- \ref mdl_option_jit_use_bitangent          "jit_use_bitangent"
-- \ref mdl_option_jit_write_bitcode          "jit_write_bitcode"
-- \ref mdl_option_jit_use_builtin_res_h      "jit_use_builtin_resource_handler_cpu"
+- \ref mdl_option_jit_disable_exceptions      "jit_disable_exceptions"
+- \ref mdl_option_jit_enable_ro_segment       "jit_enable_ro_segment"
+- \ref mdl_option_jit_fast_math               "jit_fast_math"
+- \ref mdl_option_jit_include_uniform_state   "jit_include_uniform_state"
+- \ref mdl_option_jit_link_libdevice          "jit_link_libdevice"
+- \ref mdl_option_jit_llvm_state_module       "jit_llvm_state_module"
+- \ref mdl_option_jit_map_strings_to_ids      "jit_map_strings_to_ids"
+- \ref mdl_option_jit_opt_level               "jit_opt_level"
+- \ref mdl_option_jit_tex_lookup_call_mode    "jit_tex_lookup_call_mode"
+- \ref mdl_option_jit_tex_runtime_with_derivs "jit_tex_runtime_with_derivs"
+- \ref mdl_option_jit_use_bitangent           "jit_use_bitangent"*/
+/*!
+- \ref mdl_option_jit_use_builtin_res_h       "jit_use_builtin_resource_handler_cpu"
 
 \section mdl_cg_options Generic MDL code generator options
 
@@ -1253,11 +1268,17 @@ These options are specific to the MDL JIT code generator:
   - \c "optix_cp": the generated code will contain OptiX \c rtCallableProgramId variables for
     each texture function which you have to set in your application
 
+\anchor mdl_option_jit_tex_runtime_with_derivs
+- <b>jit_tex_runtime_with_derivs</b>: If set to \c "true", the generated code will calculate
+  derivatives and provide coordinates with derivatives to some texture runtime functions.
+  Default: \c "false"
+
 \anchor mdl_option_jit_use_bitangent
 - <b>jit_use_bitangent</b>: If set to \c "true", bitangents will be expected in the renderer
   provided state instead of tangent_u and tangent_v vectors.
   Default: \c "false"
-
+*/
+/*!
 \anchor mdl_option_jit_write_bitcode
 - <b>jit_write_bitcode</b>: If set to \c "true", LLVM bitcode will be generated instead of LLVM IR
   assembly text.

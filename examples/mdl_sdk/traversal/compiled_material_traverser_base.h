@@ -89,60 +89,60 @@ protected:
 
     // Encapsulated to current element that is visited during the traversal
     // It contains either an IExpression, an IValue, a Parameter or a Temporary while the
-    // others are NULL.
+    // others are nullptr.
     struct Traversal_element
     {
         explicit Traversal_element(const mi::neuraylib::IExpression* expression,
                                    mi::Size sibling_count = 1, mi::Size sibling_index = 0) 
             : expression(expression)
-            , value(NULL)
-            , parameter(NULL)
-            , temporary(NULL)
+            , value(nullptr)
+            , parameter(nullptr)
+            , temporary(nullptr)
             , sibling_count(sibling_count)
             , sibling_index(sibling_index)
         { }
 
         explicit Traversal_element(const mi::neuraylib::IValue* value,
                                    mi::Size sibling_count = 1, mi::Size sibling_index = 0)
-            : expression(NULL)
+            : expression(nullptr)
             , value(value)
-            , parameter(NULL)
-            , temporary(NULL)
+            , parameter(nullptr)
+            , temporary(nullptr)
             , sibling_count(sibling_count)
             , sibling_index(sibling_index)
         { }
 
         explicit Traversal_element(const Parameter* parameter,
                                    mi::Size sibling_count = 1, mi::Size sibling_index = 0)
-            : expression(NULL)
-            , value(NULL)
+            : expression(nullptr)
+            , value(nullptr)
             , parameter(parameter)
-            , temporary(NULL)
+            , temporary(nullptr)
             , sibling_count(sibling_count)
             , sibling_index(sibling_index)
         { }
 
         explicit Traversal_element(const Temporary* temporary,
                                    mi::Size sibling_count = 1, mi::Size sibling_index = 0)
-            : expression(NULL)
-            , value(NULL)
-            , parameter(NULL)
+            : expression(nullptr)
+            , value(nullptr)
+            , parameter(nullptr)
             , temporary(temporary)
             , sibling_count(sibling_count)
             , sibling_index(sibling_index)
         { }
 
-        // Not NULL if the current traversal element is an IExpression.
+        // Not nullptr if the current traversal element is an IExpression.
         const mi::neuraylib::IExpression* expression;
 
-        // Not NULL if the current traversal element is an IValue.
+        // Not nullptr if the current traversal element is an IValue.
         const mi::neuraylib::IValue* value;
 
-        // Not NULL if the current traversal element is a Parameter.
+        // Not nullptr if the current traversal element is a Parameter.
         // This can happen only in the ES_PARAMETERS stage.
         const Parameter* parameter;
 
-        // Not NULL if the current traversal element is a Parameter.
+        // Not nullptr if the current traversal element is a Parameter.
         // This can happen only in the ES_TEMPORARAY stage.
         const Temporary* temporary;
 
@@ -235,7 +235,7 @@ protected:
     //
     // Return: The parameter name.
     std::string get_parameter_name(const mi::neuraylib::ICompiled_material* material,
-                                         mi::Size index, bool* out_generated = NULL) const;
+                                         mi::Size index, bool* out_generated = nullptr) const;
 
     // Gets the name of a temporary of the traversed material.
     // Since the name is usually unknown, due to optimization, a proper name is generated.

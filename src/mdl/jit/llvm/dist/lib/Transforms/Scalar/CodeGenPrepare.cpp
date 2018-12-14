@@ -1268,7 +1268,7 @@ static bool IsOperandAMemoryOperand(CallInst *CI, InlineAsm *IA, Value *OpVal,
 /// memory use.  If we find an obviously non-foldable instruction, return true.
 /// Add the ultimately found memory instructions to MemoryUses.
 static bool FindAllMemoryUses(Instruction *I,
-                SmallVectorImpl<MISTD::pair<Instruction*,unsigned> > &MemoryUses,
+                SmallVectorImpl<std::pair<Instruction*,unsigned> > &MemoryUses,
                               SmallPtrSet<Instruction*, 16> &ConsideredInsts,
                               const TargetLowering &TLI) {
   // If we already considered this instruction, we're done.
@@ -1285,14 +1285,14 @@ static bool FindAllMemoryUses(Instruction *I,
     User *U = *UI;
 
     if (LoadInst *LI = dyn_cast<LoadInst>(U)) {
-      MemoryUses.push_back(MISTD::make_pair(LI, UI.getOperandNo()));
+      MemoryUses.push_back(std::make_pair(LI, UI.getOperandNo()));
       continue;
     }
 
     if (StoreInst *SI = dyn_cast<StoreInst>(U)) {
       unsigned opNo = UI.getOperandNo();
       if (opNo == 0) return true; // Storing addr, not into addr.
-      MemoryUses.push_back(MISTD::make_pair(SI, opNo));
+      MemoryUses.push_back(std::make_pair(SI, opNo));
       continue;
     }
 
@@ -1393,7 +1393,7 @@ IsProfitableToFoldIntoAddressingMode(Instruction *I, ExtAddrMode &AMBefore,
   // check to see if their addressing modes will include this instruction.  If
   // so, we can fold it into all uses, so it doesn't matter if it has multiple
   // uses.
-  SmallVector<MISTD::pair<Instruction*,unsigned>, 16> MemoryUses;
+  SmallVector<std::pair<Instruction*,unsigned>, 16> MemoryUses;
   SmallPtrSet<Instruction*, 16> ConsideredInsts;
   if (FindAllMemoryUses(I, MemoryUses, ConsideredInsts, TLI))
     return false;  // Has a non-memory, non-foldable use!
@@ -1425,7 +1425,7 @@ IsProfitableToFoldIntoAddressingMode(Instruction *I, ExtAddrMode &AMBefore,
     (void)Success; assert(Success && "Couldn't select *anything*?");
 
     // If the match didn't cover I, then it won't be shared by it.
-    if (MISTD::find(MatchedAddrModeInsts.begin(), MatchedAddrModeInsts.end(),
+    if (std::find(MatchedAddrModeInsts.begin(), MatchedAddrModeInsts.end(),
                   I) == MatchedAddrModeInsts.end())
       return false;
 

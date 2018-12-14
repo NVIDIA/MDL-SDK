@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-typedef DenseMap<uint64_t, MISTD::pair<uint8_t, int64_t> > RelocAddrMap;
+typedef DenseMap<uint64_t, std::pair<uint8_t, int64_t> > RelocAddrMap;
 
 } // namespace llvm
 

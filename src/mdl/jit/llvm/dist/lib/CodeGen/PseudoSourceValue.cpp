@@ -27,11 +27,11 @@ struct PSVGlobalsTy {
   // PseudoSourceValues are immutable so don't need locking.
   const PseudoSourceValue PSVs[4];
   sys::Mutex Lock;  // Guards FSValues, but not the values inside it.
-  MISTD::map<int, const PseudoSourceValue *> FSValues;
+  std::map<int, const PseudoSourceValue *> FSValues;
 
   PSVGlobalsTy() : PSVs() {}
   ~PSVGlobalsTy() {
-    for (MISTD::map<int, const PseudoSourceValue *>::iterator
+    for (std::map<int, const PseudoSourceValue *>::iterator
            I = FSValues.begin(), E = FSValues.end(); I != E; ++I) {
       delete I->second;
     }

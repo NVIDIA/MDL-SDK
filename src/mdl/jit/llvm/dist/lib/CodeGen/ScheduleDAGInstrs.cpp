@@ -545,7 +545,7 @@ static bool MIsNeedChainEdge(AliasAnalysis *AA, const MachineFrameInfo *MFI,
   assert ((MMOa->getOffset() >= 0) && "Negative MachineMemOperand offset");
   assert ((MMOb->getOffset() >= 0) && "Negative MachineMemOperand offset");
 
-  int64_t MinOffset = MISTD::min(MMOa->getOffset(), MMOb->getOffset());
+  int64_t MinOffset = std::min(MMOa->getOffset(), MMOb->getOffset());
   int64_t Overlapa = MMOa->getSize() + MMOa->getOffset() - MinOffset;
   int64_t Overlapb = MMOb->getSize() + MMOb->getOffset() - MinOffset;
 
@@ -607,7 +607,7 @@ iterateChainSucc(AliasAnalysis *AA, const MachineFrameInfo *MFI,
 /// checks whether SU can be aliasing any node dominated
 /// by it.
 static void adjustChainDeps(AliasAnalysis *AA, const MachineFrameInfo *MFI,
-                            SUnit *SU, SUnit *ExitSU, MISTD::set<SUnit *> &CheckList,
+                            SUnit *SU, SUnit *ExitSU, std::set<SUnit *> &CheckList,
                             unsigned LatencyToLoad) {
   if (!SU)
     return;
@@ -615,7 +615,7 @@ static void adjustChainDeps(AliasAnalysis *AA, const MachineFrameInfo *MFI,
   SmallPtrSet<const SUnit*, 16> Visited;
   unsigned Depth = 0;
 
-  for (MISTD::set<SUnit *>::iterator I = CheckList.begin(), IE = CheckList.end();
+  for (std::set<SUnit *>::iterator I = CheckList.begin(), IE = CheckList.end();
        I != IE; ++I) {
     if (SU == *I)
       continue;
@@ -639,7 +639,7 @@ static void adjustChainDeps(AliasAnalysis *AA, const MachineFrameInfo *MFI,
 static inline
 void addChainDependency (AliasAnalysis *AA, const MachineFrameInfo *MFI,
                          SUnit *SUa, SUnit *SUb,
-                         MISTD::set<SUnit *> &RejectList,
+                         std::set<SUnit *> &RejectList,
                          unsigned TrueMemOrderLatency = 0,
                          bool isNormalMemory = false) {
   // If this is a false dependency,
@@ -721,8 +721,8 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
   // separately the known memory locations that may alias and those
   // that are known not to alias
   MapVector<const Value *, SUnit *> AliasMemDefs, NonAliasMemDefs;
-  MapVector<const Value *, MISTD::vector<SUnit *> > AliasMemUses, NonAliasMemUses;
-  MISTD::set<SUnit*> RejectMemNodes;
+  MapVector<const Value *, std::vector<SUnit *> > AliasMemUses, NonAliasMemUses;
+  std::set<SUnit*> RejectMemNodes;
 
   // Remove any stale debug info; sometimes BuildSchedGraph is called again
   // without emitting the info from the previous call.
@@ -749,7 +749,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
        MII != MIE; --MII) {
     MachineInstr *MI = prior(MII);
     if (MI && DbgMI) {
-      DbgValues.push_back(MISTD::make_pair(DbgMI, MI));
+      DbgValues.push_back(std::make_pair(DbgMI, MI));
       DbgMI = NULL;
     }
 
@@ -819,7 +819,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
              NonAliasMemDefs.begin(), E = NonAliasMemDefs.end(); I != E; ++I) {
         I->second->addPred(SDep(SU, SDep::Barrier));
       }
-      for (MapVector<const Value *, MISTD::vector<SUnit *> >::iterator I =
+      for (MapVector<const Value *, std::vector<SUnit *> >::iterator I =
              NonAliasMemUses.begin(), E = NonAliasMemUses.end(); I != E; ++I) {
         for (unsigned i = 0, e = I->second.size(); i != e; ++i) {
           SDep Dep(SU, SDep::Barrier);
@@ -856,7 +856,7 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
       for (MapVector<const Value *, SUnit *>::iterator I = AliasMemDefs.begin(),
            E = AliasMemDefs.end(); I != E; ++I)
         addChainDependency(AAForDep, MFI, SU, I->second, RejectMemNodes);
-      for (MapVector<const Value *, MISTD::vector<SUnit *> >::iterator I =
+      for (MapVector<const Value *, std::vector<SUnit *> >::iterator I =
            AliasMemUses.begin(), E = AliasMemUses.end(); I != E; ++I) {
         for (unsigned i = 0, e = I->second.size(); i != e; ++i)
           addChainDependency(AAForDep, MFI, SU, I->second[i], RejectMemNodes,
@@ -902,9 +902,9 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
             NonAliasMemDefs[V] = SU;
         }
         // Handle the uses in MemUses, if there are any.
-        MapVector<const Value *, MISTD::vector<SUnit *> >::iterator J =
+        MapVector<const Value *, std::vector<SUnit *> >::iterator J =
           ((ThisMayAlias) ? AliasMemUses.find(V) : NonAliasMemUses.find(V));
-        MapVector<const Value *, MISTD::vector<SUnit *> >::iterator JE =
+        MapVector<const Value *, std::vector<SUnit *> >::iterator JE =
           ((ThisMayAlias) ? AliasMemUses.end() : NonAliasMemUses.end());
         if (J != JE) {
           for (unsigned i = 0, e = J->second.size(); i != e; ++i)
@@ -1005,8 +1005,8 @@ void ScheduleDAGInstrs::dumpNode(const SUnit *SU) const {
 #endif
 }
 
-MISTD::string ScheduleDAGInstrs::getGraphNodeLabel(const SUnit *SU) const {
-  MISTD::string s;
+std::string ScheduleDAGInstrs::getGraphNodeLabel(const SUnit *SU) const {
+  std::string s;
   raw_string_ostream oss(s);
   if (SU == &EntrySU)
     oss << "<entry>";
@@ -1019,7 +1019,7 @@ MISTD::string ScheduleDAGInstrs::getGraphNodeLabel(const SUnit *SU) const {
 
 /// Return the basic block label. It is not necessarilly unique because a block
 /// contains multiple scheduling regions. But it is fine for visualization.
-MISTD::string ScheduleDAGInstrs::getDAGName() const {
+std::string ScheduleDAGInstrs::getDAGName() const {
   return "dag." + BB->getFullName();
 }
 
@@ -1035,7 +1035,7 @@ class SchedDFSImpl {
   /// Join DAG nodes into equivalence classes by their subtree.
   IntEqClasses SubtreeClasses;
   /// List PredSU, SuccSU pairs that represent data edges between subtrees.
-  MISTD::vector<MISTD::pair<const SUnit*, const SUnit*> > ConnectionPairs;
+  std::vector<std::pair<const SUnit*, const SUnit*> > ConnectionPairs;
 
   struct RootData {
     unsigned NodeID;
@@ -1126,7 +1126,7 @@ public:
 
   /// Add a connection for cross edges.
   void visitCrossEdge(const SDep &PredDep, const SUnit *Succ) {
-    ConnectionPairs.push_back(MISTD::make_pair(PredDep.getSUnit(), Succ));
+    ConnectionPairs.push_back(std::make_pair(PredDep.getSUnit(), Succ));
   }
 
   /// Set each node's subtree ID to the representative ID and record connections
@@ -1155,7 +1155,7 @@ public:
       DEBUG(dbgs() << "  SU(" << Idx << ") in tree "
             << R.DFSNodeData[Idx].SubtreeID << '\n');
     }
-    for (MISTD::vector<MISTD::pair<const SUnit*, const SUnit*> >::const_iterator
+    for (std::vector<std::pair<const SUnit*, const SUnit*> >::const_iterator
            I = ConnectionPairs.begin(), E = ConnectionPairs.end();
          I != E; ++I) {
       unsigned PredTree = SubtreeClasses[I->first->NodeNum];
@@ -1209,7 +1209,7 @@ protected:
       for (SmallVectorImpl<SchedDFSResult::Connection>::iterator
              I = Connections.begin(), E = Connections.end(); I != E; ++I) {
         if (I->TreeID == ToTree) {
-          I->Level = MISTD::max(I->Level, Depth);
+          I->Level = std::max(I->Level, Depth);
           return;
         }
       }
@@ -1223,12 +1223,12 @@ protected:
 namespace {
 /// \brief Manage the stack used by a reverse depth-first search over the DAG.
 class SchedDAGReverseDFS {
-  MISTD::vector<MISTD::pair<const SUnit*, SUnit::const_pred_iterator> > DFSStack;
+  std::vector<std::pair<const SUnit*, SUnit::const_pred_iterator> > DFSStack;
 public:
   bool isComplete() const { return DFSStack.empty(); }
 
   void follow(const SUnit *SU) {
-    DFSStack.push_back(MISTD::make_pair(SU, SU->Preds.begin()));
+    DFSStack.push_back(std::make_pair(SU, SU->Preds.begin()));
   }
   void advance() { ++DFSStack.back().second; }
 
@@ -1311,7 +1311,7 @@ void SchedDFSResult::scheduleTree(unsigned SubtreeID) {
          I = SubtreeConnections[SubtreeID].begin(),
          E = SubtreeConnections[SubtreeID].end(); I != E; ++I) {
     SubtreeConnectLevels[I->TreeID] =
-      MISTD::max(SubtreeConnectLevels[I->TreeID], I->Level);
+      std::max(SubtreeConnectLevels[I->TreeID], I->Level);
     DEBUG(dbgs() << "  Tree: " << I->TreeID
           << " @" << SubtreeConnectLevels[I->TreeID] << '\n');
   }

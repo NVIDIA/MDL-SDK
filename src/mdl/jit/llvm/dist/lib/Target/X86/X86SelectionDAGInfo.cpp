@@ -67,7 +67,7 @@ X86SelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, SDLoc dl,
                         /*doesNotRet=*/false, /*isReturnValueUsed=*/false,
                         DAG.getExternalSymbol(bzeroEntry, IntPtr), Args,
                         DAG, dl);
-      MISTD::pair<SDValue,SDValue> CallResult =
+      std::pair<SDValue,SDValue> CallResult =
         TLI.LowerCallTo(CLI);
       return CallResult.second;
     }

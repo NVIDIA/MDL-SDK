@@ -184,7 +184,7 @@ int LLVMContextImpl::getOrAddScopeRecordIdxEntry(MDNode *Scope,
 int LLVMContextImpl::getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,
                                                     int ExistingIdx) {
   // If we already have an entry, return it.
-  int &Idx = ScopeInlinedAtIdx[MISTD::make_pair(Scope, IA)];
+  int &Idx = ScopeInlinedAtIdx[std::make_pair(Scope, IA)];
   if (Idx) return Idx;
   
   // If we don't have an entry, but ExistingIdx is specified, use it.
@@ -198,7 +198,7 @@ int LLVMContextImpl::getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,
     
   // Index is biased by 1 and negated.
   Idx = -ScopeInlinedAtRecords.size()-1;
-  ScopeInlinedAtRecords.push_back(MISTD::make_pair(DebugRecVH(Scope, this, Idx),
+  ScopeInlinedAtRecords.push_back(std::make_pair(DebugRecVH(Scope, this, Idx),
                                                  DebugRecVH(IA, this, Idx)));
   return Idx;
 }
@@ -233,7 +233,7 @@ void DebugRecVH::deleted() {
   // Otherwise, it is an entry in ScopeInlinedAtRecords, we don't know if it
   // is the scope or the inlined-at record entry.
   assert(unsigned(-Idx-1) < Ctx->ScopeInlinedAtRecords.size());
-  MISTD::pair<DebugRecVH, DebugRecVH> &Entry = Ctx->ScopeInlinedAtRecords[-Idx-1];
+  std::pair<DebugRecVH, DebugRecVH> &Entry = Ctx->ScopeInlinedAtRecords[-Idx-1];
   assert((this == &Entry.first || this == &Entry.second) &&
          "Mapping out of date!");
   
@@ -243,9 +243,9 @@ void DebugRecVH::deleted() {
          "Entry should be non-canonical if either val dropped to null");
 
   // Otherwise, we do have an entry in it, nuke it and we're done.
-  assert(Ctx->ScopeInlinedAtIdx[MISTD::make_pair(OldScope, OldInlinedAt)] == Idx&&
+  assert(Ctx->ScopeInlinedAtIdx[std::make_pair(OldScope, OldInlinedAt)] == Idx&&
          "Mapping out of date");
-  Ctx->ScopeInlinedAtIdx.erase(MISTD::make_pair(OldScope, OldInlinedAt));
+  Ctx->ScopeInlinedAtIdx.erase(std::make_pair(OldScope, OldInlinedAt));
   
   // Reset this VH to null.  Drop both 'Idx' values to null to indicate that
   // we're in non-canonical form now.
@@ -287,7 +287,7 @@ void DebugRecVH::allUsesReplacedWith(Value *NewVa) {
   // Otherwise, it is an entry in ScopeInlinedAtRecords, we don't know if it
   // is the scope or the inlined-at record entry.
   assert(unsigned(-Idx-1) < Ctx->ScopeInlinedAtRecords.size());
-  MISTD::pair<DebugRecVH, DebugRecVH> &Entry = Ctx->ScopeInlinedAtRecords[-Idx-1];
+  std::pair<DebugRecVH, DebugRecVH> &Entry = Ctx->ScopeInlinedAtRecords[-Idx-1];
   assert((this == &Entry.first || this == &Entry.second) &&
          "Mapping out of date!");
   
@@ -297,9 +297,9 @@ void DebugRecVH::allUsesReplacedWith(Value *NewVa) {
          "Entry should be non-canonical if either val dropped to null");
   
   // Otherwise, we do have an entry in it, nuke it and we're done.
-  assert(Ctx->ScopeInlinedAtIdx[MISTD::make_pair(OldScope, OldInlinedAt)] == Idx&&
+  assert(Ctx->ScopeInlinedAtIdx[std::make_pair(OldScope, OldInlinedAt)] == Idx&&
          "Mapping out of date");
-  Ctx->ScopeInlinedAtIdx.erase(MISTD::make_pair(OldScope, OldInlinedAt));
+  Ctx->ScopeInlinedAtIdx.erase(std::make_pair(OldScope, OldInlinedAt));
   
   // Reset this VH to the new value.
   setValPtr(NewVal);
@@ -309,7 +309,7 @@ void DebugRecVH::allUsesReplacedWith(Value *NewVa) {
   // If NewVal already has an entry, this becomes a non-canonical reference,
   // just drop Idx to 0 to signify this.
   if (NewIdx != Idx) {
-    MISTD::pair<DebugRecVH, DebugRecVH> &Entry=Ctx->ScopeInlinedAtRecords[-Idx-1];
+    std::pair<DebugRecVH, DebugRecVH> &Entry=Ctx->ScopeInlinedAtRecords[-Idx-1];
     Entry.first.Idx = Entry.second.Idx = 0;
   }
 }

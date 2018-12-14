@@ -62,7 +62,7 @@ public:
 
 void OProfileJITEventListener::initialize() {
   if (!Wrapper.op_open_agent()) {
-    const MISTD::string err_str = sys::StrError();
+    const std::string err_str = sys::StrError();
     DEBUG(dbgs() << "Failed to connect to OProfile agent: " << err_str << "\n");
   } else {
     DEBUG(dbgs() << "Connected to OProfile agent.\n");
@@ -72,7 +72,7 @@ void OProfileJITEventListener::initialize() {
 OProfileJITEventListener::~OProfileJITEventListener() {
   if (Wrapper.isAgentAvailable()) {
     if (Wrapper.op_close_agent() == -1) {
-      const MISTD::string err_str = sys::StrError();
+      const std::string err_str = sys::StrError();
       DEBUG(dbgs() << "Failed to disconnect from OProfile agent: "
                    << err_str << "\n");
     } else {
@@ -114,7 +114,7 @@ void OProfileJITEventListener::NotifyFunctionEmitted(
     // expects.  Note that OProfile 0.9.4 has a bug that causes it to ignore
     // line numbers for addresses above 4G.
     FilenameCache Filenames;
-    MISTD::vector<debug_line_info> LineInfo;
+    std::vector<debug_line_info> LineInfo;
     LineInfo.reserve(1 + Details.LineStarts.size());
 
     DebugLoc FirstLoc = Details.LineStarts[0].Loc;
@@ -134,7 +134,7 @@ void OProfileJITEventListener::NotifyFunctionEmitted(
       LineInfo.push_back(line_info);
     }
 
-    for (MISTD::vector<EmittedFunctionDetails::LineStart>::const_iterator
+    for (std::vector<EmittedFunctionDetails::LineStart>::const_iterator
            I = Details.LineStarts.begin(), E = Details.LineStarts.end();
          I != E; ++I) {
       LineInfo.push_back(LineStartToOProfileFormat(

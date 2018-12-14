@@ -55,36 +55,36 @@ class RegisterClassInfo;
     /// the vector. A node can "point to" itself to indicate that it
     /// is the parent of a group, or point to another node to indicate
     /// that it is a member of the same group as that node.
-    MISTD::vector<unsigned> GroupNodes;
+    std::vector<unsigned> GroupNodes;
 
     /// GroupNodeIndices - For each register, the index of the GroupNode
     /// currently representing the group that the register belongs to.
     /// Register 0 is always represented by the 0 group, a group
     /// composed of registers that are not eligible for anti-aliasing.
-    MISTD::vector<unsigned> GroupNodeIndices;
+    std::vector<unsigned> GroupNodeIndices;
 
     /// RegRefs - Map registers to all their references within a live range.
-    MISTD::multimap<unsigned, RegisterReference> RegRefs;
+    std::multimap<unsigned, RegisterReference> RegRefs;
 
     /// KillIndices - The index of the most recent kill (proceding bottom-up),
     /// or ~0u if the register is not live.
-    MISTD::vector<unsigned> KillIndices;
+    std::vector<unsigned> KillIndices;
 
     /// DefIndices - The index of the most recent complete def (proceding bottom
     /// up), or ~0u if the register is live.
-    MISTD::vector<unsigned> DefIndices;
+    std::vector<unsigned> DefIndices;
 
   public:
     AggressiveAntiDepState(const unsigned TargetRegs, MachineBasicBlock *BB);
 
     /// GetKillIndices - Return the kill indices.
-    MISTD::vector<unsigned> &GetKillIndices() { return KillIndices; }
+    std::vector<unsigned> &GetKillIndices() { return KillIndices; }
 
     /// GetDefIndices - Return the define indices.
-    MISTD::vector<unsigned> &GetDefIndices() { return DefIndices; }
+    std::vector<unsigned> &GetDefIndices() { return DefIndices; }
 
     /// GetRegRefs - Return the RegRefs map.
-    MISTD::multimap<unsigned, RegisterReference>& GetRegRefs() { return RegRefs; }
+    std::multimap<unsigned, RegisterReference>& GetRegRefs() { return RegRefs; }
 
     // GetGroup - Get the group for a register. The returned value is
     // the index of the GroupNode representing the group.
@@ -94,8 +94,8 @@ class RegisterClassInfo;
     // group. If RegRefs is non-NULL then only included referenced registers.
     void GetGroupRegs(
        unsigned Group,
-       MISTD::vector<unsigned> &Regs,
-       MISTD::multimap<unsigned,
+       std::vector<unsigned> &Regs,
+       std::multimap<unsigned,
          AggressiveAntiDepState::RegisterReference> *RegRefs);
 
     // UnionGroups - Union Reg1's and Reg2's groups to form a new
@@ -142,7 +142,7 @@ class RegisterClassInfo;
     /// path
     /// of the ScheduleDAG and break them by renaming registers.
     ///
-    unsigned BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
+    unsigned BreakAntiDependencies(const std::vector<SUnit>& SUnits,
                                    MachineBasicBlock::iterator Begin,
                                    MachineBasicBlock::iterator End,
                                    unsigned InsertPosIndex,
@@ -158,7 +158,7 @@ class RegisterClassInfo;
 
   private:
     /// Keep track of a position in the allocation order for each regclass.
-    typedef MISTD::map<const TargetRegisterClass *, unsigned> RenameOrderType;
+    typedef std::map<const TargetRegisterClass *, unsigned> RenameOrderType;
 
     /// IsImplicitDefUse - Return true if MO represents a register
     /// that is both implicitly used and defined in MI
@@ -166,18 +166,18 @@ class RegisterClassInfo;
 
     /// GetPassthruRegs - If MI implicitly def/uses a register, then
     /// return that register and all subregisters.
-    void GetPassthruRegs(MachineInstr *MI, MISTD::set<unsigned>& PassthruRegs);
+    void GetPassthruRegs(MachineInstr *MI, std::set<unsigned>& PassthruRegs);
 
     void HandleLastUse(unsigned Reg, unsigned KillIdx, const char *tag,
                        const char *header =NULL, const char *footer =NULL);
 
     void PrescanInstruction(MachineInstr *MI, unsigned Count,
-                            MISTD::set<unsigned>& PassthruRegs);
+                            std::set<unsigned>& PassthruRegs);
     void ScanInstruction(MachineInstr *MI, unsigned Count);
     BitVector GetRenameRegisters(unsigned Reg);
     bool FindSuitableFreeRegisters(unsigned AntiDepGroupIndex,
                                    RenameOrderType& RenameOrder,
-                                   MISTD::map<unsigned, unsigned> &RenameMap);
+                                   std::map<unsigned, unsigned> &RenameMap);
   };
 }
 

@@ -96,12 +96,12 @@ using namespace llvm::X86Disassembler;
 namespace llvm {
 
 extern void EmitFixedLenDecoder(RecordKeeper &RK, raw_ostream &OS,
-                                MISTD::string PredicateNamespace,
-                                MISTD::string GPrefix,
-                                MISTD::string GPostfix,
-                                MISTD::string ROK,
-                                MISTD::string RFail,
-                                MISTD::string L);
+                                std::string PredicateNamespace,
+                                std::string GPrefix,
+                                std::string GPostfix,
+                                std::string ROK,
+                                std::string RFail,
+                                std::string L);
 
 void EmitDisassembler(RecordKeeper &Records, raw_ostream &OS) {
   CodeGenTarget Target(Records);
@@ -111,7 +111,7 @@ void EmitDisassembler(RecordKeeper &Records, raw_ostream &OS) {
   if (Target.getName() == "X86") {
     DisassemblerTables Tables;
 
-    const MISTD::vector<const CodeGenInstruction*> &numberedInstructions =
+    const std::vector<const CodeGenInstruction*> &numberedInstructions =
       Target.getInstructionsByEnumValue();
 
     for (unsigned i = 0, e = numberedInstructions.size(); i != e; ++i)

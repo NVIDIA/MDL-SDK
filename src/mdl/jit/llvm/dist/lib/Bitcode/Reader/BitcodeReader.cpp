@@ -42,13 +42,13 @@ void BitcodeReader::FreeState() {
   if (BufferOwned)
     delete Buffer;
   Buffer = 0;
-  MISTD::vector<Type*>().swap(TypeList);
+  std::vector<Type*>().swap(TypeList);
   ValueList.clear();
   MDValueList.clear();
 
-  MISTD::vector<AttributeSet>().swap(MAttributes);
-  MISTD::vector<BasicBlock*>().swap(FunctionBBs);
-  MISTD::vector<Function*>().swap(FunctionsWithBodies);
+  std::vector<AttributeSet>().swap(MAttributes);
+  std::vector<BasicBlock*>().swap(FunctionBBs);
+  std::vector<Function*>().swap(FunctionsWithBodies);
   DeferredFunctionInfo.clear();
   MDKindMap.clear();
 
@@ -59,7 +59,7 @@ void BitcodeReader::FreeState() {
 //  Helper functions to implement forward reference resolution, etc.
 //===----------------------------------------------------------------------===//
 
-/// ConvertToString - Convert a string from a record into an MISTD::string, return
+/// ConvertToString - Convert a string from a record into an std::string, return
 /// true on failure.
 template<typename StrTy>
 static bool ConvertToString(ArrayRef<uint64_t> Record, unsigned Idx,
@@ -247,7 +247,7 @@ void BitcodeReaderValueList::AssignValue(Value *V, unsigned Idx) {
   // Handle constants and non-constants (e.g. instrs) differently for
   // efficiency.
   if (Constant *PHC = dyn_cast<Constant>(&*OldV)) {
-    ResolveConstants.push_back(MISTD::make_pair(PHC, Idx));
+    ResolveConstants.push_back(std::make_pair(PHC, Idx));
     OldV = V;
   } else {
     // If there was a forward reference to this value, replace it.
@@ -302,7 +302,7 @@ Value *BitcodeReaderValueList::getValueFwdRef(unsigned Idx, Type *Ty) {
 void BitcodeReaderValueList::ResolveConstantForwardRefs() {
   // Sort the values by-pointer so that they are efficient to look up with a
   // binary search.
-  MISTD::sort(ResolveConstants.begin(), ResolveConstants.end());
+  std::sort(ResolveConstants.begin(), ResolveConstants.end());
 
   SmallVector<Constant*, 64> NewOps;
 
@@ -340,8 +340,8 @@ void BitcodeReaderValueList::ResolveConstantForwardRefs() {
         } else {
           // Otherwise, look up the placeholder in ResolveConstants.
           ResolveConstantsTy::iterator It =
-            MISTD::lower_bound(ResolveConstants.begin(), ResolveConstants.end(),
-                             MISTD::pair<Constant*, unsigned>(cast<Constant>(*I),
+            std::lower_bound(ResolveConstants.begin(), ResolveConstants.end(),
+                             std::pair<Constant*, unsigned>(cast<Constant>(*I),
                                                             0));
           assert(It != ResolveConstants.end() && It->first == *I);
           NewOp = operator[](It->second);
@@ -1052,7 +1052,7 @@ error_code BitcodeReader::ParseMetadata() {
       SmallString<8> Name(Record.begin()+1, Record.end());
 
       unsigned NewKind = TheModule->getMDKindID(Name.str());
-      if (!MDKindMap.insert(MISTD::make_pair(Kind, NewKind)).second)
+      if (!MDKindMap.insert(std::make_pair(Kind, NewKind)).second)
         return Error(ConflictingMETADATA_KINDRecords);
       break;
     }
@@ -1074,9 +1074,9 @@ uint64_t BitcodeReader::decodeSignRotatedValue(uint64_t V) {
 /// ResolveGlobalAndAliasInits - Resolve all of the initializers for global
 /// values and aliases that we can.
 error_code BitcodeReader::ResolveGlobalAndAliasInits() {
-  MISTD::vector<MISTD::pair<GlobalVariable*, unsigned> > GlobalInitWorklist;
-  MISTD::vector<MISTD::pair<GlobalAlias*, unsigned> > AliasInitWorklist;
-  MISTD::vector<MISTD::pair<Function*, unsigned> > FunctionPrefixWorklist;
+  std::vector<std::pair<GlobalVariable*, unsigned> > GlobalInitWorklist;
+  std::vector<std::pair<GlobalAlias*, unsigned> > AliasInitWorklist;
+  std::vector<std::pair<Function*, unsigned> > FunctionPrefixWorklist;
 
   GlobalInitWorklist.swap(GlobalInits);
   AliasInitWorklist.swap(AliasInits);
@@ -1127,7 +1127,7 @@ error_code BitcodeReader::ResolveGlobalAndAliasInits() {
 
 static APInt ReadWideAPInt(ArrayRef<uint64_t> Vals, unsigned TypeBits) {
   SmallVector<uint64_t, 8> Words(Vals.size());
-  MISTD::transform(Vals.begin(), Vals.end(), Words.begin(),
+  std::transform(Vals.begin(), Vals.end(), Words.begin(),
                  BitcodeReader::decodeSignRotatedValue);
 
   return APInt(TypeBits, Words);
@@ -1296,14 +1296,14 @@ error_code BitcodeReader::ParseConstants() {
           V = ConstantDataArray::get(Context, Elts);
       } else if (EltTy->isFloatTy()) {
         SmallVector<float, 16> Elts(Size);
-        MISTD::transform(Record.begin(), Record.end(), Elts.begin(), BitsToFloat);
+        std::transform(Record.begin(), Record.end(), Elts.begin(), BitsToFloat);
         if (isa<VectorType>(CurTy))
           V = ConstantDataVector::get(Context, Elts);
         else
           V = ConstantDataArray::get(Context, Elts);
       } else if (EltTy->isDoubleTy()) {
         SmallVector<double, 16> Elts(Size);
-        MISTD::transform(Record.begin(), Record.end(), Elts.begin(),
+        std::transform(Record.begin(), Record.end(), Elts.begin(),
                        BitsToDouble);
         if (isa<VectorType>(CurTy))
           V = ConstantDataVector::get(Context, Elts);
@@ -1468,7 +1468,7 @@ error_code BitcodeReader::ParseConstants() {
     case bitc::CST_CODE_INLINEASM_OLD: {
       if (Record.size() < 2)
         return Error(InvalidRecord);
-      MISTD::string AsmStr, ConstrStr;
+      std::string AsmStr, ConstrStr;
       bool HasSideEffects = Record[0] & 1;
       bool IsAlignStack = Record[0] >> 1;
       unsigned AsmStrSize = Record[1];
@@ -1492,7 +1492,7 @@ error_code BitcodeReader::ParseConstants() {
     case bitc::CST_CODE_INLINEASM: {
       if (Record.size() < 2)
         return Error(InvalidRecord);
-      MISTD::string AsmStr, ConstrStr;
+      std::string AsmStr, ConstrStr;
       bool HasSideEffects = Record[0] & 1;
       bool IsAlignStack = (Record[0] >> 1) & 1;
       unsigned AsmDialect = Record[0] >> 2;
@@ -1541,7 +1541,7 @@ error_code BitcodeReader::ParseConstants() {
                                                     Type::getInt8Ty(Context),
                                             false, GlobalValue::InternalLinkage,
                                                     0, "");
-        BlockAddrFwdRefs[Fn].push_back(MISTD::make_pair(Record[2], FwdRef));
+        BlockAddrFwdRefs[Fn].push_back(std::make_pair(Record[2], FwdRef));
         V = FwdRef;
       }
       break;
@@ -1622,7 +1622,7 @@ error_code BitcodeReader::GlobalCleanup() {
        FI != FE; ++FI) {
     Function *NewFn;
     if (UpgradeIntrinsicFunction(FI, NewFn))
-      UpgradedIntrinsics.push_back(MISTD::make_pair(FI, NewFn));
+      UpgradedIntrinsics.push_back(std::make_pair(FI, NewFn));
   }
 
   // Look for global variables which need to be renamed.
@@ -1632,8 +1632,8 @@ error_code BitcodeReader::GlobalCleanup() {
     UpgradeGlobalVariable(GI);
   // Force deallocation of memory for these vectors to favor the client that
   // want lazy deserialization.
-  MISTD::vector<MISTD::pair<GlobalVariable*, unsigned> >().swap(GlobalInits);
-  MISTD::vector<MISTD::pair<GlobalAlias*, unsigned> >().swap(AliasInits);
+  std::vector<std::pair<GlobalVariable*, unsigned> >().swap(GlobalInits);
+  std::vector<std::pair<GlobalAlias*, unsigned> >().swap(AliasInits);
   return error_code::success();
 }
 
@@ -1644,8 +1644,8 @@ error_code BitcodeReader::ParseModule(bool Resume) {
     return Error(InvalidRecord);
 
   SmallVector<uint64_t, 64> Record;
-  MISTD::vector<MISTD::string> SectionTable;
-  MISTD::vector<MISTD::string> GCTable;
+  std::vector<std::string> SectionTable;
+  std::vector<std::string> GCTable;
 
   // Read all the records for this module.
   while (1) {
@@ -1698,7 +1698,7 @@ error_code BitcodeReader::ParseModule(bool Resume) {
         // If this is the first function body we've seen, reverse the
         // FunctionsWithBodies list.
         if (!SeenFirstFunctionBody) {
-          MISTD::reverse(FunctionsWithBodies.begin(), FunctionsWithBodies.end());
+          std::reverse(FunctionsWithBodies.begin(), FunctionsWithBodies.end());
           if (error_code EC = GlobalCleanup())
             return EC;
           SeenFirstFunctionBody = true;
@@ -1751,21 +1751,21 @@ error_code BitcodeReader::ParseModule(bool Resume) {
       break;
     }
     case bitc::MODULE_CODE_TRIPLE: {  // TRIPLE: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       TheModule->setTargetTriple(S);
       break;
     }
     case bitc::MODULE_CODE_DATALAYOUT: {  // DATALAYOUT: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       TheModule->setDataLayout(S);
       break;
     }
     case bitc::MODULE_CODE_ASM: {  // ASM: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       TheModule->setModuleInlineAsm(S);
@@ -1773,21 +1773,21 @@ error_code BitcodeReader::ParseModule(bool Resume) {
     }
     case bitc::MODULE_CODE_DEPLIB: {  // DEPLIB: [strchr x N]
       // FIXME: Remove in 4.0.
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       // Ignore value.
       break;
     }
     case bitc::MODULE_CODE_SECTIONNAME: {  // SECTIONNAME: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       SectionTable.push_back(S);
       break;
     }
     case bitc::MODULE_CODE_GCNAME: {  // SECTIONNAME: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       GCTable.push_back(S);
@@ -1810,7 +1810,7 @@ error_code BitcodeReader::ParseModule(bool Resume) {
       bool isConstant = Record[1];
       GlobalValue::LinkageTypes Linkage = GetDecodedLinkage(Record[3]);
       unsigned Alignment = (1 << Record[4]) >> 1;
-      MISTD::string Section;
+      std::string Section;
       if (Record[5]) {
         if (Record[5]-1 >= SectionTable.size())
           return Error(InvalidID);
@@ -1845,7 +1845,7 @@ error_code BitcodeReader::ParseModule(bool Resume) {
 
       // Remember which value to use for the global initializer.
       if (unsigned InitID = Record[2])
-        GlobalInits.push_back(MISTD::make_pair(NewGV, InitID-1));
+        GlobalInits.push_back(std::make_pair(NewGV, InitID-1));
       break;
     }
     // FUNCTION:  [type, callingconv, isproto, linkage, paramattr,
@@ -1888,7 +1888,7 @@ error_code BitcodeReader::ParseModule(bool Resume) {
         UnnamedAddr = Record[9];
       Func->setUnnamedAddr(UnnamedAddr);
       if (Record.size() > 10 && Record[10] != 0)
-        FunctionPrefixes.push_back(MISTD::make_pair(Func, Record[10]-1));
+        FunctionPrefixes.push_back(std::make_pair(Func, Record[10]-1));
       ValueList.push_back(Func);
 
       // If this is a function with a body, remember the prototype we are
@@ -1916,7 +1916,7 @@ error_code BitcodeReader::ParseModule(bool Resume) {
       if (Record.size() > 3)
         NewGA->setVisibility(GetDecodedVisibility(Record[3]));
       ValueList.push_back(NewGA);
-      AliasInits.push_back(MISTD::make_pair(NewGA, Record[1]));
+      AliasInits.push_back(std::make_pair(NewGA, Record[1]));
       break;
     }
     /// MODULE_CODE_PURGEVALS: [numvals]
@@ -1999,7 +1999,7 @@ error_code BitcodeReader::ParseBitcodeInto(Module *M) {
   }
 }
 
-error_code BitcodeReader::ParseModuleTriple(MISTD::string &Triple) {
+error_code BitcodeReader::ParseModuleTriple(std::string &Triple) {
   if (Stream.EnterSubBlock(bitc::MODULE_BLOCK_ID))
     return Error(InvalidRecord);
 
@@ -2024,7 +2024,7 @@ error_code BitcodeReader::ParseModuleTriple(MISTD::string &Triple) {
     switch (Stream.readRecord(Entry.ID, Record)) {
     default: break;  // Default behavior, ignore unknown content.
     case bitc::MODULE_CODE_TRIPLE: {  // TRIPLE: [strchr x N]
-      MISTD::string S;
+      std::string S;
       if (ConvertToString(Record, 0, S))
         return Error(InvalidRecord);
       Triple = S;
@@ -2035,7 +2035,7 @@ error_code BitcodeReader::ParseModuleTriple(MISTD::string &Triple) {
   }
 }
 
-error_code BitcodeReader::ParseTriple(MISTD::string &Triple) {
+error_code BitcodeReader::ParseTriple(std::string &Triple) {
   if (error_code EC = InitStream())
     return EC;
 
@@ -3006,10 +3006,10 @@ OutOfRecordLoop:
 
   // See if anything took the address of blocks in this function.  If so,
   // resolve them now.
-  DenseMap<Function*, MISTD::vector<BlockAddrRefTy> >::iterator BAFRI =
+  DenseMap<Function*, std::vector<BlockAddrRefTy> >::iterator BAFRI =
     BlockAddrFwdRefs.find(F);
   if (BAFRI != BlockAddrFwdRefs.end()) {
-    MISTD::vector<BlockAddrRefTy> &RefList = BAFRI->second;
+    std::vector<BlockAddrRefTy> &RefList = BAFRI->second;
     for (unsigned i = 0, e = RefList.size(); i != e; ++i) {
       unsigned BlockIdx = RefList[i].first;
       if (BlockIdx >= FunctionBBs.size())
@@ -3026,7 +3026,7 @@ OutOfRecordLoop:
   // Trim the value list down to the size it was before we parsed this function.
   ValueList.shrinkTo(ModuleValueListSize);
   MDValueList.shrinkTo(ModuleMDValueListSize);
-  MISTD::vector<BasicBlock*>().swap(FunctionBBs);
+  std::vector<BasicBlock*>().swap(FunctionBBs);
   return error_code::success();
 }
 
@@ -3134,7 +3134,7 @@ error_code BitcodeReader::MaterializeModule(Module *M) {
   // delete the old functions to clean up. We can't do this unless the entire
   // module is materialized because there could always be another function body
   // with calls to the old function.
-  for (MISTD::vector<MISTD::pair<Function*, Function*> >::iterator I =
+  for (std::vector<std::pair<Function*, Function*> >::iterator I =
        UpgradedIntrinsics.begin(), E = UpgradedIntrinsics.end(); I != E; ++I) {
     if (I->first != I->second) {
       for (Value::use_iterator UI = I->first->use_begin(),
@@ -3147,7 +3147,7 @@ error_code BitcodeReader::MaterializeModule(Module *M) {
       I->first->eraseFromParent();
     }
   }
-  MISTD::vector<MISTD::pair<Function*, Function*> >().swap(UpgradedIntrinsics);
+  std::vector<std::pair<Function*, Function*> >().swap(UpgradedIntrinsics);
 
   for (unsigned I = 0, E = InstsWithTBAATag.size(); I < E; I++)
     UpgradeInstWithTBAATag(InstsWithTBAATag[I]);
@@ -3214,7 +3214,7 @@ class BitcodeErrorCategoryType : public _do_message {
   const char *name() const LLVM_OVERRIDE {
     return "llvm.bitcode";
   }
-  MISTD::string message(int IE) const LLVM_OVERRIDE {
+  std::string message(int IE) const LLVM_OVERRIDE {
     BitcodeReader::ErrorType E = static_cast<BitcodeReader::ErrorType>(IE);
     switch (E) {
     case BitcodeReader::BitcodeStreamInvalidSize:
@@ -3274,7 +3274,7 @@ const error_category &BitcodeReader::BitcodeErrorCategory() {
 ///
 Module *llvm::getLazyBitcodeModule(MemoryBuffer *Buffer,
                                    LLVMContext& Context,
-                                   MISTD::string *ErrMsg) {
+                                   std::string *ErrMsg) {
   Module *M = new Module(Buffer->getBufferIdentifier(), Context);
   BitcodeReader *R = new BitcodeReader(Buffer, Context);
   M->setMaterializer(R);
@@ -3294,10 +3294,10 @@ Module *llvm::getLazyBitcodeModule(MemoryBuffer *Buffer,
 }
 
 
-Module *llvm::getStreamedBitcodeModule(const MISTD::string &name,
+Module *llvm::getStreamedBitcodeModule(const std::string &name,
                                        DataStreamer *streamer,
                                        LLVMContext &Context,
-                                       MISTD::string *ErrMsg) {
+                                       std::string *ErrMsg) {
   Module *M = new Module(name, Context);
   BitcodeReader *R = new BitcodeReader(streamer, Context);
   M->setMaterializer(R);
@@ -3314,7 +3314,7 @@ Module *llvm::getStreamedBitcodeModule(const MISTD::string &name,
 /// ParseBitcodeFile - Read the specified bitcode file, returning the module.
 /// If an error occurs, return null and fill in *ErrMsg if non-null.
 Module *llvm::ParseBitcodeFile(MemoryBuffer *Buffer, LLVMContext& Context,
-                               MISTD::string *ErrMsg){
+                               std::string *ErrMsg){
   Module *M = getLazyBitcodeModule(Buffer, Context, ErrMsg);
   if (!M) return 0;
 
@@ -3334,14 +3334,14 @@ Module *llvm::ParseBitcodeFile(MemoryBuffer *Buffer, LLVMContext& Context,
   return M;
 }
 
-MISTD::string llvm::getBitcodeTargetTriple(MemoryBuffer *Buffer,
+std::string llvm::getBitcodeTargetTriple(MemoryBuffer *Buffer,
                                          LLVMContext& Context,
-                                         MISTD::string *ErrMsg) {
+                                         std::string *ErrMsg) {
   BitcodeReader *R = new BitcodeReader(Buffer, Context);
   // Don't let the BitcodeReader dtor delete 'Buffer'.
   R->setBufferOwned(false);
 
-  MISTD::string Triple("");
+  std::string Triple("");
   if (error_code EC = R->ParseTriple(Triple))
     if (ErrMsg)
       *ErrMsg = EC.message();

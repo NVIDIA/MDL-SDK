@@ -40,10 +40,10 @@
 #include "llvm/Support/ToolOutputFile.h"
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input file>"), cl::init("-"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Output filename"),
                cl::value_desc("filename"));
 
@@ -87,25 +87,25 @@ FileType("filetype", cl::init(OFT_AssemblyFile),
                   "Emit a native object ('.o') file"),
        clEnumValEnd));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 IncludeDirs("I", cl::desc("Directory of include files"),
             cl::value_desc("directory"), cl::Prefix);
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 ArchName("arch", cl::desc("Target arch to assemble for, "
                           "see -version for available targets"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 TripleName("triple", cl::desc("Target triple to assemble for, "
                               "see -version for available targets"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 MCPU("mcpu",
      cl::desc("Target a specific cpu type (-mcpu=help for details)"),
      cl::value_desc("cpu-name"),
      cl::init(""));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 MAttrs("mattr",
   cl::CommaSeparated,
   cl::desc("Target specific attributes (-mattr=help for details)"),
@@ -153,11 +153,11 @@ static cl::opt<bool>
 GenDwarfForAssembly("g", cl::desc("Generate dwarf debugging info for assembly "
                                   "source files"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 DebugCompilationDir("fdebug-compilation-dir",
                     cl::desc("Specifies the debug info's compilation dir"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 MainFileName("main-file-name",
              cl::desc("Specifies the name we should consider the input file"));
 
@@ -192,7 +192,7 @@ static const Target *GetTarget(const char *ProgName) {
   Triple TheTriple(Triple::normalize(TripleName));
 
   // Get the target specific parser.
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(ArchName, TheTriple,
                                                          Error);
   if (!TheTarget) {
@@ -209,7 +209,7 @@ static tool_output_file *GetOutputStream() {
   if (OutputFilename == "")
     OutputFilename = "-";
 
-  MISTD::string Err;
+  std::string Err;
   tool_output_file *Out =
       new tool_output_file(OutputFilename.c_str(), Err, sys::fs::F_Binary);
   if (!Err.empty()) {
@@ -221,7 +221,7 @@ static tool_output_file *GetOutputStream() {
   return Out;
 }
 
-static MISTD::string DwarfDebugFlags;
+static std::string DwarfDebugFlags;
 static void setDwarfDebugFlags(int argc, char **argv) {
   if (!getenv("RC_DEBUG_OPTIONS"))
     return;
@@ -232,7 +232,7 @@ static void setDwarfDebugFlags(int argc, char **argv) {
   }
 }
 
-static MISTD::string DwarfDebugProducer;
+static std::string DwarfDebugProducer;
 static void setDwarfDebugProducer(void) {
   if(!getenv("DEBUG_PRODUCER"))
     return;
@@ -405,7 +405,7 @@ int main(int argc, char **argv) {
     Ctx.setMainFileName(MainFileName);
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
   if (MAttrs.size()) {
     SubtargetFeatures Features;
     for (unsigned i = 0; i != MAttrs.size(); ++i)

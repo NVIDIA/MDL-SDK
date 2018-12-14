@@ -47,11 +47,11 @@ ClPrintInlining("inlining", cl::init(true),
 static cl::opt<bool>
 ClDemangle("demangle", cl::init(true), cl::desc("Demangle function names"));
 
-static cl::opt<MISTD::string> ClDefaultArch("default-arch", cl::init(""),
+static cl::opt<std::string> ClDefaultArch("default-arch", cl::init(""),
                                           cl::desc("Default architecture "
                                                    "(for multi-arch objects)"));
 
-static bool parseCommand(bool &IsData, MISTD::string &ModuleName,
+static bool parseCommand(bool &IsData, std::string &ModuleName,
                          uint64_t &ModuleOffset) {
   const char *kDataCmd = "DATA ";
   const char *kCodeCmd = "CODE ";
@@ -62,7 +62,7 @@ static bool parseCommand(bool &IsData, MISTD::string &ModuleName,
     return false;
   IsData = false;
   ModuleName = "";
-  MISTD::string ModuleOffsetStr = "";
+  std::string ModuleOffsetStr = "";
   char *pos = InputString;
   if (strncmp(pos, kDataCmd, strlen(kDataCmd)) == 0) {
     IsData = true;
@@ -82,17 +82,17 @@ static bool parseCommand(bool &IsData, MISTD::string &ModuleName,
     char *end = strchr(pos, quote);
     if (end == 0)
       return false;
-    ModuleName = MISTD::string(pos, end - pos);
+    ModuleName = std::string(pos, end - pos);
     pos = end + 1;
   } else {
     int name_length = strcspn(pos, kDelimiters);
-    ModuleName = MISTD::string(pos, name_length);
+    ModuleName = std::string(pos, name_length);
     pos += name_length;
   }
   // Skip delimiters and parse module offset.
   pos += strspn(pos, kDelimiters);
   int offset_length = strcspn(pos, kDelimiters);
-  ModuleOffsetStr = MISTD::string(pos, offset_length);
+  ModuleOffsetStr = std::string(pos, offset_length);
   if (StringRef(ModuleOffsetStr).getAsInteger(0, ModuleOffset))
     return false;
   return true;
@@ -110,10 +110,10 @@ int main(int argc, char **argv) {
   LLVMSymbolizer Symbolizer(Opts);
 
   bool IsData = false;
-  MISTD::string ModuleName;
+  std::string ModuleName;
   uint64_t ModuleOffset;
   while (parseCommand(IsData, ModuleName, ModuleOffset)) {
-    MISTD::string Result =
+    std::string Result =
         IsData ? Symbolizer.symbolizeData(ModuleName, ModuleOffset)
                : Symbolizer.symbolizeCode(ModuleName, ModuleOffset);
     outs() << Result << "\n";

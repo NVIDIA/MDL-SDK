@@ -57,7 +57,7 @@ StructLayout::StructLayout(StructType *ST, const DataLayout &DL) {
       StructSize = DataLayout::RoundUpAlignment(StructSize, TyAlign);
 
     // Keep track of maximum alignment constraint.
-    StructAlignment = MISTD::max(TyAlign, StructAlignment);
+    StructAlignment = std::max(TyAlign, StructAlignment);
 
     MemberOffsets[i] = StructSize;
     StructSize += DL.getTypeAllocSize(Ty); // Consume space for this data item
@@ -77,7 +77,7 @@ StructLayout::StructLayout(StructType *ST, const DataLayout &DL) {
 /// return the structure index that contains it.
 unsigned StructLayout::getElementContainingOffset(uint64_t Offset) const {
   const uint64_t *SI =
-    MISTD::upper_bound(&MemberOffsets[0], &MemberOffsets[NumElements], Offset);
+    std::upper_bound(&MemberOffsets[0], &MemberOffsets[NumElements], Offset);
   assert(SI != &MemberOffsets[0] && "Offset not in structure type!");
   --SI;
   assert(*SI <= Offset && "upper_bound didn't work");
@@ -177,9 +177,9 @@ void DataLayout::init(StringRef Desc) {
 }
 
 /// Checked version of split, to ensure mandatory subparts.
-static MISTD::pair<StringRef, StringRef> split(StringRef Str, char Separator) {
+static std::pair<StringRef, StringRef> split(StringRef Str, char Separator) {
   assert(!Str.empty() && "parse error, string can't be empty here");
-  MISTD::pair<StringRef, StringRef> Split = Str.split(Separator);
+  std::pair<StringRef, StringRef> Split = Str.split(Separator);
   assert((!Split.second.empty() || Split.first == Str) &&
          "a trailing separator is not allowed");
   return Split;
@@ -202,7 +202,7 @@ static unsigned inBytes(unsigned Bits) {
 void DataLayout::parseSpecifier(StringRef Desc) {
   while (!Desc.empty()) {
     // Split at '-'.
-    MISTD::pair<StringRef, StringRef> Split = split(Desc, '-');
+    std::pair<StringRef, StringRef> Split = split(Desc, '-');
     Desc = Split.second;
 
     // Split at ':'.
@@ -486,8 +486,8 @@ void DataLayout::deleteLayoutCache() const
   LayoutMap = 0;
 }
 
-MISTD::string DataLayout::getStringRepresentation() const {
-  MISTD::string Result;
+std::string DataLayout::getStringRepresentation() const {
+  std::string Result;
   raw_string_ostream OS(Result);
 
   OS << (LittleEndian ? "e" : "E");
@@ -500,7 +500,7 @@ MISTD::string DataLayout::getStringRepresentation() const {
       pib != pie; ++pib) {
     addrSpaces.push_back(pib->first);
   }
-  MISTD::sort(addrSpaces.begin(), addrSpaces.end());
+  std::sort(addrSpaces.begin(), addrSpaces.end());
   for (SmallVectorImpl<unsigned>::iterator asb = addrSpaces.begin(),
       ase = addrSpaces.end(); asb != ase; ++asb) {
     const PointerAlignElem &PI = Pointers.find(*asb)->second;
@@ -573,7 +573,7 @@ unsigned DataLayout::getAlignment(Type *Ty, bool abi_or_pref) const {
     // Get the layout annotation... which is lazily created on demand.
     const StructLayout *Layout = getStructLayout(cast<StructType>(Ty));
     unsigned Align = getAlignmentInfo(AGGREGATE_ALIGN, 0, abi_or_pref, Ty);
-    return MISTD::max(Align, Layout->getAlignment());
+    return std::max(Align, Layout->getAlignment());
   }
   case Type::IntegerTyID:
     AlignType = INTEGER_ALIGN;
@@ -653,7 +653,7 @@ Type *DataLayout::getSmallestLegalIntType(LLVMContext &C, unsigned Width) const 
 unsigned DataLayout::getLargestLegalIntTypeSize() const {
   unsigned MaxWidth = 0;
   for (unsigned i = 0, e = (unsigned)LegalIntWidths.size(); i != e; ++i)
-    MaxWidth = MISTD::max<unsigned>(MaxWidth, LegalIntWidths[i]);
+    MaxWidth = std::max<unsigned>(MaxWidth, LegalIntWidths[i]);
   return MaxWidth;
 }
 
@@ -704,7 +704,7 @@ unsigned DataLayout::getPreferredAlignment(const GlobalVariable *GV) const {
   if (GVAlignment >= Alignment) {
     Alignment = GVAlignment;
   } else if (GVAlignment != 0) {
-    Alignment = MISTD::max(GVAlignment, getABITypeAlignment(ElemType));
+    Alignment = std::max(GVAlignment, getABITypeAlignment(ElemType));
   }
 
   if (GV->hasInitializer() && GVAlignment == 0) {

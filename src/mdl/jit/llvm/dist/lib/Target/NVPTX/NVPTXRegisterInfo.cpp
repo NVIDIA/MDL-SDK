@@ -26,7 +26,7 @@
 using namespace llvm;
 
 namespace llvm {
-MISTD::string getNVPTXRegClassName(TargetRegisterClass const *RC) {
+std::string getNVPTXRegClassName(TargetRegisterClass const *RC) {
   if (RC == &NVPTX::Float32RegsRegClass) {
     return ".f32";
   }
@@ -48,7 +48,7 @@ MISTD::string getNVPTXRegClassName(TargetRegisterClass const *RC) {
   return "";
 }
 
-MISTD::string getNVPTXRegClassStr(TargetRegisterClass const *RC) {
+std::string getNVPTXRegClassStr(TargetRegisterClass const *RC) {
   if (RC == &NVPTX::Float32RegsRegClass) {
     return "%f";
   }

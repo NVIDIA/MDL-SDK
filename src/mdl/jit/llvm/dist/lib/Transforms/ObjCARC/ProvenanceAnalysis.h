@@ -49,7 +49,7 @@ namespace objcarc {
 class ProvenanceAnalysis {
   AliasAnalysis *AA;
 
-  typedef MISTD::pair<const Value *, const Value *> ValuePairTy;
+  typedef std::pair<const Value *, const Value *> ValuePairTy;
   typedef DenseMap<ValuePairTy, bool> CachedResultsTy;
   CachedResultsTy CachedResults;
 

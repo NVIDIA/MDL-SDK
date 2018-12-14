@@ -110,7 +110,7 @@ GTEST_API_ TimeInMillis GetTimeInMillis();
 GTEST_API_ bool ShouldUseColor(bool stdout_is_tty);
 
 // Formats the given time in milliseconds as seconds.
-GTEST_API_ MISTD::string FormatTimeInMillisAsSeconds(TimeInMillis ms);
+GTEST_API_ std::string FormatTimeInMillisAsSeconds(TimeInMillis ms);
 
 // Parses a string for an Int32 flag, in the form of "--flag=value".
 //
@@ -270,7 +270,7 @@ GTEST_API_ bool ShouldRunTestOnShard(
 // the given predicate.
 template <class Container, typename Predicate>
 inline int CountIf(const Container& c, Predicate predicate) {
-  // Implemented as an explicit loop since MISTD::count_if() in libCstd on
+  // Implemented as an explicit loop since std::count_if() in libCstd on
   // Solaris has a non-standard signature.
   int count = 0;
   for (typename Container::const_iterator it = c.begin(); it != c.end(); ++it) {
@@ -283,13 +283,13 @@ inline int CountIf(const Container& c, Predicate predicate) {
 // Applies a function/functor to each element in the container.
 template <class Container, typename Functor>
 void ForEach(const Container& c, Functor functor) {
-  MISTD::for_each(c.begin(), c.end(), functor);
+  std::for_each(c.begin(), c.end(), functor);
 }
 
 // Returns the i-th element of the vector, or default_value if i is not
 // in range [0, v.size()).
 template <typename E>
-inline E GetElementOr(const MISTD::vector<E>& v, int i, E default_value) {
+inline E GetElementOr(const std::vector<E>& v, int i, E default_value) {
   return (i < 0 || i >= static_cast<int>(v.size())) ? default_value : v[i];
 }
 
@@ -299,7 +299,7 @@ inline E GetElementOr(const MISTD::vector<E>& v, int i, E default_value) {
 // shuffle to the end of the vector.
 template <typename E>
 void ShuffleRange(internal::Random* random, int begin, int end,
-                  MISTD::vector<E>* v) {
+                  std::vector<E>* v) {
   const int size = static_cast<int>(v->size());
   GTEST_CHECK_(0 <= begin && begin <= size)
       << "Invalid shuffle range start " << begin << ": must be in range [0, "
@@ -313,13 +313,13 @@ void ShuffleRange(internal::Random* random, int begin, int end,
   for (int range_width = end - begin; range_width >= 2; range_width--) {
     const int last_in_range = begin + range_width - 1;
     const int selected = begin + random->Generate(range_width);
-    MISTD::swap((*v)[selected], (*v)[last_in_range]);
+    std::swap((*v)[selected], (*v)[last_in_range]);
   }
 }
 
 // Performs an in-place shuffle of the vector's elements.
 template <typename E>
-inline void Shuffle(internal::Random* random, MISTD::vector<E>* v) {
+inline void Shuffle(internal::Random* random, std::vector<E>* v) {
   ShuffleRange(random, 0, static_cast<int>(v->size()), v);
 }
 
@@ -717,13 +717,13 @@ class GTEST_API_ UnitTestImpl {
 
   // Returns the vector of environments that need to be set-up/torn-down
   // before/after the tests are run.
-  MISTD::vector<Environment*>& environments() { return environments_; }
+  std::vector<Environment*>& environments() { return environments_; }
 
   // Getters for the per-thread Google Test trace stack.
-  MISTD::vector<TraceInfo>& gtest_trace_stack() {
+  std::vector<TraceInfo>& gtest_trace_stack() {
     return *(gtest_trace_stack_.pointer());
   }
-  const MISTD::vector<TraceInfo>& gtest_trace_stack() const {
+  const std::vector<TraceInfo>& gtest_trace_stack() const {
     return gtest_trace_stack_.get();
   }
 
@@ -814,17 +814,17 @@ class GTEST_API_ UnitTestImpl {
 
   // The vector of environments that need to be set-up/torn-down
   // before/after the tests are run.
-  MISTD::vector<Environment*> environments_;
+  std::vector<Environment*> environments_;
 
   // The vector of TestCases in their original order.  It owns the
   // elements in the vector.
-  MISTD::vector<TestCase*> test_cases_;
+  std::vector<TestCase*> test_cases_;
 
   // Provides a level of indirection for the test case list to allow
   // easy shuffling and restoring the test case order.  The i-th
   // element of this vector is the index of the i-th test case in the
   // shuffled order.
-  MISTD::vector<int> test_case_indices_;
+  std::vector<int> test_case_indices_;
 
 #if GTEST_HAS_PARAM_TEST
   // ParameterizedTestRegistry object used to register value-parameterized
@@ -890,7 +890,7 @@ class GTEST_API_ UnitTestImpl {
 #endif  // GTEST_HAS_DEATH_TEST
 
   // A per-thread stack of traces created by the SCOPED_TRACE() macro.
-  internal::ThreadLocal<MISTD::vector<TraceInfo> > gtest_trace_stack_;
+  internal::ThreadLocal<std::vector<TraceInfo> > gtest_trace_stack_;
 
   // The value of GTEST_FLAG(catch_exceptions) at the moment RunAllTests()
   // starts.
@@ -964,10 +964,10 @@ class AutoHandle {
 
 // Attempts to parse a string into a positive integer pointed to by the
 // number parameter.  Returns true if that is possible.
-// GTEST_HAS_DEATH_TEST implies that we have ::MISTD::string, so we can use
+// GTEST_HAS_DEATH_TEST implies that we have ::std::string, so we can use
 // it here.
 template <typename Integer>
-bool ParseNaturalNumber(const ::MISTD::string& str, Integer* number) {
+bool ParseNaturalNumber(const ::std::string& str, Integer* number) {
   // Fail fast if the given string does not begin with a digit;
   // this bypasses strtoXXX's "optional leading whitespace and plus
   // or minus sign" semantics, which are undesirable here.
@@ -1025,7 +1025,7 @@ class TestResultAccessor {
     test_result->ClearTestPartResults();
   }
 
-  static const MISTD::vector<testing::TestPartResult>& test_part_results(
+  static const std::vector<testing::TestPartResult>& test_part_results(
       const TestResult& test_result) {
     return test_result.test_part_results();
   }

@@ -1625,7 +1625,7 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
         if (val == NULL) continue;
         sorted_resources.push_back(Resource_index_pair(val, it->second.index));
     }
-    MISTD::sort(sorted_resources.begin(), sorted_resources.end(), Resource_index_pair_compare());
+    std::sort(sorted_resources.begin(), sorted_resources.end(), Resource_index_pair_compare());
 
     for (size_t i = 0, n = sorted_resources.size(); i < n; ++i) {
         get_resource_index(sorted_resources[i].val);

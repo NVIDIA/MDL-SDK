@@ -149,11 +149,11 @@ findIndexForHandle(MachineOperand &Op, MachineFunction &MF, unsigned &Idx) {
 
     assert(TexHandleDef.getOperand(6).isSymbol() && "Load is not a symbol!");
     StringRef Sym = TexHandleDef.getOperand(6).getSymbolName();
-    MISTD::string ParamBaseName = MF.getName();
+    std::string ParamBaseName = MF.getName();
     ParamBaseName += "_param_";
     assert(Sym.startswith(ParamBaseName) && "Invalid symbol reference");
     unsigned Param = atoi(Sym.data()+ParamBaseName.size());
-    MISTD::string NewSym;
+    std::string NewSym;
     raw_string_ostream NewSymStr(NewSym);
     NewSymStr << MF.getFunction()->getName() << "_param_" << Param;
 

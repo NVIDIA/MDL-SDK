@@ -53,7 +53,7 @@ namespace ATTR {
 
 using namespace LOG;
 using namespace CONT;
-using namespace MISTD;
+using namespace std;
 
 // iterate over a type using the given type iterator and serialize all data
 // to the given serializer. This is able to handle structs as well as static

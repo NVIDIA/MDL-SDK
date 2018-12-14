@@ -29,16 +29,16 @@ namespace llvm {
 #define NVCL_IMAGE3D_READONLY_FUNCNAME "__is_image3D_readonly"
 
 class NVVMAnnotations {
-    typedef MISTD::map<MISTD::string, MISTD::vector<unsigned> > key_val_pair_t;
-    typedef MISTD::map<const GlobalValue *, key_val_pair_t> global_val_annot_t;
-    typedef MISTD::map<const Module *, global_val_annot_t> per_module_annot_t;
+    typedef std::map<std::string, std::vector<unsigned> > key_val_pair_t;
+    typedef std::map<const GlobalValue *, key_val_pair_t> global_val_annot_t;
+    typedef std::map<const Module *, global_val_annot_t> per_module_annot_t;
 
 public:
     NVVMAnnotations() {}
 
-    bool findOneNVVMAnnotation(const llvm::GlobalValue *, MISTD::string, unsigned &) const;
-    bool findAllNVVMAnnotation(const llvm::GlobalValue *, MISTD::string,
-                               MISTD::vector<unsigned> &) const;
+    bool findOneNVVMAnnotation(const llvm::GlobalValue *, std::string, unsigned &) const;
+    bool findAllNVVMAnnotation(const llvm::GlobalValue *, std::string,
+                               std::vector<unsigned> &) const;
 
     bool isTexture(const llvm::Value &) const;
     bool isSurface(const llvm::Value &) const;
@@ -72,21 +72,21 @@ private:
 
 bool getAlign(const llvm::CallInst &, unsigned index, unsigned &);
 
-MISTD::string getTextureName(const llvm::Value &);
-MISTD::string getSurfaceName(const llvm::Value &);
-MISTD::string getSamplerName(const llvm::Value &);
+std::string getTextureName(const llvm::Value &);
+std::string getSurfaceName(const llvm::Value &);
+std::string getSamplerName(const llvm::Value &);
 
 bool isBarrierIntrinsic(llvm::Intrinsic::ID);
 bool isMemorySpaceTransferIntrinsic(Intrinsic::ID id);
 const Value *skipPointerTransfer(const Value *V, bool ignore_GEP_indices);
 const Value *
-skipPointerTransfer(const Value *V, MISTD::set<const Value *> &processed);
+skipPointerTransfer(const Value *V, std::set<const Value *> &processed);
 BasicBlock *getParentBlock(Value *v);
 Function *getParentFunction(Value *v);
 void dumpBlock(Value *v, char *blockName);
 Instruction *getInst(Value *base, char *instName);
 void dumpInst(Value *base, char *instName);
-void dumpInstRec(Value *v, MISTD::set<Instruction *> *visited);
+void dumpInstRec(Value *v, std::set<Instruction *> *visited);
 void dumpInstRec(Value *v);
 void dumpParent(Value *v);
 

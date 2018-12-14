@@ -223,7 +223,7 @@ static void EmitMSInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
         }
       }
       if (Error) {
-        MISTD::string msg;
+        std::string msg;
         raw_string_ostream Msg(msg);
         Msg << "invalid operand in inline asm: '" << AsmStr << "'";
         MMI->getModule()->getContext().emitError(LocCookie, Msg.str());
@@ -315,7 +315,7 @@ static void EmitGCCInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
           report_fatal_error("Unterminated ${:foo} operand in inline asm"
                              " string: '" + Twine(AsmStr) + "'");
 
-        MISTD::string Val(StrStart, StrEnd);
+        std::string Val(StrStart, StrEnd);
         AP->PrintSpecial(MI, OS, Val.c_str());
         LastEmitted = StrEnd+1;
         break;
@@ -395,7 +395,7 @@ static void EmitGCCInlineAsmStr(const char *AsmStr, const MachineInstr *MI,
           }
         }
         if (Error) {
-          MISTD::string msg;
+          std::string msg;
           raw_string_ostream Msg(msg);
           Msg << "invalid operand in inline asm: '" << AsmStr << "'";
           MMI->getModule()->getContext().emitError(LocCookie, Msg.str());
@@ -507,7 +507,7 @@ void AsmPrinter::PrintSpecial(const MachineInstr *MI, raw_ostream &OS,
     }
     OS << Counter;
   } else {
-    MISTD::string msg;
+    std::string msg;
     raw_string_ostream Msg(msg);
     Msg << "Unknown special formatter '" << Code
          << "' for machine instr: " << *MI;

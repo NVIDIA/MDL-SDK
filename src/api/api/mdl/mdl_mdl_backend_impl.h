@@ -79,7 +79,7 @@ public:
 
     virtual mi::Sint32 set_option_binary( const char* name, const char* data, mi::Size size);
 
-    virtual const mi::neuraylib::ITarget_code* translate_environment(
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_environment(
         mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::IFunction_call* call,
         mi::Float32 mdl_meters_per_scene_unit,
@@ -88,26 +88,40 @@ public:
         const char* fname,
         mi::Sint32* errors);
 
+    virtual const mi::neuraylib::ITarget_code* translate_environment(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::IFunction_call* call,
+        const char* fname,
+        mi::neuraylib::IMdl_execution_context* context);
+
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_material_expression(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* material,
+        const char* path,
+        const char* fname,
+        mi::Sint32* errors);
+
     virtual const mi::neuraylib::ITarget_code* translate_material_expression(
         mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::ICompiled_material* material,
         const char* path,
         const char* fname,
-        mi::Sint32* errors);
+        mi::neuraylib::IMdl_execution_context* context);
 
     virtual const mi::Uint8* get_device_library( mi::Size &size) const;
 
-    virtual const mi::neuraylib::ITarget_code* translate_material_expression_uniform_state(
-        mi::neuraylib::ITransaction* transaction,
-        const mi::neuraylib::ICompiled_material* material,
-        const char* path,
-        const char* fname,
-        const mi::Float32_4_4_struct& world_to_obj,
-        const mi::Float32_4_4_struct& obj_to_world,
-        mi::Sint32 object_id,
-        mi::Sint32* errors);
+    virtual const mi::neuraylib::ITarget_code*
+        deprecated_translate_material_expression_uniform_state(
+            mi::neuraylib::ITransaction* transaction,
+            const mi::neuraylib::ICompiled_material* material,
+            const char* path,
+            const char* fname,
+            const mi::Float32_4_4_struct& world_to_obj,
+            const mi::Float32_4_4_struct& obj_to_world,
+            mi::Sint32 object_id,
+            mi::Sint32* errors);
 
-    virtual const mi::neuraylib::ITarget_code* translate_material_expressions(
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_material_expressions(
         mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::ICompiled_material* material,
         const char* const paths[],
@@ -115,7 +129,7 @@ public:
         const char* fname,
         mi::Sint32* errors);
 
-    virtual const mi::neuraylib::ITarget_code* translate_material_df(
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_material_df(
         mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::ICompiled_material* material,
         const char* path,
@@ -123,20 +137,42 @@ public:
         bool include_geometry_normal,
         mi::Sint32* errors);
 
-    virtual const mi::neuraylib::ITarget_code* translate_material(
+    virtual const mi::neuraylib::ITarget_code* translate_material_df(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* material,
+        const char* path,
+        const char* base_fname,
+        mi::neuraylib::IMdl_execution_context* context);
+
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_material(
         mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::ICompiled_material* material,
         mi::neuraylib::Target_function_description* function_descriptions,
         mi::Size description_count,
         bool include_geometry_normal);
 
-    virtual mi::neuraylib::ILink_unit *create_link_unit(
-        mi::neuraylib::ITransaction *transaction,
-        mi::Sint32                  *errors);
+    virtual const mi::neuraylib::ITarget_code* translate_material(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* material,
+        mi::neuraylib::Target_function_description* function_descriptions,
+        mi::Size description_count,
+        mi::neuraylib::IMdl_execution_context* context);
 
-    virtual const mi::neuraylib::ITarget_code *translate_link_unit(
-        mi::neuraylib::ILink_unit const *lu,
-        mi::Sint32                      *errors);
+    virtual mi::neuraylib::ILink_unit* deprecated_create_link_unit(
+        mi::neuraylib::ITransaction* transaction,
+        mi::Sint32* errors);
+
+    virtual mi::neuraylib::ILink_unit* create_link_unit(
+        mi::neuraylib::ITransaction* transaction,
+        mi::neuraylib::IMdl_execution_context* context);
+
+    virtual const mi::neuraylib::ITarget_code* deprecated_translate_link_unit(
+        mi::neuraylib::ILink_unit const* lu,
+        mi::Sint32* errors);
+
+    virtual const mi::neuraylib::ITarget_code* translate_link_unit(
+        mi::neuraylib::ILink_unit const* lu,
+        mi::neuraylib::IMdl_execution_context* context);
 
 private:
     /// Get the internal backend.
@@ -165,19 +201,42 @@ public:
 
     /// Add an MDL environment function call as a function to this link unit.
     /// (see #mi::neuraylib::ILink_unit::add_environment for details)
-    virtual mi::Sint32 add_environment(
+    virtual mi::Sint32 deprecated_add_environment(
         mi::neuraylib::IFunction_call const *call,
         char const                          *fname,
         mi::Float32                         mdl_meters_per_scene_unit,
         mi::Float32                         mdl_wavelength_min,
         mi::Float32                         mdl_wavelength_max);
 
+    /// Add an MDL environment function call as a function to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_environment for details)
+    virtual mi::Sint32 add_environment(
+        mi::neuraylib::IFunction_call const     *call,
+        char const                              *fname,
+        mi::neuraylib::IMdl_execution_context   *context);
+
+    /// Add an expression that is part of an MDL material instance as a function to this
+    /// (see #mi::neuraylib::ILink_unit::add_material_expression for details)
+    virtual mi::Sint32 deprecated_add_material_expression(
+        mi::neuraylib::ICompiled_material const *material,
+        char const                              *path,
+        char const                              *fname);
+
     /// Add an expression that is part of an MDL material instance as a function to this
     /// (see #mi::neuraylib::ILink_unit::add_material_expression for details)
     virtual mi::Sint32 add_material_expression(
         mi::neuraylib::ICompiled_material const *material,
         char const                              *path,
-        char const                              *fname);
+        char const                              *fname,
+        mi::neuraylib::IMdl_execution_context   *context);
+
+    /// Add an MDL distribution function to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_material_df for details)
+    virtual mi::Sint32 deprecated_add_material_df(
+        mi::neuraylib::ICompiled_material const *material,
+        char const                              *path,
+        char const                              *base_fname,
+        bool                                     include_geometry_normal);
 
     /// Add an MDL distribution function to this link unit.
     /// (see #mi::neuraylib::ILink_unit::add_material_df for details)
@@ -185,7 +244,15 @@ public:
         mi::neuraylib::ICompiled_material const *material,
         char const                              *path,
         char const                              *base_fname,
-        bool                                     include_geometry_normal);
+        mi::neuraylib::IMdl_execution_context   *context);
+
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_material for details)
+    virtual mi::Sint32 deprecated_add_material(
+        mi::neuraylib::ICompiled_material const    *material,
+        mi::neuraylib::Target_function_description *function_descriptions,
+        mi::Size                                    description_count,
+        bool                                        include_geometry_normal);
 
     /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
     /// (see #mi::neuraylib::ILink_unit::add_material for details)
@@ -193,7 +260,7 @@ public:
         mi::neuraylib::ICompiled_material const    *material,
         mi::neuraylib::Target_function_description *function_descriptions,
         mi::Size                                    description_count,
-        bool                                        include_geometry_normal);
+        mi::neuraylib::IMdl_execution_context      *context);
 
     BACKENDS::Link_unit const *get_link_unit() const { return &m_link_unit; }
 

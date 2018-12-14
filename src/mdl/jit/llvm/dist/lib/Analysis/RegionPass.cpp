@@ -36,7 +36,7 @@ RGPassManager::RGPassManager()
 }
 
 // Recurse through all subregions and all regions  into RQ.
-static void addRegionIntoQueue(Region *R, MISTD::deque<Region *> &RQ) {
+static void addRegionIntoQueue(Region *R, std::deque<Region *> &RQ) {
   RQ.push_back(R);
   for (Region::iterator I = R->begin(), E = R->end(); I != E; ++I)
     addRegionIntoQueue(*I, RQ);
@@ -63,7 +63,7 @@ bool RGPassManager::runOnFunction(Function &F) {
     return false;
 
   // Initialization
-  for (MISTD::deque<Region *>::const_iterator I = RQ.begin(), E = RQ.end();
+  for (std::deque<Region *>::const_iterator I = RQ.begin(), E = RQ.end();
        I != E; ++I) {
     Region *R = *I;
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
@@ -180,13 +180,13 @@ namespace {
 // PrintRegionPass
 class PrintRegionPass : public RegionPass {
 private:
-  MISTD::string Banner;
+  std::string Banner;
   raw_ostream &Out;       // raw_ostream to print on.
 
 public:
   static char ID;
   PrintRegionPass() : RegionPass(ID), Out(dbgs()) {}
-  PrintRegionPass(const MISTD::string &B, raw_ostream &o)
+  PrintRegionPass(const std::string &B, raw_ostream &o)
       : RegionPass(ID), Banner(B), Out(o) {}
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -270,6 +270,6 @@ void RegionPass::assignPassManager(PMStack &PMS,
 
 /// Get the printer pass
 Pass *RegionPass::createPrinterPass(raw_ostream &O,
-                                  const MISTD::string &Banner) const {
+                                  const std::string &Banner) const {
   return new PrintRegionPass(Banner, O);
 }

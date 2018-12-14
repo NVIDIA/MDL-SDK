@@ -36,6 +36,9 @@
 #include <sstream>
 #include <iostream>
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include <mi/mdl_sdk.h>
 
 #include "example_shared.h"
@@ -49,12 +52,11 @@
 #include <cuda_runtime.h>
 #include <vector_functions.h>
 
-
 // Structure representing an MDL texture, containing filtered and unfiltered CUDA texture
 // objects and the size of the texture.
 struct Texture
 {
-    Texture(cudaTextureObject_t  filtered_object,
+    explicit Texture(cudaTextureObject_t  filtered_object,
             cudaTextureObject_t  unfiltered_object,
             uint3                size)
         : filtered_object(filtered_object)
@@ -69,18 +71,113 @@ struct Texture
     float3               inv_size;           // the inverse values of the size of the texture
 };
 
+// Structure representing an MDL bsdf measurement.
+struct Mbsdf
+{
+    explicit Mbsdf()
+    {
+        for (unsigned i = 0; i < 2; ++i) {
+            has_data[i] = 0u;
+            eval_data[i] = 0;
+            sample_data[i] = 0;
+            albedo_data[i] = 0;
+            this->max_albedo[i] = 0.0f;
+            angular_resolution[i] = make_uint2(0u, 0u);
+            inv_angular_resolution[i] = make_float2(0.0f, 0.0f);
+            num_channels[i] = 0;
+        }
+    }
+
+    void Add(mi::neuraylib::Mbsdf_part part,
+             const uint2& angular_resolution, 
+             unsigned num_channels)
+    {
+        unsigned part_idx = static_cast<unsigned>(part);
+
+        this->has_data[part_idx] = 1u;
+        this->angular_resolution[part_idx] = angular_resolution;
+        this->inv_angular_resolution[part_idx] = make_float2(1.0f / float(angular_resolution.x),
+                                                             1.0f / float(angular_resolution.y));
+        this->num_channels[part_idx] = num_channels;
+    }
+
+    unsigned            has_data[2];            // true if there is a measurement for this part
+    cudaTextureObject_t eval_data[2];           // uses filter mode cudaFilterModeLinear
+    float               max_albedo[2];          // max albedo used to limit the multiplier
+    float*              sample_data[2];         // CDFs for sampling a BSDF measurement
+    float*              albedo_data[2];         // max albedo for each theta (isotropic)
+
+    uint2           angular_resolution[2];      // size of the dataset, needed for texel access
+    float2          inv_angular_resolution[2];  // the inverse values of the size of the dataset
+    unsigned        num_channels[2];            // number of color channels (1 or 3)
+};
+
+
+// Structure representing a Light Profile
+struct Lightprofile
+{
+    explicit Lightprofile(
+        uint2               angular_resolution = make_uint2(0, 0),
+        float2              theta_phi_start = make_float2(0.0f, 0.0f),
+        float2              theta_phi_delta = make_float2(0.0f, 0.0f),
+        float               candela_multiplier = 0.0f,
+        float               total_power = 0.0f,
+        cudaTextureObject_t eval_data = 0,
+        float               *cdf_data = nullptr)
+    : angular_resolution(angular_resolution)
+    , theta_phi_start(theta_phi_start)
+    , theta_phi_delta(theta_phi_delta)
+        , theta_phi_inv_delta(make_float2(0.0f, 0.0f))
+    , candela_multiplier(candela_multiplier)
+    , total_power(total_power)
+    , eval_data(eval_data)
+    , cdf_data(cdf_data)
+    {
+        theta_phi_inv_delta.x = theta_phi_delta.x ? (1.f / theta_phi_delta.x) : 0.f;
+        theta_phi_inv_delta.y = theta_phi_delta.y ? (1.f / theta_phi_delta.y) : 0.f;
+    }
+
+    uint2           angular_resolution;     // angular resolution of the grid
+    float2          theta_phi_start;        // start of the grid
+    float2          theta_phi_delta;        // angular step size
+    float2          theta_phi_inv_delta;    // inverse step size
+    float           candela_multiplier;     // factor to rescale the normalized data
+    float           total_power;
+
+    cudaTextureObject_t eval_data;          // normalized data sampled on grid
+    float*              cdf_data;           // CDFs for sampling a light profile
+};
+
 // Structure representing the resources used by the generated code of a target code.
 struct Target_code_data
 {
-    Target_code_data(size_t num_textures, CUdeviceptr textures, CUdeviceptr ro_data_segment)
+    Target_code_data(
+        size_t num_textures,
+        CUdeviceptr textures,
+        size_t num_mbsdfs,
+        CUdeviceptr mbsdfs,
+        size_t num_lightprofiles,
+        CUdeviceptr lightprofiles,
+                     CUdeviceptr ro_data_segment)
         : num_textures(num_textures)
         , textures(textures)
+        , num_mbsdfs(num_mbsdfs)
+        , mbsdfs(mbsdfs)
+        , num_lightprofiles(num_lightprofiles)
+        , lightprofiles(lightprofiles)
         , ro_data_segment(ro_data_segment)
     {}
 
-    size_t      num_textures;      // number of elements in the textures field
-    CUdeviceptr textures;          // a device pointer to a list of Texture objects, if used
-    CUdeviceptr ro_data_segment;   // a device pointer to the read-only data segment, if used
+    size_t      num_textures;           // number of elements in the textures field
+    CUdeviceptr textures;               // a device pointer to a list of Texture objects, if used
+
+    size_t      num_mbsdfs;             // number of elements in the mbsdfs field
+    CUdeviceptr mbsdfs;                 // a device pointer to a list of mbsdfs objects, if used
+
+    size_t      num_lightprofiles;     // number of elements in the lightprofiles field
+    CUdeviceptr lightprofiles;         // a device pointer to a list of mbsdfs objects, if used
+
+    CUdeviceptr ro_data_segment;        // a device pointer to the read-only data segment, if used
 };
 
 
@@ -158,6 +255,117 @@ void uninit_cuda(CUcontext cuda_context)
     check_cuda_success(cuCtxDestroy(cuda_context));
 }
 
+/// Helper struct to delete CUDA (and related) resources.
+template<typename T> struct Resource_deleter {
+    /*compile error*/
+};
+
+template<> struct Resource_deleter<cudaArray_t> {
+    void operator()(cudaArray_t res) { check_cuda_success(cudaFreeArray(res)); }
+};
+
+template<> struct Resource_deleter<cudaMipmappedArray_t> {
+    void operator()(cudaMipmappedArray_t res) { check_cuda_success(cudaFreeMipmappedArray(res)); }
+};
+
+template<> struct Resource_deleter<Texture> {
+    void operator()(Texture &res) {
+        check_cuda_success(cudaDestroyTextureObject(res.filtered_object));
+        check_cuda_success(cudaDestroyTextureObject(res.unfiltered_object));
+    }
+};
+
+template<> struct Resource_deleter<Mbsdf> {
+    void operator()(Mbsdf &res) {
+        for (size_t i = 0; i < 2; ++i) {
+            if (res.has_data[i] != 0u) {
+                check_cuda_success(cudaDestroyTextureObject(res.eval_data[i]));
+                check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(res.sample_data[i])));
+                check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(res.albedo_data[i])));
+            }
+        }
+    }
+};
+
+template<> struct Resource_deleter<Lightprofile> {
+    void operator()(Lightprofile res) {
+        if (res.cdf_data)
+            check_cuda_success(cuMemFree((CUdeviceptr)res.cdf_data));
+    }
+};
+
+template<> struct Resource_deleter<Target_code_data> {
+    void operator()(Target_code_data &res) {
+        if (res.textures)
+            check_cuda_success(cuMemFree(res.textures));
+        if (res.ro_data_segment)
+            check_cuda_success(cuMemFree(res.ro_data_segment));
+    }
+};
+
+template<> struct Resource_deleter<CUdeviceptr> {
+    void operator()(CUdeviceptr res) {
+        if (res != 0)
+            check_cuda_success(cuMemFree(res));
+    }
+};
+
+/// Holds one resource, not copyable.
+template<typename T, typename D = Resource_deleter<T> >
+struct Resource_handle {
+    Resource_handle(T res) : m_res(res) {}
+
+    ~Resource_handle() {
+        D deleter;
+        deleter(m_res);
+    }
+
+    T &get() { return m_res; }
+
+    T const &get() const { return m_res; }
+
+    void set(T res) { m_res = res; }
+
+private:
+    // No copy possible.
+    Resource_handle(Resource_handle const &);
+    Resource_handle &operator=(Resource_handle const &);
+
+private:
+    T m_res;
+};
+
+/// Hold one container of resources, not copyable.
+template<typename T, typename C = std::vector<T>, typename D = Resource_deleter<T> >
+struct Resource_container {
+    Resource_container() : m_cont() {}
+
+    ~Resource_container() {
+        D deleter;
+        typedef typename C::iterator I;
+        for (I it(m_cont.begin()), end(m_cont.end()); it != end; ++it) {
+            T &r = *it;
+            deleter(r);
+        }
+    }
+
+    C &operator*() { return m_cont; }
+
+    C const &operator*() const { return m_cont; }
+
+    C *operator->() { return &m_cont; }
+
+    C const *operator->() const { return &m_cont; }
+
+private:
+    // No copy possible.
+    Resource_container(Resource_container const &);
+    Resource_container &operator=(Resource_container const &);
+
+private:
+    C m_cont;
+};
+
 // Allocate memory on GPU and copy the given data to the allocated memory.
 CUdeviceptr gpu_mem_dup(void const *data, size_t size)
 {
@@ -168,10 +376,24 @@ CUdeviceptr gpu_mem_dup(void const *data, size_t size)
 }
 
 // Allocate memory on GPU and copy the given data to the allocated memory.
+template <typename T>
+CUdeviceptr gpu_mem_dup(Resource_handle<T> const *data, size_t size)
+{
+    return gpu_mem_dup((void *)data->get(), size);
+}
+
+// Allocate memory on GPU and copy the given data to the allocated memory.
 template<typename T>
 CUdeviceptr gpu_mem_dup(std::vector<T> const &data)
 {
     return gpu_mem_dup(&data[0], data.size() * sizeof(T));
+}
+
+// Allocate memory on GPU and copy the given data to the allocated memory.
+template<typename T, typename C>
+CUdeviceptr gpu_mem_dup(Resource_container<T,C> const &cont)
+{
+    return gpu_mem_dup(*cont);
 }
 
 
@@ -186,16 +408,14 @@ CUdeviceptr gpu_mem_dup(std::vector<T> const &data)
 class Material_gpu_context
 {
 public:
-    Material_gpu_context()
-        : m_device_target_code_data_list(0)
+    Material_gpu_context(bool enable_derivatives)
+        : m_enable_derivatives(enable_derivatives)
+        , m_device_target_code_data_list(0)
         , m_device_target_argument_block_list(0)
     {
         // Use first entry as "not-used" block
-        m_target_argument_block_list.push_back(0);
+        m_target_argument_block_list->push_back(0);
     }
-
-    // Free all acquired resources.
-    ~Material_gpu_context();
 
     // Prepare the needed data of the given target code.
     bool prepare_target_code_data(
@@ -213,8 +433,9 @@ public:
     CUdeviceptr get_device_target_argument_block(size_t i)
     {
         // First entry is the "not-used" block, so start at index 1.
-        if (i + 1 >= m_target_argument_block_list.size()) return 0;
-        return m_target_argument_block_list[i + 1];
+        if (i + 1 >= m_target_argument_block_list->size())
+            return 0;
+        return (*m_target_argument_block_list)[i + 1];
     }
 
     // Get the number of target argument blocks.
@@ -251,6 +472,9 @@ public:
     // block returned by get_argument_block().
     void update_device_argument_block(size_t i);
 private:
+    // Copy the image data of a canvas to a CUDA array.
+    void copy_canvas_to_cuda_array(cudaArray_t device_array, mi::neuraylib::ICanvas const *canvas);
+
     // Prepare the texture identified by the texture_index for use by the texture access functions
     // on the GPU.
     bool prepare_texture(
@@ -260,17 +484,36 @@ private:
         mi::Size                           texture_index,
         std::vector<Texture>              &textures);
 
+    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access 
+    // functions on the GPU.
+    bool prepare_mbsdf(
+        mi::neuraylib::ITransaction       *transaction,
+        mi::neuraylib::ITarget_code const *code_ptx,
+        mi::Size                           mbsdf_index,
+        std::vector<Mbsdf>                &mbsdfs);
+
+    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access 
+    // functions on the GPU.
+    bool prepare_lightprofile(
+        mi::neuraylib::ITransaction       *transaction,
+        mi::neuraylib::ITarget_code const *code_ptx,
+        mi::Size                           lightprofile_index,
+        std::vector<Lightprofile>        &lightprofiles);
+
+    // If true, mipmaps will be generated for all 2D textures.
+    bool m_enable_derivatives;
+
     // The device pointer of the target code data list.
-    CUdeviceptr m_device_target_code_data_list;
+    Resource_handle<CUdeviceptr> m_device_target_code_data_list;
 
     // List of all target code data objects owned by this context.
-    std::vector<Target_code_data> m_target_code_data_list;
+    Resource_container<Target_code_data> m_target_code_data_list;
 
     // The device pointer of the target argument block list.
-    CUdeviceptr m_device_target_argument_block_list;
+    Resource_handle<CUdeviceptr> m_device_target_argument_block_list;
 
     // List of all target argument blocks owned by this context.
-    std::vector<CUdeviceptr> m_target_argument_block_list;
+    Resource_container<CUdeviceptr> m_target_argument_block_list;
 
     // List of all local, writable copies of the target argument blocks.
     std::vector<mi::base::Handle<mi::neuraylib::ITarget_argument_block> > m_own_arg_blocks;
@@ -282,53 +525,51 @@ private:
     std::vector<mi::base::Handle<mi::neuraylib::ITarget_value_layout const> > m_arg_block_layouts;
 
     // List of all Texture objects owned by this context.
-    std::vector<Texture> m_all_textures;
+    Resource_container<Texture> m_all_textures;
+
+    // List of all MBSDFs objects owned by this context.
+    Resource_container<Mbsdf> m_all_mbsdfs;
+
+    // List of all Light profiles objects owned by this context.
+    Resource_container<Lightprofile> m_all_lightprofiles;
 
     // List of all CUDA arrays owned by this context.
-    std::vector<cudaArray_t> m_all_texture_arrays;
-};
+    Resource_container<cudaArray_t> m_all_texture_arrays;
 
-// Free all acquired resources.
-Material_gpu_context::~Material_gpu_context()
-{
-    for (std::vector<cudaArray_t>::iterator it = m_all_texture_arrays.begin(),
-            end = m_all_texture_arrays.end(); it != end; ++it) {
-        check_cuda_success(cudaFreeArray(*it));
-    }
-    for (std::vector<Texture>::iterator it = m_all_textures.begin(),
-            end = m_all_textures.end(); it != end; ++it) {
-        check_cuda_success(cudaDestroyTextureObject(it->filtered_object));
-        check_cuda_success(cudaDestroyTextureObject(it->unfiltered_object));
-    }
-    for (std::vector<Target_code_data>::iterator it = m_target_code_data_list.begin(),
-            end = m_target_code_data_list.end(); it != end; ++it) {
-        if (it->textures)
-            check_cuda_success(cuMemFree(it->textures));
-        if (it->ro_data_segment)
-            check_cuda_success(cuMemFree(it->ro_data_segment));
-    }
-    for (std::vector<CUdeviceptr>::iterator it = m_target_argument_block_list.begin(),
-            end = m_target_argument_block_list.end(); it != end; ++it) {
-        if (*it != 0)
-            check_cuda_success(cuMemFree(*it));
-    }
-    check_cuda_success(cuMemFree(m_device_target_code_data_list));
-}
+    // List of all CUDA mipmapped arrays owned by this context.
+    Resource_container<cudaMipmappedArray_t> m_all_texture_mipmapped_arrays;
+};
 
 // Get a device pointer to the target code data list.
 CUdeviceptr Material_gpu_context::get_device_target_code_data_list()
 {
-    if (!m_device_target_code_data_list)
-        m_device_target_code_data_list = gpu_mem_dup(m_target_code_data_list);
-    return m_device_target_code_data_list;
+    if (!m_device_target_code_data_list.get())
+        m_device_target_code_data_list.set(gpu_mem_dup(m_target_code_data_list));
+    return m_device_target_code_data_list.get();
 }
 
 // Get a device pointer to the target argument block list.
 CUdeviceptr Material_gpu_context::get_device_target_argument_block_list()
 {
-    if (!m_device_target_argument_block_list)
-        m_device_target_argument_block_list = gpu_mem_dup(m_target_argument_block_list);
-    return m_device_target_argument_block_list;
+    if (!m_device_target_argument_block_list.get())
+        m_device_target_argument_block_list.set(gpu_mem_dup(m_target_argument_block_list));
+    return m_device_target_argument_block_list.get();
+}
+
+// Copy the image data of a canvas to a CUDA array.
+void Material_gpu_context::copy_canvas_to_cuda_array(
+    cudaArray_t device_array,
+    mi::neuraylib::ICanvas const *canvas)
+{
+    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::Float32 const *data = static_cast<mi::Float32 const *>(tile->get_data());
+    check_cuda_success(cudaMemcpyToArray(
+        device_array,
+        /*wOffset=*/ 0,
+        /*hOffset=*/ 0,
+        data,
+        canvas->get_resolution_x() * canvas->get_resolution_y() * sizeof(float) * 4,
+        cudaMemcpyHostToDevice));
 }
 
 // Prepare the texture identified by the texture_index for use by the texture access functions
@@ -377,9 +618,11 @@ bool Material_gpu_context::prepare_texture(
         canvas = image_api->convert(canvas.get(), "Color");
     }
 
-    // Copy image data to GPU array depending on texture shape
     cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
-    cudaArray_t device_tex_data;
+    cudaResourceDesc res_desc;
+    memset(&res_desc, 0, sizeof(res_desc));
+
+    // Copy image data to GPU array depending on texture shape
     mi::neuraylib::ITarget_code::Texture_shape texture_shape =
         code_ptx->get_texture_shape(texture_index);
     if (texture_shape == mi::neuraylib::ITarget_code::Texture_shape_cube ||
@@ -395,15 +638,16 @@ bool Material_gpu_context::prepare_texture(
 
         // Allocate a 3D array on the GPU
         cudaExtent extent = make_cudaExtent(tex_width, tex_height, tex_layers);
+        cudaArray_t device_tex_array;
         check_cuda_success(cudaMalloc3DArray(
-            &device_tex_data, &channel_desc, extent,
+            &device_tex_array, &channel_desc, extent,
             texture_shape == mi::neuraylib::ITarget_code::Texture_shape_cube ?
             cudaArrayCubemap : 0));
 
         // Prepare the memcpy parameter structure
         cudaMemcpy3DParms copy_params;
         memset(&copy_params, 0, sizeof(copy_params));
-        copy_params.dstArray = device_tex_data;
+        copy_params.dstArray = device_tex_array;
         copy_params.extent = make_cudaExtent(tex_width, tex_height, 1);
         copy_params.kind = cudaMemcpyHostToDevice;
 
@@ -420,23 +664,52 @@ bool Material_gpu_context::prepare_texture(
 
             check_cuda_success(cudaMemcpy3D(&copy_params));
         }
+
+        res_desc.resType = cudaResourceTypeArray;
+        res_desc.res.array.array = device_tex_array;
+
+        m_all_texture_arrays->push_back(device_tex_array);
+    } else if (m_enable_derivatives) {
+        // mipmapped textures use CUDA mipmapped arrays
+        mi::Uint32 num_levels = image->get_levels();
+        cudaExtent extent = make_cudaExtent(tex_width, tex_height, 0);
+        cudaMipmappedArray_t device_tex_miparray;
+        check_cuda_success(cudaMallocMipmappedArray(
+            &device_tex_miparray, &channel_desc, extent, num_levels));
+
+        // create all mipmap levels and copy them to the CUDA arrays in the mipmapped array
+        mi::base::Handle<mi::IArray> mipmaps(image_api->create_mipmaps(canvas.get(), 1.0f));
+
+        for (mi::Uint32 level = 0; level < num_levels; ++level) {
+            mi::base::Handle<mi::neuraylib::ICanvas const> level_canvas;
+            if (level == 0)
+                level_canvas = canvas;
+            else {
+                mi::base::Handle<mi::IPointer> mipmap_ptr(mipmaps->get_element<mi::IPointer>(level - 1));
+                level_canvas = mipmap_ptr->get_pointer<mi::neuraylib::ICanvas>();
+            }
+            cudaArray_t device_level_array;
+            cudaGetMipmappedArrayLevel(&device_level_array, device_tex_miparray, level);
+            copy_canvas_to_cuda_array(device_level_array, level_canvas.get());
+        }
+
+        res_desc.resType = cudaResourceTypeMipmappedArray;
+        res_desc.res.mipmap.mipmap = device_tex_miparray;
+
+        m_all_texture_mipmapped_arrays->push_back(device_tex_miparray);
     } else {
         // 2D texture objects use CUDA arrays
+        cudaArray_t device_tex_array;
         check_cuda_success(cudaMallocArray(
-            &device_tex_data, &channel_desc, tex_width, tex_height));
+            &device_tex_array, &channel_desc, tex_width, tex_height));
 
-        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
-        mi::Float32 const *data = static_cast<mi::Float32 const *>(tile->get_data());
-        check_cuda_success(cudaMemcpyToArray(device_tex_data, 0, 0, data,
-            tex_width * tex_height * sizeof(float) * 4, cudaMemcpyHostToDevice));
+        copy_canvas_to_cuda_array(device_tex_array, canvas.get());
+
+        res_desc.resType = cudaResourceTypeArray;
+        res_desc.res.array.array = device_tex_array;
+
+        m_all_texture_arrays->push_back(device_tex_array);
     }
-    m_all_texture_arrays.push_back(device_tex_data);
-
-    // Create filtered texture object
-    cudaResourceDesc res_desc;
-    memset(&res_desc, 0, sizeof(res_desc));
-    res_desc.resType = cudaResourceTypeArray;
-    res_desc.res.array.array = device_tex_data;
 
     // For cube maps we need clamped address mode to avoid artifacts in the corners
     cudaTextureAddressMode addr_mode =
@@ -444,6 +717,7 @@ bool Material_gpu_context::prepare_texture(
         ? cudaAddressModeClamp
         : cudaAddressModeWrap;
 
+    // Create filtered texture object
     cudaTextureDesc tex_desc;
     memset(&tex_desc, 0, sizeof(tex_desc));
     tex_desc.addressMode[0]   = addr_mode;
@@ -452,9 +726,15 @@ bool Material_gpu_context::prepare_texture(
     tex_desc.filterMode       = cudaFilterModeLinear;
     tex_desc.readMode         = cudaReadModeElementType;
     tex_desc.normalizedCoords = 1;
+    if (res_desc.resType == cudaResourceTypeMipmappedArray) {
+        tex_desc.mipmapFilterMode = cudaFilterModeLinear;
+        tex_desc.maxAnisotropy = 16;
+        tex_desc.minMipmapLevelClamp = 0.f;
+        tex_desc.maxMipmapLevelClamp = 1000.f;  // default value in OpenGL
+    }
 
     cudaTextureObject_t tex_obj = 0;
-    check_cuda_success(cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, NULL));
+    check_cuda_success(cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, nullptr));
 
     // Create unfiltered texture object if necessary (cube textures have no texel functions)
     cudaTextureObject_t tex_obj_unfilt = 0;
@@ -466,7 +746,7 @@ bool Material_gpu_context::prepare_texture(
         tex_desc.filterMode       = cudaFilterModePoint;
 
         check_cuda_success(cudaCreateTextureObject(
-            &tex_obj_unfilt, &res_desc, &tex_desc, NULL));
+            &tex_obj_unfilt, &res_desc, &tex_desc, nullptr));
     }
 
     // Store texture infos in result vector
@@ -474,8 +754,387 @@ bool Material_gpu_context::prepare_texture(
         tex_obj,
         tex_obj_unfilt,
         make_uint3(tex_width, tex_height, tex_layers)));
-    m_all_textures.push_back(textures.back());
+    m_all_textures->push_back(textures.back());
 
+    return true;
+}
+
+namespace 
+{
+    bool prepare_mbsdfs_part(mi::neuraylib::Mbsdf_part part, Mbsdf& mbsdf_cuda_representation, 
+                             const mi::neuraylib::IBsdf_measurement* bsdf_measurement)
+    {
+        mi::base::Handle<const mi::neuraylib::Bsdf_isotropic_data> dataset;
+        switch (part)
+        {
+            case mi::neuraylib::MBSDF_DATA_REFLECTION:
+                dataset = bsdf_measurement->get_reflection<mi::neuraylib::Bsdf_isotropic_data>();
+                break;
+            case mi::neuraylib::MBSDF_DATA_TRANSMISSION:
+                dataset = bsdf_measurement->get_transmission<mi::neuraylib::Bsdf_isotropic_data>();
+                break;
+        }
+
+        // no data, fine
+        if (!dataset)
+            return true;
+
+        // get dimensions
+        uint2 res;
+        res.x = dataset->get_resolution_theta();
+        res.y = dataset->get_resolution_phi();
+        unsigned num_channels = dataset->get_type() == mi::neuraylib::BSDF_SCALAR ? 1 : 3;
+        mbsdf_cuda_representation.Add(part, res, num_channels);
+
+
+        // get data
+        mi::base::Handle<const mi::neuraylib::IBsdf_buffer> buffer(dataset->get_bsdf_buffer());
+        // {1,3} * (index_theta_in * (res_phi * res_theta) + index_theta_out * res_phi + index_phi)
+
+        const mi::Float32* src_data = buffer->get_data();
+
+        // ----------------------------------------------------------------------------------------
+        // prepare importance sampling data:
+        // - for theta_in we will be able to perform a two stage CDF, first to select theta_out,
+        //   and second to select phi_out
+        // - maximum component is used to "probability" in case of colored measurements
+
+        // CDF of the probability to select a certain theta_out for a given theta_in
+        const unsigned int cdf_theta_size = res.x * res.x;
+
+        // for each of theta_in x theta_out combination, a CDF of the probabilities to select a
+        // a certain theta_out is stored
+        const unsigned sample_data_size = cdf_theta_size + cdf_theta_size * res.y;
+        float* sample_data = new float[sample_data_size];
+
+        float* albedo_data = new float[res.x]; // albedo for sampling reflection and transmission
+
+        float* sample_data_theta = sample_data;                // begin of the first (theta) CDF
+        float* sample_data_phi = sample_data + cdf_theta_size; // begin of the second (phi) CDFs
+
+        const float s_theta = (float) (M_PI * 0.5) / float(res.x);  // step size
+        const float s_phi = (float) (M_PI) / float(res.y);          // step size
+
+        float max_albedo = 0.0f;
+        for (unsigned int t_in = 0; t_in < res.x; ++t_in)
+        {
+            float sum_theta = 0.0f;
+            float sintheta0_sqd = 0.0f;
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const float sintheta1 = sinf(float(t_out + 1) * s_theta);
+                const float sintheta1_sqd = sintheta1 * sintheta1;
+
+                // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
+                // take the average of both measurements
+
+                // area of two the surface elements (the ones we are averaging) 
+                const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
+                sintheta0_sqd = sintheta1_sqd;
+
+                // offset for both the thetas into the measurement data (select row in the volume) 
+                const unsigned int offset_phi  = (t_in * res.x + t_out) * res.y;
+                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+
+                // build CDF for phi
+                float sum_phi = 0.0f;
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx  = offset_phi  + p_out;
+                    const unsigned int idx2 = offset_phi2 + p_out;
+
+                    float value = 0.0f;
+                    if (num_channels == 3)
+                    {
+                        value = fmax(fmaxf(src_data[3 * idx  + 0], src_data[3 * idx  + 1]),
+                                     fmaxf(src_data[3 * idx  + 2], 0.0f))
+                              + fmax(fmaxf(src_data[3 * idx2 + 0], src_data[3 * idx2 + 1]),
+                                     fmaxf(src_data[3 * idx2 + 2], 0.0f));
+                    }
+                    else /* num_channels == 1 */
+                    {
+                        value = fmaxf(src_data[idx], 0.0f) + fmaxf(src_data[idx2], 0.0f);
+                    }
+
+                    sum_phi += value * mu;
+                    sample_data_phi[idx] = sum_phi;
+                }
+
+                // normalize CDF for phi
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx = offset_phi + p_out;
+                    sample_data_phi[idx] = sample_data_phi[idx] / sum_phi;
+                }
+
+                // build CDF for theta
+                sum_theta += sum_phi;
+                sample_data_theta[t_in * res.x + t_out] = sum_theta;
+            }
+
+            if (sum_theta > max_albedo)
+                max_albedo = sum_theta;
+
+            albedo_data[t_in] = sum_theta;
+
+            // normalize CDF for theta 
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const unsigned int idx = t_in * res.x + t_out;
+                sample_data_theta[idx] = sample_data_theta[idx] / sum_theta;
+            }
+        }
+
+        // copy entire CDF data buffer to GPU
+        CUdeviceptr sample_obj = 0;
+        check_cuda_success(cuMemAlloc(&sample_obj, sample_data_size * sizeof(float)));
+        check_cuda_success(cuMemcpyHtoD(sample_obj, sample_data, sample_data_size * sizeof(float)));
+        delete[] sample_data;
+
+        CUdeviceptr albedo_obj = 0;
+        check_cuda_success(cuMemAlloc(&albedo_obj, res.x * sizeof(float)));
+        check_cuda_success(cuMemcpyHtoD(albedo_obj, albedo_data, res.x * sizeof(float)));
+        delete[] albedo_data;
+
+
+        mbsdf_cuda_representation.sample_data[part] = reinterpret_cast<float*>(sample_obj);
+        mbsdf_cuda_representation.albedo_data[part] = reinterpret_cast<float*>(albedo_obj);
+        mbsdf_cuda_representation.max_albedo[part] = max_albedo;
+
+        // ----------------------------------------------------------------------------------------
+        // prepare evaluation data:
+        // - simply store the measured data in a volume texture
+        // - in case of color data, we store each sample in a vector4 to get texture support
+        unsigned lookup_channels = (num_channels == 3) ? 4 : 1;
+
+        // make lookup data symmetric
+        float* lookup_data = new float[lookup_channels * res.y * res.x * res.x];
+        for (unsigned int t_in = 0; t_in < res.x; ++t_in)
+        {
+            for (unsigned int t_out = 0; t_out < res.x; ++t_out)
+            {
+                const unsigned int offset_phi = (t_in * res.x + t_out) * res.y;
+                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+                for (unsigned int p_out = 0; p_out < res.y; ++p_out)
+                {
+                    const unsigned int idx = offset_phi + p_out;
+                    const unsigned int idx2 = offset_phi2 + p_out;
+
+                    if (num_channels == 3)
+                    {
+                        lookup_data[4*idx+0] = (src_data[3*idx+0] + src_data[3*idx2+0]) * 0.5f;
+                        lookup_data[4*idx+1] = (src_data[3*idx+1] + src_data[3*idx2+1]) * 0.5f;
+                        lookup_data[4*idx+2] = (src_data[3*idx+2] + src_data[3*idx2+2]) * 0.5f;
+                        lookup_data[4*idx+3] = 1.0f;
+                    }
+                    else
+                    {
+                        lookup_data[idx] = (src_data[idx] + src_data[idx2]) * 0.5f;
+                    }
+                }
+            }
+        }
+
+        // Copy data to GPU array
+        cudaArray_t device_mbsdf_data;
+        cudaChannelFormatDesc channel_desc = (num_channels == 3
+            ? cudaCreateChannelDesc<float4>() // float3 is not supported
+            : cudaCreateChannelDesc<float>());
+
+        // Allocate a 3D array on the GPU (phi_delta x theta_out x theta_in)
+        cudaExtent extent = make_cudaExtent(res.y, res.x, res.x); 
+        check_cuda_success(cudaMalloc3DArray(&device_mbsdf_data, &channel_desc, extent, 0));
+
+        // prepare and copy
+        cudaMemcpy3DParms copy_params;
+        memset(&copy_params, 0, sizeof(copy_params));
+        copy_params.srcPtr = make_cudaPitchedPtr(
+            (void*)(lookup_data),                                   // base pointer
+            res.y * lookup_channels * sizeof(float),                // row pitch
+            res.y,                                                  // width of slice
+            res.x);                                                 // height of slice
+        copy_params.dstArray = device_mbsdf_data;
+        copy_params.extent = extent;
+        copy_params.kind = cudaMemcpyHostToDevice;
+        check_cuda_success(cudaMemcpy3D(&copy_params));
+        delete[] lookup_data;
+
+        cudaResourceDesc    texRes;
+        memset(&texRes, 0, sizeof(cudaResourceDesc));
+        texRes.resType = cudaResourceTypeArray;
+        texRes.res.array.array = device_mbsdf_data;
+
+        cudaTextureDesc     texDescr;
+        memset(&texDescr, 0, sizeof(cudaTextureDesc));
+        texDescr.normalizedCoords = 1;
+        texDescr.filterMode = cudaFilterModeLinear;
+        texDescr.addressMode[0] = cudaAddressModeClamp;   
+        texDescr.addressMode[1] = cudaAddressModeClamp;
+        texDescr.addressMode[2] = cudaAddressModeClamp;
+        texDescr.readMode = cudaReadModeElementType;
+
+        cudaTextureObject_t eval_tex_obj;
+        check_cuda_success(cudaCreateTextureObject(&eval_tex_obj, &texRes, &texDescr, nullptr));
+        mbsdf_cuda_representation.eval_data[part] = eval_tex_obj;
+
+        return true;
+    }
+}
+
+bool Material_gpu_context::prepare_mbsdf(
+    mi::neuraylib::ITransaction       *transaction,
+    mi::neuraylib::ITarget_code const *code_ptx,
+    mi::Size                           mbsdf_index,
+    std::vector<Mbsdf>                &mbsdfs)
+{
+    // Get access to the texture data by the texture database name from the target code.
+    mi::base::Handle<const mi::neuraylib::IBsdf_measurement> mbsdf(
+        transaction->access<mi::neuraylib::IBsdf_measurement>(
+        code_ptx->get_bsdf_measurement(mbsdf_index)));
+
+    Mbsdf mbsdf_cuda;
+
+    // handle reflection and transmission
+    if (!prepare_mbsdfs_part(mi::neuraylib::MBSDF_DATA_REFLECTION, mbsdf_cuda, mbsdf.get()))
+        return false;
+    if (!prepare_mbsdfs_part(mi::neuraylib::MBSDF_DATA_TRANSMISSION, mbsdf_cuda, mbsdf.get()))
+        return false;
+
+    mbsdfs.push_back(mbsdf_cuda);
+    m_all_mbsdfs->push_back(mbsdfs.back());
+    return true;
+}
+
+bool Material_gpu_context::prepare_lightprofile(
+    mi::neuraylib::ITransaction       *transaction,
+    mi::neuraylib::ITarget_code const *code_ptx,
+    mi::Size                           lightprofile_index,
+    std::vector<Lightprofile>         &lightprofiles)
+{
+
+    // Get access to the texture data by the texture database name from the target code.
+    mi::base::Handle<const mi::neuraylib::ILightprofile> lprof_nr(
+        transaction->access<mi::neuraylib::ILightprofile>(
+        code_ptx->get_light_profile(lightprofile_index)));
+
+    uint2 res = make_uint2(lprof_nr->get_resolution_theta(), lprof_nr->get_resolution_phi());
+    float2 start = make_float2(lprof_nr->get_theta(0), lprof_nr->get_phi(0));
+    float2 delta = make_float2(lprof_nr->get_theta(1) - start.x, lprof_nr->get_phi(1) - start.y);
+
+    // phi-mayor: [res.x x res.y]
+    const float* data = lprof_nr->get_data();
+
+    // -------------------------------------------------------------------------------------------- 
+    // compute total power
+    // compute inverse CDF data for sampling
+    // sampling will work on cells rather than grid nodes (used for evaluation)
+
+    // first (res.x-1) for the cdf for sampling theta
+    // rest (rex.x-1) * (res.y-1) for the individual cdfs for sampling phi (after theta)
+    size_t cdf_data_size = (res.x - 1) + (res.x - 1) * (res.y - 1);
+    float* cdf_data = new float[cdf_data_size];
+
+    float debug_total_erea = 0.0f;
+    float sum_theta = 0.0f;
+    float total_power = 0.0f;
+    float cos_theta0 = cosf(start.x);
+    for (unsigned int t = 0; t < res.x - 1; ++t)
+    {
+        const float cos_theta1 = cosf(start.x + float(t + 1) * delta.x);
+
+        // area of the patch (grid cell)
+        // \mu = int_{theta0}^{theta1} sin{theta} \delta theta
+        const float mu = cos_theta0 - cos_theta1;
+        cos_theta0 = cos_theta1;
+
+        // build CDF for phi
+        float* cdf_data_phi = cdf_data + (res.x - 1) + t * (res.y - 1);
+        float sum_phi = 0.0f;
+        for (unsigned int p = 0; p < res.y - 1; ++p)
+        {
+            // the probability to select a patch corresponds to the value times area
+            // the value of a cell is the average of the corners
+            // omit the *1/4 as we normalize in the end
+            float value = data[p * res.x + t]
+                + data[p * res.x + t + 1]
+                + data[(p + 1) * res.x + t]
+                + data[(p + 1) * res.x + t + 1];
+
+            sum_phi += value * mu;
+            cdf_data_phi[p] = sum_phi;
+            debug_total_erea += mu;
+        }
+
+        // normalize CDF for phi
+        for (unsigned int p = 0; p < res.y - 2; ++p)
+            cdf_data_phi[p] = sum_phi ? (cdf_data_phi[p] / sum_phi) : 0.0f;
+
+        cdf_data_phi[res.y - 2] = 1.0f;
+
+        // build CDF for theta
+        sum_theta += sum_phi;
+        cdf_data[t] = sum_theta;
+    }
+    total_power = sum_theta * 0.25f * delta.y;
+
+    // normalize CDF for theta
+    for (unsigned int t = 0; t < res.x - 2; ++t)
+        cdf_data[t] = sum_theta ? (cdf_data[t] / sum_theta) : cdf_data[t];
+
+    cdf_data[res.x - 2] = 1.0f;
+
+    // copy entire CDF data buffer to GPU
+    CUdeviceptr cdf_data_obj = 0;
+    check_cuda_success(cuMemAlloc(&cdf_data_obj, cdf_data_size * sizeof(float)));
+    check_cuda_success(cuMemcpyHtoD(cdf_data_obj, cdf_data, cdf_data_size * sizeof(float)));
+    delete[] cdf_data;
+
+    // -------------------------------------------------------------------------------------------- 
+    // prepare evaluation data
+    //  - use a 2d texture that allows bilinear interpolation
+    // Copy data to GPU array
+    cudaArray_t device_lightprofile_data;
+    cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float>();
+
+    // 2D texture objects use CUDA arrays
+    check_cuda_success(cudaMallocArray(&device_lightprofile_data, &channel_desc, res.x, res.y));
+    check_cuda_success(cudaMemcpyToArray(device_lightprofile_data, 0, 0, data,
+                       res.x * res.y * sizeof(float), cudaMemcpyHostToDevice));
+
+    // Create filtered texture object
+    cudaResourceDesc res_desc;
+    memset(&res_desc, 0, sizeof(res_desc));
+    res_desc.resType = cudaResourceTypeArray;
+    res_desc.res.array.array = device_lightprofile_data;
+
+    cudaTextureDesc tex_desc;
+    memset(&tex_desc, 0, sizeof(tex_desc));
+    tex_desc.addressMode[0] = cudaAddressModeClamp;
+    tex_desc.addressMode[1] = cudaAddressModeClamp;
+    tex_desc.addressMode[2] = cudaAddressModeClamp;
+    tex_desc.borderColor[0] = 1.0f;
+    tex_desc.borderColor[1] = 1.0f;
+    tex_desc.borderColor[2] = 1.0f;
+    tex_desc.borderColor[3] = 1.0f;
+    tex_desc.filterMode = cudaFilterModeLinear;
+    tex_desc.readMode = cudaReadModeElementType;
+    tex_desc.normalizedCoords = 1;
+
+    cudaTextureObject_t tex_obj = 0;
+    check_cuda_success(cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, nullptr));
+
+    double multiplier = lprof_nr->get_candela_multiplier();
+    Lightprofile lprof(
+        res,
+        start,
+        delta,
+        float(multiplier),
+        float(total_power * multiplier),
+        tex_obj,
+        reinterpret_cast<float*>(cdf_data_obj));
+
+    lightprofiles.push_back(lprof);
+    m_all_lightprofiles->push_back(lightprofiles.back());
     return true;
 }
 
@@ -486,7 +1145,7 @@ bool Material_gpu_context::prepare_target_code_data(
     mi::neuraylib::ITarget_code const *target_code)
 {
     // Target code data list may not have been retrieved already
-    check_success(!m_device_target_code_data_list);
+    check_success(m_device_target_code_data_list.get() == 0);
 
     // Handle the read-only data segments if necessary.
     // They are only created, if the "enable_ro_segment" backend option was set to "on".
@@ -515,14 +1174,57 @@ bool Material_gpu_context::prepare_target_code_data(
         device_textures = gpu_mem_dup(textures);
     }
 
-    m_target_code_data_list.push_back(
-        Target_code_data(num_textures, device_textures, device_ro_data));
+    // Copy MBSDFs to GPU if the code has more than just the invalid mbsdf
+    CUdeviceptr device_mbsdfs = 0;
+    mi::Size num_mbsdfs = target_code->get_bsdf_measurement_count();
+    if (num_mbsdfs > 1)
+    {
+        std::vector<Mbsdf> mbsdfs;
+
+        // Loop over all mbsdfs skipping the first mbsdf,
+        // which is always the invalid mbsdf
+        for (mi::Size i = 1; i < num_mbsdfs; ++i)
+        {
+            if (!prepare_mbsdf(
+                transaction, target_code, i, mbsdfs))
+                return false;
+        }
+
+        // Copy mbsdf list to GPU
+        device_mbsdfs = gpu_mem_dup(mbsdfs);
+    }
+
+    // Copy light profiles to GPU if the code has more than just the invalid light profile
+    CUdeviceptr device_lightprofiles = 0;
+    mi::Size num_lightprofiles = target_code->get_light_profile_count();
+    if (num_lightprofiles > 1)
+    {
+        std::vector<Lightprofile> lightprofiles;
+
+        // Loop over all profiles skipping the first profile,
+        // which is always the invalid profile
+        for (mi::Size i = 1; i < num_lightprofiles; ++i)
+        {
+            if (!prepare_lightprofile(
+                transaction, target_code, i, lightprofiles))
+                return false;
+        }
+
+        // Copy light profile list to GPU
+        device_lightprofiles = gpu_mem_dup(lightprofiles);
+    }
+
+    (*m_target_code_data_list).push_back(
+        Target_code_data(num_textures, device_textures,
+                         num_mbsdfs, device_mbsdfs,
+                         num_lightprofiles, device_lightprofiles,
+                         device_ro_data));
 
     for (mi::Size i = 0, num = target_code->get_argument_block_count(); i < num; ++i) {
         mi::base::Handle<mi::neuraylib::ITarget_argument_block const> arg_block(
             target_code->get_argument_block(i));
         CUdeviceptr dev_block = gpu_mem_dup(arg_block->get_data(), arg_block->get_size());
-        m_target_argument_block_list.push_back(dev_block);
+        m_target_argument_block_list->push_back(dev_block);
         m_own_arg_blocks.push_back(mi::base::make_handle(arg_block->clone()));
         m_arg_block_layouts.push_back(
             mi::base::make_handle(target_code->get_argument_block_layout(i)));
@@ -569,8 +1271,10 @@ public:
     // Constructor.
     Material_compiler(
         mi::neuraylib::IMdl_compiler* mdl_compiler,
+        mi::neuraylib::IMdl_factory* mdl_factory,
         mi::neuraylib::ITransaction* transaction,
-        unsigned num_texture_results);
+        unsigned num_texture_results,
+        bool enable_derivatives);
 
     // Helper function to extract the module name from a fully-qualified material name.
     static std::string get_module_name(const std::string& material_name);
@@ -647,6 +1351,7 @@ private:
     mi::base::Handle<mi::neuraylib::IMdl_backend>  m_be_cuda_ptx;
     mi::base::Handle<mi::neuraylib::ITransaction>  m_transaction;
 
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> m_context;
     mi::base::Handle<mi::neuraylib::ILink_unit> m_link_unit;
 
     std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> > m_material_defs;
@@ -655,12 +1360,15 @@ private:
 
 // Constructor.
 Material_compiler::Material_compiler(
-    mi::neuraylib::IMdl_compiler* mdl_compiler,
-    mi::neuraylib::ITransaction* transaction,
-    unsigned num_texture_results)
+        mi::neuraylib::IMdl_compiler* mdl_compiler,
+        mi::neuraylib::IMdl_factory* mdl_factory,
+        mi::neuraylib::ITransaction* transaction,
+        unsigned num_texture_results,
+        bool enable_derivatives)
     : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
     , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
     , m_transaction(mi::base::make_handle_dup(transaction))
+    , m_context(mdl_factory->create_execution_context())
     , m_link_unit()
 {
     check_success(m_be_cuda_ptx->set_option("num_texture_spaces", "1") == 0);
@@ -668,6 +1376,12 @@ Material_compiler::Material_compiler(
     // Option "enable_ro_segment": Default is disabled.
     // If you have a lot of big arrays, enabling this might speed up compilation.
     // check_success(m_be_cuda_ptx->set_option("enable_ro_segment", "on") == 0);
+
+    if (enable_derivatives) {
+        // Option "texture_runtime_with_derivs": Default is disabled.
+        // We enable it to get coordinates with derivatives for texture lookup functions.
+        check_success(m_be_cuda_ptx->set_option("texture_runtime_with_derivs", "on") == 0);
+    }
 
     // Option "tex_lookup_call_mode": Default mode is vtable mode.
     // You can switch to the slower vtable mode by commenting out the next line.
@@ -680,8 +1394,9 @@ Material_compiler::Material_compiler(
         "num_texture_results",
         to_string(num_texture_results).c_str()) == 0);
 
+
     // After we set the options, we can create the link unit
-    m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, NULL));
+    m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, m_context.get()));
 }
 
 // Helper function to extract the module name from a fully-qualified material name.
@@ -724,7 +1439,8 @@ mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
 {
     // Load mdl module.
     std::string module_name = get_module_name(material_name);
-    check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str()) >= 0);
+    check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str(), m_context.get()) >= 0);
+    print_messages(m_context.get());
 
     // Create a material instance from the material definition
     // with the default arguments.
@@ -752,13 +1468,12 @@ mi::neuraylib::ICompiled_material *Material_compiler::compile_material_instance(
     mi::neuraylib::IMaterial_instance* material_instance,
     bool class_compilation)
 {
-    mi::Sint32 result = 0;
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        material_instance->create_compiled_material(flags, 1.0f, 380.0f, 780.0f, &result));
-    check_success(result == 0);
+        material_instance->create_compiled_material(flags, m_context.get()));
+    check_success(print_messages(m_context.get()));
 
     m_compiled_materials.push_back(compiled_material);
 
@@ -769,10 +1484,9 @@ mi::neuraylib::ICompiled_material *Material_compiler::compile_material_instance(
 // Generates CUDA PTX target code for the current link unit.
 mi::base::Handle<const mi::neuraylib::ITarget_code> Material_compiler::generate_cuda_ptx()
 {
-    mi::Sint32 result = -1;
     mi::base::Handle<const mi::neuraylib::ITarget_code> code_cuda_ptx(
-        m_be_cuda_ptx->translate_link_unit(m_link_unit.get(), &result));
-    check_success(result == 0);
+        m_be_cuda_ptx->translate_link_unit(m_link_unit.get(), m_context.get()));
+    check_success(print_messages(m_context.get()));
     check_success(code_cuda_ptx);
 
 #ifdef DUMP_PTX
@@ -800,7 +1514,8 @@ bool Material_compiler::add_material_subexpr(
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
         compile_material_instance(material_instance.get(), class_compilation));
 
-    return m_link_unit->add_material_expression(compiled_material.get(), path, fname) >= 0;
+    m_link_unit->add_material_expression(compiled_material.get(), path, fname, m_context.get());
+    return print_messages(m_context.get());
 }
 
 // Add a distribution function of a given material to the link unit.
@@ -820,8 +1535,8 @@ bool Material_compiler::add_material_df(
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
         compile_material_instance(material_instance.get(), class_compilation));
 
-    return m_link_unit->add_material_df(
-        compiled_material.get(), path, base_fname, /*include_geometry_normal=*/true) >= 0;
+    m_link_unit->add_material_df(compiled_material.get(), path, base_fname, m_context.get());
+    return print_messages(m_context.get());
 }
 
 // Add (multiple) MDL distribution function and expressions of a material to this link unit.
@@ -845,9 +1560,10 @@ bool Material_compiler::add_material(
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
         compile_material_instance(material_instance.get(), class_compilation));
 
-    bool res = m_link_unit->add_material(
+    m_link_unit->add_material(
         compiled_material.get(), function_descriptions, description_count,
-        /*include_geometry_normal=*/true) >= 0;
+        m_context.get());
+    bool res = print_messages(m_context.get());
 
     if (res)
         for (size_t i = 0; i < description_count; ++i)
@@ -1020,7 +1736,7 @@ CUmodule build_linked_kernel(
                 cuda_link_state, CU_JIT_INPUT_PTX,
                 const_cast<char *>(target_codes[i]->get_code()),
                 target_codes[i]->get_code_size(),
-                NULL, 0, NULL, NULL);
+                nullptr, 0, nullptr, nullptr);
             if (link_result != CUDA_SUCCESS) break;
         }
         if (link_result != CUDA_SUCCESS) break;
@@ -1030,13 +1746,13 @@ CUmodule build_linked_kernel(
             cuda_link_state, CU_JIT_INPUT_PTX,
             const_cast<char *>(ptx_func_array_src.c_str()),
             ptx_func_array_src.size(),
-            NULL, 0, NULL, NULL);
+            nullptr, 0, nullptr, nullptr);
         if (link_result != CUDA_SUCCESS) break;
 
         // Add our kernel
         link_result = cuLinkAddFile(
             cuda_link_state, CU_JIT_INPUT_PTX,
-            ptx_file, 0, NULL, NULL);
+            ptx_file, 0, nullptr, nullptr);
         if (link_result != CUDA_SUCCESS) break;
 
         // Link everything to a cubin
@@ -1069,4 +1785,5 @@ CUmodule build_linked_kernel(
 }
 
 #endif // EXAMPLE_CUDA_SHARED_H
+
 

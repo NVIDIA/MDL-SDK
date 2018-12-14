@@ -46,11 +46,11 @@ private:
   ContextDecision* Tables[9];
 
   // Table of ModRM encodings.
-  typedef MISTD::map<MISTD::vector<unsigned>, unsigned> ModRMMapTy;
+  typedef std::map<std::vector<unsigned>, unsigned> ModRMMapTy;
   mutable ModRMMapTy ModRMTable;
 
   /// The instruction information table
-  MISTD::vector<InstructionSpecifier> InstructionSpecifiers;
+  std::vector<InstructionSpecifier> InstructionSpecifiers;
 
   /// True if there are primary decode conflicts in the instruction set
   bool HasConflicts;

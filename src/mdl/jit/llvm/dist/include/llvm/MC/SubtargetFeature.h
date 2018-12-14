@@ -37,7 +37,7 @@ struct SubtargetFeatureKV {
   uint64_t Value;                       // K-V integer value
   uint64_t Implies;                     // K-V bit mask
 
-  // Compare routine for MISTD::lower_bound
+  // Compare routine for std::lower_bound
   bool operator<(StringRef S) const {
     return StringRef(Key) < S;
   }
@@ -52,7 +52,7 @@ struct SubtargetInfoKV {
   const char *Key;                      // K-V key string
   const void *Value;                    // K-V pointer value
 
-  // Compare routine for MISTD::lower_bound
+  // Compare routine for std::lower_bound
   bool operator<(StringRef S) const {
     return StringRef(Key) < S;
   }
@@ -70,12 +70,12 @@ struct SubtargetInfoKV {
 ///
 
 class SubtargetFeatures {
-  MISTD::vector<MISTD::string> Features;    // Subtarget features as a vector
+  std::vector<std::string> Features;    // Subtarget features as a vector
 public:
   explicit SubtargetFeatures(const StringRef Initial = "");
 
   /// Features string accessors.
-  MISTD::string getString() const;
+  std::string getString() const;
 
   /// Adding Features.
   void AddFeature(const StringRef String, bool IsEnabled = true);

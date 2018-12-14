@@ -76,7 +76,7 @@ private:
     mi::base::Handle<Manifest> m_manifest;
 };
 
-/// Implementation of the IArchiver interface.
+/// Implementation of the IArchive_tool interface.
 class Archive_tool : public Allocator_interface_implement<IArchive_tool>
 {
     typedef Allocator_interface_implement<IArchive_tool> Base;
@@ -121,7 +121,7 @@ public:
     /// Get the MANIFEST from an archive to the file system.
     ///
     /// \param archive_path  The archive to extract.
-    IArchive_manifest const *get_manifest(
+    Manifest const *get_manifest(
         char const *archive_path) MDL_FINAL;
 
     /// Get the MANIFEST content from an archive on the file system.

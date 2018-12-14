@@ -24,7 +24,7 @@ namespace llvm {
 /// reference each piece.
 class StringToOffsetTable {
   StringMap<unsigned> StringOffset;
-  MISTD::string AggregateString;
+  std::string AggregateString;
 public:
   
   unsigned GetOrAddStringOffset(StringRef Str, bool appendZero = true) {

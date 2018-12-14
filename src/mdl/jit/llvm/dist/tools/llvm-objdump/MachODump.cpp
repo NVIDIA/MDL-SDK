@@ -46,7 +46,7 @@ using namespace object;
 static cl::opt<bool>
   UseDbg("g", cl::desc("Print line information from debug info if available"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
   DSYMFile("dsym", cl::desc("Use .dSYM file for debug info"));
 
 static const Target *GetTarget(const MachOObjectFile *MachOObj) {
@@ -58,7 +58,7 @@ static const Target *GetTarget(const MachOObjectFile *MachOObj) {
   }
 
   // Get the target specific parser.
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
   if (TheTarget)
     return TheTarget;
@@ -89,8 +89,8 @@ struct SymbolSorter {
 
 // Types for the storted data in code table that is built before disassembly
 // and the predicate function to sort them.
-typedef MISTD::pair<uint64_t, DiceRef> DiceTableEntry;
-typedef MISTD::vector<DiceTableEntry> DiceTable;
+typedef std::pair<uint64_t, DiceRef> DiceTableEntry;
+typedef std::vector<DiceTableEntry> DiceTable;
 typedef DiceTable::iterator dice_table_iterator;
 
 static bool
@@ -150,8 +150,8 @@ static void DumpDataInCode(const char *bytes, uint64_t Size,
 static void
 getSectionsAndSymbols(const MachO::mach_header Header,
                       MachOObjectFile *MachOObj,
-                      MISTD::vector<SectionRef> &Sections,
-                      MISTD::vector<SymbolRef> &Symbols,
+                      std::vector<SectionRef> &Sections,
+                      std::vector<SymbolRef> &Symbols,
                       SmallVectorImpl<uint64_t> &FoundFns,
                       uint64_t &BaseSegmentAddress) {
   error_code ec;
@@ -252,8 +252,8 @@ static void DisassembleInputMachO2(StringRef Filename,
   // annotate relocations with the referenced symbol's name, and if this was
   // inside a __[cf]string section, the data it points to. This is now replaced
   // by the upcoming MCSymbolizer, which needs the appropriate setup done above.
-  MISTD::vector<SectionRef> Sections;
-  MISTD::vector<SymbolRef> Symbols;
+  std::vector<SectionRef> Sections;
+  std::vector<SymbolRef> Symbols;
   SmallVector<uint64_t, 8> FoundFns;
   uint64_t BaseSegmentAddress;
 
@@ -261,7 +261,7 @@ static void DisassembleInputMachO2(StringRef Filename,
                         BaseSegmentAddress);
 
   // Sort the symbols by address, just in case they didn't come in that way.
-  MISTD::sort(Symbols.begin(), Symbols.end(), SymbolSorter());
+  std::sort(Symbols.begin(), Symbols.end(), SymbolSorter());
 
   // Build a data in code table that is sorted on by the address of each entry.
   uint64_t BaseAddress = 0;
@@ -275,7 +275,7 @@ static void DisassembleInputMachO2(StringRef Filename,
        DI != DE; DI.increment(ec)){
     uint32_t Offset;
     DI->getOffset(Offset);
-    Dices.push_back(MISTD::make_pair(BaseAddress + Offset, *DI));
+    Dices.push_back(std::make_pair(BaseAddress + Offset, *DI));
   }
   array_pod_sort(Dices.begin(), Dices.end());
 
@@ -328,7 +328,7 @@ static void DisassembleInputMachO2(StringRef Filename,
     bool symbolTableWorked = false;
 
     // Parse relocations.
-    MISTD::vector<MISTD::pair<uint64_t, SymbolRef> > Relocs;
+    std::vector<std::pair<uint64_t, SymbolRef> > Relocs;
     error_code ec;
     for (relocation_iterator RI = Sections[SectIdx].begin_relocations(),
          RE = Sections[SectIdx].end_relocations(); RI != RE; RI.increment(ec)) {
@@ -339,7 +339,7 @@ static void DisassembleInputMachO2(StringRef Filename,
 
       symbol_iterator RelocSym = RI->getSymbol();
 
-      Relocs.push_back(MISTD::make_pair(RelocOffset, *RelocSym));
+      Relocs.push_back(std::make_pair(RelocOffset, *RelocSym));
     }
     array_pod_sort(Relocs.begin(), Relocs.end());
 
@@ -403,8 +403,8 @@ static void DisassembleInputMachO2(StringRef Filename,
         // Check the data in code table here to see if this is data not an
         // instruction to be disassembled.
         DiceTable Dice;
-        Dice.push_back(MISTD::make_pair(SectAddress + Index, DiceRef()));
-        dice_table_iterator DTI = MISTD::search(Dices.begin(), Dices.end(),
+        Dice.push_back(std::make_pair(SectAddress + Index, DiceRef()));
+        dice_table_iterator DTI = std::search(Dices.begin(), Dices.end(),
                                               Dice.begin(), Dice.end(),
                                               compareDiceTableEntries);
         if (DTI != Dices.end()){

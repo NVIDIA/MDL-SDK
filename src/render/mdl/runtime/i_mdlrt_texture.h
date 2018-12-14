@@ -76,7 +76,7 @@ public:
     ~Texture_2d();
 
 
-    Texture_2d(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, DB::Transaction*);
+    Texture_2d(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, bool, DB::Transaction*);
 
     mi::Sint32_2 get_resolution(const mi::Sint32_2& uv_tile) const;
 
@@ -116,6 +116,17 @@ public:
             ) const;
 
 
+    mi::Float32_4 lookup_deriv_float4(
+            const mi::Float32_2& coord_val,
+            const mi::Float32_2& coord_dx,
+            const mi::Float32_2& coord_dy,
+            Wrap_mode wrap_u,
+            Wrap_mode wrap_v,
+            const mi::Float32_2& crop_u,
+            const mi::Float32_2& crop_v
+            ) const;
+
+
     mi::Spectrum lookup_color(
             const mi::Float32_2& coord,
             Wrap_mode wrap_u,
@@ -138,7 +149,6 @@ public:
 
 
     mi::Spectrum texel_color(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
-    
 
 private:
     unsigned int get_tile_id(int tile_u, int tile_v) const {
@@ -153,10 +163,10 @@ private:
             return m_udim_mapping[tile_v * m_udim_num_u + tile_u];
     }
 
-    MISTD::vector<mi::Uint32_3> m_tile_resolutions;
-    MISTD::vector<IMAGE::Access_canvas> m_canvases;
-    MISTD::vector<float> m_gamma;
-    MISTD::vector<unsigned int>  m_udim_mapping;
+    std::vector< std::vector<mi::Uint32_3> >          m_tile_resolutions;
+    std::vector< std::vector<IMAGE::Access_canvas> >  m_canvases;
+    std::vector<float>                                  m_gamma;
+    std::vector<unsigned int>                           m_udim_mapping;
     bool m_is_udim;
     unsigned int  m_udim_num_u;
     unsigned int  m_udim_num_v;

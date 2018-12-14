@@ -60,4 +60,6 @@ The \ref mi_mdl_core_examples explain topics that are listed here as an index.
   - \ref mi_mdl_core_example_df_cuda "Generated BSDF functions"
   - \ref mi_mdl_core_example_df_cuda "Changing compiled material arguments at runtime"
 
+  - \ref mi_mdl_core_example_derivatives "Automatic derivatives"
+
 */

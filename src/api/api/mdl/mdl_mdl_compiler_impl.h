@@ -102,31 +102,53 @@ public:
 
     const mi::IString* get_resource_path( mi::Size index) const;
 
+    mi::Sint32 deprecated_load_module(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const mi::IMap* options);
 
     mi::Sint32 load_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
+        mi::neuraylib::IMdl_execution_context* context);
+
+    mi::Sint32 deprecated_load_module_from_string(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const char* module_source,
         const mi::IMap* options);
 
     mi::Sint32 load_module_from_string(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const char* module_source,
-        const mi::IMap* options);
+        mi::neuraylib::IMdl_execution_context* context);
 
     mi::Sint32 add_builtin_module( const char* module_name, const char* module_source);
+
+    mi::Sint32 deprecated_export_module(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const char* filename,
+        const mi::IMap* options);
 
     mi::Sint32 export_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const char* filename,
+        mi::neuraylib::IMdl_execution_context* context);
+
+    mi::Sint32 deprecated_export_module_to_string(
+        mi::neuraylib::ITransaction* transaaction,
+        const char* module_name,
+        mi::IString* exported_module,
         const mi::IMap* options);
 
     mi::Sint32 export_module_to_string(
         mi::neuraylib::ITransaction* transaaction,
         const char* module_name,
         mi::IString* exported_module,
-        const mi::IMap* options);
+        mi::neuraylib::IMdl_execution_context* context);
 
     mi::Sint32 export_canvas(
         const char* filename, const mi::neuraylib::ICanvas* canvas, mi::Uint32 quality) const;
@@ -175,7 +197,7 @@ private:
         const char* module_name,
         mi::neuraylib::IWriter* writer,
         const char* filename,
-        const mi::IMap* options);
+        mi::neuraylib::IMdl_execution_context* context);
 
     Neuray_impl* m_neuray_impl;                                    ///< Neuray_impl
 

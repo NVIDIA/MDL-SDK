@@ -1055,12 +1055,12 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
         match(RHS, m_Mul(m_Value(Y), m_Value(Z)))) {
       if (W != Y) {
         if (W == Z) {
-          MISTD::swap(Y, Z);
+          std::swap(Y, Z);
         } else if (Y == X) {
-          MISTD::swap(W, X);
+          std::swap(W, X);
         } else if (X == Z) {
-          MISTD::swap(Y, Z);
-          MISTD::swap(W, X);
+          std::swap(Y, Z);
+          std::swap(W, X);
         }
       }
 

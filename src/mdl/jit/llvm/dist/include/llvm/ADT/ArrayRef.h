@@ -34,7 +34,7 @@ namespace llvm {
     typedef const T *const_iterator;
     typedef size_t size_type;
 
-    typedef MISTD::reverse_iterator<iterator> reverse_iterator;
+    typedef std::reverse_iterator<iterator> reverse_iterator;
 
   private:
     /// The start of the array, in an external buffer.
@@ -73,9 +73,9 @@ namespace llvm {
       : Data(Vec.data()), Length(Vec.size()) {
     }
 
-    /// Construct an ArrayRef from a MISTD::vector.
+    /// Construct an ArrayRef from a std::vector.
     template<typename A>
-    /*implicit*/ ArrayRef(const MISTD::vector<T, A> &Vec)
+    /*implicit*/ ArrayRef(const std::vector<T, A> &Vec)
       : Data(Vec.empty() ? (T*)0 : &Vec[0]), Length(Vec.size()) {}
 
     /// Construct an ArrayRef from a C array.
@@ -84,8 +84,8 @@ namespace llvm {
       : Data(Arr), Length(N) {}
 
 #if LLVM_HAS_INITIALIZER_LISTS
-    /// Construct an ArrayRef from a MISTD::initializer_list.
-    /*implicit*/ ArrayRef(const MISTD::initializer_list<T> &Vec)
+    /// Construct an ArrayRef from a std::initializer_list.
+    /*implicit*/ ArrayRef(const std::initializer_list<T> &Vec)
     : Data(Vec.begin() == Vec.end() ? (T*)0 : Vec.begin()),
       Length(Vec.size()) {}
 #endif
@@ -154,15 +154,15 @@ namespace llvm {
     /// @}
     /// @name Expensive Operations
     /// @{
-    MISTD::vector<T> vec() const {
-      return MISTD::vector<T>(Data, Data+Length);
+    std::vector<T> vec() const {
+      return std::vector<T>(Data, Data+Length);
     }
 
     /// @}
     /// @name Conversion operators
     /// @{
-    operator MISTD::vector<T>() const {
-      return MISTD::vector<T>(Data, Data+Length);
+    operator std::vector<T>() const {
+      return std::vector<T>(Data, Data+Length);
     }
 
     /// @}
@@ -185,7 +185,7 @@ namespace llvm {
   public:
     typedef T *iterator;
 
-    typedef MISTD::reverse_iterator<iterator> reverse_iterator;
+    typedef std::reverse_iterator<iterator> reverse_iterator;
 
     /// Construct an empty MutableArrayRef.
     /*implicit*/ MutableArrayRef() : ArrayRef<T>() {}
@@ -207,8 +207,8 @@ namespace llvm {
     /*implicit*/ MutableArrayRef(SmallVectorImpl<T> &Vec)
     : ArrayRef<T>(Vec) {}
 
-    /// Construct a MutableArrayRef from a MISTD::vector.
-    /*implicit*/ MutableArrayRef(MISTD::vector<T> &Vec)
+    /// Construct a MutableArrayRef from a std::vector.
+    /*implicit*/ MutableArrayRef(std::vector<T> &Vec)
     : ArrayRef<T>(Vec) {}
 
     /// Construct an MutableArrayRef from a C array.
@@ -291,9 +291,9 @@ namespace llvm {
     return Vec;
   }
 
-  /// Construct an ArrayRef from a MISTD::vector.
+  /// Construct an ArrayRef from a std::vector.
   template<typename T>
-  ArrayRef<T> makeArrayRef(const MISTD::vector<T> &Vec) {
+  ArrayRef<T> makeArrayRef(const std::vector<T> &Vec) {
     return Vec;
   }
 

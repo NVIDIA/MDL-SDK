@@ -43,7 +43,7 @@
 #include <limits>
 #include <base/lib/log/log.h>
 
-using namespace MISTD;
+using namespace std;
 
 namespace MI
 {
@@ -123,7 +123,7 @@ class Deserialization_manager_impl : public Deserialization_manager
       mi::base::Lock m_lock;			// lock for protecting the set
 
     // Container for keeping deserialization classes
-    typedef MISTD::set<Deserialization_class,  Deserialization_class_compare> Class_set;
+    typedef std::set<Deserialization_class,  Deserialization_class_compare> Class_set;
     Class_set	 m_classes; 			// map of registered class.
 };
 
@@ -201,7 +201,7 @@ void Serializer_impl::write(const char* value)
     write(value, size);
 }
 
-void Serializer_impl::write(const MISTD::string& value)
+void Serializer_impl::write(const std::string& value)
 {
     write_size_t(value.size() + 1u);
     write(value.c_str(), value.size());
@@ -339,7 +339,7 @@ void Deserializer_impl::read_size_t(size_t* value)
     Uint64 value64;
     read(&value64);
 #ifndef BIT64
-    if (value64 > MISTD::numeric_limits<size_t>::max())
+    if (value64 > std::numeric_limits<size_t>::max())
     {
         LOG::mod_log->fatal(M_SERIAL, LOG::Mod_log::C_MISC, 1,
             "Received memory block size which cannot be handled"
@@ -374,14 +374,14 @@ void Deserializer_impl::read(char** value_pointer)
     (*value_pointer)[size-1] = '\0';
 }
 
-void Deserializer_impl::read(MISTD::string* value_pointer)
+void Deserializer_impl::read(std::string* value_pointer)
 {
     size_t size;
     read_size_t(&size);
 
     if (size == 0) {
         // This should not happen unless someone serializes a NULL const char* and
-        // deserializes it as MISTD::string.
+        // deserializes it as std::string.
         value_pointer->clear();
         return;
     }

@@ -28,7 +28,7 @@ namespace llvm {
   class StringRef;
 
 /// This class provides a symbol table of name/value pairs. It is essentially
-/// a MISTD::map<MISTD::string,Value*> but has a controlled interface provided by
+/// a std::map<std::string,Value*> but has a controlled interface provided by
 /// LLVM as well as ensuring uniqueness of names.
 ///
 class ValueSymbolTable {

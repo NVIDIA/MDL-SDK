@@ -51,7 +51,7 @@ namespace {
 
 #ifdef LLVM_ON_WIN32
     // C:
-    if (path.size() >= 2 && MISTD::isalpha(static_cast<unsigned char>(path[0])) &&
+    if (path.size() >= 2 && std::isalpha(static_cast<unsigned char>(path[0])) &&
         path[1] == ':')
       return path.substr(0, 2);
 #endif
@@ -460,7 +460,7 @@ void native(const Twine &path, SmallVectorImpl<char> &result) {
 
 void native(SmallVectorImpl<char> &path) {
 #ifdef LLVM_ON_WIN32
-  MISTD::replace(path.begin(), path.end(), '/', '\\');
+  std::replace(path.begin(), path.end(), '/', '\\');
 #endif
 }
 

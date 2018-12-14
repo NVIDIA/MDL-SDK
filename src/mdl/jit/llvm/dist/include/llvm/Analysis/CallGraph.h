@@ -72,7 +72,7 @@ class CallGraphNode;
 class CallGraph : public ModulePass {
   Module *Mod;              // The module this call graph represents
 
-  typedef MISTD::map<const Function *, CallGraphNode *> FunctionMapTy;
+  typedef std::map<const Function *, CallGraphNode *> FunctionMapTy;
   FunctionMapTy FunctionMap;    // Map from a function to its node
 
   // Root is root of the call graph, or the external node if a 'main' function
@@ -178,9 +178,9 @@ class CallGraphNode {
   // CallRecord - This is a pair of the calling instruction (a call or invoke)
   // and the callgraph node being called.
 public:
-  typedef MISTD::pair<WeakVH, CallGraphNode*> CallRecord;
+  typedef std::pair<WeakVH, CallGraphNode*> CallRecord;
 private:
-  MISTD::vector<CallRecord> CalledFunctions;
+  std::vector<CallRecord> CalledFunctions;
   
   /// NumReferences - This is the number of times that this CallGraphNode occurs
   /// in the CalledFunctions array of this or other CallGraphNodes.
@@ -192,7 +192,7 @@ private:
   void DropRef() { --NumReferences; }
   void AddRef() { ++NumReferences; }
 public:
-  typedef MISTD::vector<CallRecord> CalledFunctionsVector;
+  typedef std::vector<CallRecord> CalledFunctionsVector;
 
   
   // CallGraphNode ctor - Create a node for the specified function.
@@ -205,8 +205,8 @@ public:
   // Accessor methods.
   //
 
-  typedef MISTD::vector<CallRecord>::iterator iterator;
-  typedef MISTD::vector<CallRecord>::const_iterator const_iterator;
+  typedef std::vector<CallRecord>::iterator iterator;
+  typedef std::vector<CallRecord>::const_iterator const_iterator;
 
   // getFunction - Return the function that this call graph node represents.
   Function *getFunction() const { return F; }
@@ -253,7 +253,7 @@ public:
   void stealCalledFunctionsFrom(CallGraphNode *N) {
     assert(CalledFunctions.empty() &&
            "Cannot steal callsite information if I already have some");
-    MISTD::swap(CalledFunctions, N->CalledFunctions);
+    std::swap(CalledFunctions, N->CalledFunctions);
   }
   
 
@@ -263,7 +263,7 @@ public:
     assert(!CS.getInstruction() ||
            !CS.getCalledFunction() ||
            !CS.getCalledFunction()->isIntrinsic());
-    CalledFunctions.push_back(MISTD::make_pair(CS.getInstruction(), M));
+    CalledFunctions.push_back(std::make_pair(CS.getInstruction(), M));
     M->AddRef();
   }
 
@@ -311,7 +311,7 @@ template <> struct GraphTraits<CallGraphNode*> {
   typedef CallGraphNode NodeType;
 
   typedef CallGraphNode::CallRecord CGNPairTy;
-  typedef MISTD::pointer_to_unary_function<CGNPairTy, CallGraphNode*> CGNDerefFun;
+  typedef std::pointer_to_unary_function<CGNPairTy, CallGraphNode*> CGNDerefFun;
 
   static NodeType *getEntryNode(CallGraphNode *CGN) { return CGN; }
 
@@ -343,8 +343,8 @@ template<> struct GraphTraits<CallGraph*> : public GraphTraits<CallGraphNode*> {
   static NodeType *getEntryNode(CallGraph *CGN) {
     return CGN->getExternalCallingNode();  // Start at the external node!
   }
-  typedef MISTD::pair<const Function*, CallGraphNode*> PairTy;
-  typedef MISTD::pointer_to_unary_function<PairTy, CallGraphNode&> DerefFun;
+  typedef std::pair<const Function*, CallGraphNode*> PairTy;
+  typedef std::pointer_to_unary_function<PairTy, CallGraphNode&> DerefFun;
 
   // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
   typedef mapped_iterator<CallGraph::iterator, DerefFun> nodes_iterator;

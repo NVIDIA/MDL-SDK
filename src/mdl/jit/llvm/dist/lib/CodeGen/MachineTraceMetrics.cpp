@@ -38,7 +38,7 @@ INITIALIZE_PASS_END(MachineTraceMetrics,
 
 MachineTraceMetrics::MachineTraceMetrics()
   : MachineFunctionPass(ID), MF(0), TII(0), TRI(0), MRI(0), Loops(0) {
-  MISTD::fill(Ensembles, array_endof(Ensembles), (Ensemble*)0);
+  std::fill(Ensembles, array_endof(Ensembles), (Ensemble*)0);
 }
 
 void MachineTraceMetrics::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -172,7 +172,7 @@ computeDepthResources(const MachineBasicBlock *MBB) {
   if (!TBI->Pred) {
     TBI->InstrDepth = 0;
     TBI->Head = MBB->getNumber();
-    MISTD::fill(ProcResourceDepths.begin() + PROffset,
+    std::fill(ProcResourceDepths.begin() + PROffset,
               ProcResourceDepths.begin() + PROffset + PRKinds, 0);
     return;
   }
@@ -208,7 +208,7 @@ computeHeightResources(const MachineBasicBlock *MBB) {
   // The trace tail is done.
   if (!TBI->Succ) {
     TBI->Tail = MBB->getNumber();
-    MISTD::copy(PRCycles.begin(), PRCycles.end(),
+    std::copy(PRCycles.begin(), PRCycles.end(),
               ProcResourceHeights.begin() + PROffset);
     return;
   }
@@ -773,7 +773,7 @@ computeCrossBlockCriticalPath(const TraceBlockInfo &TBI) {
     if (!DefTBI.isUsefulDominator(TBI))
       continue;
     unsigned Len = LIR.Height + Cycles[DefMI].Depth;
-    MaxLen = MISTD::max(MaxLen, Len);
+    MaxLen = std::max(MaxLen, Len);
   }
   return MaxLen;
 }
@@ -854,7 +854,7 @@ computeInstrDepths(const MachineBasicBlock *MBB) {
         if (!Dep.DefMI->isTransient())
           DepCycle += MTM.SchedModel
             .computeOperandLatency(Dep.DefMI, Dep.DefOp, UseMI, Dep.UseOp);
-        Cycle = MISTD::max(Cycle, DepCycle);
+        Cycle = std::max(Cycle, DepCycle);
       }
       // Remember the instruction depth.
       InstrCycles &MICycles = Cycles[UseMI];
@@ -865,7 +865,7 @@ computeInstrDepths(const MachineBasicBlock *MBB) {
         continue;
       }
       // Update critical path length.
-      TBI.CriticalPath = MISTD::max(TBI.CriticalPath, Cycle + MICycles.Height);
+      TBI.CriticalPath = std::max(TBI.CriticalPath, Cycle + MICycles.Height);
       DEBUG(dbgs() << TBI.CriticalPath << '\t' << Cycle << '\t' << *UseMI);
     }
   }
@@ -903,7 +903,7 @@ static unsigned updatePhysDepsUpwards(const MachineInstr *MI, unsigned Height,
         DepHeight += SchedModel
           .computeOperandLatency(MI, MO.getOperandNo(), I->MI, I->Op);
       }
-      Height = MISTD::max(Height, DepHeight);
+      Height = std::max(Height, DepHeight);
       // This regunit is dead above MI.
       RegUnits.erase(I);
     }
@@ -944,7 +944,7 @@ static bool pushDepHeight(const DataDep &Dep,
   // Update Heights[DefMI] to be the maximum height seen.
   MIHeightMap::iterator I;
   bool New;
-  tie(I, New) = Heights.insert(MISTD::make_pair(Dep.DefMI, UseHeight));
+  tie(I, New) = Heights.insert(std::make_pair(Dep.DefMI, UseHeight));
   if (New)
     return true;
 
@@ -1108,7 +1108,7 @@ computeInstrHeights(const MachineBasicBlock *MBB) {
         continue;
       }
       // Update critical path length.
-      TBI.CriticalPath = MISTD::max(TBI.CriticalPath, Cycle + MICycles.Depth);
+      TBI.CriticalPath = std::max(TBI.CriticalPath, Cycle + MICycles.Depth);
       DEBUG(dbgs() << TBI.CriticalPath << '\t' << Cycle << '\t' << *MI);
     }
 
@@ -1134,7 +1134,7 @@ computeInstrHeights(const MachineBasicBlock *MBB) {
     if (!TBI.HasValidInstrDepths)
       continue;
     // Add live-ins to the critical path length.
-    TBI.CriticalPath = MISTD::max(TBI.CriticalPath,
+    TBI.CriticalPath = std::max(TBI.CriticalPath,
                                 computeCrossBlockCriticalPath(TBI));
     DEBUG(dbgs() << "Critical path: " << TBI.CriticalPath << '\n');
   }
@@ -1181,10 +1181,10 @@ unsigned MachineTraceMetrics::Trace::getResourceDepth(bool Bottom) const {
   if (Bottom) {
     ArrayRef<unsigned> PRCycles = TE.MTM.getProcResourceCycles(getBlockNum());
     for (unsigned K = 0; K != PRDepths.size(); ++K)
-      PRMax = MISTD::max(PRMax, PRDepths[K] + PRCycles[K]);
+      PRMax = std::max(PRMax, PRDepths[K] + PRCycles[K]);
   } else {
     for (unsigned K = 0; K != PRDepths.size(); ++K)
-      PRMax = MISTD::max(PRMax, PRDepths[K]);
+      PRMax = std::max(PRMax, PRDepths[K]);
   }
   // Convert to cycle count.
   PRMax = TE.MTM.getCycles(PRMax);
@@ -1195,7 +1195,7 @@ unsigned MachineTraceMetrics::Trace::getResourceDepth(bool Bottom) const {
   if (unsigned IW = TE.MTM.SchedModel.getIssueWidth())
     Instrs /= IW;
   // Assume issue width 1 without a schedule model.
-  return MISTD::max(Instrs, PRMax);
+  return std::max(Instrs, PRMax);
 }
 
 
@@ -1222,7 +1222,7 @@ getResourceLength(ArrayRef<const MachineBasicBlock*> Extrablocks,
         PRCycles += (PI->Cycles * TE.MTM.SchedModel.getResourceFactor(K));
       }
     }
-    PRMax = MISTD::max(PRMax, PRCycles);
+    PRMax = std::max(PRMax, PRCycles);
   }
   // Convert to cycle count.
   PRMax = TE.MTM.getCycles(PRMax);
@@ -1233,7 +1233,7 @@ getResourceLength(ArrayRef<const MachineBasicBlock*> Extrablocks,
   if (unsigned IW = TE.MTM.SchedModel.getIssueWidth())
     Instrs /= IW;
   // Assume issue width 1 without a schedule model.
-  return MISTD::max(Instrs, PRMax);
+  return std::max(Instrs, PRMax);
 }
 
 void MachineTraceMetrics::Ensemble::print(raw_ostream &OS) const {

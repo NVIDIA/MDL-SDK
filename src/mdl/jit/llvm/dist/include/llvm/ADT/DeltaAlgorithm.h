@@ -37,13 +37,13 @@ class DeltaAlgorithm {
 public:
   typedef unsigned change_ty;
   // FIXME: Use a decent data structure.
-  typedef MISTD::set<change_ty> changeset_ty;
-  typedef MISTD::vector<changeset_ty> changesetlist_ty;
+  typedef std::set<change_ty> changeset_ty;
+  typedef std::vector<changeset_ty> changesetlist_ty;
 
 private:
   /// Cache of failed test results. Successful test results are never cached
   /// since we always reduce following a success.
-  MISTD::set<changeset_ty> FailedTestsCache;
+  std::set<changeset_ty> FailedTestsCache;
 
   /// GetTestResult - Get the test result for the \p Changes from the
   /// cache, executing the test if necessary.

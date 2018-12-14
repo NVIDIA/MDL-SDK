@@ -73,7 +73,7 @@ public:
 private:
 
     /// Stack of crcs.
-    MISTD::stack<mi::Uint32> m_crc_stack;
+    std::stack<mi::Uint32> m_crc_stack;
 
     /// Number of checksummed bytes in this scope.
     size_t m_crc_len;

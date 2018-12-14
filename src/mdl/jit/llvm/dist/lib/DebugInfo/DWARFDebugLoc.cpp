@@ -67,7 +67,7 @@ void DWARFDebugLoc::parse(DataExtractor data, unsigned AddressSize) {
       StringRef str = data.getData().substr(Offset, Bytes);
       Offset += Bytes;
       E.Loc.reserve(str.size());
-      MISTD::copy(str.begin(), str.end(), MISTD::back_inserter(E.Loc));
+      std::copy(str.begin(), str.end(), std::back_inserter(E.Loc));
       Loc.Entries.push_back(llvm_move(E));
     }
   }

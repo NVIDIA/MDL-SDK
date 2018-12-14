@@ -49,6 +49,3 @@
 #endif // MI_PLATFORM_WINDOWS
 
 #endif // BASE_MI_WINDOWS_H
-
-
-

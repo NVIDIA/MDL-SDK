@@ -69,10 +69,10 @@ class MCSymbol;
     bool ShouldOmitSectionDirective(StringRef Name, const MCAsmInfo &MAI) const;
 
     StringRef getSectionName() const { return SectionName; }
-    virtual MISTD::string getLabelBeginName() const {
+    virtual std::string getLabelBeginName() const {
       return SectionName.str() + "_begin";
     }
-    virtual MISTD::string getLabelEndName() const {
+    virtual std::string getLabelEndName() const {
       return SectionName.str() + "_end";
     }
     unsigned getCharacteristics() const { return Characteristics; }

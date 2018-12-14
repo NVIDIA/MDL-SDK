@@ -1335,7 +1335,7 @@ export material scratched_metal(
     [[
         anno::display_name("Anisotropy rotation"),
         anno::hard_range(0.0,1.),
-        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.")
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees")
     ]],
     float3 normal = state::normal()
     [[
@@ -1532,7 +1532,7 @@ export material scratched_plastic(
     [[
         anno::display_name("Anisotropy rotation"),
         anno::hard_range(0.0,1.),
-        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees."),
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees"),
         ui_position(5)
     ]],
     uniform float ior = 1.4
@@ -2159,7 +2159,7 @@ export material thick_translucent(
 )
 [[
     anno::display_name("Thick translucent"),
-    anno::description("A a subsurface scattering material"),
+    anno::description("A subsurface scattering material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     anno::version_number(0,1,9,0),
@@ -2806,8 +2806,7 @@ export material add_cutout(
     ]]
 ) [[
     anno::display_name("Add cut-outs"),
-    anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled\namespace\n"
-            "good for modeling leaves, grass or fences"),
+    anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     anno::version_number(0,1,9,0),

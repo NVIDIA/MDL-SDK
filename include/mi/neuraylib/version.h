@@ -51,7 +51,7 @@
 ///
 /// A change in this version number indicates that the binary compatibility
 /// of the interfaces offered through the shared library have changed.
-#define MI_NEURAYLIB_API_VERSION  32
+#define MI_NEURAYLIB_API_VERSION  33
 
 // The following three to four macros define the API version.
 // The macros thereafter are defined in terms of the first four.
@@ -95,25 +95,20 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2018.1.1"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2018.1.2"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
-#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v23"
+#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v24"
 
-// Enables features that were deprecated with version 8.1.
-// #define MI_NEURAYLIB_DEPRECATED_8_1
+// Enables features that were deprecated with version 9.1.
+//#define MI_NEURAYLIB_DEPRECATED_9_1
 
-// Prefixes names of deprecated methods without explicit transaction unless this deprecated feature
-// is enabled.
-#ifdef MI_NEURAYLIB_DEPRECATED_8_1
-#define MI_NEURAYLIB_DEPRECATED_METHOD_8_1(X) X
-#else
-#define MI_NEURAYLIB_DEPRECATED_METHOD_8_1(X) deprecated_##X
+#ifdef MI_NEURAYLIB_DEPRECATED_LEGACY_MDL_API
+#warning Support for macro \
+    MI_NEURAYLIB_DEPRECATED_LEGACY_MDL_API \
+    has been removed
 #endif
-
-// Enables the deprecated legacy MDL API (interfaces IMdl_module, IAttachable, etc.).
-// #define MI_NEURAYLIB_DEPRECATED_LEGACY_MDL_API
 
 #ifdef MI_NEURAYLIB_DEPRECATED_ITRANSACTION_STORE_DEFAULT_PRIVACY_LEVEL_ZERO
 #warning Support for macro \
@@ -149,6 +144,10 @@
 
 #ifdef MI_NEURAYLIB_DEPRECATED_8_0
 #warning Support for macro MI_NEURAYLIB_DEPRECATED_8_0 has been removed
+#endif
+
+#ifdef MI_NEURAYLIB_DEPRECATED_8_1
+#warning Support for macro MI_NEURAYLIB_DEPRECATED_8_1 has been removed
 #endif
 
 /*@}*/ // end group mi_neuray_version

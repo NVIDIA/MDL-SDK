@@ -202,14 +202,14 @@ class Access_module<T, OPTIONAL_MODULE> : private STLEXT::Non_copyable
     /// Initializing constructor.
     /// \param name the name of the module
     Access_module(
-	const MISTD::string& name);
+	const std::string& name);
     /// Destruction.
     ~Access_module();
 
     /// Setup the module with the given name.
     /// \param name the name of the module
     void set(
-	const MISTD::string& name);
+	const std::string& name);
     /// Tear down the module with the given name.
     void reset();
 
@@ -248,7 +248,7 @@ Access_module<T, OPTIONAL_MODULE>::Access_module()
 // Accessing constructor. This (tries to) initializes the module.
 template <typename T>
 Access_module<T, OPTIONAL_MODULE>::Access_module(
-    const MISTD::string& name)
+    const std::string& name)
   : m_module(0)
 {
     set(name);
@@ -273,7 +273,7 @@ Access_module<T, OPTIONAL_MODULE>::~Access_module()
 // it. Since we do have dependencies among modules this might result in undefined behaviour.
 template <typename T>
 void Access_module<T, OPTIONAL_MODULE>::set(
-    const MISTD::string& name)
+    const std::string& name)
 {
     if (!m_module)
 	m_module = Module_registration_entry::init_module(name.c_str());

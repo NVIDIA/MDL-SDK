@@ -49,8 +49,8 @@ Threshold("jump-threading-threshold",
 
 namespace {
   // These are at global scope so static functions can use them too.
-  typedef SmallVectorImpl<MISTD::pair<Constant*, BasicBlock*> > PredValueInfo;
-  typedef SmallVector<MISTD::pair<Constant*, BasicBlock*>, 8> PredValueInfoTy;
+  typedef SmallVectorImpl<std::pair<Constant*, BasicBlock*> > PredValueInfo;
+  typedef SmallVector<std::pair<Constant*, BasicBlock*>, 8> PredValueInfoTy;
 
   // This is used to keep track of what kind of constant we're currently hoping
   // to find.
@@ -84,15 +84,15 @@ namespace {
 #else
     SmallSet<AssertingVH<BasicBlock>, 16> LoopHeaders;
 #endif
-    DenseSet<MISTD::pair<Value*, BasicBlock*> > RecursionSet;
+    DenseSet<std::pair<Value*, BasicBlock*> > RecursionSet;
 
     // RAII helper for updating the recursion stack.
     struct RecursionSetRemover {
-      DenseSet<MISTD::pair<Value*, BasicBlock*> > &TheSet;
-      MISTD::pair<Value*, BasicBlock*> ThePair;
+      DenseSet<std::pair<Value*, BasicBlock*> > &TheSet;
+      std::pair<Value*, BasicBlock*> ThePair;
 
-      RecursionSetRemover(DenseSet<MISTD::pair<Value*, BasicBlock*> > &S,
-                          MISTD::pair<Value*, BasicBlock*> P)
+      RecursionSetRemover(DenseSet<std::pair<Value*, BasicBlock*> > &S,
+                          std::pair<Value*, BasicBlock*> P)
         : TheSet(S), ThePair(P) { }
 
       ~RecursionSetRemover() {
@@ -290,7 +290,7 @@ static unsigned getJumpThreadDuplicationCost(const BasicBlock *BB,
 /// mutates, so we don't allow any of these transformations.
 ///
 void JumpThreading::FindLoopHeaders(Function &F) {
-  SmallVector<MISTD::pair<const BasicBlock*,const BasicBlock*>, 32> Edges;
+  SmallVector<std::pair<const BasicBlock*,const BasicBlock*>, 32> Edges;
   FindFunctionBackedges(F, Edges);
 
   for (unsigned i = 0, e = Edges.size(); i != e; ++i)
@@ -330,17 +330,17 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
   // get into an infinite loop going around loops in the use-def chain.  To
   // prevent this, keep track of what (value, block) pairs we've already visited
   // and terminate the search if we loop back to them
-  if (!RecursionSet.insert(MISTD::make_pair(V, BB)).second)
+  if (!RecursionSet.insert(std::make_pair(V, BB)).second)
     return false;
 
   // An RAII help to remove this pair from the recursion set once the recursion
   // stack pops back out again.
-  RecursionSetRemover remover(RecursionSet, MISTD::make_pair(V, BB));
+  RecursionSetRemover remover(RecursionSet, std::make_pair(V, BB));
 
   // If V is a constant, then it is known in all predecessors.
   if (Constant *KC = getKnownConstant(V, Preference)) {
     for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI)
-      Result.push_back(MISTD::make_pair(KC, *PI));
+      Result.push_back(std::make_pair(KC, *PI));
 
     return true;
   }
@@ -369,7 +369,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
       // predecessor, use that information to try to thread this block.
       Constant *PredCst = LVI->getConstantOnEdge(V, P, BB);
       if (Constant *KC = getKnownConstant(PredCst, Preference))
-        Result.push_back(MISTD::make_pair(KC, P));
+        Result.push_back(std::make_pair(KC, P));
     }
 
     return !Result.empty();
@@ -380,12 +380,12 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
     for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i) {
       Value *InVal = PN->getIncomingValue(i);
       if (Constant *KC = getKnownConstant(InVal, Preference)) {
-        Result.push_back(MISTD::make_pair(KC, PN->getIncomingBlock(i)));
+        Result.push_back(std::make_pair(KC, PN->getIncomingBlock(i)));
       } else {
         Constant *CI = LVI->getConstantOnEdge(InVal,
                                               PN->getIncomingBlock(i), BB);
         if (Constant *KC = getKnownConstant(CI, Preference))
-          Result.push_back(MISTD::make_pair(KC, PN->getIncomingBlock(i)));
+          Result.push_back(std::make_pair(KC, PN->getIncomingBlock(i)));
       }
     }
 
@@ -471,7 +471,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
         Constant *Folded = ConstantExpr::get(BO->getOpcode(), V, CI);
 
         if (Constant *KC = getKnownConstant(Folded, WantInteger))
-          Result.push_back(MISTD::make_pair(KC, LHSVals[i].second));
+          Result.push_back(std::make_pair(KC, LHSVals[i].second));
       }
     }
 
@@ -504,7 +504,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
         }
 
         if (Constant *KC = getKnownConstant(Res, WantInteger))
-          Result.push_back(MISTD::make_pair(KC, PredBB));
+          Result.push_back(std::make_pair(KC, PredBB));
       }
 
       return !Result.empty();
@@ -529,7 +529,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
             continue;
 
           Constant *ResC = ConstantInt::get(Cmp->getType(), Res);
-          Result.push_back(MISTD::make_pair(ResC, P));
+          Result.push_back(std::make_pair(ResC, P));
         }
 
         return !Result.empty();
@@ -547,7 +547,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
           Constant *Folded = ConstantExpr::getCompare(Cmp->getPredicate(),
                                                       V, CmpConst);
           if (Constant *KC = getKnownConstant(Folded, WantInteger))
-            Result.push_back(MISTD::make_pair(KC, LHSVals[i].second));
+            Result.push_back(std::make_pair(KC, LHSVals[i].second));
         }
 
         return !Result.empty();
@@ -582,7 +582,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
 
         // See if the select has a known constant value for this predecessor.
         if (Constant *Val = KnownCond ? TrueVal : FalseVal)
-          Result.push_back(MISTD::make_pair(Val, Conds[i].second));
+          Result.push_back(std::make_pair(Val, Conds[i].second));
       }
 
       return !Result.empty();
@@ -593,7 +593,7 @@ ComputeValueKnownInPredecessors(Value *V, BasicBlock *BB, PredValueInfo &Result,
   Constant *CI = LVI->getConstant(V, BB);
   if (Constant *KC = getKnownConstant(CI, Preference)) {
     for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI)
-      Result.push_back(MISTD::make_pair(KC, *PI));
+      Result.push_back(std::make_pair(KC, *PI));
   }
 
   return !Result.empty();
@@ -612,10 +612,10 @@ static unsigned GetBestDestForJumpOnUndef(BasicBlock *BB) {
   unsigned MinSucc = 0;
   BasicBlock *TestBB = BBTerm->getSuccessor(MinSucc);
   // Compute the successor with the minimum number of predecessors.
-  unsigned MinNumPreds = MISTD::distance(pred_begin(TestBB), pred_end(TestBB));
+  unsigned MinNumPreds = std::distance(pred_begin(TestBB), pred_end(TestBB));
   for (unsigned i = 1, e = BBTerm->getNumSuccessors(); i != e; ++i) {
     TestBB = BBTerm->getSuccessor(i);
-    unsigned NumPreds = MISTD::distance(pred_begin(TestBB), pred_end(TestBB));
+    unsigned NumPreds = std::distance(pred_begin(TestBB), pred_end(TestBB));
     if (NumPreds < MinNumPreds) {
       MinSucc = i;
       MinNumPreds = NumPreds;
@@ -884,7 +884,7 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
   MDNode *TBAATag = LI->getMetadata(LLVMContext::MD_tbaa);
 
   SmallPtrSet<BasicBlock*, 8> PredsScanned;
-  typedef SmallVector<MISTD::pair<BasicBlock*, Value*>, 8> AvailablePredsTy;
+  typedef SmallVector<std::pair<BasicBlock*, Value*>, 8> AvailablePredsTy;
   AvailablePredsTy AvailablePreds;
   BasicBlock *OneUnavailablePred = 0;
 
@@ -913,7 +913,7 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
 
     // If so, this load is partially redundant.  Remember this info so that we
     // can create a PHI node.
-    AvailablePreds.push_back(MISTD::make_pair(PredBB, PredAvailable));
+    AvailablePreds.push_back(std::make_pair(PredBB, PredAvailable));
   }
 
   // If the loaded value isn't available in any predecessor, it isn't partially
@@ -972,7 +972,7 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
     if (TBAATag)
       NewVal->setMetadata(LLVMContext::MD_tbaa, TBAATag);
 
-    AvailablePreds.push_back(MISTD::make_pair(UnavailablePred, NewVal));
+    AvailablePreds.push_back(std::make_pair(UnavailablePred, NewVal));
   }
 
   // Now we know that each predecessor of this block has a value in
@@ -981,7 +981,7 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
 
   // Create a PHI node at the start of the block for the PRE'd load value.
   pred_iterator PB = pred_begin(LoadBB), PE = pred_end(LoadBB);
-  PHINode *PN = PHINode::Create(LI->getType(), MISTD::distance(PB, PE), "",
+  PHINode *PN = PHINode::Create(LI->getType(), std::distance(PB, PE), "",
                                 LoadBB->begin());
   PN->takeName(LI);
   PN->setDebugLoc(LI->getDebugLoc());
@@ -991,8 +991,8 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
   for (pred_iterator PI = PB; PI != PE; ++PI) {
     BasicBlock *P = *PI;
     AvailablePredsTy::iterator I =
-      MISTD::lower_bound(AvailablePreds.begin(), AvailablePreds.end(),
-                       MISTD::make_pair(P, (Value*)0));
+      std::lower_bound(AvailablePreds.begin(), AvailablePreds.end(),
+                       std::make_pair(P, (Value*)0));
 
     assert(I != AvailablePreds.end() && I->first == P &&
            "Didn't find entry for predecessor!");
@@ -1013,7 +1013,7 @@ bool JumpThreading::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
 /// the list.
 static BasicBlock *
 FindMostPopularDest(BasicBlock *BB,
-                    const SmallVectorImpl<MISTD::pair<BasicBlock*,
+                    const SmallVectorImpl<std::pair<BasicBlock*,
                                   BasicBlock*> > &PredToDestList) {
   assert(!PredToDestList.empty());
 
@@ -1058,7 +1058,7 @@ FindMostPopularDest(BasicBlock *BB,
     for (unsigned i = 0; ; ++i) {
       assert(i != TI->getNumSuccessors() && "Didn't find any successor!");
 
-      if (MISTD::find(SamePopularity.begin(), SamePopularity.end(),
+      if (std::find(SamePopularity.begin(), SamePopularity.end(),
                     TI->getSuccessor(i)) == SamePopularity.end())
         continue;
 
@@ -1097,7 +1097,7 @@ bool JumpThreading::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
   // predecessors and keeps track of the undefined inputs (which are represented
   // as a null dest in the PredToDestList).
   SmallPtrSet<BasicBlock*, 16> SeenPreds;
-  SmallVector<MISTD::pair<BasicBlock*, BasicBlock*>, 16> PredToDestList;
+  SmallVector<std::pair<BasicBlock*, BasicBlock*>, 16> PredToDestList;
 
   BasicBlock *OnlyDest = 0;
   BasicBlock *MultipleDestSentinel = (BasicBlock*)(intptr_t)~0ULL;
@@ -1133,7 +1133,7 @@ bool JumpThreading::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
     else if (OnlyDest != DestBB)
       OnlyDest = MultipleDestSentinel;
 
-    PredToDestList.push_back(MISTD::make_pair(Pred, DestBB));
+    PredToDestList.push_back(std::make_pair(Pred, DestBB));
   }
 
   // If all edges were unthreadable, we fail.

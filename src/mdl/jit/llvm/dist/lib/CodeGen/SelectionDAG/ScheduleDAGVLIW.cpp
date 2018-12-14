@@ -57,7 +57,7 @@ private:
   /// been issued, but their results are not ready yet (due to the latency of
   /// the operation).  Once the operands become available, the instruction is
   /// added to the AvailableQueue.
-  MISTD::vector<SUnit*> PendingQueue;
+  std::vector<SUnit*> PendingQueue;
 
   /// HazardRec - The hazard recognizer to use.
   ScheduleHazardRecognizer *HazardRec;
@@ -182,7 +182,7 @@ void ScheduleDAGVLIW::listScheduleTopDown() {
 
   // While AvailableQueue is not empty, grab the node with the highest
   // priority. If it is not ready put it back.  Schedule the node.
-  MISTD::vector<SUnit*> NotReady;
+  std::vector<SUnit*> NotReady;
   Sequence.reserve(SUnits.size());
   while (!AvailableQueue->empty() || !PendingQueue.empty()) {
     // Check to see if any of the pending instructions are ready to issue.  If

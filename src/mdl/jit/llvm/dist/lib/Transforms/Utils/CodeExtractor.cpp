@@ -305,7 +305,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
   default: RetTy = Type::getInt16Ty(header->getContext()); break;
   }
 
-  MISTD::vector<Type*> paramTy;
+  std::vector<Type*> paramTy;
 
   // Add the types of the input values to the function's argument list
   for (ValueSet::const_iterator i = inputs.begin(), e = inputs.end();
@@ -326,7 +326,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
   }
 
   DEBUG(dbgs() << "Function type: " << *RetTy << " f(");
-  for (MISTD::vector<Type*>::iterator i = paramTy.begin(),
+  for (std::vector<Type*>::iterator i = paramTy.begin(),
          e = paramTy.end(); i != e; ++i)
     DEBUG(dbgs() << **i << ", ");
   DEBUG(dbgs() << ")\n");
@@ -369,8 +369,8 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
     } else
       RewriteVal = AI++;
 
-    MISTD::vector<User*> Users(inputs[i]->use_begin(), inputs[i]->use_end());
-    for (MISTD::vector<User*>::iterator use = Users.begin(), useE = Users.end();
+    std::vector<User*> Users(inputs[i]->use_begin(), inputs[i]->use_end());
+    for (std::vector<User*>::iterator use = Users.begin(), useE = Users.end();
          use != useE; ++use)
       if (Instruction* inst = dyn_cast<Instruction>(*use))
         if (Blocks.count(inst->getParent()))
@@ -389,7 +389,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
   // Rewrite branches to basic blocks outside of the loop to new dummy blocks
   // within the new function. This must be done before we lose track of which
   // blocks were originally in the code region.
-  MISTD::vector<User*> Users(header->use_begin(), header->use_end());
+  std::vector<User*> Users(header->use_begin(), header->use_end());
   for (unsigned i = 0, e = Users.size(); i != e; ++i)
     // The BasicBlock which contains the branch is not in the region
     // modify the branch target to a new block
@@ -423,7 +423,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
                            ValueSet &inputs, ValueSet &outputs) {
   // Emit a call to the new function, passing in: *pointer to struct (if
   // aggregating parameters), or plan inputs and allocated memory for outputs
-  MISTD::vector<Value*> params, StructValues, ReloadOutputs, Reloads;
+  std::vector<Value*> params, StructValues, ReloadOutputs, Reloads;
   
   LLVMContext &Context = newFunction->getContext();
 
@@ -449,7 +449,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
 
   AllocaInst *Struct = 0;
   if (AggregateArgs && (inputs.size() + outputs.size() > 0)) {
-    MISTD::vector<Type*> ArgTypes;
+    std::vector<Type*> ArgTypes;
     for (ValueSet::iterator v = StructValues.begin(),
            ve = StructValues.end(); v != ve; ++v)
       ArgTypes.push_back((*v)->getType());
@@ -482,7 +482,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
   Function::arg_iterator OutputArgBegin = newFunction->arg_begin();
   unsigned FirstOut = inputs.size();
   if (!AggregateArgs)
-    MISTD::advance(OutputArgBegin, inputs.size());
+    std::advance(OutputArgBegin, inputs.size());
 
   // Reload the outputs passed in by reference
   for (unsigned i = 0, e = outputs.size(); i != e; ++i) {
@@ -502,7 +502,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
     LoadInst *load = new LoadInst(Output, outputs[i]->getName()+".reload");
     Reloads.push_back(load);
     codeReplacer->getInstList().push_back(load);
-    MISTD::vector<User*> Users(outputs[i]->use_begin(), outputs[i]->use_end());
+    std::vector<User*> Users(outputs[i]->use_begin(), outputs[i]->use_end());
     for (unsigned u = 0, e = Users.size(); u != e; ++u) {
       Instruction *inst = cast<Instruction>(Users[u]);
       if (!Blocks.count(inst->getParent()))
@@ -520,7 +520,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
   // over all of the blocks in the extracted region, updating any terminator
   // instructions in the to-be-extracted region that branch to blocks that are
   // not in the region to be extracted.
-  MISTD::map<BasicBlock*, BasicBlock*> ExitBlockMap;
+  std::map<BasicBlock*, BasicBlock*> ExitBlockMap;
 
   unsigned switchVal = 0;
   for (SetVector<BasicBlock*>::const_iterator i = Blocks.begin(),
@@ -573,7 +573,7 @@ emitCallAndSwitchStatement(Function *newFunction, BasicBlock *codeReplacer,
               // Make sure we are looking at the original successor block, not
               // at a newly inserted exit block, which won't be in the dominator
               // info.
-              for (MISTD::map<BasicBlock*, BasicBlock*>::iterator I =
+              for (std::map<BasicBlock*, BasicBlock*>::iterator I =
                      ExitBlockMap.begin(), E = ExitBlockMap.end(); I != E; ++I)
                 if (DefBlock == I->second) {
                   DefBlock = I->first;
@@ -748,12 +748,12 @@ Function *CodeExtractor::extractCodeRegion() {
   // Look at all successors of the codeReplacer block.  If any of these blocks
   // had PHI nodes in them, we need to update the "from" block to be the code
   // replacer, not the original block in the extracted region.
-  MISTD::vector<BasicBlock*> Succs(succ_begin(codeReplacer),
+  std::vector<BasicBlock*> Succs(succ_begin(codeReplacer),
                                  succ_end(codeReplacer));
   for (unsigned i = 0, e = Succs.size(); i != e; ++i)
     for (BasicBlock::iterator I = Succs[i]->begin(); isa<PHINode>(I); ++I) {
       PHINode *PN = cast<PHINode>(I);
-      MISTD::set<BasicBlock*> ProcessedPreds;
+      std::set<BasicBlock*> ProcessedPreds;
       for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
         if (Blocks.count(PN->getIncomingBlock(i))) {
           if (ProcessedPreds.insert(PN->getIncomingBlock(i)).second)

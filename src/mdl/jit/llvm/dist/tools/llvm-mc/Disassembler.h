@@ -29,7 +29,7 @@ class MCStreamer;
 class Disassembler {
 public:
   static int disassemble(const Target &T,
-                         const MISTD::string &Triple,
+                         const std::string &Triple,
                          MCSubtargetInfo &STI,
                          MCStreamer &Streamer,
                          MemoryBuffer &Buffer,

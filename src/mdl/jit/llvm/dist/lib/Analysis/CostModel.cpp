@@ -275,7 +275,7 @@ static bool matchPairwiseReduction(const ExtractElementInst *ReduxRoot,
   return true;
 }
 
-static MISTD::pair<Value *, ShuffleVectorInst *>
+static std::pair<Value *, ShuffleVectorInst *>
 getShuffleAndOtherOprd(BinaryOperator *B) {
 
   Value *L = B->getOperand(0);
@@ -283,10 +283,10 @@ getShuffleAndOtherOprd(BinaryOperator *B) {
   ShuffleVectorInst *S = 0;
 
   if ((S = dyn_cast<ShuffleVectorInst>(L)))
-    return MISTD::make_pair(R, S);
+    return std::make_pair(R, S);
 
   S = dyn_cast<ShuffleVectorInst>(R);
-  return MISTD::make_pair(L, S);
+  return std::make_pair(L, S);
 }
 
 static bool matchVectorSplittingReduction(const ExtractElementInst *ReduxRoot,
@@ -349,7 +349,7 @@ static bool matchVectorSplittingReduction(const ExtractElementInst *ReduxRoot,
     for (unsigned j = 0; j != MaskStart; ++j)
       ShuffleMask[j] = MaskStart + j;
     // Fill the rest of the mask with -1 for undef.
-    MISTD::fill(&ShuffleMask[MaskStart], ShuffleMask.end(), -1);
+    std::fill(&ShuffleMask[MaskStart], ShuffleMask.end(), -1);
 
     SmallVector<int, 16> Mask = Shuffle->getShuffleMask();
     if (!matchMask(ShuffleMask, Mask))

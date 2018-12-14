@@ -736,7 +736,7 @@ public:
   /// indicating if this instruction reads or writes Reg. This also considers
   /// partial defines.
   /// If Ops is not null, all operand indices for Reg are added.
-  MISTD::pair<bool,bool> readsWritesVirtualRegister(unsigned Reg,
+  std::pair<bool,bool> readsWritesVirtualRegister(unsigned Reg,
                                       SmallVectorImpl<unsigned> *Ops = 0) const;
 
   /// killsRegister - Return true if the MachineInstr kills the specified

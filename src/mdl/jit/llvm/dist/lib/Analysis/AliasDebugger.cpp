@@ -35,7 +35,7 @@ namespace {
     //A query to a value that didn't exist when the AA was created
     //means someone forgot to update the AA when creating new values
 
-    MISTD::set<const Value*> Vals;
+    std::set<const Value*> Vals;
     
   public:
     static char ID; // Class identification, replacement for typeinfo

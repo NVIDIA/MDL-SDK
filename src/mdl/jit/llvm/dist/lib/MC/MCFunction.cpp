@@ -55,7 +55,7 @@ void MCBasicBlock::addSuccessor(const MCBasicBlock *MCBB) {
 }
 
 bool MCBasicBlock::isSuccessor(const MCBasicBlock *MCBB) const {
-  return MISTD::find(Successors.begin(), Successors.end(),
+  return std::find(Successors.begin(), Successors.end(),
                    MCBB) != Successors.end();
 }
 
@@ -65,7 +65,7 @@ void MCBasicBlock::addPredecessor(const MCBasicBlock *MCBB) {
 }
 
 bool MCBasicBlock::isPredecessor(const MCBasicBlock *MCBB) const {
-  return MISTD::find(Predecessors.begin(), Predecessors.end(),
+  return std::find(Predecessors.begin(), Predecessors.end(),
                    MCBB) != Predecessors.end();
 }
 

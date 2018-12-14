@@ -170,9 +170,9 @@ static error_code resolveSectionAndAddress(const COFFObjectFile *Obj,
 
 // Given a vector of relocations for a section and an offset into this section
 // the function returns the symbol used for the relocation at the offset.
-static error_code resolveSymbol(const MISTD::vector<RelocationRef> &Rels,
+static error_code resolveSymbol(const std::vector<RelocationRef> &Rels,
                                 uint64_t Offset, SymbolRef &Sym) {
-  for (MISTD::vector<RelocationRef>::const_iterator I = Rels.begin(),
+  for (std::vector<RelocationRef>::const_iterator I = Rels.begin(),
                                                   E = Rels.end();
                                                   I != E; ++I) {
     uint64_t Ofs;
@@ -190,7 +190,7 @@ static error_code resolveSymbol(const MISTD::vector<RelocationRef> &Rels,
 // returns the section content and the address inside the content pointed to
 // by the symbol.
 static error_code getSectionContents(const COFFObjectFile *Obj,
-                                     const MISTD::vector<RelocationRef> &Rels,
+                                     const std::vector<RelocationRef> &Rels,
                                      uint64_t Offset,
                                      ArrayRef<uint8_t> &Contents,
                                      uint64_t &Addr) {
@@ -206,7 +206,7 @@ static error_code getSectionContents(const COFFObjectFile *Obj,
 // Given a vector of relocations for a section and an offset into this section
 // the function returns the name of the symbol used for the relocation at the
 // offset.
-static error_code resolveSymbolName(const MISTD::vector<RelocationRef> &Rels,
+static error_code resolveSymbolName(const std::vector<RelocationRef> &Rels,
                                     uint64_t Offset, StringRef &Name) {
   SymbolRef Sym;
   if (error_code ec = resolveSymbol(Rels, Offset, Sym)) return ec;
@@ -215,7 +215,7 @@ static error_code resolveSymbolName(const MISTD::vector<RelocationRef> &Rels,
 }
 
 static void printCOFFSymbolAddress(llvm::raw_ostream &Out,
-                                   const MISTD::vector<RelocationRef> &Rels,
+                                   const std::vector<RelocationRef> &Rels,
                                    uint64_t Offset, uint32_t Disp) {
   StringRef Sym;
   if (error_code ec = resolveSymbolName(Rels, Offset, Sym)) {
@@ -293,7 +293,7 @@ void llvm::printCOFFUnwindInfo(const COFFObjectFile *Obj) {
     if (Name != ".pdata") continue;
 
     Pdata = Obj->getCOFFSection(SI);
-    MISTD::vector<RelocationRef> Rels;
+    std::vector<RelocationRef> Rels;
     for (relocation_iterator RI = SI->begin_relocations(),
                              RE = SI->end_relocations();
                              RI != RE; RI.increment(ec)) {
@@ -302,7 +302,7 @@ void llvm::printCOFFUnwindInfo(const COFFObjectFile *Obj) {
     }
 
     // Sort relocations by address.
-    MISTD::sort(Rels.begin(), Rels.end(), RelocAddressLess);
+    std::sort(Rels.begin(), Rels.end(), RelocAddressLess);
 
     ArrayRef<uint8_t> Contents;
     if (error(Obj->getSectionContents(Pdata, Contents))) continue;
@@ -312,7 +312,7 @@ void llvm::printCOFFUnwindInfo(const COFFObjectFile *Obj) {
                   reinterpret_cast<const RuntimeFunction *>(Contents.data()),
                                   Contents.size() / sizeof(RuntimeFunction));
     for (const RuntimeFunction *I = RFs.begin(), *E = RFs.end(); I < E; ++I) {
-      const uint64_t SectionOffset = MISTD::distance(RFs.begin(), I)
+      const uint64_t SectionOffset = std::distance(RFs.begin(), I)
                                      * sizeof(RuntimeFunction);
 
       outs() << "Function Table:\n";

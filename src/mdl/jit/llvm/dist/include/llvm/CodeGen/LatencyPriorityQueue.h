@@ -22,7 +22,7 @@ namespace llvm {
   class LatencyPriorityQueue;
 
   /// Sorting functions for the Available queue.
-  struct latency_sort : public MISTD::binary_function<SUnit*, SUnit*, bool> {
+  struct latency_sort : public std::binary_function<SUnit*, SUnit*, bool> {
     LatencyPriorityQueue *PQ;
     explicit latency_sort(LatencyPriorityQueue *pq) : PQ(pq) {}
 
@@ -31,16 +31,16 @@ namespace llvm {
 
   class LatencyPriorityQueue : public SchedulingPriorityQueue {
     // SUnits - The SUnits for the current graph.
-    MISTD::vector<SUnit> *SUnits;
+    std::vector<SUnit> *SUnits;
 
     /// NumNodesSolelyBlocking - This vector contains, for every node in the
     /// Queue, the number of nodes that the node is the sole unscheduled
     /// predecessor for.  This is used as a tie-breaker heuristic for better
     /// mobility.
-    MISTD::vector<unsigned> NumNodesSolelyBlocking;
+    std::vector<unsigned> NumNodesSolelyBlocking;
 
     /// Queue - The queue.
-    MISTD::vector<SUnit*> Queue;
+    std::vector<SUnit*> Queue;
     latency_sort Picker;
 
   public:
@@ -49,7 +49,7 @@ namespace llvm {
 
     bool isBottomUp() const { return false; }
 
-    void initNodes(MISTD::vector<SUnit> &sunits) {
+    void initNodes(std::vector<SUnit> &sunits) {
       SUnits = &sunits;
       NumNodesSolelyBlocking.resize(SUnits->size(), 0);
     }

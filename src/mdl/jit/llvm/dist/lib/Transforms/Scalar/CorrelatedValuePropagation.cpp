@@ -80,7 +80,7 @@ bool CorrelatedValuePropagation::processSelect(SelectInst *S) {
 
   Value *ReplaceWith = S->getOperand(1);
   Value *Other = S->getOperand(2);
-  if (!CI->isOne()) MISTD::swap(ReplaceWith, Other);
+  if (!CI->isOne()) std::swap(ReplaceWith, Other);
   if (ReplaceWith == S) ReplaceWith = UndefValue::get(S->getType());
 
   S->replaceAllUsesWith(ReplaceWith);

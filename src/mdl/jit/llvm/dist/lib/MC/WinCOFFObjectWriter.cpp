@@ -87,13 +87,13 @@ struct COFFRelocation {
   static size_t size() { return COFF::RelocationSize; }
 };
 
-typedef MISTD::vector<COFFRelocation> relocations;
+typedef std::vector<COFFRelocation> relocations;
 
 class COFFSection {
 public:
   COFF::section Header;
 
-  MISTD::string          Name;
+  std::string          Name;
   int                  Number;
   MCSectionData const *MCData;
   COFFSymbol          *Symbol;
@@ -110,7 +110,7 @@ class StringTable {
 
   void update_length();
 public:
-  MISTD::vector<char> Data;
+  std::vector<char> Data;
 
   StringTable();
   size_t size() const;
@@ -120,8 +120,8 @@ public:
 class WinCOFFObjectWriter : public MCObjectWriter {
 public:
 
-  typedef MISTD::vector<COFFSymbol*>  symbols;
-  typedef MISTD::vector<COFFSection*> sections;
+  typedef std::vector<COFFSymbol*>  symbols;
+  typedef std::vector<COFFSection*> sections;
 
   typedef DenseMap<MCSymbol  const *, COFFSymbol *>   symbol_map;
   typedef DenseMap<MCSection const *, COFFSection *> section_map;
@@ -418,7 +418,7 @@ void WinCOFFObjectWriter::DefineSymbol(MCSymbolData const &SymbolData,
 
       coff_symbol->Other = GetOrCreateCOFFSymbol(&SymRef->getSymbol());
     } else {
-      MISTD::string WeakName = MISTD::string(".weak.")
+      std::string WeakName = std::string(".weak.")
                            +  Symbol.getName().str()
                            + ".default";
       COFFSymbol *WeakDefault = createSymbol(WeakName);

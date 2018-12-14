@@ -250,7 +250,7 @@ bool llvm::finalizeBundles(MachineFunction &MF) {
 
 MachineOperandIteratorBase::VirtRegInfo
 MachineOperandIteratorBase::analyzeVirtReg(unsigned Reg,
-                    SmallVectorImpl<MISTD::pair<MachineInstr*, unsigned> > *Ops) {
+                    SmallVectorImpl<std::pair<MachineInstr*, unsigned> > *Ops) {
   VirtRegInfo RI = { false, false, false };
   for(; isValid(); ++*this) {
     MachineOperand &MO = deref();
@@ -259,7 +259,7 @@ MachineOperandIteratorBase::analyzeVirtReg(unsigned Reg,
 
     // Remember each (MI, OpNo) that refers to Reg.
     if (Ops)
-      Ops->push_back(MISTD::make_pair(MO.getParent(), getOperandNo()));
+      Ops->push_back(std::make_pair(MO.getParent(), getOperandNo()));
 
     // Both defs and uses can read virtual registers.
     if (MO.readsReg()) {

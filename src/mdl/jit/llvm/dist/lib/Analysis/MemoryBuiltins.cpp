@@ -444,12 +444,12 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitAllocaInst(AllocaInst &I) {
 
   APInt Size(IntTyBits, DL->getTypeAllocSize(I.getAllocatedType()));
   if (!I.isArrayAllocation())
-    return MISTD::make_pair(align(Size, I.getAlignment()), Zero);
+    return std::make_pair(align(Size, I.getAlignment()), Zero);
 
   Value *ArraySize = I.getArraySize();
   if (const ConstantInt *C = dyn_cast<ConstantInt>(ArraySize)) {
     Size *= C->getValue().zextOrSelf(IntTyBits);
-    return MISTD::make_pair(align(Size, I.getAlignment()), Zero);
+    return std::make_pair(align(Size, I.getAlignment()), Zero);
   }
   return unknown();
 }
@@ -462,7 +462,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitArgument(Argument &A) {
   }
   PointerType *PT = cast<PointerType>(A.getType());
   APInt Size(IntTyBits, DL->getTypeAllocSize(PT->getElementType()));
-  return MISTD::make_pair(align(Size, A.getParamAlignment()), Zero);
+  return std::make_pair(align(Size, A.getParamAlignment()), Zero);
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::visitCallSite(CallSite CS) {
@@ -487,7 +487,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitCallSite(CallSite CS) {
       if (Size.ugt(MaxSize))
         Size = MaxSize + 1;
     }
-    return MISTD::make_pair(Size, Zero);
+    return std::make_pair(Size, Zero);
   }
 
   ConstantInt *Arg = dyn_cast<ConstantInt>(CS.getArgument(FnData->FstParam));
@@ -497,14 +497,14 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitCallSite(CallSite CS) {
   APInt Size = Arg->getValue().zextOrSelf(IntTyBits);
   // size determined by just 1 parameter
   if (FnData->SndParam < 0)
-    return MISTD::make_pair(Size, Zero);
+    return std::make_pair(Size, Zero);
 
   Arg = dyn_cast<ConstantInt>(CS.getArgument(FnData->SndParam));
   if (!Arg)
     return unknown();
 
   Size *= Arg->getValue().zextOrSelf(IntTyBits);
-  return MISTD::make_pair(Size, Zero);
+  return std::make_pair(Size, Zero);
 
   // TODO: handle more standard functions (+ wchar cousins):
   // - strdup / strndup
@@ -517,7 +517,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitCallSite(CallSite CS) {
 
 SizeOffsetType
 ObjectSizeOffsetVisitor::visitConstantPointerNull(ConstantPointerNull&) {
-  return MISTD::make_pair(Zero, Zero);
+  return std::make_pair(Zero, Zero);
 }
 
 SizeOffsetType
@@ -537,7 +537,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitGEPOperator(GEPOperator &GEP) {
   if (!bothKnown(PtrData) || !GEP.accumulateConstantOffset(*DL, Offset))
     return unknown();
 
-  return MISTD::make_pair(PtrData.first, PtrData.second + Offset);
+  return std::make_pair(PtrData.first, PtrData.second + Offset);
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::visitGlobalAlias(GlobalAlias &GA) {
@@ -551,7 +551,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitGlobalVariable(GlobalVariable &GV){
     return unknown();
 
   APInt Size(IntTyBits, DL->getTypeAllocSize(GV.getType()->getElementType()));
-  return MISTD::make_pair(align(Size, GV.getAlignment()), Zero);
+  return std::make_pair(align(Size, GV.getAlignment()), Zero);
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::visitIntToPtrInst(IntToPtrInst&) {
@@ -578,7 +578,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitSelectInst(SelectInst &I) {
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::visitUndefValue(UndefValue&) {
-  return MISTD::make_pair(Zero, Zero);
+  return std::make_pair(Zero, Zero);
 }
 
 SizeOffsetType ObjectSizeOffsetVisitor::visitInstruction(Instruction &I) {
@@ -619,7 +619,7 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::compute_(Value *V) {
   ObjectSizeOffsetVisitor Visitor(DL, TLI, Context, RoundToAlign);
   SizeOffsetType Const = Visitor.compute(V);
   if (Visitor.bothKnown(Const))
-    return MISTD::make_pair(ConstantInt::get(Context, Const.first),
+    return std::make_pair(ConstantInt::get(Context, Const.first),
                           ConstantInt::get(Context, Const.second));
 
   V = V->stripPointerCasts();
@@ -678,7 +678,7 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitAllocaInst(AllocaInst &I) {
   Value *Size = ConstantInt::get(ArraySize->getType(),
                                  DL->getTypeAllocSize(I.getAllocatedType()));
   Size = Builder.CreateMul(Size, ArraySize);
-  return MISTD::make_pair(Size, Zero);
+  return std::make_pair(Size, Zero);
 }
 
 SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitCallSite(CallSite CS) {
@@ -696,12 +696,12 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitCallSite(CallSite CS) {
   Value *FirstArg = CS.getArgument(FnData->FstParam);
   FirstArg = Builder.CreateZExt(FirstArg, IntTy);
   if (FnData->SndParam < 0)
-    return MISTD::make_pair(FirstArg, Zero);
+    return std::make_pair(FirstArg, Zero);
 
   Value *SecondArg = CS.getArgument(FnData->SndParam);
   SecondArg = Builder.CreateZExt(SecondArg, IntTy);
   Value *Size = Builder.CreateMul(FirstArg, SecondArg);
-  return MISTD::make_pair(Size, Zero);
+  return std::make_pair(Size, Zero);
 
   // TODO: handle more standard functions (+ wchar cousins):
   // - strdup / strndup
@@ -730,7 +730,7 @@ ObjectSizeOffsetEvaluator::visitGEPOperator(GEPOperator &GEP) {
 
   Value *Offset = EmitGEPOffset(&Builder, *DL, &GEP, /*NoAssumptions=*/true);
   Offset = Builder.CreateAdd(PtrData.second, Offset);
-  return MISTD::make_pair(PtrData.first, Offset);
+  return std::make_pair(PtrData.first, Offset);
 }
 
 SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitIntToPtrInst(IntToPtrInst&) {
@@ -748,7 +748,7 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitPHINode(PHINode &PHI) {
   PHINode *OffsetPHI = Builder.CreatePHI(IntTy, PHI.getNumIncomingValues());
 
   // insert right away in the cache to handle recursive PHIs
-  CacheMap[&PHI] = MISTD::make_pair(SizePHI, OffsetPHI);
+  CacheMap[&PHI] = std::make_pair(SizePHI, OffsetPHI);
 
   // compute offset/size for each PHI incoming pointer
   for (unsigned i = 0, e = PHI.getNumIncomingValues(); i != e; ++i) {
@@ -777,7 +777,7 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitPHINode(PHINode &PHI) {
     OffsetPHI->replaceAllUsesWith(Offset);
     OffsetPHI->eraseFromParent();
   }
-  return MISTD::make_pair(Size, Offset);
+  return std::make_pair(Size, Offset);
 }
 
 SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitSelectInst(SelectInst &I) {
@@ -793,7 +793,7 @@ SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitSelectInst(SelectInst &I) {
                                      FalseSide.first);
   Value *Offset = Builder.CreateSelect(I.getCondition(), TrueSide.second,
                                        FalseSide.second);
-  return MISTD::make_pair(Size, Offset);
+  return std::make_pair(Size, Offset);
 }
 
 SizeOffsetEvalType ObjectSizeOffsetEvaluator::visitInstruction(Instruction &I) {

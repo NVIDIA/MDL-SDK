@@ -52,6 +52,7 @@ namespace MI {
 
 namespace DB { class Transaction; }
 namespace MDL {
+    class Execution_context;
     class Mdl_compiled_material;
     class Mdl_function_call;
     class IValue;
@@ -92,18 +93,15 @@ public:
     const mi::neuraylib::ITarget_code* translate_environment(
         DB::Transaction* transaction,
         const MDL::Mdl_function_call* call,
-        mi::Float32 mdl_meters_per_scene_unit,
-        mi::Float32 mdl_wavelength_min,
-        mi::Float32 mdl_wavelength_max,
         const char* fname,
-        mi::Sint32* errors);
+        MDL::Execution_context* context);
 
     const mi::neuraylib::ITarget_code* translate_material_expression(
         DB::Transaction* transaction,
         const MDL::Mdl_compiled_material* material,
         const char* path,
         const char* fname,
-        mi::Sint32* errors);
+        MDL::Execution_context* context);
 
     const mi::neuraylib::ITarget_code* translate_material_expressions(
         DB::Transaction* transaction,
@@ -128,8 +126,7 @@ public:
         const MDL::Mdl_compiled_material* material,
         const char* path,
         const char* base_fname,
-        bool include_geometry_normal,
-        mi::Sint32* errors);
+        MDL::Execution_context* context);
 
     const mi::Uint8* get_device_library( mi::Size &size) const;
 
@@ -144,7 +141,7 @@ public:
 
     mi::neuraylib::ITarget_code const *translate_link_unit(
         Link_unit const *lu,
-        mi::Sint32      *errors);
+        MDL::Execution_context* context);
 
     /// Get the MDL compiler.
     mi::base::Handle<mi::mdl::IMDL> get_compiler() const { return m_compiler; }
@@ -176,6 +173,9 @@ public:
     /// If true, string arguments are mapped to string identifiers.
     bool get_strings_mapped_to_ids() const { return m_strings_mapped_to_ids; }
 
+    /// If true, derivatives should be calculated.
+    bool get_calc_derivatives() const { return m_calc_derivatives; }
+
     /// Add a function to the given target code, also registering the function prototypes
     /// applicable for the used backend.
     ///
@@ -186,7 +186,7 @@ public:
     /// \param arg_block_index  The argument block index for this function or ~0 if not used
     void add_target_code_function(
         Target_code *tc,
-        MISTD::string const &name,
+        std::string const &name,
         mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
         mi::neuraylib::ITarget_code::Function_kind func_kind,
         mi::Size arg_block_index);
@@ -224,6 +224,9 @@ private:
 
     /// If true, strings arguments are compiled into string identifiers.
     bool m_strings_mapped_to_ids;
+
+    /// If true, derivatives should be calculated.
+    bool m_calc_derivatives;
 
     /// If true, use the builtin resource handler when running native code
     bool m_use_builtin_resource_handler;

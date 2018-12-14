@@ -74,7 +74,7 @@ private:
   /// used to convert raw addresses into the LLVM global value that is emitted
   /// at the address.  This map is not computed unless getGlobalValueAtAddress
   /// is called at some point.
-  MISTD::map<void *, AssertingVH<const GlobalValue> > GlobalAddressReverseMap;
+  std::map<void *, AssertingVH<const GlobalValue> > GlobalAddressReverseMap;
 
 public:
   ExecutionEngineState(ExecutionEngine &EE);
@@ -83,7 +83,7 @@ public:
     return GlobalAddressMap;
   }
 
-  MISTD::map<void*, AssertingVH<const GlobalValue> > &
+  std::map<void*, AssertingVH<const GlobalValue> > &
   getGlobalAddressReverseMap(const MutexGuard &) {
     return GlobalAddressReverseMap;
   }
@@ -135,22 +135,22 @@ protected:
   // pointers at startup time if they are linked in.
   static ExecutionEngine *(*JITCtor)(
     Module *M,
-    MISTD::string *ErrorStr,
+    std::string *ErrorStr,
     JITMemoryManager *JMM,
     bool GVsWithCode,
     TargetMachine *TM);
   static ExecutionEngine *(*MCJITCtor)(
     Module *M,
-    MISTD::string *ErrorStr,
+    std::string *ErrorStr,
     RTDyldMemoryManager *MCJMM,
     bool GVsWithCode,
     TargetMachine *TM);
-  static ExecutionEngine *(*InterpCtor)(Module *M, MISTD::string *ErrorStr);
+  static ExecutionEngine *(*InterpCtor)(Module *M, std::string *ErrorStr);
 
   /// LazyFunctionCreator - If an unknown function is needed, this function
   /// pointer is invoked to create it.  If this returns null, the JIT will
   /// abort.
-  void *(*LazyFunctionCreator)(const MISTD::string &);
+  void *(*LazyFunctionCreator)(const std::string &);
 
 public:
   /// lock - This lock protects the ExecutionEngine, MCJIT, JIT, JITResolver and
@@ -176,7 +176,7 @@ public:
   /// freeMachineCodeForFunction works.
   static ExecutionEngine *create(Module *M,
                                  bool ForceInterpreter = false,
-                                 MISTD::string *ErrorStr = 0,
+                                 std::string *ErrorStr = 0,
                                  CodeGenOpt::Level OptLevel =
                                  CodeGenOpt::Default,
                                  bool GVsWithCode = true);
@@ -188,7 +188,7 @@ public:
   /// Clients should make sure to initialize targets prior to calling this
   /// function.
   static ExecutionEngine *createJIT(Module *M,
-                                    MISTD::string *ErrorStr = 0,
+                                    std::string *ErrorStr = 0,
                                     JITMemoryManager *JMM = 0,
                                     CodeGenOpt::Level OptLevel =
                                     CodeGenOpt::Default,
@@ -218,7 +218,7 @@ public:
   /// runFunction - Execute the specified function with the specified arguments,
   /// and return the result.
   virtual GenericValue runFunction(Function *F,
-                                const MISTD::vector<GenericValue> &ArgValues) = 0;
+                                const std::vector<GenericValue> &ArgValues) = 0;
 
   /// getPointerToNamedFunction - This method returns the address of the
   /// specified function by using the dlsym function call.  As such it is only
@@ -233,7 +233,7 @@ public:
   /// FIXME: the JIT and MCJIT interfaces should be disentangled or united 
   /// again, if possible.
   ///
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) = 0;
 
   /// mapSectionAddress - map a section to its target address space value.
@@ -288,7 +288,7 @@ public:
   /// runFunctionAsMain - This is a helper function which wraps runFunction to
   /// handle the common task of starting up main with the specified argc, argv,
   /// and envp parameters.
-  int runFunctionAsMain(Function *Fn, const MISTD::vector<MISTD::string> &argv,
+  int runFunctionAsMain(Function *Fn, const std::vector<std::string> &argv,
                         const char * const * envp);
 
 
@@ -362,7 +362,7 @@ public:
   /// value. This may involve code generation.
   ///
   /// This function should not be called with the JIT or interpreter engines.
-  virtual uint64_t getGlobalValueAddress(const MISTD::string &Name) {
+  virtual uint64_t getGlobalValueAddress(const std::string &Name) {
     // Default implementation for JIT and interpreter.  MCJIT will override this.
     // JIT and interpreter clients should use getPointerToGlobal instead.
     return 0;
@@ -370,7 +370,7 @@ public:
 
   /// getFunctionAddress - Return the address of the specified function.
   /// This may involve code generation.
-  virtual uint64_t getFunctionAddress(const MISTD::string &Name) {
+  virtual uint64_t getFunctionAddress(const std::string &Name) {
     // Default implementation for JIT and interpreter.  MCJIT will override this.
     // JIT and interpreter clients should use getPointerToFunction instead.
     return 0;
@@ -476,7 +476,7 @@ public:
   /// InstallLazyFunctionCreator - If an unknown function is needed, the
   /// specified function pointer is invoked to create it.  If it returns null,
   /// the JIT will abort.
-  void InstallLazyFunctionCreator(void* (*P)(const MISTD::string &)) {
+  void InstallLazyFunctionCreator(void* (*P)(const std::string &)) {
     LazyFunctionCreator = P;
   }
 
@@ -508,7 +508,7 @@ class EngineBuilder {
 private:
   Module *M;
   EngineKind::Kind WhichEngine;
-  MISTD::string *ErrorStr;
+  std::string *ErrorStr;
   CodeGenOpt::Level OptLevel;
   RTDyldMemoryManager *MCJMM;
   JITMemoryManager *JMM;
@@ -516,9 +516,9 @@ private:
   TargetOptions Options;
   Reloc::Model RelocModel;
   CodeModel::Model CMModel;
-  MISTD::string MArch;
-  MISTD::string MCPU;
-  SmallVector<MISTD::string, 4> MAttrs;
+  std::string MArch;
+  std::string MCPU;
+  SmallVector<std::string, 4> MAttrs;
   bool UseMCJIT;
 
   /// InitEngine - Does the common initialization of default options.
@@ -577,7 +577,7 @@ public:
 
   /// setErrorStr - Set the error string to write to on error.  This option
   /// defaults to NULL.
-  EngineBuilder &setErrorStr(MISTD::string *e) {
+  EngineBuilder &setErrorStr(std::string *e) {
     ErrorStr = e;
     return *this;
   }
@@ -657,7 +657,7 @@ public:
   TargetMachine *selectTarget(const Triple &TargetTriple,
                               StringRef MArch,
                               StringRef MCPU,
-                              const SmallVectorImpl<MISTD::string>& MAttrs);
+                              const SmallVectorImpl<std::string>& MAttrs);
 
   ExecutionEngine *create() {
     return create(selectTarget());

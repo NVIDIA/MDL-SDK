@@ -304,11 +304,17 @@ public:
 
     IAnnotation_list* create_annotation_list() const;
 
-    IExpression* clone( const IExpression* expr) const;
+    IExpression* clone(
+        const IExpression* expr,
+        DB::Transaction* transaction,
+        bool copy_immutable_calls) const;
 
     using IExpression_factory::clone;
 
-    IExpression_list* clone( const IExpression_list* expr) const;
+    IExpression_list* clone(
+        const IExpression_list* expr,
+        DB::Transaction* transaction,
+        bool copy_immutable_calls) const;
 
     mi::Sint32 compare( const IExpression* lhs, const IExpression* rhs) const
     { return compare_static( lhs, rhs); }

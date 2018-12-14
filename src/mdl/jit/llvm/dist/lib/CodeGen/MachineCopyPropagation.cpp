@@ -221,7 +221,7 @@ bool MachineCopyPropagation::CopyPropagateBlock(MachineBasicBlock &MBB) {
 
       // Remember source that's copied to Def. Once it's clobbered, then
       // it's no longer available for copy propagation.
-      if (MISTD::find(SrcMap[Src].begin(), SrcMap[Src].end(), Def) ==
+      if (std::find(SrcMap[Src].begin(), SrcMap[Src].end(), Def) ==
           SrcMap[Src].end()) {
         SrcMap[Src].push_back(Def);
       }

@@ -85,9 +85,9 @@ bool DeltaAlgorithm::Search(const changeset_ty &Changes,
     if (Sets.size() > 2) {
       // FIXME: This is really slow.
       changeset_ty Complement;
-      MISTD::set_difference(
+      std::set_difference(
         Changes.begin(), Changes.end(), it->begin(), it->end(),
-        MISTD::insert_iterator<changeset_ty>(Complement, Complement.begin()));
+        std::insert_iterator<changeset_ty>(Complement, Complement.begin()));
       if (GetTestResult(Complement)) {
         changesetlist_ty ComplementSets;
         ComplementSets.insert(ComplementSets.end(), Sets.begin(), it);

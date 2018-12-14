@@ -20,7 +20,7 @@ namespace {
 class _readobj_error_category : public _do_message {
 public:
   virtual const char* name() const;
-  virtual MISTD::string message(int ev) const;
+  virtual std::string message(int ev) const;
   virtual error_condition default_error_condition(int ev) const;
 };
 } // namespace
@@ -29,7 +29,7 @@ const char *_readobj_error_category::name() const {
   return "llvm.readobj";
 }
 
-MISTD::string _readobj_error_category::message(int ev) const {
+std::string _readobj_error_category::message(int ev) const {
   switch (ev) {
   case readobj_error::success: return "Success";
   case readobj_error::file_not_found:

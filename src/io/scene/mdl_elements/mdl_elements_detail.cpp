@@ -397,7 +397,7 @@ DB::Tag mdl_light_profile_to_tag(
     ASSERT( M_SCENE, resolved_filename);
 
     DB::Tag tag;
-    const MISTD::string& absolute_mdl_file_path = reader->get_mdl_url();
+    const std::string& absolute_mdl_file_path = reader->get_mdl_url();
 
     if( is_archive_member( resolved_filename)) {
 
@@ -467,7 +467,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     ASSERT( M_SCENE, resolved_filename);
 
     DB::Tag tag;
-    const MISTD::string& absolute_mdl_file_path = reader->get_mdl_url();
+    const std::string& absolute_mdl_file_path = reader->get_mdl_url();
 
     if( is_archive_member( resolved_filename)) {
 

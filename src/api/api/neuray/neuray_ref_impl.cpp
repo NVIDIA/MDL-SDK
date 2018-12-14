@@ -49,8 +49,7 @@ namespace MI {
 
 namespace NEURAY {
 
-template <Ref_type T>
-mi::base::IInterface* Ref_impl<T>::create_api_class(
+mi::base::IInterface* Ref_impl::create_api_class(
     mi::neuraylib::ITransaction* transaction,
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
@@ -62,41 +61,18 @@ mi::base::IInterface* Ref_impl<T>::create_api_class(
     return new Ref_impl( transaction);
 }
 
-template <Ref_type T>
-Ref_impl<T>::Ref_impl( mi::neuraylib::ITransaction* transaction)
+Ref_impl::Ref_impl( mi::neuraylib::ITransaction* transaction)
 {
     ASSERT( M_NEURAY_API, transaction);
     m_transaction = make_handle_dup( static_cast<Transaction_impl*>( transaction));
 }
 
-template <>
-const char* Ref_impl<REF_UNTYPED>::get_type_name() const
+const char* Ref_impl::get_type_name() const
 {
     return "Ref";
 }
 
-
-template <>
-const char* Ref_impl<REF_TEXTURE>::get_type_name() const
-{
-    return "Ref<Texture>";
-}
-
-template <>
-const char* Ref_impl<REF_LIGHTPROFILE>::get_type_name() const
-{
-    return "Ref<Lightprofile>";
-}
-
-template <>
-const char* Ref_impl<REF_BSDF_MEASUREMENT>::get_type_name() const
-{
-    return "Ref<Bsdf_measurement>";
-}
-
-
-template <Ref_type T>
-mi::Sint32 Ref_impl<T>::set_reference( const IInterface* interface)
+mi::Sint32 Ref_impl::set_reference( const IInterface* interface)
 {
     if( !interface) {
         m_storage = DB::Tag();
@@ -111,15 +87,11 @@ mi::Sint32 Ref_impl<T>::set_reference( const IInterface* interface)
     if( !tag.is_valid())
         return -3;
 
-    if( !is_valid_reference_type( tag))
-        return -5;
-
     m_storage = tag;
     return 0;
 }
 
-template <Ref_type T>
-mi::Sint32 Ref_impl<T>::set_reference( const char* name)
+mi::Sint32 Ref_impl::set_reference( const char* name)
 {
     if( !name) {
         m_storage = DB::Tag();
@@ -130,15 +102,11 @@ mi::Sint32 Ref_impl<T>::set_reference( const char* name)
     if( !tag.is_valid())
         return -2;
 
-    if( !is_valid_reference_type( tag))
-        return -5;
-
     m_storage = tag;
     return 0;
 }
 
-template <Ref_type T>
-const mi::base::IInterface* Ref_impl<T>::get_reference() const
+const mi::base::IInterface* Ref_impl::get_reference() const
 {
     if( !m_storage.is_valid())
         return 0;
@@ -146,8 +114,7 @@ const mi::base::IInterface* Ref_impl<T>::get_reference() const
     return m_transaction->access( m_storage);
 }
 
-template <Ref_type T>
-mi::base::IInterface* Ref_impl<T>::get_reference()
+mi::base::IInterface* Ref_impl::get_reference()
 {
     if( !m_storage.is_valid())
         return 0;
@@ -155,8 +122,7 @@ mi::base::IInterface* Ref_impl<T>::get_reference()
     return m_transaction->edit( m_storage);
 }
 
-template <Ref_type T>
-const char* Ref_impl<T>::get_reference_name() const
+const char* Ref_impl::get_reference_name() const
 {
     if( !m_storage.is_valid())
         return 0;
@@ -165,41 +131,13 @@ const char* Ref_impl<T>::get_reference_name() const
     return name;
 }
 
-template <Ref_type T>
-mi::neuraylib::ITransaction* Ref_impl<T>::get_transaction() const
+mi::neuraylib::ITransaction* Ref_impl::get_transaction() const
 {
     m_transaction->retain();
     return m_transaction.get();
 }
 
-template <>
-bool Ref_impl<REF_UNTYPED>::is_valid_reference_type( DB::Tag tag) const
-{
-    return true;
-}
-
-
-template <>
-bool Ref_impl<REF_TEXTURE>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == TEXTURE::ID_TEXTURE;
-}
-
-template <>
-bool Ref_impl<REF_LIGHTPROFILE>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == LIGHTPROFILE::ID_LIGHTPROFILE;
-}
-
-template <>
-bool Ref_impl<REF_BSDF_MEASUREMENT>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == BSDFM::ID_BSDF_MEASUREMENT;
-}
-
-
-template <Ref_type T>
-mi::base::IInterface* Ref_impl_proxy<T>::create_api_class(
+mi::base::IInterface* Ref_impl_proxy::create_api_class(
     mi::neuraylib::ITransaction* transaction,
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
@@ -211,42 +149,19 @@ mi::base::IInterface* Ref_impl_proxy<T>::create_api_class(
     return (new Ref_impl_proxy( transaction))->cast_to_major();
 }
 
-template <Ref_type T>
-Ref_impl_proxy<T>::Ref_impl_proxy( mi::neuraylib::ITransaction* transaction)
+Ref_impl_proxy::Ref_impl_proxy( mi::neuraylib::ITransaction* transaction)
 {
     ASSERT( M_NEURAY_API, transaction);
     m_transaction = make_handle_dup( static_cast<Transaction_impl*>( transaction));
     m_pointer = 0;
 }
 
-template <>
-const char* Ref_impl_proxy<REF_UNTYPED>::get_type_name() const
+const char* Ref_impl_proxy::get_type_name() const
 {
     return "Ref";
 }
 
-
-template <>
-const char* Ref_impl_proxy<REF_TEXTURE>::get_type_name() const
-{
-    return "Ref<Texture>";
-}
-
-template <>
-const char* Ref_impl_proxy<REF_LIGHTPROFILE>::get_type_name() const
-{
-    return "Ref<Lightprofile>";
-}
-
-template <>
-const char* Ref_impl_proxy<REF_BSDF_MEASUREMENT>::get_type_name() const
-{
-    return "Ref<Bsdf_measurement>";
-}
-
-
-template <Ref_type T>
-mi::Sint32 Ref_impl_proxy<T>::set_reference( const IInterface* interface)
+mi::Sint32 Ref_impl_proxy::set_reference( const IInterface* interface)
 {
     if( !interface) {
         *m_pointer = DB::Tag();
@@ -268,15 +183,11 @@ mi::Sint32 Ref_impl_proxy<T>::set_reference( const IInterface* interface)
     if( !owner_db_element->can_reference_tag( tag))
         return -4;
 
-    if( !is_valid_reference_type( tag))
-        return -5;
-
     *m_pointer = tag;
     return 0;
 }
 
-template <Ref_type T>
-mi::Sint32 Ref_impl_proxy<T>::set_reference( const char* name)
+mi::Sint32 Ref_impl_proxy::set_reference( const char* name)
 {
     if( !name) {
         *m_pointer = DB::Tag();
@@ -294,15 +205,11 @@ mi::Sint32 Ref_impl_proxy<T>::set_reference( const char* name)
     if( !owner_db_element->can_reference_tag( tag))
         return -4;
 
-    if( !is_valid_reference_type( tag))
-        return -5;
-
     *m_pointer = tag;
     return 0;
 }
 
-template <Ref_type T>
-const mi::base::IInterface* Ref_impl_proxy<T>::get_reference() const
+const mi::base::IInterface* Ref_impl_proxy::get_reference() const
 {
     if( !m_pointer->is_valid())
         return 0;
@@ -310,8 +217,7 @@ const mi::base::IInterface* Ref_impl_proxy<T>::get_reference() const
     return m_transaction->access( *m_pointer);
 }
 
-template <Ref_type T>
-mi::base::IInterface* Ref_impl_proxy<T>::get_reference()
+mi::base::IInterface* Ref_impl_proxy::get_reference()
 {
     if( !m_pointer->is_valid())
         return 0;
@@ -319,8 +225,7 @@ mi::base::IInterface* Ref_impl_proxy<T>::get_reference()
     return m_transaction->edit( *m_pointer);
 }
 
-template <Ref_type T>
-const char* Ref_impl_proxy<T>::get_reference_name() const
+const char* Ref_impl_proxy::get_reference_name() const
 {
     if( !m_pointer->is_valid())
         return 0;
@@ -329,64 +234,23 @@ const char* Ref_impl_proxy<T>::get_reference_name() const
     return name;
 }
 
-template <Ref_type T>
-void Ref_impl_proxy<T>::set_pointer_and_owner(
+void Ref_impl_proxy::set_pointer_and_owner(
     void* pointer, const mi::base::IInterface* owner)
 {
     m_pointer = static_cast<DB::Tag*>( pointer);
     m_owner = make_handle_dup( owner);
 }
 
-template <Ref_type T>
-void Ref_impl_proxy<T>::release_referenced_memory()
+void Ref_impl_proxy::release_referenced_memory()
 {
     // nothing to do
 }
 
-template <Ref_type T>
-mi::neuraylib::ITransaction* Ref_impl_proxy<T>::get_transaction() const
+mi::neuraylib::ITransaction* Ref_impl_proxy::get_transaction() const
 {
     m_transaction->retain();
     return m_transaction.get();
 }
-
-template <>
-bool Ref_impl_proxy<REF_UNTYPED>::is_valid_reference_type( DB::Tag tag) const
-{
-    return true;
-}
-
-
-template <>
-bool Ref_impl_proxy<REF_TEXTURE>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == TEXTURE::ID_TEXTURE;
-}
-
-template <>
-bool Ref_impl_proxy<REF_LIGHTPROFILE>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == LIGHTPROFILE::ID_LIGHTPROFILE;
-}
-
-template <>
-bool Ref_impl_proxy<REF_BSDF_MEASUREMENT>::is_valid_reference_type( DB::Tag tag) const
-{
-    return m_transaction->get_db_transaction()->get_class_id( tag) == BSDFM::ID_BSDF_MEASUREMENT;
-}
-
-
-// explicit template instantiation for Ref_impl<T>
-template class Ref_impl<REF_UNTYPED>;
-template class Ref_impl<REF_TEXTURE>;
-template class Ref_impl<REF_LIGHTPROFILE>;
-template class Ref_impl<REF_BSDF_MEASUREMENT>;
-
-// explicit template instantiation for Ref_impl_proxy<T>
-template class Ref_impl_proxy<REF_UNTYPED>;
-template class Ref_impl_proxy<REF_TEXTURE>;
-template class Ref_impl_proxy<REF_LIGHTPROFILE>;
-template class Ref_impl_proxy<REF_BSDF_MEASUREMENT>;
 
 } // namespace NEURAY
 

@@ -92,7 +92,7 @@ LiveVariables::VarInfo &LiveVariables::getVarInfo(unsigned RegIdx) {
 void LiveVariables::MarkVirtRegAliveInBlock(VarInfo& VRInfo,
                                             MachineBasicBlock *DefBlock,
                                             MachineBasicBlock *MBB,
-                                    MISTD::vector<MachineBasicBlock*> &WorkList) {
+                                    std::vector<MachineBasicBlock*> &WorkList) {
   unsigned BBNum = MBB->getNumber();
 
   // Check to see if this basic block is one of the killing blocks.  If so,
@@ -118,7 +118,7 @@ void LiveVariables::MarkVirtRegAliveInBlock(VarInfo& VRInfo,
 void LiveVariables::MarkVirtRegAliveInBlock(VarInfo &VRInfo,
                                             MachineBasicBlock *DefBlock,
                                             MachineBasicBlock *MBB) {
-  MISTD::vector<MachineBasicBlock*> WorkList;
+  std::vector<MachineBasicBlock*> WorkList;
   MarkVirtRegAliveInBlock(VRInfo, DefBlock, MBB, WorkList);
 
   while (!WorkList.empty()) {
@@ -506,8 +506,8 @@ bool LiveVariables::runOnMachineFunction(MachineFunction &mf) {
   PhysRegDef  = new MachineInstr*[NumRegs];
   PhysRegUse  = new MachineInstr*[NumRegs];
   PHIVarInfo = new SmallVector<unsigned, 4>[MF->getNumBlockIDs()];
-  MISTD::fill(PhysRegDef,  PhysRegDef  + NumRegs, (MachineInstr*)0);
-  MISTD::fill(PhysRegUse,  PhysRegUse  + NumRegs, (MachineInstr*)0);
+  std::fill(PhysRegDef,  PhysRegDef  + NumRegs, (MachineInstr*)0);
+  std::fill(PhysRegUse,  PhysRegUse  + NumRegs, (MachineInstr*)0);
   PHIJoins.clear();
 
   // FIXME: LiveIntervals will be updated to remove its dependence on
@@ -547,7 +547,7 @@ bool LiveVariables::runOnMachineFunction(MachineFunction &mf) {
       MachineInstr *MI = I;
       if (MI->isDebugValue())
         continue;
-      DistanceMap.insert(MISTD::make_pair(MI, Dist++));
+      DistanceMap.insert(std::make_pair(MI, Dist++));
 
       // Process all of the operands of the instruction...
       unsigned NumOperandsToProcess = MI->getNumOperands();
@@ -641,8 +641,8 @@ bool LiveVariables::runOnMachineFunction(MachineFunction &mf) {
       if ((PhysRegDef[i] || PhysRegUse[i]) && !LiveOuts.count(i))
         HandlePhysRegDef(i, 0, Defs);
 
-    MISTD::fill(PhysRegDef,  PhysRegDef  + NumRegs, (MachineInstr*)0);
-    MISTD::fill(PhysRegUse,  PhysRegUse  + NumRegs, (MachineInstr*)0);
+    std::fill(PhysRegDef,  PhysRegDef  + NumRegs, (MachineInstr*)0);
+    std::fill(PhysRegUse,  PhysRegUse  + NumRegs, (MachineInstr*)0);
   }
 
   // Convert and transfer the dead / killed information we have gathered into
@@ -676,7 +676,7 @@ bool LiveVariables::runOnMachineFunction(MachineFunction &mf) {
 void LiveVariables::replaceKillInstruction(unsigned Reg, MachineInstr *OldMI,
                                            MachineInstr *NewMI) {
   VarInfo &VI = getVarInfo(Reg);
-  MISTD::replace(VI.Kills.begin(), VI.Kills.end(), OldMI, NewMI);
+  std::replace(VI.Kills.begin(), VI.Kills.end(), OldMI, NewMI);
 }
 
 /// removeVirtualRegistersKilled - Remove all killed info for the specified
@@ -765,9 +765,9 @@ bool LiveVariables::isLiveOut(unsigned Reg, const MachineBasicBlock &MBB) {
     break;
   }
   default:
-    MISTD::sort(OpSuccBlocks.begin(), OpSuccBlocks.end());
+    std::sort(OpSuccBlocks.begin(), OpSuccBlocks.end());
     for (unsigned i = 0, e = VI.Kills.size(); i != e; ++i)
-      if (MISTD::binary_search(OpSuccBlocks.begin(), OpSuccBlocks.end(),
+      if (std::binary_search(OpSuccBlocks.begin(), OpSuccBlocks.end(),
                              VI.Kills[i]->getParent()))
         return true;
   }

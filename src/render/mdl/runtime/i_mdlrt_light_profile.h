@@ -52,6 +52,7 @@ public:
     Light_profile();
 
     Light_profile(Tag_type const &tag, DB::Transaction *trans);
+    virtual ~Light_profile();
 
     float get_power() const { return m_light_profile->get_power(); }
 
@@ -59,8 +60,21 @@ public:
 
     bool is_valid() const { return m_light_profile->is_valid(); }
 
+    mi::Float32 evaluate(const mi::Float32_2& theta_phi) const;
+    mi::Float32_3 sample(const mi::Float32_3& xi) const;
+    mi::Float32 pdf(const mi::Float32_2& theta_phi) const;
+
 protected:
     DB::Access<LIGHTPROFILE::Lightprofile>  m_light_profile;   // the underlying light profile
+
+    size_t  m_res_t, m_res_p;               // angular resolution of the grid
+    float   m_start_t, m_start_p;           // start of the grid
+    float   m_delta_t, m_delta_p;           // angular step size
+    float   m_inv_delta_t, m_inv_delta_p;   // inverse step size
+    float   m_candela_multiplier;           // factor to rescale the normalized data
+    float   m_total_power;                  // power of the light source to be able to rescale
+
+    float*  m_cdf_data;                     // CDFs for sampling a light profile
 };
 
 }  // MDLRT

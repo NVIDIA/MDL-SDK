@@ -41,7 +41,7 @@
 #endif
 
 /// \brief Does the compiler support r-value references?
-/// This implies that <utility> provides the one-argument MISTD::move;  it
+/// This implies that <utility> provides the one-argument std::move;  it
 /// does not imply the existence of any other C++ library features.
 #if !defined(LLVM_STLPORT_INC) && \
      ((__has_feature(cxx_rvalue_references)   \
@@ -94,17 +94,17 @@
 /// \macro LLVM_HAS_VARIADIC_TEMPLATES
 /// \brief Does this compiler support variadic templates.
 ///
-/// Implies LLVM_HAS_RVALUE_REFERENCES and the existence of MISTD::forward.
+/// Implies LLVM_HAS_RVALUE_REFERENCES and the existence of std::forward.
 #if __has_feature(cxx_variadic_templates)
 # define LLVM_HAS_VARIADIC_TEMPLATES 1
 #else
 # define LLVM_HAS_VARIADIC_TEMPLATES 0
 #endif
 
-/// llvm_move - Expands to ::MISTD::move if the compiler supports
+/// llvm_move - Expands to ::std::move if the compiler supports
 /// r-value references; otherwise, expands to the argument.
 #if LLVM_HAS_RVALUE_REFERENCES
-#define llvm_move(value) (::MISTD::move(value))
+#define llvm_move(value) (::std::move(value))
 #else
 #define llvm_move(value) (value)
 #endif
@@ -405,7 +405,7 @@
 #endif
 
 /// \brief Does the compiler support generalized initializers (using braced
-/// lists and MISTD::initializer_list).
+/// lists and std::initializer_list).
 #if __has_feature(cxx_generalized_initializers)
 #define LLVM_HAS_INITIALIZER_LISTS 1
 #else

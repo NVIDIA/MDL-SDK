@@ -138,7 +138,7 @@ static SDValue getCopyFromParts(SelectionDAG &DAG, SDLoc DL,
       }
 
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
 
       Val = DAG.getNode(ISD::BUILD_PAIR, DL, RoundVT, Lo, Hi);
 
@@ -152,7 +152,7 @@ static SDValue getCopyFromParts(SelectionDAG &DAG, SDLoc DL,
         // Combine the round and odd parts.
         Lo = Val;
         if (TLI.isBigEndian())
-          MISTD::swap(Lo, Hi);
+          std::swap(Lo, Hi);
         EVT TotalVT = EVT::getIntegerVT(*DAG.getContext(), NumParts * PartBits);
         Hi = DAG.getNode(ISD::ANY_EXTEND, DL, TotalVT, Hi);
         Hi = DAG.getNode(ISD::SHL, DL, TotalVT, Hi,
@@ -169,7 +169,7 @@ static SDValue getCopyFromParts(SelectionDAG &DAG, SDLoc DL,
       Lo = DAG.getNode(ISD::BITCAST, DL, EVT(MVT::f64), Parts[0]);
       Hi = DAG.getNode(ISD::BITCAST, DL, EVT(MVT::f64), Parts[1]);
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
       Val = DAG.getNode(ISD::BUILD_PAIR, DL, ValueVT, Lo, Hi);
     } else {
       // FP split into integer parts (soft fp)
@@ -428,7 +428,7 @@ static void getCopyToParts(SelectionDAG &DAG, SDLoc DL,
 
     if (TLI.isBigEndian())
       // The odd parts were reversed by getCopyToParts - unreverse them.
-      MISTD::reverse(Parts + RoundParts, Parts + NumParts);
+      std::reverse(Parts + RoundParts, Parts + NumParts);
 
     NumParts = RoundParts;
     ValueVT = EVT::getIntegerVT(*DAG.getContext(), NumParts * PartBits);
@@ -462,7 +462,7 @@ static void getCopyToParts(SelectionDAG &DAG, SDLoc DL,
   }
 
   if (TLI.isBigEndian())
-    MISTD::reverse(Parts, Parts + OrigNumParts);
+    std::reverse(Parts, Parts + OrigNumParts);
 }
 
 
@@ -666,7 +666,7 @@ namespace {
     void AddInlineAsmOperands(unsigned Kind,
                               bool HasMatching, unsigned MatchingIdx,
                               SelectionDAG &DAG,
-                              MISTD::vector<SDValue> &Ops) const;
+                              std::vector<SDValue> &Ops) const;
   };
 }
 
@@ -830,7 +830,7 @@ void RegsForValue::getCopyToRegs(SDValue Val, SelectionDAG &DAG, SDLoc dl,
 void RegsForValue::AddInlineAsmOperands(unsigned Code, bool HasMatching,
                                         unsigned MatchingIdx,
                                         SelectionDAG &DAG,
-                                        MISTD::vector<SDValue> &Ops) const {
+                                        std::vector<SDValue> &Ops) const {
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
 
   unsigned Flag = InlineAsm::getFlagWord(Code, Regs.size());
@@ -1482,7 +1482,7 @@ void SelectionDAGBuilder::FindMergedConditions(const Value *Cond,
 /// If we should emit this as a bunch of and/or'd together conditions, return
 /// false.
 bool
-SelectionDAGBuilder::ShouldEmitAsBranches(const MISTD::vector<CaseBlock> &Cases) {
+SelectionDAGBuilder::ShouldEmitAsBranches(const std::vector<CaseBlock> &Cases) {
   if (Cases.size() != 2) return true;
 
   // If this is two comparisons of the same values or'd or and'd together, they
@@ -1656,7 +1656,7 @@ void SelectionDAGBuilder::visitSwitchCase(CaseBlock &CB,
   // If the lhs block is the next block, invert the condition so that we can
   // fall through to the lhs instead of the rhs block.
   if (CB.TrueBB == NextBlock) {
-    MISTD::swap(CB.TrueBB, CB.FalseBB);
+    std::swap(CB.TrueBB, CB.FalseBB);
     SDValue True = DAG.getConstant(1, Cond.getValueType());
     Cond = DAG.getNode(ISD::XOR, dl, Cond.getValueType(), Cond, True);
   }
@@ -2104,7 +2104,7 @@ bool SelectionDAGBuilder::handleSmallSwitchRange(CaseRec& CR,
       for (CaseItr J = CR.Range.first; J < I; ++J) {
         uint32_t JWeight = J->ExtraWeight;
         if (IWeight > JWeight)
-          MISTD::swap(*I, *J);
+          std::swap(*I, *J);
       }
     }
   }
@@ -2117,7 +2117,7 @@ bool SelectionDAGBuilder::handleSmallSwitchRange(CaseRec& CR,
     // We start at the bottom as it's the case with the least weight.
     for (Case *I = &*(CR.Range.second-2), *E = &*CR.Range.first-1; I != E; --I)
       if (I->BB == NextBlock) {
-        MISTD::swap(*I, BackCase);
+        std::swap(*I, BackCase);
         break;
       }
   }
@@ -2179,7 +2179,7 @@ static inline bool areJTsAllowed(const TargetLowering &TLI) {
 }
 
 static APInt ComputeRange(const APInt &First, const APInt &Last) {
-  uint32_t BitWidth = MISTD::max(Last.getBitWidth(), First.getBitWidth()) + 1;
+  uint32_t BitWidth = std::max(Last.getBitWidth(), First.getBitWidth()) + 1;
   APInt LastExt = Last.sext(BitWidth), FirstExt = First.sext(BitWidth);
   return (LastExt - FirstExt + 1ULL);
 }
@@ -2241,7 +2241,7 @@ bool SelectionDAGBuilder::handleJTSwitchCase(CaseRec &CR,
   // of the jump table. If the value of the jump table slot corresponds to
   // a case statement, push the case's BB onto the vector, otherwise, push
   // the default BB.
-  MISTD::vector<MachineBasicBlock*> DestBBs;
+  std::vector<MachineBasicBlock*> DestBBs;
   APInt TEI = First;
   for (CaseItr I = CR.Range.first, E = CR.Range.second; I != E; ++TEI) {
     const APInt &Low = cast<ConstantInt>(I->Low)->getValue();
@@ -2270,7 +2270,7 @@ bool SelectionDAGBuilder::handleJTSwitchCase(CaseRec &CR,
 
   // Update successor info. Add one edge to each unique successor.
   BitVector SuccsHandled(CR.CaseBB->getParent()->getNumBlockIDs());
-  for (MISTD::vector<MachineBasicBlock*>::iterator I = DestBBs.begin(),
+  for (std::vector<MachineBasicBlock*>::iterator I = DestBBs.begin(),
          E = DestBBs.end(); I != E; ++I) {
     if (!SuccsHandled[(*I)->getNumber()]) {
       SuccsHandled[(*I)->getNumber()] = true;
@@ -2528,7 +2528,7 @@ bool SelectionDAGBuilder::handleBitTestsSwitchCase(CaseRec& CR,
     }
 
   }
-  MISTD::sort(CasesBits.begin(), CasesBits.end(), CaseBitsCmp());
+  std::sort(CasesBits.begin(), CasesBits.end(), CaseBitsCmp());
 
   BitTestInfo BTC;
 
@@ -2584,7 +2584,7 @@ size_t SelectionDAGBuilder::Clusterify(CaseVector& Cases,
     Cases.push_back(Case(i.getCaseValue(), i.getCaseValue(),
                          SMBB, ExtraWeight));
   }
-  MISTD::sort(Cases.begin(), Cases.end(), CaseCmp());
+  std::sort(Cases.begin(), Cases.end(), CaseCmp());
 
   // Merge case into clusters
   if (Cases.size() >= 2)
@@ -3332,7 +3332,7 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
   const TargetLowering *TLI = TM.getTargetLowering();
   uint64_t TySize = TLI->getDataLayout()->getTypeAllocSize(Ty);
   unsigned Align =
-    MISTD::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
+    std::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty),
              I.getAlignment());
 
   SDValue AllocSize = getValue(I.getArraySize());
@@ -3414,7 +3414,7 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
   }
 
   SmallVector<SDValue, 4> Values(NumValues);
-  SmallVector<SDValue, 4> Chains(MISTD::min(unsigned(MaxParallelChains),
+  SmallVector<SDValue, 4> Chains(std::min(unsigned(MaxParallelChains),
                                           NumValues));
   EVT PtrVT = Ptr.getValueType();
   unsigned ChainI = 0;
@@ -3479,7 +3479,7 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
   SDValue Ptr = getValue(PtrV);
 
   SDValue Root = getRoot();
-  SmallVector<SDValue, 4> Chains(MISTD::min(unsigned(MaxParallelChains),
+  SmallVector<SDValue, 4> Chains(std::min(unsigned(MaxParallelChains),
                                           NumValues));
   EVT PtrVT = Ptr.getValueType();
   bool isVolatile = I.isVolatile();
@@ -5228,7 +5228,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
                  DAG.getExternalSymbol(TrapFuncName.data(),
                                        TLI->getPointerTy()),
                  Args, DAG, sdl);
-    MISTD::pair<SDValue, SDValue> Result = TLI->LowerCallTo(CLI);
+    std::pair<SDValue, SDValue> Result = TLI->LowerCallTo(CLI);
     DAG.setRoot(Result.second);
     return 0;
   }
@@ -5435,7 +5435,7 @@ void SelectionDAGBuilder::LowerCallTo(ImmutableCallSite CS, SDValue Callee,
   TargetLowering::
   CallLoweringInfo CLI(getRoot(), RetTy, FTy, isTailCall, Callee, Args, DAG,
                        getCurSDLoc(), CS);
-  MISTD::pair<SDValue,SDValue> Result = TLI->LowerCallTo(CLI);
+  std::pair<SDValue,SDValue> Result = TLI->LowerCallTo(CLI);
   assert((isTailCall || Result.second.getNode()) &&
          "Non-null chain expected with non-tail call!");
   assert((Result.second.getNode() || !Result.first.getNode()) &&
@@ -5600,7 +5600,7 @@ bool SelectionDAGBuilder::visitMemCmpCall(const CallInst &I) {
   }
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForMemcmp(DAG, getCurSDLoc(), DAG.getRoot(),
                                 getValue(LHS), getValue(RHS), getValue(Size),
                                 MachinePointerInfo(LHS),
@@ -5692,7 +5692,7 @@ bool SelectionDAGBuilder::visitMemChrCall(const CallInst &I) {
     return false;
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForMemchr(DAG, getCurSDLoc(), DAG.getRoot(),
                                 getValue(Src), getValue(Char), getValue(Length),
                                 MachinePointerInfo(Src));
@@ -5720,7 +5720,7 @@ bool SelectionDAGBuilder::visitStrCpyCall(const CallInst &I, bool isStpcpy) {
     return false;
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForStrcpy(DAG, getCurSDLoc(), getRoot(),
                                 getValue(Arg0), getValue(Arg1),
                                 MachinePointerInfo(Arg0),
@@ -5749,7 +5749,7 @@ bool SelectionDAGBuilder::visitStrCmpCall(const CallInst &I) {
     return false;
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForStrcmp(DAG, getCurSDLoc(), DAG.getRoot(),
                                 getValue(Arg0), getValue(Arg1),
                                 MachinePointerInfo(Arg0),
@@ -5776,7 +5776,7 @@ bool SelectionDAGBuilder::visitStrLenCall(const CallInst &I) {
     return false;
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForStrlen(DAG, getCurSDLoc(), DAG.getRoot(),
                                 getValue(Arg0), MachinePointerInfo(Arg0));
   if (Res.first.getNode()) {
@@ -5803,7 +5803,7 @@ bool SelectionDAGBuilder::visitStrNLenCall(const CallInst &I) {
     return false;
 
   const TargetSelectionDAGInfo &TSI = DAG.getSelectionDAGInfo();
-  MISTD::pair<SDValue, SDValue> Res =
+  std::pair<SDValue, SDValue> Res =
     TSI.EmitTargetCodeForStrnlen(DAG, getCurSDLoc(), DAG.getRoot(),
                                  getValue(Arg0), getValue(Arg1),
                                  MachinePointerInfo(Arg0));
@@ -6093,7 +6093,7 @@ static void GetRegistersForValue(SelectionDAG &DAG,
 
   // If this is a constraint for a single physreg, or a constraint for a
   // register class, find it.
-  MISTD::pair<unsigned, const TargetRegisterClass*> PhysReg =
+  std::pair<unsigned, const TargetRegisterClass*> PhysReg =
     TLI.getRegForInlineAsmConstraint(OpInfo.ConstraintCode,
                                      OpInfo.ConstraintVT);
 
@@ -6284,10 +6284,10 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
       SDISelAsmOperandInfo &Input = ConstraintOperands[OpInfo.MatchingInput];
 
       if (OpInfo.ConstraintVT != Input.ConstraintVT) {
-        MISTD::pair<unsigned, const TargetRegisterClass*> MatchRC =
+        std::pair<unsigned, const TargetRegisterClass*> MatchRC =
           TLI->getRegForInlineAsmConstraint(OpInfo.ConstraintCode,
                                             OpInfo.ConstraintVT);
-        MISTD::pair<unsigned, const TargetRegisterClass*> InputRC =
+        std::pair<unsigned, const TargetRegisterClass*> InputRC =
           TLI->getRegForInlineAsmConstraint(Input.ConstraintCode,
                                             Input.ConstraintVT);
         if ((OpInfo.ConstraintVT.isInteger() !=
@@ -6372,7 +6372,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
   }
 
   // AsmNodeOperands - The operands for the ISD::INLINEASM node.
-  MISTD::vector<SDValue> AsmNodeOperands;
+  std::vector<SDValue> AsmNodeOperands;
   AsmNodeOperands.push_back(SDValue());  // reserve space for input chain
   AsmNodeOperands.push_back(
           DAG.getTargetExternalSymbol(IA->getAsmString().c_str(),
@@ -6424,7 +6424,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
   RegsForValue RetValRegs;
 
   // IndirectStoresToEmit - The set of stores to emit after the inline asm node.
-  MISTD::vector<MISTD::pair<RegsForValue, Value*> > IndirectStoresToEmit;
+  std::vector<std::pair<RegsForValue, Value*> > IndirectStoresToEmit;
 
   for (unsigned i = 0, e = ConstraintOperands.size(); i != e; ++i) {
     SDISelAsmOperandInfo &OpInfo = ConstraintOperands[i];
@@ -6459,7 +6459,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
       // If this is an indirect operand, store through the pointer after the
       // asm.
       if (OpInfo.isIndirect) {
-        IndirectStoresToEmit.push_back(MISTD::make_pair(OpInfo.AssignedRegs,
+        IndirectStoresToEmit.push_back(std::make_pair(OpInfo.AssignedRegs,
                                                       OpInfo.CallOperandVal));
       } else {
         // This is the result value of the call.
@@ -6557,7 +6557,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
         OpInfo.ConstraintType = TargetLowering::C_Memory;
 
       if (OpInfo.ConstraintType == TargetLowering::C_Other) {
-        MISTD::vector<SDValue> Ops;
+        std::vector<SDValue> Ops;
         TLI->LowerAsmOperandForConstraint(InOperandVal, OpInfo.ConstraintCode,
                                           Ops, DAG);
         if (Ops.empty()) {
@@ -6677,7 +6677,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
       return;
   }
 
-  MISTD::vector<MISTD::pair<SDValue, const Value *> > StoresToEmit;
+  std::vector<std::pair<SDValue, const Value *> > StoresToEmit;
 
   // Process indirect outputs, first output all of the flagged copies out of
   // physregs.
@@ -6686,7 +6686,7 @@ void SelectionDAGBuilder::visitInlineAsm(ImmutableCallSite CS) {
     const Value *Ptr = IndirectStoresToEmit[i].second;
     SDValue OutVal = OutRegs.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(),
                                              Chain, &Flag, IA);
-    StoresToEmit.push_back(MISTD::make_pair(OutVal, Ptr));
+    StoresToEmit.push_back(std::make_pair(OutVal, Ptr));
   }
 
   // Emit the non-flagged stores from the physregs.
@@ -6748,7 +6748,7 @@ void SelectionDAGBuilder::visitVACopy(const CallInst &I) {
 /// This is a helper for lowering intrinsics that follow a target calling
 /// convention or require stack pointer adjustment. Only a subset of the
 /// intrinsic's operands need to participate in the calling convention.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 SelectionDAGBuilder::LowerCallOperands(const CallInst &CI, unsigned ArgIdx,
                                        unsigned NumArgs, SDValue Callee,
                                        bool useVoidTy) {
@@ -6791,7 +6791,7 @@ void SelectionDAGBuilder::visitStackmap(const CallInst &CI) {
   SDValue Callee = getValue(CI.getCalledValue());
 
   // Lower into a call sequence with no args and no return value.
-  MISTD::pair<SDValue, SDValue> Result = LowerCallOperands(CI, 0, 0, Callee);
+  std::pair<SDValue, SDValue> Result = LowerCallOperands(CI, 0, 0, Callee);
   // Set the root to the target-lowered call chain.
   SDValue Chain = Result.second;
   DAG.setRoot(Chain);
@@ -6864,7 +6864,7 @@ void SelectionDAGBuilder::visitPatchpoint(const CallInst &CI) {
 
   // For AnyRegCC the arguments are lowered later on manually.
   unsigned NumCallArgs = isAnyRegCC ? 0 : NumArgs;
-  MISTD::pair<SDValue, SDValue> Result =
+  std::pair<SDValue, SDValue> Result =
     LowerCallOperands(CI, 4, NumCallArgs, Callee, isAnyRegCC);
 
   // Set the root to the target-lowered call chain.
@@ -6987,7 +6987,7 @@ void SelectionDAGBuilder::visitPatchpoint(const CallInst &CI) {
 /// implementation, which just calls LowerCall.
 /// FIXME: When all targets are
 /// migrated to using LowerCall, this hook should be integrated into SDISel.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   // Handle the incoming return values from the call.
   CLI.Ins.clear();
@@ -7121,7 +7121,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   // should be processed in the current block.
   if (CLI.IsTailCall) {
     CLI.DAG.setRoot(CLI.Chain);
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   }
 
   DEBUG(for (unsigned i = 0, e = CLI.Ins.size(); i != e; ++i) {
@@ -7155,12 +7155,12 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   // such a node, so we just return a null return value in that case. In
   // that case, nothing will actually look at the value.
   if (ReturnValues.empty())
-    return MISTD::make_pair(SDValue(), CLI.Chain);
+    return std::make_pair(SDValue(), CLI.Chain);
 
   SDValue Res = CLI.DAG.getNode(ISD::MERGE_VALUES, CLI.DL,
                                 CLI.DAG.getVTList(&RetTys[0], RetTys.size()),
                             &ReturnValues[0], ReturnValues.size());
-  return MISTD::make_pair(Res, CLI.Chain);
+  return std::make_pair(Res, CLI.Chain);
 }
 
 void TargetLowering::LowerOperationWrapper(SDNode *N,
@@ -7497,7 +7497,7 @@ SelectionDAGBuilder::HandlePHINodesInSuccessorBlocks(const BasicBlock *LLVMBB) {
         EVT VT = ValueVTs[vti];
         unsigned NumRegisters = TLI->getNumRegisters(*DAG.getContext(), VT);
         for (unsigned i = 0, e = NumRegisters; i != e; ++i)
-          FuncInfo.PHINodesToUpdate.push_back(MISTD::make_pair(MBBI++, Reg+i));
+          FuncInfo.PHINodesToUpdate.push_back(std::make_pair(MBBI++, Reg+i));
         Reg += NumRegisters;
       }
     }

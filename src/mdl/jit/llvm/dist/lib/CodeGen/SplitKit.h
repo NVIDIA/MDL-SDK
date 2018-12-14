@@ -90,7 +90,7 @@ private:
   /// function. The first entry is the first terminator, the second entry is the
   /// last valid split point for a variable that is live in to a landing pad
   /// successor.
-  SmallVector<MISTD::pair<SlotIndex, SlotIndex>, 8> LastSplitPoint;
+  SmallVector<std::pair<SlotIndex, SlotIndex>, 8> LastSplitPoint;
 
   /// UseBlocks - Blocks where CurLI has uses.
   SmallVector<BlockInfo, 8> UseBlocks;
@@ -271,7 +271,7 @@ private:
   RegAssignMap RegAssign;
 
   typedef PointerIntPair<VNInfo*, 1> ValueForcePair;
-  typedef DenseMap<MISTD::pair<unsigned, unsigned>, ValueForcePair> ValueMap;
+  typedef DenseMap<std::pair<unsigned, unsigned>, ValueForcePair> ValueMap;
 
   /// Values - keep track of the mapping from parent values to values in the new
   /// intervals. Given a pair (RegIdx, ParentVNI->id), Values contains:

@@ -30,13 +30,13 @@ class Vector {
     /// \brief Construct a PBQP vector with initializer.
     Vector(unsigned length, PBQPNum initVal) :
       length(length), data(new PBQPNum[length]) {
-        MISTD::fill(data, data + length, initVal);
+        std::fill(data, data + length, initVal);
       }
 
     /// \brief Copy construct a PBQP vector.
     Vector(const Vector &v) :
       length(v.length), data(new PBQPNum[length]) {
-        MISTD::copy(v.data, v.data + length, data);
+        std::copy(v.data, v.data + length, data);
       }
 
     /// \brief Destroy this vector, return its memory.
@@ -47,7 +47,7 @@ class Vector {
       delete[] data;
       length = v.length;
       data = new PBQPNum[length];
-      MISTD::copy(v.data, v.data + length, data);
+      std::copy(v.data, v.data + length, data);
       return *this;
     }
 
@@ -71,20 +71,20 @@ class Vector {
     /// \brief Add another vector to this one.
     Vector& operator+=(const Vector &v) {
       assert(length == v.length && "Vector length mismatch.");
-      MISTD::transform(data, data + length, v.data, data, MISTD::plus<PBQPNum>()); 
+      std::transform(data, data + length, v.data, data, std::plus<PBQPNum>()); 
       return *this;
     }
 
     /// \brief Subtract another vector from this one.
     Vector& operator-=(const Vector &v) {
       assert(length == v.length && "Vector length mismatch.");
-      MISTD::transform(data, data + length, v.data, data, MISTD::minus<PBQPNum>()); 
+      std::transform(data, data + length, v.data, data, std::minus<PBQPNum>()); 
       return *this;
     }
 
     /// \brief Returns the index of the minimum value in this vector
     unsigned minIndex() const {
-      return MISTD::min_element(data, data + length) - data;
+      return std::min_element(data, data + length) - data;
     }
 
   private:
@@ -121,13 +121,13 @@ class Matrix {
     /// value.
     Matrix(unsigned rows, unsigned cols, PBQPNum initVal) :
       rows(rows), cols(cols), data(new PBQPNum[rows * cols]) {
-        MISTD::fill(data, data + (rows * cols), initVal);
+        std::fill(data, data + (rows * cols), initVal);
     }
 
     /// \brief Copy construct a PBQP matrix.
     Matrix(const Matrix &m) :
       rows(m.rows), cols(m.cols), data(new PBQPNum[rows * cols]) {
-        MISTD::copy(m.data, m.data + (rows * cols), data);  
+        std::copy(m.data, m.data + (rows * cols), data);  
     }
 
     /// \brief Destroy this matrix, return its memory.
@@ -138,7 +138,7 @@ class Matrix {
       delete[] data;
       rows = m.rows; cols = m.cols;
       data = new PBQPNum[rows * cols];
-      MISTD::copy(m.data, m.data + (rows * cols), data);
+      std::copy(m.data, m.data + (rows * cols), data);
       return *this;
     }
 
@@ -178,14 +178,14 @@ class Matrix {
 
     /// \brief Reset the matrix to the given value.
     Matrix& reset(PBQPNum val = 0) {
-      MISTD::fill(data, data + (rows * cols), val);
+      std::fill(data, data + (rows * cols), val);
       return *this;
     }
 
     /// \brief Set a single row of this matrix to the given value.
     Matrix& setRow(unsigned r, PBQPNum val) {
       assert(r < rows && "Row out of bounds.");
-      MISTD::fill(data + (r * cols), data + ((r + 1) * cols), val);
+      std::fill(data + (r * cols), data + ((r + 1) * cols), val);
       return *this;
     }
 
@@ -222,15 +222,15 @@ class Matrix {
     Matrix& operator+=(const Matrix &m) {
       assert(rows == m.rows && cols == m.cols &&
           "Matrix dimensions mismatch.");
-      MISTD::transform(data, data + (rows * cols), m.data, data,
-          MISTD::plus<PBQPNum>());
+      std::transform(data, data + (rows * cols), m.data, data,
+          std::plus<PBQPNum>());
       return *this;
     }
 
     /// \brief Returns the minimum of the given row
     PBQPNum getRowMin(unsigned r) const {
       assert(r < rows && "Row out of bounds");
-      return *MISTD::min_element(data + (r * cols), data + ((r + 1) * cols));
+      return *std::min_element(data + (r * cols), data + ((r + 1) * cols));
     }
 
     /// \brief Returns the minimum of the given column
@@ -244,9 +244,9 @@ class Matrix {
     /// \brief Subtracts the given scalar from the elements of the given row.
     Matrix& subFromRow(unsigned r, PBQPNum val) {
       assert(r < rows && "Row out of bounds");
-      MISTD::transform(data + (r * cols), data + ((r + 1) * cols),
+      std::transform(data + (r * cols), data + ((r + 1) * cols),
           data + (r * cols),
-          MISTD::bind2nd(MISTD::minus<PBQPNum>(), val));
+          std::bind2nd(std::minus<PBQPNum>(), val));
       return *this;
     }
 
@@ -260,7 +260,7 @@ class Matrix {
     /// \brief Returns true if this is a zero matrix.
     bool isZero() const {
       return find_if(data, data + (rows * cols),
-          MISTD::bind2nd(MISTD::not_equal_to<PBQPNum>(), 0)) ==
+          std::bind2nd(std::not_equal_to<PBQPNum>(), 0)) ==
         data + (rows * cols);
     }
 

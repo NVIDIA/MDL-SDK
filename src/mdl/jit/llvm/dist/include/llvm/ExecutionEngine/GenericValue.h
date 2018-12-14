@@ -37,7 +37,7 @@ struct GenericValue {
   };
   APInt IntVal;   // also used for long doubles.
   // For aggregate data types.
-  MISTD::vector<GenericValue> AggregateVal;
+  std::vector<GenericValue> AggregateVal;
 
   // to make code faster, set GenericValue to zero could be omitted, but it is
   // potentially can cause problems, since GenericValue to store garbage

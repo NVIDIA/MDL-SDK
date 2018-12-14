@@ -17,7 +17,7 @@
 //
 // This tool provides analytical information about a bitcode file. It is
 // intended as an aid to developers of bitcode reading and writing software. It
-// produces on MISTD::out a summary of the bitcode file that shows various
+// produces on std::out a summary of the bitcode file that shows various
 // statistics about the contents of the file. By default this information is
 // detailed and contains information about individual bitcode blocks and the
 // functions in the module.
@@ -45,7 +45,7 @@
 #include <map>
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
   InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::init("-"));
 
 static cl::opt<bool> Dump("dump", cl::desc("Dump low level bitcode trace"));
@@ -303,20 +303,20 @@ struct PerBlockIDStats {
   unsigned NumRecords, NumAbbreviatedRecords;
 
   /// CodeFreq - Keep track of the number of times we see each code.
-  MISTD::vector<PerRecordStats> CodeFreq;
+  std::vector<PerRecordStats> CodeFreq;
 
   PerBlockIDStats()
     : NumInstances(0), NumBits(0),
       NumSubBlocks(0), NumAbbrevs(0), NumRecords(0), NumAbbreviatedRecords(0) {}
 };
 
-static MISTD::map<unsigned, PerBlockIDStats> BlockIDStats;
+static std::map<unsigned, PerBlockIDStats> BlockIDStats;
 
 
 
 /// Error - All bitcode analysis errors go through this function, making this a
 /// good place to breakpoint if debugging.
-static bool Error(const MISTD::string &Err) {
+static bool Error(const std::string &Err) {
   errs() << Err << "\n";
   return true;
 }
@@ -324,7 +324,7 @@ static bool Error(const MISTD::string &Err) {
 /// ParseBlock - Read a block, updating statistics, etc.
 static bool ParseBlock(BitstreamCursor &Stream, unsigned BlockID,
                        unsigned IndentLevel) {
-  MISTD::string Indent(IndentLevel*2, ' ');
+  std::string Indent(IndentLevel*2, ' ');
   uint64_t BlockBitStart = Stream.GetCurrentBitNo();
 
   // Get the statistics for this BlockID.
@@ -550,7 +550,7 @@ static int AnalyzeBitcode() {
 
   // Emit per-block stats.
   outs() << "Per-block Summary:\n";
-  for (MISTD::map<unsigned, PerBlockIDStats>::iterator I = BlockIDStats.begin(),
+  for (std::map<unsigned, PerBlockIDStats>::iterator I = BlockIDStats.begin(),
        E = BlockIDStats.end(); I != E; ++I) {
     outs() << "  Block ID #" << I->first;
     if (const char *BlockName = GetBlockName(I->first, StreamFile))
@@ -587,12 +587,12 @@ static int AnalyzeBitcode() {
 
     // Print a histogram of the codes we see.
     if (!NoHistogram && !Stats.CodeFreq.empty()) {
-      MISTD::vector<MISTD::pair<unsigned, unsigned> > FreqPairs;  // <freq,code>
+      std::vector<std::pair<unsigned, unsigned> > FreqPairs;  // <freq,code>
       for (unsigned i = 0, e = Stats.CodeFreq.size(); i != e; ++i)
         if (unsigned Freq = Stats.CodeFreq[i].NumInstances)
-          FreqPairs.push_back(MISTD::make_pair(Freq, i));
-      MISTD::stable_sort(FreqPairs.begin(), FreqPairs.end());
-      MISTD::reverse(FreqPairs.begin(), FreqPairs.end());
+          FreqPairs.push_back(std::make_pair(Freq, i));
+      std::stable_sort(FreqPairs.begin(), FreqPairs.end());
+      std::reverse(FreqPairs.begin(), FreqPairs.end());
 
       outs() << "\tRecord Histogram:\n";
       outs() << "\t\t  Count    # Bits   %% Abv  Record Kind\n";

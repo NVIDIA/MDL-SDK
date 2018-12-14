@@ -151,7 +151,7 @@ class Attr_module : public SYSTEM::IModule
     /// \return success
     template <typename T>
     bool get_reserved_attr_default(
-        const MISTD::string& name,
+        const std::string& name,
         T& default_value) const
     {
         STLEXT::Any any;
@@ -169,7 +169,7 @@ class Attr_module : public SYSTEM::IModule
     /// \param type_name name of the type
     /// \return \c Type_code, \c TYPE_UNDEF if the look up fails.
     virtual ATTR::Type_code get_type_code(
-        const MISTD::string& type_name) const = 0;
+        const std::string& type_name) const = 0;
 
     /// \name ModuleImpl
     /// Required functionality for implementing a \c SYSTEM::IModule.
@@ -184,7 +184,7 @@ class Attr_module : public SYSTEM::IModule
     /// Internal helper. It allows us to hide its implementation, even though it is used inside
       /// the templated member \c get_reserved_attr_default(). But thanks to the \c Any...
     void retrieve_reserved_attr_default(
-        const MISTD::string& name,
+        const std::string& name,
         STLEXT::Any& any) const;
 };
 
@@ -197,7 +197,7 @@ class Attr_module : public SYSTEM::IModule
 class Attribute;
 
 /// Typedef for convenience only
-typedef MISTD::map<Attribute_id, boost::shared_ptr<Attribute> > Attributes;
+typedef std::map<Attribute_id, boost::shared_ptr<Attribute> > Attributes;
 
 
 /// Another Type iterator.
@@ -255,7 +255,7 @@ class Type_iterator_rec
 
   private:
     /// convenience typedef
-    typedef MISTD::vector<const Type*> Types;
+    typedef std::vector<const Type*> Types;
     Types 		m_roots;	//</ stack of parent Types
     const Type		*m_iter;	///< current position
     bool		m_toplevel_only;///< traverse only the toplevel

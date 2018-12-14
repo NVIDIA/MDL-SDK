@@ -52,7 +52,7 @@ struct Bytes
  This function converts \p bytes to kibi-, mebi-, ..., exbibytes as appropriate and prints the
  result.
  */
-inline MISTD::ostream& operator<<(MISTD::ostream& str, const Bytes bytes)
+inline std::ostream& operator<<(std::ostream& str, const Bytes bytes)
 {
     if (bytes.bytes == ~size_t(0)) {
         return str << "unknown";
@@ -70,9 +70,9 @@ inline MISTD::ostream& operator<<(MISTD::ostream& str, const Bytes bytes)
 
 
 /// Converts an integer memory size into a human-readable form, e.g., 16777216 -> "16 MiB".
-inline MISTD::string get_readable_memory_size(size_t mem_size)
+inline std::string get_readable_memory_size(size_t mem_size)
 {
-    MISTD::stringstream str;
+    std::stringstream str;
     str << Bytes(mem_size);
     return str.str();
 }

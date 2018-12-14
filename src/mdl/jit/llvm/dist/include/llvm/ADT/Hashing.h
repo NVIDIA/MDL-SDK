@@ -118,11 +118,11 @@ template <typename T> hash_code hash_value(const T *ptr);
 
 /// \brief Compute a hash_code for a pair of objects.
 template <typename T, typename U>
-hash_code hash_value(const MISTD::pair<T, U> &arg);
+hash_code hash_value(const std::pair<T, U> &arg);
 
 /// \brief Compute a hash_code for a standard string.
 template <typename T>
-hash_code hash_value(const MISTD::basic_string<T> &arg);
+hash_code hash_value(const std::basic_string<T> &arg);
 
 
 /// \brief Override the execution seed with a fixed value.
@@ -306,7 +306,7 @@ struct hash_state {
     h5 = h2 + h6;
     h6 = h1 + fetch64(s + 16);
     mix_32_bytes(s + 32, h5, h6);
-    MISTD::swap(h2, h0);
+    std::swap(h2, h0);
   }
 
   /// \brief Compute the final 64-bit hash code value based on the current
@@ -356,15 +356,15 @@ template <typename T> struct is_hashable_data
                               is_pointer<T>::value) &&
                              64 % sizeof(T) == 0)> {};
 
-// Special case MISTD::pair to detect when both types are viable and when there
+// Special case std::pair to detect when both types are viable and when there
 // is no alignment-derived padding in the pair. This is a bit of a lie because
-// MISTD::pair isn't truly POD, but it's close enough in all reasonable
+// std::pair isn't truly POD, but it's close enough in all reasonable
 // implementations for our use case of hashing the underlying data.
-template <typename T, typename U> struct is_hashable_data<MISTD::pair<T, U> >
+template <typename T, typename U> struct is_hashable_data<std::pair<T, U> >
   : integral_constant<bool, (is_hashable_data<T>::value &&
                              is_hashable_data<U>::value &&
                              (sizeof(T) + sizeof(U)) ==
-                              sizeof(MISTD::pair<T, U>))> {};
+                              sizeof(std::pair<T, U>))> {};
 
 /// \brief Helper to get the hashable data representation for a type.
 /// This variant is enabled when the type itself can be used.
@@ -432,7 +432,7 @@ hash_code hash_combine_range_impl(InputIteratorT first, InputIteratorT last) {
     // Rotate the buffer if we did a partial fill in order to simulate doing
     // a mix of the last 64-bytes. That is how the algorithm works when we
     // have a contiguous byte sequence, and we want to emulate that here.
-    MISTD::rotate(buffer, buffer_ptr, buffer_end);
+    std::rotate(buffer, buffer_ptr, buffer_end);
 
     // Mix this chunk into the current state.
     state.mix(buffer);
@@ -456,7 +456,7 @@ hash_combine_range_impl(ValueT *first, ValueT *last) {
   const size_t seed = get_execution_seed();
   const char *s_begin = reinterpret_cast<const char *>(first);
   const char *s_end = reinterpret_cast<const char *>(last);
-  const size_t length = MISTD::distance(s_begin, s_end);
+  const size_t length = std::distance(s_begin, s_end);
   if (length <= 64)
     return hash_short(s_begin, length, seed);
 
@@ -631,7 +631,7 @@ public:
     // simulate doing a mix of the last 64-bytes. That is how the algorithm
     // works when we have a contiguous byte sequence, and we want to emulate
     // that here.
-    MISTD::rotate(buffer, buffer_ptr, buffer_end);
+    std::rotate(buffer, buffer_ptr, buffer_end);
 
     // Mix this chunk into the current state.
     state.mix(buffer);
@@ -749,14 +749,14 @@ template <typename T> hash_code hash_value(const T *ptr) {
 // Declared and documented above, but defined here so that any of the hashing
 // infrastructure is available.
 template <typename T, typename U>
-hash_code hash_value(const MISTD::pair<T, U> &arg) {
+hash_code hash_value(const std::pair<T, U> &arg) {
   return hash_combine(arg.first, arg.second);
 }
 
 // Declared and documented above, but defined here so that any of the hashing
 // infrastructure is available.
 template <typename T>
-hash_code hash_value(const MISTD::basic_string<T> &arg) {
+hash_code hash_value(const std::basic_string<T> &arg) {
   return hash_combine_range(arg.begin(), arg.end());
 }
 

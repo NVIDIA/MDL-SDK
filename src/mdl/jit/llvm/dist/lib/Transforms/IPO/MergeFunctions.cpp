@@ -568,7 +568,7 @@ private:
 
   /// A work queue of functions that may have been modified and should be
   /// analyzed again.
-  MISTD::vector<WeakVH> Deferred;
+  std::vector<WeakVH> Deferred;
 
   /// Insert a ComparableFunction into the FnSet, or merge it away if it's
   /// equal to one that's already present.
@@ -632,7 +632,7 @@ bool MergeFunctions::runOnModule(Module &M) {
   FnSet.resize(Deferred.size());
 
   do {
-    MISTD::vector<WeakVH> Worklist;
+    std::vector<WeakVH> Worklist;
     Deferred.swap(Worklist);
 
     DEBUG(dbgs() << "size of module: " << M.size() << '\n');
@@ -640,7 +640,7 @@ bool MergeFunctions::runOnModule(Module &M) {
 
     // Insert only strong functions and merge them. Strong function merging
     // always deletes one of them.
-    for (MISTD::vector<WeakVH>::iterator I = Worklist.begin(),
+    for (std::vector<WeakVH>::iterator I = Worklist.begin(),
            E = Worklist.end(); I != E; ++I) {
       if (!*I) continue;
       Function *F = cast<Function>(*I);
@@ -655,7 +655,7 @@ bool MergeFunctions::runOnModule(Module &M) {
     // create thunks to the strong function when possible. When two weak
     // functions are identical, we create a new strong function with two weak
     // weak thunks to it which are identical but not mergable.
-    for (MISTD::vector<WeakVH>::iterator I = Worklist.begin(),
+    for (std::vector<WeakVH>::iterator I = Worklist.begin(),
            E = Worklist.end(); I != E; ++I) {
       if (!*I) continue;
       Function *F = cast<Function>(*I);
@@ -787,7 +787,7 @@ void MergeFunctions::writeAlias(Function *F, Function *G) {
   Constant *BitcastF = ConstantExpr::getBitCast(F, G->getType());
   GlobalAlias *GA = new GlobalAlias(G->getType(), G->getLinkage(), "",
                                     BitcastF, G->getParent());
-  F->setAlignment(MISTD::max(F->getAlignment(), G->getAlignment()));
+  F->setAlignment(std::max(F->getAlignment(), G->getAlignment()));
   GA->takeName(G);
   GA->setVisibility(G->getVisibility());
   removeUsers(G);
@@ -812,7 +812,7 @@ void MergeFunctions::mergeTwoFunctions(Function *F, Function *G) {
       removeUsers(F);
       F->replaceAllUsesWith(H);
 
-      unsigned MaxAlignment = MISTD::max(G->getAlignment(), H->getAlignment());
+      unsigned MaxAlignment = std::max(G->getAlignment(), H->getAlignment());
 
       writeAlias(F, G);
       writeAlias(F, H);
@@ -836,7 +836,7 @@ void MergeFunctions::mergeTwoFunctions(Function *F, Function *G) {
 // Insert a ComparableFunction into the FnSet, or merge it away if equal to one
 // that was already inserted.
 bool MergeFunctions::insert(ComparableFunction &NewF) {
-  MISTD::pair<FnSetType::iterator, bool> Result = FnSet.insert(NewF);
+  std::pair<FnSetType::iterator, bool> Result = FnSet.insert(NewF);
   if (Result.second) {
     DEBUG(dbgs() << "Inserting as unique: " << NewF.getFunc()->getName() << '\n');
     return false;
@@ -888,7 +888,7 @@ void MergeFunctions::remove(Function *F) {
 // For each instruction used by the value, remove() the function that contains
 // the instruction. This should happen right before a call to RAUW.
 void MergeFunctions::removeUsers(Value *V) {
-  MISTD::vector<Value *> Worklist;
+  std::vector<Value *> Worklist;
   Worklist.push_back(V);
   while (!Worklist.empty()) {
     Value *V = Worklist.back();

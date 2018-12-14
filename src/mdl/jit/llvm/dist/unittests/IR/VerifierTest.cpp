@@ -57,7 +57,7 @@ TEST(VerifierTest, AliasUnnamedAddr) {
                                     GlobalValue::ExternalLinkage,
                                     "bar", Aliasee, &M);
   GA->setUnnamedAddr(true);
-  MISTD::string Error;
+  std::string Error;
   EXPECT_TRUE(verifyModule(M, ReturnStatusAction, &Error));
   EXPECT_TRUE(StringRef(Error).startswith("Alias cannot have unnamed_addr"));
 }
@@ -71,7 +71,7 @@ TEST(VerifierTest, InvalidRetAttribute) {
   F->setAttributes(AS.addAttribute(C, AttributeSet::ReturnIndex,
                                    Attribute::UWTable));
 
-  MISTD::string Error;
+  std::string Error;
   EXPECT_TRUE(verifyModule(M, ReturnStatusAction, &Error));
   EXPECT_TRUE(StringRef(Error).
               startswith("Attribute 'uwtable' only applies to functions!"));

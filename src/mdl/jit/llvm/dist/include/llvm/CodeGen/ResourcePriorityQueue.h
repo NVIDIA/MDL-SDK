@@ -28,7 +28,7 @@ namespace llvm {
   class ResourcePriorityQueue;
 
   /// Sorting functions for the Available queue.
-  struct resource_sort : public MISTD::binary_function<SUnit*, SUnit*, bool> {
+  struct resource_sort : public std::binary_function<SUnit*, SUnit*, bool> {
     ResourcePriorityQueue *PQ;
     explicit resource_sort(ResourcePriorityQueue *pq) : PQ(pq) {}
 
@@ -37,24 +37,24 @@ namespace llvm {
 
   class ResourcePriorityQueue : public SchedulingPriorityQueue {
     /// SUnits - The SUnits for the current graph.
-    MISTD::vector<SUnit> *SUnits;
+    std::vector<SUnit> *SUnits;
 
     /// NumNodesSolelyBlocking - This vector contains, for every node in the
     /// Queue, the number of nodes that the node is the sole unscheduled
     /// predecessor for.  This is used as a tie-breaker heuristic for better
     /// mobility.
-    MISTD::vector<unsigned> NumNodesSolelyBlocking;
+    std::vector<unsigned> NumNodesSolelyBlocking;
 
     /// Queue - The queue.
-    MISTD::vector<SUnit*> Queue;
+    std::vector<SUnit*> Queue;
 
     /// RegPressure - Tracking current reg pressure per register class.
     ///
-    MISTD::vector<unsigned> RegPressure;
+    std::vector<unsigned> RegPressure;
 
     /// RegLimit - Tracking the number of allocatable registers per register
     /// class.
-    MISTD::vector<unsigned> RegLimit;
+    std::vector<unsigned> RegLimit;
 
     resource_sort Picker;
     const TargetRegisterInfo *TRI;
@@ -68,7 +68,7 @@ namespace llvm {
 
     /// Resource model - packet/bundle model. Purely
     /// internal at the time.
-    MISTD::vector<SUnit*> Packet;
+    std::vector<SUnit*> Packet;
 
     /// Heuristics for estimating register pressure.
     unsigned ParallelLiveRanges;
@@ -83,7 +83,7 @@ namespace llvm {
 
     bool isBottomUp() const { return false; }
 
-    void initNodes(MISTD::vector<SUnit> &sunits);
+    void initNodes(std::vector<SUnit> &sunits);
 
     void addNode(const SUnit *SU) {
       NumNodesSolelyBlocking.resize(SUnits->size(), 0);

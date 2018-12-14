@@ -53,8 +53,8 @@ using namespace llvm;
 /// \param RequiredLibs [out] - The ordered list of required libraries.
 static void VisitComponent(StringRef Name,
                            const StringMap<AvailableComponent*> &ComponentMap,
-                           MISTD::set<AvailableComponent*> &VisitedComponents,
-                           MISTD::vector<StringRef> &RequiredLibs,
+                           std::set<AvailableComponent*> &VisitedComponents,
+                           std::vector<StringRef> &RequiredLibs,
                            bool IncludeNonInstalled) {
   // Lookup the component.
   AvailableComponent *AC = ComponentMap.lookup(Name);
@@ -90,10 +90,10 @@ static void VisitComponent(StringRef Name,
 /// are required to link the given components.
 /// \param IncludeNonInstalled - Whether non-installed components should be
 /// reported.
-void ComputeLibsForComponents(const MISTD::vector<StringRef> &Components,
-                              MISTD::vector<StringRef> &RequiredLibs,
+void ComputeLibsForComponents(const std::vector<StringRef> &Components,
+                              std::vector<StringRef> &RequiredLibs,
                               bool IncludeNonInstalled) {
-  MISTD::set<AvailableComponent*> VisitedComponents;
+  std::set<AvailableComponent*> VisitedComponents;
 
   // Build a map of component names to information.
   StringMap<AvailableComponent*> ComponentMap;
@@ -105,7 +105,7 @@ void ComputeLibsForComponents(const MISTD::vector<StringRef> &Components,
   // Visit the components.
   for (unsigned i = 0, e = Components.size(); i != e; ++i) {
     // Users are allowed to provide mixed case component names.
-    MISTD::string ComponentLower = Components[i].lower();
+    std::string ComponentLower = Components[i].lower();
 
     // Validate that the user supplied a valid component name.
     if (!ComponentMap.count(ComponentLower)) {
@@ -120,7 +120,7 @@ void ComputeLibsForComponents(const MISTD::vector<StringRef> &Components,
 
   // The list is now ordered with leafs first, we want the libraries to printed
   // in the reverse order of dependency.
-  MISTD::reverse(RequiredLibs.begin(), RequiredLibs.end());
+  std::reverse(RequiredLibs.begin(), RequiredLibs.end());
 }
 
 /* *** */
@@ -161,7 +161,7 @@ Typical components:\n\
 }
 
 /// \brief Compute the path to the main executable.
-MISTD::string GetExecutablePath(const char *Argv0) {
+std::string GetExecutablePath(const char *Argv0) {
   // This just needs to be some symbol in the binary; C++ doesn't
   // allow taking the address of ::main however.
   void *P = (void*) (intptr_t) GetExecutablePath;
@@ -169,7 +169,7 @@ MISTD::string GetExecutablePath(const char *Argv0) {
 }
 
 int main(int argc, char **argv) {
-  MISTD::vector<StringRef> Components;
+  std::vector<StringRef> Components;
   bool PrintLibs = false, PrintLibNames = false, PrintLibFiles = false;
   bool HasAnyOption = false;
 
@@ -180,8 +180,8 @@ int main(int argc, char **argv) {
   bool IsInDevelopmentTree;
   enum { MakefileStyle, CMakeStyle, CMakeBuildModeStyle } DevelopmentTreeLayout;
   llvm::SmallString<256> CurrentPath(GetExecutablePath(argv[0]));
-  MISTD::string CurrentExecPrefix;
-  MISTD::string ActiveObjRoot;
+  std::string CurrentExecPrefix;
+  std::string ActiveObjRoot;
 
   // Create an absolute path, and pop up one directory (we expect to be inside a
   // bin dir).
@@ -220,10 +220,10 @@ int main(int argc, char **argv) {
 
   // Compute various directory locations based on the derived location
   // information.
-  MISTD::string ActivePrefix, ActiveBinDir, ActiveIncludeDir, ActiveLibDir;
-  MISTD::string ActiveIncludeOption;
+  std::string ActivePrefix, ActiveBinDir, ActiveIncludeDir, ActiveLibDir;
+  std::string ActiveIncludeOption;
   if (IsInDevelopmentTree) {
-    ActiveIncludeDir = MISTD::string(LLVM_SRC_ROOT) + "/include";
+    ActiveIncludeDir = std::string(LLVM_SRC_ROOT) + "/include";
     ActivePrefix = CurrentExecPrefix;
 
     // CMake organizes the products differently than a normal prefix style
@@ -322,7 +322,7 @@ int main(int argc, char **argv) {
       Components.push_back("all");
 
     // Construct the list of all the required libraries.
-    MISTD::vector<StringRef> RequiredLibs;
+    std::vector<StringRef> RequiredLibs;
     ComputeLibsForComponents(Components, RequiredLibs,
                              /*IncludeNonInstalled=*/IsInDevelopmentTree);
 

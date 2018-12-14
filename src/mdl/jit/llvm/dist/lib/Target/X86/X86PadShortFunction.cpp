@@ -148,7 +148,7 @@ void PadShortFunc::findReturns(MachineBasicBlock *MBB, unsigned int Cycles) {
     return;
 
   if (hasReturn) {
-    ReturnBBs[MBB] = MISTD::max(ReturnBBs[MBB], Cycles);
+    ReturnBBs[MBB] = std::max(ReturnBBs[MBB], Cycles);
     return;
   }
 

@@ -49,9 +49,9 @@ Config_registry_impl::~Config_registry_impl()
 // \param name name of the value
 // \return its value or the empty type iff not registered
 STLEXT::Any Config_registry_impl::get_value(
-    const MISTD::string& name) const
+    const std::string& name) const
 {
-    MISTD::map<MISTD::string, STLEXT::Any>::const_iterator it = m_values.find(name);
+    std::map<std::string, STLEXT::Any>::const_iterator it = m_values.find(name);
 
     if (it != m_values.end())
 	return it->second;
@@ -64,11 +64,11 @@ STLEXT::Any Config_registry_impl::get_value(
 // \param name name of the value
 // \param value the value
 bool Config_registry_impl::add_value(
-    const MISTD::string& name,
+    const std::string& name,
     const STLEXT::Any& value)
 {
-    MISTD::pair<MISTD::map<MISTD::string, STLEXT::Any>::iterator, bool> result =
-	m_values.insert(MISTD::make_pair(name, value));
+    std::pair<std::map<std::string, STLEXT::Any>::iterator, bool> result =
+	m_values.insert(std::make_pair(name, value));
 /*
     // this would add dependency on base/lib/log!
     if (!result.second)
@@ -84,10 +84,10 @@ bool Config_registry_impl::add_value(
 // \param value the value
 // \return success of registration
 bool Config_registry_impl::add_value_multiple(
-    const MISTD::string& name,
+    const std::string& name,
     const STLEXT::Any& value)
 {
-    typedef MISTD::vector<STLEXT::Any> Many;
+    typedef std::vector<STLEXT::Any> Many;
 
     if (value.empty()) {
 	// we do not support containers of void type
@@ -96,7 +96,7 @@ bool Config_registry_impl::add_value_multiple(
 
     bool result = false;
 
-    MISTD::map<MISTD::string, STLEXT::Any>::iterator it = m_values.find(name);
+    std::map<std::string, STLEXT::Any>::iterator it = m_values.find(name);
     if (it != m_values.end()) {
 	Many* val = STLEXT::any_cast<Many>(&it->second);
 	if (!val)
@@ -120,17 +120,17 @@ bool Config_registry_impl::add_value_multiple(
 // \param name name of the value
 // \param value the value
 void Config_registry_impl::overwrite_value(
-    const MISTD::string& name,
+    const std::string& name,
     const STLEXT::Any& value)
 {
-    MISTD::map<MISTD::string, STLEXT::Any>::iterator it = m_values.find(name);
+    std::map<std::string, STLEXT::Any>::iterator it = m_values.find(name);
     if (it != m_values.end())
 	m_values.erase(it);
     add_value(name, value);
 }
 
 
-void stream_any(MISTD::ostream& os, const STLEXT::Any& any)
+void stream_any(std::ostream& os, const STLEXT::Any& any)
 {
     if (any.type() == typeid(int)) {
 	const int* v = STLEXT::any_cast<int>(&any);
@@ -145,17 +145,17 @@ void stream_any(MISTD::ostream& os, const STLEXT::Any& any)
     else if (any.type() == typeid(bool)) {
 	const bool* v = STLEXT::any_cast<bool>(&any);
 	if (v)
-	    os << MISTD::boolalpha << *v;
+	    os << std::boolalpha << *v;
     }
-    else if (any.type() == typeid(MISTD::string)) {
-	const MISTD::string* v = STLEXT::any_cast<MISTD::string>(&any);
+    else if (any.type() == typeid(std::string)) {
+	const std::string* v = STLEXT::any_cast<std::string>(&any);
 	if (v)
 	    os << v->c_str();
     }
-    else if (any.type() == typeid(MISTD::vector<STLEXT::Any>)) {
+    else if (any.type() == typeid(std::vector<STLEXT::Any>)) {
 	os << '[';
-	const MISTD::vector<STLEXT::Any>* v =
-	    STLEXT::any_cast<MISTD::vector<STLEXT::Any> >(&any);
+	const std::vector<STLEXT::Any>* v =
+	    STLEXT::any_cast<std::vector<STLEXT::Any> >(&any);
 	if (v) {
 	    for (size_t i=0; i<v->size(); ++i) {
 		if (i)
@@ -168,14 +168,14 @@ void stream_any(MISTD::ostream& os, const STLEXT::Any& any)
 }
 
 /// Writing out the current values.
-MISTD::ostream& operator<<(MISTD::ostream& os, const Config_registry& configuration)
+std::ostream& operator<<(std::ostream& os, const Config_registry& configuration)
 {
     const Config_registry_impl& config = static_cast<const Config_registry_impl&>(configuration);
-    MISTD::map<MISTD::string, STLEXT::Any>::const_iterator it, end=config.end();
+    std::map<std::string, STLEXT::Any>::const_iterator it, end=config.end();
     for (it=config.begin(); it != end; ++it) {
 	os << "Value \"" << it->first.c_str() << "\" ";
 	stream_any(os, it->second);
-	os << MISTD::endl;
+	os << std::endl;
     }
     return os;
 }
@@ -183,14 +183,14 @@ MISTD::ostream& operator<<(MISTD::ostream& os, const Config_registry& configurat
 namespace {
 // Convert the given string \p input to a string where all characters are lowercase.
 void to_lower(
-    MISTD::string& input)
+    std::string& input)
 {
     // using the global ::tolower() as the STLport implementation is breaking on MAC OSX.
-    MISTD::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
 }
 }
 
-bool as_bool(const MISTD::string& str)
+bool as_bool(const std::string& str)
 {
     // try interpreting the string as a number
     const STLEXT::Likely<double> num(STRING::lexicographic_cast_s<double>(str));
@@ -198,7 +198,7 @@ bool as_bool(const MISTD::string& str)
         return static_cast<bool>(static_cast<double>(num) != 0);
 
     // it's not a number, check strings
-    MISTD::string lower(str);
+    std::string lower(str);
     to_lower(lower);
     return lower == "true" || lower == "on" || lower == "yes";
 }

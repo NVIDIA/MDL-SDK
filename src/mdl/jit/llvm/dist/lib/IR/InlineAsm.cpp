@@ -34,8 +34,8 @@ InlineAsm *InlineAsm::get(FunctionType *Ty, StringRef AsmString,
   return pImpl->InlineAsms.getOrCreate(PointerType::getUnqual(Ty), Key);
 }
 
-InlineAsm::InlineAsm(PointerType *Ty, const MISTD::string &asmString,
-                     const MISTD::string &constraints, bool hasSideEffects,
+InlineAsm::InlineAsm(PointerType *Ty, const std::string &asmString,
+                     const std::string &constraints, bool hasSideEffects,
                      bool isAlignStack, AsmDialect asmDialect)
   : Value(Ty, Value::InlineAsmVal),
     AsmString(asmString), Constraints(constraints),
@@ -147,16 +147,16 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
   while (I != E) {
     if (*I == '{') {   // Physical register reference.
       // Find the end of the register name.
-      StringRef::iterator ConstraintEnd = MISTD::find(I+1, E, '}');
+      StringRef::iterator ConstraintEnd = std::find(I+1, E, '}');
       if (ConstraintEnd == E) return true;  // "{foo"
-      pCodes->push_back(MISTD::string(I, ConstraintEnd+1));
+      pCodes->push_back(std::string(I, ConstraintEnd+1));
       I = ConstraintEnd+1;
     } else if (isdigit(static_cast<unsigned char>(*I))) { // Matching Constraint
       // Maximal munch numbers.
       StringRef::iterator NumStart = I;
       while (I != E && isdigit(static_cast<unsigned char>(*I)))
         ++I;
-      pCodes->push_back(MISTD::string(NumStart, I));
+      pCodes->push_back(std::string(NumStart, I));
       unsigned N = atoi(pCodes->back().c_str());
       // Check that this is a valid matching constraint!
       if (N >= ConstraintsSoFar.size() || ConstraintsSoFar[N].Type != isOutput||
@@ -185,11 +185,11 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
     } else if (*I == '^') {
       // Multi-letter constraint
       // FIXME: For now assuming these are 2-character constraints.
-      pCodes->push_back(MISTD::string(I+1, I+3));
+      pCodes->push_back(std::string(I+1, I+3));
       I += 3;
     } else {
       // Single letter constraint.
-      pCodes->push_back(MISTD::string(I, I+1));
+      pCodes->push_back(std::string(I, I+1));
       ++I;
     }
   }
@@ -219,7 +219,7 @@ InlineAsm::ParseConstraints(StringRef Constraints) {
     ConstraintInfo Info;
 
     // Find the end of this constraint.
-    StringRef::iterator ConstraintEnd = MISTD::find(I, E, ',');
+    StringRef::iterator ConstraintEnd = std::find(I, E, ',');
 
     if (ConstraintEnd == I ||  // Empty constraint like ",,"
         Info.Parse(StringRef(I, ConstraintEnd-I), Result)) {

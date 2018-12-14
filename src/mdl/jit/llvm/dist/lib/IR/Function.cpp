@@ -397,7 +397,7 @@ unsigned Function::lookupIntrinsicID() const {
   return 0;
 }
 
-MISTD::string Intrinsic::getName(ID id, ArrayRef<Type*> Tys) {
+std::string Intrinsic::getName(ID id, ArrayRef<Type*> Tys) {
   assert(id < num_intrinsics && "Invalid intrinsic ID!");
   static const char * const Table[] = {
     "not_intrinsic",
@@ -407,7 +407,7 @@ MISTD::string Intrinsic::getName(ID id, ArrayRef<Type*> Tys) {
   };
   if (Tys.empty())
     return Table[id];
-  MISTD::string Result(Table[id]);
+  std::string Result(Table[id]);
   for (unsigned i = 0; i < Tys.size(); ++i) {
     if (PointerType* PTyp = dyn_cast<PointerType>(Tys[i])) {
       Result += ".p" + llvm::utostr(PTyp->getAddressSpace()) +

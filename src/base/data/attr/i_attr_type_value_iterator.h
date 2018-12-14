@@ -60,7 +60,7 @@ class Type;
 class Type_value_iterator : public STLEXT::iterator_facade<
     Type_value_iterator,
     Type,
-    MISTD::forward_iterator_tag,
+    std::forward_iterator_tag,
     const Type&>
 {
   public:
@@ -135,13 +135,13 @@ class Type_value_iterator : public STLEXT::iterator_facade<
     const char* m_value_ptr;				///< the values
     size_t m_offset;					///< the offset into the values
 
-    typedef MISTD::pair<const Type*, size_t> Values;
+    typedef std::pair<const Type*, size_t> Values;
 
     // Use vector-based stack, because vector is smaller than deque,
     // is simpler to debug, and sufficient for small stack depths.
-    typedef MISTD::stack<Values, MISTD::vector<Values> > Values_stack;
-    typedef MISTD::stack<const char*, MISTD::vector<const char*> > Pchar_stack;
-    typedef MISTD::stack<size_t, MISTD::vector<size_t> >  Size_t_stack;
+    typedef std::stack<Values, std::vector<Values> > Values_stack;
+    typedef std::stack<const char*, std::vector<const char*> > Pchar_stack;
+    typedef std::stack<size_t, std::vector<size_t> >  Size_t_stack;
 
     Values_stack    m_types_stack;      ///< helper struct for parsing structs
     Pchar_stack     m_dyn_values;	///< start of values of dyn arrays

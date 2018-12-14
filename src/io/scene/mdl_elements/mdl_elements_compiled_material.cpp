@@ -78,22 +78,25 @@ Mdl_compiled_material::Mdl_compiled_material(
   : m_mdl_meters_per_scene_unit( mdl_meters_per_scene_unit),
     m_mdl_wavelength_min( mdl_wavelength_min),
     m_mdl_wavelength_max( mdl_wavelength_max),
-    m_properties( instance->get_properties())
+    m_properties( instance->get_properties()),
+    m_internal_space( instance->get_internal_space())
 {
     m_tf = get_type_factory();
     m_vf = get_value_factory();
     m_ef = get_expression_factory();
 
-    const mi::mdl::DAG_call* constructor = instance->get_constructor();
-    mi::base::Handle<IExpression> body( mdl_dag_node_to_int_expr(
+    Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
-        /*type_int*/ 0,
-        constructor,
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         module_filename,
-        module_name));
+        module_name,
+        /*prototype_tag*/ DB::Tag());
+
+    const mi::mdl::DAG_call* constructor = instance->get_constructor();
+    mi::base::Handle<IExpression> body(
+        converter.mdl_dag_node_to_int_expr(constructor, /*type_int*/ 0));
     ASSERT( M_SCENE, body);
     m_body = body->get_interface<IExpression_direct_call>();
     ASSERT( M_SCENE, m_body);
@@ -104,15 +107,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         std::string name( std::to_string( i));
         const mi::mdl::DAG_node* mdl_temporary = instance->get_temporary_value( i);
         mi::base::Handle<const IExpression> temporary(
-            mdl_dag_node_to_int_expr(
-                m_ef.get(),
-                transaction,
-                /*type_int*/ 0,
-                mdl_temporary,
-                /*immutable*/ true,
-                /*create_direct_calls*/ true,
-                module_filename,
-                module_name));
+            converter.mdl_dag_node_to_int_expr(mdl_temporary, /*type_int*/ 0));
         ASSERT( M_SCENE, temporary);
         m_temporaries->add_expression( name.c_str(), temporary.get());
     }
@@ -167,6 +162,11 @@ mi::Float32 Mdl_compiled_material::get_mdl_wavelength_min() const
 mi::Float32 Mdl_compiled_material::get_mdl_wavelength_max() const
 {
     return m_mdl_wavelength_max;
+}
+
+const char* Mdl_compiled_material::get_internal_space() const
+{
+    return m_internal_space.c_str();
 }
 
 bool Mdl_compiled_material::depends_on_state_transform() const
@@ -274,6 +274,7 @@ void Mdl_compiled_material::swap( Mdl_compiled_material& other)
     std::swap( m_mdl_wavelength_min, other.m_mdl_wavelength_min);
     std::swap( m_mdl_wavelength_max, other.m_mdl_wavelength_max);
     std::swap( m_properties, other.m_properties);
+    std::swap( m_internal_space, other.m_internal_space);
 }
 
 const IExpression* Mdl_compiled_material::lookup_sub_expression(
@@ -402,6 +403,7 @@ const SERIAL::Serializable* Mdl_compiled_material::serialize(
     serializer->write( m_mdl_wavelength_min);
     serializer->write( m_mdl_wavelength_max);
     serializer->write( m_properties);
+    serializer->write( m_internal_space);
     return this + 1;
 }
 
@@ -423,6 +425,7 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     deserializer->read( &m_mdl_wavelength_min);
     deserializer->read( &m_mdl_wavelength_max);
     deserializer->read( &m_properties);
+    deserializer->read( &m_internal_space);
     return this + 1;
 }
 
@@ -457,6 +460,7 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     s << "Wavelength min: " << m_mdl_wavelength_min << std::endl;
     s << "Wavelength max: " << m_mdl_wavelength_max << std::endl;
     s << "Properties: " << m_properties << std::endl;
+    s << "Internal space: " << m_internal_space << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 

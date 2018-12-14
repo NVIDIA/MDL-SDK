@@ -54,6 +54,12 @@ struct Options {
     // Whether class compilation should be used for the materials.
     bool use_class_compilation;
 
+    // Disables pixel oversampling.
+    bool no_aa;
+
+    // Whether derivative support should be enabled.
+    bool enable_derivatives;
+
     // List of materials to use.
     std::vector<std::string> material_names;
 
@@ -67,6 +73,8 @@ struct Options {
         , res_x(700)
         , res_y(520)
         , use_class_compilation(false)
+        , no_aa(false)
+        , enable_derivatives(false)
     {
     }
 };
@@ -77,24 +85,25 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
     mi::neuraylib::ITransaction       *transaction,
     mi::neuraylib::IImage_api         *image_api,
     std::vector<mi::base::Handle<const mi::neuraylib::ITarget_code> > const &target_codes,
-    mi::Uint32                         width,
-    mi::Uint32                         height,
+    Options                           &options,
     mi::Uint32                         num_samples)
 {
     // Build the full CUDA kernel with all the generated code
     CUfunction  cuda_function;
+    char const *ptx_name = options.enable_derivatives ?
+        "example_execution_cuda_derivatives.ptx" : "example_execution_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + "example_execution_cuda.ptx").c_str(),
+        (get_executable_folder() + ptx_name).c_str(),
         "evaluate_mat_expr",
         &cuda_function);
 
     // Prepare the needed data of all target codes for the GPU
-    Material_gpu_context material_gpu_context;
+    Material_gpu_context material_gpu_context(options.enable_derivatives);
     for (size_t i = 0, num_target_codes = target_codes.size(); i < num_target_codes; ++i) {
         if (!material_gpu_context.prepare_target_code_data(
                 transaction, image_api, target_codes[i].get()))
-            return NULL;
+            return nullptr;
     }
     CUdeviceptr device_tc_data_list = material_gpu_context.get_device_target_code_data_list();
     CUdeviceptr device_arg_block_list =
@@ -102,17 +111,17 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
 
     // Allocate GPU output buffer
     CUdeviceptr device_outbuf;
-    check_cuda_success(cuMemAlloc(&device_outbuf, width * height * sizeof(float3)));
+    check_cuda_success(cuMemAlloc(&device_outbuf, options.res_x * options.res_y * sizeof(float3)));
 
     // Launch kernel for the whole image
     dim3 threads_per_block(16, 16);
-    dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
+    dim3 num_blocks((options.res_x + 15) / 16, (options.res_y + 15) / 16);
     void *kernel_params[] = {
         &device_outbuf,
         &device_tc_data_list,
         &device_arg_block_list,
-        &width,
-        &height,
+        &options.res_x,
+        &options.res_y,
         &num_samples
     };
 
@@ -120,14 +129,15 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
         cuda_function,
         num_blocks.x, num_blocks.y, num_blocks.z,
         threads_per_block.x, threads_per_block.y, threads_per_block.z,
-        0, NULL, kernel_params, NULL));
+        0, nullptr, kernel_params, nullptr));
 
     // Create a canvas (with only one tile) and copy the result image to it
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
-        image_api->create_canvas("Rgb_fp", width, height));
+        image_api->create_canvas("Rgb_fp", options.res_x, options.res_y));
     mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
     float3 *data = static_cast<float3 *>(tile->get_data());
-    check_cuda_success(cuMemcpyDtoH(data, device_outbuf, width * height * sizeof(float3)));
+    check_cuda_success(cuMemcpyDtoH(
+        data, device_outbuf, options.res_x * options.res_y * sizeof(float3)));
 
     // Cleanup resources not handled by Material_gpu_context
     check_cuda_success(cuMemFree(device_outbuf));
@@ -144,6 +154,8 @@ void usage(char const *prog_name)
         << "Options:\n"
         << "  --res <x> <y>       resolution (default: 700x520)\n"
         << "  --cc                use class compilation\n"
+        << "  --noaa              disable pixel oversampling\n"
+        << "  -d                  enable use of derivatives\n"
         << "  -o <outputfile>     image file to write result to\n"
         << "                      (default: example_cuda_<material_pattern>.png)\n"
         << "  --mdl_path <path>   mdl search path, can occur multiple times.\n"
@@ -179,6 +191,10 @@ int main(int argc, char* argv[])
                 options.res_y = std::max(atoi(argv[++i]), 1);
             } else if (strcmp(opt, "--cc") == 0) {
                 options.use_class_compilation = true;
+            } else if (strcmp(opt, "--noaa") == 0) {
+                options.no_aa = true;
+            } else if (strcmp(opt, "-d") == 0) {
+                options.enable_derivatives = true;
             } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
                 options.mdl_paths.push_back(argv[++i]);
             } else {
@@ -191,7 +207,7 @@ int main(int argc, char* argv[])
             options.material_names.push_back(std::string(opt));
     }
 
-    // Use default materials, if non was provided via command line
+    // Use default materials, if none was provided via command line
     if (options.material_names.empty()) {
         options.material_names.push_back("::nvidia::sdk_examples::tutorials::example_execution1");
         options.material_names.push_back("::nvidia::sdk_examples::tutorials::example_execution2");
@@ -235,11 +251,20 @@ int main(int argc, char* argv[])
         mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
         mi::base::Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
 
+        // Access mdl factory
+        mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+            neuray->get_api_component<mi::neuraylib::IMdl_factory>());
         {
             // Generate code for material sub-expressions of different materials
             // according to the requested material pattern
             std::vector<mi::base::Handle<const mi::neuraylib::ITarget_code> > target_codes;
-            Material_compiler mc(mdl_compiler.get(), transaction.get(), 0);
+
+            Material_compiler mc(
+                mdl_compiler.get(),
+                mdl_factory.get(),
+                transaction.get(),
+                /*num_texture_results=*/ 0,
+                options.enable_derivatives);
 
             for (unsigned i = 0, n = unsigned(options.material_names.size()); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {
@@ -261,8 +286,11 @@ int main(int argc, char* argv[])
             CUcontext cuda_context = init_cuda();
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 bake_expression_cuda_ptx(
-                    transaction.get(), image_api.get(), target_codes,
-                    options.res_x, options.res_y, 8));
+                    transaction.get(),
+                    image_api.get(),
+                    target_codes,
+                    options,
+                    options.no_aa ? 1 : 8));
             uninit_cuda(cuda_context);
 
             // Export the canvas to an image on disk
@@ -286,3 +314,4 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+

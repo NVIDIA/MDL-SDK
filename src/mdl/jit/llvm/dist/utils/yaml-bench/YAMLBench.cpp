@@ -37,7 +37,7 @@ static cl::opt<bool>
                , cl::init(false)
                );
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
  Input(cl::Positional, cl::desc("<input>"));
 
 static cl::opt<bool>
@@ -64,14 +64,14 @@ static raw_ostream &operator <<(raw_ostream &os, const indent &in) {
 }
 
 /// \brief Pretty print a tag by replacing tag:yaml.org,2002: with !!.
-static MISTD::string prettyTag(yaml::Node *N) {
-  MISTD::string Tag = N->getVerbatimTag();
+static std::string prettyTag(yaml::Node *N) {
+  std::string Tag = N->getVerbatimTag();
   if (StringRef(Tag).startswith("tag:yaml.org,2002:")) {
-    MISTD::string Ret = "!!";
+    std::string Ret = "!!";
     Ret += StringRef(Tag).substr(18);
     return llvm_move(Ret);
   }
-  MISTD::string Ret = "!<";
+  std::string Ret = "!<";
   Ret += Tag;
   Ret += ">";
   return Ret;
@@ -165,16 +165,16 @@ static void benchmark( llvm::TimerGroup &Group
   Parsing.stopTimer();
 }
 
-static MISTD::string createJSONText(size_t MemoryMB, unsigned ValueSize) {
-  MISTD::string JSONText;
+static std::string createJSONText(size_t MemoryMB, unsigned ValueSize) {
+  std::string JSONText;
   llvm::raw_string_ostream Stream(JSONText);
   Stream << "[\n";
   size_t MemoryBytes = MemoryMB * 1024 * 1024;
   while (JSONText.size() < MemoryBytes) {
     Stream << " {\n"
-           << "  \"key1\": \"" << MISTD::string(ValueSize, '*') << "\",\n"
-           << "  \"key2\": \"" << MISTD::string(ValueSize, '*') << "\",\n"
-           << "  \"key3\": \"" << MISTD::string(ValueSize, '*') << "\"\n"
+           << "  \"key1\": \"" << std::string(ValueSize, '*') << "\",\n"
+           << "  \"key2\": \"" << std::string(ValueSize, '*') << "\",\n"
+           << "  \"key3\": \"" << std::string(ValueSize, '*') << "\"\n"
            << " }";
     Stream.flush();
     if (JSONText.size() < MemoryBytes) Stream << ",";

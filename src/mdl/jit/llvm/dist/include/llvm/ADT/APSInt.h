@@ -61,9 +61,9 @@ public:
   void toString(SmallVectorImpl<char> &Str, unsigned Radix = 10) const {
     APInt::toString(Str, Radix, isSigned());
   }
-  /// toString - Converts an APInt to a MISTD::string.  This is an inefficient
+  /// toString - Converts an APInt to a std::string.  This is an inefficient
   /// method, your should prefer passing in a SmallString instead.
-  MISTD::string toString(unsigned Radix) const {
+  std::string toString(unsigned Radix) const {
     return APInt::toString(Radix, isSigned());
   }
   using APInt::toString;

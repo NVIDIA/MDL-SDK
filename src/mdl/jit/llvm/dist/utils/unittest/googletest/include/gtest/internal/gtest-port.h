@@ -46,10 +46,10 @@
 //                              are enabled.
 //   GTEST_HAS_GLOBAL_STRING  - Define it to 1/0 to indicate that ::string
 //                              is/isn't available (some systems define
-//                              ::string, which is different to MISTD::string).
+//                              ::string, which is different to std::string).
 //   GTEST_HAS_GLOBAL_WSTRING - Define it to 1/0 to indicate that ::string
 //                              is/isn't available (some systems define
-//                              ::wstring, which is different to MISTD::wstring).
+//                              ::wstring, which is different to std::wstring).
 //   GTEST_HAS_POSIX_RE       - Define it to 1/0 to indicate that POSIX regular
 //                              expressions are/aren't available.
 //   GTEST_HAS_PTHREAD        - Define it to 1/0 to indicate that <pthread.h>
@@ -57,8 +57,8 @@
 //   GTEST_HAS_RTTI           - Define it to 1/0 to indicate that RTTI is/isn't
 //                              enabled.
 //   GTEST_HAS_STD_WSTRING    - Define it to 1/0 to indicate that
-//                              MISTD::wstring does/doesn't work (Google Test can
-//                              be used where MISTD::wstring is unavailable).
+//                              std::wstring does/doesn't work (Google Test can
+//                              be used where std::wstring is unavailable).
 //   GTEST_HAS_TR1_TUPLE      - Define it to 1/0 to indicate tr1::tuple
 //                              is/isn't available.
 //   GTEST_HAS_SEH            - Define it to 1/0 to indicate whether the
@@ -141,7 +141,7 @@
 //
 // Template meta programming:
 //   is_pointer     - as in TR1; needed on Symbian and IBM XL C/C++ only.
-//   IteratorTraits - partial implementation of MISTD::iterator_traits, which
+//   IteratorTraits - partial implementation of std::iterator_traits, which
 //                    is not available in libCstd when compiled with Sun C++.
 //
 // Smart pointers:
@@ -333,8 +333,8 @@
 // some clients still depend on it.
 # define GTEST_HAS_STD_STRING 1
 #elif !GTEST_HAS_STD_STRING
-// The user told us that ::MISTD::string isn't available.
-# error "Google Test cannot be used where ::MISTD::string isn't available."
+// The user told us that ::std::string isn't available.
+# error "Google Test cannot be used where ::std::string isn't available."
 #endif  // !defined(GTEST_HAS_STD_STRING)
 
 #ifndef GTEST_HAS_GLOBAL_STRING
@@ -346,12 +346,12 @@
 #endif  // GTEST_HAS_GLOBAL_STRING
 
 #ifndef GTEST_HAS_STD_WSTRING
-// The user didn't tell us whether ::MISTD::wstring is available, so we need
+// The user didn't tell us whether ::std::wstring is available, so we need
 // to figure it out.
-// TODO(wan@google.com): uses autoconf to detect whether ::MISTD::wstring
+// TODO(wan@google.com): uses autoconf to detect whether ::std::wstring
 //   is available.
 
-// Cygwin 1.7 and below doesn't support ::MISTD::wstring.
+// Cygwin 1.7 and below doesn't support ::std::wstring.
 // Solaris' libc++ doesn't support it either.  Android has
 // no support for it at least as recent as Froyo (2.2).
 // Minix currently doesn't support it either.
@@ -758,13 +758,13 @@ struct StaticAssertTypeEqHelper<T, T> {};
 #if GTEST_HAS_GLOBAL_STRING
 typedef ::string string;
 #else
-typedef ::MISTD::string string;
+typedef ::std::string string;
 #endif  // GTEST_HAS_GLOBAL_STRING
 
 #if GTEST_HAS_GLOBAL_WSTRING
 typedef ::wstring wstring;
 #elif GTEST_HAS_STD_WSTRING
-typedef ::MISTD::wstring wstring;
+typedef ::std::wstring wstring;
 #endif  // GTEST_HAS_GLOBAL_WSTRING
 
 // A helper for suppressing warnings on constant condition.  It just
@@ -818,7 +818,7 @@ class GTEST_API_ RE {
   RE(const RE& other) { Init(other.pattern()); }
 
   // Constructs an RE from a string.
-  RE(const ::MISTD::string& regex) { Init(regex.c_str()); }  // NOLINT
+  RE(const ::std::string& regex) { Init(regex.c_str()); }  // NOLINT
 
 #if GTEST_HAS_GLOBAL_STRING
 
@@ -839,10 +839,10 @@ class GTEST_API_ RE {
   //
   // TODO(wan@google.com): make FullMatch() and PartialMatch() work
   // when str contains NUL characters.
-  static bool FullMatch(const ::MISTD::string& str, const RE& re) {
+  static bool FullMatch(const ::std::string& str, const RE& re) {
     return FullMatch(str.c_str(), re);
   }
-  static bool PartialMatch(const ::MISTD::string& str, const RE& re) {
+  static bool PartialMatch(const ::std::string& str, const RE& re) {
     return PartialMatch(str.c_str(), re);
   }
 
@@ -886,12 +886,12 @@ class GTEST_API_ RE {
 
 // Formats a source file path and a line number as they would appear
 // in an error message from the compiler used to compile this code.
-GTEST_API_ ::MISTD::string FormatFileLocation(const char* file, int line);
+GTEST_API_ ::std::string FormatFileLocation(const char* file, int line);
 
 // Formats a file location for compiler-independent XML output.
 // Although this function is not platform dependent, we put it next to
 // FormatFileLocation in order to contrast the two functions.
-GTEST_API_ ::MISTD::string FormatCompilerIndependentFileLocation(const char* file,
+GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(const char* file,
                                                                int line);
 
 // Defines logging utilities:
@@ -917,7 +917,7 @@ class GTEST_API_ GTestLog {
   // Flushes the buffers and, if severity is GTEST_FATAL, aborts the program.
   ~GTestLog();
 
-  ::MISTD::ostream& GetStream() { return ::MISTD::cerr; }
+  ::std::ostream& GetStream() { return ::std::cerr; }
 
  private:
   const GTestLogSeverity severity_;
@@ -1059,10 +1059,10 @@ GTEST_API_ String GetCapturedStderr();
 #if GTEST_HAS_DEATH_TEST
 
 // A copy of all command line arguments.  Set by InitGoogleTest().
-extern ::MISTD::vector<String> g_argvs;
+extern ::std::vector<String> g_argvs;
 
-// GTEST_HAS_DEATH_TEST implies we have ::MISTD::string.
-const ::MISTD::vector<String>& GetArgvs();
+// GTEST_HAS_DEATH_TEST implies we have ::std::string.
+const ::std::vector<String>& GetArgvs();
 
 #endif  // GTEST_HAS_DEATH_TEST
 

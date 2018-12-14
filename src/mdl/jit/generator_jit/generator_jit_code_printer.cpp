@@ -57,7 +57,7 @@ void JIT_code_printer::print(Printer *printer, mi::base::IInterface const *code)
 
     llvm::Module const *llvm_module = code_llvm->get_llvm_module();
     if (llvm_module != NULL) {
-        MISTD::string llvm_asm;
+        std::string llvm_asm;
         llvm::raw_string_ostream s(llvm_asm);
 
         llvm_module->print(s, /*AssemblyAnnotationWriter=*/NULL);

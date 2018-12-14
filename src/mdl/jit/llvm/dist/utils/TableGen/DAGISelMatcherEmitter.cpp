@@ -35,17 +35,17 @@ class MatcherTableEmitter {
   const CodeGenDAGPatterns &CGP;
   
   DenseMap<TreePattern *, unsigned> NodePredicateMap;
-  MISTD::vector<TreePredicateFn> NodePredicates;
+  std::vector<TreePredicateFn> NodePredicates;
   
   StringMap<unsigned> PatternPredicateMap;
-  MISTD::vector<MISTD::string> PatternPredicates;
+  std::vector<std::string> PatternPredicates;
 
   DenseMap<const ComplexPattern*, unsigned> ComplexPatternMap;
-  MISTD::vector<const ComplexPattern*> ComplexPatterns;
+  std::vector<const ComplexPattern*> ComplexPatterns;
 
 
   DenseMap<Record*, unsigned> NodeXFormMap;
-  MISTD::vector<Record*> NodeXForms;
+  std::vector<Record*> NodeXForms;
 
 public:
   MatcherTableEmitter(const CodeGenDAGPatterns &cgp)
@@ -435,7 +435,7 @@ EmitMatcher(const Matcher *N, unsigned Indent, unsigned CurrentIdx,
     return Bytes;
   }
   case Matcher::EmitStringInteger: {
-    const MISTD::string &Val = cast<EmitStringIntegerMatcher>(N)->getValue();
+    const std::string &Val = cast<EmitStringIntegerMatcher>(N)->getValue();
     // These should always fit into one byte.
     OS << "OPC_EmitInteger, "
       << getEnumName(cast<EmitStringIntegerMatcher>(N)->getVT()) << ", "
@@ -648,7 +648,7 @@ void MatcherTableEmitter::EmitPredicateFunctions(formatted_raw_ostream &OS) {
   if (!ComplexPatterns.empty()) {
     OS << "virtual bool CheckComplexPattern(SDNode *Root, SDNode *Parent,\n";
     OS << "                                 SDValue N, unsigned PatternNo,\n";
-    OS << "         SmallVectorImpl<MISTD::pair<SDValue, SDNode*> > &Result) {\n";
+    OS << "         SmallVectorImpl<std::pair<SDValue, SDNode*> > &Result) {\n";
     OS << "  unsigned NextRes = Result.size();\n";
     OS << "  switch (PatternNo) {\n";
     OS << "  default: llvm_unreachable(\"Invalid pattern # in table?\");\n";
@@ -697,14 +697,14 @@ void MatcherTableEmitter::EmitPredicateFunctions(formatted_raw_ostream &OS) {
         CGP.getSDNodeTransform(NodeXForms[i]);
 
       Record *SDNode = Entry.first;
-      const MISTD::string &Code = Entry.second;
+      const std::string &Code = Entry.second;
 
       OS << "  case " << i << ": {  ";
       if (!OmitComments)
         OS << "// " << NodeXForms[i]->getName();
       OS << '\n';
 
-      MISTD::string ClassName = CGP.getSDNodeInfo(SDNode).getSDClassName();
+      std::string ClassName = CGP.getSDNodeInfo(SDNode).getSDClassName();
       if (ClassName == "SDNode")
         OS << "    SDNode *N = V.getNode();\n";
       else
@@ -717,7 +717,7 @@ void MatcherTableEmitter::EmitPredicateFunctions(formatted_raw_ostream &OS) {
   }
 }
 
-static void BuildHistogram(const Matcher *M, MISTD::vector<unsigned> &OpcodeFreq){
+static void BuildHistogram(const Matcher *M, std::vector<unsigned> &OpcodeFreq){
   for (; M != 0; M = M->getNext()) {
     // Count this node.
     if (unsigned(M->getKind()) >= OpcodeFreq.size())
@@ -744,7 +744,7 @@ void MatcherTableEmitter::EmitHistogram(const Matcher *M,
   if (OmitComments)
     return;
 
-  MISTD::vector<unsigned> OpcodeFreq;
+  std::vector<unsigned> OpcodeFreq;
   BuildHistogram(M, OpcodeFreq);
 
   OS << "  // Opcode Histogram:\n";

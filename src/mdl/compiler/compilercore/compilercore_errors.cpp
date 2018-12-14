@@ -449,7 +449,7 @@ char const *get_error_template(
         case SOFT_RANGE_OUTSIDE_HARD_RANGE:
             return "soft_range($0, $1) is outside the specified hard_range($2, $3)";
         case FUNCTION_PTR_USED:
-            return "Missing braces on function call";
+            return "Missing parentheses on function call";
         case USED_VARIABLE_MARKED_UNUSED:
             return "used variable '$0' marked with anno::unused() annotation";
         case USED_CONSTANT_MARKED_UNUSED:
@@ -566,6 +566,8 @@ char const *get_error_template(
         case ARCHIVE_CONFLICT:
             return "inside search path '$0': "
                    "archive '$1' conflicts with $2 '$3', both locations are ignored";
+        case MATERIAL_PTR_USED:
+            return "Missing parentheses on material instance";
 
         // ------------------------------------------------------------- //
         case INTERNAL_COMPILER_ERROR:
@@ -665,6 +667,65 @@ char const *get_error_template(
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:
             return "internal JIT backend error: $.";
+        }
+    } else if (msg_class == 'V') {
+        Comparator_error err = Comparator_error(code);
+        switch (err) {
+        case OTHER_DEFINED_AT:
+            return "other '$0' was defined here";
+        case MISSING_STRUCT_MEMBER:
+            return "field '$0' was removed";
+        case DIFFERENT_STRUCT_MEMBER_TYPE:
+            return "field '$0' has type $1 but type $2 in $3";
+        case ADDED_STRUCT_MEMBER:
+            return "field '$0' was added";
+        case MISSING_ENUM_VALUE:
+            return "enum value '$0' was removed";
+        case DIFFERENT_ENUM_VALUE:
+            return "enum value '$0' has integer value $1 but $2 in $3";
+        case ADDED_ENUM_VALUE:
+            return "enum value '$0' was added";
+
+        case TYPE_DOES_NOT_EXISTS:
+            return "Type '$0' does not exists in $1";
+        case TYPES_DIFFERENT:
+            return "Types '$0' are of different kind";
+        case INCOMPATIBLE_STRUCT:
+            return "incompatible struct type $0";
+        case INCOMPATIBLE_ENUM:
+            return "incompatible enum type $0";
+        case DIFFERENT_MDL_VERSIONS:
+            return "modules using different MDL versions, mdl $0 != mdl $1";
+        case DIFFERENT_DEFAULT_ARGUMENT:
+            return "different default arguments on '$0'";
+        case CONSTANT_DOES_NOT_EXISTS:
+            return "Constant '$0' does not exists in $1";
+        case CONSTANT_OF_DIFFERENT_TYPE:
+            return "Constants '$0' are of different type, $1 != $2";
+        case CONSTANT_OF_DIFFERENT_VALUE:
+            return "Constants '$0' are of different values, $1 != $2";
+        case FUNCTION_DOES_NOT_EXISTS:
+            return "Function '$0' does not exists in $1";
+        case FUNCTION_RET_TYPE_DIFFERENT:
+            return "Functions '$0' have different return types, $1 != $2";
+        case FUNCTION_PARAM_DEF_ARG_DELETED:
+            return "Parameter '$0' of function '$1' has no default argument in $2";
+        case FUNCTION_PARAM_DEF_ARG_CHANGED:
+            return "Parameter '$0' of function '$1' has a different default argument in $2";
+        case ANNOTATION_DOES_NOT_EXISTS:
+            return "'$0' does not exists in $1";
+        case ANNOTATION_PARAM_DEF_ARG_DELETED:
+            return "Parameter '$0' of '$1' has no default argument in $2";
+        case ANNOTATION_PARAM_DEF_ARG_CHANGED:
+            return "Parameter '$0' of '$1' has a different default argument in $2";
+        case SEMA_VERSION_IS_HIGHER:
+            return "The archive version of '$0' is higher then of '$1'";
+        case ARCHIVE_DOES_NOT_CONTAIN_MODULE:
+            return "Module '$0' was removed from archive";
+
+        // ------------------------------------------------------------- //
+        case INTERNAL_COMPARATOR_ERROR:
+            return "internal comparator error: $.";
         }
     }
     return "";
@@ -811,6 +872,12 @@ Error_params &Error_params::add(char const *s)
     return *this;
 }
 
+// Add a string argument.
+Error_params &Error_params::add(string const &s)
+{
+    return add(s.c_str());
+}
+
 // Return the string argument of given index.
 char const *Error_params::get_string_arg(size_t index) const
 {
@@ -917,11 +984,22 @@ int Error_params::get_pos_arg(size_t index) const
     return e.u.pos;
 }
 
-// Add a function signature.
+// Add a function signature (including return type).
 Error_params &Error_params::add_signature(IDefinition const *def)
 {
     Entry e;
     e.kind  = EK_SIGNATURE;
+    e.u.sig = def;
+
+    m_args.push_back(e);
+    return *this;
+}
+
+// Add a function signature (without return type).
+Error_params &Error_params::add_signature_no_rt(IDefinition const *def)
+{
+    Entry e;
+    e.kind = EK_SIGNATURE_NO_RT;
     e.u.sig = def;
 
     m_args.push_back(e);
@@ -933,7 +1011,7 @@ IDefinition const *Error_params::get_signature_arg(size_t index) const
 {
     Entry const &e = m_args.at(index);
 
-    MDL_ASSERT(e.kind == EK_SIGNATURE);
+    MDL_ASSERT(e.kind == EK_SIGNATURE || e.kind == EK_SIGNATURE_NO_RT);
     return e.u.sig;
 }
 
@@ -1236,7 +1314,8 @@ static void print_error_param(
     size_t             idx,
     IPrinter           *printer)
 {
-    switch (params.get_kind(idx)) {
+    Error_params::Kind err_kind = params.get_kind(idx);
+    switch (err_kind) {
     case Error_params::EK_TYPE:
         {
             // type param
@@ -1429,6 +1508,7 @@ static void print_error_param(
             );
         break;
     case Error_params::EK_SIGNATURE:
+    case Error_params::EK_SIGNATURE_NO_RT:
         {
             IDefinition const *def = params.get_signature_arg(idx);
             IDefinition::Kind kind = def->get_kind();
@@ -1463,8 +1543,11 @@ static void print_error_param(
                 if (IType_struct const *s_type = as<IType_struct>(ret_type))
                     if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL)
                         is_material = true;
-                printer->print(ret_type);
-                printer->print(" ");
+
+                if (is_material || err_kind == Error_params::EK_SIGNATURE) {
+                    printer->print(ret_type);
+                    printer->print(" ");
+                }
             } else if (kind == Definition::DK_ANNOTATION)
                 printer->print("annotation ");
 
@@ -1560,6 +1643,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_2: s = "1.2"; break;
             case IMDL::MDL_VERSION_1_3: s = "1.3"; break;
             case IMDL::MDL_VERSION_1_4: s = "1.4"; break;
+            case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
             }
             printer->print(s);
         }

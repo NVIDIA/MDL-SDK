@@ -789,7 +789,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(BlockAddress, Value)
 /// maintained in the Value::SubclassData field.
 class ConstantExpr : public Constant {
   friend struct ConstantCreator<ConstantExpr,Type,
-                            MISTD::pair<unsigned, MISTD::vector<Constant*> > >;
+                            std::pair<unsigned, std::vector<Constant*> > >;
   friend struct ConvertConstantType<ConstantExpr, Type>;
 
 protected:

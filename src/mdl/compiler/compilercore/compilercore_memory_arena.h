@@ -159,7 +159,7 @@ public:
     size_type max_size() const { return 0xffffffff; }
 
     /// Memory is allocated for \c count objects of type \c T but objects are not constructed.
-    pointer allocate( size_type count, MISTD::allocator<void>::const_pointer /*hint*/ = 0 ) const
+    pointer allocate( size_type count, std::allocator<void>::const_pointer /*hint*/ = 0 ) const
     {
         return reinterpret_cast<T*>(m_arena->allocate(count * sizeof(T)));
     }
@@ -180,7 +180,7 @@ public:
     template <typename U, typename... Args>
     void construct(U *p, Args&&... args)
     {
-        ::new((void *)p) U(MISTD::forward<Args>(args)...);
+        ::new((void *)p) U(std::forward<Args>(args)...);
     }
 #endif
 
@@ -425,9 +425,9 @@ private:
     size_t const m_size;
 };
 
-typedef MISTD::basic_string<
+typedef std::basic_string<
     char, 
-    MISTD::char_traits<char>, 
+    std::char_traits<char>, 
     Memory_arena_allocator<char> > Arena_string;
 
 // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
@@ -438,16 +438,16 @@ inline size_t dynamic_memory_consumption(Arena_string const &) { return 0; }
 template<typename T>
 struct Arena_vector
 {
-    typedef MISTD::vector<T, Memory_arena_allocator<T> > Type;
+    typedef std::vector<T, Memory_arena_allocator<T> > Type;
 };
 
 // Helper for dynamic memory consumption: Arena vectors have no EXTRA memory allocated.
 template<typename T>
-inline bool has_dynamic_memory_consumption(MISTD::vector<T, Memory_arena_allocator<T> > const &) {
+inline bool has_dynamic_memory_consumption(std::vector<T, Memory_arena_allocator<T> > const &) {
     return false;
 }
 template<typename T>
-inline size_t dynamic_memory_consumption(MISTD::vector<T, Memory_arena_allocator<T> > const &) {
+inline size_t dynamic_memory_consumption(std::vector<T, Memory_arena_allocator<T> > const &) {
     return 0;
 }
 
@@ -455,7 +455,7 @@ template <
     typename Key,
     typename Tp,
     typename HashFcn = boost::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename EqualKey = std::equal_to<Key>
 >
 struct Arena_hash_map {
     typedef boost::unordered_map<
@@ -482,13 +482,13 @@ struct Arena_ptr_hash_map {
 // Helper for dynamic memory consumption: Arena hash maps have no EXTRA memory allocated.
 template<typename T1, typename T2, typename T3, typename T4>
 inline bool has_dynamic_memory_consumption(
-    boost::unordered_map<T1,T2,T3,T4,Memory_arena_allocator<MISTD::pair<T1,T2> > > const &)
+    boost::unordered_map<T1,T2,T3,T4,Memory_arena_allocator<std::pair<T1,T2> > > const &)
 {
     return false;
 }
 template<typename T1, typename T2, typename T3, typename T4>
 inline size_t dynamic_memory_consumption(
-    boost::unordered_map<T1,T2,T3,T4,Memory_arena_allocator<MISTD::pair<T1,T2> > >  const &)
+    boost::unordered_map<T1,T2,T3,T4,Memory_arena_allocator<std::pair<T1,T2> > >  const &)
 {
     return 0;
 }
@@ -496,7 +496,7 @@ inline size_t dynamic_memory_consumption(
 template <
     typename Key,
     typename HashFcn = boost::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename EqualKey = std::equal_to<Key>
 >
 struct Arena_hash_set {
     typedef boost::unordered_set<
@@ -530,16 +530,16 @@ inline size_t dynamic_memory_consumption(
 /// A list using a memory arena.
 template <typename Tp>
 struct Arena_list {
-    typedef MISTD::list<Tp, Memory_arena_allocator<Tp> > Type;
+    typedef std::list<Tp, Memory_arena_allocator<Tp> > Type;
 };
 
 // Helper for dynamic memory consumption: Arena lists have no EXTRA memory allocated.
 template<typename T>
-inline bool has_dynamic_memory_consumption(MISTD::list<T,Memory_arena_allocator<T> > const &) {
+inline bool has_dynamic_memory_consumption(std::list<T,Memory_arena_allocator<T> > const &) {
     return false;
 }
 template<typename T>
-inline size_t dynamic_memory_consumption(MISTD::list<T,Memory_arena_allocator<T> > const &) {
+inline size_t dynamic_memory_consumption(std::list<T,Memory_arena_allocator<T> > const &) {
     return 0;
 }
 

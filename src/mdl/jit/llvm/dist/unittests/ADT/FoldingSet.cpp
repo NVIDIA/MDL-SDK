@@ -25,11 +25,11 @@ TEST(FoldingSetTest, UnalignedStringTest) {
 
   FoldingSetNodeID a, b;
   // An aligned string
-  MISTD::string str1= "a test string";
+  std::string str1= "a test string";
   a.AddString(str1);
 
   // An unaligned string
-  MISTD::string str2 = ">" + str1;
+  std::string str2 = ">" + str1;
   b.AddString(str2.c_str() + 1);
 
   EXPECT_EQ(a.ComputeHash(), b.ComputeHash());

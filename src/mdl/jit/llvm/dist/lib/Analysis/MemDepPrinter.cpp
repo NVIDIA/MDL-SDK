@@ -35,7 +35,7 @@ namespace {
     static const char *const DepTypeStr[];
 
     typedef PointerIntPair<const Instruction *, 2, DepType> InstTypePair;
-    typedef MISTD::pair<InstTypePair, const BasicBlock *> Dep;
+    typedef std::pair<InstTypePair, const BasicBlock *> Dep;
     typedef SmallSetVector<Dep, 4> DepSet;
     typedef DenseMap<const Instruction *, DepSet> DepSetMap;
     DepSetMap Deps;
@@ -106,7 +106,7 @@ bool MemDepPrinter::runOnFunction(Function &F) {
 
     MemDepResult Res = MDA.getDependency(Inst);
     if (!Res.isNonLocal()) {
-      Deps[Inst].insert(MISTD::make_pair(getInstTypePair(Res),
+      Deps[Inst].insert(std::make_pair(getInstTypePair(Res),
                                        static_cast<BasicBlock *>(0)));
     } else if (CallSite CS = cast<Value>(Inst)) {
       const MemoryDependenceAnalysis::NonLocalDepInfo &NLDI =
@@ -116,14 +116,14 @@ bool MemDepPrinter::runOnFunction(Function &F) {
       for (MemoryDependenceAnalysis::NonLocalDepInfo::const_iterator
            I = NLDI.begin(), E = NLDI.end(); I != E; ++I) {
         const MemDepResult &Res = I->getResult();
-        InstDeps.insert(MISTD::make_pair(getInstTypePair(Res), I->getBB()));
+        InstDeps.insert(std::make_pair(getInstTypePair(Res), I->getBB()));
       }
     } else {
       SmallVector<NonLocalDepResult, 4> NLDI;
       if (LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
         if (!LI->isUnordered()) {
           // FIXME: Handle atomic/volatile loads.
-          Deps[Inst].insert(MISTD::make_pair(getInstTypePair(0, Unknown),
+          Deps[Inst].insert(std::make_pair(getInstTypePair(0, Unknown),
                                            static_cast<BasicBlock *>(0)));
           continue;
         }
@@ -132,7 +132,7 @@ bool MemDepPrinter::runOnFunction(Function &F) {
       } else if (StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
         if (!SI->isUnordered()) {
           // FIXME: Handle atomic/volatile stores.
-          Deps[Inst].insert(MISTD::make_pair(getInstTypePair(0, Unknown),
+          Deps[Inst].insert(std::make_pair(getInstTypePair(0, Unknown),
                                            static_cast<BasicBlock *>(0)));
           continue;
         }
@@ -149,7 +149,7 @@ bool MemDepPrinter::runOnFunction(Function &F) {
       for (SmallVectorImpl<NonLocalDepResult>::const_iterator
            I = NLDI.begin(), E = NLDI.end(); I != E; ++I) {
         const MemDepResult &Res = I->getResult();
-        InstDeps.insert(MISTD::make_pair(getInstTypePair(Res), I->getBB()));
+        InstDeps.insert(std::make_pair(getInstTypePair(Res), I->getBB()));
       }
     }
   }

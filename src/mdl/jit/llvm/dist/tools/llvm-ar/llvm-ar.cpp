@@ -57,18 +57,18 @@ static void failIfError(error_code EC, Twine Context = "") {
   if (!EC)
     return;
 
-  MISTD::string ContextStr = Context.str();
+  std::string ContextStr = Context.str();
   if (ContextStr == "")
     fail(EC.message());
   fail(Context + ": " + EC.message());
 }
 
 // llvm-ar/llvm-ranlib remaining positional arguments.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 RestOfArgs(cl::Positional, cl::OneOrMore,
     cl::desc("[relpos] [count] <archive-file> [members]..."));
 
-MISTD::string Options;
+std::string Options;
 
 // MoreHelp - Provide additional help output explaining the operations and
 // modifiers of llvm-ar. This object instructs the CommandLine library
@@ -122,22 +122,22 @@ static bool Symtab = true;         ///< 's' modifier
 // the name of the archive member to which the 'a', 'b' or 'i' modifier
 // refers. Only one of 'a', 'b' or 'i' can be specified so we only need
 // one variable.
-static MISTD::string RelPos;
+static std::string RelPos;
 
 // This variable holds the name of the archive file as given on the
 // command line.
-static MISTD::string ArchiveName;
+static std::string ArchiveName;
 
 // This variable holds the list of member files to proecess, as given
 // on the command line.
-static MISTD::vector<MISTD::string> Members;
+static std::vector<std::string> Members;
 
 // show_help - Show the error message, the help message and exit.
 LLVM_ATTRIBUTE_NORETURN static void
-show_help(const MISTD::string &msg) {
+show_help(const std::string &msg) {
   errs() << ToolName << ": " << msg << "\n\n";
   cl::PrintHelpMessage();
-  MISTD::exit(1);
+  std::exit(1);
 }
 
 // getRelPos - Extract the member filename from the command line for
@@ -168,7 +168,7 @@ static void getArchive() {
 // This is just for clarity.
 static void getMembers() {
   if(RestOfArgs.size() > 0)
-    Members = MISTD::vector<MISTD::string>(RestOfArgs);
+    Members = std::vector<std::string>(RestOfArgs);
 }
 
 // parseCommandLine - Parse the command line options as presented and return the
@@ -372,7 +372,7 @@ static void performReadOperation(ArchiveOperation Operation,
     failIfError(I->getName(Name));
 
     if (!Members.empty() &&
-        MISTD::find(Members.begin(), Members.end(), Name) == Members.end())
+        std::find(Members.begin(), Members.end(), Name) == Members.end())
       continue;
 
     switch (Operation) {
@@ -396,11 +396,11 @@ class NewArchiveIterator {
   bool IsNewMember;
   StringRef Name;
   object::Archive::child_iterator OldI;
-  MISTD::string NewFilename;
+  std::string NewFilename;
 
 public:
   NewArchiveIterator(object::Archive::child_iterator I, StringRef Name);
-  NewArchiveIterator(MISTD::string *I, StringRef Name);
+  NewArchiveIterator(std::string *I, StringRef Name);
   NewArchiveIterator();
   bool isNewMember() const;
   object::Archive::child_iterator getOld() const;
@@ -415,7 +415,7 @@ NewArchiveIterator::NewArchiveIterator(object::Archive::child_iterator I,
                                        StringRef Name)
     : IsNewMember(false), Name(Name), OldI(I) {}
 
-NewArchiveIterator::NewArchiveIterator(MISTD::string *NewFilename, StringRef Name)
+NewArchiveIterator::NewArchiveIterator(std::string *NewFilename, StringRef Name)
     : IsNewMember(true), Name(Name), NewFilename(*NewFilename) {}
 
 StringRef NewArchiveIterator::getName() const { return Name; }
@@ -433,7 +433,7 @@ const char *NewArchiveIterator::getNew() const {
 }
 
 template <typename T>
-void addMember(MISTD::vector<NewArchiveIterator> &Members, T I, StringRef Name,
+void addMember(std::vector<NewArchiveIterator> &Members, T I, StringRef Name,
                int Pos = -1) {
   NewArchiveIterator NI(I, Name);
   if (Pos == -1)
@@ -463,12 +463,12 @@ enum InsertAction {
 static InsertAction
 computeInsertAction(ArchiveOperation Operation,
                     object::Archive::child_iterator I, StringRef Name,
-                    MISTD::vector<MISTD::string>::iterator &Pos) {
+                    std::vector<std::string>::iterator &Pos) {
   if (Operation == QuickAppend || Members.empty())
     return IA_AddOldMember;
 
-  MISTD::vector<MISTD::string>::iterator MI =
-      MISTD::find_if(Members.begin(), Members.end(), HasName(Name));
+  std::vector<std::string>::iterator MI =
+      std::find_if(Members.begin(), Members.end(), HasName(Name));
 
   if (MI == Members.end())
     return IA_AddOldMember;
@@ -507,12 +507,12 @@ computeInsertAction(ArchiveOperation Operation,
 }
 
 // We have to walk this twice and computing it is not trivial, so creating an
-// explicit MISTD::vector is actually fairly efficient.
-static MISTD::vector<NewArchiveIterator>
+// explicit std::vector is actually fairly efficient.
+static std::vector<NewArchiveIterator>
 computeNewArchiveMembers(ArchiveOperation Operation,
                          object::Archive *OldArchive) {
-  MISTD::vector<NewArchiveIterator> Ret;
-  MISTD::vector<NewArchiveIterator> Moved;
+  std::vector<NewArchiveIterator> Ret;
+  std::vector<NewArchiveIterator> Moved;
   int InsertPos = -1;
   StringRef PosName = sys::path::filename(RelPos);
   if (OldArchive) {
@@ -530,7 +530,7 @@ computeNewArchiveMembers(ArchiveOperation Operation,
           InsertPos = Pos + 1;
       }
 
-      MISTD::vector<MISTD::string>::iterator MemberI = Members.end();
+      std::vector<std::string>::iterator MemberI = Members.end();
       InsertAction Action = computeInsertAction(Operation, I, Name, MemberI);
       switch (Action) {
       case IA_AddOldMember:
@@ -567,7 +567,7 @@ computeNewArchiveMembers(ArchiveOperation Operation,
 
   Ret.insert(Ret.begin() + InsertPos, Members.size(), NewArchiveIterator());
   int Pos = InsertPos;
-  for (MISTD::vector<MISTD::string>::iterator I = Members.begin(),
+  for (std::vector<std::string>::iterator I = Members.begin(),
          E = Members.end();
        I != E; ++I, ++Pos) {
     StringRef Name = sys::path::filename(*I);
@@ -624,7 +624,7 @@ static void printMemberHeader(raw_fd_ostream &Out, unsigned NameOffset,
 
 static void writeStringTable(raw_fd_ostream &Out,
                              ArrayRef<NewArchiveIterator> Members,
-                             MISTD::vector<unsigned> &StringMapIndexes) {
+                             std::vector<unsigned> &StringMapIndexes) {
   unsigned StartOffset = 0;
   for (ArrayRef<NewArchiveIterator>::iterator I = Members.begin(),
                                               E = Members.end();
@@ -652,11 +652,11 @@ static void writeStringTable(raw_fd_ostream &Out,
 
 static void writeSymbolTable(
     raw_fd_ostream &Out, ArrayRef<NewArchiveIterator> Members,
-    MISTD::vector<MISTD::pair<unsigned, unsigned> > &MemberOffsetRefs) {
+    std::vector<std::pair<unsigned, unsigned> > &MemberOffsetRefs) {
   unsigned StartOffset = 0;
   unsigned MemberNum = 0;
-  MISTD::vector<StringRef> SymNames;
-  MISTD::vector<object::ObjectFile *> DeleteIt;
+  std::vector<StringRef> SymNames;
+  std::vector<object::ObjectFile *> DeleteIt;
   for (ArrayRef<NewArchiveIterator>::iterator I = Members.begin(),
                                               E = Members.end();
        I != E; ++I, ++MemberNum) {
@@ -700,18 +700,18 @@ static void writeSymbolTable(
       StringRef Name;
       failIfError(I->getName(Name));
       SymNames.push_back(Name);
-      MemberOffsetRefs.push_back(MISTD::make_pair(Out.tell(), MemberNum));
+      MemberOffsetRefs.push_back(std::make_pair(Out.tell(), MemberNum));
       print32BE(Out, 0);
     }
   }
-  for (MISTD::vector<StringRef>::iterator I = SymNames.begin(),
+  for (std::vector<StringRef>::iterator I = SymNames.begin(),
                                         E = SymNames.end();
        I != E; ++I) {
     Out << *I;
     Out << '\0';
   }
 
-  for (MISTD::vector<object::ObjectFile *>::iterator I = DeleteIt.begin(),
+  for (std::vector<object::ObjectFile *>::iterator I = DeleteIt.begin(),
                                                    E = DeleteIt.end();
        I != E; ++I) {
     object::ObjectFile *O = *I;
@@ -743,24 +743,24 @@ static void performWriteOperation(ArchiveOperation Operation,
   raw_fd_ostream &Out = Output.os();
   Out << "!<arch>\n";
 
-  MISTD::vector<NewArchiveIterator> NewMembers =
+  std::vector<NewArchiveIterator> NewMembers =
       computeNewArchiveMembers(Operation, OldArchive);
 
-  MISTD::vector<MISTD::pair<unsigned, unsigned> > MemberOffsetRefs;
+  std::vector<std::pair<unsigned, unsigned> > MemberOffsetRefs;
 
   if (Symtab) {
     writeSymbolTable(Out, NewMembers, MemberOffsetRefs);
   }
 
-  MISTD::vector<unsigned> StringMapIndexes;
+  std::vector<unsigned> StringMapIndexes;
   writeStringTable(Out, NewMembers, StringMapIndexes);
 
-  MISTD::vector<MISTD::pair<unsigned, unsigned> >::iterator MemberRefsI =
+  std::vector<std::pair<unsigned, unsigned> >::iterator MemberRefsI =
       MemberOffsetRefs.begin();
 
   unsigned MemberNum = 0;
   unsigned LongNameMemberNum = 0;
-  for (MISTD::vector<NewArchiveIterator>::iterator I = NewMembers.begin(),
+  for (std::vector<NewArchiveIterator>::iterator I = NewMembers.begin(),
                                                  E = NewMembers.end();
        I != E; ++I, ++MemberNum) {
 

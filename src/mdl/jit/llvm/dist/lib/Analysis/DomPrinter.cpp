@@ -31,7 +31,7 @@ struct DOTGraphTraits<DomTreeNode*> : public DefaultDOTGraphTraits {
   DOTGraphTraits (bool isSimple=false)
     : DefaultDOTGraphTraits(isSimple) {}
 
-  MISTD::string getNodeLabel(DomTreeNode *Node, DomTreeNode *Graph) {
+  std::string getNodeLabel(DomTreeNode *Node, DomTreeNode *Graph) {
 
     BasicBlock *BB = Node->getBlock();
 
@@ -54,11 +54,11 @@ struct DOTGraphTraits<DominatorTree*> : public DOTGraphTraits<DomTreeNode*> {
   DOTGraphTraits (bool isSimple=false)
     : DOTGraphTraits<DomTreeNode*>(isSimple) {}
 
-  static MISTD::string getGraphName(DominatorTree *DT) {
+  static std::string getGraphName(DominatorTree *DT) {
     return "Dominator tree";
   }
 
-  MISTD::string getNodeLabel(DomTreeNode *Node, DominatorTree *G) {
+  std::string getNodeLabel(DomTreeNode *Node, DominatorTree *G) {
     return DOTGraphTraits<DomTreeNode*>::getNodeLabel(Node, G->getRootNode());
   }
 };
@@ -70,11 +70,11 @@ struct DOTGraphTraits<PostDominatorTree*>
   DOTGraphTraits (bool isSimple=false)
     : DOTGraphTraits<DomTreeNode*>(isSimple) {}
 
-  static MISTD::string getGraphName(PostDominatorTree *DT) {
+  static std::string getGraphName(PostDominatorTree *DT) {
     return "Post dominator tree";
   }
 
-  MISTD::string getNodeLabel(DomTreeNode *Node, PostDominatorTree *G ) {
+  std::string getNodeLabel(DomTreeNode *Node, PostDominatorTree *G ) {
     return DOTGraphTraits<DomTreeNode*>::getNodeLabel(Node, G->getRootNode());
   }
 };

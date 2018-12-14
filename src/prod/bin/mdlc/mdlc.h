@@ -140,12 +140,12 @@ private:
     mi::base::Handle<mi::mdl::IMDL> m_imdl;
 
     /// If non empty, a library root to check
-    MISTD::string m_check_root;
+    std::string m_check_root;
 
     /// The internal space to be used.
-    MISTD::string m_internal_space;
+    std::string m_internal_space;
 
-    typedef MISTD::list<MISTD::string> String_list;
+    typedef std::list<std::string> String_list;
 
     /// The list of backend options.
     String_list m_backend_options;

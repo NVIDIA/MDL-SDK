@@ -410,7 +410,7 @@ public:
   /// use_size - Return the number of uses of this node. This method takes
   /// time proportional to the number of uses.
   ///
-  size_t use_size() const { return MISTD::distance(use_begin(), use_end()); }
+  size_t use_size() const { return std::distance(use_begin(), use_end()); }
 
   /// getNodeId - Return the unique node id.
   ///
@@ -437,15 +437,15 @@ public:
   /// use_iterator - This class provides iterator support for SDUse
   /// operands that use a specific SDNode.
   class use_iterator
-    : public MISTD::iterator<MISTD::forward_iterator_tag, SDUse, ptrdiff_t> {
+    : public std::iterator<std::forward_iterator_tag, SDUse, ptrdiff_t> {
     SDUse *Op;
     explicit use_iterator(SDUse *op) : Op(op) {
     }
     friend class SDNode;
   public:
-    typedef MISTD::iterator<MISTD::forward_iterator_tag,
+    typedef std::iterator<std::forward_iterator_tag,
                           SDUse, ptrdiff_t>::reference reference;
-    typedef MISTD::iterator<MISTD::forward_iterator_tag,
+    typedef std::iterator<std::forward_iterator_tag,
                           SDUse, ptrdiff_t>::pointer pointer;
 
     use_iterator(const use_iterator &I) : Op(I.Op) {}
@@ -629,7 +629,7 @@ public:
 
   /// getOperationName - Return the opcode of this operation for printing.
   ///
-  MISTD::string getOperationName(const SelectionDAG *G = 0) const;
+  std::string getOperationName(const SelectionDAG *G = 0) const;
   static const char* getIndexedModeName(ISD::MemIndexedMode AM);
   void print_types(raw_ostream &OS, const SelectionDAG *G) const;
   void print_details(raw_ostream &OS, const SelectionDAG *G) const;
@@ -1814,7 +1814,7 @@ public:
   }
 };
 
-class SDNodeIterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class SDNodeIterator : public std::iterator<std::forward_iterator_tag,
                                             SDNode, ptrdiff_t> {
   const SDNode *Node;
   unsigned Operand;

@@ -131,17 +131,17 @@ template<> struct DenseMapInfo<long long> {
 
 // Provide DenseMapInfo for all pairs whose members have info.
 template<typename T, typename U>
-struct DenseMapInfo<MISTD::pair<T, U> > {
-  typedef MISTD::pair<T, U> Pair;
+struct DenseMapInfo<std::pair<T, U> > {
+  typedef std::pair<T, U> Pair;
   typedef DenseMapInfo<T> FirstInfo;
   typedef DenseMapInfo<U> SecondInfo;
 
   static inline Pair getEmptyKey() {
-    return MISTD::make_pair(FirstInfo::getEmptyKey(),
+    return std::make_pair(FirstInfo::getEmptyKey(),
                           SecondInfo::getEmptyKey());
   }
   static inline Pair getTombstoneKey() {
-    return MISTD::make_pair(FirstInfo::getTombstoneKey(),
+    return std::make_pair(FirstInfo::getTombstoneKey(),
                           SecondInfo::getTombstoneKey());
   }
   static unsigned getHashValue(const Pair& PairVal) {

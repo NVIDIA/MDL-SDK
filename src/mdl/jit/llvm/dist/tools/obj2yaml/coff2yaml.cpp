@@ -50,7 +50,7 @@ void COFFDumper::dumpHeader(const object::coff_file_header *Header) {
 }
 
 void COFFDumper::dumpSections(unsigned NumSections) {
-  MISTD::vector<COFFYAML::Section> &Sections = YAMLObj.Sections;
+  std::vector<COFFYAML::Section> &Sections = YAMLObj.Sections;
   error_code ec;
   for (object::section_iterator iter = Obj.begin_sections();
        iter != Obj.end_sections(); iter.increment(ec)) {
@@ -66,7 +66,7 @@ void COFFDumper::dumpSections(unsigned NumSections) {
     Obj.getSectionContents(Sect, sectionData);
     Sec.SectionData = object::yaml::BinaryRef(sectionData);
 
-    MISTD::vector<COFFYAML::Relocation> Relocations;
+    std::vector<COFFYAML::Relocation> Relocations;
     for (object::relocation_iterator rIter = iter->begin_relocations();
                        rIter != iter->end_relocations(); rIter.increment(ec)) {
       const object::coff_relocation *reloc = Obj.getCOFFRelocation(rIter);
@@ -84,7 +84,7 @@ void COFFDumper::dumpSections(unsigned NumSections) {
 
 void COFFDumper::dumpSymbols(unsigned NumSymbols) {
   error_code ec;
-  MISTD::vector<COFFYAML::Symbol> &Symbols = YAMLObj.Symbols;
+  std::vector<COFFYAML::Symbol> &Symbols = YAMLObj.Symbols;
   for (object::symbol_iterator iter = Obj.begin_symbols();
        iter != Obj.end_symbols(); iter.increment(ec)) {
     check(ec);

@@ -60,7 +60,7 @@ namespace llvm {
 
       node2VReg[nodeId] = vreg;
       vreg2Node[vreg] = nodeId;
-      MISTD::copy(arBegin, arEnd, MISTD::back_inserter(allowedSets[vreg]));
+      std::copy(arBegin, arEnd, std::back_inserter(allowedSets[vreg]));
     }
 
     /// Get the virtual register corresponding to the given PBQP node.
@@ -92,7 +92,7 @@ namespace llvm {
 
   private:
 
-    typedef MISTD::map<PBQP::Graph::NodeId, unsigned>  Node2VReg;
+    typedef std::map<PBQP::Graph::NodeId, unsigned>  Node2VReg;
     typedef DenseMap<unsigned, PBQP::Graph::NodeId> VReg2Node;
     typedef DenseMap<unsigned, AllowedSet> AllowedSetMap;
 
@@ -113,7 +113,7 @@ namespace llvm {
     void operator=(const PBQPBuilder&) LLVM_DELETED_FUNCTION;
   public:
 
-    typedef MISTD::set<unsigned> RegSet;
+    typedef std::set<unsigned> RegSet;
  
     /// Default constructor.
     PBQPBuilder() {}

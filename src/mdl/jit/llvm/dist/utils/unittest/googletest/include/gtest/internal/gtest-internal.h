@@ -73,7 +73,7 @@
 
 // Google Test defines the testing::Message class to allow construction of
 // test messages via the << operator.  The idea is that anything
-// streamable to MISTD::ostream can be streamed to a testing::Message.
+// streamable to std::ostream can be streamed to a testing::Message.
 // This allows a user to use his own types in Google Test assertions by
 // overloading the << operator.
 //
@@ -98,30 +98,30 @@
 // compile with MSVC.
 
 // LLVM INTERNAL CHANGE: To allow operator<< to work with both
-// MISTD::ostreams and LLVM's raw_ostreams, we define a special
-// MISTD::ostream with an implicit conversion to raw_ostream& and stream
-// to that.  This causes the compiler to prefer MISTD::ostream overloads
+// std::ostreams and LLVM's raw_ostreams, we define a special
+// std::ostream with an implicit conversion to raw_ostream& and stream
+// to that.  This causes the compiler to prefer std::ostream overloads
 // but still find raw_ostream& overloads.
 #if !GTEST_NO_LLVM_RAW_OSTREAM
 namespace llvm {
-class convertible_fwd_ostream : public MISTD::ostream {
+class convertible_fwd_ostream : public std::ostream {
   virtual void anchor();
   raw_os_ostream ros_;
 
 public:
-  convertible_fwd_ostream(MISTD::ostream& os)
-    : MISTD::ostream(os.rdbuf()), ros_(*this) {}
+  convertible_fwd_ostream(std::ostream& os)
+    : std::ostream(os.rdbuf()), ros_(*this) {}
   operator raw_ostream&() { return ros_; }
 };
 }
 template <typename T>
-inline void GTestStreamToHelper(MISTD::ostream* os, const T& val) {
+inline void GTestStreamToHelper(std::ostream* os, const T& val) {
   llvm::convertible_fwd_ostream cos(*os);
   cos << val;
 }
 #else
 template <typename T>
-inline void GTestStreamToHelper(MISTD::ostream* os, const T& val) {
+inline void GTestStreamToHelper(std::ostream* os, const T& val) {
   *os << val;
 }
 #endif
@@ -141,7 +141,7 @@ class TestPartResult;                  // Result of a test part.
 class UnitTest;                        // A collection of test cases.
 
 template <typename T>
-::MISTD::string PrintToString(const T& value);
+::std::string PrintToString(const T& value);
 
 namespace internal {
 
@@ -216,7 +216,7 @@ class GTEST_API_ ScopedTrace {
 
 // Converts a streamable value to a String.  A NULL pointer is
 // converted to "(null)".  When the input value is a ::string,
-// ::MISTD::string, ::wstring, or ::MISTD::wstring object, each NUL
+// ::std::string, ::wstring, or ::std::wstring object, each NUL
 // character in it is replaced with "\\0".
 // Declared here but defined in gtest.h, so that it has access
 // to the definition of the Message class, required by the ARM
@@ -236,7 +236,7 @@ String StreamableToString(const T& streamable);
 #endif
 
 // When this operand is a const char* or char*, if the other operand
-// is a ::MISTD::string or ::string, we print this operand as a C string
+// is a ::std::string or ::string, we print this operand as a C string
 // rather than a pointer (we do the same for wide strings); otherwise
 // we print it as a pointer to be safe.
 
@@ -253,9 +253,9 @@ inline String FormatForComparisonFailureMessage(\
   return operand1_printer(str);\
 }
 
-GTEST_FORMAT_IMPL_(::MISTD::string, String::ShowCStringQuoted)
+GTEST_FORMAT_IMPL_(::std::string, String::ShowCStringQuoted)
 #if GTEST_HAS_STD_WSTRING
-GTEST_FORMAT_IMPL_(::MISTD::wstring, String::ShowWideCStringQuoted)
+GTEST_FORMAT_IMPL_(::std::wstring, String::ShowWideCStringQuoted)
 #endif  // GTEST_HAS_STD_WSTRING
 
 #if GTEST_HAS_GLOBAL_STRING
@@ -356,7 +356,7 @@ class FloatingPoint {
 
   // # of fraction bits in a number.
   static const size_t kFractionBitCount =
-    MISTD::numeric_limits<RawType>::digits - 1;
+    std::numeric_limits<RawType>::digits - 1;
 
   // # of exponent bits in a number.
   static const size_t kExponentBitCount = kBitCount - 1 - kFractionBitCount;
@@ -637,7 +637,7 @@ class GTEST_API_ TypedTestCasePState {
 
  private:
   bool registered_;
-  ::MISTD::set<const char*> defined_test_names_;
+  ::std::set<const char*> defined_test_names_;
 };
 
 // Skips to the first non-space char after the first comma in 'str';

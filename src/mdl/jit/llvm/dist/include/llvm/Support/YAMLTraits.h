@@ -116,11 +116,11 @@ struct ScalarTraits {
 /// to/from a YAML sequence.  For example:
 ///
 ///    template<>
-///    struct SequenceTraits< MISTD::vector<MyType> > {
-///      static size_t size(IO &io, MISTD::vector<MyType> &seq) {
+///    struct SequenceTraits< std::vector<MyType> > {
+///      static size_t size(IO &io, std::vector<MyType> &seq) {
 ///        return seq.size();
 ///      }
-///      static MyType& element(IO &, MISTD::vector<MyType> &seq, size_t index) {
+///      static MyType& element(IO &, std::vector<MyType> &seq, size_t index) {
 ///        if ( index >= seq.size() )
 ///          seq.resize(index+1);
 ///        return seq[index];
@@ -466,7 +466,7 @@ template<typename T>
 typename llvm::enable_if_c<has_ScalarTraits<T>::value,void>::type
 yamlize(IO &io, T &Val, bool) {
   if ( io.outputting() ) {
-    MISTD::string Storage;
+    std::string Storage;
     llvm::raw_string_ostream Buffer(Storage);
     ScalarTraits<T>::output(Val, io.getContext(), Buffer);
     StringRef Str = Buffer.str();
@@ -787,7 +787,7 @@ private:
     }
     static inline bool classof(const SequenceHNode *) { return true; }
 
-    MISTD::vector<HNode*> Entries;
+    std::vector<HNode*> Entries;
   };
 
   Input::HNode *createHNodes(Node *node);
@@ -808,7 +808,7 @@ private:
   llvm::error_code                 EC;
   llvm::BumpPtrAllocator           StringAllocator;
   llvm::yaml::document_iterator    DocIterator;
-  MISTD::vector<bool>                BitValuesUsed;
+  std::vector<bool>                BitValuesUsed;
   HNode                           *CurrentNode;
   bool                             ScalarMatchFound;
 };
@@ -1045,17 +1045,17 @@ operator<<(Output &yout, T &seq) {
 } // namespace llvm
 
 
-/// Utility for declaring that a MISTD::vector of a particular type
+/// Utility for declaring that a std::vector of a particular type
 /// should be considered a YAML sequence.
 #define LLVM_YAML_IS_SEQUENCE_VECTOR(_type)                                 \
   namespace llvm {                                                          \
   namespace yaml {                                                          \
     template<>                                                              \
-    struct SequenceTraits< MISTD::vector<_type> > {                           \
-      static size_t size(IO &io, MISTD::vector<_type> &seq) {                 \
+    struct SequenceTraits< std::vector<_type> > {                           \
+      static size_t size(IO &io, std::vector<_type> &seq) {                 \
         return seq.size();                                                  \
       }                                                                     \
-      static _type& element(IO &io, MISTD::vector<_type> &seq, size_t index) {\
+      static _type& element(IO &io, std::vector<_type> &seq, size_t index) {\
         if ( index >= seq.size() )                                          \
           seq.resize(index+1);                                              \
         return seq[index];                                                  \
@@ -1064,17 +1064,17 @@ operator<<(Output &yout, T &seq) {
   }                                                                         \
   }
 
-/// Utility for declaring that a MISTD::vector of a particular type
+/// Utility for declaring that a std::vector of a particular type
 /// should be considered a YAML flow sequence.
 #define LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(_type)                            \
   namespace llvm {                                                          \
   namespace yaml {                                                          \
     template<>                                                              \
-    struct SequenceTraits< MISTD::vector<_type> > {                           \
-      static size_t size(IO &io, MISTD::vector<_type> &seq) {                 \
+    struct SequenceTraits< std::vector<_type> > {                           \
+      static size_t size(IO &io, std::vector<_type> &seq) {                 \
         return seq.size();                                                  \
       }                                                                     \
-      static _type& element(IO &io, MISTD::vector<_type> &seq, size_t index) {\
+      static _type& element(IO &io, std::vector<_type> &seq, size_t index) {\
         if ( index >= seq.size() )                                          \
           seq.resize(index+1);                                              \
         return seq[index];                                                  \
@@ -1084,17 +1084,17 @@ operator<<(Output &yout, T &seq) {
   }                                                                         \
   }
 
-/// Utility for declaring that a MISTD::vector of a particular type
+/// Utility for declaring that a std::vector of a particular type
 /// should be considered a YAML document list.
 #define LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(_type)                            \
   namespace llvm {                                                          \
   namespace yaml {                                                          \
     template<>                                                              \
-    struct DocumentListTraits< MISTD::vector<_type> > {                       \
-      static size_t size(IO &io, MISTD::vector<_type> &seq) {                 \
+    struct DocumentListTraits< std::vector<_type> > {                       \
+      static size_t size(IO &io, std::vector<_type> &seq) {                 \
         return seq.size();                                                  \
       }                                                                     \
-      static _type& element(IO &io, MISTD::vector<_type> &seq, size_t index) {\
+      static _type& element(IO &io, std::vector<_type> &seq, size_t index) {\
         if ( index >= seq.size() )                                          \
           seq.resize(index+1);                                              \
         return seq[index];                                                  \

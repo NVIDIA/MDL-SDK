@@ -60,9 +60,9 @@ using namespace llvm;
 #undef max
 
 namespace {
-  cl::opt<MISTD::string> ProgramToRun(cl::Positional,
+  cl::opt<std::string> ProgramToRun(cl::Positional,
     cl::desc("<program to run>"));
-  cl::list<MISTD::string>  Argv(cl::ConsumeAfter,
+  cl::list<std::string>  Argv(cl::ConsumeAfter,
     cl::desc("<program arguments>..."));
   cl::opt<bool> TraceExecution("x",
     cl::desc("Print detailed output about what is being run to stderr."));
@@ -170,7 +170,7 @@ namespace {
 }
 
 static error_code GetFileNameFromHandle(HANDLE FileHandle,
-                                        MISTD::string& Name) {
+                                        std::string& Name) {
   char Filename[MAX_PATH+1];
   bool Success = false;
   Name.clear();
@@ -220,17 +220,17 @@ static error_code GetFileNameFromHandle(HANDLE FileHandle,
 ///        extension is present, try all extensions in PATHEXT.
 /// @return If ec == errc::success, The absolute path to the program. Otherwise
 ///         the return value is undefined.
-static MISTD::string FindProgram(const MISTD::string &Program, error_code &ec) {
+static std::string FindProgram(const std::string &Program, error_code &ec) {
   char PathName[MAX_PATH + 1];
   typedef SmallVector<StringRef, 12> pathext_t;
   pathext_t pathext;
   // Check for the program without an extension (in case it already has one).
   pathext.push_back("");
-  SplitString(MISTD::getenv("PATHEXT"), pathext, ";");
+  SplitString(std::getenv("PATHEXT"), pathext, ";");
 
   for (pathext_t::iterator i = pathext.begin(), e = pathext.end(); i != e; ++i){
     SmallString<5> ext;
-    for (MISTD::size_t ii = 0, e = i->size(); ii != e; ++ii)
+    for (std::size_t ii = 0, e = i->size(); ii != e; ++ii)
       ext.push_back(::tolower((*i)[ii]));
     LPCSTR Extension = NULL;
     if (ext.size() && ext[0] == '.')
@@ -303,14 +303,14 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  if (Timeout > MISTD::numeric_limits<uint32_t>::max() / 1000) {
+  if (Timeout > std::numeric_limits<uint32_t>::max() / 1000) {
     errs() << ToolName << ": Timeout value too large, must be less than: "
-                       << MISTD::numeric_limits<uint32_t>::max() / 1000
+                       << std::numeric_limits<uint32_t>::max() / 1000
                        << '\n';
     return -1;
   }
 
-  MISTD::string CommandLine(ProgramToRun);
+  std::string CommandLine(ProgramToRun);
 
   error_code ec;
   ProgramToRun = FindProgram(ProgramToRun, ec);
@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
   if (TraceExecution)
     errs() << ToolName << ": Found Program: " << ProgramToRun << '\n';
 
-  for (MISTD::vector<MISTD::string>::iterator i = Argv.begin(),
+  for (std::vector<std::string>::iterator i = Argv.begin(),
                                           e = Argv.end();
                                           i != e; ++i) {
     CommandLine.push_back(' ');
@@ -336,9 +336,9 @@ int main(int argc, char **argv) {
 
   STARTUPINFO StartupInfo;
   PROCESS_INFORMATION ProcessInfo;
-  MISTD::memset(&StartupInfo, 0, sizeof(StartupInfo));
+  std::memset(&StartupInfo, 0, sizeof(StartupInfo));
   StartupInfo.cb = sizeof(StartupInfo);
-  MISTD::memset(&ProcessInfo, 0, sizeof(ProcessInfo));
+  std::memset(&ProcessInfo, 0, sizeof(ProcessInfo));
 
   // Set error mode to not display any message boxes. The child process inherits
   // this.
@@ -363,10 +363,10 @@ int main(int argc, char **argv) {
   }
 
   // Make sure ::CloseHandle is called on exit.
-  MISTD::map<DWORD, HANDLE> ProcessIDToHandle;
+  std::map<DWORD, HANDLE> ProcessIDToHandle;
 
   DEBUG_EVENT DebugEvent;
-  MISTD::memset(&DebugEvent, 0, sizeof(DebugEvent));
+  std::memset(&DebugEvent, 0, sizeof(DebugEvent));
   DWORD dwContinueStatus = DBG_CONTINUE;
 
   // Run the program under the debugger until either it exits, or throws an
@@ -399,7 +399,7 @@ int main(int argc, char **argv) {
       uint64_t TotalTimeMiliseconds = (a.QuadPart + b.QuadPart) / 10000;
       // Handle the case where the process has been running for more than 49
       // days.
-      if (TotalTimeMiliseconds > MISTD::numeric_limits<uint32_t>::max()) {
+      if (TotalTimeMiliseconds > std::numeric_limits<uint32_t>::max()) {
         errs() << ToolName << ": Timeout Failed: Process has been running for"
                               "more than 49 days.\n";
         return -1;
@@ -453,7 +453,7 @@ int main(int argc, char **argv) {
           return DebugEvent.u.ExitProcess.dwExitCode;
 
         // Otherwise cleanup any resources we have for it.
-        MISTD::map<DWORD, HANDLE>::iterator ExitingProcess =
+        std::map<DWORD, HANDLE>::iterator ExitingProcess =
           ProcessIDToHandle.find(DebugEvent.dwProcessId);
         if (ExitingProcess == ProcessIDToHandle.end()) {
           errs() << ToolName << ": Got unknown process id!\n";
@@ -469,7 +469,7 @@ int main(int argc, char **argv) {
     case LOAD_DLL_DEBUG_EVENT: {
         // Cleanup the file handle.
         FileScopedHandle DLLFile(DebugEvent.u.LoadDll.hFile);
-        MISTD::string DLLName;
+        std::string DLLName;
         ec = GetFileNameFromHandle(DLLFile, DLLName);
         if (ec) {
           DLLName = "<failed to get file name from file handle> : ";

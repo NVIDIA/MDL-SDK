@@ -32,23 +32,23 @@ namespace llvm {
 ///
 /// @tparam SeqT The sequence container. (vector or string).
 /// @tparam Less A stable comparator for SeqT elements.
-template<typename SeqT, typename Less = MISTD::less<typename SeqT::value_type> >
+template<typename SeqT, typename Less = std::less<typename SeqT::value_type> >
 class SequenceToOffsetTable {
   typedef typename SeqT::value_type ElemT;
 
   // Define a comparator for SeqT that sorts a suffix immediately before a
   // sequence with that suffix.
-  struct SeqLess : public MISTD::binary_function<SeqT, SeqT, bool> {
+  struct SeqLess : public std::binary_function<SeqT, SeqT, bool> {
     Less L;
     bool operator()(const SeqT &A, const SeqT &B) const {
-      return MISTD::lexicographical_compare(A.rbegin(), A.rend(),
+      return std::lexicographical_compare(A.rbegin(), A.rend(),
                                           B.rbegin(), B.rend(), L);
     }
   };
 
   // Keep sequences ordered according to SeqLess so suffixes are easy to find.
   // Map each sequence to its offset in the table.
-  typedef MISTD::map<SeqT, unsigned, SeqLess> SeqMap;
+  typedef std::map<SeqT, unsigned, SeqLess> SeqMap;
 
   // Sequences added so far, with suffixes removed.
   SeqMap Seqs;
@@ -58,7 +58,7 @@ class SequenceToOffsetTable {
 
   // isSuffix - Returns true if A is a suffix of B.
   static bool isSuffix(const SeqT &A, const SeqT &B) {
-    return A.size() <= B.size() && MISTD::equal(A.rbegin(), A.rend(), B.rbegin());
+    return A.size() <= B.size() && std::equal(A.rbegin(), A.rend(), B.rbegin());
   }
 
 public:
@@ -75,7 +75,7 @@ public:
     if (I != Seqs.end() && isSuffix(Seq, I->first))
       return;
 
-    I = Seqs.insert(I, MISTD::make_pair(Seq, 0u));
+    I = Seqs.insert(I, std::make_pair(Seq, 0u));
 
     // The entry before I may be a suffix of Seq that can now be erased.
     if (I != Seqs.begin() && isSuffix((--I)->first, Seq))

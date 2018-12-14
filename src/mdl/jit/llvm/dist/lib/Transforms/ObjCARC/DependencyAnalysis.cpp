@@ -210,10 +210,10 @@ llvm::objcarc::FindDependencies(DependenceKind Flavor,
                                 ProvenanceAnalysis &PA) {
   BasicBlock::iterator StartPos = StartInst;
 
-  SmallVector<MISTD::pair<BasicBlock *, BasicBlock::iterator>, 4> Worklist;
-  Worklist.push_back(MISTD::make_pair(StartBB, StartPos));
+  SmallVector<std::pair<BasicBlock *, BasicBlock::iterator>, 4> Worklist;
+  Worklist.push_back(std::make_pair(StartBB, StartPos));
   do {
-    MISTD::pair<BasicBlock *, BasicBlock::iterator> Pair =
+    std::pair<BasicBlock *, BasicBlock::iterator> Pair =
       Worklist.pop_back_val();
     BasicBlock *LocalStartBB = Pair.first;
     BasicBlock::iterator LocalStartPos = Pair.second;
@@ -229,7 +229,7 @@ llvm::objcarc::FindDependencies(DependenceKind Flavor,
           do {
             BasicBlock *PredBB = *PI;
             if (Visited.insert(PredBB))
-              Worklist.push_back(MISTD::make_pair(PredBB, PredBB->end()));
+              Worklist.push_back(std::make_pair(PredBB, PredBB->end()));
           } while (++PI != PE);
         break;
       }

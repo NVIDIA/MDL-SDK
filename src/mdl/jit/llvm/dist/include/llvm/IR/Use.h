@@ -59,7 +59,7 @@ public:
 /// easy.
 class Use {
 public:
-  /// swap - provide a fast substitute to MISTD::swap<Use>
+  /// swap - provide a fast substitute to std::swap<Use>
   /// that also works with less standard-compliant compilers
   void swap(Use &RHS);
 
@@ -165,9 +165,9 @@ template<> struct simplify_type<const Use> {
 
 
 template<typename UserTy>  // UserTy == 'User' or 'const User'
-class value_use_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class value_use_iterator : public std::iterator<std::forward_iterator_tag,
                                                 UserTy*, ptrdiff_t> {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag, UserTy*, ptrdiff_t> super;
+  typedef std::iterator<std::forward_iterator_tag, UserTy*, ptrdiff_t> super;
   typedef value_use_iterator<UserTy> _Self;
 
   Use *U;

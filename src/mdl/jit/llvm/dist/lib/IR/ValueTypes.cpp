@@ -103,7 +103,7 @@ unsigned EVT::getExtendedSizeInBits() const {
 }
 
 /// getEVTString - This function returns value type as a string, e.g. "i32".
-MISTD::string EVT::getEVTString() const {
+std::string EVT::getEVTString() const {
   switch (V.SimpleTy) {
   default:
     if (isVector())

@@ -51,7 +51,7 @@ namespace {
     const MachineBlockFrequencyInfo *MBFI;
 
     // SSIntervals - Spill slot intervals.
-    MISTD::vector<LiveInterval*> SSIntervals;
+    std::vector<LiveInterval*> SSIntervals;
 
     // SSRefs - Keep a list of MachineMemOperands for each spill slot.
     // MachineMemOperands can be shared between instructions, so we need
@@ -201,7 +201,7 @@ void StackSlotColoring::InitializeSlots() {
   DEBUG(dbgs() << '\n');
 
   // Sort them by weight.
-  MISTD::stable_sort(SSIntervals.begin(), SSIntervals.end(), IntervalSorter());
+  std::stable_sort(SSIntervals.begin(), SSIntervals.end(), IntervalSorter());
 
   // Get first "color".
   NextColor = AllColors.find_first();
@@ -294,7 +294,7 @@ bool StackSlotColoring::ColorSlots(MachineFunction &MF) {
     li->weight = SlotWeights[SS];
   }
   // Sort them by new weight.
-  MISTD::stable_sort(SSIntervals.begin(), SSIntervals.end(), IntervalSorter());
+  std::stable_sort(SSIntervals.begin(), SSIntervals.end(), IntervalSorter());
 
 #ifndef NDEBUG
   for (unsigned i = 0, e = SSIntervals.size(); i != e; ++i)

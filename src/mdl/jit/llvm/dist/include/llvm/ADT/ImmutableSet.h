@@ -371,8 +371,8 @@ class ImutAVLFactory {
 
   CacheTy Cache;
   uintptr_t Allocator;
-  MISTD::vector<TreeTy*> createdNodes;
-  MISTD::vector<TreeTy*> freeNodes;
+  std::vector<TreeTy*> createdNodes;
+  std::vector<TreeTy*> freeNodes;
 
   bool ownsAllocator() const {
     return Allocator & 0x1 ? false : true;
@@ -885,7 +885,7 @@ struct ImutProfileInfo<T*> {
 
 /// ImutContainerInfo - Generic definition of comparison operations for
 ///   elements of immutable containers that defaults to using
-///   MISTD::equal_to<> and MISTD::less<> to perform comparison of elements.
+///   std::equal_to<> and std::less<> to perform comparison of elements.
 template <typename T>
 struct ImutContainerInfo : public ImutProfileInfo<T> {
   typedef typename ImutProfileInfo<T>::value_type      value_type;
@@ -899,11 +899,11 @@ struct ImutContainerInfo : public ImutProfileInfo<T> {
   static inline data_type_ref DataOfValue(value_type_ref) { return true; }
 
   static inline bool isEqual(key_type_ref LHS, key_type_ref RHS) {
-    return MISTD::equal_to<key_type>()(LHS,RHS);
+    return std::equal_to<key_type>()(LHS,RHS);
   }
 
   static inline bool isLess(key_type_ref LHS, key_type_ref RHS) {
-    return MISTD::less<key_type>()(LHS,RHS);
+    return std::less<key_type>()(LHS,RHS);
   }
 
   static inline bool isDataEqual(data_type_ref,data_type_ref) { return true; }
@@ -1076,7 +1076,7 @@ public:
     typedef typename ImmutableSet<ValT,ValInfo>::value_type value_type;
     typedef typename ImmutableSet<ValT,ValInfo>::value_type_ref reference;
     typedef typename iterator::value_type *pointer;
-    typedef MISTD::bidirectional_iterator_tag iterator_category;
+    typedef std::bidirectional_iterator_tag iterator_category;
 
     typename iterator::reference operator*() const { return itr->getValue(); }
     typename iterator::pointer   operator->() const { return &(operator*()); }

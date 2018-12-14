@@ -129,7 +129,7 @@ error_code Archive::Child::getName(StringRef &Result) const {
     }
     // It's a long name.
     // Get the offset.
-    MISTD::size_t offset;
+    std::size_t offset;
     if (name.substr(1).rtrim(" ").getAsInteger(10, offset))
       llvm_unreachable("Long name offset is not an integer");
     const char *addr = Parent->StringTable->Data.begin()

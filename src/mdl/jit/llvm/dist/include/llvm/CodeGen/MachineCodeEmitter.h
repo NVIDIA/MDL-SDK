@@ -202,7 +202,7 @@ public:
 
   /// emitString - This callback is invoked when a String needs to be
   /// written to the output stream.
-  void emitString(const MISTD::string &String) {
+  void emitString(const std::string &String) {
     for (unsigned i = 0, N = static_cast<unsigned>(String.size());
          i < N; ++i) {
       uint8_t C = String[i];

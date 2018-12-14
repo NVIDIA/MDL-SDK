@@ -68,19 +68,19 @@ namespace llvm {
 
       /// Name - If this operand was assigned a symbolic name, this is it,
       /// otherwise, it's empty.
-      MISTD::string Name;
+      std::string Name;
 
       /// PrinterMethodName - The method used to print operands of this type in
       /// the asmprinter.
-      MISTD::string PrinterMethodName;
+      std::string PrinterMethodName;
 
       /// EncoderMethodName - The method used to get the machine operand value
       /// for binary encoding. "getMachineOpValue" by default.
-      MISTD::string EncoderMethodName;
+      std::string EncoderMethodName;
 
       /// OperandType - A value from MCOI::OperandType representing the type of
       /// the operand.
-      MISTD::string OperandType;
+      std::string OperandType;
 
       /// MIOperandNo - Currently (this is meant to be phased out), some logical
       /// operands correspond to multiple MachineInstr operands.  In the X86
@@ -94,7 +94,7 @@ namespace llvm {
       /// DoNotEncode - Bools are set to true in this vector for each operand in
       /// the DisableEncoding list.  These should not be emitted by the code
       /// emitter.
-      MISTD::vector<bool> DoNotEncode;
+      std::vector<bool> DoNotEncode;
 
       /// MIOperandInfo - Default MI operand type. Note an operand may be made
       /// up of multiple MI operands.
@@ -102,10 +102,10 @@ namespace llvm {
 
       /// Constraint info for this operand.  This operand can have pieces, so we
       /// track constraint info for each.
-      MISTD::vector<ConstraintInfo> Constraints;
+      std::vector<ConstraintInfo> Constraints;
 
-      OperandInfo(Record *R, const MISTD::string &N, const MISTD::string &PMN,
-                  const MISTD::string &EMN, const MISTD::string &OT, unsigned MION,
+      OperandInfo(Record *R, const std::string &N, const std::string &PMN,
+                  const std::string &EMN, const std::string &OT, unsigned MION,
                   unsigned MINO, DagInit *MIOI)
       : Rec(R), Name(N), PrinterMethodName(PMN), EncoderMethodName(EMN),
         OperandType(OT), MIOperandNo(MION), MINumOperands(MINO),
@@ -134,7 +134,7 @@ namespace llvm {
 
     /// OperandList - The list of declared operands, along with their declared
     /// type (which is a record).
-    MISTD::vector<OperandInfo> OperandList;
+    std::vector<OperandInfo> OperandList;
 
     // Information gleaned from the operand list.
     bool isPredicable;
@@ -164,22 +164,22 @@ namespace llvm {
     /// where $foo is a whole operand and $foo.bar refers to a suboperand.
     /// This aborts if the name is invalid.  If AllowWholeOp is true, references
     /// to operands with suboperands are allowed, otherwise not.
-    MISTD::pair<unsigned,unsigned> ParseOperandName(const MISTD::string &Op,
+    std::pair<unsigned,unsigned> ParseOperandName(const std::string &Op,
                                                   bool AllowWholeOp = true);
 
     /// getFlattenedOperandNumber - Flatten a operand/suboperand pair into a
     /// flat machineinstr operand #.
-    unsigned getFlattenedOperandNumber(MISTD::pair<unsigned,unsigned> Op) const {
+    unsigned getFlattenedOperandNumber(std::pair<unsigned,unsigned> Op) const {
       return OperandList[Op.first].MIOperandNo + Op.second;
     }
 
     /// getSubOperandNumber - Unflatten a operand number into an
     /// operand/suboperand pair.
-    MISTD::pair<unsigned,unsigned> getSubOperandNumber(unsigned Op) const {
+    std::pair<unsigned,unsigned> getSubOperandNumber(unsigned Op) const {
       for (unsigned i = 0; ; ++i) {
         assert(i < OperandList.size() && "Invalid flat operand #");
         if (OperandList[i].MIOperandNo+OperandList[i].MINumOperands > Op)
-          return MISTD::make_pair(i, Op-OperandList[i].MIOperandNo);
+          return std::make_pair(i, Op-OperandList[i].MIOperandNo);
       }
     }
 
@@ -187,24 +187,24 @@ namespace llvm {
     /// isFlatOperandNotEmitted - Return true if the specified flat operand #
     /// should not be emitted with the code emitter.
     bool isFlatOperandNotEmitted(unsigned FlatOpNo) const {
-      MISTD::pair<unsigned,unsigned> Op = getSubOperandNumber(FlatOpNo);
+      std::pair<unsigned,unsigned> Op = getSubOperandNumber(FlatOpNo);
       if (OperandList[Op.first].DoNotEncode.size() > Op.second)
         return OperandList[Op.first].DoNotEncode[Op.second];
       return false;
     }
 
-    void ProcessDisableEncoding(MISTD::string Value);
+    void ProcessDisableEncoding(std::string Value);
   };
 
 
   class CodeGenInstruction {
   public:
     Record *TheDef;            // The actual record defining this instruction.
-    MISTD::string Namespace;     // The namespace the instruction is in.
+    std::string Namespace;     // The namespace the instruction is in.
 
     /// AsmString - The format string used to emit a .s file for the
     /// instruction.
-    MISTD::string AsmString;
+    std::string AsmString;
 
     /// Operands - This is information about the (ins) and (outs) list specified
     /// to the instruction.
@@ -212,7 +212,7 @@ namespace llvm {
 
     /// ImplicitDefs/ImplicitUses - These are lists of registers that are
     /// implicitly defined and used by the instruction.
-    MISTD::vector<Record*> ImplicitDefs, ImplicitUses;
+    std::vector<Record*> ImplicitDefs, ImplicitUses;
 
     // Various boolean values we track for the instruction.
     bool isReturn;
@@ -248,7 +248,7 @@ namespace llvm {
     bool isCodeGenOnly;
     bool isPseudo;
 
-    MISTD::string DeprecatedReason;
+    std::string DeprecatedReason;
     bool HasComplexDeprecationPredicate;
 
     /// Are there any undefined flags?
@@ -271,7 +271,7 @@ namespace llvm {
 
     /// FlattenAsmStringVariants - Flatten the specified AsmString to only
     /// include text from the specified variant, returning the new string.
-    static MISTD::string FlattenAsmStringVariants(StringRef AsmString,
+    static std::string FlattenAsmStringVariants(StringRef AsmString,
                                                 unsigned Variant);
   };
 
@@ -283,7 +283,7 @@ namespace llvm {
 
     /// AsmString - The format string used to emit a .s file for the
     /// instruction.
-    MISTD::string AsmString;
+    std::string AsmString;
 
     /// Result - The result instruction.
     DagInit *Result;
@@ -295,7 +295,7 @@ namespace llvm {
 
     struct ResultOperand {
     private:
-      MISTD::string Name;
+      std::string Name;
       Record *R;
 
       int64_t Imm;
@@ -306,7 +306,7 @@ namespace llvm {
         K_Reg
       } Kind;
 
-      ResultOperand(MISTD::string N, Record *r) : Name(N), R(r), Kind(K_Record) {}
+      ResultOperand(std::string N, Record *r) : Name(N), R(r), Kind(K_Record) {}
       ResultOperand(int64_t I) : Imm(I), Kind(K_Imm) {}
       ResultOperand(Record *r) : R(r), Kind(K_Reg) {}
 
@@ -321,14 +321,14 @@ namespace llvm {
     };
 
     /// ResultOperands - The decoded operands for the result instruction.
-    MISTD::vector<ResultOperand> ResultOperands;
+    std::vector<ResultOperand> ResultOperands;
 
     /// ResultInstOperandIndex - For each operand, this vector holds a pair of
     /// indices to identify the corresponding operand in the result
     /// instruction.  The first index specifies the operand and the second
     /// index specifies the suboperand.  If there are no suboperands or if all
     /// of them are matched by the operand, the second value should be -1.
-    MISTD::vector<MISTD::pair<unsigned, int> > ResultInstOperandIndex;
+    std::vector<std::pair<unsigned, int> > ResultInstOperandIndex;
 
     CodeGenInstAlias(Record *R, CodeGenTarget &T);
 

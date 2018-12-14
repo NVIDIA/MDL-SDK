@@ -99,7 +99,7 @@ public:
 
   /// LegalizeKind holds the legalization kind that needs to happen to EVT
   /// in order to type-legalize it.
-  typedef MISTD::pair<LegalizeTypeAction, EVT> LegalizeKind;
+  typedef std::pair<LegalizeTypeAction, EVT> LegalizeKind;
 
   /// Enum that describes how the target represents true/false values.
   enum BooleanContent {
@@ -295,7 +295,7 @@ public:
 
   public:
     ValueTypeActionImpl() {
-      MISTD::fill(ValueTypeActions, array_endof(ValueTypeActions), 0);
+      std::fill(ValueTypeActions, array_endof(ValueTypeActions), 0);
     }
 
     LegalizeTypeAction getTypeAction(MVT VT) const {
@@ -557,9 +557,9 @@ public:
            "This operation isn't promoted!");
 
     // See if this has an explicit type specified.
-    MISTD::map<MISTD::pair<unsigned, MVT::SimpleValueType>,
+    std::map<std::pair<unsigned, MVT::SimpleValueType>,
              MVT::SimpleValueType>::const_iterator PTTI =
-      PromoteToType.find(MISTD::make_pair(Op, VT.SimpleTy));
+      PromoteToType.find(std::make_pair(Op, VT.SimpleTy));
     if (PTTI != PromoteToType.end()) return PTTI->second;
 
     assert((VT.isInteger() || VT.isFloatingPoint()) &&
@@ -851,7 +851,7 @@ public:
   int InstructionOpcodeToISD(unsigned Opcode) const;
 
   /// Estimate the cost of type-legalization and the legalized type.
-  MISTD::pair<unsigned, MVT> getTypeLegalizationCost(Type *Ty) const;
+  std::pair<unsigned, MVT> getTypeLegalizationCost(Type *Ty) const;
 
   /// @}
 
@@ -951,7 +951,7 @@ protected:
   /// that class natively.
   void addRegisterClass(MVT VT, const TargetRegisterClass *RC) {
     assert((unsigned)VT.SimpleTy < array_lengthof(RegClassForVT));
-    AvailableRegClasses.push_back(MISTD::make_pair(VT, RC));
+    AvailableRegClasses.push_back(std::make_pair(VT, RC));
     RegClassForVT[VT.SimpleTy] = RC;
   }
 
@@ -968,7 +968,7 @@ protected:
 
   /// Return the largest legal super-reg register class of the register class
   /// for the specified type and its associated "cost".
-  virtual MISTD::pair<const TargetRegisterClass*, uint8_t>
+  virtual std::pair<const TargetRegisterClass*, uint8_t>
   findRepresentativeClass(MVT VT) const;
 
   /// Once all of the register classes are added, this allows us to compute
@@ -1049,7 +1049,7 @@ protected:
   /// default is insufficient, this method can be used by the target to override
   /// the default.
   void AddPromotedToType(unsigned Opc, MVT OrigVT, MVT DestVT) {
-    PromoteToType[MISTD::make_pair(Opc, OrigVT.SimpleTy)] = DestVT.SimpleTy;
+    PromoteToType[std::make_pair(Opc, OrigVT.SimpleTy)] = DestVT.SimpleTy;
   }
 
   /// Targets should invoke this method for each target independent node that
@@ -1600,7 +1600,7 @@ public:
   }
 
 private:
-  MISTD::vector<MISTD::pair<MVT, const TargetRegisterClass*> > AvailableRegClasses;
+  std::vector<std::pair<MVT, const TargetRegisterClass*> > AvailableRegClasses;
 
   /// Targets can specify ISD nodes that they would like PerformDAGCombine
   /// callbacks for by calling setTargetDAGCombine(), which sets a bit in this
@@ -1614,7 +1614,7 @@ private:
   ///
   /// Targets add entries to this map with AddPromotedToType(..), clients access
   /// this with getTypeToPromoteTo(..).
-  MISTD::map<MISTD::pair<unsigned, MVT::SimpleValueType>, MVT::SimpleValueType>
+  std::map<std::pair<unsigned, MVT::SimpleValueType>, MVT::SimpleValueType>
     PromoteToType;
 
   /// Stores the name each libcall.
@@ -1755,7 +1755,7 @@ public:
                            ISD::CondCode &CCCode, SDLoc DL) const;
 
   /// Returns a pair of (return value, chain).
-  MISTD::pair<SDValue, SDValue> makeLibCall(SelectionDAG &DAG, RTLIB::Libcall LC,
+  std::pair<SDValue, SDValue> makeLibCall(SelectionDAG &DAG, RTLIB::Libcall LC,
                                           EVT RetVT, const SDValue *Ops,
                                           unsigned NumOps, bool isSigned,
                                           SDLoc dl, bool doesNotReturn = false,
@@ -1845,7 +1845,7 @@ public:
 
     void AddToWorklist(SDNode *N);
     void RemoveFromWorklist(SDNode *N);
-    SDValue CombineTo(SDNode *N, const MISTD::vector<SDValue> &To,
+    SDValue CombineTo(SDNode *N, const std::vector<SDValue> &To,
                       bool AddTo = true);
     SDValue CombineTo(SDNode *N, SDValue Res, bool AddTo = true);
     SDValue CombineTo(SDNode *N, SDValue Res0, SDValue Res1, bool AddTo = true);
@@ -1940,7 +1940,7 @@ public:
 
     void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
   };
-  typedef MISTD::vector<ArgListEntry> ArgListTy;
+  typedef std::vector<ArgListEntry> ArgListTy;
 
   /// This structure contains all information that is necessary for lowering
   /// calls. It is passed to TLI::LowerCallTo when the SelectionDAG builder
@@ -2004,7 +2004,7 @@ public:
   /// This returns a pair of operands.  The first element is the return value
   /// for the function (if RetTy is not VoidTy).  The second element is the
   /// outgoing token chain. It calls LowerCall to do the actual lowering.
-  MISTD::pair<SDValue, SDValue> LowerCallTo(CallLoweringInfo &CLI) const;
+  std::pair<SDValue, SDValue> LowerCallTo(CallLoweringInfo &CLI) const;
 
   /// This hook must be implemented to lower calls into the the specified
   /// DAG. The outgoing arguments to the call are described by the Outs array,
@@ -2168,7 +2168,7 @@ public:
     /// This contains the actual string for the code, like "m".  TargetLowering
     /// picks the 'best' code from ConstraintInfo::Codes that most closely
     /// matches the operand.
-    MISTD::string ConstraintCode;
+    std::string ConstraintCode;
 
     /// Information about the constraint code, e.g. Register, RegisterClass,
     /// Memory, Other, Unknown.
@@ -2207,7 +2207,7 @@ public:
     }
   };
 
-  typedef MISTD::vector<AsmOperandInfo> AsmOperandInfoVector;
+  typedef std::vector<AsmOperandInfo> AsmOperandInfoVector;
 
   /// Split up the constraint string from the inline assembly value into the
   /// specific constraints and their prefixes, and also tie in the associated
@@ -2234,7 +2234,7 @@ public:
                                       SelectionDAG *DAG = 0) const;
 
   /// Given a constraint, return the type of constraint it is for this target.
-  virtual ConstraintType getConstraintType(const MISTD::string &Constraint) const;
+  virtual ConstraintType getConstraintType(const std::string &Constraint) const;
 
   /// Given a physical register constraint (e.g.  {edx}), return the register
   /// number and the register class for the register.
@@ -2245,8 +2245,8 @@ public:
   ///
   /// This should only be used for C_Register constraints.  On error, this
   /// returns a register number of 0 and a null register class pointer..
-  virtual MISTD::pair<unsigned, const TargetRegisterClass*>
-    getRegForInlineAsmConstraint(const MISTD::string &Constraint,
+  virtual std::pair<unsigned, const TargetRegisterClass*>
+    getRegForInlineAsmConstraint(const std::string &Constraint,
                                  MVT VT) const;
 
   /// Try to replace an X constraint, which matches anything, with another that
@@ -2256,8 +2256,8 @@ public:
 
   /// Lower the specified operand into the Ops vector.  If it is invalid, don't
   /// add anything to Ops.
-  virtual void LowerAsmOperandForConstraint(SDValue Op, MISTD::string &Constraint,
-                                            MISTD::vector<SDValue> &Ops,
+  virtual void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                            std::vector<SDValue> &Ops,
                                             SelectionDAG &DAG) const;
 
   //===--------------------------------------------------------------------===//
@@ -2266,9 +2266,9 @@ public:
   SDValue BuildExactSDIV(SDValue Op1, SDValue Op2, SDLoc dl,
                          SelectionDAG &DAG) const;
   SDValue BuildSDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
-                      MISTD::vector<SDNode*> *Created) const;
+                      std::vector<SDNode*> *Created) const;
   SDValue BuildUDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
-                      MISTD::vector<SDNode*> *Created) const;
+                      std::vector<SDNode*> *Created) const;
 
   //===--------------------------------------------------------------------===//
   // Instruction Emitting Hooks

@@ -64,6 +64,7 @@ public:
 
     /// Constructor.
     Mdl_function_call(
+        DB::Tag module_tag,
         DB::Tag definition_tag,
         mi::Uint32 function_index,
         IExpression_list* arguments,
@@ -106,13 +107,13 @@ public:
     // internal methods
 
     /// Indicates whether the function call is immutable.
-    bool is_immutable() { return m_immutable; }
+    bool is_immutable() const { return m_immutable; }
 
     /// Makes the function call mutable.
     ///
     /// This method may only be set to \c true by the MDL integration itself, not by external
     /// callers.
-    void make_mutable() { m_immutable = false; }
+    void make_mutable(DB::Transaction* transaction);
 
     /// Returns the MDL semantic of the corresponding definition.
     mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
@@ -197,6 +198,7 @@ private:
     // Members marked with (*) are duplicated from the corresponding function definition to avoid
     // frequent DB accesses.
 
+    DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding function definition.
     mi::Uint32 m_function_index;                 ///< The index in the corresponding module. (*)
     mi::mdl::IDefinition::Semantics m_mdl_semantic; ///< The MDL semantic. (*)

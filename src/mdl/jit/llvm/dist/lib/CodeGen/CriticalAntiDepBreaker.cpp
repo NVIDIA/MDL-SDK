@@ -197,7 +197,7 @@ void CriticalAntiDepBreaker::PrescanInstruction(MachineInstr *MI) {
 
     // If we're still willing to consider this register, note the reference.
     if (Classes[Reg] != reinterpret_cast<TargetRegisterClass *>(-1))
-      RegRefs.insert(MISTD::make_pair(Reg, &MO));
+      RegRefs.insert(std::make_pair(Reg, &MO));
 
     if (MO.isUse() && Special) {
       if (!KeepRegs.test(Reg)) {
@@ -278,7 +278,7 @@ void CriticalAntiDepBreaker::ScanInstruction(MachineInstr *MI,
     else if (!NewRC || Classes[Reg] != NewRC)
       Classes[Reg] = reinterpret_cast<TargetRegisterClass *>(-1);
 
-    RegRefs.insert(MISTD::make_pair(Reg, &MO));
+    RegRefs.insert(std::make_pair(Reg, &MO));
 
     // It wasn't previously live but now it is, this is a kill.
     if (KillIndices[Reg] == ~0u) {
@@ -403,7 +403,7 @@ findSuitableFreeRegister(RegRefIter RegRefBegin,
 }
 
 unsigned CriticalAntiDepBreaker::
-BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
+BreakAntiDependencies(const std::vector<SUnit>& SUnits,
                       MachineBasicBlock::iterator Begin,
                       MachineBasicBlock::iterator End,
                       unsigned InsertPosIndex,
@@ -486,7 +486,7 @@ BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
   // fix that remaining critical edge too. This is a little more involved,
   // because unlike the most recent register, less recent registers should
   // still be considered, though only if no other registers are available.
-  MISTD::vector<unsigned> LastNewReg(TRI->getNumRegs(), 0);
+  std::vector<unsigned> LastNewReg(TRI->getNumRegs(), 0);
 
   // Attempt to break anti-dependence edges on the critical path. Walk the
   // instructions from the bottom up, tracking information about liveness
@@ -600,8 +600,8 @@ BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
     // TODO: Instead of picking the first free register, consider which might
     // be the best.
     if (AntiDepReg != 0) {
-      MISTD::pair<MISTD::multimap<unsigned, MachineOperand *>::iterator,
-                MISTD::multimap<unsigned, MachineOperand *>::iterator>
+      std::pair<std::multimap<unsigned, MachineOperand *>::iterator,
+                std::multimap<unsigned, MachineOperand *>::iterator>
         Range = RegRefs.equal_range(AntiDepReg);
       if (unsigned NewReg = findSuitableFreeRegister(Range.first, Range.second,
                                                      AntiDepReg,
@@ -614,7 +614,7 @@ BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
 
         // Update the references to the old register to refer to the new
         // register.
-        for (MISTD::multimap<unsigned, MachineOperand *>::iterator
+        for (std::multimap<unsigned, MachineOperand *>::iterator
              Q = Range.first, QE = Range.second; Q != QE; ++Q) {
           Q->second->setReg(NewReg);
           // If the SU for the instruction being updated has debug information

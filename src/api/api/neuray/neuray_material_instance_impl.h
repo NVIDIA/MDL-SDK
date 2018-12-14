@@ -49,7 +49,7 @@ namespace NEURAY {
 /// This class implements MDL material instances.
 class Material_instance_impl NEURAY_FINAL
     : public Attribute_set_impl<Db_element_impl<mi::neuraylib::IMaterial_instance,
-                                                MDL::Mdl_material_instance> >
+    MDL::Mdl_material_instance> >
 {
 
 public:
@@ -74,9 +74,9 @@ public:
 
     mi::Size get_parameter_count() const NEURAY_FINAL;
 
-    const char* get_parameter_name( mi::Size index) const NEURAY_FINAL;
+    const char* get_parameter_name(mi::Size index) const NEURAY_FINAL;
 
-    mi::Size get_parameter_index( const char* name) const NEURAY_FINAL;
+    mi::Size get_parameter_index(const char* name) const NEURAY_FINAL;
 
     const mi::neuraylib::IType_list* get_parameter_types() const NEURAY_FINAL;
 
@@ -93,15 +93,16 @@ public:
         const char* name,
         const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
 
-    mi::neuraylib::ICompiled_material* create_compiled_material(
+    mi::neuraylib::ICompiled_material* deprecated_create_compiled_material(
         mi::Uint32 flags,
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,
-        mi::Sint32* errors) const NEURAY_FINAL;
+        mi::Sint32* errors) const;
 
-    // methods of IInterface
-
+    mi::neuraylib::ICompiled_material* create_compiled_material(
+        mi::Uint32 flags,
+        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
 };
 
 } // namespace NEURAY
@@ -109,4 +110,3 @@ public:
 } // namespace MI
 
 #endif // API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
-

@@ -6,16 +6,12 @@ set(PROJECT_SOURCES
     "mdl_core_factory.cpp"
     )
 
-if(WINDOWS)
-    list(APPEND PROJECT_SOURCES "mdl_core.rc")
-endif()
-
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE SHARED
-    NAMESPACE mdl_core
     SOURCES ${PROJECT_SOURCES}
+    EMBED_RC "mdl_core.rc"
     )
 
 # customize name

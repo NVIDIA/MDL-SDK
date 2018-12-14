@@ -347,7 +347,7 @@ bool SSAIfConv::canConvertIf(MachineBasicBlock *MBB) {
 
   // Canonicalize so Succ0 has MBB as its single predecessor.
   if (Succ0->pred_size() != 1)
-    MISTD::swap(Succ0, Succ1);
+    std::swap(Succ0, Succ1);
 
   if (Succ0->pred_size() != 1 || Succ0->succ_size() != 1)
     return false;
@@ -683,7 +683,7 @@ bool EarlyIfConverter::shouldConvertIf() {
   MachineTraceMetrics::Trace TBBTrace = MinInstr->getTrace(IfConv.getTPred());
   MachineTraceMetrics::Trace FBBTrace = MinInstr->getTrace(IfConv.getFPred());
   DEBUG(dbgs() << "TBB: " << TBBTrace << "FBB: " << FBBTrace);
-  unsigned MinCrit = MISTD::min(TBBTrace.getCriticalPath(),
+  unsigned MinCrit = std::min(TBBTrace.getCriticalPath(),
                               FBBTrace.getCriticalPath());
 
   // Set a somewhat arbitrary limit on the critical path extension we accept.

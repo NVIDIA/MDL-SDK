@@ -41,7 +41,7 @@
 #include <utility>
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 DefaultGCOVVersion("default-gcov-version", cl::init("402*"), cl::Hidden,
                    cl::ValueRequired);
 
@@ -54,7 +54,7 @@ GCOVOptions GCOVOptions::getDefault() {
   Options.FunctionNamesInData = true;
 
   if (DefaultGCOVVersion.size() != 4) {
-    llvm::report_fatal_error(MISTD::string("Invalid -default-gcov-version: ") +
+    llvm::report_fatal_error(std::string("Invalid -default-gcov-version: ") +
                              DefaultGCOVVersion);
   }
   memcpy(Options.Version, DefaultGCOVVersion.c_str(), 4);
@@ -120,12 +120,12 @@ namespace {
 
     // Add the function to write out all our counters to the global destructor
     // list.
-    Function *insertCounterWriteout(ArrayRef<MISTD::pair<GlobalVariable*,
+    Function *insertCounterWriteout(ArrayRef<std::pair<GlobalVariable*,
                                                        MDNode*> >);
-    Function *insertFlush(ArrayRef<MISTD::pair<GlobalVariable*, MDNode*> >);
+    Function *insertFlush(ArrayRef<std::pair<GlobalVariable*, MDNode*> >);
     void insertIndirectCounterIncrement();
 
-    MISTD::string mangleName(DICompileUnit CU, const char *NewStem);
+    std::string mangleName(DICompileUnit CU, const char *NewStem);
 
     GCOVOptions Options;
 
@@ -145,7 +145,7 @@ ModulePass *llvm::createGCOVProfilerPass(const GCOVOptions &Options) {
   return new GCOVProfiler(Options);
 }
 
-static MISTD::string getFunctionName(DISubprogram SP) {
+static std::string getFunctionName(DISubprogram SP) {
   if (!SP.getLinkageName().empty())
     return SP.getLinkageName();
   return SP.getName();
@@ -270,7 +270,7 @@ namespace {
       write(Number);
 
       StringKeySort Sorter;
-      MISTD::sort(SortedLinesByFile.begin(), SortedLinesByFile.end(), Sorter);
+      std::sort(SortedLinesByFile.begin(), SortedLinesByFile.end(), Sorter);
       for (SmallVectorImpl<StringMapEntry<GCOVLines *> *>::iterator
                I = SortedLinesByFile.begin(), E = SortedLinesByFile.end();
            I != E; ++I) 
@@ -380,7 +380,7 @@ namespace {
   };
 }
 
-MISTD::string GCOVProfiler::mangleName(DICompileUnit CU, const char *NewStem) {
+std::string GCOVProfiler::mangleName(DICompileUnit CU, const char *NewStem) {
   if (NamedMDNode *GCov = M->getNamedMetadata("llvm.gcov")) {
     for (int i = 0, e = GCov->getNumOperands(); i != e; ++i) {
       MDNode *N = GCov->getOperand(i);
@@ -424,7 +424,7 @@ void GCOVProfiler::emitProfileNotes() {
     // LTO, we'll generate the same .gcno files.
 
     DICompileUnit CU(CU_Nodes->getOperand(i));
-    MISTD::string ErrorInfo;
+    std::string ErrorInfo;
     raw_fd_ostream out(mangleName(CU, "gcno").c_str(), ErrorInfo,
                        sys::fs::F_Binary);
     out.write("oncg", 4);
@@ -483,7 +483,7 @@ bool GCOVProfiler::emitProfileArcs() {
   for (unsigned i = 0, e = CU_Nodes->getNumOperands(); i != e; ++i) {
     DICompileUnit CU(CU_Nodes->getOperand(i));
     DIArray SPs = CU.getSubprograms();
-    SmallVector<MISTD::pair<GlobalVariable *, MDNode *>, 8> CountersBySP;
+    SmallVector<std::pair<GlobalVariable *, MDNode *>, 8> CountersBySP;
     for (unsigned i = 0, e = SPs.getNumElements(); i != e; ++i) {
       DISubprogram SP(SPs.getElement(i));
       assert((!SP || SP.isSubprogram()) &&
@@ -509,7 +509,7 @@ bool GCOVProfiler::emitProfileArcs() {
                            GlobalValue::InternalLinkage,
                            Constant::getNullValue(CounterTy),
                            "__llvm_gcov_ctr");
-      CountersBySP.push_back(MISTD::make_pair(Counters, (MDNode*)SP));
+      CountersBySP.push_back(std::make_pair(Counters, (MDNode*)SP));
       
       UniqueVector<BasicBlock *> ComplexEdgePreds;
       UniqueVector<BasicBlock *> ComplexEdgeSuccs;
@@ -735,7 +735,7 @@ GlobalVariable *GCOVProfiler::getEdgeStateValue() {
 }
 
 Function *GCOVProfiler::insertCounterWriteout(
-    ArrayRef<MISTD::pair<GlobalVariable *, MDNode *> > CountersBySP) {
+    ArrayRef<std::pair<GlobalVariable *, MDNode *> > CountersBySP) {
   FunctionType *WriteoutFTy = FunctionType::get(Type::getVoidTy(*Ctx), false);
   Function *WriteoutF = M->getFunction("__llvm_gcov_writeout");
   if (!WriteoutF)
@@ -759,7 +759,7 @@ Function *GCOVProfiler::insertCounterWriteout(
   if (CU_Nodes) {
     for (unsigned i = 0, e = CU_Nodes->getNumOperands(); i != e; ++i) {
       DICompileUnit CU(CU_Nodes->getOperand(i));
-      MISTD::string FilenameGcda = mangleName(CU, "gcda");
+      std::string FilenameGcda = mangleName(CU, "gcda");
       Builder.CreateCall2(StartFile,
                           Builder.CreateGlobalStringPtr(FilenameGcda),
                           Builder.CreateGlobalStringPtr(ReversedVersion));
@@ -840,7 +840,7 @@ void GCOVProfiler::insertIndirectCounterIncrement() {
 }
 
 Function *GCOVProfiler::
-insertFlush(ArrayRef<MISTD::pair<GlobalVariable*, MDNode*> > CountersBySP) {
+insertFlush(ArrayRef<std::pair<GlobalVariable*, MDNode*> > CountersBySP) {
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(*Ctx), false);
   Function *FlushF = M->getFunction("__llvm_gcov_flush");
   if (!FlushF)
@@ -863,7 +863,7 @@ insertFlush(ArrayRef<MISTD::pair<GlobalVariable*, MDNode*> > CountersBySP) {
   Builder.CreateCall(WriteoutF);
 
   // Zero out the counters.
-  for (ArrayRef<MISTD::pair<GlobalVariable *, MDNode *> >::iterator
+  for (ArrayRef<std::pair<GlobalVariable *, MDNode *> >::iterator
          I = CountersBySP.begin(), E = CountersBySP.end();
        I != E; ++I) {
     GlobalVariable *GV = I->first;

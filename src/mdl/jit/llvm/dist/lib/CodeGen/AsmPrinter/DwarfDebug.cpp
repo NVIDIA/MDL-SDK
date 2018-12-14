@@ -240,7 +240,7 @@ MCSymbol *DwarfUnits::getStringPoolSym() {
 }
 
 MCSymbol *DwarfUnits::getStringPoolEntry(StringRef Str) {
-  MISTD::pair<MCSymbol*, unsigned> &Entry =
+  std::pair<MCSymbol*, unsigned> &Entry =
     StringPool.GetOrCreateValue(Str).getValue();
   if (Entry.first) return Entry.first;
 
@@ -249,7 +249,7 @@ MCSymbol *DwarfUnits::getStringPoolEntry(StringRef Str) {
 }
 
 unsigned DwarfUnits::getStringPoolIndex(StringRef Str) {
-  MISTD::pair<MCSymbol*, unsigned> &Entry =
+  std::pair<MCSymbol*, unsigned> &Entry =
     StringPool.GetOrCreateValue(Str).getValue();
   if (Entry.first) return Entry.second;
 
@@ -263,8 +263,8 @@ unsigned DwarfUnits::getAddrPoolIndex(const MCSymbol *Sym) {
 }
 
 unsigned DwarfUnits::getAddrPoolIndex(const MCExpr *Sym) {
-  MISTD::pair<DenseMap<const MCExpr *, unsigned>::iterator, bool> P =
-      AddressPool.insert(MISTD::make_pair(Sym, NextAddrPoolNumber));
+  std::pair<DenseMap<const MCExpr *, unsigned>::iterator, bool> P =
+      AddressPool.insert(std::make_pair(Sym, NextAddrPoolNumber));
   if (P.second)
     ++NextAddrPoolNumber;
   return P.first->second;
@@ -318,8 +318,8 @@ static StringRef getObjCMethodName(StringRef In) {
 
 // Helper for sorting sections into a stable output order.
 static bool SectionSort(const MCSection *A, const MCSection *B) {
-    MISTD::string LA = (A ? A->getLabelBeginName() : "");
-    MISTD::string LB = (B ? B->getLabelBeginName() : "");
+    std::string LA = (A ? A->getLabelBeginName() : "");
+    std::string LB = (B ? B->getLabelBeginName() : "");
     return LA < LB;
 }
 
@@ -619,7 +619,7 @@ DIE *DwarfDebug::constructScopeDIE(CompileUnit *TheCU, LexicalScope *Scope) {
       ScopeDIE = TheCU->getDIE(DS);
       // Note down abstract DIE.
       if (ScopeDIE)
-        AbstractSPDies.insert(MISTD::make_pair(DS, ScopeDIE));
+        AbstractSPDies.insert(std::make_pair(DS, ScopeDIE));
     } else
       ScopeDIE = updateSubprogramScopeDIE(TheCU, DISubprogram(DS));
   } else {
@@ -633,10 +633,10 @@ DIE *DwarfDebug::constructScopeDIE(CompileUnit *TheCU, LexicalScope *Scope) {
     ChildrenCreated = true;
 
     // There is no need to emit empty lexical block DIE.
-    MISTD::pair<ImportedEntityMap::const_iterator,
-              ImportedEntityMap::const_iterator> Range = MISTD::equal_range(
+    std::pair<ImportedEntityMap::const_iterator,
+              ImportedEntityMap::const_iterator> Range = std::equal_range(
         ScopesWithImportedEntities.begin(), ScopesWithImportedEntities.end(),
-        MISTD::pair<const MDNode *, const MDNode *>(DS, (const MDNode*)0),
+        std::pair<const MDNode *, const MDNode *>(DS, (const MDNode*)0),
         less_first());
     if (Children.empty() && Range.first == Range.second)
       return NULL;
@@ -815,8 +815,8 @@ CompileUnit *DwarfDebug::constructCompileUnit(DICompileUnit DIUnit) {
 
   InfoHolder.addUnit(NewCU);
 
-  CUMap.insert(MISTD::make_pair(DIUnit, NewCU));
-  CUDieMap.insert(MISTD::make_pair(Die, NewCU));
+  CUMap.insert(std::make_pair(DIUnit, NewCU));
+  CUDieMap.insert(std::make_pair(Die, NewCU));
   return NewCU;
 }
 
@@ -914,10 +914,10 @@ void DwarfDebug::beginModule() {
     CompileUnit *CU = constructCompileUnit(CUNode);
     DIArray ImportedEntities = CUNode.getImportedEntities();
     for (unsigned i = 0, e = ImportedEntities.getNumElements(); i != e; ++i)
-      ScopesWithImportedEntities.push_back(MISTD::make_pair(
+      ScopesWithImportedEntities.push_back(std::make_pair(
           DIImportedEntity(ImportedEntities.getElement(i)).getContext(),
           ImportedEntities.getElement(i)));
-    MISTD::sort(ScopesWithImportedEntities.begin(),
+    std::sort(ScopesWithImportedEntities.begin(),
               ScopesWithImportedEntities.end(), less_first());
     DIArray GVs = CUNode.getGlobalVariables();
     for (unsigned i = 0, e = GVs.getNumElements(); i != e; ++i)
@@ -1112,7 +1112,7 @@ void DwarfDebug::endSections() {
   }
 
   // Build a list of sections used.
-  MISTD::vector<const MCSection *> Sections;
+  std::vector<const MCSection *> Sections;
   for (SectionMapType::iterator it = SectionMap.begin(); it != SectionMap.end();
        it++) {
     const MCSection *Section = it->first;
@@ -1121,7 +1121,7 @@ void DwarfDebug::endSections() {
 
   // Sort the sections into order.
   // This is only done to ensure consistent output order across different runs.
-  MISTD::sort(Sections.begin(), Sections.end(), SectionSort);
+  std::sort(Sections.begin(), Sections.end(), SectionSort);
 
   // Add terminating symbols for each section.
   for (unsigned ID=0;ID<Sections.size();ID++) {
@@ -1290,7 +1290,7 @@ DwarfDebug::collectVariableInfoFromMMITable(const MachineFunction *MF,
     if (!Var) continue;
     Processed.insert(Var);
     DIVariable DV(Var);
-    const MISTD::pair<unsigned, DebugLoc> &VP = VI->second;
+    const std::pair<unsigned, DebugLoc> &VP = VI->second;
 
     LexicalScope *Scope = LScopes.findLexicalScope(VP.second);
 
@@ -1625,7 +1625,7 @@ void DwarfDebug::beginFunction(const MachineFunction *MF) {
 
   const TargetRegisterInfo *TRI = Asm->TM.getRegisterInfo();
   // LiveUserVar - Map physreg numbers to the MDNode they contain.
-  MISTD::vector<const MDNode *> LiveUserVar(TRI->getNumRegs());
+  std::vector<const MDNode *> LiveUserVar(TRI->getNumRegs());
 
   for (MachineFunction::const_iterator I = MF->begin(), E = MF->end(); I != E;
        ++I) {
@@ -1927,7 +1927,7 @@ void DwarfDebug::recordSourceLine(unsigned Line, unsigned Col, const MDNode *S,
 unsigned
 DwarfUnits::computeSizeAndOffset(DIE *Die, unsigned Offset) {
   // Get the children.
-  const MISTD::vector<DIE *> &Children = Die->getChildren();
+  const std::vector<DIE *> &Children = Die->getChildren();
 
   // Record the abbreviation.
   assignAbbrevNumber(Die->getAbbrev());
@@ -2140,7 +2140,7 @@ void DwarfDebug::emitDIE(DIE *Die, ArrayRef<DIEAbbrev *> Abbrevs) {
 
   // Emit the DIE children if any.
   if (Abbrev->getChildrenFlag() == dwarf::DW_CHILDREN_yes) {
-    const MISTD::vector<DIE *> &Children = Die->getChildren();
+    const std::vector<DIE *> &Children = Die->getChildren();
 
     for (unsigned j = 0, M = Children.size(); j < M; ++j)
       emitDIE(Children[j], Abbrevs);
@@ -2199,7 +2199,7 @@ void DwarfDebug::emitAbbreviations() {
 }
 
 void DwarfDebug::emitAbbrevs(const MCSection *Section,
-                             MISTD::vector<DIEAbbrev *> *Abbrevs) {
+                             std::vector<DIEAbbrev *> *Abbrevs) {
   // Check to see if it is worth the effort.
   if (!Abbrevs->empty()) {
     // Start the debug abbrev section.
@@ -2258,12 +2258,12 @@ void DwarfDebug::emitAccelNames() {
   for (DenseMap<const MDNode *, CompileUnit *>::iterator I = CUMap.begin(),
          E = CUMap.end(); I != E; ++I) {
     CompileUnit *TheCU = I->second;
-    const StringMap<MISTD::vector<DIE*> > &Names = TheCU->getAccelNames();
-    for (StringMap<MISTD::vector<DIE*> >::const_iterator
+    const StringMap<std::vector<DIE*> > &Names = TheCU->getAccelNames();
+    for (StringMap<std::vector<DIE*> >::const_iterator
            GI = Names.begin(), GE = Names.end(); GI != GE; ++GI) {
       StringRef Name = GI->getKey();
-      const MISTD::vector<DIE *> &Entities = GI->second;
-      for (MISTD::vector<DIE *>::const_iterator DI = Entities.begin(),
+      const std::vector<DIE *> &Entities = GI->second;
+      for (std::vector<DIE *>::const_iterator DI = Entities.begin(),
              DE = Entities.end(); DI != DE; ++DI)
         AT.AddName(Name, (*DI));
     }
@@ -2287,12 +2287,12 @@ void DwarfDebug::emitAccelObjC() {
   for (DenseMap<const MDNode *, CompileUnit *>::iterator I = CUMap.begin(),
          E = CUMap.end(); I != E; ++I) {
     CompileUnit *TheCU = I->second;
-    const StringMap<MISTD::vector<DIE*> > &Names = TheCU->getAccelObjC();
-    for (StringMap<MISTD::vector<DIE*> >::const_iterator
+    const StringMap<std::vector<DIE*> > &Names = TheCU->getAccelObjC();
+    for (StringMap<std::vector<DIE*> >::const_iterator
            GI = Names.begin(), GE = Names.end(); GI != GE; ++GI) {
       StringRef Name = GI->getKey();
-      const MISTD::vector<DIE *> &Entities = GI->second;
-      for (MISTD::vector<DIE *>::const_iterator DI = Entities.begin(),
+      const std::vector<DIE *> &Entities = GI->second;
+      for (std::vector<DIE *>::const_iterator DI = Entities.begin(),
              DE = Entities.end(); DI != DE; ++DI)
         AT.AddName(Name, (*DI));
     }
@@ -2315,12 +2315,12 @@ void DwarfDebug::emitAccelNamespaces() {
   for (DenseMap<const MDNode *, CompileUnit *>::iterator I = CUMap.begin(),
          E = CUMap.end(); I != E; ++I) {
     CompileUnit *TheCU = I->second;
-    const StringMap<MISTD::vector<DIE*> > &Names = TheCU->getAccelNamespace();
-    for (StringMap<MISTD::vector<DIE*> >::const_iterator
+    const StringMap<std::vector<DIE*> > &Names = TheCU->getAccelNamespace();
+    for (StringMap<std::vector<DIE*> >::const_iterator
            GI = Names.begin(), GE = Names.end(); GI != GE; ++GI) {
       StringRef Name = GI->getKey();
-      const MISTD::vector<DIE *> &Entities = GI->second;
-      for (MISTD::vector<DIE *>::const_iterator DI = Entities.begin(),
+      const std::vector<DIE *> &Entities = GI->second;
+      for (std::vector<DIE *>::const_iterator DI = Entities.begin(),
              DE = Entities.end(); DI != DE; ++DI)
         AT.AddName(Name, (*DI));
     }
@@ -2338,7 +2338,7 @@ void DwarfDebug::emitAccelNamespaces() {
 
 // Emit type dies into a hashed accelerator table.
 void DwarfDebug::emitAccelTypes() {
-  MISTD::vector<DwarfAccelTable::Atom> Atoms;
+  std::vector<DwarfAccelTable::Atom> Atoms;
   Atoms.push_back(DwarfAccelTable::Atom(dwarf::DW_ATOM_die_offset,
                                         dwarf::DW_FORM_data4));
   Atoms.push_back(DwarfAccelTable::Atom(dwarf::DW_ATOM_die_tag,
@@ -2349,13 +2349,13 @@ void DwarfDebug::emitAccelTypes() {
   for (DenseMap<const MDNode *, CompileUnit *>::iterator I = CUMap.begin(),
          E = CUMap.end(); I != E; ++I) {
     CompileUnit *TheCU = I->second;
-    const StringMap<MISTD::vector<MISTD::pair<DIE*, unsigned > > > &Names
+    const StringMap<std::vector<std::pair<DIE*, unsigned > > > &Names
       = TheCU->getAccelTypes();
-    for (StringMap<MISTD::vector<MISTD::pair<DIE*, unsigned> > >::const_iterator
+    for (StringMap<std::vector<std::pair<DIE*, unsigned> > >::const_iterator
            GI = Names.begin(), GE = Names.end(); GI != GE; ++GI) {
       StringRef Name = GI->getKey();
-      const MISTD::vector<MISTD::pair<DIE *, unsigned> > &Entities = GI->second;
-      for (MISTD::vector<MISTD::pair<DIE *, unsigned> >::const_iterator DI
+      const std::vector<std::pair<DIE *, unsigned> > &Entities = GI->second;
+      for (std::vector<std::pair<DIE *, unsigned> >::const_iterator DI
              = Entities.begin(), DE = Entities.end(); DI !=DE; ++DI)
         AT.AddName(Name, (*DI).first, (*DI).second);
     }
@@ -2584,13 +2584,13 @@ void DwarfUnits::emitStrings(const MCSection *StrSection,
 
   // Get all of the string pool entries and put them in an array by their ID so
   // we can sort them.
-  SmallVector<MISTD::pair<unsigned,
-                 StringMapEntry<MISTD::pair<MCSymbol*, unsigned> >*>, 64> Entries;
+  SmallVector<std::pair<unsigned,
+                 StringMapEntry<std::pair<MCSymbol*, unsigned> >*>, 64> Entries;
 
-  for (StringMap<MISTD::pair<MCSymbol*, unsigned> >::iterator
+  for (StringMap<std::pair<MCSymbol*, unsigned> >::iterator
          I = StringPool.begin(), E = StringPool.end();
        I != E; ++I)
-    Entries.push_back(MISTD::make_pair(I->second.second, &*I));
+    Entries.push_back(std::make_pair(I->second.second, &*I));
 
   array_pod_sort(Entries.begin(), Entries.end());
 
@@ -2780,12 +2780,12 @@ void DwarfDebug::emitDebugARanges() {
   Asm->OutStreamer
       .SwitchSection(Asm->getObjFileLowering().getDwarfARangesSection());
 
-  typedef DenseMap<CompileUnit *, MISTD::vector<ArangeSpan> > SpansType;
+  typedef DenseMap<CompileUnit *, std::vector<ArangeSpan> > SpansType;
 
   SpansType Spans;
 
   // Build a list of sections used.
-  MISTD::vector<const MCSection *> Sections;
+  std::vector<const MCSection *> Sections;
   for (SectionMapType::iterator it = SectionMap.begin(); it != SectionMap.end();
        it++) {
     const MCSection *Section = it->first;
@@ -2794,7 +2794,7 @@ void DwarfDebug::emitDebugARanges() {
 
   // Sort the sections into order.
   // This is only done to ensure consistent output order across different runs.
-  MISTD::sort(Sections.begin(), Sections.end(), SectionSort);
+  std::sort(Sections.begin(), Sections.end(), SectionSort);
 
   // Build a set of address spans, sorted by CU.
   for (size_t SecIdx=0;SecIdx<Sections.size();SecIdx++) {
@@ -2805,7 +2805,7 @@ void DwarfDebug::emitDebugARanges() {
 
     // Sort the symbols by offset within the section.
     SymbolCUSorter sorter(Asm->OutStreamer);
-    MISTD::sort(List.begin(), List.end(), sorter);
+    std::sort(List.begin(), List.end(), sorter);
 
     // If we have no section (e.g. common), just write out
     // individual spans for each symbol.
@@ -2842,19 +2842,19 @@ void DwarfDebug::emitDebugARanges() {
   unsigned PtrSize = Asm->getDataLayout().getPointerSize();
 
   // Build a list of CUs used.
-  MISTD::vector<CompileUnit *> CUs;
+  std::vector<CompileUnit *> CUs;
   for (SpansType::iterator it = Spans.begin(); it != Spans.end(); it++) {
     CompileUnit *CU = it->first;
     CUs.push_back(CU);
   }
 
   // Sort the CU list (again, to ensure consistent output order).
-  MISTD::sort(CUs.begin(), CUs.end(), CUSort);
+  std::sort(CUs.begin(), CUs.end(), CUSort);
 
   // Emit an arange table for each CU we used.
   for (size_t CUIdx=0;CUIdx<CUs.size();CUIdx++) {
     CompileUnit *CU = CUs[CUIdx];
-    MISTD::vector<ArangeSpan> &List = Spans[CU];
+    std::vector<ArangeSpan> &List = Spans[CU];
 
     // Emit size of content not including length itself.
     unsigned ContentSize

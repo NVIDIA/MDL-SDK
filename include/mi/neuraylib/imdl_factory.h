@@ -41,6 +41,7 @@ class IArray;
 namespace neuraylib {
 
 class IExpression_factory;
+class IMdl_execution_context;
 class ITransaction;
 class IType_factory;
 class IValue_bsdf_measurement;
@@ -209,6 +210,9 @@ public:
     ///                      failure.
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
+    
+    /// Creates an execution context.
+    virtual IMdl_execution_context* create_execution_context() = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_types

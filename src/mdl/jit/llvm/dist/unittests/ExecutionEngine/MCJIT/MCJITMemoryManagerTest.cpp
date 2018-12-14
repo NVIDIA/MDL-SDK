@@ -45,7 +45,7 @@ TEST(MCJITMemoryManagerTest, BasicAllocations) {
     EXPECT_EQ(4, data2[i]);
   }
 
-  MISTD::string Error;
+  std::string Error;
   EXPECT_FALSE(MemMgr->finalizeMemory(&Error));
 }
 
@@ -78,7 +78,7 @@ TEST(MCJITMemoryManagerTest, LargeAllocations) {
     EXPECT_EQ(4, data2[i]);
   }
 
-  MISTD::string Error;
+  std::string Error;
   EXPECT_FALSE(MemMgr->finalizeMemory(&Error));
 }
 
@@ -113,7 +113,7 @@ TEST(MCJITMemoryManagerTest, ManyAllocations) {
     }
   }
 
-  MISTD::string Error;
+  std::string Error;
   EXPECT_FALSE(MemMgr->finalizeMemory(&Error));
 }
 

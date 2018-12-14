@@ -675,14 +675,14 @@ static void LowerTlsAddr(MCStreamer &OutStreamer,
     .addExpr(tlsRef));
 }
 
-static MISTD::pair<StackMaps::Location, MachineInstr::const_mop_iterator>
+static std::pair<StackMaps::Location, MachineInstr::const_mop_iterator>
 parseMemoryOperand(StackMaps::Location::LocationType LocTy, unsigned Size,
                    MachineInstr::const_mop_iterator MOI,
                    MachineInstr::const_mop_iterator MOE) {
 
   typedef StackMaps::Location Location;
 
-  assert(MISTD::distance(MOI, MOE) >= 5 && "Too few operands to encode mem op.");
+  assert(std::distance(MOI, MOE) >= 5 && "Too few operands to encode mem op.");
 
   const MachineOperand &Base = *MOI;
   const MachineOperand &Scale = *(++MOI);
@@ -700,11 +700,11 @@ parseMemoryOperand(StackMaps::Location::LocationType LocTy, unsigned Size,
   (void)Index;
   (void)ZeroReg;
 
-  return MISTD::make_pair(
+  return std::make_pair(
     Location(LocTy, Size, Base.getReg(), Disp.getImm()), ++MOI);
 }
 
-MISTD::pair<StackMaps::Location, MachineInstr::const_mop_iterator>
+std::pair<StackMaps::Location, MachineInstr::const_mop_iterator>
 X86AsmPrinter::stackmapOperandParser(MachineInstr::const_mop_iterator MOI,
                                      MachineInstr::const_mop_iterator MOE,
                                      const TargetMachine &TM) {
@@ -739,7 +739,7 @@ X86AsmPrinter::stackmapOperandParser(MachineInstr::const_mop_iterator MOI,
       ++MOI;
       assert(MOI->isImm() && "Expected constant operand.");
       int64_t Imm = MOI->getImm();
-      return MISTD::make_pair(
+      return std::make_pair(
         Location(Location::Constant, sizeof(int64_t), 0, Imm), ++MOI);
     }
     }
@@ -755,7 +755,7 @@ X86AsmPrinter::stackmapOperandParser(MachineInstr::const_mop_iterator MOI,
   const TargetRegisterClass *RC =
     TM.getRegisterInfo()->getMinimalPhysRegClass(MOP.getReg());
   assert(!MOP.getSubReg() && "Physical subreg still around.");
-  return MISTD::make_pair(
+  return std::make_pair(
     Location(Location::Register, RC->getSize(), MOP.getReg(), 0), ++MOI);
 }
 

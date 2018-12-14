@@ -23,9 +23,9 @@ TargetRegistry::iterator TargetRegistry::begin() {
   return iterator(FirstTarget);
 }
 
-const Target *TargetRegistry::lookupTarget(const MISTD::string &ArchName,
+const Target *TargetRegistry::lookupTarget(const std::string &ArchName,
                                            Triple &TheTriple,
-                                           MISTD::string &Error) {
+                                           std::string &Error) {
   // Allocate target machine.  First, check whether the user has explicitly
   // specified an architecture to compile for. If so we have to look it up by
   // name, because it might be a backend that has no mapping to a target triple.
@@ -51,7 +51,7 @@ const Target *TargetRegistry::lookupTarget(const MISTD::string &ArchName,
       TheTriple.setArch(Type);
   } else {
     // Get the target specific parser.
-    MISTD::string TempError;
+    std::string TempError;
     TheTarget = TargetRegistry::lookupTarget(TheTriple.getTriple(), TempError);
     if (TheTarget == 0) {
       Error = ": error: unable to get target for '"
@@ -64,8 +64,8 @@ const Target *TargetRegistry::lookupTarget(const MISTD::string &ArchName,
   return TheTarget;
 }
 
-const Target *TargetRegistry::lookupTarget(const MISTD::string &TT,
-                                           MISTD::string &Error) {
+const Target *TargetRegistry::lookupTarget(const std::string &TT,
+                                           std::string &Error) {
   // Provide special warning when no targets are initialized.
   if (begin() == end()) {
     Error = "Unable to find target for this triple (no targets are registered)";
@@ -93,7 +93,7 @@ const Target *TargetRegistry::lookupTarget(const MISTD::string &TT,
   // Otherwise, take the best target, but make sure we don't have two equally
   // good best targets.
   if (EquallyBest) {
-    Error = MISTD::string("Cannot choose between targets \"") +
+    Error = std::string("Cannot choose between targets \"") +
       Best->Name  + "\" and \"" + EquallyBest->Name + "\"";
     return 0;
   }
@@ -124,7 +124,7 @@ void TargetRegistry::RegisterTarget(Target &T,
   T.HasJIT = HasJIT;
 }
 
-const Target *TargetRegistry::getClosestTargetForJIT(MISTD::string &Error) {
+const Target *TargetRegistry::getClosestTargetForJIT(std::string &Error) {
   const Target *TheTarget = lookupTarget(sys::getDefaultTargetTriple(), Error);
 
   if (TheTarget && !TheTarget->hasJIT()) {
@@ -135,19 +135,19 @@ const Target *TargetRegistry::getClosestTargetForJIT(MISTD::string &Error) {
   return TheTarget;
 }
 
-static int TargetArraySortFn(const MISTD::pair<StringRef, const Target *> *LHS,
-                             const MISTD::pair<StringRef, const Target *> *RHS) {
+static int TargetArraySortFn(const std::pair<StringRef, const Target *> *LHS,
+                             const std::pair<StringRef, const Target *> *RHS) {
   return LHS->first.compare(RHS->first);
 }
 
 void TargetRegistry::printRegisteredTargetsForVersion() {
-  MISTD::vector<MISTD::pair<StringRef, const Target*> > Targets;
+  std::vector<std::pair<StringRef, const Target*> > Targets;
   size_t Width = 0;
   for (TargetRegistry::iterator I = TargetRegistry::begin(),
        E = TargetRegistry::end();
        I != E; ++I) {
-    Targets.push_back(MISTD::make_pair(I->getName(), &*I));
-    Width = MISTD::max(Width, Targets.back().first.size());
+    Targets.push_back(std::make_pair(I->getName(), &*I));
+    Width = std::max(Width, Targets.back().first.size());
   }
   array_pod_sort(Targets.begin(), Targets.end(), TargetArraySortFn);
 

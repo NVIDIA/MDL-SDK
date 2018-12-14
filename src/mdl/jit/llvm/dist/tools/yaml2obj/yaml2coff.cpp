@@ -36,7 +36,7 @@ struct COFFParser {
   }
 
   bool parseSections() {
-    for (MISTD::vector<COFFYAML::Section>::iterator i = Obj.Sections.begin(),
+    for (std::vector<COFFYAML::Section>::iterator i = Obj.Sections.begin(),
            e = Obj.Sections.end(); i != e; ++i) {
       COFFYAML::Section &Sec = *i;
 
@@ -45,17 +45,17 @@ struct COFFParser {
       StringRef Name = Sec.Name;
 
       if (Name.size() <= COFF::NameSize) {
-        MISTD::copy(Name.begin(), Name.end(), Sec.Header.Name);
+        std::copy(Name.begin(), Name.end(), Sec.Header.Name);
       } else {
         // Add string to the string table and format the index for output.
         unsigned Index = getStringIndex(Name);
-        MISTD::string str = utostr(Index);
+        std::string str = utostr(Index);
         if (str.size() > 7) {
           errs() << "String table got too large";
           return false;
         }
         Sec.Header.Name[0] = '/';
-        MISTD::copy(str.begin(), str.end(), Sec.Header.Name + 1);
+        std::copy(str.begin(), str.end(), Sec.Header.Name + 1);
       }
 
       Sec.Header.Characteristics |= (Log2_32(Sec.Alignment) + 1) << 20;
@@ -64,7 +64,7 @@ struct COFFParser {
   }
 
   bool parseSymbols() {
-    for (MISTD::vector<COFFYAML::Symbol>::iterator i = Obj.Symbols.begin(),
+    for (std::vector<COFFYAML::Symbol>::iterator i = Obj.Symbols.begin(),
            e = Obj.Symbols.end(); i != e; ++i) {
       COFFYAML::Symbol &Sym = *i;
 
@@ -72,7 +72,7 @@ struct COFFParser {
       // store it in the string table.
       StringRef Name = Sym.Name;
       if (Name.size() <= COFF::NameSize) {
-        MISTD::copy(Name.begin(), Name.end(), Sym.Header.Name);
+        std::copy(Name.begin(), Name.end(), Sym.Header.Name);
       } else {
         // Add string to the string table and format the index for output.
         unsigned Index = getStringIndex(Name);
@@ -109,7 +109,7 @@ struct COFFParser {
   COFFYAML::Object &Obj;
 
   StringMap<unsigned> StringTableMap;
-  MISTD::string StringTable;
+  std::string StringTable;
 };
 
 // Take a CP and assign addresses and sizes to everything. Returns false if the
@@ -126,7 +126,7 @@ static bool layoutCOFF(COFFParser &CP) {
   uint32_t CurrentSectionDataOffset = SectionTableStart + SectionTableSize;
 
   // Assign each section data address consecutively.
-  for (MISTD::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
+  for (std::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
                                                 e = CP.Obj.Sections.end();
                                                 i != e; ++i) {
     if (i->SectionData.binary_size() > 0) {
@@ -150,7 +150,7 @@ static bool layoutCOFF(COFFParser &CP) {
 
   // Calculate number of symbols.
   uint32_t NumberOfSymbols = 0;
-  for (MISTD::vector<COFFYAML::Symbol>::iterator i = CP.Obj.Symbols.begin(),
+  for (std::vector<COFFYAML::Symbol>::iterator i = CP.Obj.Symbols.begin(),
                                                e = CP.Obj.Symbols.end();
                                                i != e; ++i) {
     unsigned AuxBytes = i->AuxiliaryData.binary_size();
@@ -204,7 +204,7 @@ bool writeCOFF(COFFParser &CP, raw_ostream &OS) {
      << binary_le(CP.Obj.Header.Characteristics);
 
   // Output section table.
-  for (MISTD::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
+  for (std::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
                                                 e = CP.Obj.Sections.end();
                                                 i != e; ++i) {
     OS.write(i->Header.Name, COFF::NameSize);
@@ -221,7 +221,7 @@ bool writeCOFF(COFFParser &CP, raw_ostream &OS) {
 
   unsigned CurSymbol = 0;
   StringMap<unsigned> SymbolTableIndexMap;
-  for (MISTD::vector<COFFYAML::Symbol>::iterator I = CP.Obj.Symbols.begin(),
+  for (std::vector<COFFYAML::Symbol>::iterator I = CP.Obj.Symbols.begin(),
                                                E = CP.Obj.Symbols.end();
        I != E; ++I) {
     SymbolTableIndexMap[I->Name] = CurSymbol;
@@ -229,7 +229,7 @@ bool writeCOFF(COFFParser &CP, raw_ostream &OS) {
   }
 
   // Output section data.
-  for (MISTD::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
+  for (std::vector<COFFYAML::Section>::iterator i = CP.Obj.Sections.begin(),
                                                 e = CP.Obj.Sections.end();
                                                 i != e; ++i) {
     i->SectionData.writeAsBinary(OS);
@@ -244,7 +244,7 @@ bool writeCOFF(COFFParser &CP, raw_ostream &OS) {
 
   // Output symbol table.
 
-  for (MISTD::vector<COFFYAML::Symbol>::const_iterator i = CP.Obj.Symbols.begin(),
+  for (std::vector<COFFYAML::Symbol>::const_iterator i = CP.Obj.Symbols.begin(),
                                                      e = CP.Obj.Symbols.end();
                                                      i != e; ++i) {
     OS.write(i->Header.Name, COFF::NameSize);

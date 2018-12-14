@@ -291,7 +291,7 @@ class SparseBitVector {
   ElementListIter CurrElementIter;
   ElementList Elements;
 
-  // This is like MISTD::lower_bound, except we do linear searching from the
+  // This is like std::lower_bound, except we do linear searching from the
   // current position.
   ElementListIter FindLowerBound(unsigned ElementIndex) {
 

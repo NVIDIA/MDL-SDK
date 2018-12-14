@@ -69,7 +69,7 @@ void Inliner::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 
-typedef DenseMap<ArrayType*, MISTD::vector<AllocaInst*> >
+typedef DenseMap<ArrayType*, std::vector<AllocaInst*> >
 InlinedArrayAllocasTy;
 
 /// \brief If the inlined function had a higher stack protection level than the
@@ -180,7 +180,7 @@ static bool InlineCallIfPossible(CallSite CS, InlineFunctionInfo &IFI,
       continue;
     
     // Get the list of all available allocas for this array type.
-    MISTD::vector<AllocaInst*> &AllocasForType = InlinedArrayAllocas[ATy];
+    std::vector<AllocaInst*> &AllocasForType = InlinedArrayAllocas[ATy];
     
     // Loop over the allocas in AllocasForType to see if we can reuse one.  Note
     // that we have to be careful not to reuse the same "available" alloca for
@@ -383,7 +383,7 @@ bool Inliner::shouldInline(CallSite CS) {
 /// InlineHistoryIncludes - Return true if the specified inline history ID
 /// indicates an inline history that includes the specified function.
 static bool InlineHistoryIncludes(Function *F, int InlineHistoryID,
-            const SmallVectorImpl<MISTD::pair<Function*, int> > &InlineHistory) {
+            const SmallVectorImpl<std::pair<Function*, int> > &InlineHistory) {
   while (InlineHistoryID != -1) {
     assert(unsigned(InlineHistoryID) < InlineHistory.size() &&
            "Invalid inline history ID");
@@ -410,13 +410,13 @@ bool Inliner::runOnSCC(CallGraphSCC &SCC) {
   // Scan through and identify all call sites ahead of time so that we only
   // inline call sites in the original functions, not call sites that result
   // from inlining other functions.
-  SmallVector<MISTD::pair<CallSite, int>, 16> CallSites;
+  SmallVector<std::pair<CallSite, int>, 16> CallSites;
   
   // When inlining a callee produces new call sites, we want to keep track of
   // the fact that they were inlined from the callee.  This allows us to avoid
   // infinite inlining in some obscure cases.  To represent this, we use an
   // index into the InlineHistory vector.
-  SmallVector<MISTD::pair<Function*, int>, 8> InlineHistory;
+  SmallVector<std::pair<Function*, int>, 8> InlineHistory;
 
   for (CallGraphSCC::iterator I = SCC.begin(), E = SCC.end(); I != E; ++I) {
     Function *F = (*I)->getFunction();
@@ -436,7 +436,7 @@ bool Inliner::runOnSCC(CallGraphSCC &SCC) {
         if (CS.getCalledFunction() && CS.getCalledFunction()->isDeclaration())
           continue;
         
-        CallSites.push_back(MISTD::make_pair(CS, -1));
+        CallSites.push_back(std::make_pair(CS, -1));
       }
   }
 
@@ -452,7 +452,7 @@ bool Inliner::runOnSCC(CallGraphSCC &SCC) {
   for (unsigned i = 0; i < FirstCallInSCC; ++i)
     if (Function *F = CallSites[i].first.getCalledFunction())
       if (SCCFunctions.count(F))
-        MISTD::swap(CallSites[i--], CallSites[--FirstCallInSCC]);
+        std::swap(CallSites[i--], CallSites[--FirstCallInSCC]);
 
   
   InlinedArrayAllocasTy InlinedArrayAllocas;
@@ -515,12 +515,12 @@ bool Inliner::runOnSCC(CallGraphSCC &SCC) {
           // Create a new inline history entry for this, so that we remember
           // that these new callsites came about due to inlining Callee.
           int NewHistoryID = InlineHistory.size();
-          InlineHistory.push_back(MISTD::make_pair(Callee, InlineHistoryID));
+          InlineHistory.push_back(std::make_pair(Callee, InlineHistoryID));
 
           for (unsigned i = 0, e = InlineInfo.InlinedCalls.size();
                i != e; ++i) {
             Value *Ptr = InlineInfo.InlinedCalls[i];
-            CallSites.push_back(MISTD::make_pair(CallSite(Ptr), NewHistoryID));
+            CallSites.push_back(std::make_pair(CallSite(Ptr), NewHistoryID));
           }
         }
       }
@@ -623,7 +623,7 @@ bool Inliner::removeDeadFunctions(CallGraph &CG, bool AlwaysInlineOnly) {
   // here to do this, it doesn't matter which order the functions are deleted
   // in.
   array_pod_sort(FunctionsToRemove.begin(), FunctionsToRemove.end());
-  FunctionsToRemove.erase(MISTD::unique(FunctionsToRemove.begin(),
+  FunctionsToRemove.erase(std::unique(FunctionsToRemove.begin(),
                                       FunctionsToRemove.end()),
                           FunctionsToRemove.end());
   for (SmallVectorImpl<CallGraphNode *>::iterator I = FunctionsToRemove.begin(),

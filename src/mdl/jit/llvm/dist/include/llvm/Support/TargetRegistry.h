@@ -79,7 +79,7 @@ namespace llvm {
   public:
     friend struct TargetRegistry;
 
-    typedef unsigned (*TripleMatchQualityFnTy)(const MISTD::string &TT);
+    typedef unsigned (*TripleMatchQualityFnTy)(const std::string &TT);
 
     typedef MCAsmInfo *(*MCAsmInfoCtorFnTy)(const MCRegisterInfo &MRI,
                                             StringRef TT);
@@ -538,8 +538,8 @@ namespace llvm {
     /// \param Triple - The triple to use for finding a target.
     /// \param Error - On failure, an error string describing why no target was
     /// found.
-    static const Target *lookupTarget(const MISTD::string &Triple,
-                                      MISTD::string &Error);
+    static const Target *lookupTarget(const std::string &Triple,
+                                      std::string &Error);
 
     /// lookupTarget - Lookup a target based on an architecture name
     /// and a target triple.  If the architecture name is non-empty,
@@ -552,16 +552,16 @@ namespace llvm {
     /// by architecture is done.
     /// \param Error - On failure, an error string describing why no target was
     /// found.
-    static const Target *lookupTarget(const MISTD::string &ArchName,
+    static const Target *lookupTarget(const std::string &ArchName,
                                       Triple &TheTriple,
-                                      MISTD::string &Error);
+                                      std::string &Error);
 
     /// getClosestTargetForJIT - Pick the best target that is compatible with
     /// the current host.  If no close target can be found, this returns null
     /// and sets the Error string to a reason.
     ///
     /// Maintained for compatibility through 2.6.
-    static const Target *getClosestTargetForJIT(MISTD::string &Error);
+    static const Target *getClosestTargetForJIT(std::string &Error);
 
     /// @}
     /// @name Target Registration
@@ -836,7 +836,7 @@ namespace llvm {
                                      HasJIT);
     }
 
-    static unsigned getTripleMatchQuality(const MISTD::string &TT) {
+    static unsigned getTripleMatchQuality(const std::string &TT) {
       if (Triple(TT).getArch() == TargetArchType)
         return 20;
       return 0;

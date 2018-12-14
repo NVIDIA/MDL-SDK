@@ -33,6 +33,7 @@
 #define RENDER_MDL_RUNTIME_I_MDLRT_BSDF_MEASUREMENT_H
 
 #include <mi/neuraylib/typedefs.h>
+#include <mi/mdl/mdl_stdlib_types.h>
 
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_access.h>
@@ -48,15 +49,46 @@ class Bsdf_measurement
 {
 public:
     typedef DB::Typed_tag<BSDFM::Bsdf_measurement> Tag_type;
+    typedef mi::mdl::stdlib::Mbsdf_part Mbsdf_part;
 
     Bsdf_measurement();
-
     Bsdf_measurement(Tag_type const &tag, DB::Transaction *trans);
+    virtual ~Bsdf_measurement();
 
     bool is_valid() const { return m_bsdf_measurement->is_valid(); }
 
+    mi::Uint32_3 get_resolution(Mbsdf_part part) const;
+
+    mi::Float32_3 evaluate(const mi::Float32_2& theta_phi_in,
+                           const mi::Float32_2& theta_phi_out,
+                           Mbsdf_part part) const;
+
+    mi::Float32_3 sample(const mi::Float32_2& theta_phi_out, 
+                         const mi::Float32_3& xi,
+                         Mbsdf_part part) const;
+
+    mi::Float32 pdf(const mi::Float32_2& theta_phi_in,
+                    const mi::Float32_2& theta_phi_out,
+                    Mbsdf_part part) const;
+
+    mi::Float32_4 albedos(const mi::Float32_2& theta_phi) const;
+
 protected:
+
+    void prepare_mbsdfs_part(Mbsdf_part part, const mi::neuraylib::IBsdf_isotropic_data*);
+    mi::Float32_2 albedo(const mi::Float32_2& theta_phi, Mbsdf_part part) const;
+
     DB::Access<BSDFM::Bsdf_measurement>  m_bsdf_measurement;   // the underlying bsdf measurement
+
+    unsigned        m_has_data[2];                // true if there is a measurement for this part
+    float*          m_eval_data[2];               // uses filter mode cudaFilterModeLinear
+    float           m_max_albedo[2];              // max albedo used to limit the multiplier
+    float*          m_sample_data[2];             // CDFs for sampling a BSDF measurement
+    float*          m_albedo_data[2];             // max albedo for each theta (isotropic)
+
+    mi::Uint32_2    m_angular_resolution[2];      // size of the dataset, needed for texel access
+    mi::Float32_2   m_inv_angular_resolution[2];  // the inverse values of the size of the dataset
+    unsigned        m_num_channels[2];            // number of color channels (1 or 3)
 };
 
 }  // MDLRT

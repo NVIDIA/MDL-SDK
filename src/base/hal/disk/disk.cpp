@@ -110,7 +110,7 @@ bool is_path_absolute(
 }
 
 bool is_path_absolute(
-    const MISTD::string& path)
+    const std::string& path)
 {
     return is_path_absolute(path.c_str());
 }
@@ -151,7 +151,7 @@ bool is_file(
 bool file_remove(
     const char* path)			// path of file to remove
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     if (!unlink(npath.c_str())) {
         set_error(0);
@@ -169,8 +169,8 @@ bool rename(
     const char		*opath,		// path of file to rename
     const char		*npath)		// new path; must be on the same disk
 {
-    MISTD::string nopath(opath? opath : "");
-    MISTD::string nnpath(npath? npath : "");
+    std::string nopath(opath? opath : "");
+    std::string nnpath(npath? npath : "");
 
     if (!::rename(nopath.c_str(), nnpath.c_str())) {
         set_error(0);
@@ -244,7 +244,7 @@ bool mkdir(
     const char		*path,		// path of directory to create
     int			mode)		// rwxrwxrwx permissions
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     //if (!::mkdir(npath.c_str(), mode)) {
     if (!mkpath(const_cast<char*>(npath.c_str()), mode, mode)) {
@@ -263,7 +263,7 @@ bool mkdir(
 bool rmdir(
     const char		*path)		// path of directory to delete
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     if (!::rmdir(npath.c_str())) {
         set_error(0);
@@ -284,7 +284,7 @@ bool chdir(
     if (path == NULL)
         return false;
 
-    MISTD::string npath(path);
+    std::string npath(path);
 
     if (!::chdir(npath.c_str())) {
         set_error(0);
@@ -312,9 +312,9 @@ static const char *getcurdir()
 //--------------------------------------------------------------------------------------------------
 
 // Get the current working directory
-MISTD::string get_cwd()
+std::string get_cwd()
 {
-    MISTD::string result;
+    std::string result;
     if (const char* cwd = getcurdir()) {
         result = cwd;
         set_error(0);
@@ -336,7 +336,7 @@ bool stat(
 {
     struct stat		st;		// results of inode check
 
-    // Be defensive and check for NULL since MISTD::string will
+    // Be defensive and check for NULL since std::string will
     // ASSERT if handed a NULL string. Set m_error to ENOENT since
     // that is what stat would have returned.
     if (!path) {
@@ -344,7 +344,7 @@ bool stat(
         return false;
     }
 
-    MISTD::string npath(path);
+    std::string npath(path);
 
     if (!::stat(npath.c_str(), &st)) {
         set_error(0);
@@ -374,7 +374,7 @@ Sint64 freespace(
 {
     struct statfs	fs;		// collect file system stats here
 
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     if (!statfs(npath.c_str(), &fs)) {
         set_error(0);
@@ -400,14 +400,14 @@ bool file_copy(
     File		src, tar;	// source and target file
     int			n;		// number of bytes read/written
 
-    MISTD::string nopath(opath? opath : "");
+    std::string nopath(opath? opath : "");
 
     if (!src.open(nopath.c_str(), File::M_READ)) {	// open source file
         set_error(src.error());
         return false;
     }
 
-    MISTD::string nnpath(npath? npath : "");
+    std::string nnpath(npath? npath : "");
     if (!tar.open(nnpath.c_str(), File::M_WRITE)) {	// open target file
         set_error(tar.error());
         src.close();
@@ -449,7 +449,7 @@ bool file_copy(
 bool file_remove(
     const char		*path)		// path of file to remove
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     bool success = DeleteFile(npath.c_str()) != FALSE;
     if (!success)
@@ -464,8 +464,8 @@ bool rename(
     const char		*opath,		// path of file to rename
     const char		*npath)		// new path; must be on the same disk
 {
-    MISTD::string nopath(opath? opath : "");
-    MISTD::string nnpath(npath? npath : "");
+    std::string nopath(opath? opath : "");
+    std::string nnpath(npath? npath : "");
 
     return MoveFile(nopath.c_str(), nnpath.c_str()) != FALSE;
 }
@@ -477,7 +477,7 @@ bool mkdir(
     const char		*path,		// path of directory to create
     int			mode)		// rwxrwxrwx permissions
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
     // path has to be absolute!
     if (!is_path_absolute(npath))
         npath = HAL::Ospath::join(get_cwd(), npath);
@@ -504,7 +504,7 @@ bool mkdir(
 bool rmdir(
     const char		*path)		// path of directory to delete
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
     return RemoveDirectory(npath.c_str()) != FALSE;
 }
@@ -519,7 +519,7 @@ bool chdir(
     if (path == NULL)
         return false;
 
-    MISTD::string npath(path);
+    std::string npath(path);
 
     if (SetCurrentDirectory(npath.c_str())) {
         set_error(0);
@@ -534,18 +534,18 @@ bool chdir(
 //-------------------------------------------------------------------------------------------------
 
 // Get the current working directory
-MISTD::string get_cwd()
+std::string get_cwd()
 {
     // retrieve required buffer size first
     DWORD size = GetCurrentDirectory(0, 0); // return value contains terminating null char
-    MISTD::vector<char> buf(static_cast<size_t>(size), '\0');
+    std::vector<char> buf(static_cast<size_t>(size), '\0');
 
     if (!GetCurrentDirectory(size, &buf[0])) {
         set_error(HAL::get_errno());
-        return MISTD::string();
+        return std::string();
     }
     set_error(0);
-    return MISTD::string(&buf[0]);
+    return std::string(&buf[0]);
 }
 
 
@@ -569,14 +569,14 @@ bool stat(
     }
 
     // stat() does not work for (real) directories with a trailing backslash
-    MISTD::string new_path = STRING::rstrip(path, "*/\\");
+    std::string new_path = STRING::rstrip(path, "*/\\");
     // stat() does not work for drives without a trailing backslash, eg C:. Hence adding it again.
     // But only, and hence the first comparison, if something was stripped indeed.
     if (path != new_path && !new_path.empty() && new_path[new_path.size() - 1] == ':')
         new_path += '/';
 
     // Note: according to MSDN, _wstat fails on symlinks on Windows 7, while _stat works.
-    MISTD::wstring p(STRING::utf8_to_wchar(new_path.c_str()));
+    std::wstring p(STRING::utf8_to_wchar(new_path.c_str()));
     if (!::_wstat64(p.c_str(), &st)) {
         set_error(0);
         file_stat->m_size		= st.st_size;
@@ -644,10 +644,10 @@ bool access(
     const char		*path,		// path of a file/dir
     bool		write)		// have permission to read or write?
 {
-    MISTD::string npath(path? path : "");
+    std::string npath(path? path : "");
 
 #ifdef WIN_NT
-    MISTD::wstring p(STRING::utf8_to_wchar(npath.c_str()));
+    std::wstring p(STRING::utf8_to_wchar(npath.c_str()));
     if (!::_waccess(p.c_str(), write ? 0x02 : 0x00)) {
 #else
     if (!::access(npath.c_str(), write ? W_OK : R_OK)) {
@@ -715,8 +715,8 @@ FILE* fopen(
     const char* mode)
 {
 #ifdef WIN_NT
-    MISTD::wstring p(STRING::utf8_to_wchar(path));
-    MISTD::wstring m(STRING::utf8_to_wchar(mode));
+    std::wstring p(STRING::utf8_to_wchar(path));
+    std::wstring m(STRING::utf8_to_wchar(mode));
     // set own error reporting handler and disable the message box for assertions.
     Reset_guard guard(
         _CrtSetReportMode(_CRT_ASSERT, 0),
@@ -728,17 +728,17 @@ FILE* fopen(
 }
 
 
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* file_name,
     int paths_count,
     const char* const* search_paths)
 {
     if (!file_name || file_name[0] == '\0')
-        return MISTD::string();
+        return std::string();
 
     // transform search_paths into string list such that we can use the already existing
     // find_file_on_paths() impl
-    MISTD::vector<MISTD::string> dirs;
+    std::vector<std::string> dirs;
     for (int i=0; i<paths_count; ++i) {
         if (search_paths[i])
             dirs.push_back(search_paths[i]);
@@ -748,19 +748,19 @@ MISTD::string find_file_on_paths(
 }
 
 
-MISTD::string find_file_on_path(
+std::string find_file_on_path(
     const char* file_name,
-    const MISTD::string& dir)
+    const std::string& dir)
 {
     if (!file_name || file_name[0] == '\0')
-        return MISTD::string();
+        return std::string();
 
-    MISTD::string fullpath;
+    std::string fullpath;
     if (access(file_name))
         fullpath = file_name;
     if (fullpath.empty()) {
         // concatenate the current dir with file_name
-        MISTD::string file(HAL::Ospath::join(dir, file_name));
+        std::string file(HAL::Ospath::join(dir, file_name));
         if (access(file.c_str()))
             fullpath = file;
     }
@@ -768,21 +768,21 @@ MISTD::string find_file_on_path(
 }
 
 
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* file_name,
-    const MISTD::vector<MISTD::string>& dirs)
+    const std::vector<std::string>& dirs)
 {
     return find_file_on_paths(file_name, dirs.begin(), dirs.end());
 }
 
-MISTD::string convert_to_forward_slashes(
-    const MISTD::string &in)	// input
+std::string convert_to_forward_slashes(
+    const std::string &in)	// input
 {
-    MISTD::string fs(in);
+    std::string fs(in);
     size_t pos = 0;
-    while(pos != MISTD::string::npos) {
+    while(pos != std::string::npos) {
         pos = fs.find('\\', pos);
-        if (pos != MISTD::string::npos) {
+        if (pos != std::string::npos) {
             fs.replace(pos, 1, "/");
         }
     }

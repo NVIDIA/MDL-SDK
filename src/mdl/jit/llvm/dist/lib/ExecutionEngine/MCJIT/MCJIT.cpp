@@ -40,7 +40,7 @@ extern "C" void LLVMLinkInMCJIT() {
 }
 
 ExecutionEngine *MCJIT::createJIT(Module *M,
-                                  MISTD::string *ErrorStr,
+                                  std::string *ErrorStr,
                                   RTDyldMemoryManager *MemMgr,
                                   bool GVsWithCode,
                                   TargetMachine *TM) {
@@ -230,7 +230,7 @@ void *MCJIT::getPointerToBasicBlock(BasicBlock *BB) {
   report_fatal_error("not yet implemented");
 }
 
-uint64_t MCJIT::getExistingSymbolAddress(const MISTD::string &Name) {
+uint64_t MCJIT::getExistingSymbolAddress(const std::string &Name) {
   // Check with the RuntimeDyld to see if we already have this symbol.
   if (Name[0] == '\1')
     return Dyld.getSymbolLoadAddress(Name.substr(1));
@@ -238,7 +238,7 @@ uint64_t MCJIT::getExistingSymbolAddress(const MISTD::string &Name) {
                                        + Name));
 }
 
-Module *MCJIT::findModuleForSymbol(const MISTD::string &Name,
+Module *MCJIT::findModuleForSymbol(const std::string &Name,
                                    bool CheckFunctionsOnly) {
   MutexGuard locked(lock);
 
@@ -261,7 +261,7 @@ Module *MCJIT::findModuleForSymbol(const MISTD::string &Name,
   return NULL;
 }
 
-uint64_t MCJIT::getSymbolAddress(const MISTD::string &Name,
+uint64_t MCJIT::getSymbolAddress(const std::string &Name,
                                  bool CheckFunctionsOnly)
 {
   MutexGuard locked(lock);
@@ -282,7 +282,7 @@ uint64_t MCJIT::getSymbolAddress(const MISTD::string &Name,
   return getExistingSymbolAddress(Name);
 }
 
-uint64_t MCJIT::getGlobalValueAddress(const MISTD::string &Name) {
+uint64_t MCJIT::getGlobalValueAddress(const std::string &Name) {
   MutexGuard locked(lock);
   uint64_t Result = getSymbolAddress(Name, false);
   if (Result != 0)
@@ -290,7 +290,7 @@ uint64_t MCJIT::getGlobalValueAddress(const MISTD::string &Name) {
   return Result;
 }
 
-uint64_t MCJIT::getFunctionAddress(const MISTD::string &Name) {
+uint64_t MCJIT::getFunctionAddress(const std::string &Name) {
   MutexGuard locked(lock);
   uint64_t Result = getSymbolAddress(Name, true);
   if (Result != 0)
@@ -379,7 +379,7 @@ Function *MCJIT::FindFunctionNamed(const char *FnName) {
 }
 
 GenericValue MCJIT::runFunction(Function *F,
-                                const MISTD::vector<GenericValue> &ArgValues) {
+                                const std::vector<GenericValue> &ArgValues) {
   assert(F && "Function *F was null at entry to run()");
 
   void *FPtr = getPointerToFunction(F);
@@ -478,7 +478,7 @@ GenericValue MCJIT::runFunction(Function *F,
   llvm_unreachable("Full-featured argument passing not supported yet!");
 }
 
-void *MCJIT::getPointerToNamedFunction(const MISTD::string &Name,
+void *MCJIT::getPointerToNamedFunction(const std::string &Name,
                                        bool AbortOnFailure) {
   if (!isSymbolSearchingDisabled()) {
     void *ptr = MemMgr.getPointerToNamedFunction(Name, false);
@@ -509,9 +509,9 @@ void MCJIT::UnregisterJITEventListener(JITEventListener *L) {
     return;
   MutexGuard locked(lock);
   SmallVector<JITEventListener*, 2>::reverse_iterator I=
-      MISTD::find(EventListeners.rbegin(), EventListeners.rend(), L);
+      std::find(EventListeners.rbegin(), EventListeners.rend(), L);
   if (I != EventListeners.rend()) {
-    MISTD::swap(*I, EventListeners.back());
+    std::swap(*I, EventListeners.back());
     EventListeners.pop_back();
   }
 }
@@ -529,7 +529,7 @@ void MCJIT::NotifyFreeingObject(const ObjectImage& Obj) {
   }
 }
 
-uint64_t LinkingMemoryManager::getSymbolAddress(const MISTD::string &Name) {
+uint64_t LinkingMemoryManager::getSymbolAddress(const std::string &Name) {
   uint64_t Result = ParentEngine->getSymbolAddress(Name, false);
   // If the symbols wasn't found and it begins with an underscore, try again
   // without the underscore.

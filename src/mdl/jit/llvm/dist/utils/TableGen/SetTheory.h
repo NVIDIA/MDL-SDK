@@ -62,7 +62,7 @@ class RecordKeeper;
 
 class SetTheory {
 public:
-  typedef MISTD::vector<Record*> RecVec;
+  typedef std::vector<Record*> RecVec;
   typedef SmallSetVector<Record*, 16> RecSet;
 
   /// Operator - A callback representing a DAG operator.
@@ -91,7 +91,7 @@ public:
 private:
   // Map set defs to their fully expanded contents. This serves as a memoization
   // cache and it makes it possible to return const references on queries.
-  typedef MISTD::map<Record*, RecVec> ExpandMap;
+  typedef std::map<Record*, RecVec> ExpandMap;
   ExpandMap Expansions;
 
   // Known DAG operators by name.

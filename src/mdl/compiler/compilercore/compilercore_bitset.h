@@ -46,6 +46,9 @@ namespace mdl {
 ///       in "unsigned(bit & 7)" is removed :-(   
 template<typename V, typename A>
 class Bitset_base {
+    typedef Bitset_base<V, A> _Myt;
+
+protected:
     V m_bits;
     size_t const N;
 
@@ -61,9 +64,38 @@ public:
         memset(m_bits.data(), 0, (N + 7) / 8);
     }
 
+    /// Constructor with initializer.
+    template<typename OV, typename OA>
+    Bitset_base(A alloc, Bitset_base<OV, OA> const &o)
+    : m_bits(alloc, (o.get_size() + 7) / 8)
+    , N(o.get_size())
+    {
+        copy_data(o);
+    }
+
+    /// Copy data from another bitset of the same size.
+    template<typename OV, typename OA>
+    void copy_data(Bitset_base<OV, OA> const &o)
+    {
+        MDL_ASSERT(get_size() == o.get_size());
+        memcpy(m_bits.data(), o.get_data(), (N + 7) / 8);
+    }
+
     /// Tests if the given bit is set.
     bool test_bit(size_t bit) const {
         return (m_bits[bit >> 3] & (1U << unsigned(bit & 7))) != 0;
+    }
+
+    bool is_any_set() const {
+        for (size_t i = 0, n_bytes = N / 8; i < n_bytes; ++i)
+            if (m_bits[i] != 0) return true;
+        return false;
+    }
+
+    /// Return the full byte containing the information of the given bit.
+    /// Useful for hashing.
+    unsigned get_raw_byte(size_t bit) const {
+        return m_bits[bit >> 3];
     }
 
     /// Sets the given bit.
@@ -76,6 +108,11 @@ public:
         m_bits[bit >> 3] &= ~(1U << unsigned(bit & 7));
     }
 
+    /// Sets all bits
+    void set_bits() {
+        memset(m_bits.data(), 255, (N + 7) / 8);
+    }
+
     /// Clears all bits.
     void clear_bits() {
         memset(m_bits.data(), 0, (N + 7) / 8);
@@ -85,6 +122,37 @@ public:
     size_t get_size() const {
         return N;
     }
+
+    void const *get_data() const {
+        return m_bits.data();
+    }
+
+    /// Returns true, iff the content the given bitset is identical to the content of this bitset.
+    bool operator==(_Myt const &o) const {
+        if (get_size() != o.get_size()) return false;
+        return memcmp(m_bits.data(), o.m_bits.data(), get_size()) == 0;
+    }
+
+    /// Returns true, iff the content the given bitset is not identical to the content of this
+    /// bitset.
+    bool operator!=(_Myt const &o) const {
+        return !operator==(o);
+    }
+
+    /// Returns true, iff this bitset is a subset of the given bitset.
+    bool operator<=(_Myt const &o) const {
+        if (get_size() != o.get_size()) return false;
+        for (size_t i = 0, n_bytes = (N + 7) / 8; i < n_bytes; ++i) {
+            if ((m_bits[i] & o.m_bits[i]) != m_bits[i])
+                return false;
+        }
+        return true;
+    }
+
+
+    // non copyable without allocator
+    Bitset_base(Bitset_base const &bitset) MDL_DELETED_FUNCTION;
+    Bitset_base &operator=(Bitset_base const &) MDL_DELETED_FUNCTION;
 };
 
 ///
@@ -101,6 +169,27 @@ public:
     Bitset(IAllocator *alloc, size_t N)
     : Base(alloc, N)
     {
+    }
+
+    /// Copy constructor.
+    Bitset(Bitset const &o)
+    : Base(o.m_bits.get_allocator(), o.get_size())
+    {
+        memcpy(m_bits.data(), o.m_bits.data(), (N + 7) / 8);
+    }
+
+    /// Copy constructor.
+    template<typename V, typename A>
+    Bitset(IAllocator *alloc, Bitset_base<V, A> const &o)
+    : Base(alloc, o)
+    {
+    }
+
+    /// Copy data from another bitset of the same size.
+    template<typename V, typename A>
+    void copy_data(Bitset_base<V, A> const &o)
+    {
+        Base::copy_data(o);
     }
 };
 

@@ -52,7 +52,7 @@ namespace llvm {
     /// The length of the string.
     size_t Length;
 
-    // Workaround PR5482: nearly all gcc 4.x miscompile StringRef and MISTD::min()
+    // Workaround PR5482: nearly all gcc 4.x miscompile StringRef and std::min()
     // Changing the arg of min to be an integer, instead of a reference to an
     // integer works around this bug.
     static size_t min(size_t a, size_t b) { return a < b ? a : b; }
@@ -86,8 +86,8 @@ namespace llvm {
         "StringRef cannot be built from a NULL argument with non-null length");
       }
 
-    /// Construct a string ref from an MISTD::string.
-    /*implicit*/ StringRef(const MISTD::string &Str)
+    /// Construct a string ref from an std::string.
+    /*implicit*/ StringRef(const std::string &Str)
       : Data(Str.data()), Length(Str.length()) {}
 
     /// @}
@@ -177,10 +177,10 @@ namespace llvm {
     unsigned edit_distance(StringRef Other, bool AllowReplacements = true,
                            unsigned MaxEditDistance = 0) const;
 
-    /// str - Get the contents as an MISTD::string.
-    MISTD::string str() const {
-      if (Data == 0) return MISTD::string();
-      return MISTD::string(Data, Length);
+    /// str - Get the contents as an std::string.
+    std::string str() const {
+      if (Data == 0) return std::string();
+      return std::string(Data, Length);
     }
 
     /// @}
@@ -196,7 +196,7 @@ namespace llvm {
     /// @name Type Conversions
     /// @{
 
-    operator MISTD::string() const {
+    operator std::string() const {
       return str();
     }
 
@@ -333,7 +333,7 @@ namespace llvm {
     /// this returns true to signify the error.  The string is considered
     /// erroneous if empty or if it overflows T.
     template <typename T>
-    typename enable_if_c<MISTD::numeric_limits<T>::is_signed, bool>::type
+    typename enable_if_c<std::numeric_limits<T>::is_signed, bool>::type
     getAsInteger(unsigned Radix, T &Result) const {
       long long LLVal;
       if (getAsSignedInteger(*this, Radix, LLVal) ||
@@ -344,7 +344,7 @@ namespace llvm {
     }
 
     template <typename T>
-    typename enable_if_c<!MISTD::numeric_limits<T>::is_signed, bool>::type
+    typename enable_if_c<!std::numeric_limits<T>::is_signed, bool>::type
     getAsInteger(unsigned Radix, T &Result) const {
       unsigned long long ULLVal;
       if (getAsUnsignedInteger(*this, Radix, ULLVal) ||
@@ -371,10 +371,10 @@ namespace llvm {
     /// @{
 
     // Convert the given ASCII string to lowercase.
-    MISTD::string lower() const;
+    std::string lower() const;
 
     /// Convert the given ASCII string to uppercase.
-    MISTD::string upper() const;
+    std::string upper() const;
 
     /// @}
     /// @name Substring Operations
@@ -434,11 +434,11 @@ namespace llvm {
     ///
     /// \param Separator The character to split on.
     /// \returns The split substrings.
-    MISTD::pair<StringRef, StringRef> split(char Separator) const {
+    std::pair<StringRef, StringRef> split(char Separator) const {
       size_t Idx = find(Separator);
       if (Idx == npos)
-        return MISTD::make_pair(*this, StringRef());
-      return MISTD::make_pair(slice(0, Idx), slice(Idx+1, npos));
+        return std::make_pair(*this, StringRef());
+      return std::make_pair(slice(0, Idx), slice(Idx+1, npos));
     }
 
     /// Split into two substrings around the first occurrence of a separator
@@ -451,11 +451,11 @@ namespace llvm {
     ///
     /// \param Separator - The string to split on.
     /// \return - The split substrings.
-    MISTD::pair<StringRef, StringRef> split(StringRef Separator) const {
+    std::pair<StringRef, StringRef> split(StringRef Separator) const {
       size_t Idx = find(Separator);
       if (Idx == npos)
-        return MISTD::make_pair(*this, StringRef());
-      return MISTD::make_pair(slice(0, Idx), slice(Idx + Separator.size(), npos));
+        return std::make_pair(*this, StringRef());
+      return std::make_pair(slice(0, Idx), slice(Idx + Separator.size(), npos));
     }
 
     /// Split into substrings around the occurrences of a separator string.
@@ -486,23 +486,23 @@ namespace llvm {
     ///
     /// \param Separator - The character to split on.
     /// \return - The split substrings.
-    MISTD::pair<StringRef, StringRef> rsplit(char Separator) const {
+    std::pair<StringRef, StringRef> rsplit(char Separator) const {
       size_t Idx = rfind(Separator);
       if (Idx == npos)
-        return MISTD::make_pair(*this, StringRef());
-      return MISTD::make_pair(slice(0, Idx), slice(Idx+1, npos));
+        return std::make_pair(*this, StringRef());
+      return std::make_pair(slice(0, Idx), slice(Idx+1, npos));
     }
 
     /// Return string with consecutive characters in \p Chars starting from
     /// the left removed.
     StringRef ltrim(StringRef Chars = " \t\n\v\f\r") const {
-      return drop_front(MISTD::min(Length, find_first_not_of(Chars)));
+      return drop_front(std::min(Length, find_first_not_of(Chars)));
     }
 
     /// Return string with consecutive characters in \p Chars starting from
     /// the right removed.
     StringRef rtrim(StringRef Chars = " \t\n\v\f\r") const {
-      return drop_back(Length - MISTD::min(Length, find_last_not_of(Chars) + 1));
+      return drop_back(Length - std::min(Length, find_last_not_of(Chars) + 1));
     }
 
     /// Return string with consecutive characters in \p Chars starting from
@@ -541,7 +541,7 @@ namespace llvm {
     return LHS.compare(RHS) != -1;
   }
 
-  inline MISTD::string &operator+=(MISTD::string &buffer, StringRef string) {
+  inline std::string &operator+=(std::string &buffer, StringRef string) {
     return buffer.append(string.data(), string.size());
   }
 

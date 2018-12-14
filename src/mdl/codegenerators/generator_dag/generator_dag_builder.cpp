@@ -64,6 +64,27 @@ static bool is_simple_select(IExpression const *expr)
     return kind == IType::TK_STRUCT || kind == IType::TK_VECTOR;
 }
 
+/// Creates a one constant for the given type to be used in a pre/post inc/decrement operation.
+///
+/// \param type  the type, might be a int, float, double, or vector of those
+static IValue const *create_pre_post_one(
+    IType const    *type,
+    IValue_factory *vf)
+{
+    switch (type->get_kind()) {
+    case IType::TK_INT:
+        return vf->create_int(1);
+    case IType::TK_FLOAT:
+        return vf->create_float(1.0f);
+    case IType::TK_DOUBLE:
+        return vf->create_double(1.0);
+    default:
+        // should not happen
+        MDL_ASSERT(!"pre/post-increment type neither int nor float/double");
+        return vf->create_bad();
+    }
+}
+
 /// Helper class to capture a constant fold exception.
 class Variable_lookup_handler : public IConst_fold_handler
 {
@@ -97,6 +118,9 @@ public:
     bool is_evaluate_intrinsic_function_enabled(
         IDefinition::Semantics semantic) const MDL_FINAL
     {
+        if (m_call_evaluator == NULL)
+            return false;
+
         switch (semantic) {
         case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_POWER:
         case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:
@@ -118,6 +142,9 @@ public:
         const IValue *const arguments[],
         size_t n_arguments) MDL_FINAL
     {
+        if (m_call_evaluator == NULL)
+            return m_module->get_value_factory()->create_bad();
+
         return m_call_evaluator->evaluate_intrinsic_function(
             m_module->get_value_factory(), semantic, arguments, n_arguments);
     }
@@ -196,12 +223,15 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
     if (IExpression_binary const *bin_expr = as<IExpression_binary>(update_expr)) {
         // make sure lhs points to a reference to the iteration variable
         IExpression_reference const *lhs = as<IExpression_reference>(bin_expr->get_left_argument());
-        if (lhs == NULL) return false;
-        if (lhs->get_definition() != m_iter_var) return false;
+        if (lhs == NULL)
+            return false;
+        if (lhs->get_definition() != m_iter_var)
+            return false;
 
         // const fold rhs
         IValue const *rhs = bin_expr->get_right_argument()->fold(m_module, this);
-        if (is<IValue_bad>(rhs)) return false;
+        if (is<IValue_bad>(rhs))
+            return false;
 
         switch (bin_expr->get_operator()) {
         case IExpression_binary::OK_SELECT:
@@ -279,8 +309,10 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
     } else if (IExpression_unary const *un_expr = as<IExpression_unary>(update_expr)) {
         // make sure the expression points to a reference to the iteration variable
         IExpression_reference const *lhs = as<IExpression_reference>(un_expr->get_argument());
-        if (lhs == NULL) return false;
-        if (lhs->get_definition() != m_iter_var) return false;
+        if (lhs == NULL)
+            return false;
+        if (lhs->get_definition() != m_iter_var)
+            return false;
 
         switch (un_expr->get_operator()) {
         case IExpression_unary::OK_BITWISE_COMPLEMENT:
@@ -291,15 +323,18 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
 
         case IExpression_unary::OK_PRE_INCREMENT:
         case IExpression_unary::OK_POST_INCREMENT:
-            new_val = m_iter_value->add(factory, factory->create_int(1));
+            new_val = m_iter_value->add(
+                factory, create_pre_post_one(m_iter_value->get_type(), factory));
             break;
         case IExpression_unary::OK_PRE_DECREMENT:
         case IExpression_unary::OK_POST_DECREMENT:
-            new_val = m_iter_value->add(factory, factory->create_int(-1));
+            new_val = m_iter_value->sub(
+                factory, create_pre_post_one(m_iter_value->get_type(), factory));
             break;
         }
-    } else
+    } else {
         return false;
+    }
 
     if (new_val == NULL || is<IValue_bad>(new_val))
         return false;
@@ -806,12 +841,14 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             //  - no nested loops
 
             // don't allow nested loops
-            if (m_var_lookup_handler.get_iteration_variable() != NULL) return false;
+            if (m_var_lookup_handler.get_iteration_variable() != NULL)
+                return false;
 
             IStatement_for const *for_stmt = cast<IStatement_for>(stmt);
             IStatement const *init_stmt = for_stmt->get_init();
             IStatement_declaration const *decl_stmt = cast<IStatement_declaration>(init_stmt);
-            if (decl_stmt == NULL) return false;
+            if (decl_stmt == NULL)
+                return false;
 
             // fold initializer of the only iteration variable to a constant
             IDeclaration_variable const *decl =
@@ -819,7 +856,8 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             if (decl == NULL || decl->get_variable_count() != 1) return false;
             IValue const *init_val = decl->get_variable_init(0)->fold(
                 m_module, &m_var_lookup_handler);
-            if (is<IValue_bad>(init_val)) return false;
+            if (is<IValue_bad>(init_val))
+                return false;
 
             // set iteration variable in lookup handler
             m_var_lookup_handler.set_iteration_variable(
@@ -1709,18 +1747,24 @@ DAG_node const *DAG_builder::unary_to_dag(
     }
 
     // if we got here, we have a post/pre increment/decrement
-    DAG_constant const *one = m_node_factory.create_constant(
-        tos_module()->get_value_factory()->create_int(1));
+    IType const *type = arg->get_type()->skip_type_alias();
+
+    if (IType_vector const *v_type = as<IType_vector>(type))
+        type = v_type->get_element_type();
+
+    IValue_factory *vf    = tos_module()->get_value_factory();
+    IValue const   *v_one = create_pre_post_one(type, vf);
+
+    DAG_constant const *one = m_node_factory.create_constant(v_one);
 
     DAG_node const *pre_node = exp_to_dag(arg);
     DAG_node const *res = NULL;
 
     if (is<DAG_constant>(pre_node)) {
         IValue const *v_l = cast<DAG_constant>(pre_node)->get_value();
-        IValue const *v_r = cast<DAG_constant>(one)->get_value();
 
         IValue const *v =
-            DAG_node_factory_impl::apply_binary_op(m_value_factory, bin_op, v_l, v_r);
+            DAG_node_factory_impl::apply_binary_op(m_value_factory, bin_op, v_l, v_one);
         if (v != NULL)
             res = m_node_factory.create_constant(v);
     }

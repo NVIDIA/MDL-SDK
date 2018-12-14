@@ -163,7 +163,7 @@ struct AllocaInfo {
 // Data package used by RenamePass()
 class RenamePassData {
 public:
-  typedef MISTD::vector<Value *> ValVector;
+  typedef std::vector<Value *> ValVector;
 
   RenamePassData() : BB(NULL), Pred(NULL), Values() {}
   RenamePassData(BasicBlock *B, BasicBlock *P, const ValVector &V)
@@ -173,8 +173,8 @@ public:
   ValVector Values;
 
   void swap(RenamePassData &RHS) {
-    MISTD::swap(BB, RHS.BB);
-    MISTD::swap(Pred, RHS.Pred);
+    std::swap(BB, RHS.BB);
+    std::swap(Pred, RHS.Pred);
     Values.swap(RHS.Values);
   }
 };
@@ -232,7 +232,7 @@ public:
 
 struct PromoteMem2Reg {
   /// The alloca instructions being promoted.
-  MISTD::vector<AllocaInst *> Allocas;
+  std::vector<AllocaInst *> Allocas;
   DominatorTree &DT;
   DIBuilder DIB;
 
@@ -248,7 +248,7 @@ struct PromoteMem2Reg {
   /// it should have deterministic iterators.  We could use a MapVector, but
   /// since we already maintain a map from BasicBlock* to a stable numbering
   /// (BBNumbers), the DenseMap is more efficient (also supports removal).
-  DenseMap<MISTD::pair<unsigned, unsigned>, PHINode *> NewPhiNodes;
+  DenseMap<std::pair<unsigned, unsigned>, PHINode *> NewPhiNodes;
 
   /// For each PHI node, keep track of which entry in Allocas it corresponds
   /// to.
@@ -257,7 +257,7 @@ struct PromoteMem2Reg {
   /// If we are updating an AliasSetTracker, then for each alloca that is of
   /// pointer type, we keep track of what to copyValue to the inserted PHI
   /// nodes here.
-  MISTD::vector<Value *> PointerAllocaValues;
+  std::vector<Value *> PointerAllocaValues;
 
   /// For each alloca, we keep track of the dbg.declare intrinsic that
   /// describes it, if any, so that we can convert it to a dbg.value
@@ -296,7 +296,7 @@ private:
   unsigned getNumPreds(const BasicBlock *BB) {
     unsigned &NP = BBNumPreds[BB];
     if (NP == 0)
-      NP = MISTD::distance(pred_begin(BB), pred_end(BB)) + 1;
+      NP = std::distance(pred_begin(BB), pred_end(BB)) + 1;
     return NP - 1;
   }
 
@@ -307,7 +307,7 @@ private:
                            SmallPtrSet<BasicBlock *, 32> &LiveInBlocks);
   void RenamePass(BasicBlock *BB, BasicBlock *Pred,
                   RenamePassData::ValVector &IncVals,
-                  MISTD::vector<RenamePassData> &Worklist);
+                  std::vector<RenamePassData> &Worklist);
   bool QueuePhiNode(BasicBlock *BB, unsigned AllocaIdx, unsigned &Version);
 };
 
@@ -453,17 +453,17 @@ static void promoteSingleBlockAlloca(AllocaInst *AI, const AllocaInfo &Info,
   // make it efficient to get the index of various operations in the block.
 
   // Walk the use-def list of the alloca, getting the locations of all stores.
-  typedef SmallVector<MISTD::pair<unsigned, StoreInst *>, 64> StoresByIndexTy;
+  typedef SmallVector<std::pair<unsigned, StoreInst *>, 64> StoresByIndexTy;
   StoresByIndexTy StoresByIndex;
 
   for (Value::use_iterator UI = AI->use_begin(), E = AI->use_end(); UI != E;
        ++UI)
     if (StoreInst *SI = dyn_cast<StoreInst>(*UI))
-      StoresByIndex.push_back(MISTD::make_pair(LBI.getInstructionIndex(SI), SI));
+      StoresByIndex.push_back(std::make_pair(LBI.getInstructionIndex(SI), SI));
 
   // Sort the stores by their index, making it efficient to do a lookup with a
   // binary search.
-  MISTD::sort(StoresByIndex.begin(), StoresByIndex.end(), less_first());
+  std::sort(StoresByIndex.begin(), StoresByIndex.end(), less_first());
 
   // Walk all of the loads from this alloca, replacing them with the nearest
   // store above them, if any.
@@ -476,8 +476,8 @@ static void promoteSingleBlockAlloca(AllocaInst *AI, const AllocaInfo &Info,
 
     // Find the nearest store that has a lower index than this load.
     StoresByIndexTy::iterator I =
-        MISTD::lower_bound(StoresByIndex.begin(), StoresByIndex.end(),
-                         MISTD::make_pair(LoadIdx, static_cast<StoreInst *>(0)),
+        std::lower_bound(StoresByIndex.begin(), StoresByIndex.end(),
+                         std::make_pair(LoadIdx, static_cast<StoreInst *>(0)),
                          less_first());
 
     if (I == StoresByIndex.begin())
@@ -637,7 +637,7 @@ void PromoteMem2Reg::run() {
   // Walks all basic blocks in the function performing the SSA rename algorithm
   // and inserting the phi nodes we marked as necessary
   //
-  MISTD::vector<RenamePassData> RenamePassWorkList;
+  std::vector<RenamePassData> RenamePassWorkList;
   RenamePassWorkList.push_back(RenamePassData(F.begin(), 0, Values));
   do {
     RenamePassData RPD;
@@ -681,7 +681,7 @@ void PromoteMem2Reg::run() {
     // simplify and RAUW them as we go.  If it was not, we could add uses to
     // the values we replace with in a non deterministic order, thus creating
     // non deterministic def->use chains.
-    for (DenseMap<MISTD::pair<unsigned, unsigned>, PHINode *>::iterator
+    for (DenseMap<std::pair<unsigned, unsigned>, PHINode *>::iterator
              I = NewPhiNodes.begin(),
              E = NewPhiNodes.end();
          I != E;) {
@@ -707,7 +707,7 @@ void PromoteMem2Reg::run() {
   // have incoming values for all predecessors.  Loop over all PHI nodes we have
   // created, inserting undef values if they are missing any incoming values.
   //
-  for (DenseMap<MISTD::pair<unsigned, unsigned>, PHINode *>::iterator
+  for (DenseMap<std::pair<unsigned, unsigned>, PHINode *>::iterator
            I = NewPhiNodes.begin(),
            E = NewPhiNodes.end();
        I != E; ++I) {
@@ -730,13 +730,13 @@ void PromoteMem2Reg::run() {
     // Ok, now we know that all of the PHI nodes are missing entries for some
     // basic blocks.  Start by sorting the incoming predecessors for efficient
     // access.
-    MISTD::sort(Preds.begin(), Preds.end());
+    std::sort(Preds.begin(), Preds.end());
 
     // Now we loop through all BB's which have entries in SomePHI and remove
     // them from the Preds list.
     for (unsigned i = 0, e = SomePHI->getNumIncomingValues(); i != e; ++i) {
       // Do a log(n) search of the Preds list for the entry we want.
-      SmallVectorImpl<BasicBlock *>::iterator EntIt = MISTD::lower_bound(
+      SmallVectorImpl<BasicBlock *>::iterator EntIt = std::lower_bound(
           Preds.begin(), Preds.end(), SomePHI->getIncomingBlock(i));
       assert(EntIt != Preds.end() && *EntIt == SomePHI->getIncomingBlock(i) &&
              "PHI node has entry for a block which is not a predecessor!");
@@ -855,8 +855,8 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
 
   // Use a priority queue keyed on dominator tree level so that inserted nodes
   // are handled from the bottom of the dominator tree upwards.
-  typedef MISTD::pair<DomTreeNode *, unsigned> DomTreeNodePair;
-  typedef MISTD::priority_queue<DomTreeNodePair, SmallVector<DomTreeNodePair, 32>,
+  typedef std::pair<DomTreeNode *, unsigned> DomTreeNodePair;
+  typedef std::priority_queue<DomTreeNodePair, SmallVector<DomTreeNodePair, 32>,
                               less_second> IDFPriorityQueue;
   IDFPriorityQueue PQ;
 
@@ -864,10 +864,10 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
                                                      E = DefBlocks.end();
        I != E; ++I) {
     if (DomTreeNode *Node = DT.getNode(*I))
-      PQ.push(MISTD::make_pair(Node, DomLevels[Node]));
+      PQ.push(std::make_pair(Node, DomLevels[Node]));
   }
 
-  SmallVector<MISTD::pair<unsigned, BasicBlock *>, 32> DFBlocks;
+  SmallVector<std::pair<unsigned, BasicBlock *>, 32> DFBlocks;
   SmallPtrSet<DomTreeNode *, 32> Visited;
   SmallVector<DomTreeNode *, 32> Worklist;
   while (!PQ.empty()) {
@@ -908,9 +908,9 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
         if (!LiveInBlocks.count(SuccBB))
           continue;
 
-        DFBlocks.push_back(MISTD::make_pair(BBNumbers[SuccBB], SuccBB));
+        DFBlocks.push_back(std::make_pair(BBNumbers[SuccBB], SuccBB));
         if (!DefBlocks.count(SuccBB))
-          PQ.push(MISTD::make_pair(SuccNode, SuccLevel));
+          PQ.push(std::make_pair(SuccNode, SuccLevel));
       }
 
       for (DomTreeNode::iterator CI = Node->begin(), CE = Node->end(); CI != CE;
@@ -922,7 +922,7 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
   }
 
   if (DFBlocks.size() > 1)
-    MISTD::sort(DFBlocks.begin(), DFBlocks.end());
+    std::sort(DFBlocks.begin(), DFBlocks.end());
 
   unsigned CurrentVersion = 0;
   for (unsigned i = 0, e = DFBlocks.size(); i != e; ++i)
@@ -935,7 +935,7 @@ void PromoteMem2Reg::DetermineInsertionPoint(AllocaInst *AI, unsigned AllocaNum,
 bool PromoteMem2Reg::QueuePhiNode(BasicBlock *BB, unsigned AllocaNo,
                                   unsigned &Version) {
   // Look up the basic-block in question.
-  PHINode *&PN = NewPhiNodes[MISTD::make_pair(BBNumbers[BB], AllocaNo)];
+  PHINode *&PN = NewPhiNodes[std::make_pair(BBNumbers[BB], AllocaNo)];
 
   // If the BB already has a phi node added for the i'th alloca then we're done!
   if (PN)
@@ -962,7 +962,7 @@ bool PromoteMem2Reg::QueuePhiNode(BasicBlock *BB, unsigned AllocaNo,
 /// predecessor block Pred.
 void PromoteMem2Reg::RenamePass(BasicBlock *BB, BasicBlock *Pred,
                                 RenamePassData::ValVector &IncomingVals,
-                                MISTD::vector<RenamePassData> &Worklist) {
+                                std::vector<RenamePassData> &Worklist) {
 NextIteration:
   // If we are inserting any phi nodes into this BB, they will already be in the
   // block.
@@ -978,7 +978,7 @@ NextIteration:
       // operands so far.  Remember this count.
       unsigned NewPHINumOperands = APN->getNumOperands();
 
-      unsigned NumEdges = MISTD::count(succ_begin(Pred), succ_end(Pred), BB);
+      unsigned NumEdges = std::count(succ_begin(Pred), succ_end(Pred), BB);
       assert(NumEdges && "Must be at least one edge from Pred to BB!");
 
       // Add entries for all the phis.

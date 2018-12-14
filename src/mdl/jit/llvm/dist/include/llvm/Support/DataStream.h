@@ -30,8 +30,8 @@ public:
   virtual ~DataStreamer();
 };
 
-DataStreamer *getDataFileStreamer(const MISTD::string &Filename,
-                                  MISTD::string *Err);
+DataStreamer *getDataFileStreamer(const std::string &Filename,
+                                  std::string *Err);
 
 }
 

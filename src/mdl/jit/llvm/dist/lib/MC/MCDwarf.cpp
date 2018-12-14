@@ -322,9 +322,9 @@ const MCSymbol *MCDwarfFileTable::EmitCU(MCStreamer *MCOS, unsigned CUID) {
   // Put out the line tables.
   const DenseMap<const MCSection *, MCLineSection *> &MCLineSections =
     MCOS->getContext().getMCLineSections();
-  const MISTD::vector<const MCSection *> &MCLineSectionOrder =
+  const std::vector<const MCSection *> &MCLineSectionOrder =
     MCOS->getContext().getMCLineSectionOrder();
-  for (MISTD::vector<const MCSection*>::const_iterator it =
+  for (std::vector<const MCSection*>::const_iterator it =
          MCLineSectionOrder.begin(), ie = MCLineSectionOrder.end(); it != ie;
        ++it) {
     const MCSection *Sec = *it;
@@ -672,9 +672,9 @@ static void EmitGenDwarfInfo(MCStreamer *MCOS,
   // Third part: the list of label DIEs.
 
   // Loop on saved info for dwarf labels and create the DIEs for them.
-  const MISTD::vector<const MCGenDwarfLabelEntry *> &Entries =
+  const std::vector<const MCGenDwarfLabelEntry *> &Entries =
     MCOS->getContext().getMCGenDwarfLabelEntries();
-  for (MISTD::vector<const MCGenDwarfLabelEntry *>::const_iterator it =
+  for (std::vector<const MCGenDwarfLabelEntry *>::const_iterator it =
        Entries.begin(), ie = Entries.end(); it != ie;
        ++it) {
     const MCGenDwarfLabelEntry *Entry = *it;
@@ -708,7 +708,7 @@ static void EmitGenDwarfInfo(MCStreamer *MCOS,
   }
   // Deallocate the MCGenDwarfLabelEntry classes that saved away the info
   // for the dwarf labels.
-  for (MISTD::vector<const MCGenDwarfLabelEntry *>::const_iterator it =
+  for (std::vector<const MCGenDwarfLabelEntry *>::const_iterator it =
        Entries.begin(), ie = Entries.end(); it != ie;
        ++it) {
     const MCGenDwarfLabelEntry *Entry = *it;
@@ -1291,7 +1291,7 @@ const MCSymbol &FrameEmitterImpl::EmitCIE(MCStreamer &streamer,
   // Initial Instructions
 
   const MCAsmInfo *MAI = context.getAsmInfo();
-  const MISTD::vector<MCCFIInstruction> &Instructions =
+  const std::vector<MCCFIInstruction> &Instructions =
       MAI->getInitialFrameState();
   EmitCFIInstructions(streamer, Instructions, NULL);
 

@@ -36,6 +36,11 @@
 #include "neuray_db_element_tracker.h"
 #include "neuray_transaction_impl.h"
 
+#include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
+#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
+#include <io/scene/mdl_elements/i_mdl_elements_module.h>
+#include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
+#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 
 // If defined, the destructor of Db_element_impl_base dumps all set journal flags for elements in
 // state STATE_EDIT.
@@ -183,6 +188,24 @@ mi::Sint32 Db_element_impl_base::store(
 
     // prevent overwriting an existing DB element with one of a different type
     DB::Tag tag = db_transaction->name_to_tag( name);
+    if( tag) {
+        SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
+        if(    (class_id == MDL::ID_MDL_MODULE)
+            || (class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
+            || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
+            return -9;
+
+        if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
+            DB::Access<MDL::Mdl_function_call> f_call(tag, db_transaction);
+            if (f_call->is_immutable())
+                return -9;
+        }
+        if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
+            DB::Access<MDL::Mdl_material_instance> m_inst(tag, db_transaction);
+            if (m_inst->is_immutable())
+                return -9;
+        }
+    }
 
     tag = transaction->get_tag_for_store( tag);
 

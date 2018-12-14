@@ -77,16 +77,16 @@ namespace PBQP {
         Graph *g;
       };
 
-      typedef MISTD::list<Graph::NodeId> RNAllocableList;
+      typedef std::list<Graph::NodeId> RNAllocableList;
       typedef RNAllocableList::iterator RNAllocableListItr;
 
-      typedef MISTD::list<Graph::NodeId> RNUnallocableList;
+      typedef std::list<Graph::NodeId> RNUnallocableList;
       typedef RNUnallocableList::iterator RNUnallocableListItr;
 
     public:
 
       struct NodeData {
-        typedef MISTD::vector<unsigned> UnsafeDegreesArray;
+        typedef std::vector<unsigned> UnsafeDegreesArray;
         bool isHeuristic, isAllocable, isInitialized;
         unsigned numDenied, numSafe;
         UnsafeDegreesArray unsafeDegrees;
@@ -99,7 +99,7 @@ namespace PBQP {
       };
 
       struct EdgeData {
-        typedef MISTD::vector<unsigned> UnsafeArray;
+        typedef std::vector<unsigned> UnsafeArray;
         unsigned worst, reverseWorst;
         UnsafeArray unsafe, reverseUnsafe;
         bool isUpToDate;
@@ -315,7 +315,7 @@ namespace PBQP {
         unsigned numRegs = eCosts.getRows() - 1,
                  numReverseRegs = eCosts.getCols() - 1;
 
-        MISTD::vector<unsigned> rowInfCounts(numRegs, 0),
+        std::vector<unsigned> rowInfCounts(numRegs, 0),
                               colInfCounts(numReverseRegs, 0);
 
         ed.worst = 0;
@@ -328,7 +328,7 @@ namespace PBQP {
         for (unsigned i = 0; i < numRegs; ++i) {
           for (unsigned j = 0; j < numReverseRegs; ++j) {
             if (eCosts[i + 1][j + 1] ==
-                  MISTD::numeric_limits<PBQPNum>::infinity()) {
+                  std::numeric_limits<PBQPNum>::infinity()) {
               ed.unsafe[i] = 1;
               ed.reverseUnsafe[j] = 1;
               ++rowInfCounts[i];
@@ -419,7 +419,7 @@ namespace PBQP {
         nd.numDenied = 0;
         const Vector& nCosts = getGraph().getNodeCosts(nId);
         for (unsigned i = 1; i < nCosts.getLength(); ++i) {
-          if (nCosts[i] == MISTD::numeric_limits<PBQPNum>::infinity())
+          if (nCosts[i] == std::numeric_limits<PBQPNum>::infinity())
             ++nd.numDenied;
         }
 
@@ -443,7 +443,7 @@ namespace PBQP {
 
       void handleRemoveNode(Graph::NodeId xnId) {
         typedef HeuristicSolverImpl<Briggs>::SolverEdgeItr SolverEdgeItr;
-        MISTD::vector<Graph::EdgeId> edgesToRemove;
+        std::vector<Graph::EdgeId> edgesToRemove;
         for (SolverEdgeItr aeItr = getSolver().solverEdgesBegin(xnId),
                            aeEnd = getSolver().solverEdgesEnd(xnId);
              aeItr != aeEnd; ++aeItr) {

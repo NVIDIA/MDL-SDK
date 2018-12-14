@@ -146,7 +146,7 @@ DIEValue *DIE::findAttribute(uint16_t Attribute) {
 
 #ifndef NDEBUG
 void DIE::print(raw_ostream &O, unsigned IndentCount) const {
-  const MISTD::string Indent(IndentCount, ' ');
+  const std::string Indent(IndentCount, ' ');
   bool isBlock = Abbrev.getTag() == 0;
 
   if (!isBlock) {

@@ -29,20 +29,20 @@
 using namespace llvm;
 
 namespace {
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   OutputFilename("o", cl::desc("Output filename"), cl::value_desc("filename"),
                  cl::init("-"));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   DependFilename("d",
                  cl::desc("Dependency filename"),
                  cl::value_desc("filename"),
                  cl::init(""));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   InputFilename(cl::Positional, cl::desc("<input file>"), cl::init("-"));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   IncludeDirs("I", cl::desc("Directory of include files"),
               cl::value_desc("directory"), cl::Prefix);
 }
@@ -56,7 +56,7 @@ static int createDependencyFile(const TGParser &Parser, const char *argv0) {
     errs() << argv0 << ": the option -d must be used together with -o\n";
     return 1;
   }
-  MISTD::string Error;
+  std::string Error;
   tool_output_file DepOut(DependFilename.c_str(), Error);
   if (!Error.empty()) {
     errs() << argv0 << ": error opening " << DependFilename
@@ -102,7 +102,7 @@ int TableGenMain(char *argv0, TableGenMainFn *MainFn) {
   if (Parser.ParseFile())
     return 1;
 
-  MISTD::string Error;
+  std::string Error;
   tool_output_file Out(OutputFilename.c_str(), Error);
   if (!Error.empty()) {
     errs() << argv0 << ": error opening " << OutputFilename

@@ -246,7 +246,7 @@ bool StripNonDebugSymbols::runOnModule(Module &M) {
 bool StripDebugDeclare::runOnModule(Module &M) {
 
   Function *Declare = M.getFunction("llvm.dbg.declare");
-  MISTD::vector<Constant*> DeadConstants;
+  std::vector<Constant*> DeadConstants;
 
   if (Declare) {
     while (!Declare->use_empty()) {

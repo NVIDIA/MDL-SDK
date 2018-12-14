@@ -749,7 +749,7 @@ void MachineInstr::addMemOperand(MachineFunction &MF,
   unsigned NewNum = NumMemRefs + 1;
   mmo_iterator NewMemRefs = MF.allocateMemRefsArray(NewNum);
 
-  MISTD::copy(OldMemRefs, OldMemRefs + OldNumMemRefs, NewMemRefs);
+  std::copy(OldMemRefs, OldMemRefs + OldNumMemRefs, NewMemRefs);
   NewMemRefs[NewNum - 1] = MO;
   setMemRefs(NewMemRefs, NewMemRefs + NewNum);
 }
@@ -1020,7 +1020,7 @@ int MachineInstr::findRegisterUseOperandIdx(unsigned Reg, bool isKill,
 /// readsWritesVirtualRegister - Return a pair of bools (reads, writes)
 /// indicating if this instruction reads or writes Reg. This also considers
 /// partial defines.
-MISTD::pair<bool,bool>
+std::pair<bool,bool>
 MachineInstr::readsWritesVirtualRegister(unsigned Reg,
                                          SmallVectorImpl<unsigned> *Ops) const {
   bool PartDef = false; // Partial redefine.
@@ -1042,7 +1042,7 @@ MachineInstr::readsWritesVirtualRegister(unsigned Reg,
       FullDef = true;
   }
   // A partial redefine uses Reg unless there is also a full define.
-  return MISTD::make_pair(Use || (PartDef && !FullDef), PartDef || FullDef);
+  return std::make_pair(Use || (PartDef && !FullDef), PartDef || FullDef);
 }
 
 /// findRegisterDefOperandIdx() - Returns the operand index that is a def of
@@ -1128,7 +1128,7 @@ void MachineInstr::tieOperands(unsigned DefIdx, unsigned UseIdx) {
   }
 
   // UseIdx can be out of range, we'll search for it in findTiedOperandIdx().
-  DefMO.TiedTo = MISTD::min(UseIdx + 1, TiedMax);
+  DefMO.TiedTo = std::min(UseIdx + 1, TiedMax);
 }
 
 /// Given the index of a tied register operand, find the operand it is tied to.

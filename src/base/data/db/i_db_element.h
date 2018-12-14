@@ -160,7 +160,7 @@ class Element_base : public SERIAL::Serializable
     /// Serializable's type, is it not exactly human readable to read 0x5f43616d for Camera.
     ///
     /// \return				The name of the class
-    virtual MISTD::string get_class_name() const = 0;
+    virtual std::string get_class_name() const = 0;
 };
 
 /// This template defines some functions for derived classes. This makes it easier to define a new

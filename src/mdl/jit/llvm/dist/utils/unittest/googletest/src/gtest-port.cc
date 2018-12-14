@@ -291,7 +291,7 @@ bool ValidateRegex(const char* regex) {
 // or +).  The behavior is undefined if str contains too many
 // characters to be indexable by size_t, in which case the test will
 // probably time out anyway.  We are fine with this limitation as
-// MISTD::string has it too.
+// std::string has it too.
 bool MatchRepetitionAndRegexAtHead(
     bool escaped, char c, char repeat, const char* regex,
     const char* str) {
@@ -428,7 +428,7 @@ const char kUnknownFile[] = "unknown file";
 
 // Formats a source file path and a line number as they would appear
 // in an error message from the compiler used to compile this code.
-GTEST_API_ ::MISTD::string FormatFileLocation(const char* file, int line) {
+GTEST_API_ ::std::string FormatFileLocation(const char* file, int line) {
   const char* const file_name = file == NULL ? kUnknownFile : file;
 
   if (line < 0) {
@@ -446,7 +446,7 @@ GTEST_API_ ::MISTD::string FormatFileLocation(const char* file, int line) {
 // FormatFileLocation in order to contrast the two functions.
 // Note that FormatCompilerIndependentFileLocation() does NOT append colon
 // to the file location it produces, unlike FormatFileLocation().
-GTEST_API_ ::MISTD::string FormatCompilerIndependentFileLocation(
+GTEST_API_ ::std::string FormatCompilerIndependentFileLocation(
     const char* file, int line) {
   const char* const file_name = file == NULL ? kUnknownFile : file;
 
@@ -463,13 +463,13 @@ GTestLog::GTestLog(GTestLogSeverity severity, const char* file, int line)
       severity == GTEST_INFO ?    "[  INFO ]" :
       severity == GTEST_WARNING ? "[WARNING]" :
       severity == GTEST_ERROR ?   "[ ERROR ]" : "[ FATAL ]";
-  GetStream() << ::MISTD::endl << marker << " "
+  GetStream() << ::std::endl << marker << " "
               << FormatFileLocation(file, line).c_str() << ": ";
 }
 
 // Flushes the buffers and, if severity is GTEST_FATAL, aborts the program.
 GTestLog::~GTestLog() {
-  GetStream() << ::MISTD::endl;
+  GetStream() << ::std::endl;
   if (severity_ == GTEST_FATAL) {
     fflush(stderr);
     posix::Abort();
@@ -551,7 +551,7 @@ class CapturedStream {
   const int fd_;  // A stream to capture.
   int uncaptured_fd_;
   // Name of the temporary file holding the stderr output.
-  ::MISTD::string filename_;
+  ::std::string filename_;
 
   GTEST_DISALLOW_COPY_AND_ASSIGN_(CapturedStream);
 };
@@ -632,10 +632,10 @@ String GetCapturedStderr() { return GetCapturedStream(&g_captured_stderr); }
 #if GTEST_HAS_DEATH_TEST
 
 // A copy of all command line arguments.  Set by InitGoogleTest().
-::MISTD::vector<String> g_argvs;
+::std::vector<String> g_argvs;
 
 // Returns the command line as a vector of strings.
-const ::MISTD::vector<String>& GetArgvs() { return g_argvs; }
+const ::std::vector<String>& GetArgvs() { return g_argvs; }
 
 #endif  // GTEST_HAS_DEATH_TEST
 

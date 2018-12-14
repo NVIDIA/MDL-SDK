@@ -268,7 +268,7 @@ bool SimplifyIndvar::eliminateIVUser(Instruction *UseInst,
 static void pushIVUsers(
   Instruction *Def,
   SmallPtrSet<Instruction*,16> &Simplified,
-  SmallVectorImpl< MISTD::pair<Instruction*,Instruction*> > &SimpleIVUsers) {
+  SmallVectorImpl< std::pair<Instruction*,Instruction*> > &SimpleIVUsers) {
 
   for (Value::use_iterator UI = Def->use_begin(), E = Def->use_end();
        UI != E; ++UI) {
@@ -279,7 +279,7 @@ static void pushIVUsers(
     // If Def is a LoopPhi, it may not be in the Simplified set, so check for
     // self edges first.
     if (User != Def && Simplified.insert(User))
-      SimpleIVUsers.push_back(MISTD::make_pair(User, Def));
+      SimpleIVUsers.push_back(std::make_pair(User, Def));
   }
 }
 
@@ -324,7 +324,7 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
   SmallPtrSet<Instruction*,16> Simplified;
 
   // Use-def pairs if IV users waiting to be processed for CurrIV.
-  SmallVector<MISTD::pair<Instruction*, Instruction*>, 8> SimpleIVUsers;
+  SmallVector<std::pair<Instruction*, Instruction*>, 8> SimpleIVUsers;
 
   // Push users of the current LoopPhi. In rare cases, pushIVUsers may be
   // called multiple times for the same LoopPhi. This is the proper thing to
@@ -332,7 +332,7 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
   pushIVUsers(CurrIV, Simplified, SimpleIVUsers);
 
   while (!SimpleIVUsers.empty()) {
-    MISTD::pair<Instruction*, Instruction*> UseOper =
+    std::pair<Instruction*, Instruction*> UseOper =
       SimpleIVUsers.pop_back_val();
     // Bypass back edges to avoid extra work.
     if (UseOper.first == CurrIV) continue;

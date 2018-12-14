@@ -85,7 +85,7 @@ namespace {
     bool isLiveIn(unsigned Reg, MachineBasicBlock *MBB);
     bool isLiveOutPastPHIs(unsigned Reg, MachineBasicBlock *MBB);
 
-    typedef MISTD::pair<unsigned, unsigned> BBVRegPair;
+    typedef std::pair<unsigned, unsigned> BBVRegPair;
     typedef DenseMap<BBVRegPair, unsigned> VRegPHIUse;
 
     VRegPHIUse VRegPHIUseCount;

@@ -196,6 +196,8 @@ Lambda_function::Lambda_function(
 , m_uses_lambda_results(false)
 , m_serial_is_valid(false)
 , m_hash_is_valid(false)
+, m_deriv_infos_calculated(false)
+, m_deriv_infos(alloc)
 {
     // CSE is always enabled when creating a lambda function
     m_node_factory.enable_cse(true);
@@ -238,13 +240,13 @@ Lambda_function *Lambda_function::clone_empty(Lambda_function const &other)
 }
 
 // Get the type factory of this builder.
-IType_factory *Lambda_function::get_type_factory()
+Type_factory *Lambda_function::get_type_factory()
 {
     return &m_type_factory;
 }
 
 // Get the value factory of this builder.
-IValue_factory *Lambda_function::get_value_factory()
+Value_factory *Lambda_function::get_value_factory()
 {
     return &m_value_factory;
 }
@@ -1503,6 +1505,13 @@ void Lambda_function::update_hash() const
 
     DAG_ir_walker walker(get_allocator());
 
+    for (size_t i = 0, n = get_parameter_count(); i < n; ++i) {
+        char const  *name = get_parameter_name(i);
+        IType const *tp = get_parameter_type(i);
+
+        dag_hasher.hash_parameter(name, tp);
+    }
+
     if (!m_roots.empty()) {
         for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
             DAG_node const *root = m_roots[i];
@@ -1567,6 +1576,54 @@ size_t Lambda_function::add_parameter(
 void Lambda_function::set_parameter_mapping(size_t i, size_t j)
 {
     m_index_map[i] = j;
+}
+
+// Initialize the derivative information for this lambda function.
+// This rewrites the body/sub-expressions with derivative types.
+void Lambda_function::initialize_derivative_infos(ICall_name_resolver const *resolver)
+{
+    // optimize the expressions here, forcing inlining of code when possible.
+    // We need to do this before calculating the derivative information, because the
+    // inlining won't update the derivative information
+    optimize(resolver, NULL);
+
+    // make sure that no nodes are used multiple times to properly create
+    // context-sensitive analysis information
+    enable_cse(false);
+
+    // collect information
+    m_deriv_infos.set_call_name_resolver(resolver);
+    if (!m_roots.empty()) {
+        for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
+            m_roots[i] = import_expr(m_roots[i]);
+            m_deriv_infos.find_initial_users(m_roots[i]);
+        }
+    } else {
+        m_body_expr = import_expr(m_body_expr);
+        m_deriv_infos.find_initial_users(m_body_expr);
+    }
+    m_deriv_infos.set_call_name_resolver(NULL);
+
+    // rebuild DAG with derivative types and enabled CSE
+    enable_cse(true);
+    Deriv_DAG_builder deriv_builder(get_allocator(), *this, m_deriv_infos);
+    if (!m_roots.empty()) {
+        for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
+            m_roots[i] = deriv_builder.rebuild(m_roots[i]);
+        }
+    } else {
+        m_body_expr = deriv_builder.rebuild(m_body_expr);
+    }
+
+    m_deriv_infos_calculated = true;
+}
+
+// Get the derivative information if they have been initialized.
+Derivative_infos const *Lambda_function::get_derivative_infos() const
+{
+    if (!m_deriv_infos_calculated)
+        return NULL;
+    return &m_deriv_infos;
 }
 
 // Returns true if the given semantic belongs to a varying state function.
@@ -2017,27 +2074,76 @@ public:
 
     /// Builds a distribution function.
     static IDistribution_function::Error_code build(
-        IDistribution_function *dist_func,
+        IDistribution_function *idist_func,
         IAllocator *alloc,
         IMDL *compiler,
         ICall_name_resolver const *resolver,
         DAG_node const *mat_root_node,
-        DAG_node const *df_node,
-        bool include_geometry_normal)
+        char const *df_path,
+        bool include_geometry_normal,
+        bool calc_derivative_infos)
     {
-        if (mat_root_node == NULL || df_node == NULL)
+        if (mat_root_node == NULL || df_path == NULL)
             return IDistribution_function::EC_INVALID_PARAMETERS;
+
+        mi::base::Handle<Lambda_function> main_df(
+            impl_cast<Lambda_function>(idist_func->get_main_df()));
+
+        Distribution_function *dist_func = impl_cast<Distribution_function>(idist_func);
+
+        // use main_df to optimize the material, forcing inlining of code when possible.
+        // We need to do this before calculating the derivative information, because the
+        // inlining won't update the derivative information
+        main_df->set_body(mat_root_node);
+        main_df->optimize(resolver, NULL);
+        mat_root_node = main_df->get_body();
+        main_df->set_body(NULL);
+
+        if (calc_derivative_infos) {
+            // make sure that no nodes are used multiple times to properly create
+            // context-sensitive analysis information
+            main_df->enable_cse(false);
+            DAG_node const *analysis_mat_root = main_df->import_expr(mat_root_node);
+
+            // calculate derivative information on analysis copy
+            Derivative_infos *deriv_infos = dist_func->get_writable_derivative_infos();
+            deriv_infos->set_call_name_resolver(resolver);
+            deriv_infos->find_initial_users(analysis_mat_root);
+            deriv_infos->set_call_name_resolver(NULL);
+
+            // rebuild DAG with derivative types and enabled CSE
+            main_df->enable_cse(true);
+            Deriv_DAG_builder deriv_builder(alloc, *main_df.get(), *deriv_infos);
+            mat_root_node = deriv_builder.rebuild(analysis_mat_root);
+        }
+
+        // split path at '.'
+        string path_copy(df_path, alloc);
+        vector<char const *>::Type path_parts(alloc);
+        size_t last_start = 0;
+        for (size_t i = 0, n = path_copy.length(); i < n; ++i) {
+            if (path_copy[i] == '.') {
+                path_copy[i] = 0;
+                path_parts.push_back(path_copy.c_str() + last_start);
+                last_start = i + 1;
+            }
+        }
+        if (last_start < path_copy.length())
+            path_parts.push_back(path_copy.c_str() + last_start);
+
+        DAG_node const *df_node = get_dag_arg(mat_root_node, path_parts, main_df.get());
+        if (df_node == NULL)
+            return IDistribution_function::EC_INVALID_PATH;
 
         // check whether node really is a DF (currently only BSDFs and EDFs are supported)
         if (!is<IType_bsdf>(df_node->get_type()->skip_type_alias()) &&
                 !is<IType_edf>(df_node->get_type()->skip_type_alias()))
             return IDistribution_function::EC_UNSUPPORTED_BSDF;
 
-        mi::base::Handle<ILambda_function> main_df(dist_func->get_main_df());
 
         // translate all non-df nodes to call_lambda nodes
         Distribution_function_builder mat_builder(
-            alloc, *dist_func, mat_root_node, compiler, resolver);
+            alloc, *dist_func, mat_root_node, compiler, resolver, calc_derivative_infos);
         mat_builder.collect_flags_and_used_nodes(
             df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL);
 
@@ -2101,13 +2207,15 @@ public:
     /// Constructor.
     Distribution_function_builder(
         IAllocator *alloc,
-        IDistribution_function &dist_func,
+        Distribution_function &dist_func,
         DAG_node const *mat_root_node,
         IMDL *compiler,
-        ICall_name_resolver const *resolver)
+        ICall_name_resolver const *resolver,
+        bool calc_derivative_infos)
     : m_alloc(alloc)
     , m_compiler(compiler, mi::base::DUP_INTERFACE)
     , m_dist_func(dist_func)
+    , m_deriv_infos(calc_derivative_infos ? dist_func.get_writable_derivative_infos() : NULL)
     , m_mat_root_node(mat_root_node)
     , m_root_lambda(impl_cast<Lambda_function>(dist_func.get_main_df()))
     , m_type_factory(*m_root_lambda->get_type_factory())
@@ -2155,9 +2263,6 @@ public:
 
                     if (needs_ior(sema))
                         m_flags |= FL_NEEDS_MATERIAL_IOR;
-
-                    if (sema == IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF)
-                        m_flags |= FL_CONTAINS_UNSUPPORTED_DF;
                 }
 
                 res = is_eval_state_dependent_direct(call);
@@ -2171,20 +2276,22 @@ public:
         return res;
     }
 
-    /// Checks whether the type is a BSDF type or contains a BSDF type.
-    bool contains_bsdf_type(IType const *type)
+    /// Checks whether the type is a DF type or contains a DF type.
+    static bool contains_df_type(IType const *type)
     {
         type = type->skip_type_alias();
         switch (type->get_kind()) {
         case IType::TK_BSDF:
+        case IType::TK_EDF:
+        case IType::TK_VDF:
             return true;
         case IType::TK_ARRAY:
-            return contains_bsdf_type(as<IType_array>(type)->get_element_type());
+            return contains_df_type(as<IType_array>(type)->get_element_type());
         case IType::TK_STRUCT:
             {
                 IType_compound const *comp_type = as<IType_compound>(type);
                 for (int i = 0, n = comp_type->get_compound_size(); i < n; ++i) {
-                    if (contains_bsdf_type(comp_type->get_compound_type(i)))
+                    if (contains_df_type(comp_type->get_compound_type(i)))
                         return true;
                 }
                 return false;
@@ -2196,7 +2303,7 @@ public:
 
     /// Checks whether an expression lambda may be created for the given DAG node.
     /// They shouldn't be created for matrices node and cannot be created for DF nodes,
-    /// or any types containing BSDF types.
+    /// or any types containing DF types.
     bool may_create_expr_lambda(DAG_node const *expr)
     {
         // don't allow expression lambdas returning matrices,
@@ -2206,7 +2313,7 @@ public:
             return false;
 
         // no DF types or types containing DF types
-        if (contains_bsdf_type(expr->get_type()))
+        if (contains_df_type(expr->get_type()))
             return false;
 
         return true;
@@ -2305,6 +2412,19 @@ public:
     void set_result_node(DAG_node const *expr, DAG_node const *res_node, Eval_state eval_state)
     {
         m_node_info_map[expr].set_node(res_node, eval_state);
+        if (m_deriv_infos && m_deriv_infos->should_calc_derivatives(expr))
+            m_deriv_infos->mark_calc_derivatives(res_node);
+    }
+
+    /// Check if we have a ternary operator of BSDF's or EDF's.
+    static bool is_ternary_on_df(
+        IDefinition::Semantics sema,
+        IType const            *ret_type)
+    {
+        if (sema != operator_to_semantic(IExpression::OK_TERNARY))
+            return false;
+        IType::Kind kind = ret_type->get_kind();
+        return kind == IType::TK_BSDF || kind == IType::TK_EDF;
     }
 
     /// Walk the material DAG, cloning the DF DAG nodes into the root lambda
@@ -2347,32 +2467,11 @@ public:
                     IType const *ret_type = expr->get_type();
                     ret_type = m_type_factory.import(ret_type);
 
-                    if (expr->get_kind() == DAG_node::EK_CALL) {
-                        DAG_call const *call = cast<DAG_call>(expr);
-                        const char *name = call->get_name();
-                        IDefinition::Semantics sema = call->get_semantic();
+                    if (DAG_call const *call = as<DAG_call>(expr)) {
+                        IType const *ret_type = call->get_type();
 
-                        bool continue_copying = false;
-
-                        if (is_df_semantics(sema) ||
-                                (sema == operator_to_semantic(
-                                        IExpression::OK_TERNARY) &&
-                                    ret_type->get_kind() == IType::TK_BSDF)) {
-                            // for df expressions continue copying into the root lambda
-                            continue_copying = true;
-                        }
-                        else if (sema == IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
-                            // for array constructors also continue copying into the root lambda
-                            continue_copying = true;
-                        }
-                        else if (sema == IDefinition::DS_ELEM_CONSTRUCTOR &&
-                                (strcmp(name, "::df::bsdf_component(float,bsdf)") == 0 ||
-                                 strcmp(name, "::df::color_bsdf_component(color,bsdf)") == 0)) {
-                            // for bsdf_component constructors also continue copying
-                            continue_copying = true;
-                        }
-
-                        if (continue_copying) {
+                        if (contains_df_type(ret_type)) {
+                            // for df expressions continue copying into the root lambda,
                             // recursively handle all arguments and create a call
 
                             int n_args = call->get_argument_count();
@@ -2385,10 +2484,10 @@ public:
                             }
 
                             res = m_root_lambda->create_call(
-                                name,
-                                sema,
-                                n_args > 0 ? args.data() : 0,
-                                n_args,
+                                call->get_name(),
+                                call->get_semantic(),
+                                args.data(),
+                                args.size(),
                                 ret_type);
 
                             set_result_node(expr, res, ES_AFTER_GEOMETRY_NORMAL);
@@ -2538,17 +2637,20 @@ private:
         if (DAG_node const *cache_node = get_result_node(expr, eval_state))
             return lambda->import_expr(cache_node);
 
+        DAG_node const *res;
         switch (expr->get_kind()) {
         case DAG_node::EK_TEMPORARY:
             {
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                return import_mat_expr(lambda, expr, eval_state);
+                res = import_mat_expr(lambda, expr, eval_state);
             }
+            break;
         case DAG_node::EK_CONSTANT:
         case DAG_node::EK_PARAMETER:
-            return lambda->import_expr(expr);
+            res = lambda->import_expr(expr);
+            break;
         case DAG_node::EK_CALL:
             {
                 DAG_call const *call = cast<DAG_call>(expr);
@@ -2564,12 +2666,19 @@ private:
                 IType const *ret_type = call->get_type();
                 ret_type = m_type_factory.import(ret_type);
 
-                return lambda->create_call(
+                res = lambda->create_call(
                     call->get_name(), call->get_semantic(), args.data(), n_args, ret_type);
             }
+            break;
+        default:
+            MDL_ASSERT(!"Unsupported DAG node kind");
+            return NULL;
         }
-        MDL_ASSERT(!"Unsupported DAG node kind");
-        return NULL;
+
+        if (m_deriv_infos && m_deriv_infos->should_calc_derivatives(expr))
+            m_deriv_infos->mark_calc_derivatives(res);
+
+        return res;
     }
 
     /// Checks whether the given BSDF semantic needs access to the material.thin_walled field.
@@ -2626,7 +2735,10 @@ private:
     mi::base::Handle<IMDL> m_compiler;
 
     /// The distribution function.
-    IDistribution_function &m_dist_func;
+    Distribution_function &m_dist_func;
+
+    /// The derivative infos, if calculation was requested.
+    Derivative_infos *m_deriv_infos;
 
     /// The root DAG node of the material.
     DAG_node const *m_mat_root_node;
@@ -2658,7 +2770,7 @@ private:
     };
 
     /// The list of special lambda descriptions.
-    MISTD::vector<Special_lambda_descr> m_special_lambdas;
+    std::vector<Special_lambda_descr> m_special_lambdas;
 
     /// Helper struct collecting information about DAG nodes in different evaluation states.
     struct Node_info {
@@ -2928,12 +3040,11 @@ Distribution_function::Distribution_function(
     MDL                                *compiler)
     : Base(alloc)
     , m_mdl(mi::base::make_handle_dup(compiler))
-    , m_main_df()
+    , m_main_df(compiler->create_lambda_function(Lambda_function::LEC_CORE))
     , m_expr_lambdas(alloc)
+    , m_deriv_infos_calculated(false)
+    , m_deriv_infos(alloc)
 {
-    m_main_df = mi::base::make_handle(m_mdl->create_lambda_function(
-        Lambda_function::LEC_CORE));
-
     Lambda_function *lambda = impl_cast<Lambda_function>(m_main_df.get());
 
     // force always using render state
@@ -2948,18 +3059,21 @@ Distribution_function::Distribution_function(
 /// expressions from the material will also be handled.
 IDistribution_function::Error_code Distribution_function::initialize(
     DAG_node const            *material_constructor,
-    DAG_node const            *df_node,
+    char const                *df_path,
     bool                       include_geometry_normal,
+    bool                       calc_derivative_infos,
     ICall_name_resolver const *name_resolver)
 {
+    m_deriv_infos_calculated = calc_derivative_infos;
     return Distribution_function_builder::build(
         this,
         get_allocator(),
         m_mdl.get(),
         name_resolver,
         material_constructor,
-        df_node,
-        include_geometry_normal);
+        df_path,
+        include_geometry_normal,
+        calc_derivative_infos);
 }
 
 // Get the main DF function representing a DF DAG call.
@@ -3014,7 +3128,14 @@ size_t Distribution_function::get_special_lambda_function_index(Special_kind kin
     return m_special_lambdas[kind];
 }
 
-/// Dump the distribution function to a .gv file with the given name.
+// Get the derivative information if they were requested during initialization.
+Derivative_infos const *Distribution_function::get_derivative_infos() const
+{
+    if (!m_deriv_infos_calculated) return NULL;
+    return &m_deriv_infos;
+}
+
+// Dump the distribution function to a .gv file with the given name.
 void Distribution_function::dump(char const *name) const
 {
     Allocator_builder builder(get_allocator());

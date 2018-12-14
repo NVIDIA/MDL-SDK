@@ -76,15 +76,15 @@ STLEXT::Likely<Target> lexicographic_cast_s(
     const Source& value)
 {
     Target result = Target(); // to avoid warning about uninitialized variable
-    MISTD::stringstream s;
+    std::stringstream s;
     s << value;
     if (s.fail())
 	return STLEXT::Likely<Target>(result, false);
-    // Note that MISTD::stringstream::operator>>() used below does not set the fail bit for unsigned
+    // Note that std::stringstream::operator>>() used below does not set the fail bit for unsigned
     // integral types if s.str() represents a small negative number (see strtoul() for details).
     // Hence, we check whether the first non-whitespace character is a '-'.
-    if (MISTD::numeric_limits<Target>::is_specialized && !MISTD::numeric_limits<Target>::is_signed){
-        const MISTD::string& str = s.str();
+    if (std::numeric_limits<Target>::is_specialized && !std::numeric_limits<Target>::is_signed){
+        const std::string& str = s.str();
         size_t i = 0;
         while (isspace(str[i]))
             ++i;

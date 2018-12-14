@@ -230,8 +230,8 @@ TEST(InstructionsTest, VectorGep) {
   // and GEPs which use this type.
   ConstantInt *Ci32a = ConstantInt::get(C, APInt(32, 1492));
   ConstantInt *Ci32b = ConstantInt::get(C, APInt(32, 1948));
-  MISTD::vector<Constant*> ConstVa(2, Ci32a);
-  MISTD::vector<Constant*> ConstVb(2, Ci32b);
+  std::vector<Constant*> ConstVa(2, Ci32a);
+  std::vector<Constant*> ConstVb(2, Ci32b);
   Constant *C2xi32a = ConstantVector::get(ConstVa);
   Constant *C2xi32b = ConstantVector::get(ConstVb);
 

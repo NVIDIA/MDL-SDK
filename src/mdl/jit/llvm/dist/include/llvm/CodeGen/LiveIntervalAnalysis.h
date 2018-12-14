@@ -88,7 +88,7 @@ namespace llvm {
     /// Note that basic block numbers may not be layout contiguous, that's why
     /// we can't just keep track of the first register mask in each basic
     /// block.
-    SmallVector<MISTD::pair<unsigned, unsigned>, 8> RegMaskBlocks;
+    SmallVector<std::pair<unsigned, unsigned>, 8> RegMaskBlocks;
 
     /// Keeps a live range set for each register unit to track fixed physreg
     /// interference.
@@ -224,7 +224,7 @@ namespace llvm {
       Indexes->insertMBBInMaps(MBB);
       assert(unsigned(MBB->getNumber()) == RegMaskBlocks.size() &&
              "Blocks must be added in order.");
-      RegMaskBlocks.push_back(MISTD::make_pair(RegMaskSlots.size(), 0));
+      RegMaskBlocks.push_back(std::make_pair(RegMaskSlots.size(), 0));
     }
 
     SlotIndex InsertMachineInstrInMaps(MachineInstr *MI) {
@@ -327,7 +327,7 @@ namespace llvm {
     /// instructions with register mask operands in the basic block numbered
     /// MBBNum.
     ArrayRef<SlotIndex> getRegMaskSlotsInBlock(unsigned MBBNum) const {
-      MISTD::pair<unsigned, unsigned> P = RegMaskBlocks[MBBNum];
+      std::pair<unsigned, unsigned> P = RegMaskBlocks[MBBNum];
       return getRegMaskSlots().slice(P.first, P.second);
     }
 
@@ -338,7 +338,7 @@ namespace llvm {
     /// getRegMaskBitsInBlock - Returns an array of mask pointers corresponding
     /// to getRegMaskSlotsInBlock(MBBNum).
     ArrayRef<const uint32_t*> getRegMaskBitsInBlock(unsigned MBBNum) const {
-      MISTD::pair<unsigned, unsigned> P = RegMaskBlocks[MBBNum];
+      std::pair<unsigned, unsigned> P = RegMaskBlocks[MBBNum];
       return getRegMaskBits().slice(P.first, P.second);
     }
 

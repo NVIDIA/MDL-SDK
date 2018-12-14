@@ -229,13 +229,6 @@ public:
         /// a key of \p target is an instance of #mi::IConst_pointer).
         DEEP_ASSIGNMENT_TO_CONST_POINTER = 256,
 
-        /// \if IRAY_API
-        /// The assignment failed due to incompatible reference types, e.g., assigning from
-        /// #mi::IRef of type "Ref<Texture>" to an #mi::IRef of type "Ref<Lightprofile>" (because
-        /// #mi::IRef::set_reference() failed).
-        /// \endif
-        INCOMPATIBLE_REF_TYPES           = 512,
-
         /// The assignment failed due to incompatible privacy levels, i.e.,
         /// #mi::IRef::set_reference() returned error code -4.
         INCOMPATIBLE_PRIVACY_LEVELS      = 1024,

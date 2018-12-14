@@ -408,9 +408,9 @@ void X86Subtarget::resetSubtargetFeatures(const MachineFunction *MF) {
                                            "target-cpu");
   Attribute FSAttr = FnAttrs.getAttribute(AttributeSet::FunctionIndex,
                                           "target-features");
-  MISTD::string CPU =
+  std::string CPU =
     !CPUAttr.hasAttribute(Attribute::None) ?CPUAttr.getValueAsString() : "";
-  MISTD::string FS =
+  std::string FS =
     !FSAttr.hasAttribute(Attribute::None) ? FSAttr.getValueAsString() : "";
   if (!FS.empty()) {
     initializeEnvironment();
@@ -419,7 +419,7 @@ void X86Subtarget::resetSubtargetFeatures(const MachineFunction *MF) {
 }
 
 void X86Subtarget::resetSubtargetFeatures(StringRef CPU, StringRef FS) {
-  MISTD::string CPUName = CPU;
+  std::string CPUName = CPU;
   if (!FS.empty() || !CPU.empty()) {
     if (CPUName.empty()) {
 #if defined(i386) || defined(__i386__) || defined(__x86__) || defined(_M_IX86)\
@@ -432,7 +432,7 @@ void X86Subtarget::resetSubtargetFeatures(StringRef CPU, StringRef FS) {
 
     // Make sure 64-bit features are available in 64-bit mode. (But make sure
     // SSE2 can be turned off explicitly.)
-    MISTD::string FullFS = FS;
+    std::string FullFS = FS;
     if (In64BitMode) {
       if (!FullFS.empty())
         FullFS = "+64bit,+sse2," + FullFS;
@@ -539,8 +539,8 @@ void X86Subtarget::initializeEnvironment() {
   MaxInlineSizeThreshold = 128;
 }
 
-X86Subtarget::X86Subtarget(const MISTD::string &TT, const MISTD::string &CPU,
-                           const MISTD::string &FS,
+X86Subtarget::X86Subtarget(const std::string &TT, const std::string &CPU,
+                           const std::string &FS,
                            unsigned StackAlignOverride, bool is64Bit)
   : X86GenSubtargetInfo(TT, CPU, FS)
   , X86ProcFamily(Others)

@@ -89,10 +89,10 @@ namespace {
   public:
     typedef ValueMap<Function*, void*, NoRAUWValueMapConfig<Function*> >
       FunctionToLazyStubMapTy;
-    typedef MISTD::map<void*, AssertingVH<Function> > CallSiteToFunctionMapTy;
+    typedef std::map<void*, AssertingVH<Function> > CallSiteToFunctionMapTy;
     typedef ValueMap<Function *, SmallPtrSet<void*, 1>,
                      CallSiteValueMapConfig> FunctionToCallSitesMapTy;
-    typedef MISTD::map<AssertingVH<GlobalValue>, void*> GlobalToIndirectSymMapTy;
+    typedef std::map<AssertingVH<GlobalValue>, void*> GlobalToIndirectSymMapTy;
   private:
     /// FunctionToLazyStubMap - Keep track of the lazy stub created for a
     /// particular function so that we can reuse them if necessary.
@@ -131,7 +131,7 @@ namespace {
       return GlobalToIndirectSymMap;
     }
 
-    MISTD::pair<void *, Function *> LookupFunctionFromCallSite(
+    std::pair<void *, Function *> LookupFunctionFromCallSite(
         const MutexGuard &locked, void *CallSite) const {
       assert(locked.holds(TheJIT->lock));
 
@@ -150,7 +150,7 @@ namespace {
       assert(locked.holds(TheJIT->lock));
 
       bool Inserted = CallSiteToFunctionMap.insert(
-          MISTD::make_pair(CallSite, F)).second;
+          std::make_pair(CallSite, F)).second;
       (void)Inserted;
       assert(Inserted && "Pair was already in CallSiteToFunctionMap");
       FunctionToCallSitesMap[F].insert(CallSite);
@@ -182,10 +182,10 @@ namespace {
     /// a lazy stub.  It's actually here to make it more likely that far calls
     /// succeed, but no single stub can guarantee that.  I'll remove this in a
     /// subsequent checkin when I actually fix far calls.
-    MISTD::map<void*, void*> ExternalFnToStubMap;
+    std::map<void*, void*> ExternalFnToStubMap;
 
     /// revGOTMap - map addresses to indexes in the GOT
-    MISTD::map<void*, unsigned> revGOTMap;
+    std::map<void*, unsigned> revGOTMap;
     unsigned nextGOTIndex;
 
     JITEmitter &JE;
@@ -233,7 +233,7 @@ namespace {
     /// lazily-compiled functions can find the right resolver to use.
     ///
     /// Guarded by Lock.
-    MISTD::map<void*, JITResolver*> Map;
+    std::map<void*, JITResolver*> Map;
 
     /// Guards Map from concurrent accesses.
     mutable sys::Mutex Lock;
@@ -242,7 +242,7 @@ namespace {
     /// Registers a Stub to be resolved by Resolver.
     void RegisterStubResolver(void *Stub, JITResolver *Resolver) {
       MutexGuard guard(Lock);
-      Map.insert(MISTD::make_pair(Stub, Resolver));
+      Map.insert(std::make_pair(Stub, Resolver));
     }
     /// Unregisters the Stub when it's invalidated.
     void UnregisterStubResolver(void *Stub) {
@@ -256,7 +256,7 @@ namespace {
       // be a little bit after the stub.  As such, use upper_bound to find it.
       // This is the same trick as in LookupFunctionFromCallSite from
       // JITResolverState.
-      MISTD::map<void*, JITResolver*>::const_iterator I = Map.upper_bound(Stub);
+      std::map<void*, JITResolver*>::const_iterator I = Map.upper_bound(Stub);
       assert(I != Map.begin() && "This is not a known stub!");
       --I;
       return I->second;
@@ -265,7 +265,7 @@ namespace {
     /// O(N)
     bool ResolverHasStubs(JITResolver* Resolver) const {
       MutexGuard guard(Lock);
-      for (MISTD::map<void*, JITResolver*>::const_iterator I = Map.begin(),
+      for (std::map<void*, JITResolver*>::const_iterator I = Map.begin(),
              E = Map.end(); I != E; ++I) {
         if (I->second == Resolver)
           return true;
@@ -294,12 +294,12 @@ namespace {
 
     /// Relocations - These are the relocations that the function needs, as
     /// emitted.
-    MISTD::vector<MachineRelocation> Relocations;
+    std::vector<MachineRelocation> Relocations;
 
     /// MBBLocations - This vector is a mapping from MBB ID's to their address.
     /// It is filled in by the StartMachineBasicBlock callback and queried by
     /// the getMachineBasicBlockAddress callback.
-    MISTD::vector<uintptr_t> MBBLocations;
+    std::vector<uintptr_t> MBBLocations;
 
     /// ConstantPool - The constant pool for the current function.
     ///
@@ -631,7 +631,7 @@ void *JITResolver::JITCompilerFn(void *Stub) {
 
     // The address given to us for the stub may not be exactly right, it might
     // be a little bit after the stub.  As such, use upper_bound to find it.
-    MISTD::pair<void*, Function*> I =
+    std::pair<void*, Function*> I =
       JR->state.LookupFunctionFromCallSite(locked, Stub);
     F = I.second;
     ActualPtr = I.first;
@@ -748,7 +748,7 @@ void JITEmitter::processDebugLoc(DebugLoc DL, bool BeforePrintingInsn) {
 
 static unsigned GetConstantPoolSizeInBytes(MachineConstantPool *MCP,
                                            const DataLayout *TD) {
-  const MISTD::vector<MachineConstantPoolEntry> &Constants = MCP->getConstants();
+  const std::vector<MachineConstantPoolEntry> &Constants = MCP->getConstants();
   if (Constants.empty()) return 0;
 
   unsigned Size = 0;
@@ -788,7 +788,7 @@ void JITEmitter::startFunction(MachineFunction &F) {
     initJumpTableInfo(MJTI);
 
   // About to start emitting the machine code for the function.
-  emitAlignment(MISTD::max(F.getFunction()->getAlignment(), 8U));
+  emitAlignment(std::max(F.getFunction()->getAlignment(), 8U));
   TheJIT->updateGlobalMapping(F.getFunction(), CurBufferPtr);
   EmittedFunctions[F.getFunction()].Code = CurBufferPtr;
 
@@ -1010,7 +1010,7 @@ void JITEmitter::emitConstantPool(MachineConstantPool *MCP) {
   if (TheJIT->getJITInfo().hasCustomConstantPool())
     return;
 
-  const MISTD::vector<MachineConstantPoolEntry> &Constants = MCP->getConstants();
+  const std::vector<MachineConstantPoolEntry> &Constants = MCP->getConstants();
   if (Constants.empty()) return;
 
   unsigned Size = GetConstantPoolSizeInBytes(MCP, TheJIT->getDataLayout());
@@ -1052,7 +1052,7 @@ void JITEmitter::initJumpTableInfo(MachineJumpTableInfo *MJTI) {
   if (MJTI->getEntryKind() == MachineJumpTableInfo::EK_Inline)
     return;
 
-  const MISTD::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
+  const std::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
   if (JT.empty()) return;
 
   unsigned NumEntries = 0;
@@ -1073,7 +1073,7 @@ void JITEmitter::emitJumpTableInfo(MachineJumpTableInfo *MJTI) {
   if (TheJIT->getJITInfo().hasCustomJumpTables())
     return;
 
-  const MISTD::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
+  const std::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
   if (JT.empty() || JumpTableBase == 0) return;
 
 
@@ -1091,7 +1091,7 @@ void JITEmitter::emitJumpTableInfo(MachineJumpTableInfo *MJTI) {
     intptr_t *SlotPtr = (intptr_t*)JumpTableBase;
 
     for (unsigned i = 0, e = JT.size(); i != e; ++i) {
-      const MISTD::vector<MachineBasicBlock*> &MBBs = JT[i].MBBs;
+      const std::vector<MachineBasicBlock*> &MBBs = JT[i].MBBs;
       // Store the address of the basic block for this jump table slot in the
       // memory we allocated for the jump table in 'initJumpTableInfo'
       for (unsigned mi = 0, me = MBBs.size(); mi != me; ++mi)
@@ -1109,7 +1109,7 @@ void JITEmitter::emitJumpTableInfo(MachineJumpTableInfo *MJTI) {
     int *SlotPtr = (int*)JumpTableBase;
 
     for (unsigned i = 0, e = JT.size(); i != e; ++i) {
-      const MISTD::vector<MachineBasicBlock*> &MBBs = JT[i].MBBs;
+      const std::vector<MachineBasicBlock*> &MBBs = JT[i].MBBs;
       // Store the offset of the basic block for this jump table slot in the
       // memory we allocated for the jump table in 'initJumpTableInfo'
       uintptr_t Base = (uintptr_t)SlotPtr;
@@ -1176,7 +1176,7 @@ uintptr_t JITEmitter::getConstantPoolEntryAddress(unsigned ConstantNum) const {
 // 'Index' in the jumpp table that was last initialized with 'initJumpTableInfo'
 //
 uintptr_t JITEmitter::getJumpTableEntryAddress(unsigned Index) const {
-  const MISTD::vector<MachineJumpTableEntry> &JT = JumpTable->getJumpTables();
+  const std::vector<MachineJumpTableEntry> &JT = JumpTable->getJumpTables();
   assert(Index < JT.size() && "Invalid jump table index!");
 
   unsigned EntrySize = JumpTable->getEntrySize(*TheJIT->getDataLayout());

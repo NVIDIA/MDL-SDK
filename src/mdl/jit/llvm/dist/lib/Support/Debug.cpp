@@ -58,12 +58,12 @@ DebugBufferSize("debug-buffer-size",
                 cl::Hidden,
                 cl::init(0));
 
-static MISTD::string CurrentDebugType;
+static std::string CurrentDebugType;
 
 namespace {
 
 struct DebugOnlyOpt {
-  void operator=(const MISTD::string &Val) const {
+  void operator=(const std::string &Val) const {
     DebugFlag |= !Val.empty();
     CurrentDebugType = Val;
   }
@@ -73,7 +73,7 @@ struct DebugOnlyOpt {
 
 static DebugOnlyOpt DebugOnlyOptLoc;
 
-static cl::opt<DebugOnlyOpt, true, cl::parser<MISTD::string> >
+static cl::opt<DebugOnlyOpt, true, cl::parser<std::string> >
 DebugOnly("debug-only", cl::desc("Enable a specific type of debug output"),
           cl::Hidden, cl::value_desc("debug string"),
           cl::location(DebugOnlyOptLoc), cl::ValueRequired);

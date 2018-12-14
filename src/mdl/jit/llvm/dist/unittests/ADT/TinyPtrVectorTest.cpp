@@ -42,13 +42,13 @@ protected:
   VectorT V2;
 
   ValueT TestValues[1024];
-  MISTD::vector<PtrT> TestPtrs;
+  std::vector<PtrT> TestPtrs;
 
   TinyPtrVectorTest() {
     for (size_t i = 0, e = array_lengthof(TestValues); i != e; ++i)
       TestPtrs.push_back(&TestValues[i]);
 
-    MISTD::random_shuffle(TestPtrs.begin(), TestPtrs.end(), test_shuffle_rng_p);
+    std::random_shuffle(TestPtrs.begin(), TestPtrs.end(), test_shuffle_rng_p);
   }
 
   ArrayRef<PtrT> testArray(size_t N) {
@@ -158,7 +158,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveCtorTest) {
   this->expectValues(this->V2, this->testArray(0));
 
 #if LLVM_HAS_RVALUE_REFERENCES
-  TypeParam Move(MISTD::move(Copy2));
+  TypeParam Move(std::move(Copy2));
   this->expectValues(Move, this->testArray(42));
   this->expectValues(Copy2, this->testArray(0));
 #endif
@@ -169,7 +169,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V, this->testArray(0));
   this->expectValues(this->V2, this->testArray(0));
 #if LLVM_HAS_RVALUE_REFERENCES
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(0));
 #endif
 
@@ -179,7 +179,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(0));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(1), this->testArray(0));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(0));
 #endif
 
@@ -189,7 +189,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(0));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(2), this->testArray(0));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(0));
 #endif
 
@@ -199,7 +199,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(0));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(42), this->testArray(0));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(0));
 #endif
 
@@ -209,7 +209,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(1));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(0), this->testArray(1));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(1));
 #endif
 
@@ -219,7 +219,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(2));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(0), this->testArray(2));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(2));
 #endif
 
@@ -229,7 +229,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(42));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(0), this->testArray(42));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(42));
 #endif
 
@@ -238,7 +238,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V, this->testArray(1));
   this->expectValues(this->V2, this->testArray(1));
 #if LLVM_HAS_RVALUE_REFERENCES
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(1));
 #endif
 
@@ -248,7 +248,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(2));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(1), this->testArray(2));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(2));
 #endif
 
@@ -258,7 +258,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(42));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(1), this->testArray(42));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(42));
 #endif
 
@@ -268,7 +268,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(1));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(2), this->testArray(1));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(1));
 #endif
 
@@ -278,7 +278,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(2));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(2), this->testArray(2));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(2));
 #endif
 
@@ -288,7 +288,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(42));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(2), this->testArray(42));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(42));
 #endif
 
@@ -298,7 +298,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(1));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(42), this->testArray(1));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(1));
 #endif
 
@@ -308,7 +308,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(2));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(42), this->testArray(2));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(2));
 #endif
 
@@ -318,7 +318,7 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {
   this->expectValues(this->V2, this->testArray(42));
 #if LLVM_HAS_RVALUE_REFERENCES
   this->setVectors(this->testArray(42), this->testArray(42));
-  this->V = MISTD::move(this->V2);
+  this->V = std::move(this->V2);
   this->expectValues(this->V, this->testArray(42));
 #endif
 }

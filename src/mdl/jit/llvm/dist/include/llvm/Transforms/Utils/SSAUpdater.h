@@ -47,7 +47,7 @@ private:
   Type *ProtoType;
 
   /// PHI nodes are given a name based on ProtoName.
-  MISTD::string ProtoName;
+  std::string ProtoName;
 
   /// If this is non-null, the SSAUpdater adds all PHI nodes that it creates to
   /// the vector.

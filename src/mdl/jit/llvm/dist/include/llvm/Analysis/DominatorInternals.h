@@ -53,9 +53,9 @@ unsigned DFSPass(DominatorTreeBase<typename GraphT::NodeType>& DT,
 #else
   bool IsChildOfArtificialExit = (N != 0);
 
-  SmallVector<MISTD::pair<typename GraphT::NodeType*,
+  SmallVector<std::pair<typename GraphT::NodeType*,
                         typename GraphT::ChildIteratorType>, 32> Worklist;
-  Worklist.push_back(MISTD::make_pair(V, GraphT::child_begin(V)));
+  Worklist.push_back(std::make_pair(V, GraphT::child_begin(V)));
   while (!Worklist.empty()) {
     typename GraphT::NodeType* BB = Worklist.back().first;
     typename GraphT::ChildIteratorType NextSucc = Worklist.back().second;
@@ -96,7 +96,7 @@ unsigned DFSPass(DominatorTreeBase<typename GraphT::NodeType>& DT,
                                                                   DT.Info[Succ];
     if (SuccVInfo.Semi == 0) {
       SuccVInfo.Parent = BBDFSNum;
-      Worklist.push_back(MISTD::make_pair(Succ, GraphT::child_begin(Succ)));
+      Worklist.push_back(std::make_pair(Succ, GraphT::child_begin(Succ)));
     }
   }
 #endif
@@ -279,7 +279,7 @@ void Calculate(DominatorTreeBase<typename GraphTraits<NodeT>::NodeType>& DT,
   // Free temporary memory used to construct idom's
   DT.IDoms.clear();
   DT.Info.clear();
-  MISTD::vector<typename GraphT::NodeType*>().swap(DT.Vertex);
+  std::vector<typename GraphT::NodeType*>().swap(DT.Vertex);
 
   DT.updateDFSNumbers();
 }

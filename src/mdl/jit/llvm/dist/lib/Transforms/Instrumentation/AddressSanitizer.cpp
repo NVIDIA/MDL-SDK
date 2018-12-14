@@ -143,7 +143,7 @@ static cl::opt<bool> ClMemIntrin("asan-memintrin",
        cl::desc("Handle memset/memcpy/memmove"), cl::Hidden, cl::init(true));
 static cl::opt<bool> ClRealignStack("asan-realign-stack",
        cl::desc("Realign stack to 32"), cl::Hidden, cl::init(true));
-static cl::opt<MISTD::string> ClBlacklistFile("asan-blacklist",
+static cl::opt<std::string> ClBlacklistFile("asan-blacklist",
        cl::desc("File containing the list of objects to ignore "
                 "during instrumentation"), cl::Hidden);
 
@@ -190,7 +190,7 @@ static cl::opt<int> ClDebug("asan-debug", cl::desc("debug"), cl::Hidden,
                             cl::init(0));
 static cl::opt<int> ClDebugStack("asan-debug-stack", cl::desc("debug stack"),
                                  cl::Hidden, cl::init(0));
-static cl::opt<MISTD::string> ClDebugFunc("asan-debug-func",
+static cl::opt<std::string> ClDebugFunc("asan-debug-func",
                                         cl::Hidden, cl::desc("Debug func"));
 static cl::opt<int> ClDebugMin("asan-debug-min", cl::desc("Debug min inst"),
                                cl::Hidden, cl::init(-1));
@@ -280,7 +280,7 @@ static ShadowMapping getShadowMapping(const Module &M, int LongSize,
 static size_t RedzoneSizeForScale(int MappingScale) {
   // Redzone used for stack and globals is at least 32 bytes.
   // For scales 6 and 7, the redzone has to be 64 and 128 bytes respectively.
-  return MISTD::max(32U, 1U << MappingScale);
+  return std::max(32U, 1U << MappingScale);
 }
 
 /// AddressSanitizer: instrument the code in module to find memory bugs.
@@ -477,7 +477,7 @@ struct FunctionStackPoisoner : public InstVisitor<FunctionStackPoisoner> {
   void visitAllocaInst(AllocaInst &AI) {
     if (!isInterestingAlloca(AI)) return;
 
-    StackAlignment = MISTD::max(StackAlignment, AI.getAlignment());
+    StackAlignment = std::max(StackAlignment, AI.getAlignment());
     AllocaVec.push_back(&AI);
     uint64_t AlignedSize = getAlignedAllocaSize(&AI);
     TotalStackSize += AlignedSize;
@@ -784,7 +784,7 @@ void AddressSanitizer::instrumentAddress(Instruction *OrigIns,
   Value *AddrLong = IRB.CreatePointerCast(Addr, IntptrTy);
 
   Type *ShadowTy  = IntegerType::get(
-      *C, MISTD::max(8U, TypeSize >> Mapping.Scale));
+      *C, std::max(8U, TypeSize >> Mapping.Scale));
   Type *ShadowPtrTy = PointerType::get(ShadowTy, 0);
   Value *ShadowPtr = memToShadow(AddrLong, IRB);
   Value *CmpVal = Constant::getNullValue(ShadowTy);
@@ -983,8 +983,8 @@ bool AddressSanitizerModule::runOnModule(Module &M) {
     uint64_t MinRZ = RedzoneSize();
     // MinRZ <= RZ <= kMaxGlobalRedzone
     // and trying to make RZ to be ~ 1/4 of SizeInBytes.
-    uint64_t RZ = MISTD::max(MinRZ,
-                         MISTD::min(kMaxGlobalRedzone,
+    uint64_t RZ = std::max(MinRZ,
+                         std::min(kMaxGlobalRedzone,
                                   (SizeInBytes / MinRZ / 4) * MinRZ));
     uint64_t RightRedzoneSize = RZ;
     // Round up to MinRZ
@@ -1076,7 +1076,7 @@ void AddressSanitizer::initializeCallbacks(Module &M) {
     for (size_t AccessSizeIndex = 0; AccessSizeIndex < kNumberOfAccessSizes;
          AccessSizeIndex++) {
       // IsWrite and TypeSize are encoded in the function name.
-      MISTD::string FunctionName = MISTD::string(kAsanReportErrorTemplate) +
+      std::string FunctionName = std::string(kAsanReportErrorTemplate) +
           (AccessIsWrite ? "store" : "load") + itostr(1 << AccessSizeIndex);
       // If we are merging crash callbacks, they have two parameters.
       AsanErrorCallback[AccessIsWrite][AccessSizeIndex] =
@@ -1156,7 +1156,7 @@ bool AddressSanitizer::maybeInsertAsanInitAtFunctionEntry(Function &F) {
   // the shadow memory.
   // We cannot just ignore these methods, because they may call other
   // instrumented functions.
-  if (F.getName().find(" load]") != MISTD::string::npos) {
+  if (F.getName().find(" load]") != std::string::npos) {
     IRBuilder<> IRB(F.begin()->begin());
     IRB.CreateCall(AsanInitFunction);
     return true;
@@ -1364,7 +1364,7 @@ bool AddressSanitizer::LooksLikeCodeInBug11395(Instruction *I) {
 void FunctionStackPoisoner::initializeCallbacks(Module &M) {
   IRBuilder<> IRB(*C);
   for (int i = 0; i <= kMaxAsanStackMallocSizeClass; i++) {
-    MISTD::string Suffix = itostr(i);
+    std::string Suffix = itostr(i);
     AsanStackMallocFunc[i] = checkInterfaceFunction(
         M.getOrInsertFunction(kAsanStackMallocNameTemplate + Suffix, IntptrTy,
                               IntptrTy, IntptrTy, NULL));

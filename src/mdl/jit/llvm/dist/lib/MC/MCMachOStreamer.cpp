@@ -49,7 +49,7 @@ public:
   virtual void EmitEHSymAttributes(const MCSymbol *Symbol,
                                    MCSymbol *EHSymbol);
   virtual void EmitAssemblerFlag(MCAssemblerFlag Flag);
-  virtual void EmitLinkerOptions(ArrayRef<MISTD::string> Options);
+  virtual void EmitLinkerOptions(ArrayRef<std::string> Options);
   virtual void EmitDataRegion(MCDataRegionType Kind);
   virtual void EmitThumbFunc(MCSymbol *Func);
   virtual bool EmitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute);
@@ -151,14 +151,14 @@ void MCMachOStreamer::EmitDataRegion(DataRegionData::KindTy Kind) {
   EmitLabel(Start);
   // Record the region for the object writer to use.
   DataRegionData Data = { Kind, Start, NULL };
-  MISTD::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
+  std::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
   Regions.push_back(Data);
 }
 
 void MCMachOStreamer::EmitDataRegionEnd() {
   if (!getAssembler().getBackend().hasDataInCodeSupport())
     return;
-  MISTD::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
+  std::vector<DataRegionData> &Regions = getAssembler().getDataRegions();
   assert(Regions.size() && "Mismatched .end_data_region!");
   DataRegionData &Data = Regions.back();
   assert(Data.End == NULL && "Mismatched .end_data_region!");
@@ -182,7 +182,7 @@ void MCMachOStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {
   }
 }
 
-void MCMachOStreamer::EmitLinkerOptions(ArrayRef<MISTD::string> Options) {
+void MCMachOStreamer::EmitLinkerOptions(ArrayRef<std::string> Options) {
   getAssembler().getLinkerOptions().push_back(Options);
 }
 

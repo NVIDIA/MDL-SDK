@@ -78,7 +78,7 @@ ModulePass *createGlobalDCEPass();
 /// the specified global values. Otherwise, it deletes as much of the module as
 /// possible, except for the global values specified.
 ///
-ModulePass *createGVExtractionPass(MISTD::vector<GlobalValue*>& GVs, bool 
+ModulePass *createGVExtractionPass(std::vector<GlobalValue*>& GVs, bool 
                                    deleteFn = false);
 
 //===----------------------------------------------------------------------===//

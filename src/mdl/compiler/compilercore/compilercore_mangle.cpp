@@ -697,6 +697,28 @@ bool MDL_name_mangler::demangle_name(char const *&strptr, char const *endptr, st
     return true;
 }
 
+// Parse the sequence id for a substitution.
+unsigned long MDL_name_mangler::parse_sequence_id(char const *&strptr, char const *endptr)
+{
+    // sequence id in base 64 (digits + upper case letters)
+    // and _ being first entry, 0_ second.
+
+    if (*strptr == '_') {
+        ++strptr;
+        return 0;
+    }
+
+    char *num_end = NULL;
+    unsigned long seqid = strtoul(strptr, &num_end, 36) + 1;
+    if (num_end == NULL || num_end == strptr || strptr >= endptr)
+        return ~0;
+    strptr = num_end;
+    if (*strptr != '_')
+        return ~0;
+    ++strptr;
+    return seqid;
+}
+
 // Demangle a C++ name to an MDL function name for use with resolvers.
 bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 {
@@ -718,8 +740,7 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
         if (*ptr == 'K')
             ++ptr;
 
-        string name(m_alloc);
-        bool first = true;
+        string name("::", m_alloc);
         while (ptr < endptr) {
             if (!demangle_name(ptr, endptr, name))
                 return false;
@@ -728,16 +749,14 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
             if (ptr >= endptr)
                 return false;
 
-            // only prefixes of qualified names are substituted
-            if (first) {
-                substitutions.push_back(Arena_strdup(arena, name.c_str()));
-                subst_skips.push_back(false);
-                first = false;
-            }
-
             // end of qualified name?
             if (*ptr == 'E')
                 break;
+
+            // note: the fully-qualified function name is not added to the substitution table,
+            //       so only add the current name prefix, if the end has not been reached
+            substitutions.push_back(Arena_strdup(arena, name.c_str()));
+            subst_skips.push_back(false);
 
             name += "::";
         }
@@ -746,8 +765,6 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
     } else {
         if (!demangle_name(ptr, endptr, m_out))
             return false;
-        substitutions.push_back(Arena_strdup(arena, m_out.c_str()));
-        subst_skips.push_back(false);
     }
 
     // for functions, handle parameter types
@@ -812,6 +829,44 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     break;
                 }
 
+                case 'N':
+                {
+                    ++ptr;
+
+                    // check for a leading substitution
+                    if (*ptr == 'S') {
+                        ++ptr;
+                        unsigned long seqid = parse_sequence_id(ptr, endptr);
+                        if (seqid == ~0 || seqid >= substitutions.size())
+                            return false;
+                        name += substitutions[seqid];
+                    }
+                    name += "::";
+
+                    while (ptr < endptr) {
+                        if (!demangle_name(ptr, endptr, name))
+                            return false;
+
+                        // unexpected end of string?
+                        if (ptr >= endptr)
+                            return false;
+
+                        // end of qualified name?
+                        if (*ptr == 'E')
+                            break;
+
+                        substitutions.push_back(Arena_strdup(arena, name.c_str()));
+                        subst_skips.push_back(false);
+
+                        name += "::";
+                    }
+                    ++ptr;  // skip 'E'
+
+                    add_subst = Arena_strdup(arena, name.c_str());
+                    add_self_subst = true;
+                    break;
+                }
+
                 case 'c':
                 {
                     ++ptr;
@@ -834,25 +889,10 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 
                 case 'S':
                 {
-                    // substitution with sequence id in base 64 (digits + upper case letters)
-                    // and S_ being first entry, S0_ second.
-                    unsigned long seqid;
+                    // substitution
                     ++ptr;
-                    if (*ptr == '_') {
-                        seqid = 0;
-                        ++ptr;
-                    }
-                    else {
-                        char *num_end = NULL;
-                        seqid = strtoul(ptr, &num_end, 36) + 1;
-                        if (num_end == NULL || num_end == ptr || ptr >= endptr)
-                            return false;
-                        ptr = num_end;
-                        if (*ptr != '_')
-                            return false;
-                        ++ptr;
-                    }
-                    if (seqid >= substitutions.size())
+                    unsigned long seqid = parse_sequence_id(ptr, endptr);
+                    if (seqid == ~0 || seqid >= substitutions.size())
                         return false;
 
                     name = substitutions[seqid];
@@ -1002,6 +1042,9 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
             break;
         case IMDL::MDL_VERSION_1_4:
             result += "$1.3";
+            break;
+        case IMDL::MDL_VERSION_1_5:
+            result += "$1.4";
             break;
         }
     }

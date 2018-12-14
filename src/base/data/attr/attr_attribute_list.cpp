@@ -188,7 +188,7 @@ void Attribute_list::list_shrink(
     }
 
     // store under m_values and free (now old) newvalues
-    MISTD::swap(m_values, newvalues);
+    std::swap(m_values, newvalues);
     ATTR::Attribute::deallocate_storage(newvalues);
 
     m_listalloc = listsize;

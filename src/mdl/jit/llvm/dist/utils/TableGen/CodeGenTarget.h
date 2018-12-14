@@ -52,12 +52,12 @@ enum SDNP {
 /// record corresponds to.
 MVT::SimpleValueType getValueType(Record *Rec);
 
-MISTD::string getName(MVT::SimpleValueType T);
-MISTD::string getEnumName(MVT::SimpleValueType T);
+std::string getName(MVT::SimpleValueType T);
+std::string getEnumName(MVT::SimpleValueType T);
 
 /// getQualifiedName - Return the name of the specified record, with a
 /// namespace qualifier if the record contains one.
-MISTD::string getQualifiedName(const Record *R);
+std::string getQualifiedName(const Record *R);
 
 /// CodeGenTarget - This class corresponds to the Target class in the .td files.
 ///
@@ -67,7 +67,7 @@ class CodeGenTarget {
 
   mutable DenseMap<const Record*, CodeGenInstruction*> Instructions;
   mutable CodeGenRegBank *RegBank;
-  mutable MISTD::vector<Record*> RegAltNameIndices;
+  mutable std::vector<Record*> RegAltNameIndices;
   mutable SmallVector<MVT::SimpleValueType, 8> LegalValueTypes;
   void ReadRegAltNameIndices() const;
   void ReadInstructions() const;
@@ -75,17 +75,17 @@ class CodeGenTarget {
 
   mutable CodeGenSchedModels *SchedModels;
 
-  mutable MISTD::vector<const CodeGenInstruction*> InstrsByEnum;
+  mutable std::vector<const CodeGenInstruction*> InstrsByEnum;
 public:
   CodeGenTarget(RecordKeeper &Records);
   ~CodeGenTarget();
 
   Record *getTargetRecord() const { return TargetRec; }
-  const MISTD::string &getName() const;
+  const std::string &getName() const;
 
   /// getInstNamespace - Return the target-specific instruction namespace.
   ///
-  MISTD::string getInstNamespace() const;
+  std::string getInstNamespace() const;
 
   /// getInstructionSet - Return the InstructionSet object.
   ///
@@ -116,7 +116,7 @@ public:
   /// return it.
   const CodeGenRegister *getRegisterByName(StringRef Name) const;
 
-  const MISTD::vector<Record*> &getRegAltNameIndices() const {
+  const std::vector<Record*> &getRegAltNameIndices() const {
     if (RegAltNameIndices.empty()) ReadRegAltNameIndices();
     return RegAltNameIndices;
   }
@@ -127,7 +127,7 @@ public:
 
   /// getRegisterVTs - Find the union of all possible SimpleValueTypes for the
   /// specified physical register.
-  MISTD::vector<MVT::SimpleValueType> getRegisterVTs(Record *R) const;
+  std::vector<MVT::SimpleValueType> getRegisterVTs(Record *R) const;
 
   ArrayRef<MVT::SimpleValueType> getLegalValueTypes() const {
     if (LegalValueTypes.empty()) ReadLegalValueTypes();
@@ -162,13 +162,13 @@ public:
 
   /// getInstructionsByEnumValue - Return all of the instructions defined by the
   /// target, ordered by their enum value.
-  const MISTD::vector<const CodeGenInstruction*> &
+  const std::vector<const CodeGenInstruction*> &
   getInstructionsByEnumValue() const {
     if (InstrsByEnum.empty()) ComputeInstrsByEnum();
     return InstrsByEnum;
   }
 
-  typedef MISTD::vector<const CodeGenInstruction*>::const_iterator inst_iterator;
+  typedef std::vector<const CodeGenInstruction*>::const_iterator inst_iterator;
   inst_iterator inst_begin() const{return getInstructionsByEnumValue().begin();}
   inst_iterator inst_end() const { return getInstructionsByEnumValue().end(); }
 
@@ -190,8 +190,8 @@ private:
 class ComplexPattern {
   MVT::SimpleValueType Ty;
   unsigned NumOperands;
-  MISTD::string SelectFunc;
-  MISTD::vector<Record*> RootNodes;
+  std::string SelectFunc;
+  std::vector<Record*> RootNodes;
   unsigned Properties; // Node properties
 public:
   ComplexPattern() : NumOperands(0) {}
@@ -199,8 +199,8 @@ public:
 
   MVT::SimpleValueType getValueType() const { return Ty; }
   unsigned getNumOperands() const { return NumOperands; }
-  const MISTD::string &getSelectFunc() const { return SelectFunc; }
-  const MISTD::vector<Record*> &getRootNodes() const {
+  const std::string &getSelectFunc() const { return SelectFunc; }
+  const std::vector<Record*> &getRootNodes() const {
     return RootNodes;
   }
   bool hasProperty(enum SDNP Prop) const { return Properties & (1 << Prop); }

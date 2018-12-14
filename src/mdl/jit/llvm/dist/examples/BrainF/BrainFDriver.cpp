@@ -40,10 +40,10 @@ using namespace llvm;
 
 //Command line options
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input brainf>"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Output filename"), cl::value_desc("filename"));
 
 static cl::opt<bool>
@@ -99,23 +99,23 @@ int main(int argc, char **argv) {
   raw_ostream *out = &outs();
   if (!JIT) {
     if (OutputFilename == "") {
-      MISTD::string base = InputFilename;
+      std::string base = InputFilename;
       if (InputFilename == "-") { base = "a"; }
 
       // Use default filename.
       OutputFilename = base+".bc";
     }
     if (OutputFilename != "-") {
-      MISTD::string ErrInfo;
+      std::string ErrInfo;
       out = new raw_fd_ostream(OutputFilename.c_str(), ErrInfo,
                                sys::fs::F_Binary);
     }
   }
 
   //Get the input stream
-  MISTD::istream *in = &MISTD::cin;
+  std::istream *in = &std::cin;
   if (InputFilename != "-")
-    in = new MISTD::ifstream(InputFilename.c_str());
+    in = new std::ifstream(InputFilename.c_str());
 
   //Gather the compile flags
   BrainF::CompileFlags cf = BrainF::flag_off;
@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
   //Read the BrainF program
   BrainF bf;
   Module *mod = bf.parse(in, 65536, cf, Context); //64 KiB
-  if (in != &MISTD::cin)
+  if (in != &std::cin)
     delete in;
   addMainFunction(mod);
 
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
 
     outs() << "------- Running JIT -------\n";
     ExecutionEngine *ee = EngineBuilder(mod).create();
-    MISTD::vector<GenericValue> args;
+    std::vector<GenericValue> args;
     Function *brainf_func = mod->getFunction("brainf");
     GenericValue gv = ee->runFunction(brainf_func, args);
   } else {

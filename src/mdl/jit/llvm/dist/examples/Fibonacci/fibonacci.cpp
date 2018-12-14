@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
   Function *FibF = CreateFibFunction(M.get(), Context);
 
   // Now we going to create JIT
-  MISTD::string errStr;
+  std::string errStr;
   ExecutionEngine *EE =
     EngineBuilder(M.get())
     .setErrorStr(&errStr)
@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
   errs() << "---------\nstarting fibonacci(" << n << ") with JIT...\n";
 
   // Call the Fibonacci function with argument n:
-  MISTD::vector<GenericValue> Args(1);
+  std::vector<GenericValue> Args(1);
   Args[0].IntVal = APInt(32, n);
   GenericValue GV = EE->runFunction(FibF, Args);
 

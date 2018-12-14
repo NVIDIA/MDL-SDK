@@ -51,19 +51,19 @@ namespace HAL {
 namespace {
 
 // Replace all occurrence of a string with another one
-MISTD::string replace_all(
-    const MISTD::string& str,		// input string
-    const MISTD::string& fstr,		// find string
-    const MISTD::string& rstr)		// replace string
+std::string replace_all(
+    const std::string& str,		// input string
+    const std::string& fstr,		// find string
+    const std::string& rstr)		// replace string
 {
     if (str.empty())
-	return MISTD::string("");
+	return std::string("");
 
-    MISTD::string fs(str);
+    std::string fs(str);
     size_t pos = 0;
-    while(pos != MISTD::string::npos) {
+    while(pos != std::string::npos) {
 	pos = fs.find(fstr, pos);
-	if (pos != MISTD::string::npos) {
+	if (pos != std::string::npos) {
 	    fs.replace(pos, fstr.size(), rstr);
 	}
     }
@@ -76,12 +76,12 @@ MISTD::string replace_all(
 
 // Return the OS independent separator. On Windows the separator is '\',
 // while on the other operating system is is '/'.
-MISTD::string Ospath::sep()
+std::string Ospath::sep()
 {
 #ifdef WIN_NT
-	return MISTD::string("\\");
+	return std::string("\\");
 #else
-	return MISTD::string("/");
+	return std::string("/");
 #endif
 }
 
@@ -89,7 +89,7 @@ MISTD::string Ospath::sep()
 // on Linux and MacOSX, path set is separated by ":", e.g.,
 // "/home/user0:/home/user0", on Windows,
 // "C:\home\user0;C:\home\user0"
-MISTD::string Ospath::get_path_set_separator()
+std::string Ospath::get_path_set_separator()
 {
 #ifdef _WIN32
     return ";";
@@ -102,27 +102,27 @@ MISTD::string Ospath::get_path_set_separator()
 // pair returned by split(path). Note that the result of this function is
 // different from the Unix basename program; where basename for '/foo/bar/'
 // returns 'bar', the basename() function returns an empty string ('').
-MISTD::string Ospath::basename(
-    const MISTD::string& path)			// Incoming path
+std::string Ospath::basename(
+    const std::string& path)			// Incoming path
 {
-    MISTD::string head, tail;
+    std::string head, tail;
     split(path, head, tail);
     return tail;
 }
 
 // Return the directory name of pathname path. This is the first half of
 // the pair returned by split(path).
-MISTD::string Ospath::dirname(
-    const MISTD::string& path)			// Incoming path
+std::string Ospath::dirname(
+    const std::string& path)			// Incoming path
 {
-    MISTD::string head, tail;
+    std::string head, tail;
     split(path, head, tail);
     return head;
 }
 
-MISTD::string Ospath::join(
-    const MISTD::string& path,
-    const MISTD::string& path2)
+std::string Ospath::join(
+    const std::string& path,
+    const std::string& path2)
 {
     if (path.empty())
 	return path2;
@@ -132,7 +132,7 @@ MISTD::string Ospath::join(
 	return path + sep() + path2;
 }
 
-MISTD::string Ospath::join_v2(const MISTD::string& path1, const MISTD::string& path2)
+std::string Ospath::join_v2(const std::string& path1, const std::string& path2)
 {
     if (path1 == ".")
         return path2;
@@ -141,18 +141,18 @@ MISTD::string Ospath::join_v2(const MISTD::string& path1, const MISTD::string& p
     return path1 + sep() + path2;
 }
 
-MISTD::string Ospath::normpath(
-    const MISTD::string& orig_in_path)
+std::string Ospath::normpath(
+    const std::string& orig_in_path)
 {
-    MISTD::vector<MISTD::string> token_list;
-    const MISTD::string separator = HAL::Ospath::sep();
-    const MISTD::string in_path = Ospath::normpath_only(orig_in_path);
-    MISTD::string out_path;
+    std::vector<std::string> token_list;
+    const std::string separator = HAL::Ospath::sep();
+    const std::string in_path = Ospath::normpath_only(orig_in_path);
+    std::string out_path;
 
     MI::STRING::split(in_path, separator, token_list);
 
-    MISTD::vector<MISTD::string> last_dir;
-    MISTD::vector<MISTD::string>::const_iterator it = token_list.begin();
+    std::vector<std::string> last_dir;
+    std::vector<std::string>::const_iterator it = token_list.begin();
 
     // iterate over all elements, skipping . and resolving ..
     while(it != token_list.end()) {
@@ -172,7 +172,7 @@ MISTD::string Ospath::normpath(
 	    if (last_dir.empty())
 		return orig_in_path;
 	    size_t ind = out_path.rfind(last_dir.back());
-	    if (ind == MISTD::string::npos)
+	    if (ind == std::string::npos)
 		return orig_in_path;
 	    out_path = out_path.substr(0, ind);
 	    last_dir.pop_back();
@@ -192,7 +192,7 @@ MISTD::string Ospath::normpath(
     // First convert back to backslashes since siteconfig converts
     // paths to forward slashes which means the test against sep()
     // which returns backslashes on windows would not work.
-    MISTD::string win_path = convert_to_backward_slashes(orig_in_path);
+    std::string win_path = convert_to_backward_slashes(orig_in_path);
     if (win_path.length() >= 2 &&
 	(win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
 	out_path.insert(0, sep());
@@ -202,18 +202,18 @@ MISTD::string Ospath::normpath(
 #endif
 }
 
-MISTD::string Ospath::normpath_only(
-    const MISTD::string& path)
+std::string Ospath::normpath_only(
+    const std::string& path)
 {
-    MISTD::string npath = convert_to_forward_slashes(path);
-    npath = replace_all(npath, MISTD::string("//"), MISTD::string("/"));
+    std::string npath = convert_to_forward_slashes(path);
+    npath = replace_all(npath, std::string("//"), std::string("/"));
 
 #if WIN_NT
     // Check for UNC and put back the '\\' which have been removed.
     // First convert back to backslashes since siteconfig converts
     // paths to forward slashes which means the test against sep()
     // which returns backslashes on windows would not work.
-    MISTD::string win_path = convert_to_backward_slashes(path);
+    std::string win_path = convert_to_backward_slashes(path);
     if (win_path.length() >= 2 &&
 	(win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
 	npath.insert(0, sep());
@@ -223,18 +223,18 @@ MISTD::string Ospath::normpath_only(
 #endif
 }
 
-MISTD::string Ospath::normpath_v2(const MISTD::string& path)
+std::string Ospath::normpath_v2(const std::string& path)
 {
-    const MISTD::string& separator = sep();
+    const std::string& separator = sep();
     ASSERT(M_HAL, separator.size() == 1);
 
-    MISTD::vector<MISTD::string> path_components;
+    std::vector<std::string> path_components;
     MI::STRING::split(path, separator, path_components);
 
     // resolved current and parent directory references
-    MISTD::vector<MISTD::string> result_components;
+    std::vector<std::string> result_components;
     for (size_t i = 0; i < path_components.size(); ++i) {
-        const MISTD::string& component = path_components[i];
+        const std::string& component = path_components[i];
 
         // skip empty path components or current directory references
         if (component.empty() || component == ".")
@@ -254,7 +254,7 @@ MISTD::string Ospath::normpath_v2(const MISTD::string& path)
     }
 
     // convert result_components into a string
-    MISTD::string result = result_components.empty() ? "" : result_components[0];
+    std::string result = result_components.empty() ? "" : result_components[0];
     for (size_t i = 1; i < result_components.size(); ++i)
         result += separator + result_components[i];
 
@@ -280,11 +280,11 @@ MISTD::string Ospath::normpath_v2(const MISTD::string& path)
 // cases, join(head, tail) equals path (the only exception being when there
 // were multiple slashes separating head from tail).
 void Ospath::split(
-    const MISTD::string& path,			// Incoming path
-    MISTD::string& head_ref,			// Out head part
-    MISTD::string& tail_ref)			// Out tail part
+    const std::string& path,			// Incoming path
+    std::string& head_ref,			// Out head part
+    std::string& tail_ref)			// Out tail part
 {
-    MISTD::string head, tail;
+    std::string head, tail;
 
     if (path.empty()) {
 	head_ref = head;
@@ -292,19 +292,19 @@ void Ospath::split(
 	return;
     }
 
-    MISTD::string filepath;
+    std::string filepath;
     filepath = convert_to_forward_slashes(path);
 
-    MISTD::string::size_type i = filepath.find_last_of('/');
-    if (i == MISTD::string::npos) {
-	head_ref = MISTD::string("");
+    std::string::size_type i = filepath.find_last_of('/');
+    if (i == std::string::npos) {
+	head_ref = std::string("");
 	tail_ref = path;
 	return;
     }
 
     // Remove from one behind '/' to the end
     head = path;
-    head.erase(i+1, MISTD::string::npos);
+    head.erase(i+1, std::string::npos);
     // remove trailing '/' iff size()>1 and if this is not a Windows drive, eg C:/
     if (head.size() > 1
 #ifdef WIN_NT
@@ -326,23 +326,23 @@ void Ospath::split(
 // last pathname component and head is everything leading up to that.
 // This version leaves both parts untouched and does only the splitting.
 void Ospath::split_only(
-    const MISTD::string& path,		// Incoming path
-    MISTD::string& head,			// Out head part
-    MISTD::string& tail)			// Out tail part
+    const std::string& path,		// Incoming path
+    std::string& head,			// Out head part
+    std::string& tail)			// Out tail part
 {
     // set pos to the 1st delimiter
-    MISTD::string::size_type pos_win = path.rfind('\\');
-    MISTD::string::size_type pos_lin = path.rfind('/');
-    MISTD::string::size_type pos = MISTD::string::npos;
-    if (pos_win == MISTD::string::npos && pos_lin != MISTD::string::npos)
+    std::string::size_type pos_win = path.rfind('\\');
+    std::string::size_type pos_lin = path.rfind('/');
+    std::string::size_type pos = std::string::npos;
+    if (pos_win == std::string::npos && pos_lin != std::string::npos)
 	pos = pos_lin;
-    else if (pos_win != MISTD::string::npos && pos_lin == MISTD::string::npos)
+    else if (pos_win != std::string::npos && pos_lin == std::string::npos)
 	pos = pos_win;
     else
-	pos = MISTD::max(pos_win, pos_lin);
+	pos = std::max(pos_win, pos_lin);
 
     head = path.substr(0, pos);				// this spares the trailing delimiter
-    tail = path.substr(pos == MISTD::string::npos? 0 : pos+1);
+    tail = path.substr(pos == std::string::npos? 0 : pos+1);
 }
 
 // Split the pathname path into a pair (drive, tail) where drive is either
@@ -350,17 +350,17 @@ void Ospath::split_only(
 // drive specifications, drive will always be the empty string. In all
 // cases, drive + tail will be the same as path.
 void Ospath::splitdrive(
-    const MISTD::string& path,		// Incoming path
-    MISTD::string& drive,			// Out drive part
-    MISTD::string& tail)			// Out tail part
+    const std::string& path,		// Incoming path
+    std::string& drive,			// Out drive part
+    std::string& tail)			// Out tail part
 {
-    drive = MISTD::string("");
-    tail = MISTD::string("");
+    drive = std::string("");
+    tail = std::string("");
     if (path.empty())
 	return;
 
-    MISTD::string::size_type i = path.find_last_of(':');
-    if (i == MISTD::string::npos)
+    std::string::size_type i = path.find_last_of(':');
+    if (i == std::string::npos)
     {
 	tail = path;
 	return;
@@ -374,55 +374,55 @@ void Ospath::splitdrive(
 // root + ext == path, and ext is empty or begins with a period and
 // contains at most one period.
 void Ospath::splitext(
-    const MISTD::string& path,		// Incoming path
-    MISTD::string& root,			// Out root part
-    MISTD::string& ext)			// Out extension part
+    const std::string& path,		// Incoming path
+    std::string& root,			// Out root part
+    std::string& ext)			// Out extension part
 {
-    root = MISTD::string("");
-    ext = MISTD::string("");
+    root = std::string("");
+    ext = std::string("");
     if (path.empty())
 	return;
 
-    MISTD::string::size_type i = path.find_last_of('.');
-    if (i == MISTD::string::npos)
+    std::string::size_type i = path.find_last_of('.');
+    if (i == std::string::npos)
 	return;
 
     root = path;
-    root.erase(i, MISTD::string::npos);
+    root.erase(i, std::string::npos);
     ext = path;
     ext.erase(0, i);
 }
 
 
-MISTD::string Ospath::get_ext(
-    const MISTD::string& path)
+std::string Ospath::get_ext(
+    const std::string& path)
 {
-    MISTD::string::size_type i = path.find_last_of('.');
-    if (i == MISTD::string::npos)
-	return MISTD::string();
+    std::string::size_type i = path.find_last_of('.');
+    if (i == std::string::npos)
+	return std::string();
     return path.substr(i);
 }
 
 
 // Convert the given path to use forward slashes
-MISTD::string Ospath::convert_to_forward_slashes(
-    const MISTD::string& path)		// Convert this path
+std::string Ospath::convert_to_forward_slashes(
+    const std::string& path)		// Convert this path
 {
-    return replace_all(path, MISTD::string("\\"), MISTD::string("/"));
+    return replace_all(path, std::string("\\"), std::string("/"));
 }
 
 
 // Convert the given path to use forward slashes
-MISTD::string Ospath::convert_to_backward_slashes(
-    const MISTD::string& path)		// Convert this path
+std::string Ospath::convert_to_backward_slashes(
+    const std::string& path)		// Convert this path
 {
-    return replace_all(path, MISTD::string("/"), MISTD::string("\\"));
+    return replace_all(path, std::string("/"), std::string("\\"));
 }
 
 
 // Convert all separators to the current platform's separators.
-MISTD::string Ospath::convert_to_platform_specific_path(
-    const MISTD::string& path)
+std::string Ospath::convert_to_platform_specific_path(
+    const std::string& path)
 {
     return
 #ifdef MI_PLATFORM_WINDOWS

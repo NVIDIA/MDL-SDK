@@ -32,6 +32,7 @@
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
 
 #include <string>
+#include <map>
 #include <vector>
 #include <set>
 #include <mi/base/ilogger.h>
@@ -41,6 +42,7 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/data/db/i_db_tag.h>
+#include <base/system/stlext/i_stlext_any.h>
 
 namespace mi { namespace neuraylib { class IReader; } }
 namespace mi { namespace mdl { class IMDL_resource_reader; } }
@@ -180,16 +182,172 @@ Mdl_compiled_material* get_default_compiled_material( DB::Transaction* transacti
 class Message
 {
 public:
+
+    enum Kind{
+        MSG_COMILER_CORE,
+        MSG_COMILER_BACKEND,
+        MSG_COMPILER_DAG,
+        MSG_COMPILER_ARCHIVE_TOOL,
+        MSG_IMP_EXP,
+        MSG_INTEGRATION,
+        MSG_UNCATEGORIZED,
+        MSG_FORCE_32_BIT = 0xffffffffU
+    };
+
     Message( mi::base::Message_severity severity, const std::string& message)
-      : m_severity( severity), m_message( message) { }
-    mi::base::Message_severity m_severity;
-    std::string              m_message;
+        : m_severity( severity)
+        , m_code(-1)
+        , m_message( message)
+        , m_kind(MSG_UNCATEGORIZED) { }
+
+    Message(mi::base::Message_severity severity, const std::string& message, mi::Sint32 code, Kind kind)
+        : m_severity(severity)
+        , m_code(code)
+        , m_message(message)
+        , m_kind(kind) { }
+
+    Message(const mi::mdl::IMessage *message);
+
+    mi::base::Message_severity  m_severity;
+    mi::Sint32                  m_code;
+    std::string                 m_message;
+    Kind                        m_kind;
+    std::vector<Message>        m_notes;
+
+};
+
+/// Simple Option class.
+class Option 
+{
+public:
+
+    typedef bool(*Validator)(const STLEXT::Any& v);
+
+    Option(const std::string& name, const STLEXT::Any& default_value, Validator validator=nullptr)
+        : m_name(name)
+        , m_value(default_value)
+        , m_default_value(default_value)
+        , m_validator(validator)
+        , m_is_set(false)
+    {}
+
+    const char* get_name() const
+    {
+        return m_name.c_str();
+    }
+
+    bool set_value(const STLEXT::Any& value) 
+    {
+        if(m_validator && !m_validator(value)) {
+            return false;
+        }
+        m_value = value;
+        m_is_set = true;
+        return true;
+    }
+
+    const STLEXT::Any& get_value() const
+    {
+        return m_value;
+    }
+
+    void reset() 
+    {
+        m_value = m_default_value;
+        m_is_set = false;
+    }
+
+    bool is_set() const 
+    {
+        return m_is_set;
+    }
+
+private:
+
+    std::string m_name;
+    STLEXT::Any m_value;
+    STLEXT::Any m_default_value;
+    Validator m_validator;
+    bool m_is_set;
+};
+
+/// Represents an MDL execution context. Similar to mi::mdl::Thread_context.
+class Execution_context
+{
+public:
+
+    #define MDL_CTX_OPTION_INTERNAL_SPACE           "internal_space"
+    #define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT    "meters_per_scene_unit"
+    #define MDL_CTX_OPTION_WAVELENGTH_MIN           "wavelength_min"
+    #define MDL_CTX_OPTION_WAVELENGTH_MAX           "wavelength_max"
+    #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL       "include_geometry_normal"
+    #define MDL_CTX_OPTION_BUNDLE_RESOURCES         "bundle_resources"
+    #define MDL_CTX_OPTION_EXPERIMENTAL             "experimental"
+
+    Execution_context();
+
+    mi::Size get_messages_count() const;
+
+    mi::Size get_error_messages_count() const;
+
+    const Message& get_message(mi::Size index) const;
+
+    const Message& get_error_message(mi::Size index) const;
+
+    void add_message(const mi::mdl::IMessage* message);
+
+    void add_error_message(const mi::mdl::IMessage* message);
+
+    void add_message(const Message& message);
+
+    void add_error_message(const Message& message);
+
+    void add_messages(const mi::mdl::Messages& messages);
+
+    void clear_messages();
+
+    mi::Size get_option_count() const;
+
+    mi::Size get_option_index(const std::string& name) const;
+
+    const char* get_option_name(mi::Size index) const;
+
+    template<typename T> 
+    T get_option(const std::string& name) const {
+
+        mi::Size index = get_option_index(name);
+        ASSERT(M_SCENE, index < m_options.size());
+
+        const Option& option = m_options[index];
+        return STLEXT::any_cast<T> (option.get_value());
+    }
+
+    mi::Sint32 get_option(const std::string& name, STLEXT::Any& value) const;
+
+    mi::Sint32 set_option(const std::string& name, const STLEXT::Any& value);
+
+    void set_result(mi::Sint32 result);
+
+    mi::Sint32 get_result() const;
+
+private:
+
+    void add_option(const Option& option);
+
+    std::vector<Message> m_messages;
+    std::vector<Message> m_error_messages;
+
+    std::map<std::string, mi::Size> m_options_2_index;
+    std::vector<Option> m_options;
+
+    mi::Sint32 m_result;
+
 };
 
 /// Outputs MDL messages to the logger.
 ///
-/// Also converts them from \p in_messages to \p out_messages (unless \p out_messages is \c NULL).
-void report_messages( const mi::mdl::Messages& in_messages, std::vector<Message>* out_messages);
+/// Also adds the messages to \p context (unless \p context is \c NULL).
+void report_messages(const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Wraps an MDL resource reader as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* reader);
@@ -419,7 +577,6 @@ private:
     typedef std::set<const mi::mdl::IModule*> Module_set;
     mutable Module_set m_resolved_modules;
 };
-
 
 // **********  Resource names **********************************************************************
 

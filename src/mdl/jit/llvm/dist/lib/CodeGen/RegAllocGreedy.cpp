@@ -81,7 +81,7 @@ class RAGreedy : public MachineFunctionPass,
 
   // state
   OwningPtr<Spiller> SpillerInstance;
-  MISTD::priority_queue<MISTD::pair<unsigned, unsigned> > Queue;
+  std::priority_queue<std::pair<unsigned, unsigned> > Queue;
   unsigned NextCascade;
 
   // Live ranges pass through a number of stages as we try to allocate them.
@@ -436,7 +436,7 @@ void RAGreedy::enqueue(LiveInterval *LI) {
   }
   // The virtual register number is a tie breaker for same-sized ranges.
   // Give lower vreg numbers higher priority to assign them first.
-  Queue.push(MISTD::make_pair(Prio, ~Reg));
+  Queue.push(std::make_pair(Prio, ~Reg));
 }
 
 LiveInterval *RAGreedy::dequeue() {
@@ -612,7 +612,7 @@ bool RAGreedy::canEvictInterference(LiveInterval &VirtReg, unsigned PhysReg,
       bool BreaksHint = VRM->hasPreferredPhys(Intf->reg);
       // Update eviction cost.
       Cost.BrokenHints += BreaksHint;
-      Cost.MaxWeight = MISTD::max(Cost.MaxWeight, Intf->weight);
+      Cost.MaxWeight = std::max(Cost.MaxWeight, Intf->weight);
       // Abort if this would be too expensive.
       if (!(Cost < MaxCost))
         return false;
@@ -1453,7 +1453,7 @@ void RAGreedy::calcGapWeights(unsigned PhysReg,
       // Update the gaps covered by IntI.
       const float weight = IntI.value()->weight;
       for (; Gap != NumGaps; ++Gap) {
-        GapWeight[Gap] = MISTD::max(GapWeight[Gap], weight);
+        GapWeight[Gap] = std::max(GapWeight[Gap], weight);
         if (Uses[Gap+1].getBaseIndex() >= IntI.stop())
           break;
       }
@@ -1522,7 +1522,7 @@ unsigned RAGreedy::tryLocalSplit(LiveInterval &VirtReg, AllocationOrder &Order,
     ArrayRef<SlotIndex> RMS = LIS->getRegMaskSlotsInBlock(BI.MBB->getNumber());
     DEBUG(dbgs() << RMS.size() << " regmasks in block:");
     // Constrain to VirtReg's live range.
-    unsigned ri = MISTD::lower_bound(RMS.begin(), RMS.end(),
+    unsigned ri = std::lower_bound(RMS.begin(), RMS.end(),
                                    Uses.front().getRegSlot()) - RMS.begin();
     unsigned re = RMS.size();
     for (unsigned i = 0; i != NumGaps && ri != re; ++i) {
@@ -1650,7 +1650,7 @@ unsigned RAGreedy::tryLocalSplit(LiveInterval &VirtReg, AllocationOrder &Order,
           if (GapWeight[SplitBefore - 1] >= MaxGap) {
             MaxGap = GapWeight[SplitBefore];
             for (unsigned i = SplitBefore + 1; i != SplitAfter; ++i)
-              MaxGap = MISTD::max(MaxGap, GapWeight[i]);
+              MaxGap = std::max(MaxGap, GapWeight[i]);
           }
           continue;
         }
@@ -1664,7 +1664,7 @@ unsigned RAGreedy::tryLocalSplit(LiveInterval &VirtReg, AllocationOrder &Order,
       }
 
       DEBUG(dbgs() << " extend\n");
-      MaxGap = MISTD::max(MaxGap, GapWeight[SplitAfter++]);
+      MaxGap = std::max(MaxGap, GapWeight[SplitAfter++]);
     }
   }
 

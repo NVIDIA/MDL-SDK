@@ -199,12 +199,12 @@ private:
   FunctionListType FunctionList;  ///< The Functions in the module
   AliasListType AliasList;        ///< The Aliases in the module
   NamedMDListType NamedMDList;    ///< The named metadata in the module
-  MISTD::string GlobalScopeAsm;     ///< Inline Asm at global scope.
+  std::string GlobalScopeAsm;     ///< Inline Asm at global scope.
   ValueSymbolTable *ValSymTab;    ///< Symbol table for values
   OwningPtr<GVMaterializer> Materializer;  ///< Used to materialize GlobalValues
-  MISTD::string ModuleID;           ///< Human readable identifier for the module
-  MISTD::string TargetTriple;       ///< Platform target triple Module compiled on
-  MISTD::string DataLayout;         ///< Target data description
+  std::string ModuleID;           ///< Human readable identifier for the module
+  std::string TargetTriple;       ///< Platform target triple Module compiled on
+  std::string DataLayout;         ///< Target data description
   void *NamedMDSymTab;            ///< NamedMDNode names.
 
   friend class Constant;
@@ -225,16 +225,16 @@ public:
 
   /// Get the module identifier which is, essentially, the name of the module.
   /// @returns the module identifier as a string
-  const MISTD::string &getModuleIdentifier() const { return ModuleID; }
+  const std::string &getModuleIdentifier() const { return ModuleID; }
 
   /// Get the data layout string for the module's target platform.  This encodes
   /// the type sizes and alignments expected by this module.
   /// @returns the data layout as a string
-  const MISTD::string &getDataLayout() const { return DataLayout; }
+  const std::string &getDataLayout() const { return DataLayout; }
 
   /// Get the target triple which is a string describing the target host.
   /// @returns a string containing the target triple.
-  const MISTD::string &getTargetTriple() const { return TargetTriple; }
+  const std::string &getTargetTriple() const { return TargetTriple; }
 
   /// Get the target endian information.
   /// @returns Endianess - an enumeration for the endianess of the target
@@ -250,7 +250,7 @@ public:
 
   /// Get any module-scope inline assembly blocks.
   /// @returns a string containing the module-scope inline assembly blocks.
-  const MISTD::string &getModuleInlineAsm() const { return GlobalScopeAsm; }
+  const std::string &getModuleInlineAsm() const { return GlobalScopeAsm; }
 
 /// @}
 /// @name Module Level Mutators
@@ -458,7 +458,7 @@ public:
   /// Materialize - Make sure the GlobalValue is fully read.  If the module is
   /// corrupt, this returns true and fills in the optional string with
   /// information about the problem.  If successful, this returns false.
-  bool Materialize(GlobalValue *GV, MISTD::string *ErrInfo = 0);
+  bool Materialize(GlobalValue *GV, std::string *ErrInfo = 0);
   /// Dematerialize - If the GlobalValue is read in, and if the GVMaterializer
   /// supports it, release the memory for the function, and set it up to be
   /// materialized lazily.  If !isDematerializable(), this method is a noop.
@@ -468,14 +468,14 @@ public:
   /// If the module is corrupt, this returns true and fills in the optional
   /// string with information about the problem.  If successful, this returns
   /// false.
-  bool MaterializeAll(MISTD::string *ErrInfo = 0);
+  bool MaterializeAll(std::string *ErrInfo = 0);
 
   /// MaterializeAllPermanently - Make sure all GlobalValues in this Module are
   /// fully read and clear the Materializer.  If the module is corrupt, this
   /// returns true, fills in the optional string with information about the
   /// problem, and DOES NOT clear the old Materializer.  If successful, this
   /// returns false.
-  bool MaterializeAllPermanently(MISTD::string *ErrInfo = 0);
+  bool MaterializeAllPermanently(std::string *ErrInfo = 0);
 
 /// @}
 /// @name Direct access to the globals list, functions list, and symbol table

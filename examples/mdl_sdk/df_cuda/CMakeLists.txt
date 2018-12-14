@@ -1,5 +1,5 @@
 # name of the target and the resulting example
-set(PROJECT_NAME mdl_sdk_example-df_cuda)
+set(PROJECT_NAME examples-mdl_sdk-df_cuda)
 
 # -------------------------------------------------------------------------------------------------
 # Main Target 
@@ -15,7 +15,8 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk_examples
+    NAMESPACE mdl_sdk
+    OUTPUT_NAME "df_cuda"
     SOURCES ${PROJECT_SOURCES}
 )
 
@@ -23,7 +24,7 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
-        mdl_sdk_examples::mdl_sdk_shared
+        mdl_sdk::shared
         opengl
         imgui
         cuda
@@ -35,10 +36,15 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 # -------------------------------------------------------------------------------------------------
 # PTX Target 
 # -------------------------------------------------------------------------------------------------
+
 target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME} 
     DEPENDS 
         mdl::mdl_sdk
-        mdl_sdk_examples::mdl_sdk_shared
+        mdl_sdk::shared
     CUDA_SOURCES
         "example_df_cuda.cu"
+        "example_df_cuda_derivatives.cu"
     )
+
+# add tests if available
+add_tests()

@@ -114,7 +114,7 @@ class Attr_module_impl : public Attr_module
     /// \param type_name name of the type
     /// \return \c Type_code, \c TYPE_UNDEF if the look up fails.
     ATTR::Type_code get_type_code(
-        const MISTD::string& type_name) const;
+        const std::string& type_name) const;
 
   private:
     static Attr_module_impl* s_attr_module;	///< internal pointer to the module
@@ -124,7 +124,7 @@ class Attr_module_impl : public Attr_module
     void build_name_to_code_map();
 
     /// Mapping from type name to type code, used in \c get_type_code.
-    typedef boost::unordered_map<MISTD::string, ATTR::Type_code> Map_name_to_code;
+    typedef boost::unordered_map<std::string, ATTR::Type_code> Map_name_to_code;
     Map_name_to_code m_map_name_to_code;
 
     friend class Attribute;

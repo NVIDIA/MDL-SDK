@@ -54,7 +54,7 @@ TEST(BitReaderTest, MaterializeFunctionsForBlockAddr) { // PR11677
   SmallString<1024> Mem;
   writeModuleToBuffer(Mem);
   MemoryBuffer *Buffer = MemoryBuffer::getMemBuffer(Mem.str(), "test", false);
-  MISTD::string errMsg;
+  std::string errMsg;
   OwningPtr<Module> m(getLazyBitcodeModule(Buffer, getGlobalContext(), &errMsg));
   PassManager passes;
   passes.add(createVerifierPass());

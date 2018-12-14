@@ -50,7 +50,7 @@ private:
   /// been flushed and the portion of the buffer that's been
   /// scanned.  The line and column scheme is zero-based.
   ///
-  MISTD::pair<unsigned, unsigned> Position;
+  std::pair<unsigned, unsigned> Position;
 
   /// Scanned - This points to one past the last character in the
   /// buffer we've scanned.

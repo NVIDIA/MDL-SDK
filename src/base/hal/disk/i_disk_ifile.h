@@ -75,7 +75,7 @@ class IFile : public MEM::Allocatable
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const MISTD::string& path,
+	const std::string& path,
 	Mode mode = M_READ) = 0;
 
     /// Close the file.
@@ -109,7 +109,7 @@ class IFile : public MEM::Allocatable
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     virtual bool read_line(
-	MISTD::string& line,
+	std::string& line,
 	bool strip=true) = 0;
 
     /// Write raw data to a file

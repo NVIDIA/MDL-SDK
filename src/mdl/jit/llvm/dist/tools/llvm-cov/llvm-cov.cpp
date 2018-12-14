@@ -25,13 +25,13 @@ using namespace llvm;
 static cl::opt<bool>
 DumpGCOV("dump", cl::init(false), cl::desc("dump gcov file"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputGCNO("gcno", cl::desc("<input gcno file>"), cl::init(""));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputGCDA("gcda", cl::desc("<input gcda file>"), cl::init(""));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFile("o", cl::desc("<output llvm-cov file>"), cl::init("-"));
 
 
@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 
   cl::ParseCommandLineOptions(argc, argv, "llvm coverage tool\n");
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   raw_fd_ostream OS(OutputFile.c_str(), ErrorInfo);
   if (!ErrorInfo.empty())
     errs() << ErrorInfo << "\n";

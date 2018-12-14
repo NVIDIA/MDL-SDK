@@ -111,7 +111,7 @@ void LLVMDisposeGenericValue(LLVMGenericValueRef GenVal) {
 LLVMBool LLVMCreateExecutionEngineForModule(LLVMExecutionEngineRef *OutEE,
                                             LLVMModuleRef M,
                                             char **OutError) {
-  MISTD::string Error;
+  std::string Error;
   EngineBuilder builder(unwrap(M));
   builder.setEngineKind(EngineKind::Either)
          .setErrorStr(&Error);
@@ -126,7 +126,7 @@ LLVMBool LLVMCreateExecutionEngineForModule(LLVMExecutionEngineRef *OutEE,
 LLVMBool LLVMCreateInterpreterForModule(LLVMExecutionEngineRef *OutInterp,
                                         LLVMModuleRef M,
                                         char **OutError) {
-  MISTD::string Error;
+  std::string Error;
   EngineBuilder builder(unwrap(M));
   builder.setEngineKind(EngineKind::Interpreter)
          .setErrorStr(&Error);
@@ -142,7 +142,7 @@ LLVMBool LLVMCreateJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
                                         LLVMModuleRef M,
                                         unsigned OptLevel,
                                         char **OutError) {
-  MISTD::string Error;
+  std::string Error;
   EngineBuilder builder(unwrap(M));
   builder.setEngineKind(EngineKind::JIT)
          .setErrorStr(&Error)
@@ -162,7 +162,7 @@ void LLVMInitializeMCJITCompilerOptions(LLVMMCJITCompilerOptions *PassedOptions,
   options.CodeModel = LLVMCodeModelJITDefault;
   
   memcpy(PassedOptions, &options,
-         MISTD::min(sizeof(options), SizeOfPassedOptions));
+         std::min(sizeof(options), SizeOfPassedOptions));
 }
 
 LLVMBool LLVMCreateMCJITCompilerForModule(
@@ -190,7 +190,7 @@ LLVMBool LLVMCreateMCJITCompilerForModule(
   targetOptions.NoFramePointerElim = options.NoFramePointerElim;
   targetOptions.EnableFastISel = options.EnableFastISel;
 
-  MISTD::string Error;
+  std::string Error;
   EngineBuilder builder(unwrap(M));
   builder.setEngineKind(EngineKind::JIT)
          .setErrorStr(&Error)
@@ -254,7 +254,7 @@ int LLVMRunFunctionAsMain(LLVMExecutionEngineRef EE, LLVMValueRef F,
                           const char * const *EnvP) {
   unwrap(EE)->finalizeObject();
   
-  MISTD::vector<MISTD::string> ArgVec;
+  std::vector<std::string> ArgVec;
   for (unsigned I = 0; I != ArgC; ++I)
     ArgVec.push_back(ArgV[I]);
   
@@ -266,7 +266,7 @@ LLVMGenericValueRef LLVMRunFunction(LLVMExecutionEngineRef EE, LLVMValueRef F,
                                     LLVMGenericValueRef *Args) {
   unwrap(EE)->finalizeObject();
   
-  MISTD::vector<GenericValue> ArgVec;
+  std::vector<GenericValue> ArgVec;
   ArgVec.reserve(NumArgs);
   for (unsigned I = 0; I != NumArgs; ++I)
     ArgVec.push_back(*unwrap(Args[I]));
@@ -359,7 +359,7 @@ public:
     uintptr_t Size, unsigned Alignment, unsigned SectionID,
     StringRef SectionName, bool isReadOnly);
 
-  virtual bool finalizeMemory(MISTD::string *ErrMsg);
+  virtual bool finalizeMemory(std::string *ErrMsg);
   
 private:
   SimpleBindingMMFunctions Functions;
@@ -399,7 +399,7 @@ uint8_t *SimpleBindingMemoryManager::allocateDataSection(
                                        isReadOnly);
 }
 
-bool SimpleBindingMemoryManager::finalizeMemory(MISTD::string *ErrMsg) {
+bool SimpleBindingMemoryManager::finalizeMemory(std::string *ErrMsg) {
   char *errMsgCString = 0;
   bool result = Functions.FinalizeMemory(Opaque, &errMsgCString);
   assert((result || !errMsgCString) &&

@@ -64,7 +64,7 @@ void DwarfCFIException::EndModule() {
 
   // Emit references to all used personality functions
   bool AtLeastOne = false;
-  const MISTD::vector<const Function*> &Personalities = MMI->getPersonalities();
+  const std::vector<const Function*> &Personalities = MMI->getPersonalities();
   for (size_t i = 0, e = Personalities.size(); i != e; ++i) {
     if (!Personalities[i])
       continue;

@@ -53,7 +53,7 @@ public:
 
     mi::Size get_data_size() const { return m_buffer.size(); }
 
-    MISTD::vector<mi::Uint8> m_buffer;
+    std::vector<mi::Uint8> m_buffer;
 };
 
 template <typename T, typename B>
@@ -185,7 +185,7 @@ Memory_reader_impl::Memory_reader_impl( const mi::neuraylib::IBuffer* buffer)
 
 mi::Sint64 Memory_reader_impl::read( char* buffer, mi::Sint64 size)
 {
-    size = MISTD::min( size, static_cast<mi::Sint64>( m_buffer->get_data_size() - m_position));
+    size = std::min( size, static_cast<mi::Sint64>( m_buffer->get_data_size() - m_position));
     if( size == 0)
         return 0;
 

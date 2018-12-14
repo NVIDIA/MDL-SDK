@@ -19,10 +19,10 @@ using namespace object;
 
 // Creates an in-memory object-file by default: createELFObjectFile(Buffer)
 ObjectFile *ObjectFile::createELFObjectFile(MemoryBuffer *Object) {
-  MISTD::pair<unsigned char, unsigned char> Ident = getElfArchType(Object);
+  std::pair<unsigned char, unsigned char> Ident = getElfArchType(Object);
   error_code ec;
 
-  MISTD::size_t MaxAlignment =
+  std::size_t MaxAlignment =
     1ULL << countTrailingZeros(uintptr_t(Object->getBufferStart()));
 
   if (Ident.first == ELF::ELFCLASS32 && Ident.second == ELF::ELFDATA2LSB)

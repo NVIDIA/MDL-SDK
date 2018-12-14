@@ -582,7 +582,7 @@ struct StrCmpOpt : public LibCallOptimization {
 
       return EmitMemCmp(Str1P, Str2P,
                         ConstantInt::get(TD->getIntPtrType(*Context),
-                        MISTD::min(Len1, Len2)), B, TD, TLI);
+                        std::min(Len1, Len2)), B, TD, TLI);
     }
 
     return 0;

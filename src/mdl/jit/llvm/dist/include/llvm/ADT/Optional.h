@@ -44,19 +44,19 @@ public:
 
 #if LLVM_HAS_RVALUE_REFERENCES
   Optional(T &&y) : hasVal(true) {
-    new (storage.buffer) T(MISTD::forward<T>(y));
+    new (storage.buffer) T(std::forward<T>(y));
   }
   Optional(Optional<T> &&O) : hasVal(O) {
     if (O) {
-      new (storage.buffer) T(MISTD::move(*O));
+      new (storage.buffer) T(std::move(*O));
       O.reset();
     }
   }
   Optional &operator=(T &&y) {
     if (hasVal)
-      **this = MISTD::move(y);
+      **this = std::move(y);
     else {
-      new (storage.buffer) T(MISTD::move(y));
+      new (storage.buffer) T(std::move(y));
       hasVal = true;
     }
     return *this;
@@ -65,7 +65,7 @@ public:
     if (!O)
       reset();
     else {
-      *this = MISTD::move(*O);
+      *this = std::move(*O);
       O.reset();
     }
     return *this;
@@ -123,8 +123,8 @@ public:
   T& operator*() LLVM_LVALUE_FUNCTION { assert(hasVal); return *getPointer(); }
 
 #if LLVM_HAS_RVALUE_REFERENCE_THIS
-  T&& getValue() && { assert(hasVal); return MISTD::move(*getPointer()); }
-  T&& operator*() && { assert(hasVal); return MISTD::move(*getPointer()); }
+  T&& getValue() && { assert(hasVal); return std::move(*getPointer()); }
+  T&& operator*() && { assert(hasVal); return std::move(*getPointer()); }
 #endif
 };
 

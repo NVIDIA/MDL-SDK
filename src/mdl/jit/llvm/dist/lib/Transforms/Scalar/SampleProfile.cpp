@@ -49,7 +49,7 @@ using namespace llvm;
 
 // Command line option to specify the file to read samples from. This is
 // mainly used for debugging.
-static cl::opt<MISTD::string> SampleProfileFile(
+static cl::opt<std::string> SampleProfileFile(
     "sample-profile-file", cl::init(""), cl::value_desc("filename"),
     cl::desc("Profile file loaded by -sample-profile"), cl::Hidden);
 
@@ -390,8 +390,8 @@ uint32_t SampleProfile::computeBlockWeight(BasicBlock *B, unsigned FirstLineno,
   // If we've computed B's weight before, return it.
   Function *F = B->getParent();
   FunctionProfile &FProfile = Profiles[F->getName()];
-  MISTD::pair<BlockWeightMap::iterator, bool> Entry =
-      FProfile.BlockWeights.insert(MISTD::make_pair(B, 0));
+  std::pair<BlockWeightMap::iterator, bool> Entry =
+      FProfile.BlockWeights.insert(std::make_pair(B, 0));
   if (!Entry.second)
     return Entry.first->second;
 

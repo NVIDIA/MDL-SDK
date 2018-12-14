@@ -21,14 +21,14 @@
 namespace llvm {
   using namespace sys;
 
-MISTD::string TimeValue::str() const {
+std::string TimeValue::str() const {
   time_t OurTime = time_t(this->toEpochTime());
   struct tm Storage;
   struct tm *LT = ::localtime_r(&OurTime, &Storage);
   assert(LT);
   char Buffer[25];
   strftime(Buffer, 25, "%b %e %H:%M %Y", LT);
-  return MISTD::string(Buffer);
+  return std::string(Buffer);
 }
 
 TimeValue TimeValue::now() {

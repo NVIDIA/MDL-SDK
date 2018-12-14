@@ -81,7 +81,7 @@ unsigned TargetInstrInfo::getInlineAsmLength(const char *Str,
     if (*Str == '\n' || strncmp(Str, MAI.getSeparatorString(),
                                 strlen(MAI.getSeparatorString())) == 0)
       atInsnStart = true;
-    if (atInsnStart && !MISTD::isspace(static_cast<unsigned char>(*Str))) {
+    if (atInsnStart && !std::isspace(static_cast<unsigned char>(*Str))) {
       Length += MAI.getMaxInstLength();
       atInsnStart = false;
     }
@@ -125,7 +125,7 @@ MachineInstr *TargetInstrInfo::commuteInstruction(MachineInstr *MI,
     return 0;
   unsigned Idx1, Idx2;
   if (!findCommutedOpIndices(MI, Idx1, Idx2)) {
-    MISTD::string msg;
+    std::string msg;
     raw_string_ostream Msg(msg);
     Msg << "Don't know how to commute: " << *MI;
     report_fatal_error(Msg.str());
@@ -763,7 +763,7 @@ computeOperandLatency(const InstrItineraryData *ItinData,
   unsigned InstrLatency = getInstrLatency(ItinData, DefMI);
 
   // Expected latency is the max of the stage latency and itinerary props.
-  InstrLatency = MISTD::max(InstrLatency,
+  InstrLatency = std::max(InstrLatency,
                           defaultDefLatency(ItinData->SchedModel, DefMI));
   return InstrLatency;
 }

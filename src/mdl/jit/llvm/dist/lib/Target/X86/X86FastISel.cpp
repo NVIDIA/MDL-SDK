@@ -1054,7 +1054,7 @@ bool X86FastISel::X86SelectCmp(const Instruction *I) {
 
   const Value *Op0 = CI->getOperand(0), *Op1 = CI->getOperand(1);
   if (SwapArgs)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   // Emit a compare of Op0/Op1.
   if (!X86FastEmitCompare(Op0, Op1, VT))
@@ -1133,7 +1133,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
       // Try to take advantage of fallthrough opportunities.
       CmpInst::Predicate Predicate = CI->getPredicate();
       if (FuncInfo.MBB->isLayoutSuccessor(TrueMBB)) {
-        MISTD::swap(TrueMBB, FalseMBB);
+        std::swap(TrueMBB, FalseMBB);
         Predicate = CmpInst::getInversePredicate(Predicate);
       }
 
@@ -1142,7 +1142,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
 
       switch (Predicate) {
       case CmpInst::FCMP_OEQ:
-        MISTD::swap(TrueMBB, FalseMBB);
+        std::swap(TrueMBB, FalseMBB);
         Predicate = CmpInst::FCMP_UNE;
         // FALL THROUGH
       case CmpInst::FCMP_UNE: SwapArgs = false; BranchOpc = X86::JNE_4; break;
@@ -1175,7 +1175,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
 
       const Value *Op0 = CI->getOperand(0), *Op1 = CI->getOperand(1);
       if (SwapArgs)
-        MISTD::swap(Op0, Op1);
+        std::swap(Op0, Op1);
 
       // Emit a compare of the LHS and RHS, setting the flags.
       if (!X86FastEmitCompare(Op0, Op1, VT))
@@ -1217,7 +1217,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
 
         unsigned JmpOpc = X86::JNE_4;
         if (FuncInfo.MBB->isLayoutSuccessor(TrueMBB)) {
-          MISTD::swap(TrueMBB, FalseMBB);
+          std::swap(TrueMBB, FalseMBB);
           JmpOpc = X86::JE_4;
         }
 

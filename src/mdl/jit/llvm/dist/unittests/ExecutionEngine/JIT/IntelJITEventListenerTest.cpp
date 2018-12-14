@@ -39,8 +39,8 @@ int NotifyEvent(iJIT_JVM_EVENT EventType, void *EventSpecificData) {
 
       for(unsigned int i = 0; i < msg->line_number_size; ++i) {
         EXPECT_TRUE(0 != msg->line_number_table);
-        MISTD::pair<MISTD::string, unsigned int> loc(
-          MISTD::string(msg->source_file_name),
+        std::pair<std::string, unsigned int> loc(
+          std::string(msg->source_file_name),
           msg->line_number_table[i].LineNumber);
         ReportedDebugFuncs[msg->method_id].push_back(loc);
       }

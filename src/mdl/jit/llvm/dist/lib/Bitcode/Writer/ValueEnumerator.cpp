@@ -24,7 +24,7 @@
 #include <algorithm>
 using namespace llvm;
 
-static bool isIntOrIntVectorValue(const MISTD::pair<const Value*, unsigned> &V) {
+static bool isIntOrIntVectorValue(const std::pair<const Value*, unsigned> &V) {
   return V.first->getType()->isIntOrIntVectorTy();
 }
 
@@ -70,7 +70,7 @@ ValueEnumerator::ValueEnumerator(const Module *M) {
   EnumerateValueSymbolTable(M->getValueSymbolTable());
   EnumerateNamedMetadata(M);
 
-  SmallVector<MISTD::pair<unsigned, MDNode*>, 8> MDs;
+  SmallVector<std::pair<unsigned, MDNode*>, 8> MDs;
 
   // Enumerate types used by function bodies and argument lists.
   for (Module::const_iterator F = M->begin(), E = M->end(); F != E; ++F) {
@@ -158,7 +158,7 @@ void ValueEnumerator::print(raw_ostream &OS, const ValueMapType &Map,
       OS << "Value: [null]\n";
     V->dump();
 
-    OS << " Uses(" << MISTD::distance(V->use_begin(),V->use_end()) << "):";
+    OS << " Uses(" << std::distance(V->use_begin(),V->use_end()) << "):";
     for (Value::const_use_iterator UI = V->use_begin(), UE = V->use_end();
          UI != UE; ++UI) {
       if (UI != V->use_begin())
@@ -178,8 +178,8 @@ namespace {
   struct CstSortPredicate {
     ValueEnumerator &VE;
     explicit CstSortPredicate(ValueEnumerator &ve) : VE(ve) {}
-    bool operator()(const MISTD::pair<const Value*, unsigned> &LHS,
-                    const MISTD::pair<const Value*, unsigned> &RHS) {
+    bool operator()(const std::pair<const Value*, unsigned> &LHS,
+                    const std::pair<const Value*, unsigned> &RHS) {
       // Sort by plane.
       if (LHS.first->getType() != RHS.first->getType())
         return VE.getTypeID(LHS.first->getType()) <
@@ -195,12 +195,12 @@ void ValueEnumerator::OptimizeConstants(unsigned CstStart, unsigned CstEnd) {
   if (CstStart == CstEnd || CstStart+1 == CstEnd) return;
 
   CstSortPredicate P(*this);
-  MISTD::stable_sort(Values.begin()+CstStart, Values.begin()+CstEnd, P);
+  std::stable_sort(Values.begin()+CstStart, Values.begin()+CstEnd, P);
 
   // Ensure that integer and vector of integer constants are at the start of the
   // constant pool.  This is important so that GEP structure indices come before
   // gep constant exprs.
-  MISTD::partition(Values.begin()+CstStart, Values.begin()+CstEnd,
+  std::partition(Values.begin()+CstStart, Values.begin()+CstEnd,
                  isIntOrIntVectorValue);
 
   // Rebuild the modified portion of ValueMap.
@@ -266,7 +266,7 @@ void ValueEnumerator::EnumerateMetadata(const Value *MD) {
     MDValues[MDValueID-1].second++;
     return;
   }
-  MDValues.push_back(MISTD::make_pair(MD, 1U));
+  MDValues.push_back(std::make_pair(MD, 1U));
   MDValueID = MDValues.size();
 
   // Enumerate all non-function-local operands.
@@ -290,7 +290,7 @@ void ValueEnumerator::EnumerateFunctionLocalMetadata(const MDNode *N) {
     MDValues[MDValueID-1].second++;
     return;
   }
-  MDValues.push_back(MISTD::make_pair(N, 1U));
+  MDValues.push_back(std::make_pair(N, 1U));
   MDValueID = MDValues.size();
 
   // To incoroporate function-local information visit all function-local
@@ -343,14 +343,14 @@ void ValueEnumerator::EnumerateValue(const Value *V) {
 
       // Finally, add the value.  Doing this could make the ValueID reference be
       // dangling, don't reuse it.
-      Values.push_back(MISTD::make_pair(V, 1U));
+      Values.push_back(std::make_pair(V, 1U));
       ValueMap[V] = Values.size();
       return;
     }
   }
 
   // Add the value.
-  Values.push_back(MISTD::make_pair(V, 1U));
+  Values.push_back(std::make_pair(V, 1U));
   ValueID = Values.size();
 }
 
@@ -491,7 +491,7 @@ void ValueEnumerator::incorporateFunction(const Function &F) {
             FnLocalMDVector.push_back(MD);
       }
 
-      SmallVector<MISTD::pair<unsigned, MDNode*>, 8> MDs;
+      SmallVector<std::pair<unsigned, MDNode*>, 8> MDs;
       I->getAllMetadataOtherThanDebugLoc(MDs);
       for (unsigned i = 0, e = MDs.size(); i != e; ++i) {
         MDNode *N = MDs[i].second;

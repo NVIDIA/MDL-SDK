@@ -152,7 +152,7 @@ bool getObjectSize(const Value *Ptr, uint64_t &Size, const DataLayout *DL,
 
 
 
-typedef MISTD::pair<APInt, APInt> SizeOffsetType;
+typedef std::pair<APInt, APInt> SizeOffsetType;
 
 /// \brief Evaluate the size and offset of an object pointed to by a Value*
 /// statically. Fails if size or offset are not known at compile time.
@@ -169,7 +169,7 @@ class ObjectSizeOffsetVisitor
   APInt align(APInt Size, uint64_t Align);
 
   SizeOffsetType unknown() {
-    return MISTD::make_pair(APInt(), APInt());
+    return std::make_pair(APInt(), APInt());
   }
 
 public:
@@ -207,7 +207,7 @@ public:
   SizeOffsetType visitInstruction(Instruction &I);
 };
 
-typedef MISTD::pair<Value*, Value*> SizeOffsetEvalType;
+typedef std::pair<Value*, Value*> SizeOffsetEvalType;
 
 
 /// \brief Evaluate the size and offset of an object pointed to by a Value*.
@@ -216,7 +216,7 @@ class ObjectSizeOffsetEvaluator
   : public InstVisitor<ObjectSizeOffsetEvaluator, SizeOffsetEvalType> {
 
   typedef IRBuilder<true, TargetFolder> BuilderTy;
-  typedef MISTD::pair<WeakVH, WeakVH> WeakEvalType;
+  typedef std::pair<WeakVH, WeakVH> WeakEvalType;
   typedef DenseMap<const Value*, WeakEvalType> CacheMapTy;
   typedef SmallPtrSet<const Value*, 8> PtrSetTy;
 
@@ -231,7 +231,7 @@ class ObjectSizeOffsetEvaluator
   bool RoundToAlign;
 
   SizeOffsetEvalType unknown() {
-    return MISTD::make_pair((Value*)0, (Value*)0);
+    return std::make_pair((Value*)0, (Value*)0);
   }
   SizeOffsetEvalType compute_(Value *V);
 

@@ -65,12 +65,12 @@ public:
 
     mi::Sint32 remove_path( Kind kind, const Path& path);
 
-    MISTD::string search( Kind kind, const MISTD::string& file_name) const;
+    std::string search( Kind kind, const std::string& file_name) const;
 
 private:
     /// On Windows, replaces all slashes by backslashes.
     /// On all other platforms, returns the string unchanged.
-    static MISTD::string normalize( const MISTD::string& s);
+    static std::string normalize( const std::string& s);
 
     /// Lock for m_search_paths.
     mutable mi::base::Lock m_lock;

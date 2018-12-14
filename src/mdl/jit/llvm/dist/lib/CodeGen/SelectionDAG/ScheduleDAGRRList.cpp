@@ -121,7 +121,7 @@ private:
   /// been issued, but their results are not ready yet (due to the latency of
   /// the operation).  Once the operands becomes available, the instruction is
   /// added to the AvailableQueue.
-  MISTD::vector<SUnit*> PendingQueue;
+  std::vector<SUnit*> PendingQueue;
 
   /// HazardRec - The hazard recognizer to use.
   ScheduleHazardRecognizer *HazardRec;
@@ -140,8 +140,8 @@ private:
   /// that are "live". These nodes must be scheduled before any other nodes that
   /// modifies the registers can be scheduled.
   unsigned NumLiveRegs;
-  MISTD::vector<SUnit*> LiveRegDefs;
-  MISTD::vector<SUnit*> LiveRegGens;
+  std::vector<SUnit*> LiveRegDefs;
+  std::vector<SUnit*> LiveRegGens;
 
   // Collect interferences between physical register use/defs.
   // Each interference is an SUnit and set of physical registers.
@@ -482,7 +482,7 @@ FindCallSeqStart(SDNode *N, unsigned &NestLevel, unsigned &MaxNest,
       if (N->getMachineOpcode() ==
           (unsigned)TII->getCallFrameDestroyOpcode()) {
         ++NestLevel;
-        MaxNest = MISTD::max(MaxNest, NestLevel);
+        MaxNest = std::max(MaxNest, NestLevel);
       } else if (N->getMachineOpcode() ==
                  (unsigned)TII->getCallFrameSetupOpcode()) {
         assert(NestLevel != 0);
@@ -882,14 +882,14 @@ void ScheduleDAGRRList::UnscheduleNodeBottomUp(SUnit *SU) {
 void ScheduleDAGRRList::RestoreHazardCheckerBottomUp() {
   HazardRec->Reset();
 
-  unsigned LookAhead = MISTD::min((unsigned)Sequence.size(),
+  unsigned LookAhead = std::min((unsigned)Sequence.size(),
                                 HazardRec->getMaxLookAhead());
   if (LookAhead == 0)
     return;
 
-  MISTD::vector<SUnit*>::const_iterator I = (Sequence.end() - LookAhead);
+  std::vector<SUnit*>::const_iterator I = (Sequence.end() - LookAhead);
   unsigned HazardCycle = (*I)->getHeight();
-  for (MISTD::vector<SUnit*>::const_iterator E = Sequence.end(); I != E; ++I) {
+  for (std::vector<SUnit*>::const_iterator E = Sequence.end(); I != E; ++I) {
     SUnit *SU = *I;
     for (; SU->getHeight() > HazardCycle; ++HazardCycle) {
       HazardRec->RecedeCycle();
@@ -1106,7 +1106,7 @@ SUnit *ScheduleDAGRRList::CopyAndMoveSuccessors(SUnit *SU) {
 
   // Only copy scheduled successors. Cut them from old node's successor
   // list and move them over.
-  SmallVector<MISTD::pair<SUnit *, SDep>, 4> DelDeps;
+  SmallVector<std::pair<SUnit *, SDep>, 4> DelDeps;
   for (SUnit::succ_iterator I = SU->Succs.begin(), E = SU->Succs.end();
        I != E; ++I) {
     if (I->isArtificial())
@@ -1117,7 +1117,7 @@ SUnit *ScheduleDAGRRList::CopyAndMoveSuccessors(SUnit *SU) {
       D.setSUnit(NewSU);
       AddPred(SuccSU, D);
       D.setSUnit(SU);
-      DelDeps.push_back(MISTD::make_pair(SuccSU, D));
+      DelDeps.push_back(std::make_pair(SuccSU, D));
     }
   }
   for (unsigned i = 0, e = DelDeps.size(); i != e; ++i)
@@ -1146,7 +1146,7 @@ void ScheduleDAGRRList::InsertCopiesAndMoveSuccs(SUnit *SU, unsigned Reg,
 
   // Only copy scheduled successors. Cut them from old node's successor
   // list and move them over.
-  SmallVector<MISTD::pair<SUnit *, SDep>, 4> DelDeps;
+  SmallVector<std::pair<SUnit *, SDep>, 4> DelDeps;
   for (SUnit::succ_iterator I = SU->Succs.begin(), E = SU->Succs.end();
        I != E; ++I) {
     if (I->isArtificial())
@@ -1156,7 +1156,7 @@ void ScheduleDAGRRList::InsertCopiesAndMoveSuccs(SUnit *SU, unsigned Reg,
       SDep D = *I;
       D.setSUnit(CopyToSU);
       AddPred(SuccSU, D);
-      DelDeps.push_back(MISTD::make_pair(SuccSU, *I));
+      DelDeps.push_back(std::make_pair(SuccSU, *I));
     }
     else {
       // Avoid scheduling the def-side copy before other successors. Otherwise
@@ -1203,7 +1203,7 @@ static EVT getPhysicalRegisterVT(SDNode *N, unsigned Reg,
 /// CheckForLiveRegDef - Return true and update live register vector if the
 /// specified register def of the specified SUnit clobbers any "live" registers.
 static void CheckForLiveRegDef(SUnit *SU, unsigned Reg,
-                               MISTD::vector<SUnit*> &LiveRegDefs,
+                               std::vector<SUnit*> &LiveRegDefs,
                                SmallSet<unsigned, 4> &RegAdded,
                                SmallVectorImpl<unsigned> &LRegs,
                                const TargetRegisterInfo *TRI) {
@@ -1225,7 +1225,7 @@ static void CheckForLiveRegDef(SUnit *SU, unsigned Reg,
 /// CheckForLiveRegDefMasked - Check for any live physregs that are clobbered
 /// by RegMask, and add them to LRegs.
 static void CheckForLiveRegDefMasked(SUnit *SU, const uint32_t *RegMask,
-                                     MISTD::vector<SUnit*> &LiveRegDefs,
+                                     std::vector<SUnit*> &LiveRegDefs,
                                      SmallSet<unsigned, 4> &RegAdded,
                                      SmallVectorImpl<unsigned> &LRegs) {
   // Look at all live registers. Skip Reg0 and the special CallResource.
@@ -1332,7 +1332,7 @@ void ScheduleDAGRRList::releaseInterferences(unsigned Reg) {
     LRegsMapT::iterator LRegsPos = LRegsMap.find(SU);
     if (Reg) {
       SmallVectorImpl<unsigned> &LRegs = LRegsPos->second;
-      if (MISTD::find(LRegs.begin(), LRegs.end(), Reg) == LRegs.end())
+      if (std::find(LRegs.begin(), LRegs.end(), Reg) == LRegs.end())
         continue;
     }
     SU->isPending = false;
@@ -1364,8 +1364,8 @@ SUnit *ScheduleDAGRRList::PickNodeToScheduleBottomUp() {
           (LRegs[0] == TRI->getNumRegs() ? "CallResource"
            : TRI->getName(LRegs[0]))
            << " SU #" << CurSU->NodeNum << '\n');
-    MISTD::pair<LRegsMapT::iterator, bool> LRegsPair =
-      LRegsMap.insert(MISTD::make_pair(CurSU, LRegs));
+    std::pair<LRegsMapT::iterator, bool> LRegsPair =
+      LRegsMap.insert(std::make_pair(CurSU, LRegs));
     if (LRegsPair.second) {
       CurSU->isPending = true;  // This SU is not in AvailableQueue right now.
       Interferences.push_back(CurSU);
@@ -1508,12 +1508,12 @@ void ScheduleDAGRRList::ListScheduleBottomUp() {
     while (AvailableQueue->empty() && !PendingQueue.empty()) {
       // Advance the cycle to free resources. Skip ahead to the next ready SU.
       assert(MinAvailableCycle < UINT_MAX && "MinAvailableCycle uninitialized");
-      AdvanceToCycle(MISTD::max(CurCycle + 1, MinAvailableCycle));
+      AdvanceToCycle(std::max(CurCycle + 1, MinAvailableCycle));
     }
   }
 
   // Reverse the order if it is bottom up.
-  MISTD::reverse(Sequence.begin(), Sequence.end());
+  std::reverse(Sequence.begin(), Sequence.end());
 
 #ifndef NDEBUG
   VerifyScheduledSequence(/*isBottomUp=*/true);
@@ -1530,7 +1530,7 @@ void ScheduleDAGRRList::ListScheduleBottomUp() {
 namespace {
 class RegReductionPQBase;
 
-struct queue_sort : public MISTD::binary_function<SUnit*, SUnit*, bool> {
+struct queue_sort : public std::binary_function<SUnit*, SUnit*, bool> {
   bool isReady(SUnit* SU, unsigned CurCycle) const { return true; }
 };
 
@@ -1619,13 +1619,13 @@ struct ilp_ls_rr_sort : public queue_sort {
 
 class RegReductionPQBase : public SchedulingPriorityQueue {
 protected:
-  MISTD::vector<SUnit*> Queue;
+  std::vector<SUnit*> Queue;
   unsigned CurQueueId;
   bool TracksRegPressure;
   bool SrcOrder;
 
   // SUnits - The SUnits for the current graph.
-  MISTD::vector<SUnit> *SUnits;
+  std::vector<SUnit> *SUnits;
 
   MachineFunction &MF;
   const TargetInstrInfo *TII;
@@ -1634,15 +1634,15 @@ protected:
   ScheduleDAGRRList *scheduleDAG;
 
   // SethiUllmanNumbers - The SethiUllman number for each node.
-  MISTD::vector<unsigned> SethiUllmanNumbers;
+  std::vector<unsigned> SethiUllmanNumbers;
 
   /// RegPressure - Tracking current reg pressure per register class.
   ///
-  MISTD::vector<unsigned> RegPressure;
+  std::vector<unsigned> RegPressure;
 
   /// RegLimit - Tracking the number of allocatable registers per register
   /// class.
-  MISTD::vector<unsigned> RegLimit;
+  std::vector<unsigned> RegLimit;
 
 public:
   RegReductionPQBase(MachineFunction &mf,
@@ -1659,8 +1659,8 @@ public:
       unsigned NumRC = TRI->getNumRegClasses();
       RegLimit.resize(NumRC);
       RegPressure.resize(NumRC);
-      MISTD::fill(RegLimit.begin(), RegLimit.end(), 0);
-      MISTD::fill(RegPressure.begin(), RegPressure.end(), 0);
+      std::fill(RegLimit.begin(), RegLimit.end(), 0);
+      std::fill(RegPressure.begin(), RegPressure.end(), 0);
       for (TargetRegisterInfo::regclass_iterator I = TRI->regclass_begin(),
              E = TRI->regclass_end(); I != E; ++I)
         RegLimit[(*I)->getID()] = tri->getRegPressureLimit(*I, MF);
@@ -1675,7 +1675,7 @@ public:
     return scheduleDAG->getHazardRec();
   }
 
-  void initNodes(MISTD::vector<SUnit> &sunits);
+  void initNodes(std::vector<SUnit> &sunits);
 
   void addNode(const SUnit *SU);
 
@@ -1684,7 +1684,7 @@ public:
   void releaseState() {
     SUnits = 0;
     SethiUllmanNumbers.clear();
-    MISTD::fill(RegPressure.begin(), RegPressure.end(), 0);
+    std::fill(RegPressure.begin(), RegPressure.end(), 0);
   }
 
   unsigned getNodePriority(const SUnit *SU) const;
@@ -1706,10 +1706,10 @@ public:
   void remove(SUnit *SU) {
     assert(!Queue.empty() && "Queue is empty!");
     assert(SU->NodeQueueId != 0 && "Not in queue!");
-    MISTD::vector<SUnit *>::iterator I = MISTD::find(Queue.begin(), Queue.end(),
+    std::vector<SUnit *>::iterator I = std::find(Queue.begin(), Queue.end(),
                                                  SU);
     if (I != prior(Queue.end()))
-      MISTD::swap(*I, Queue.back());
+      std::swap(*I, Queue.back());
     Queue.pop_back();
     SU->NodeQueueId = 0;
   }
@@ -1736,21 +1736,21 @@ protected:
 };
 
 template<class SF>
-static SUnit *popFromQueueImpl(MISTD::vector<SUnit*> &Q, SF &Picker) {
-  MISTD::vector<SUnit *>::iterator Best = Q.begin();
-  for (MISTD::vector<SUnit *>::iterator I = llvm::next(Q.begin()),
+static SUnit *popFromQueueImpl(std::vector<SUnit*> &Q, SF &Picker) {
+  std::vector<SUnit *>::iterator Best = Q.begin();
+  for (std::vector<SUnit *>::iterator I = llvm::next(Q.begin()),
          E = Q.end(); I != E; ++I)
     if (Picker(*Best, *I))
       Best = I;
   SUnit *V = *Best;
   if (Best != prior(Q.end()))
-    MISTD::swap(*Best, Q.back());
+    std::swap(*Best, Q.back());
   Q.pop_back();
   return V;
 }
 
 template<class SF>
-SUnit *popFromQueue(MISTD::vector<SUnit*> &Q, SF &Picker, ScheduleDAG *DAG) {
+SUnit *popFromQueue(std::vector<SUnit*> &Q, SF &Picker, ScheduleDAG *DAG) {
 #ifndef NDEBUG
   if (DAG->StressSched) {
     reverse_sort<SF> RPicker(Picker);
@@ -1793,7 +1793,7 @@ public:
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   void dump(ScheduleDAG *DAG) const {
     // Emulate pop() without clobbering NodeQueueIds.
-    MISTD::vector<SUnit*> DumpQueue = Queue;
+    std::vector<SUnit*> DumpQueue = Queue;
     SF DumpPicker = Picker;
     while (!DumpQueue.empty()) {
       SUnit *SU = popFromQueue(DumpQueue, DumpPicker, scheduleDAG);
@@ -1838,7 +1838,7 @@ static int checkSpecialNodes(const SUnit *left, const SUnit *right) {
 /// CalcNodeSethiUllmanNumber - Compute Sethi Ullman number.
 /// Smaller number is the higher priority.
 static unsigned
-CalcNodeSethiUllmanNumber(const SUnit *SU, MISTD::vector<unsigned> &SUNumbers) {
+CalcNodeSethiUllmanNumber(const SUnit *SU, std::vector<unsigned> &SUNumbers) {
   unsigned &SethiUllmanNumber = SUNumbers[SU->NodeNum];
   if (SethiUllmanNumber != 0)
     return SethiUllmanNumber;
@@ -2645,7 +2645,7 @@ bool ilp_ls_rr_sort::operator()(SUnit *left, SUnit *right) const {
 
   if (!DisableSchedCriticalPath) {
     int spread = (int)left->getDepth() - (int)right->getDepth();
-    if (MISTD::abs(spread) > MaxReorderWindow) {
+    if (std::abs(spread) > MaxReorderWindow) {
       DEBUG(dbgs() << "Depth of SU(" << left->NodeNum << "): "
             << left->getDepth() << " != SU(" << right->NodeNum << "): "
             << right->getDepth() << "\n");
@@ -2655,14 +2655,14 @@ bool ilp_ls_rr_sort::operator()(SUnit *left, SUnit *right) const {
 
   if (!DisableSchedHeight && left->getHeight() != right->getHeight()) {
     int spread = (int)left->getHeight() - (int)right->getHeight();
-    if (MISTD::abs(spread) > MaxReorderWindow)
+    if (std::abs(spread) > MaxReorderWindow)
       return left->getHeight() > right->getHeight();
   }
 
   return BURRSort(left, right, SPQ);
 }
 
-void RegReductionPQBase::initNodes(MISTD::vector<SUnit> &sunits) {
+void RegReductionPQBase::initNodes(std::vector<SUnit> &sunits) {
   SUnits = &sunits;
   // Add pseudo dependency edges for two-address nodes.
   if (!Disable2AddrHack)

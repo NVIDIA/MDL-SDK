@@ -32,7 +32,7 @@ void BitstreamCursor::operator=(const BitstreamCursor &RHS) {
   // Copy block scope and bump ref counts.
   BlockScope = RHS.BlockScope;
   for (size_t S = 0, e = BlockScope.size(); S != e; ++S) {
-    MISTD::vector<BitCodeAbbrev*> &Abbrevs = BlockScope[S].PrevAbbrevs;
+    std::vector<BitCodeAbbrev*> &Abbrevs = BlockScope[S].PrevAbbrevs;
     for (size_t i = 0, e = Abbrevs.size(); i != e; ++i)
       Abbrevs[i]->addRef();
   }
@@ -46,7 +46,7 @@ void BitstreamCursor::freeState() {
 
   // Free all the Abbrevs in the block scope.
   for (size_t S = 0, e = BlockScope.size(); S != e; ++S) {
-    MISTD::vector<BitCodeAbbrev*> &Abbrevs = BlockScope[S].PrevAbbrevs;
+    std::vector<BitCodeAbbrev*> &Abbrevs = BlockScope[S].PrevAbbrevs;
     for (size_t i = 0, e = Abbrevs.size(); i != e; ++i)
       Abbrevs[i]->dropRef();
   }
@@ -356,7 +356,7 @@ bool BitstreamCursor::ReadBlockInfoBlock() {
       case bitc::BLOCKINFO_CODE_BLOCKNAME: {
         if (!CurBlockInfo) return true;
         if (BitStream->isIgnoringBlockInfoNames()) break;  // Ignore name.
-        MISTD::string Name;
+        std::string Name;
         for (unsigned i = 0, e = Record.size(); i != e; ++i)
           Name += (char)Record[i];
         CurBlockInfo->Name = Name;
@@ -365,10 +365,10 @@ bool BitstreamCursor::ReadBlockInfoBlock() {
       case bitc::BLOCKINFO_CODE_SETRECORDNAME: {
         if (!CurBlockInfo) return true;
         if (BitStream->isIgnoringBlockInfoNames()) break;  // Ignore name.
-        MISTD::string Name;
+        std::string Name;
         for (unsigned i = 1, e = Record.size(); i != e; ++i)
           Name += (char)Record[i];
-        CurBlockInfo->RecordNames.push_back(MISTD::make_pair((unsigned)Record[0],
+        CurBlockInfo->RecordNames.push_back(std::make_pair((unsigned)Record[0],
                                                            Name));
         break;
       }

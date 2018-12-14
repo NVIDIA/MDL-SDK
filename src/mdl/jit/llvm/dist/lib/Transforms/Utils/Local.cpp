@@ -141,7 +141,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
           unsigned idx = i.getCaseIndex();
           Weights[0] += Weights[idx+1];
           // Remove weight for this case.
-          MISTD::swap(Weights[idx+1], Weights.back());
+          std::swap(Weights[idx+1], Weights.back());
           Weights.pop_back();
           SI->setMetadata(LLVMContext::MD_prof,
                           MDBuilder(BB->getContext()).
@@ -606,7 +606,7 @@ static Value *selectIncomingValueForBlock(Value *OldVal, BasicBlock *BB,
             IncomingValues.find(BB)->second == OldVal) &&
            "Expected OldVal to match incoming value from BB!");
 
-    IncomingValues.insert(MISTD::make_pair(BB, OldVal));
+    IncomingValues.insert(std::make_pair(BB, OldVal));
     return OldVal;
   }
 
@@ -631,7 +631,7 @@ static void gatherIncomingValuesToPhi(PHINode *PN,
     Value *V = PN->getIncomingValue(i);
 
     if (!isa<UndefValue>(V))
-      IncomingValues.insert(MISTD::make_pair(BB, V));
+      IncomingValues.insert(std::make_pair(BB, V));
   }
 }
 
@@ -841,8 +841,8 @@ bool llvm::EliminateDuplicatePHINodes(BasicBlock *BB) {
     // Avoid colliding with the DenseMap sentinels ~0 and ~0-1.
     Hash >>= 1;
     // If we've never seen this hash value before, it's a unique PHI.
-    MISTD::pair<DenseMap<uintptr_t, PHINode *>::iterator, bool> Pair =
-      HashMap.insert(MISTD::make_pair(Hash, PN));
+    std::pair<DenseMap<uintptr_t, PHINode *>::iterator, bool> Pair =
+      HashMap.insert(std::make_pair(Hash, PN));
     if (Pair.second) continue;
     // Otherwise it's either a duplicate or a hash collision.
     for (PHINode *OtherPN = Pair.first->second; ; ) {
@@ -931,12 +931,12 @@ unsigned llvm::getOrEnforceKnownAlignment(Value *V, unsigned PrefAlign,
 
   // Avoid trouble with ridiculously large TrailZ values, such as
   // those computed from a null pointer.
-  TrailZ = MISTD::min(TrailZ, unsigned(sizeof(unsigned) * CHAR_BIT - 1));
+  TrailZ = std::min(TrailZ, unsigned(sizeof(unsigned) * CHAR_BIT - 1));
 
-  unsigned Align = 1u << MISTD::min(BitWidth - 1, TrailZ);
+  unsigned Align = 1u << std::min(BitWidth - 1, TrailZ);
 
   // LLVM doesn't support alignments larger than this currently.
-  Align = MISTD::min(Align, +Value::MaximumAlignment);
+  Align = std::min(Align, +Value::MaximumAlignment);
 
   if (PrefAlign > Align)
     Align = enforceKnownAlignment(V, Align, PrefAlign, DL);

@@ -68,8 +68,7 @@ mi::IData* Attribute_container_impl::create_attribute( const char* name, const c
 {
     ATTR::Attribute_set* attribute_set = get_attribute_set();
     return Attribute_set_impl_helper::create_attribute(
-        attribute_set, this, name, type_name,
-        /*skip_type_check*/ true, /*warn_for_typed_refs*/ false);
+        attribute_set, this, name, type_name, /*skip_type_check*/ true);
 }
 
 mi::neuraylib::Element_type Attribute_container_impl::get_element_type() const

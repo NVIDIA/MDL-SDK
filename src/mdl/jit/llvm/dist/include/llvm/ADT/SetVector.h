@@ -32,7 +32,7 @@ namespace llvm {
 /// This adapter class provides a way to keep a set of things that also has the
 /// property of a deterministic iteration order. The order of iteration is the
 /// order of insertion.
-template <typename T, typename Vector = MISTD::vector<T>,
+template <typename T, typename Vector = std::vector<T>,
                       typename Set = SmallSet<T, 16> >
 class SetVector {
 public:
@@ -118,7 +118,7 @@ public:
   bool remove(const value_type& X) {
     if (set_.erase(X)) {
       typename vector_type::iterator I =
-        MISTD::find(vector_.begin(), vector_.end(), X);
+        std::find(vector_.begin(), vector_.end(), X);
       assert(I != vector_.end() && "Corrupted SetVector instances!");
       vector_.erase(I);
       return true;
@@ -132,7 +132,7 @@ public:
   /// write it:
   ///
   /// \code
-  ///   V.erase(MISTD::remove_if(V.begin(), V.end(), P), V.end());
+  ///   V.erase(std::remove_if(V.begin(), V.end(), P), V.end());
   /// \endcode
   ///
   /// However, SetVector doesn't expose non-const iterators, making any
@@ -142,7 +142,7 @@ public:
   template <typename UnaryPredicate>
   bool remove_if(UnaryPredicate P) {
     typename vector_type::iterator I
-      = MISTD::remove_if(vector_.begin(), vector_.end(),
+      = std::remove_if(vector_.begin(), vector_.end(),
                        TestAndEraseFromSet<UnaryPredicate>(P, set_));
     if (I == vector_.end())
       return false;
@@ -185,9 +185,9 @@ public:
   }
 
 private:
-  /// \brief A wrapper predicate designed for use with MISTD::remove_if.
+  /// \brief A wrapper predicate designed for use with std::remove_if.
   ///
-  /// This predicate wraps a predicate suitable for use with MISTD::remove_if to
+  /// This predicate wraps a predicate suitable for use with std::remove_if to
   /// call set_.erase(x) on each element which is slated for removal.
   template <typename UnaryPredicate>
   class TestAndEraseFromSet {

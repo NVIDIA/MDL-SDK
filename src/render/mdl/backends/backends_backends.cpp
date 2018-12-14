@@ -32,13 +32,16 @@
 #include <map>
 #include <string>
 
+#include <mi/base/handle.h>
 #include <mi/base/types.h>
+#include "mi/mdl/mdl_generated_dag.h"
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_symbols.h>
 #include <mi/mdl/mdl_types.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/data/db/i_db_access.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h> // DETAIL::Type_binder
+#include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
@@ -60,6 +63,30 @@ namespace MI {
 namespace BACKENDS {
 
 namespace {
+
+/// Add message to context
+mi::Sint32 add_error_message(MDL::Execution_context* context, const std::string& message, mi::Sint32 result)
+{
+    if (!context)
+        return -1;
+
+    MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, message);
+    context->add_error_message(err);
+    context->add_message(err);
+    context->set_result(result);
+
+    return - 1;
+}
+
+template <typename T> 
+T get_context_option(MDL::Execution_context* context, const char* option)
+{
+    if (context)
+        return context->get_option<T>(option);
+
+    MDL::Execution_context default_context;
+    return default_context.get_option<T>(option);
+}
 
 /// A name register interface.
 class IResource_register {
@@ -103,7 +130,7 @@ public:
 /// Helper class to enumerate resources in lambda functions.
 class Function_enumerator : public mi::mdl::ILambda_resource_enumerator {
 public:
-    typedef MISTD::map<MISTD::string, size_t>  Resource_index_map;
+    typedef std::map<std::string, size_t>  Resource_index_map;
 
     /// Constructor.
     ///
@@ -587,7 +614,8 @@ public:
         mi::Float32     mdl_meters_per_scene_unit,
         mi::Float32     mdl_wavelength_min,
         mi::Float32     mdl_wavelength_max,
-        bool            compile_consts)
+        bool            compile_consts,
+        bool            calc_derivatives)
     : m_compiler(compiler, mi::base::DUP_INTERFACE)
     , m_db_transaction(db_transaction)
     , m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit)
@@ -595,11 +623,15 @@ public:
     , m_mdl_wavelength_max(mdl_wavelength_max)
     , m_error(0)
     , m_compile_consts(compile_consts)
+    , m_calc_derivatives(calc_derivatives)
     {
     }
 
     /// Get the error code of the last operation.
     mi::Sint32 get_error_code() const { return m_error; }
+
+    /// Get the error code of the last operation.
+    const std::string& get_error_string() const { return m_error_string; }
 
     /// Build a lambda function from a call.
     mi::mdl::ILambda_function *env_from_call(
@@ -608,6 +640,7 @@ public:
     {
         if (function_call == NULL) {
             m_error = -1;
+            m_error_string = "Invalid parameters (NULL pointer).";
             return NULL;
         }
 
@@ -616,12 +649,14 @@ public:
 
         if (!definition.is_valid()) {
             m_error = -2;
+            m_error_string = "Invalid expression.";
             return NULL;
         }
 
         mi::mdl::IType const *mdl_type = definition->get_mdl_return_type(m_db_transaction);
         if (mdl_type == NULL) {
             m_error = -2;
+
             return NULL;
         }
         mdl_type = mdl_type->skip_type_alias();
@@ -631,6 +666,7 @@ public:
             // need special handling for array constructor because its definition is "broken".
             // However, array constructors are not allowed here
             m_error = -2;
+            m_error_string = "Invalid expression.";
             return NULL;
         }
 
@@ -649,6 +685,7 @@ public:
 
         if (!type_ok) {
             m_error = -2;
+            m_error_string = "Invalid expression.";
             return NULL;
         }
 
@@ -664,7 +701,7 @@ public:
 
         mi::Uint32 count = static_cast<mi::Uint32>(function_call->get_parameter_count());
 
-        MISTD::vector<mi::mdl::DAG_call::Call_argument> mdl_arguments(count);
+        std::vector<mi::mdl::DAG_call::Call_argument> mdl_arguments(count);
         mi::base::Handle<const MDL::IExpression_list> arguments(
             function_call->get_arguments());
         for (mi::Uint32 i = 0; i < count; ++i) {
@@ -688,20 +725,29 @@ public:
                 // nothing to do
                 break;
             case -1:
-                LOG::mod_log->error(M_BACKENDS, LOG::Mod_log::C_DATABASE,
-                    "Type mismatch for argument \"%s\" of function call \"%s\".",
-                    mdl_arguments[i].param_name, function_call->get_mdl_function_definition());
                 m_error = -2;
+                m_error_string = std::string("Type mismatch for argument \"") +
+                    mdl_arguments[i].param_name +
+                    "\" of function call \"" +
+                    function_call->get_mdl_function_definition() +
+                    "\".";
+                LOG::mod_log->error(
+                    M_BACKENDS, LOG::Mod_log::C_DATABASE, "%s", m_error_string.c_str());
                 return NULL;
             case -2:
-                LOG::mod_log->error(M_BACKENDS, LOG::Mod_log::C_DATABASE,
-                    "Array size mismatch for argument \"%s\" of function call \"%s\".",
-                    mdl_arguments[i].param_name, function_call->get_mdl_function_definition());
                 m_error = -2;
+                m_error_string = std::string("Array size mismatch for argument \"") +
+                    mdl_arguments[i].param_name +
+                    "\" of function call \"" +
+                    function_call->get_mdl_function_definition() +
+                    "\".";
+                LOG::mod_log->error(
+                    M_BACKENDS, LOG::Mod_log::C_DATABASE, "%s", m_error_string.c_str());
                 return NULL;
             default:
                 ASSERT(M_BACKENDS, false);
                 m_error = -2;
+                m_error_string = "Invalid expression.";
                 return NULL;
             }
 
@@ -724,7 +770,7 @@ public:
 
             tex_ret_type->get_field(0, f_type, f_name);
 
-            MISTD::string name(tex_ret_type->get_symbol()->get_name());
+            std::string name(tex_ret_type->get_symbol()->get_name());
             name += '.';
             name += f_name->get_name();
             name += '(';
@@ -770,12 +816,14 @@ public:
 
         if (!field.is_valid_interface()) {
             m_error = -2;
+            m_error_string = "Invalid path (non-existing).";
             return NULL;
         }
 
-        // reject constants if not explicitely enabled
+        // reject constants if not explicitly enabled
         if (!m_compile_consts && field->get_kind() == MDL::IExpression::EK_CONSTANT) {
             m_error = -4;
+            m_error_string = "The requested expression is a constant.";
             return NULL;
         }
 
@@ -783,6 +831,7 @@ public:
         field_type = field_type->skip_type_alias();
         if (contains_df_type(field_type) || mi::mdl::is<mi::mdl::IType_resource>(field_type)) {
             m_error = -5;
+            m_error_string = "Neither DFs nor resource type expressions can be handled.";
             return NULL;
         }
 
@@ -830,12 +879,13 @@ public:
 
         // get the field corresponding to path
         mi::mdl::IType_factory* tf = m_compiler->get_type_factory();
-        const mi::mdl::IType* field_type = 0;
+        const mi::mdl::IType* field_type = NULL;
         mi::base::Handle<const MDL::IExpression> field(
             compiled_material->lookup_sub_expression(m_db_transaction, path, tf, &field_type));
 
         if (!field) {
             m_error = -2;
+            m_error_string = "Invalid path (non-existing).";
             return NULL;
         }
 
@@ -845,6 +895,7 @@ public:
         //  constant, but it does not makes much sense, and we do not support it yet.
         if (!m_compile_consts && field->get_kind() == MDL::IExpression::EK_CONSTANT) {
             m_error = -4;
+            m_error_string = "The requested expression is a constant.";
             return NULL;
         }
 
@@ -852,6 +903,7 @@ public:
         field_type = field_type->skip_type_alias();
         if (!mi::mdl::is<mi::mdl::IType_df>(field_type)) {
             m_error = -5;
+            m_error_string = "Only distribution functions are allowed.";
             return NULL;
         }
 
@@ -865,6 +917,7 @@ public:
 
             case mi::mdl::IType::TK_VDF:
                 m_error = -9;
+                m_error_string = "VDFs are not supported.";
                 return NULL;
 
             default:
@@ -897,8 +950,6 @@ public:
             main_df->set_parameter_mapping(i, idx);
         }
 
-        const mi::mdl::DAG_node* body = builder.int_expr_to_mdl_dag_node(field_type, field.get());
-
         mi::base::Handle<const MI::MDL::IExpression_direct_call> mat_body(
             compiled_material->get_body());
         DB::Tag tag = mat_body->get_definition();
@@ -909,19 +960,28 @@ public:
             builder.int_expr_to_mdl_dag_node(mat_type, mat_body.get());
 
         MDL::Mdl_call_resolver resolver(m_db_transaction);
-        mi::mdl::IDistribution_function::Error_code ec =
-            dist_func->initialize(material_constructor, body, include_geometry_normal, &resolver);
+        mi::mdl::IDistribution_function::Error_code ec = dist_func->initialize(
+            material_constructor,
+            path,
+            include_geometry_normal,
+            m_calc_derivatives,
+            &resolver);
         switch (ec) {
         case mi::mdl::IDistribution_function::EC_NONE:
             break;
+        case mi::mdl::IDistribution_function::EC_INVALID_PATH:
+            m_error = -2;
+            return NULL;
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_BSDF:
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EDF:
             m_error = -10;
+            m_error_string = "VDFs are not supported.";
             return NULL;
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE:
         case mi::mdl::IDistribution_function::EC_INVALID_PARAMETERS:
             MDL_ASSERT(!"Unexpected error.");
             m_error = -10;
+            m_error_string = "The requested BSDF is not supported, yet.";
             return NULL;
         }
 
@@ -945,8 +1005,9 @@ public:
             lec = mi::mdl::ILambda_function::LEC_DISPLACEMENT;
         }
         if (lec != lambda->get_execution_context()) {
-            // we cannot mix expressions with different contexts so far
+            // we cannot mix expressions with different contexts so gefar
             m_error = -7;
+            m_error_string = "Mixing displacement and non-displacement expression not possible.";
             return 0;
         }
 
@@ -1075,11 +1136,17 @@ private:
     /// The largest supported wavelength.
     mi::Float32 m_mdl_wavelength_max;
 
-    /// Reported errors is any
+    /// Reported error code, if any
     mi::Sint32 m_error;
+
+    /// Reported error string, if any
+    std::string m_error_string;
 
     /// True, if constants should be compiled (else return error -4 instead)
     bool m_compile_consts;
+
+    /// If true, derivatives should be calculated.
+    bool m_calc_derivatives;
 };
 
 } // anonymous
@@ -1092,32 +1159,32 @@ public:
     struct Texture_entry {
         Texture_entry(
             size_t                                     index,
-            MISTD::string const                        &name,
+            std::string const                        &name,
             mi::neuraylib::ITarget_code::Texture_shape type)
         : m_index(index), m_name(name), m_type(type)
         {
         }
 
         size_t                                     m_index;
-        MISTD::string                              m_name;
+        std::string                              m_name;
         mi::neuraylib::ITarget_code::Texture_shape m_type;
     };
 
-    typedef MISTD::vector<Texture_entry> Texture_resource_table;
+    typedef std::vector<Texture_entry> Texture_resource_table;
 
     struct Res_entry {
         Res_entry(
             size_t                                     index,
-            MISTD::string const                        &name)
+            std::string const                        &name)
         : m_index(index), m_name(name)
         {
         }
 
         size_t        m_index;
-        MISTD::string m_name;
+        std::string m_name;
     };
 
-    typedef MISTD::vector<Res_entry> Resource_table;
+    typedef std::vector<Res_entry> Resource_table;
 
 public:
     /// Constructor.
@@ -1622,6 +1689,7 @@ Link_unit::Link_unit(
 , m_gen_base_name_suffix_counter(0)
 , m_compile_consts(llvm_be.get_compile_consts())
 , m_strings_mapped_to_ids(llvm_be.get_strings_mapped_to_ids())
+, m_calc_derivatives(llvm_be.get_calc_derivatives())
 {
 }
 
@@ -1636,29 +1704,46 @@ Link_unit::~Link_unit()
 mi::Sint32 Link_unit::add_environment(
     MDL::Mdl_function_call const *function_call,
     char const                   *fname,
-    mi::Float32                  mdl_meters_per_scene_unit,
-    mi::Float32                  mdl_wavelength_min,
-    mi::Float32                  mdl_wavelength_max)
+    MDL::Execution_context       *context)
 {
-    if (function_call == NULL)
-        return -2;
-
-    if (m_transaction == NULL)
+    if (function_call == NULL || m_transaction == NULL)
+    {
+        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
+    }
+
+    // check internal space configuration
+    DB::Access<MDL::Mdl_function_definition> function_definition(
+        function_call->get_function_definition(), m_transaction);
+    DB::Access<MDL::Mdl_module> module(
+        function_definition->get_module(m_transaction), m_transaction);
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
+
+    if (m_internal_space.empty())
+        m_internal_space = code_dag->get_internal_space();
+    else
+        if (m_internal_space != code_dag->get_internal_space()) {
+            add_error_message(context, "Functions and materials compiled with different "
+                "internal_space configurations cannot be mixed.", -1);
+            return -1;
+        }
 
     Lambda_builder builder(
         m_compiler.get(),
         m_transaction,
-        mdl_meters_per_scene_unit,
-        mdl_wavelength_min,
-        mdl_wavelength_max,
-        m_compile_consts);
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT),
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MIN),
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MAX),
+        m_compile_consts,
+        m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
-    if (!lambda.is_valid_interface())
-        return builder.get_error_code();
-
+    if (!lambda.is_valid_interface()) {
+        add_error_message(context,
+            builder.get_error_string(), builder.get_error_code());
+        return -1;
+    }
     // enumerate resources ...
     Function_enumerator enumerator(
         *m_tc_reg, lambda.get(), m_transaction, m_tex_idx, m_lp_idx, m_bm_idx, m_res_index_map);
@@ -1671,9 +1756,11 @@ mi::Sint32 Link_unit::add_environment(
     size_t arg_block_index = ~0;
     bool res = m_unit->add(
         lambda.get(), &resolver, mi::mdl::ILink_unit::FK_ENVIRONMENT, &arg_block_index, NULL);
-    if (!res)
-        return -3;
-
+    if (!res) {
+        add_error_message(context,
+            "The backend failed to compile the function.", -3);
+        return -1;
+    }
     ASSERT(M_BACKENDS, arg_block_index == size_t(~0) &&
         "Environments should not have captured arguments");
 
@@ -1683,48 +1770,68 @@ mi::Sint32 Link_unit::add_environment(
 mi::Sint32 Link_unit::add_material_expression(
     MDL::Mdl_compiled_material const *compiled_material,
     char const                       *path,
-    char const                       *base_fname)
+    char const                       *base_fname,
+    MDL::Execution_context           *context)
 {
     mi::mdl::ILink_unit::Target_function_description desc;
     desc.path = path;
     desc.base_fname = base_fname;
-    add_material(compiled_material, &desc, 1, false);
-    return (desc.return_code != ~0 && desc.return_code < -9)
-        ? desc.return_code / 10 
-        : desc.return_code;
+    mi::Sint32 result = add_material(compiled_material, &desc, 1, context);
+    // store legacy error code
+    if(context)
+        context->set_result((desc.return_code != ~0 && desc.return_code < -9)
+            ? desc.return_code / 10
+            : desc.return_code);
+    return result;
 }
 
 mi::Sint32 Link_unit::add_material_df(
     MDL::Mdl_compiled_material const *compiled_material,
     char const *path,
     char const *base_fname,
-    bool include_geometry_normal)
+    MDL::Execution_context* context)
 {
     mi::mdl::ILink_unit::Target_function_description desc;
     desc.path = path;
     desc.base_fname = base_fname;
-    add_material(compiled_material, &desc, 1, include_geometry_normal);
-
-    return (desc.return_code != ~0 && desc.return_code < -99)
-        ? desc.return_code / 100
-        : desc.return_code;
+    mi::Sint32 result = add_material(compiled_material, &desc, 1, context);
+    // store legacy error code
+    if (context)
+        context->set_result((desc.return_code != ~0 && desc.return_code < -99)
+            ? desc.return_code / 100
+            : desc.return_code);
+    return result;
 }
 
 mi::Sint32 Link_unit::add_material(
     MDL::Mdl_compiled_material const                   *compiled_material,
     mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
     mi::Size                                            description_count,
-    bool                                                include_geometry_normal)
+    MDL::Execution_context                             *context)
 {
-    if (m_transaction == NULL || compiled_material == NULL)
+    if (m_transaction == NULL || compiled_material == NULL) {
+        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
-
-    // argument block index for the entire material 
+    }
+    // argument block index for the entire material
     // (initialized by the first function that requires material arguments)
     size_t arg_block_index = ~0;
 
     mi::base::Handle<MDL::IExpression_factory> ef(MDL::get_expression_factory());
     mi::mdl::IType_factory* tf = m_compiler->get_type_factory();
+
+    bool include_geometry_normal = get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL);
+
+    // check internal space configuration
+    if (m_internal_space.empty()) {
+        m_internal_space = compiled_material->get_internal_space();
+    }
+    else
+        if (m_internal_space != compiled_material->get_internal_space()) {
+                add_error_message(context, "Materials compiled with different internal_space "
+                    "configurations cannot be mixed.", -1);
+            return -1;
+        }
 
     // increment once for each add_material invocation
     m_gen_base_name_suffix_counter++;
@@ -1733,7 +1840,9 @@ mi::Sint32 Link_unit::add_material(
     {
         if (function_descriptions[i].path == NULL)
         {
-            function_descriptions[i].return_code = -1;
+            function_descriptions[i].return_code =
+                add_error_message(context, "Invalid parameters (NULL pointer) for function at index" + 
+                    std::to_string(i), -1);
             return -1;
         }
 
@@ -1743,7 +1852,8 @@ mi::Sint32 Link_unit::add_material(
             compiled_material->get_mdl_meters_per_scene_unit(),
             compiled_material->get_mdl_wavelength_min(),
             compiled_material->get_mdl_wavelength_max(),
-            m_compile_consts);
+            m_compile_consts,
+            m_calc_derivatives);
 
         // get the field corresponding to path
         const mi::mdl::IType* field_type = 0;
@@ -1753,7 +1863,9 @@ mi::Sint32 Link_unit::add_material(
 
         if (!field)
         {
-            function_descriptions[i].return_code = -2;
+            function_descriptions[i].return_code = 
+                add_error_message(context, "Invalid path (non-existing) for function at index" + 
+                    std::to_string(i) + ".", -2);
             return -1;
         }
 
@@ -1761,17 +1873,16 @@ mi::Sint32 Link_unit::add_material(
         field_type = field_type->skip_type_alias();
 
         // use the provided base name or generate one
-        MISTD::stringstream sstr;
-        if (function_descriptions[i].base_fname)
+        std::stringstream sstr;
+        if (function_descriptions[i].base_fname) {
             sstr << function_descriptions[i].base_fname;
-        else
-        {
-            sstr << "lambda_" << m_gen_base_name_suffix_counter;
+        } else {
+            sstr << "lambda_" << m_gen_base_name_suffix_counter
+                 << "__" << function_descriptions[i].path;
         }
-        sstr << "__" + MISTD::string(function_descriptions[i].path);
 
-        MISTD::string function_name = sstr.str();
-        MISTD::replace(function_name.begin(), function_name.end(), '.', '_');
+        std::string function_name = sstr.str();
+        std::replace(function_name.begin(), function_name.end(), '.', '_');
 
         switch (field_type->get_kind())
         {
@@ -1796,7 +1907,9 @@ mi::Sint32 Link_unit::add_material(
                     //    break;
 
                     default:
-                        function_descriptions[i].return_code = -900;
+                        function_descriptions[i].return_code =  
+                            add_error_message(context, "VDFs are not supported for function at index" + 
+                                std::to_string(i), -900);
                         function_descriptions[i].distribution_kind =
                             mi::mdl::ILink_unit::DK_INVALID;
                         break;
@@ -1808,21 +1921,23 @@ mi::Sint32 Link_unit::add_material(
                 //  - a number of expression lambdas containing the non-DF part
                 mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
                     builder.from_material_df(
-                        compiled_material, 
-                        function_descriptions[i].path, 
+                        compiled_material,
+                        function_descriptions[i].path,
                         function_name.c_str(),
                         include_geometry_normal));
 
                 if (!dist_func.is_valid_interface())
                 {
-                    function_descriptions[i].return_code = builder.get_error_code() * 100;
+                    function_descriptions[i].return_code = 
+                        add_error_message(
+                            context, builder.get_error_string(), builder.get_error_code() * 100);
                     return -1;
                 }
 
                 mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
-                
+
                 // check if the distribution function is the default one, e.g. 'bsdf()'
-                // if that's the case we don't need to translate as the evaluation of the function 
+                // if that's the case we don't need to translate as the evaluation of the function
                 // will result in zero
                 const mi::mdl::DAG_node* body = main_df->get_body();
                 if (body->get_kind() == mi::mdl::DAG_node::EK_CONSTANT &&
@@ -1836,7 +1951,7 @@ mi::Sint32 Link_unit::add_material(
                 // ... enumerate resources: must be done before we compile ...
                 //     all resource information will be collected in main_df
                 Function_enumerator enumerator(
-                    *m_tc_reg, main_df.get(), m_transaction, m_tex_idx, 
+                    *m_tc_reg, main_df.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map);
                 main_df->enumerate_resources(enumerator, main_df->get_body());
 
@@ -1851,57 +1966,70 @@ mi::Sint32 Link_unit::add_material(
                     mi::base::Handle<mi::mdl::ILambda_function> lambda(
                         dist_func->get_expr_lambda(i));
 
-                    // also register the resources in lambda itself, 
+                    // also register the resources in lambda itself,
                     // so we see whether it accesses resources
                     enumerator.set_additional_lambda(lambda.get());
 
                     lambda->enumerate_resources(enumerator, lambda->get_body());
                 }
 
-                // ... optimize all expression lambdas
-                MDL::Call_evaluator    call_evaluator(m_transaction);
                 MDL::Mdl_call_resolver resolver(m_transaction);
-                for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i)
-                {
-                    mi::base::Handle<mi::mdl::ILambda_function> lambda(
-                        dist_func->get_expr_lambda(i));
-                    lambda->optimize(&resolver, &call_evaluator);
+
+                // ... optimize all expression lambdas
+                // (for derivatives, optimization already happened while building derivative info,
+                // and doing it again may destroy the analysis result)
+                if (!m_calc_derivatives) {
+                    MDL::Call_evaluator    call_evaluator(m_transaction);
+                    for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i)
+                    {
+                        mi::base::Handle<mi::mdl::ILambda_function> lambda(
+                            dist_func->get_expr_lambda(i));
+                        lambda->optimize(&resolver, &call_evaluator);
+                    }
                 }
 
                 // ... and add it to the compilation unit
                 if (!m_unit->add(
-                    dist_func.get(), 
-                    &resolver, 
+                    dist_func.get(),
+                    &resolver,
                     &arg_block_index,
                     &function_descriptions[i].function_index))
                 {
-                    MDL::report_messages(m_unit->access_messages(), /*out_messages=*/0);
-                    function_descriptions[i].return_code = -300;
+                    MDL::report_messages(m_unit->access_messages(), context);
+                    function_descriptions[i].return_code = 
+                        add_error_message(context, 
+                            "The JIT backend failed to compile the function at index " 
+                            + std::to_string(i) + ".", -300);
                     return -1;
                 }
 
                 break;
             }
-  
 
             // if not a distribution function, we assume a generic expression
             default:
             {
                 mi::base::Handle<mi::mdl::ILambda_function> lambda(
                     builder.from_sub_expr(
-                        compiled_material, 
+                        compiled_material,
                         function_descriptions[i].path,
                         function_name.c_str()));
 
                 if (!lambda.is_valid_interface())
                 {
-                    function_descriptions[i].return_code = builder.get_error_code() * 10;
+                    function_descriptions[i].return_code =
+                        add_error_message(
+                            context, builder.get_error_string(), builder.get_error_code() * 10);
                     return -1;
                 }
 
+                MDL::Mdl_call_resolver resolver(m_transaction);
+                if (m_calc_derivatives)
+                    lambda->initialize_derivative_infos(&resolver);
+
                 // Enumerate resources ...
                 Function_enumerator enumerator(
-                    *m_tc_reg, lambda.get(), m_transaction, m_tex_idx, 
+                    *m_tc_reg, lambda.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map);
                 lambda->enumerate_resources(enumerator, lambda->get_body());
 
@@ -1914,16 +2042,18 @@ mi::Sint32 Link_unit::add_material(
                 function_descriptions[i].distribution_kind = mi::mdl::ILink_unit::DK_NONE;
 
                 // ... and add it to the compilation unit
-                MDL::Mdl_call_resolver resolver(m_transaction);
                 if (!m_unit->add(
                     lambda.get(),
-                    &resolver, 
-                    mi::mdl::ILink_unit::FK_LAMBDA, 
+                    &resolver,
+                    mi::mdl::ILink_unit::FK_LAMBDA,
                     &arg_block_index,
                     &function_descriptions[i].function_index))
                 {
-                    MDL::report_messages(m_unit->access_messages(), /*out_messages=*/0);
-                    function_descriptions[i].return_code = -30;
+                    MDL::report_messages(m_unit->access_messages(), context);
+                    function_descriptions[i].return_code =
+                        add_error_message(
+                            context, "The JIT backend failed to compile the function at index" + 
+                            std::to_string(i), -30);
                     return -1;
                 }
                 break;
@@ -1944,7 +2074,7 @@ mi::Sint32 Link_unit::add_material(
         ASSERT(M_BACKENDS, index == arg_block_index && "Unit and target code should be in sync");
 
         m_arg_block_comp_material_args.push_back(
-            mi::base::make_handle_dup(compiled_material->get_arguments()));
+            mi::base::make_handle(compiled_material->get_arguments()));
         ASSERT(M_BACKENDS, index == m_arg_block_comp_material_args.size() - 1 &&
                "Unit and arg block material arg list should be in sync");
 
@@ -2038,6 +2168,7 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     m_enable_simd(m_kind != mi::neuraylib::IMdl_compiler::MB_CUDA_PTX),
     m_output_ptx(true),
     m_strings_mapped_to_ids(string_ids),
+    m_calc_derivatives(false),
     m_use_builtin_resource_handler(true)
 {
     mi::mdl::Options &options = m_jit->access_options();
@@ -2074,6 +2205,9 @@ Mdl_llvm_backend::Mdl_llvm_backend(
 
     // do we map strings to identifiers?
     options.set_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS, string_ids ? "true" : "false");
+
+    // by default we expect a texture runtime without derivative support
+    options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, "false");
 }
 
 /// Currently supported SM versions.
@@ -2139,16 +2273,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         m_num_texture_spaces = v;
         return 0;
     }
-    if (strcmp(name, "internal_space") == 0) {
-        if (strcmp(value, "world") == 0) {
-            jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, "coordinate_world");
-            return 0;
-        } else if (strcmp(value, "object") == 0) {
-            jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, "coordinate_object");
-            return 0;
-        }
-        return -2;
-    }
 
     // llvm specific options
 
@@ -2181,6 +2305,22 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return -2;
         }
         m_num_texture_results = v;
+        return 0;
+    }
+
+    if (strcmp(name, "texture_runtime_with_derivs") == 0) {
+        if (m_kind == mi::neuraylib::IMdl_compiler::MB_GLSL)
+            return -1;
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+            m_calc_derivatives = false;
+        } else if (strcmp(value, "on") == 0) {
+            value = "true";
+            m_calc_derivatives = true;
+        } else {
+            return -2;
+        }
+        m_jit->access_options().set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, value);
         return 0;
     }
 
@@ -2301,33 +2441,36 @@ mi::Sint32 Mdl_llvm_backend::set_option_binary(
 mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     DB::Transaction              *transaction,
     MDL::Mdl_function_call const *function_call,
-    mi::Float32                  mdl_meters_per_scene_unit,
-    mi::Float32                  mdl_wavelength_min,
-    mi::Float32                  mdl_wavelength_max,
     char const                   *fname,
-    mi::Sint32                       *errors)
+    MDL::Execution_context       *context)
 {
-    mi::Sint32 dummy_errors;
-    if (errors == NULL)
-        errors = &dummy_errors;
-
     if (transaction == NULL || function_call == NULL) {
-        *errors = -1;
+        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
+
+    DB::Access<MDL::Mdl_function_definition> function_definition(
+        function_call->get_function_definition(), transaction);
+    DB::Access<MDL::Mdl_module> module(
+        function_definition->get_module(transaction), transaction);
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
+    m_jit->access_options().set_option(
+        MDL_CG_OPTION_INTERNAL_SPACE, code_dag->get_internal_space());
 
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
-        mdl_meters_per_scene_unit,
-        mdl_wavelength_min,
-        mdl_wavelength_max,
-        m_compile_consts);
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT),
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MIN),
+        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MAX),
+        m_compile_consts,
+        m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
     if (!lambda.is_valid_interface()) {
-        *errors = builder.get_error_code();
+        add_error_message(context,
+            builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
 
@@ -2373,27 +2516,33 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     }
 
     if (!code.is_valid_interface()) {
-        *errors = -3;
+        add_error_message(context,
+            "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
+    MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        *errors = -3;
+        add_error_message(context, 
+            "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
 
     Target_code *tc = new Target_code(
-        code.get(), transaction, m_strings_mapped_to_ids, m_use_builtin_resource_handler);
+        code.get(),
+        transaction,
+        m_strings_mapped_to_ids,
+        m_calc_derivatives,
+        m_use_builtin_resource_handler);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
     add_target_code_function(
-        tc, lambda->get_name(), 
-        mi::neuraylib::ITarget_code::DK_NONE, 
-        mi::neuraylib::ITarget_code::FK_ENVIRONMENT, 
+        tc, lambda->get_name(),
+        mi::neuraylib::ITarget_code::DK_NONE,
+        mi::neuraylib::ITarget_code::FK_ENVIRONMENT,
         ~0);
 
     size_t ro_size = 0;
@@ -2408,7 +2557,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         tc->add_string_constant_index(i, code->get_string_constant(i));
     }
 
-    *errors = 0;
     return tc;
 }
 
@@ -2417,31 +2565,35 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     MDL::Mdl_compiled_material const *compiled_material,
     char const                       *path,
     char const                       *fname,
-    mi::Sint32                           *errors)
+    MDL::Execution_context           *context)
 {
-    mi::Sint32 dummy_errors;
-    if (!errors)
-        errors = &dummy_errors;
-
     if (!transaction || !compiled_material || !path) {
-        *errors = -1;
+        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
-
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
         compiled_material->get_mdl_meters_per_scene_unit(),
         compiled_material->get_mdl_wavelength_min(),
         compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts);
+        m_compile_consts,
+        m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.from_sub_expr(compiled_material, path, fname));
     if (!lambda.is_valid_interface()) {
-        *errors = builder.get_error_code();
+        add_error_message(context,
+            builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
+
+    mi::mdl::Options& jit_options = m_jit->access_options();
+    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
+
+    MDL::Mdl_call_resolver resolver(transaction);
+    if (m_calc_derivatives)
+        lambda->initialize_derivative_infos(&resolver);
 
     // ... enumerate resources: must be done before we compile ...
     Target_code_register tc_reg;
@@ -2453,7 +2605,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
 
     // ... and compile
-    MDL::Mdl_call_resolver resolver(transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
     case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
@@ -2490,33 +2641,40 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     if (!code.is_valid_interface()) {
-        *errors = -3;
+        add_error_message(context,
+            "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
+    MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        *errors = -3;
+        add_error_message(context,
+            "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
 
     Target_code *tc = new Target_code(
-        code.get(), transaction, m_strings_mapped_to_ids, m_use_builtin_resource_handler);
+        code.get(),
+        transaction,
+        m_strings_mapped_to_ids,
+        m_calc_derivatives,
+        m_use_builtin_resource_handler);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
     mi::Size arg_block_index = ~0;
     if (compiled_material->get_parameter_count() != 0) {
-        tc->init_argument_block(0, transaction, compiled_material->get_arguments());
+        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
+        tc->init_argument_block(0, transaction, args.get());
         arg_block_index = 0;
     }
 
     add_target_code_function(
-        tc, lambda->get_name(), 
+        tc, lambda->get_name(),
         mi::neuraylib::ITarget_code::DK_NONE,
-        mi::neuraylib::ITarget_code::FK_LAMBDA, 
+        mi::neuraylib::ITarget_code::FK_LAMBDA,
         arg_block_index);
 
     size_t ro_size = 0;
@@ -2530,7 +2688,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         tc->add_string_constant_index(i, code->get_string_constant(i));
     }
 
-    *errors = 0;
     return tc;
 }
 
@@ -2556,13 +2713,17 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         return NULL;
     }
 
+    mi::mdl::Options& jit_options = m_jit->access_options();
+    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
+
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
         compiled_material->get_mdl_meters_per_scene_unit(),
         compiled_material->get_mdl_wavelength_min(),
         compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts);
+        m_compile_consts,
+        m_calc_derivatives);
 
     // create the first expression
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
@@ -2587,6 +2748,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         }
     }
 
+    MDL::Mdl_call_resolver resolver(transaction);
+    if (m_calc_derivatives)
+        lambda->initialize_derivative_infos(&resolver);
+
     // ... enumerate resources: must be done before we compile ...
     Target_code_register tc_reg;
     Function_enumerator enumerator(tc_reg, lambda.get(), transaction);
@@ -2600,17 +2765,16 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
 
     // ... and compile
-    MDL::Mdl_call_resolver resolver(transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
     case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
         code = mi::base::make_handle(
             m_jit->compile_into_llvm_ir(
-            lambda.get(),
-            &resolver,
-            m_num_texture_spaces,
-            m_num_texture_results,
-            m_enable_simd));
+                lambda.get(),
+                &resolver,
+                m_num_texture_spaces,
+                m_num_texture_results,
+                m_enable_simd));
         break;
     case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
         code = mi::base::make_handle(
@@ -2625,12 +2789,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         break;
     case mi::neuraylib::IMdl_compiler::MB_NATIVE:
         code = mi::base::make_handle(
-            m_jit->compile_into_generic_function(
+            m_jit->compile_into_switch_function(
                 lambda.get(),
                 &resolver,
                 m_num_texture_spaces,
-                m_num_texture_results,
-                /*transformer=*/NULL));
+                m_num_texture_results));
         break;
     default:
         break;
@@ -2649,19 +2812,23 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     Target_code *tc = new Target_code(
-        code.get(), transaction, m_strings_mapped_to_ids, m_use_builtin_resource_handler);
+        code.get(),
+        transaction,
+        m_strings_mapped_to_ids,
+        m_calc_derivatives, m_use_builtin_resource_handler);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
     mi::Size arg_block_index = ~0;
     if (compiled_material->get_parameter_count() != 0) {
-        tc->init_argument_block(0, transaction, compiled_material->get_arguments());
+        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
+        tc->init_argument_block(0, transaction, args.get());
         arg_block_index = 0;
     }
 
     add_target_code_function(
-        tc, lambda->get_name(), 
+        tc, lambda->get_name(),
         mi::neuraylib::ITarget_code::DK_NONE,
         mi::neuraylib::ITarget_code::FK_SWITCH_LAMBDA, arg_block_index);
 
@@ -2718,13 +2885,17 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         return NULL;
     }
 
+    mi::mdl::Options& jit_options = m_jit->access_options();
+    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
+
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
         compiled_material->get_mdl_meters_per_scene_unit(),
         compiled_material->get_mdl_wavelength_min(),
         compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts);
+        m_compile_consts,
+        m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.from_sub_expr(compiled_material, path, fname));
@@ -2732,6 +2903,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         *errors = builder.get_error_code();
         return NULL;
     }
+
+    MDL::Mdl_call_resolver resolver(transaction);
+    if (m_calc_derivatives)
+        lambda->initialize_derivative_infos(&resolver);
 
     mi::mdl::DAG_node const *body = lambda->get_body();
 
@@ -2749,7 +2924,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     o2w_vec[2] = get_row(o2w, 2);
     o2w_vec[3] = get_row(o2w, 3);
 
-    MDL::Mdl_call_resolver resolver(transaction);
     body = lambda->set_uniform_context(&resolver, body, w2o_vec, o2w_vec, object_id);
     lambda->set_body(body);
 
@@ -2811,21 +2985,25 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     Target_code *tc = new Target_code(
-        code.get(), transaction, m_strings_mapped_to_ids, m_use_builtin_resource_handler);
+        code.get(),
+        transaction,
+        m_strings_mapped_to_ids,
+        m_calc_derivatives, m_use_builtin_resource_handler);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
     mi::Size arg_block_index = ~0;
     if (compiled_material->get_parameter_count() != 0) {
-        tc->init_argument_block(0, transaction, compiled_material->get_arguments());
+        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
+        tc->init_argument_block(0, transaction, args.get());
         arg_block_index = 0;
     }
 
     add_target_code_function(
-        tc, lambda->get_name(), 
+        tc, lambda->get_name(),
         mi::neuraylib::ITarget_code::DK_NONE,
-        mi::neuraylib::ITarget_code::FK_LAMBDA, 
+        mi::neuraylib::ITarget_code::FK_LAMBDA,
         arg_block_index);
 
     size_t ro_size = 0;
@@ -2848,21 +3026,19 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     const MDL::Mdl_compiled_material* compiled_material,
     const char* path,
     const char* base_fname,
-    bool include_geometry_normal,
-    mi::Sint32* errors)
+    MDL::Execution_context* context)
 {
-    mi::Sint32 dummy_errors;
-    if (!errors)
-        errors = &dummy_errors;
-
     Lambda_builder lambda_builder(
         m_compiler.get(),
         transaction,
         compiled_material->get_mdl_meters_per_scene_unit(),
         compiled_material->get_mdl_wavelength_min(),
         compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts);
+        m_compile_consts,
+        m_calc_derivatives);
 
+    mi::mdl::Options& jit_options = m_jit->access_options();
+    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
 
     // convert from an IExpression-based compiled material sub-expression
     // to a DAG_node-based distribution function consisting of
@@ -2870,9 +3046,11 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     //  - a number of expression lambdas containing the non-DF part
     mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
         lambda_builder.from_material_df(
-            compiled_material, path, base_fname, include_geometry_normal));
+            compiled_material, path, base_fname, 
+            get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL)));
     if (!dist_func.is_valid_interface()) {
-        *errors = lambda_builder.get_error_code();
+       add_error_message(
+           context, lambda_builder.get_error_string(), lambda_builder.get_error_code());
         return NULL;
     }
 
@@ -2899,15 +3077,8 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         lambda->enumerate_resources(enumerator, lambda->get_body());
     }
 
-    // ... optimize all expression lambdas
-    MDL::Call_evaluator    call_evaluator(transaction);
-    MDL::Mdl_call_resolver resolver(transaction);
-    for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
-        mi::base::Handle<mi::mdl::ILambda_function> lambda(dist_func->get_expr_lambda(i));
-        lambda->optimize(&resolver, &call_evaluator);
-    }
-
     // ... and compile
+    MDL::Mdl_call_resolver resolver(transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
 
     switch (m_kind) {
@@ -2934,29 +3105,35 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     }
 
     if (!code.is_valid_interface()) {
-        *errors = -3;
+        add_error_message(
+            context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
+    MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        *errors = -3;
+        add_error_message(
+            context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
 
     Target_code *tc = new Target_code(
-        code.get(), transaction, m_strings_mapped_to_ids, m_use_builtin_resource_handler);
+        code.get(),
+        transaction,
+        m_strings_mapped_to_ids,
+        m_calc_derivatives,
+        m_use_builtin_resource_handler);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
     mi::Size arg_block_index = ~0;
     if (compiled_material->get_parameter_count() != 0) {
-        tc->init_argument_block(0, transaction, compiled_material->get_arguments());
+        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
+        tc->init_argument_block(0, transaction, args.get());
         arg_block_index = 0;
     }
-
 
     // get distribution kind
     mi::neuraylib::ITarget_code::Distribution_kind dist_kind =
@@ -2974,20 +3151,21 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
             break;
 
         default:
+            ASSERT(M_BACKENDS, !"Unsupported Distribution kind");
             return NULL;
     }
 
     add_target_code_function(
-        tc, main_df->get_name() + MISTD::string("_init"), dist_kind,
+        tc, main_df->get_name() + std::string("_init"), dist_kind,
         mi::neuraylib::ITarget_code::FK_DF_INIT, arg_block_index);
     add_target_code_function(
-        tc, main_df->get_name() + MISTD::string("_sample"), dist_kind,
+        tc, main_df->get_name() + std::string("_sample"), dist_kind,
         mi::neuraylib::ITarget_code::FK_DF_SAMPLE, arg_block_index);
     add_target_code_function(
-        tc, main_df->get_name() + MISTD::string("_evaluate"), dist_kind,
+        tc, main_df->get_name() + std::string("_evaluate"), dist_kind,
         mi::neuraylib::ITarget_code::FK_DF_EVALUATE, arg_block_index);
     add_target_code_function(
-        tc, main_df->get_name() + MISTD::string("_pdf"), dist_kind,
+        tc, main_df->get_name() + std::string("_pdf"), dist_kind,
         mi::neuraylib::ITarget_code::FK_DF_PDF, arg_block_index);
 
     size_t ro_size = 0;
@@ -3001,7 +3179,6 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         tc->add_string_constant_index(i, code->get_string_constant(i));
     }
 
-    *errors = 0;
     return tc;
 }
 
@@ -3021,29 +3198,30 @@ mi::Uint8 const *Mdl_llvm_backend::get_device_library(
 
 mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     Link_unit const *lu,
-    mi::Sint32      *errors)
+    MDL::Execution_context* context)
 {
-    mi::Sint32 dummy_errors;
-    if (errors == NULL)
-        errors = &dummy_errors;
+    m_jit->access_options().set_option(MDL_CG_OPTION_INTERNAL_SPACE,
+        lu->get_internal_space());
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
         m_jit->compile_unit(mi::base::make_handle(lu->get_compilation_unit()).get()));
 
     if (!code.is_valid_interface()) {
-        *errors = -2;
+        add_error_message(context,
+            "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
+    MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        *errors = -2;
+        add_error_message(context,
+            "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
 
     mi::base::Handle<Target_code> tc(lu->get_target_code());
-    tc->finalize(code.get(), lu->get_transaction());
+    tc->finalize(code.get(), lu->get_transaction(), m_calc_derivatives);
 
     // Enter the resource-table here
     fill_resource_tables(*lu->get_tc_reg(), tc.get());
@@ -3067,7 +3245,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
 
     // Create all target argument blocks, now that all resources are known
     {
-        MISTD::vector<mi::base::Handle<MDL::IValue_list const> > const &args =
+        std::vector<mi::base::Handle<MDL::IValue_list const> > const &args =
             lu->get_arg_block_comp_material_args();
         DB::Transaction *trans = lu->get_transaction();
         for (size_t i = 0, n_args = args.size(); i < n_args; ++i) {
@@ -3084,14 +3262,13 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
         tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
     }
 
-    *errors = 0;
     tc->retain();
     return tc.get();
 }
 
 void Mdl_llvm_backend::add_target_code_function(
     Target_code *tc,
-    MISTD::string const &name,
+    std::string const &name,
     mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
     mi::neuraylib::ITarget_code::Function_kind func_kind,
     mi::Size arg_block_index)
@@ -3099,7 +3276,7 @@ void Mdl_llvm_backend::add_target_code_function(
     size_t index = tc->add_function(name, dist_kind, func_kind, arg_block_index);
     if (m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX) {
         // PTX prototype
-        MISTD::string p(".extern .func " + name);
+        std::string p(".extern .func " + name);
         if (func_kind == mi::neuraylib::ITarget_code::FK_DF_INIT)
             p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d);";
         else if (func_kind == mi::neuraylib::ITarget_code::FK_SWITCH_LAMBDA)

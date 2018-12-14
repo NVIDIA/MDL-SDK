@@ -20,9 +20,9 @@ namespace llvm {
 
 // NOTE: All relocations generated here are 4-byte image-relative.
 
-static uint8_t CountOfUnwindCodes(MISTD::vector<MCWin64EHInstruction> &instArray){
+static uint8_t CountOfUnwindCodes(std::vector<MCWin64EHInstruction> &instArray){
   uint8_t count = 0;
-  for (MISTD::vector<MCWin64EHInstruction>::const_iterator I = instArray.begin(),
+  for (std::vector<MCWin64EHInstruction>::const_iterator I = instArray.begin(),
        E = instArray.end(); I != E; ++I) {
     switch (I->getOperation()) {
     case Win64EH::UOP_PushNonVol:

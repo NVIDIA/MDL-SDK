@@ -397,7 +397,7 @@ void TargetLowering::DAGCombinerInfo::RemoveFromWorklist(SDNode *N) {
 }
 
 SDValue TargetLowering::DAGCombinerInfo::
-CombineTo(SDNode *N, const MISTD::vector<SDValue> &To, bool AddTo) {
+CombineTo(SDNode *N, const std::vector<SDValue> &To, bool AddTo) {
   return ((DAGCombiner*)DC)->CombineTo(N, &To[0], To.size(), AddTo);
 }
 
@@ -1317,7 +1317,7 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
 
       case ISD::TokenFactor:
         if (Op.hasOneUse() &&
-            MISTD::find(TFs.begin(), TFs.end(), Op.getNode()) == TFs.end()) {
+            std::find(TFs.begin(), TFs.end(), Op.getNode()) == TFs.end()) {
           // Queue up for processing.
           TFs.push_back(Op.getNode());
           // Clean up in case the token factor is removed.
@@ -2704,7 +2704,7 @@ SDValue DAGCombiner::visitAND(SDNode *N) {
     // canonicalize equivalent to ll == rl
     if (LL == RR && LR == RL) {
       Op1 = ISD::getSetCCSwappedOperands(Op1);
-      MISTD::swap(RL, RR);
+      std::swap(RL, RR);
     }
     if (LL == RL && LR == RR) {
       bool isInteger = LL.getValueType().isInteger();
@@ -2895,9 +2895,9 @@ SDValue DAGCombiner::MatchBSwapHWordLow(SDNode *N, SDValue N0, SDValue N1,
   bool LookPassAnd0 = false;
   bool LookPassAnd1 = false;
   if (N0.getOpcode() == ISD::AND && N0.getOperand(0).getOpcode() == ISD::SRL)
-      MISTD::swap(N0, N1);
+      std::swap(N0, N1);
   if (N1.getOpcode() == ISD::AND && N1.getOperand(0).getOpcode() == ISD::SHL)
-      MISTD::swap(N0, N1);
+      std::swap(N0, N1);
   if (N0.getOpcode() == ISD::AND) {
     if (!N0.getNode()->hasOneUse())
       return SDValue();
@@ -2919,7 +2919,7 @@ SDValue DAGCombiner::MatchBSwapHWordLow(SDNode *N, SDValue N0, SDValue N1,
   }
 
   if (N0.getOpcode() == ISD::SRL && N1.getOpcode() == ISD::SHL)
-    MISTD::swap(N0, N1);
+    std::swap(N0, N1);
   if (N0.getOpcode() != ISD::SHL || N1.getOpcode() != ISD::SRL)
     return SDValue();
   if (!N0.getNode()->hasOneUse() ||
@@ -3227,7 +3227,7 @@ SDValue DAGCombiner::visitOR(SDNode *N) {
     // canonicalize equivalent to ll == rl
     if (LL == RR && LR == RL) {
       Op1 = ISD::getSetCCSwappedOperands(Op1);
-      MISTD::swap(RL, RR);
+      std::swap(RL, RR);
     }
     if (LL == RL && LR == RR) {
       bool isInteger = LL.getValueType().isInteger();
@@ -3334,9 +3334,9 @@ SDNode *DAGCombiner::MatchRotate(SDValue LHS, SDValue RHS, SDLoc DL) {
 
   // Canonicalize shl to left side in a shl/srl pair.
   if (RHSShift.getOpcode() == ISD::SHL) {
-    MISTD::swap(LHS, RHS);
-    MISTD::swap(LHSShift, RHSShift);
-    MISTD::swap(LHSMask , RHSMask );
+    std::swap(LHS, RHS);
+    std::swap(LHSShift, RHSShift);
+    std::swap(LHSMask , RHSMask );
   }
 
   unsigned OpSizeInBits = VT.getSizeInBits();
@@ -4272,7 +4272,7 @@ SDValue DAGCombiner::visitSELECT(SDNode *N) {
 }
 
 static
-MISTD::pair<SDValue, SDValue> SplitVSETCC(const SDNode *N, SelectionDAG &DAG) {
+std::pair<SDValue, SDValue> SplitVSETCC(const SDNode *N, SelectionDAG &DAG) {
   SDLoc DL(N);
   EVT LoVT, HiVT;
   llvm::tie(LoVT, HiVT) = DAG.GetSplitDestVTs(N->getValueType(0));
@@ -4285,7 +4285,7 @@ MISTD::pair<SDValue, SDValue> SplitVSETCC(const SDNode *N, SelectionDAG &DAG) {
   Lo = DAG.getNode(N->getOpcode(), DL, LoVT, LL, RL, N->getOperand(2));
   Hi = DAG.getNode(N->getOpcode(), DL, HiVT, LH, RH, N->getOperand(2));
 
-  return MISTD::make_pair(Lo, Hi);
+  return std::make_pair(Lo, Hi);
 }
 
 SDValue DAGCombiner::visitVSELECT(SDNode *N) {
@@ -4763,7 +4763,7 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
       APInt(Op.getValueSizeInBits(), 0) :
       APInt::getBitsSet(Op.getValueSizeInBits(),
                         N0.getValueSizeInBits(),
-                        MISTD::min(Op.getValueSizeInBits(),
+                        std::min(Op.getValueSizeInBits(),
                                  VT.getSizeInBits()));
     if (TruncatedBits == (KnownZero & TruncatedBits)) {
       if (VT.bitsGT(Op.getValueType()))
@@ -5964,7 +5964,7 @@ ConstantFoldBITCASTofBUILD_VECTOR(SDNode *BV, EVT DstEltVT) {
 
     // For big endian targets, swap the order of the pieces of each element.
     if (TLI.isBigEndian())
-      MISTD::reverse(Ops.end()-NumOutputsPerInput, Ops.end());
+      std::reverse(Ops.end()-NumOutputsPerInput, Ops.end());
   }
 
   return DAG.getNode(ISD::BUILD_VECTOR, SDLoc(BV), VT,
@@ -7142,7 +7142,7 @@ bool DAGCombiner::CombineToPreIndexedLoadStore(SDNode *N) {
   // will work with the patterns in canonical form.
   bool Swapped = false;
   if (isa<ConstantSDNode>(BasePtr)) {
-    MISTD::swap(BasePtr, Offset);
+    std::swap(BasePtr, Offset);
     Swapped = true;
   }
 
@@ -7192,7 +7192,7 @@ bool DAGCombiner::CombineToPreIndexedLoadStore(SDNode *N) {
 
       SDValue Op0 = Use->getOperand(0), Op1 = Use->getOperand(1);
       if (Op1.getNode() == BasePtr.getNode())
-        MISTD::swap(Op0, Op1);
+        std::swap(Op0, Op1);
       assert(Op0.getNode() == BasePtr.getNode() &&
              "Use of ADD/SUB but not an operand");
 
@@ -7211,7 +7211,7 @@ bool DAGCombiner::CombineToPreIndexedLoadStore(SDNode *N) {
     }
 
   if (Swapped)
-    MISTD::swap(BasePtr, Offset);
+    std::swap(BasePtr, Offset);
 
   // Now check for #3 and #4.
   bool RealUse = false;
@@ -7263,7 +7263,7 @@ bool DAGCombiner::CombineToPreIndexedLoadStore(SDNode *N) {
   DAG.DeleteNode(N);
 
   if (Swapped)
-    MISTD::swap(BasePtr, Offset);
+    std::swap(BasePtr, Offset);
 
   // Replace other uses of BasePtr that can be updated to use Ptr
   for (unsigned i = 0, e = OtherUses.size(); i != e; ++i) {
@@ -7939,7 +7939,7 @@ static void adjustCostForPairing(SmallVectorImpl<LoadedSlice> &LoadedSlices,
 
   // Sort the slices so that elements that are likely to be next to each
   // other in memory are next to each other in the list.
-  MISTD::sort(LoadedSlices.begin(), LoadedSlices.end(), LoadedSliceSorter());
+  std::sort(LoadedSlices.begin(), LoadedSlices.end(), LoadedSliceSorter());
   const TargetLowering &TLI = LoadedSlices[0].DAG->getTargetLoweringInfo();
   // First (resp. Second) is the first (resp. Second) potentially candidate
   // to be placed in a paired load.
@@ -8132,9 +8132,9 @@ bool DAGCombiner::SliceUpLoad(SDNode *N) {
 /// CheckForMaskedLoad - Check to see if V is (and load (ptr), imm), where the
 /// load is having specific bytes cleared out.  If so, return the byte size
 /// being masked out and the shift amount.
-static MISTD::pair<unsigned, unsigned>
+static std::pair<unsigned, unsigned>
 CheckForMaskedLoad(SDValue V, SDValue Ptr, SDValue Chain) {
-  MISTD::pair<unsigned, unsigned> Result(0, 0);
+  std::pair<unsigned, unsigned> Result(0, 0);
 
   // Check for the structure we're looking for.
   if (V->getOpcode() != ISD::AND ||
@@ -8208,7 +8208,7 @@ CheckForMaskedLoad(SDValue V, SDValue Ptr, SDValue Chain) {
 /// provides a value as specified by MaskInfo.  If so, replace the specified
 /// store with a narrower store of truncated IVal.
 static SDNode *
-ShrinkLoadReplaceStoreWithStore(const MISTD::pair<unsigned, unsigned> &MaskInfo,
+ShrinkLoadReplaceStoreWithStore(const std::pair<unsigned, unsigned> &MaskInfo,
                                 SDValue IVal, StoreSDNode *St,
                                 DAGCombiner *DC) {
   unsigned NumBytes = MaskInfo.first;
@@ -8286,7 +8286,7 @@ SDValue DAGCombiner::ReduceLoadOpStoreWidth(SDNode *N) {
   // load + replace + store sequence with a single (narrower) store, which makes
   // the load dead.
   if (Opc == ISD::OR) {
-    MISTD::pair<unsigned, unsigned> MaskedLoad;
+    std::pair<unsigned, unsigned> MaskedLoad;
     MaskedLoad = CheckForMaskedLoad(Value.getOperand(0), Ptr, Chain);
     if (MaskedLoad.first)
       if (SDNode *NewST = ShrinkLoadReplaceStoreWithStore(MaskedLoad,
@@ -8340,7 +8340,7 @@ SDValue DAGCombiner::ReduceLoadOpStoreWidth(SDNode *N) {
     if (ShAmt % NewBW)
       ShAmt = (((ShAmt + NewBW - 1) / NewBW) * NewBW) - NewBW;
     APInt Mask = APInt::getBitsSet(BitWidth, ShAmt,
-                                   MISTD::min(BitWidth, ShAmt + NewBW));
+                                   std::min(BitWidth, ShAmt + NewBW));
     if ((Imm & Mask) == Imm) {
       APInt NewImm = (Imm & Mask).lshr(ShAmt).trunc(NewBW);
       if (Opc == ISD::AND)
@@ -8668,7 +8668,7 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode* St) {
     return false;
 
   // Sort the memory operands according to their distance from the base pointer.
-  MISTD::sort(StoreNodes.begin(), StoreNodes.end(),
+  std::sort(StoreNodes.begin(), StoreNodes.end(),
             ConsecutiveMemoryChainSorter());
 
   // Scan the memory operations on the chain and find the first non-consecutive
@@ -8933,12 +8933,12 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode* St) {
   // Only use vector types if the vector type is larger than the integer type.
   // If they are the same, use integers.
   bool UseVectorTy = LastLegalVectorType > LastLegalIntegerType && !NoVectors;
-  unsigned LastLegalType = MISTD::max(LastLegalVectorType, LastLegalIntegerType);
+  unsigned LastLegalType = std::max(LastLegalVectorType, LastLegalIntegerType);
 
   // We add +1 here because the LastXXX variables refer to location while
   // the NumElem refers to array/index size.
-  unsigned NumElem = MISTD::min(LastConsecutiveStore, LastConsecutiveLoad) + 1;
-  NumElem = MISTD::min(LastLegalType, NumElem);
+  unsigned NumElem = std::min(LastConsecutiveStore, LastConsecutiveLoad) + 1;
+  NumElem = std::min(LastLegalType, NumElem);
 
   if (NumElem < 2)
     return false;
@@ -9079,7 +9079,7 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
           uint64_t Val = CFP->getValueAPF().bitcastToAPInt().getZExtValue();
           SDValue Lo = DAG.getConstant(Val & 0xFFFFFFFF, MVT::i32);
           SDValue Hi = DAG.getConstant(Val >> 32, MVT::i32);
-          if (TLI.isBigEndian()) MISTD::swap(Lo, Hi);
+          if (TLI.isBigEndian()) std::swap(Lo, Hi);
 
           unsigned Alignment = ST->getAlignment();
           bool isVolatile = ST->isVolatile();
@@ -10739,10 +10739,10 @@ SDValue DAGCombiner::SimplifySetCC(EVT VT, SDValue N0,
 /// multiplying by a magic number.  See:
 /// <http://the.wall.riscom.net/books/proc/ppc/cwg/code2.html>
 SDValue DAGCombiner::BuildSDIV(SDNode *N) {
-  MISTD::vector<SDNode*> Built;
+  std::vector<SDNode*> Built;
   SDValue S = TLI.BuildSDIV(N, DAG, LegalOperations, &Built);
 
-  for (MISTD::vector<SDNode*>::iterator ii = Built.begin(), ee = Built.end();
+  for (std::vector<SDNode*>::iterator ii = Built.begin(), ee = Built.end();
        ii != ee; ++ii)
     AddToWorkList(*ii);
   return S;
@@ -10753,10 +10753,10 @@ SDValue DAGCombiner::BuildSDIV(SDNode *N) {
 /// multiplying by a magic number.  See:
 /// <http://the.wall.riscom.net/books/proc/ppc/cwg/code2.html>
 SDValue DAGCombiner::BuildUDIV(SDNode *N) {
-  MISTD::vector<SDNode*> Built;
+  std::vector<SDNode*> Built;
   SDValue S = TLI.BuildUDIV(N, DAG, LegalOperations, &Built);
 
-  for (MISTD::vector<SDNode*>::iterator ii = Built.begin(), ee = Built.end();
+  for (std::vector<SDNode*>::iterator ii = Built.begin(), ee = Built.end();
        ii != ee; ++ii)
     AddToWorkList(*ii);
   return S;
@@ -10864,7 +10864,7 @@ bool DAGCombiner::isAlias(SDValue Ptr1, int64_t Size1, bool IsVolatile1,
     TLI.getTargetMachine().getSubtarget<TargetSubtargetInfo>().useAA();
   if (UseAA && SrcValue1 && SrcValue2) {
     // Use alias analysis information.
-    int64_t MinOffset = MISTD::min(SrcValueOffset1, SrcValueOffset2);
+    int64_t MinOffset = std::min(SrcValueOffset1, SrcValueOffset2);
     int64_t Overlap1 = Size1 + SrcValueOffset1 - MinOffset;
     int64_t Overlap2 = Size2 + SrcValueOffset2 - MinOffset;
     AliasAnalysis::AliasResult AAResult =

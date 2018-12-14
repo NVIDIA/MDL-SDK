@@ -177,7 +177,7 @@ public:
 
   /// \brief The Attribute is converted to a string of equivalent mnemonic. This
   /// is, presumably, for writing out the mnemonics for the assembly writer.
-  MISTD::string getAsString(bool InAttrGrp = false) const;
+  std::string getAsString(bool InAttrGrp = false) const;
 
   /// \brief Equality and non-equality operators.
   bool operator==(Attribute A) const { return pImpl == A.pImpl; }
@@ -219,13 +219,13 @@ private:
 
   /// \brief Create an AttributeSet with the specified parameters in it.
   static AttributeSet get(LLVMContext &C,
-                          ArrayRef<MISTD::pair<unsigned, Attribute> > Attrs);
+                          ArrayRef<std::pair<unsigned, Attribute> > Attrs);
   static AttributeSet get(LLVMContext &C,
-                          ArrayRef<MISTD::pair<unsigned,
+                          ArrayRef<std::pair<unsigned,
                                              AttributeSetNode*> > Attrs);
 
   static AttributeSet getImpl(LLVMContext &C,
-                              ArrayRef<MISTD::pair<unsigned,
+                              ArrayRef<std::pair<unsigned,
                                                  AttributeSetNode*> > Attrs);
 
 
@@ -314,7 +314,7 @@ public:
   unsigned getStackAlignment(unsigned Index) const;
 
   /// \brief Return the attributes at the index as a string.
-  MISTD::string getAsString(unsigned Index, bool InAttrGrp = false) const;
+  std::string getAsString(unsigned Index, bool InAttrGrp = false) const;
 
   typedef ArrayRef<Attribute>::iterator iterator;
 
@@ -388,8 +388,8 @@ template<> struct DenseMapInfo<AttributeSet> {
 /// value, however, is not. So this can be used as a quick way to test for
 /// equality, presence of attributes, etc.
 class AttrBuilder {
-  MISTD::bitset<Attribute::EndAttrKinds> Attrs;
-  MISTD::map<MISTD::string, MISTD::string> TargetDepAttrs;
+  std::bitset<Attribute::EndAttrKinds> Attrs;
+  std::map<std::string, std::string> TargetDepAttrs;
   uint64_t Alignment;
   uint64_t StackAlignment;
 public:
@@ -469,9 +469,9 @@ public:
   bool empty() const { return Attrs.none(); }
 
   // Iterators for target-dependent attributes.
-  typedef MISTD::pair<MISTD::string, MISTD::string>                td_type;
-  typedef MISTD::map<MISTD::string, MISTD::string>::iterator       td_iterator;
-  typedef MISTD::map<MISTD::string, MISTD::string>::const_iterator td_const_iterator;
+  typedef std::pair<std::string, std::string>                td_type;
+  typedef std::map<std::string, std::string>::iterator       td_iterator;
+  typedef std::map<std::string, std::string>::const_iterator td_const_iterator;
 
   td_iterator td_begin()             { return TargetDepAttrs.begin(); }
   td_iterator td_end()               { return TargetDepAttrs.end(); }

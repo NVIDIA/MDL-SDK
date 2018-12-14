@@ -76,9 +76,9 @@ bool CFGSCC::runOnFunction(Function &F) {
   errs() << "SCCs for Function " << F.getName() << " in PostOrder:";
   for (scc_iterator<Function*> SCCI = scc_begin(&F),
          E = scc_end(&F); SCCI != E; ++SCCI) {
-    MISTD::vector<BasicBlock*> &nextSCC = *SCCI;
+    std::vector<BasicBlock*> &nextSCC = *SCCI;
     errs() << "\nSCC #" << ++sccNum << " : ";
-    for (MISTD::vector<BasicBlock*>::const_iterator I = nextSCC.begin(),
+    for (std::vector<BasicBlock*>::const_iterator I = nextSCC.begin(),
            E = nextSCC.end(); I != E; ++I)
       errs() << (*I)->getName() << ", ";
     if (nextSCC.size() == 1 && SCCI.hasLoop())
@@ -97,9 +97,9 @@ bool CallGraphSCC::runOnModule(Module &M) {
   errs() << "SCCs for the program in PostOrder:";
   for (scc_iterator<CallGraphNode*> SCCI = scc_begin(rootNode),
          E = scc_end(rootNode); SCCI != E; ++SCCI) {
-    const MISTD::vector<CallGraphNode*> &nextSCC = *SCCI;
+    const std::vector<CallGraphNode*> &nextSCC = *SCCI;
     errs() << "\nSCC #" << ++sccNum << " : ";
-    for (MISTD::vector<CallGraphNode*>::const_iterator I = nextSCC.begin(),
+    for (std::vector<CallGraphNode*>::const_iterator I = nextSCC.begin(),
            E = nextSCC.end(); I != E; ++I)
       errs() << ((*I)->getFunction() ? (*I)->getFunction()->getName()
                                      : "external node") << ", ";

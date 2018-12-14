@@ -43,7 +43,7 @@ enum Token {
   tok_var = -13
 };
 
-static MISTD::string IdentifierStr;  // Filled in if tok_identifier
+static std::string IdentifierStr;  // Filled in if tok_identifier
 static double NumVal;              // Filled in if tok_number
 
 /// gettok - Return the next token from standard input.
@@ -73,7 +73,7 @@ static int gettok() {
   }
 
   if (isdigit(LastChar) || LastChar == '.') {   // Number: [0-9.]+
-    MISTD::string NumStr;
+    std::string NumStr;
     do {
       NumStr += LastChar;
       LastChar = getchar();
@@ -123,10 +123,10 @@ public:
 
 /// VariableExprAST - Expression class for referencing a variable, like "a".
 class VariableExprAST : public ExprAST {
-  MISTD::string Name;
+  std::string Name;
 public:
-  VariableExprAST(const MISTD::string &name) : Name(name) {}
-  const MISTD::string &getName() const { return Name; }
+  VariableExprAST(const std::string &name) : Name(name) {}
+  const std::string &getName() const { return Name; }
   virtual Value *Codegen();
 };
 
@@ -152,10 +152,10 @@ public:
 
 /// CallExprAST - Expression class for function calls.
 class CallExprAST : public ExprAST {
-  MISTD::string Callee;
-  MISTD::vector<ExprAST*> Args;
+  std::string Callee;
+  std::vector<ExprAST*> Args;
 public:
-  CallExprAST(const MISTD::string &callee, MISTD::vector<ExprAST*> &args)
+  CallExprAST(const std::string &callee, std::vector<ExprAST*> &args)
     : Callee(callee), Args(args) {}
   virtual Value *Codegen();
 };
@@ -171,10 +171,10 @@ public:
 
 /// ForExprAST - Expression class for for/in.
 class ForExprAST : public ExprAST {
-  MISTD::string VarName;
+  std::string VarName;
   ExprAST *Start, *End, *Step, *Body;
 public:
-  ForExprAST(const MISTD::string &varname, ExprAST *start, ExprAST *end,
+  ForExprAST(const std::string &varname, ExprAST *start, ExprAST *end,
              ExprAST *step, ExprAST *body)
     : VarName(varname), Start(start), End(end), Step(step), Body(body) {}
   virtual Value *Codegen();
@@ -182,10 +182,10 @@ public:
 
 /// VarExprAST - Expression class for var/in
 class VarExprAST : public ExprAST {
-  MISTD::vector<MISTD::pair<MISTD::string, ExprAST*> > VarNames;
+  std::vector<std::pair<std::string, ExprAST*> > VarNames;
   ExprAST *Body;
 public:
-  VarExprAST(const MISTD::vector<MISTD::pair<MISTD::string, ExprAST*> > &varnames,
+  VarExprAST(const std::vector<std::pair<std::string, ExprAST*> > &varnames,
              ExprAST *body)
   : VarNames(varnames), Body(body) {}
   
@@ -195,12 +195,12 @@ public:
 /// PrototypeAST - This class represents the "prototype" for a function,
 /// which captures its argument names as well as if it is an operator.
 class PrototypeAST {
-  MISTD::string Name;
-  MISTD::vector<MISTD::string> Args;
+  std::string Name;
+  std::vector<std::string> Args;
   bool isOperator;
   unsigned Precedence;  // Precedence if a binary op.
 public:
-  PrototypeAST(const MISTD::string &name, const MISTD::vector<MISTD::string> &args,
+  PrototypeAST(const std::string &name, const std::vector<std::string> &args,
                bool isoperator = false, unsigned prec = 0)
   : Name(name), Args(args), isOperator(isoperator), Precedence(prec) {}
   
@@ -245,7 +245,7 @@ static int getNextToken() {
 
 /// BinopPrecedence - This holds the precedence for each binary operator that is
 /// defined.
-static MISTD::map<char, int> BinopPrecedence;
+static std::map<char, int> BinopPrecedence;
 
 /// GetTokPrecedence - Get the precedence of the pending binary operator token.
 static int GetTokPrecedence() {
@@ -269,7 +269,7 @@ static ExprAST *ParseExpression();
 ///   ::= identifier
 ///   ::= identifier '(' expression* ')'
 static ExprAST *ParseIdentifierExpr() {
-  MISTD::string IdName = IdentifierStr;
+  std::string IdName = IdentifierStr;
   
   getNextToken();  // eat identifier.
   
@@ -278,7 +278,7 @@ static ExprAST *ParseIdentifierExpr() {
   
   // Call.
   getNextToken();  // eat (
-  MISTD::vector<ExprAST*> Args;
+  std::vector<ExprAST*> Args;
   if (CurTok != ')') {
     while (1) {
       ExprAST *Arg = ParseExpression();
@@ -351,7 +351,7 @@ static ExprAST *ParseForExpr() {
   if (CurTok != tok_identifier)
     return Error("expected identifier after for");
   
-  MISTD::string IdName = IdentifierStr;
+  std::string IdName = IdentifierStr;
   getNextToken();  // eat identifier.
   
   if (CurTok != '=')
@@ -391,14 +391,14 @@ static ExprAST *ParseForExpr() {
 static ExprAST *ParseVarExpr() {
   getNextToken();  // eat the var.
 
-  MISTD::vector<MISTD::pair<MISTD::string, ExprAST*> > VarNames;
+  std::vector<std::pair<std::string, ExprAST*> > VarNames;
 
   // At least one variable name is required.
   if (CurTok != tok_identifier)
     return Error("expected identifier after var");
   
   while (1) {
-    MISTD::string Name = IdentifierStr;
+    std::string Name = IdentifierStr;
     getNextToken();  // eat identifier.
 
     // Read the optional initializer.
@@ -410,7 +410,7 @@ static ExprAST *ParseVarExpr() {
       if (Init == 0) return 0;
     }
     
-    VarNames.push_back(MISTD::make_pair(Name, Init));
+    VarNames.push_back(std::make_pair(Name, Init));
     
     // End of var list, exit loop.
     if (CurTok != ',') break;
@@ -514,7 +514,7 @@ static ExprAST *ParseExpression() {
 ///   ::= binary LETTER number? (id, id)
 ///   ::= unary LETTER (id)
 static PrototypeAST *ParsePrototype() {
-  MISTD::string FnName;
+  std::string FnName;
   
   unsigned Kind = 0; // 0 = identifier, 1 = unary, 2 = binary.
   unsigned BinaryPrecedence = 30;
@@ -558,7 +558,7 @@ static PrototypeAST *ParsePrototype() {
   if (CurTok != '(')
     return ErrorP("Expected '(' in prototype");
   
-  MISTD::vector<MISTD::string> ArgNames;
+  std::vector<std::string> ArgNames;
   while (getNextToken() == tok_identifier)
     ArgNames.push_back(IdentifierStr);
   if (CurTok != ')')
@@ -589,7 +589,7 @@ static FunctionAST *ParseDefinition() {
 static FunctionAST *ParseTopLevelExpr() {
   if (ExprAST *E = ParseExpression()) {
     // Make an anonymous proto.
-    PrototypeAST *Proto = new PrototypeAST("", MISTD::vector<MISTD::string>());
+    PrototypeAST *Proto = new PrototypeAST("", std::vector<std::string>());
     return new FunctionAST(Proto, E);
   }
   return 0;
@@ -607,7 +607,7 @@ static PrototypeAST *ParseExtern() {
 
 static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
-static MISTD::map<MISTD::string, AllocaInst*> NamedValues;
+static std::map<std::string, AllocaInst*> NamedValues;
 static FunctionPassManager *TheFPM;
 
 Value *ErrorV(const char *Str) { Error(Str); return 0; }
@@ -615,7 +615,7 @@ Value *ErrorV(const char *Str) { Error(Str); return 0; }
 /// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
 /// the function.  This is used for mutable variables etc.
 static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
-                                          const MISTD::string &VarName) {
+                                          const std::string &VarName) {
   IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
                  TheFunction->getEntryBlock().begin());
   return TmpB.CreateAlloca(Type::getDoubleTy(getGlobalContext()), 0,
@@ -639,7 +639,7 @@ Value *UnaryExprAST::Codegen() {
   Value *OperandV = Operand->Codegen();
   if (OperandV == 0) return 0;
   
-  Function *F = TheModule->getFunction(MISTD::string("unary")+Opcode);
+  Function *F = TheModule->getFunction(std::string("unary")+Opcode);
   if (F == 0)
     return ErrorV("Unknown unary operator");
   
@@ -683,7 +683,7 @@ Value *BinaryExprAST::Codegen() {
   
   // If it wasn't a builtin binary operator, it must be a user defined one. Emit
   // a call to it.
-  Function *F = TheModule->getFunction(MISTD::string("binary")+Op);
+  Function *F = TheModule->getFunction(std::string("binary")+Op);
   assert(F && "binary operator not found!");
   
   Value *Ops[] = { L, R };
@@ -700,7 +700,7 @@ Value *CallExprAST::Codegen() {
   if (CalleeF->arg_size() != Args.size())
     return ErrorV("Incorrect # arguments passed");
 
-  MISTD::vector<Value*> ArgsV;
+  std::vector<Value*> ArgsV;
   for (unsigned i = 0, e = Args.size(); i != e; ++i) {
     ArgsV.push_back(Args[i]->Codegen());
     if (ArgsV.back() == 0) return 0;
@@ -860,13 +860,13 @@ Value *ForExprAST::Codegen() {
 }
 
 Value *VarExprAST::Codegen() {
-  MISTD::vector<AllocaInst *> OldBindings;
+  std::vector<AllocaInst *> OldBindings;
   
   Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
   // Register all variables and emit their initializer.
   for (unsigned i = 0, e = VarNames.size(); i != e; ++i) {
-    const MISTD::string &VarName = VarNames[i].first;
+    const std::string &VarName = VarNames[i].first;
     ExprAST *Init = VarNames[i].second;
     
     // Emit the initializer before adding the variable to scope, this prevents
@@ -907,7 +907,7 @@ Value *VarExprAST::Codegen() {
 
 Function *PrototypeAST::Codegen() {
   // Make the function type:  double(double,double) etc.
-  MISTD::vector<Type*> Doubles(Args.size(), 
+  std::vector<Type*> Doubles(Args.size(), 
                              Type::getDoubleTy(getGlobalContext()));
   FunctionType *FT = FunctionType::get(Type::getDoubleTy(getGlobalContext()),
                                        Doubles, false);
@@ -1102,7 +1102,7 @@ int main() {
   TheModule = new Module("my cool jit", Context);
 
   // Create the JIT.  This takes ownership of the module.
-  MISTD::string ErrStr;
+  std::string ErrStr;
   TheExecutionEngine = EngineBuilder(TheModule).setErrorStr(&ErrStr).create();
   if (!TheExecutionEngine) {
     fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());

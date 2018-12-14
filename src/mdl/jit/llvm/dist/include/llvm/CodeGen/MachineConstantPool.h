@@ -134,7 +134,7 @@ public:
 class MachineConstantPool {
   const TargetMachine &TM;      ///< The target machine.
   unsigned PoolAlignment;       ///< The alignment for the pool.
-  MISTD::vector<MachineConstantPoolEntry> Constants; ///< The pool of constants.
+  std::vector<MachineConstantPoolEntry> Constants; ///< The pool of constants.
   /// MachineConstantPoolValues that use an existing MachineConstantPoolEntry.
   DenseSet<MachineConstantPoolValue*> MachineCPVsSharingEntries;
 
@@ -158,7 +158,7 @@ public:
   /// isEmpty - Return true if this constant pool contains no constants.
   bool isEmpty() const { return Constants.empty(); }
 
-  const MISTD::vector<MachineConstantPoolEntry> &getConstants() const {
+  const std::vector<MachineConstantPoolEntry> &getConstants() const {
     return Constants;
   }
 

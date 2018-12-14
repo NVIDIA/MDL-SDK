@@ -181,8 +181,7 @@ mi::IData* Attribute_set_impl<T>::create_attribute(
 {
     ATTR::Attribute_set* attribute_set = get_attribute_set();
     return Attribute_set_impl_helper::create_attribute(
-        attribute_set, this, name, type_name,
-        /*skip_type_check*/ false, /*warn_for_typed_refs*/ true);
+        attribute_set, this, name, type_name, /*skip_type_check*/ false);
 }
 
 template <typename T>

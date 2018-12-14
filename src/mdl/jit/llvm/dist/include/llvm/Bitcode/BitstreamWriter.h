@@ -40,25 +40,25 @@ class BitstreamWriter {
   unsigned BlockInfoCurBID;
 
   /// CurAbbrevs - Abbrevs installed at in this block.
-  MISTD::vector<BitCodeAbbrev*> CurAbbrevs;
+  std::vector<BitCodeAbbrev*> CurAbbrevs;
 
   struct Block {
     unsigned PrevCodeSize;
     unsigned StartSizeWord;
-    MISTD::vector<BitCodeAbbrev*> PrevAbbrevs;
+    std::vector<BitCodeAbbrev*> PrevAbbrevs;
     Block(unsigned PCS, unsigned SSW) : PrevCodeSize(PCS), StartSizeWord(SSW) {}
   };
 
   /// BlockScope - This tracks the current blocks that we have entered.
-  MISTD::vector<Block> BlockScope;
+  std::vector<Block> BlockScope;
 
   /// BlockInfo - This contains information emitted to BLOCKINFO_BLOCK blocks.
   /// These describe abbreviations that all blocks of the specified ID inherit.
   struct BlockInfo {
     unsigned BlockID;
-    MISTD::vector<BitCodeAbbrev*> Abbrevs;
+    std::vector<BitCodeAbbrev*> Abbrevs;
   };
-  MISTD::vector<BlockInfo> BlockInfoRecords;
+  std::vector<BlockInfo> BlockInfoRecords;
 
   // BackpatchWord - Backpatch a 32-bit word in the output with the specified
   // value.

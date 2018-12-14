@@ -102,7 +102,7 @@ private:
   SDValue ExpandLibCall(RTLIB::Libcall LC, EVT RetVT, const SDValue *Ops,
                         unsigned NumOps, bool isSigned, SDLoc dl);
 
-  MISTD::pair<SDValue, SDValue> ExpandChainLibCall(RTLIB::Libcall LC,
+  std::pair<SDValue, SDValue> ExpandChainLibCall(RTLIB::Libcall LC,
                                                  SDNode *Node, bool isSigned);
   SDValue ExpandFPLibCall(SDNode *Node, RTLIB::Libcall Call_F32,
                           RTLIB::Libcall Call_F64, RTLIB::Libcall Call_F80,
@@ -139,7 +139,7 @@ private:
 
   SDValue ExpandConstantFP(ConstantFPSDNode *CFP, bool UseCP);
 
-  MISTD::pair<SDValue, SDValue> ExpandAtomic(SDNode *Node);
+  std::pair<SDValue, SDValue> ExpandAtomic(SDNode *Node);
 
   void ExpandNode(SDNode *Node);
   void PromoteNode(SDNode *Node);
@@ -689,7 +689,7 @@ SDValue SelectionDAGLegalize::OptimizeFloatStore(StoreSDNode* ST) {
         const APInt &IntVal =CFP->getValueAPF().bitcastToAPInt();
         SDValue Lo = DAG.getConstant(IntVal.trunc(32), MVT::i32);
         SDValue Hi = DAG.getConstant(IntVal.lshr(32).trunc(32), MVT::i32);
-        if (TLI.isBigEndian()) MISTD::swap(Lo, Hi);
+        if (TLI.isBigEndian()) std::swap(Lo, Hi);
 
         Lo = DAG.getStore(Chain, dl, Lo, Ptr, ST->getPointerInfo(), isVolatile,
                           isNonTemporal, Alignment, TBAAInfo);
@@ -1629,7 +1629,7 @@ bool SelectionDAGLegalize::LegalizeSetCCCondCode(EVT VT,
   case TargetLowering::Expand: {
     ISD::CondCode InvCC = ISD::getSetCCSwappedOperands(CCCode);
     if (TLI.isCondCodeLegal(InvCC, OpVT)) {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
       CC = DAG.getCondCode(InvCC);
       return true;
     }
@@ -1915,7 +1915,7 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, SDNode *Node,
                     0, TLI.getLibcallCallingConv(LC), isTailCall,
                     /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                     Callee, Args, DAG, SDLoc(Node));
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
 
   if (!CallInfo.second.getNode())
@@ -1951,14 +1951,14 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, EVT RetVT,
                        /*isTailCall=*/false,
                   /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                   Callee, Args, DAG, dl);
-  MISTD::pair<SDValue,SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue,SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   return CallInfo.first;
 }
 
 // ExpandChainLibCall - Expand a node into a call to a libcall. Similar to
 // ExpandLibCall except that the first operand is the in-chain.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 SelectionDAGLegalize::ExpandChainLibCall(RTLIB::Libcall LC,
                                          SDNode *Node,
                                          bool isSigned) {
@@ -1984,7 +1984,7 @@ SelectionDAGLegalize::ExpandChainLibCall(RTLIB::Libcall LC,
                     0, TLI.getLibcallCallingConv(LC), /*isTailCall=*/false,
                     /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                     Callee, Args, DAG, SDLoc(Node));
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   return CallInfo;
 }
@@ -2121,7 +2121,7 @@ SelectionDAGLegalize::ExpandDivRemLibCall(SDNode *Node,
                     0, TLI.getLibcallCallingConv(LC), /*isTailCall=*/false,
                     /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                     Callee, Args, DAG, dl);
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   // Remainder is loaded back from the stack frame.
   SDValue Rem = DAG.getLoad(RetVT, dl, CallInfo.second, FIPtr,
@@ -2236,7 +2236,7 @@ SelectionDAGLegalize::ExpandSinCosLibCall(SDNode *Node,
                        0, TLI.getLibcallCallingConv(LC), /*isTailCall=*/false,
                        /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                        Callee, Args, DAG, dl);
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   Results.push_back(DAG.getLoad(RetVT, dl, CallInfo.second, SinPtr,
                                 MachinePointerInfo(), false, false, false, 0));
@@ -2265,7 +2265,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned,
     SDValue Lo = DAG.getNode(ISD::ADD, dl, StackSlot.getValueType(),
                              StackSlot, WordOff);
     if (TLI.isLittleEndian())
-      MISTD::swap(Hi, Lo);
+      std::swap(Hi, Lo);
 
     // if signed map to unsigned space
     SDValue Op0Mapped;
@@ -2423,7 +2423,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned,
   SDValue CPIdx = DAG.getConstantPool(FudgeFactor, TLI.getPointerTy());
   unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
   CPIdx = DAG.getNode(ISD::ADD, dl, CPIdx.getValueType(), CPIdx, CstOffset);
-  Alignment = MISTD::min(Alignment, 4u);
+  Alignment = std::min(Alignment, 4u);
   SDValue FudgeInReg;
   if (DestVT == MVT::f32)
     FudgeInReg = DAG.getLoad(MVT::f32, dl, DAG.getEntryNode(), CPIdx,
@@ -2668,7 +2668,7 @@ SDValue SelectionDAGLegalize::ExpandBitCount(unsigned Opc, SDValue Op,
   }
 }
 
-MISTD::pair <SDValue, SDValue> SelectionDAGLegalize::ExpandAtomic(SDNode *Node) {
+std::pair <SDValue, SDValue> SelectionDAGLegalize::ExpandAtomic(SDNode *Node) {
   unsigned Opc = Node->getOpcode();
   MVT VT = cast<AtomicSDNode>(Node)->getMemoryVT().getSimpleVT();
   RTLIB::Libcall LC;
@@ -2854,7 +2854,7 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
                       DAG.getExternalSymbol("__sync_synchronize",
                                             TLI.getPointerTy()),
                       Args, DAG, dl);
-    MISTD::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
+    std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
     Results.push_back(CallResult.second);
     break;
@@ -2900,7 +2900,7 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
   case ISD::ATOMIC_LOAD_UMIN:
   case ISD::ATOMIC_LOAD_UMAX:
   case ISD::ATOMIC_CMP_SWAP: {
-    MISTD::pair<SDValue, SDValue> Tmp = ExpandAtomic(Node);
+    std::pair<SDValue, SDValue> Tmp = ExpandAtomic(Node);
     Results.push_back(Tmp.first);
     Results.push_back(Tmp.second);
     break;
@@ -2933,7 +2933,7 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
                       /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                       DAG.getExternalSymbol("abort", TLI.getPointerTy()),
                       Args, DAG, dl);
-    MISTD::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
+    std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
     Results.push_back(CallResult.second);
     break;
@@ -3772,7 +3772,7 @@ void SelectionDAGLegalize::ExpandNode(SDNode *Node) {
       // If we expanded the SETCC by inverting the condition code, then swap
       // the True/False operands to match.
       if (NeedInvert)
-        MISTD::swap(Tmp3, Tmp4);
+        std::swap(Tmp3, Tmp4);
 
       // If we expanded the SETCC by swapping LHS and RHS, or by inverting the
       // condition code, create a new SELECT_CC node.

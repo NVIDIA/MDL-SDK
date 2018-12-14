@@ -83,7 +83,7 @@ class Directory
     /// Read the next filename from the directory. Names are unsorted.
     /// \param nodot ignore files beginning with '.'
     /// \return the next filename, or empty string if at eof
-    MISTD::string read(
+    std::string read(
         bool nodot=true);
 
     /// Retrieve whether reading has hit the end of the directory.
@@ -107,7 +107,7 @@ class Directory
     int error() const;
 
   private:
-    MISTD::string	m_path;			///< last path passed to open()
+    std::string	m_path;			///< last path passed to open()
     int			m_error;		///< last error, 0 if none
     bool		m_eof;			///< hit EOF while reading?
 #ifndef WIN_NT
@@ -156,7 +156,7 @@ bool is_path_absolute(
 /// \param path the path
 /// \return true if a path is absolute
 bool is_path_absolute(
-    const MISTD::string& path);
+    const std::string& path);
 
 /// Retrieve whether path is a directory.
 /// \param path the path
@@ -221,7 +221,7 @@ bool chdir(
 
 /// Retrieve the current working directory.
 /// \return the current working directory or the empty string else
-MISTD::string get_cwd();
+std::string get_cwd();
 
 /// Given a path, return information about the file. Return true, if the
 /// operation succeeded or false, if not. In the latter case the file_stat
@@ -249,8 +249,8 @@ bool file_copy(
 /// Convert given path into a path using only forward slashes.
 /// \param path incoming path
 /// \return converted path
-MISTD::string convert_to_forward_slashes(
-    const MISTD::string& path);
+std::string convert_to_forward_slashes(
+    const std::string& path);
 
 /// Enable disktrace verbosity.
 /// \note This implementation is based on a (global) static variable!
@@ -262,17 +262,17 @@ void set_disktrace_enabled();
 /// \param filename name of the file
 /// \param dir the given directory
 /// \return absolute path to the file when found, empty string else
-MISTD::string find_file_on_path(
+std::string find_file_on_path(
     const char* file_name,
-    const MISTD::string& dir=MISTD::string());
+    const std::string& dir=std::string());
 
 /// Find a file by name and given set of search paths.
 /// \param filename name of the file
 /// \param search_paths the list of search paths
 /// \return absolute path to the file when found, empty string else
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* file_name,
-    const MISTD::vector<MISTD::string>& search_paths);
+    const std::vector<std::string>& search_paths);
 
 /// Find a file by name and given set of search paths.
 /// \param filename name of the file
@@ -280,7 +280,7 @@ MISTD::string find_file_on_paths(
 /// \param end end of the list of search paths
 /// \return absolute path to the file when found, empty string else
 template <typename InputIterator>
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* file_name,
     InputIterator begin,
     InputIterator end);
@@ -292,7 +292,7 @@ MISTD::string find_file_on_paths(
 /// \param paths_count number of passed-in paths
 /// \param search_paths the list of search paths
 /// \return absolute path to the file when found, empty string else
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* filename,
     int paths_count,
     const char* const* search_paths);

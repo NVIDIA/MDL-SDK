@@ -74,7 +74,7 @@ int get_errno()
 // The Disk module has error() functions that return system error codes.
 //
 
-MISTD::string strerror(
+std::string strerror(
     int		err)			// system error code
 {
     char buffer[1024];
@@ -176,10 +176,10 @@ void message_box(
 
 // return the name of a temp directory (/tmp on Unix/Linux).
 // existence and write permissions are not checked.
-MISTD::string get_tmpdir()
+std::string get_tmpdir()
 {
 #ifndef WIN_NT
-    MISTD::string env = get_env("TMPDIR");
+    std::string env = get_env("TMPDIR");
     if (!env.empty())
 	return env;
     env = get_env("TMP");
@@ -188,17 +188,17 @@ MISTD::string get_tmpdir()
     env = get_env("TEMP");
     if (!env.empty())
 	return env;
-    return MISTD::string("/tmp");
+    return std::string("/tmp");
 #else
     const DWORD bufsize = 4096;
     char buf[bufsize];
     DWORD len = ::GetTempPath(bufsize, buf);
 
     if (len <= 0 || len > bufsize)
-	return MISTD::string(".");
+	return std::string(".");
 
     // remove trailing '\' since _stat() gets confused
-    MISTD::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
+    std::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
 
     return Ospath::convert_to_forward_slashes(dir);
 #endif
@@ -209,11 +209,11 @@ MISTD::string get_tmpdir()
 // return the name of a suitable directory for storing user data
 //
 
-MISTD::string get_userdata_dir()
+std::string get_userdata_dir()
 {
 #ifndef WIN_NT
-    MISTD::string env = get_env("HOME");
-    return !env.empty() ? env : MISTD::string(".");
+    std::string env = get_env("HOME");
+    return !env.empty() ? env : std::string(".");
 #else
     char sz_path[MAX_PATH];
     HRESULT hresult = ::SHGetFolderPath(NULL,
@@ -227,10 +227,10 @@ MISTD::string get_userdata_dir()
 	for (char *p=sz_path; *p; p++)
 	    if (*p == '\\')
 		*p = '/';
-	return MISTD::string(sz_path);
+	return std::string(sz_path);
     }
     else
-	return MISTD::string(".");
+	return std::string(".");
 #endif
 }
 
@@ -239,13 +239,13 @@ MISTD::string get_userdata_dir()
 // return the value of an environment variable or empty string else
 //
 
-MISTD::string get_env(
-    const MISTD::string& name)		// name of variable
+std::string get_env(
+    const std::string& name)		// name of variable
 {
     char* value = getenv(name.c_str());
     if (!value)
-	return MISTD::string();
-    MISTD::string result = value;
+	return std::string();
+    std::string result = value;
 
     // if the getenv'ed value is wrapped with a leading and a trailing "
     // then remove those two - watched this so far only on windows on

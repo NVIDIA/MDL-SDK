@@ -115,6 +115,11 @@ Code_generator_jit::Code_generator_jit(
         "false",
         "Map string constants to identifiers");
     m_options.add_option(
+        MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES,
+        "false",
+        "The generated code should use texture lookup functions with derivative parameters "
+        "for the texture coordinates");
+    m_options.add_option(
         MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU,
         "true",
         "Use built-in resource handler on CPU");
@@ -1707,3 +1712,4 @@ void terminate_jitted_code_singleton(Jitted_code *jitted_code)
 
 } // mdl
 } // mi
+

@@ -33,6 +33,13 @@ else()
                     ${MDL_DEPENDENCY_CUDA_SHARED}
                     ${LINKER_AS_NEEDED}
                 )
+
+            if(MACOSX)
+                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+                    PRIVATE
+                        ${MDL_DEPENDENCY_CUDA_LIBS} # cuda framework
+                    )
+            endif()
         endif()
     endif()
 endif()

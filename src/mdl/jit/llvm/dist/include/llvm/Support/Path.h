@@ -61,7 +61,7 @@ public:
   typedef ptrdiff_t difference_type;
   typedef value_type &reference;
   typedef value_type *pointer;
-  typedef MISTD::bidirectional_iterator_tag iterator_category;
+  typedef std::bidirectional_iterator_tag iterator_category;
 
   reference operator*() const { return Component; }
   pointer   operator->() const { return &Component; }
@@ -76,7 +76,7 @@ public:
   ptrdiff_t operator-(const const_iterator &RHS) const;
 };
 
-typedef MISTD::reverse_iterator<const_iterator> reverse_iterator;
+typedef std::reverse_iterator<const_iterator> reverse_iterator;
 
 /// @brief Get begin iterator over \a path.
 /// @param path Input path.

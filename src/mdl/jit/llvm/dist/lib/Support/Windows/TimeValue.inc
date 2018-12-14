@@ -31,7 +31,7 @@ TimeValue TimeValue::now() {
   return t;
 }
 
-MISTD::string TimeValue::str() const {
+std::string TimeValue::str() const {
   struct tm *LT;
 #ifdef __MINGW32__
   // Old versions of mingw don't have _localtime64_s. Remove this once we drop support
@@ -55,5 +55,5 @@ MISTD::string TimeValue::str() const {
   // Emulate %e on %d to mute '0'.
   if (Buffer[4] == '0')
     Buffer[4] = ' ';
-  return MISTD::string(Buffer);
+  return std::string(Buffer);
 }

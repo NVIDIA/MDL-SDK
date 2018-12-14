@@ -41,17 +41,17 @@ struct ListReducer {
   // if the Kept list still satisfies the property, but if it is going to check
   // the prefix anyway, it can.
   //
-  virtual TestResult doTest(MISTD::vector<ElTy> &Prefix,
-                            MISTD::vector<ElTy> &Kept,
-                            MISTD::string &Error) = 0;
+  virtual TestResult doTest(std::vector<ElTy> &Prefix,
+                            std::vector<ElTy> &Kept,
+                            std::string &Error) = 0;
 
   // reduceList - This function attempts to reduce the length of the specified
   // list while still maintaining the "test" property.  This is the core of the
   // "work" that bugpoint does.
   //
-  bool reduceList(MISTD::vector<ElTy> &TheList, MISTD::string &Error) {
-    MISTD::vector<ElTy> empty;
-    MISTD::srand(0x6e5ea738); // Seed the random number generator
+  bool reduceList(std::vector<ElTy> &TheList, std::string &Error) {
+    std::vector<ElTy> empty;
+    std::srand(0x6e5ea738); // Seed the random number generator
     switch (doTest(TheList, empty, Error)) {
     case KeepPrefix:
       if (TheList.size() == 1) // we are done, it's the base case and it fails
@@ -93,8 +93,8 @@ Backjump:
       // distribution (improving the speed of convergence).
       if (ShufflingEnabled && 
           NumOfIterationsWithoutProgress > MaxIterations) {
-        MISTD::vector<ElTy> ShuffledList(TheList);
-        MISTD::random_shuffle(ShuffledList.begin(), ShuffledList.end());
+        std::vector<ElTy> ShuffledList(TheList);
+        std::random_shuffle(ShuffledList.begin(), ShuffledList.end());
         errs() << "\n\n*** Testing shuffled set...\n\n";
         // Check that random shuffle doesn't loose the bug
         if (doTest(ShuffledList, empty, Error) == KeepPrefix) {
@@ -113,8 +113,8 @@ Backjump:
       }
       
       unsigned Mid = MidTop / 2;
-      MISTD::vector<ElTy> Prefix(TheList.begin(), TheList.begin()+Mid);
-      MISTD::vector<ElTy> Suffix(TheList.begin()+Mid, TheList.end());
+      std::vector<ElTy> Prefix(TheList.begin(), TheList.begin()+Mid);
+      std::vector<ElTy> Suffix(TheList.begin()+Mid, TheList.end());
 
       switch (doTest(Prefix, Suffix, Error)) {
       case KeepSuffix:
@@ -156,7 +156,7 @@ Backjump:
     //
     if (TheList.size() > 2) {
       bool Changed = true;
-      MISTD::vector<ElTy> EmptyList;
+      std::vector<ElTy> EmptyList;
       while (Changed) {  // Trimming loop.
         Changed = false;
         
@@ -165,7 +165,7 @@ Backjump:
         // remaining elements (large search space). Backjumping out of that
         // search space and attempting a different split can significantly 
         // improve the convergence speed.
-        if (MISTD::rand() % 100 < BackjumpProbability)
+        if (std::rand() % 100 < BackjumpProbability)
           goto Backjump;
         
         for (unsigned i = 1; i < TheList.size()-1; ++i) { // Check interior elts
@@ -174,7 +174,7 @@ Backjump:
             return true;
           }
           
-          MISTD::vector<ElTy> TestList(TheList);
+          std::vector<ElTy> TestList(TheList);
           TestList.erase(TestList.begin()+i);
 
           if (doTest(EmptyList, TestList, Error) == KeepSuffix) {

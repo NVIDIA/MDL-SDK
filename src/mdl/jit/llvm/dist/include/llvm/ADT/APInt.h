@@ -1419,12 +1419,12 @@ public:
     toString(Str, Radix, true, false);
   }
 
-  /// \brief Return the APInt as a MISTD::string.
+  /// \brief Return the APInt as a std::string.
   ///
   /// Note that this is an inefficient method.  It is better to pass in a
   /// SmallVector/SmallString to the methods above to avoid thrashing the heap
   /// for the string.
-  MISTD::string toString(unsigned Radix, bool Signed) const;
+  std::string toString(unsigned Radix, bool Signed) const;
 
   /// \returns a byte-swapped representation of this APInt Value.
   APInt LLVM_ATTRIBUTE_UNUSED_RESULT byteSwap() const;

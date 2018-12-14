@@ -43,12 +43,10 @@
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/idynamic_array.h>
 #include <mi/neuraylib/istring.h>
-
 #include <base/system/main/access_module.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-
 
 namespace MI {
 
@@ -126,8 +124,7 @@ mi::Size Module_impl::get_function_count() const
 const char* Module_impl::get_function( mi::Size index) const
 {
     DB::Transaction* db_transaction = get_db_transaction();
-    DB::Tag tag = get_db_element()->get_function( db_transaction, index);
-    return tag.get_uint() ? db_transaction->tag_to_name( tag) : 0;
+    return get_db_element()->get_function_name(db_transaction, index);
 }
 
 mi::Size Module_impl::get_material_count() const
@@ -138,8 +135,7 @@ mi::Size Module_impl::get_material_count() const
 const char* Module_impl::get_material( mi::Size index) const
 {
     DB::Transaction* db_transaction = get_db_transaction();
-    DB::Tag tag = get_db_element()->get_material( db_transaction, index);
-    return tag.get_uint() ? db_transaction->tag_to_name( tag) : 0;
+    return get_db_element()->get_material_name(db_transaction, index);
 }
 
 const mi::neuraylib::IAnnotation_block* Module_impl::get_annotations() const
@@ -230,8 +226,6 @@ const char* Module_impl::get_resource_name(mi::Size index) const
     return get_db_transaction()->tag_to_name(tag);
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

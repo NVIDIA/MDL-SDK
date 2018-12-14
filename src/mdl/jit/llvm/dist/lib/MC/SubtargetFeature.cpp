@@ -38,7 +38,7 @@ static inline bool hasFlag(const StringRef Feature) {
 
 /// StripFlag - Return string stripped of flag.
 ///
-static inline MISTD::string StripFlag(const StringRef Feature) {
+static inline std::string StripFlag(const StringRef Feature) {
   return hasFlag(Feature) ? Feature.substr(1) : Feature;
 }
 
@@ -54,19 +54,19 @@ static inline bool isEnabled(const StringRef Feature) {
 
 /// PrependFlag - Return a string with a prepended flag; '+' or '-'.
 ///
-static inline MISTD::string PrependFlag(const StringRef Feature,
+static inline std::string PrependFlag(const StringRef Feature,
                                     bool IsEnabled) {
   assert(!Feature.empty() && "Empty string");
   if (hasFlag(Feature))
     return Feature;
-  MISTD::string Prefix = IsEnabled ? "+" : "-";
+  std::string Prefix = IsEnabled ? "+" : "-";
   Prefix += Feature;
   return Prefix;
 }
 
 /// Split - Splits a string of comma separated items in to a vector of strings.
 ///
-static void Split(MISTD::vector<MISTD::string> &V, const StringRef S) {
+static void Split(std::vector<std::string> &V, const StringRef S) {
   if (S.empty())
     return;
 
@@ -76,7 +76,7 @@ static void Split(MISTD::vector<MISTD::string> &V, const StringRef S) {
     // Find the next comma
     size_t Comma = S.find(',', Pos);
     // If no comma found then the rest of the string is used
-    if (Comma == MISTD::string::npos) {
+    if (Comma == std::string::npos) {
       // Add string to vector
       V.push_back(S.substr(Pos));
       break;
@@ -90,9 +90,9 @@ static void Split(MISTD::vector<MISTD::string> &V, const StringRef S) {
 
 /// Join a vector of strings to a string with a comma separating each element.
 ///
-static MISTD::string Join(const MISTD::vector<MISTD::string> &V) {
+static std::string Join(const std::vector<std::string> &V) {
   // Start with empty string.
-  MISTD::string Result;
+  std::string Result;
   // If the vector is not empty
   if (!V.empty()) {
     // Start with the first feature
@@ -125,7 +125,7 @@ static const SubtargetFeatureKV *Find(StringRef S, const SubtargetFeatureKV *A,
   // Determine the end of the array
   const SubtargetFeatureKV *Hi = A + L;
   // Binary search the array
-  const SubtargetFeatureKV *F = MISTD::lower_bound(A, Hi, S);
+  const SubtargetFeatureKV *F = std::lower_bound(A, Hi, S);
   // If not found then return NULL
   if (F == Hi || StringRef(F->Key) != S) return NULL;
   // Return the found array item
@@ -138,7 +138,7 @@ static size_t getLongestEntryLength(const SubtargetFeatureKV *Table,
                                     size_t Size) {
   size_t MaxLen = 0;
   for (size_t i = 0; i < Size; i++)
-    MaxLen = MISTD::max(MaxLen, ::strlen(Table[i].Key));
+    MaxLen = std::max(MaxLen, ::strlen(Table[i].Key));
   return MaxLen;
 }
 
@@ -179,7 +179,7 @@ SubtargetFeatures::SubtargetFeatures(const StringRef Initial) {
 }
 
 
-MISTD::string SubtargetFeatures::getString() const {
+std::string SubtargetFeatures::getString() const {
   return Join(Features);
 }
 

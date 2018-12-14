@@ -68,7 +68,7 @@ struct LandingPadInfo {
   SmallVector<MCSymbol*, 1> EndLabels;   // Labels after invoke.
   MCSymbol *LandingPadLabel;             // Label at beginning of landing pad.
   const Function *Personality;           // Personality function.
-  MISTD::vector<int> TypeIds;              // List of type ids (filters negative)
+  std::vector<int> TypeIds;              // List of type ids (filters negative)
 
   explicit LandingPadInfo(MachineBasicBlock *MBB)
     : LandingPadBlock(MBB), LandingPadLabel(0), Personality(0) {}
@@ -84,7 +84,7 @@ class MachineModuleInfoImpl {
 public:
   typedef PointerIntPair<MCSymbol*, 1, bool> StubValueTy;
   virtual ~MachineModuleInfoImpl();
-  typedef MISTD::vector<MISTD::pair<MCSymbol*, StubValueTy> > SymbolListTy;
+  typedef std::vector<std::pair<MCSymbol*, StubValueTy> > SymbolListTy;
 protected:
   static SymbolListTy GetSortedStubs(const DenseMap<MCSymbol*, StubValueTy>&);
 };
@@ -108,7 +108,7 @@ class MachineModuleInfo : public ImmutablePass {
 
   /// List of moves done by a function's prolog.  Used to construct frame maps
   /// by debug and exception handling consumers.
-  MISTD::vector<MCCFIInstruction> FrameInstructions;
+  std::vector<MCCFIInstruction> FrameInstructions;
 
   /// CompactUnwindEncoding - If the target supports it, this is the compact
   /// unwind encoding. It replaces a function's CIE and FDE.
@@ -116,7 +116,7 @@ class MachineModuleInfo : public ImmutablePass {
 
   /// LandingPads - List of LandingPadInfo describing the landing pad
   /// information in the current function.
-  MISTD::vector<LandingPadInfo> LandingPads;
+  std::vector<LandingPadInfo> LandingPads;
 
   /// LPadToCallSiteMap - Map a landing pad's EH symbol to the call site
   /// indexes.
@@ -131,18 +131,18 @@ class MachineModuleInfo : public ImmutablePass {
   unsigned CurCallSite;
 
   /// TypeInfos - List of C++ TypeInfo used in the current function.
-  MISTD::vector<const GlobalVariable *> TypeInfos;
+  std::vector<const GlobalVariable *> TypeInfos;
 
   /// FilterIds - List of typeids encoding filters used in the current function.
-  MISTD::vector<unsigned> FilterIds;
+  std::vector<unsigned> FilterIds;
 
   /// FilterEnds - List of the indices in FilterIds corresponding to filter
   /// terminators.
-  MISTD::vector<unsigned> FilterEnds;
+  std::vector<unsigned> FilterEnds;
 
   /// Personalities - Vector of all personality functions ever seen. Used to
   /// emit common EH frames.
-  MISTD::vector<const Function *> Personalities;
+  std::vector<const Function *> Personalities;
 
   /// UsedFunctions - The functions in the @llvm.used list in a more easily
   /// searchable format.  This does not include the functions in
@@ -168,8 +168,8 @@ class MachineModuleInfo : public ImmutablePass {
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  typedef MISTD::pair<unsigned, DebugLoc> UnsignedDebugLocPair;
-  typedef SmallVector<MISTD::pair<TrackingVH<MDNode>, UnsignedDebugLocPair>, 4>
+  typedef std::pair<unsigned, DebugLoc> UnsignedDebugLocPair;
+  typedef SmallVector<std::pair<TrackingVH<MDNode>, UnsignedDebugLocPair>, 4>
     VariableDbgInfoMapTy;
   VariableDbgInfoMapTy VariableDbgInfo;
 
@@ -234,7 +234,7 @@ public:
   /// \brief Returns a reference to a list of cfi instructions in the current
   /// function's prologue.  Used to construct frame maps for debug and exception
   /// handling comsumers.
-  const MISTD::vector<MCCFIInstruction> &getFrameInstructions() const {
+  const std::vector<MCCFIInstruction> &getFrameInstructions() const {
     return FrameInstructions;
   }
 
@@ -259,14 +259,14 @@ public:
   /// getAddrLabelSymbolToEmit - Return the symbol to be used for the specified
   /// basic block when its address is taken.  If other blocks were RAUW'd to
   /// this one, we may have to emit them as well, return the whole set.
-  MISTD::vector<MCSymbol*> getAddrLabelSymbolToEmit(const BasicBlock *BB);
+  std::vector<MCSymbol*> getAddrLabelSymbolToEmit(const BasicBlock *BB);
 
   /// takeDeletedSymbolsForFunction - If the specified function has had any
   /// references to address-taken blocks generated, but the block got deleted,
   /// return the symbol now so we can emit it.  This prevents emitting a
   /// reference to a symbol that has no definition.
   void takeDeletedSymbolsForFunction(const Function *F,
-                                     MISTD::vector<MCSymbol*> &Result);
+                                     std::vector<MCSymbol*> &Result);
 
 
   //===- EH ---------------------------------------------------------------===//
@@ -294,7 +294,7 @@ public:
   unsigned getPersonalityIndex() const;
 
   /// getPersonalities - Return array of personality functions ever seen.
-  const MISTD::vector<const Function *>& getPersonalities() const {
+  const std::vector<const Function *>& getPersonalities() const {
     return Personalities;
   }
 
@@ -325,7 +325,7 @@ public:
 
   /// getFilterIDFor - Return the id of the filter encoded by TyIds.  This is
   /// function wide.
-  int getFilterIDFor(MISTD::vector<unsigned> &TyIds);
+  int getFilterIDFor(std::vector<unsigned> &TyIds);
 
   /// TidyLandingPads - Remap landing pad labels and remove any deleted landing
   /// pads.
@@ -333,7 +333,7 @@ public:
 
   /// getLandingPads - Return a reference to the landing pad info for the
   /// current function.
-  const MISTD::vector<LandingPadInfo> &getLandingPads() const {
+  const std::vector<LandingPadInfo> &getLandingPads() const {
     return LandingPads;
   }
 
@@ -382,13 +382,13 @@ public:
 
   /// getTypeInfos - Return a reference to the C++ typeinfo for the current
   /// function.
-  const MISTD::vector<const GlobalVariable *> &getTypeInfos() const {
+  const std::vector<const GlobalVariable *> &getTypeInfos() const {
     return TypeInfos;
   }
 
   /// getFilterIds - Return a reference to the typeids encoding filters used in
   /// the current function.
-  const MISTD::vector<unsigned> &getFilterIds() const {
+  const std::vector<unsigned> &getFilterIds() const {
     return FilterIds;
   }
 
@@ -399,7 +399,7 @@ public:
   /// setVariableDbgInfo - Collect information used to emit debugging
   /// information of a variable.
   void setVariableDbgInfo(MDNode *N, unsigned Slot, DebugLoc Loc) {
-    VariableDbgInfo.push_back(MISTD::make_pair(N, MISTD::make_pair(Slot, Loc)));
+    VariableDbgInfo.push_back(std::make_pair(N, std::make_pair(Slot, Loc)));
   }
 
   VariableDbgInfoMapTy &getVariableDbgInfo() { return VariableDbgInfo; }

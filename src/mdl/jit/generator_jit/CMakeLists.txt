@@ -81,7 +81,7 @@ endif()
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         boost
-        mdl::mdl-jit-libbsdf
+        mdl-jit-libbsdf
     )
 
 # add cuda headers, only required for CUDA_VERSION define
@@ -130,10 +130,10 @@ add_custom_command(
     OUTPUT ${_GENERATED_DIR}/libbsdf_bitcode.h
     COMMAND ${CMAKE_COMMAND} -E echo "Generating libbsdf_bitcode.h ..."
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
-    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/libbsdf.bc ${_GENERATED_DIR}
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf.bc ${_GENERATED_DIR}
     DEPENDS 
         ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
-        ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/libbsdf.bc
+        ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf.bc
     VERBATIM
     )
 

@@ -83,7 +83,7 @@ File::~File()
 
 // open a file by path. If the file was already open, close it first.
 bool File::open(
-    const MISTD::string& path,
+    const std::string& path,
     Mode mode)
 {
     const char* filepath = 0;
@@ -188,7 +188,7 @@ Sint64 File::read(
     }
 #else
     // 32 bit platform
-    if (num >= Uint64(MISTD::numeric_limits<size_t>::max())) {
+    if (num >= Uint64(std::numeric_limits<size_t>::max())) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
             << "File::read() error: Filesize too large (" << num << ")"
             " [file: " << m_path << "]";
@@ -232,7 +232,7 @@ bool File::readline(
 
 
 bool File::read_line(
-    MISTD::string& line,
+    std::string& line,
     bool strip)
 {
     ASSERT(M_DISK, m_fp != 0);
@@ -283,7 +283,7 @@ Sint64 File::write(
     }
 #else
     // 32 bit platform
-    if (num >= Uint64(MISTD::numeric_limits<size_t>::max())) {
+    if (num >= Uint64(std::numeric_limits<size_t>::max())) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
             << "File::write() error: Filesize too large (" << num << ")"
             " [file: " << m_path << "]";

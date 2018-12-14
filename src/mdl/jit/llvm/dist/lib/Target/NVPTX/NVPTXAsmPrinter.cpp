@@ -149,7 +149,7 @@ const MCExpr *nvptx::LowerConstant(const Constant *CV, AsmPrinter &AP) {
 
     // Otherwise report the problem to the user.
     {
-      MISTD::string S;
+      std::string S;
       raw_string_ostream OS(S);
       OS << "Unsupported expression in static initializer: ";
       WriteAsOperand(OS, CE, /*PrintType=*/ false,
@@ -164,7 +164,7 @@ const MCExpr *nvptx::LowerConstant(const Constant *CV, AsmPrinter &AP) {
     if (SrcTy->getAddressSpace() == 1 && DstTy->getAddressSpace() == 0) {
       return LowerConstant(cast<const Constant>(CE->getOperand(0)), AP);
     }
-    MISTD::string S;
+    std::string S;
     raw_string_ostream OS(S);
     OS << "Unsupported expression in static initializer: ";
     WriteAsOperand(OS, CE, /*PrintType=*/ false,
@@ -312,7 +312,7 @@ void NVPTXAsmPrinter::emitLineNumberAsDotLoc(const MachineInstr &MI) {
   if (InterleaveSrc)
     this->emitSrcInText(fileName.str(), curLoc.getLine());
 
-  MISTD::stringstream temp;
+  std::stringstream temp;
   temp << "\t.loc " << filenameMap[fileName.str()] << " " << curLoc.getLine()
        << " " << curLoc.getCol();
   OutStreamer.EmitRawText(Twine(temp.str().c_str()));
@@ -386,7 +386,7 @@ void NVPTXAsmPrinter::lowerImageHandleSymbol(unsigned Index, MCOperand &MCOp) {
   NVPTXTargetMachine &nvTM = static_cast<NVPTXTargetMachine&>(TM);
   const NVPTXMachineFunctionInfo *MFI = MF->getInfo<NVPTXMachineFunctionInfo>();
   const char *Sym = MFI->getImageHandleSymbol(Index);
-  MISTD::string *SymNamePtr =
+  std::string *SymNamePtr =
     nvTM.getManagedStrPool()->getManagedString(Sym);
   MCOp = GetSymbolRef(OutContext.GetOrCreateSymbol(
     StringRef(SymNamePtr->c_str())));
@@ -693,11 +693,11 @@ void NVPTXAsmPrinter::emitKernelFunctionDirectives(const Function &F,
     O << ".minnctapersm " << mincta << "\n";
 }
 
-MISTD::string
+std::string
 NVPTXAsmPrinter::getVirtualRegisterName(unsigned Reg) const {
   const TargetRegisterClass *RC = MRI->getRegClass(Reg);
 
-  MISTD::string Name;
+  std::string Name;
   raw_string_ostream NameStr(Name);
 
   VRegRCMap::const_iterator I = VRegMapping.find(RC);
@@ -1140,7 +1140,7 @@ void NVPTXAsmPrinter::emitLinkageDirective(const GlobalValue *V,
       else
         O << ".visible ";
     } else if (V->hasAppendingLinkage()) {
-      MISTD::string msg;
+      std::string msg;
       msg.append("Error: ");
       msg.append("Symbol ");
       if (V->hasName())
@@ -1284,7 +1284,7 @@ void NVPTXAsmPrinter::printModuleLevelGV(const GlobalVariable *GVar,
     if (localDecls.find(demotedFunc) != localDecls.end())
       localDecls[demotedFunc].push_back(GVar);
     else {
-      MISTD::vector<const GlobalVariable *> temp;
+      std::vector<const GlobalVariable *> temp;
       temp.push_back(GVar);
       localDecls[demotedFunc] = temp;
     }
@@ -1328,7 +1328,7 @@ void NVPTXAsmPrinter::printModuleLevelGV(const GlobalVariable *GVar,
         // The frontend adds zero-initializer to variables that don't have an
         // initial value, so skip warning for this case.
         if (!GVar->getInitializer()->isNullValue()) {
-          MISTD::string warnMsg = "initial value of '" + GVar->getName().str() +
+          std::string warnMsg = "initial value of '" + GVar->getName().str() +
               "' is not allowed in addrspace(" +
               llvm::utostr_32(PTy->getAddressSpace()) + ")";
           report_fatal_error(warnMsg.c_str());
@@ -1402,7 +1402,7 @@ void NVPTXAsmPrinter::emitDemotedVars(const Function *f, raw_ostream &O) {
   if (localDecls.find(f) == localDecls.end())
     return;
 
-  MISTD::vector<const GlobalVariable *> &gvars = localDecls[f];
+  std::vector<const GlobalVariable *> &gvars = localDecls[f];
 
   for (unsigned i = 0, e = gvars.size(); i != e; ++i) {
     O << "\t// demoted variable\n\t";
@@ -1431,7 +1431,7 @@ void NVPTXAsmPrinter::emitPTXAddressSpace(unsigned int AddressSpace,
   }
 }
 
-MISTD::string
+std::string
 NVPTXAsmPrinter::getPTXFundamentalTypeStr(const Type *Ty, bool useB4PTR) const {
   switch (Ty->getTypeID()) {
   default:
@@ -1442,7 +1442,7 @@ NVPTXAsmPrinter::getPTXFundamentalTypeStr(const Type *Ty, bool useB4PTR) const {
     if (NumBits == 1)
       return "pred";
     else if (NumBits <= 64) {
-      MISTD::string name = "u";
+      std::string name = "u";
       return name + utostr(NumBits);
     } else {
       llvm_unreachable("Integer too large");
@@ -1561,7 +1561,7 @@ void NVPTXAsmPrinter::printParamName(Function::const_arg_iterator I,
       (nvptxSubtarget.getDrvInterface() == NVPTX::CUDA))
     O << *getSymbol(I->getParent()) << "_param_" << paramIndex;
   else {
-    MISTD::string argName = I->getName();
+    std::string argName = I->getName();
     const char *p = argName.c_str();
     while (*p) {
       if (*p == '.')
@@ -1617,7 +1617,7 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
     if (NVVM.isKernelFunction(*F)) {
       if (NVVM.isSampler(*I) || NVVM.isImage(*I)) {
         if (NVVM.isImage(*I)) {
-          MISTD::string sname = I->getName();
+          std::string sname = I->getName();
           if (NVVM.isImageWriteOnly(*I) || NVVM.isImageReadWrite(*I)) {
             if (nvptxSubtarget.hasImageHandles())
               O << "\t.param .u64 .ptr .surfref ";
@@ -1814,7 +1814,7 @@ void NVPTXAsmPrinter::setAndEmitFunctionVirtualRegisters(
     const TargetRegisterClass *RC = MRI->getRegClass(vr);
     DenseMap<unsigned, unsigned> &regmap = VRegMapping[RC];
     int n = regmap.size();
-    regmap.insert(MISTD::make_pair(vr, n + 1));
+    regmap.insert(std::make_pair(vr, n + 1));
   }
 
   // Emit register declarations
@@ -1832,8 +1832,8 @@ void NVPTXAsmPrinter::setAndEmitFunctionVirtualRegisters(
   for (unsigned i=0; i< TRI->getNumRegClasses(); i++) {
     const TargetRegisterClass *RC = TRI->getRegClass(i);
     DenseMap<unsigned, unsigned> &regmap = VRegMapping[RC];
-    MISTD::string rcname = getNVPTXRegClassName(RC);
-    MISTD::string rcStr = getNVPTXRegClassStr(RC);
+    std::string rcname = getNVPTXRegClassName(RC);
+    std::string rcStr = getNVPTXRegClassStr(RC);
     int n = regmap.size();
 
     // Only declare those registers that may be used.
@@ -1864,10 +1864,10 @@ void NVPTXAsmPrinter::printFPConstant(const ConstantFP *Fp, raw_ostream &O) {
     llvm_unreachable("unsupported fp type");
 
   APInt API = APF.bitcastToAPInt();
-  MISTD::string hexstr(utohexstr(API.getZExtValue()));
+  std::string hexstr(utohexstr(API.getZExtValue()));
   O << lead;
   if (hexstr.length() < numHex)
-    O << MISTD::string(numHex - hexstr.length(), '0');
+    O << std::string(numHex - hexstr.length(), '0');
   O << utohexstr(API.getZExtValue());
 }
 
@@ -2099,7 +2099,7 @@ void NVPTXAsmPrinter::bufferAggregateConstant(const Constant *CPV,
 
 bool NVPTXAsmPrinter::isImageType(const Type *Ty) {
 
-  MISTD::map<const Type *, MISTD::string>::iterator PI = TypeNameMap.find(Ty);
+  std::map<const Type *, std::string>::iterator PI = TypeNameMap.find(Ty);
 
   if (PI != TypeNameMap.end() && (!PI->second.compare("struct._image1d_t") ||
                                   !PI->second.compare("struct._image2d_t") ||
@@ -2283,7 +2283,7 @@ extern "C" void LLVMInitializeNVPTXBackendAsmPrinter() {
 }
 
 void NVPTXAsmPrinter::emitSrcInText(StringRef filename, unsigned line) {
-  MISTD::stringstream temp;
+  std::stringstream temp;
   LineReader *reader = this->getReader(filename.str());
   temp << "\n//";
   temp << filename.str();
@@ -2295,7 +2295,7 @@ void NVPTXAsmPrinter::emitSrcInText(StringRef filename, unsigned line) {
   this->OutStreamer.EmitRawText(Twine(temp.str()));
 }
 
-LineReader *NVPTXAsmPrinter::getReader(MISTD::string filename) {
+LineReader *NVPTXAsmPrinter::getReader(std::string filename) {
   if (reader == NULL) {
     reader = new LineReader(filename);
   }
@@ -2308,10 +2308,10 @@ LineReader *NVPTXAsmPrinter::getReader(MISTD::string filename) {
   return reader;
 }
 
-MISTD::string LineReader::readLine(unsigned lineNum) {
+std::string LineReader::readLine(unsigned lineNum) {
   if (lineNum < theCurLine) {
     theCurLine = 0;
-    fstr.seekg(0, MISTD::ios::beg);
+    fstr.seekg(0, std::ios::beg);
   }
   while (theCurLine < lineNum) {
     fstr.getline(buff, 500);

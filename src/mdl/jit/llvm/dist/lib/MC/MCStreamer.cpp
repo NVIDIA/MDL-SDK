@@ -30,7 +30,7 @@ MCStreamer::MCStreamer(MCContext &Ctx, MCTargetStreamer *TargetStreamer)
     : Context(Ctx), TargetStreamer(TargetStreamer), EmitEHFrame(true),
       EmitDebugFrame(false), CurrentW64UnwindInfo(0), LastSymbol(0),
       AutoInitSections(false) {
-  SectionStack.push_back(MISTD::pair<MCSectionSubPair, MCSectionSubPair>());
+  SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
   if (TargetStreamer)
     TargetStreamer->setStreamer(this);
 }
@@ -49,7 +49,7 @@ void MCStreamer::reset() {
   CurrentW64UnwindInfo = 0;
   LastSymbol = 0;
   SectionStack.clear();
-  SectionStack.push_back(MISTD::pair<MCSectionSubPair, MCSectionSubPair>());
+  SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
 
 const MCExpr *MCStreamer::BuildSymbolDiff(MCContext &Context,
@@ -81,7 +81,7 @@ raw_ostream &MCStreamer::GetCommentOS() {
 }
 
 void MCStreamer::generateCompactUnwindEncodings(MCAsmBackend *MAB) {
-  for (MISTD::vector<MCDwarfFrameInfo>::iterator I = FrameInfos.begin(),
+  for (std::vector<MCDwarfFrameInfo>::iterator I = FrameInfos.begin(),
          E = FrameInfos.end(); I != E; ++I)
     I->CompactUnwindEncoding =
       (MAB ? MAB->generateCompactUnwindEncoding(I->Instructions) : 0);

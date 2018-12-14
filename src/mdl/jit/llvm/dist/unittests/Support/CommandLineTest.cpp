@@ -85,7 +85,7 @@ TEST(CommandLineTest, ModifyExisitingOption) {
 
 const char test_env_var[] = "LLVM_TEST_COMMAND_LINE_FLAGS";
 
-cl::opt<MISTD::string> EnvironmentTestOption("env-test-opt");
+cl::opt<std::string> EnvironmentTestOption("env-test-opt");
 TEST(CommandLineTest, ParseEnvironment) {
   TempEnvVar TEV(test_env_var, "-env-test-opt=hello");
   EXPECT_EQ("", EnvironmentTestOption);
@@ -103,7 +103,7 @@ TEST(CommandLineTest, ParseEnvironment) {
 // command line system will still hold a pointer to a deallocated cl::Option.
 TEST(CommandLineTest, ParseEnvironmentToLocalVar) {
   // Put cl::opt on stack to check for proper initialization of fields.
-  cl::opt<MISTD::string> EnvironmentTestOptionLocal("env-test-opt-local");
+  cl::opt<std::string> EnvironmentTestOptionLocal("env-test-opt-local");
   TempEnvVar TEV(test_env_var, "-env-test-opt-local=hello-local");
   EXPECT_EQ("", EnvironmentTestOptionLocal);
   cl::ParseEnvironmentOptions("CommandLineTest", test_env_var);

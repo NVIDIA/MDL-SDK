@@ -250,8 +250,8 @@ StringRef MachineBasicBlock::getName() const {
 }
 
 /// Return a hopefully unique identifier for this block.
-MISTD::string MachineBasicBlock::getFullName() const {
-  MISTD::string Name;
+std::string MachineBasicBlock::getFullName() const {
+  std::string Name;
   if (getParent())
     Name = (getParent()->getName() + ":").str();
   if (getBasicBlock())
@@ -331,14 +331,14 @@ void MachineBasicBlock::print(raw_ostream &OS, SlotIndexes *Indexes) const {
 }
 
 void MachineBasicBlock::removeLiveIn(unsigned Reg) {
-  MISTD::vector<unsigned>::iterator I =
-    MISTD::find(LiveIns.begin(), LiveIns.end(), Reg);
+  std::vector<unsigned>::iterator I =
+    std::find(LiveIns.begin(), LiveIns.end(), Reg);
   if (I != LiveIns.end())
     LiveIns.erase(I);
 }
 
 bool MachineBasicBlock::isLiveIn(unsigned Reg) const {
-  livein_iterator I = MISTD::find(livein_begin(), livein_end(), Reg);
+  livein_iterator I = std::find(livein_begin(), livein_end(), Reg);
   return I != livein_end();
 }
 
@@ -495,7 +495,7 @@ void MachineBasicBlock::addSuccessor(MachineBasicBlock *succ, uint32_t weight) {
 
 void MachineBasicBlock::removeSuccessor(MachineBasicBlock *succ) {
   succ->removePredecessor(this);
-  succ_iterator I = MISTD::find(Successors.begin(), Successors.end(), succ);
+  succ_iterator I = std::find(Successors.begin(), Successors.end(), succ);
   assert(I != Successors.end() && "Not a current successor!");
 
   // If Weight list is empty it means we don't use it (disabled optimization).
@@ -566,7 +566,7 @@ void MachineBasicBlock::addPredecessor(MachineBasicBlock *pred) {
 }
 
 void MachineBasicBlock::removePredecessor(MachineBasicBlock *pred) {
-  pred_iterator I = MISTD::find(Predecessors.begin(), Predecessors.end(), pred);
+  pred_iterator I = std::find(Predecessors.begin(), Predecessors.end(), pred);
   assert(I != Predecessors.end() && "Pred is not a predecessor of this block!");
   Predecessors.erase(I);
 }
@@ -613,11 +613,11 @@ MachineBasicBlock::transferSuccessorsAndUpdatePHIs(MachineBasicBlock *fromMBB) {
 }
 
 bool MachineBasicBlock::isPredecessor(const MachineBasicBlock *MBB) const {
-  return MISTD::find(pred_begin(), pred_end(), MBB) != pred_end();
+  return std::find(pred_begin(), pred_end(), MBB) != pred_end();
 }
 
 bool MachineBasicBlock::isSuccessor(const MachineBasicBlock *MBB) const {
-  return MISTD::find(succ_begin(), succ_end(), MBB) != succ_end();
+  return std::find(succ_begin(), succ_end(), MBB) != succ_end();
 }
 
 bool MachineBasicBlock::isLayoutSuccessor(const MachineBasicBlock *MBB) const {
@@ -747,7 +747,7 @@ MachineBasicBlock::SplitCriticalEdge(MachineBasicBlock *Succ, Pass *P) {
           continue;
 
         unsigned Reg = OI->getReg();
-        if (MISTD::find(UsedRegs.begin(), UsedRegs.end(), Reg) == UsedRegs.end())
+        if (std::find(UsedRegs.begin(), UsedRegs.end(), Reg) == UsedRegs.end())
           UsedRegs.push_back(Reg);
       }
     }
@@ -774,7 +774,7 @@ MachineBasicBlock::SplitCriticalEdge(MachineBasicBlock *Succ, Pass *P) {
 
     for (SmallVectorImpl<MachineInstr*>::iterator I = Terminators.begin(),
         E = Terminators.end(); I != E; ++I) {
-      if (MISTD::find(NewTerminators.begin(), NewTerminators.end(), *I) ==
+      if (std::find(NewTerminators.begin(), NewTerminators.end(), *I) ==
           NewTerminators.end())
        Indexes->removeMachineInstrFromMaps(*I);
     }
@@ -1119,7 +1119,7 @@ uint32_t MachineBasicBlock::getSuccWeight(const_succ_iterator Succ) const {
 MachineBasicBlock::weight_iterator MachineBasicBlock::
 getWeightIterator(MachineBasicBlock::succ_iterator I) {
   assert(Weights.size() == Successors.size() && "Async weight list!");
-  size_t index = MISTD::distance(Successors.begin(), I);
+  size_t index = std::distance(Successors.begin(), I);
   assert(index < Weights.size() && "Not a current successor!");
   return Weights.begin() + index;
 }
@@ -1129,7 +1129,7 @@ getWeightIterator(MachineBasicBlock::succ_iterator I) {
 MachineBasicBlock::const_weight_iterator MachineBasicBlock::
 getWeightIterator(MachineBasicBlock::const_succ_iterator I) const {
   assert(Weights.size() == Successors.size() && "Async weight list!");
-  const size_t index = MISTD::distance(Successors.begin(), I);
+  const size_t index = std::distance(Successors.begin(), I);
   assert(index < Weights.size() && "Not a current successor!");
   return Weights.begin() + index;
 }

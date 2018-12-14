@@ -101,9 +101,9 @@ struct Attachment
 {
     Attachment();
 
-    MISTD::string m_member_name;			///< ""=whole attr, else target field
+    std::string m_member_name;			///< ""=whole attr, else target field
     DB::Tag m_target;					///< src shader that provides values
-    MISTD::string m_target_name;			///< ""=whole return,else result field
+    std::string m_target_name;			///< ""=whole return,else result field
     bool m_is_interface;				///< target is a phen interface param
 };
 
@@ -405,7 +405,7 @@ class Attribute : public SERIAL::Serializable
     /// Copy given string to attribute value memory. The given pointer
     /// is assumed to reference string storage for the Attribute class.
     static void set_string(char* & storage, const char* str);
-    static void set_string(char* & storage, MISTD::string const& str)
+    static void set_string(char* & storage, std::string const& str)
         {set_string( storage, str.c_str()); }
     //@}
 

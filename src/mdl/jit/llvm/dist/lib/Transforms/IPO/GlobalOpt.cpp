@@ -193,7 +193,7 @@ static bool CleanupPointerRootUsers(GlobalVariable *GV,
 
   // If Dead[n].first is the only use of a malloc result, we can delete its
   // chain of computation and the store to the global in Dead[n].second.
-  SmallVector<MISTD::pair<Instruction *, Instruction *>, 32> Dead;
+  SmallVector<std::pair<Instruction *, Instruction *>, 32> Dead;
 
   // Constants can't be pointers to dynamically allocated memory.
   for (Value::use_iterator UI = GV->use_begin(), E = GV->use_end();
@@ -206,7 +206,7 @@ static bool CleanupPointerRootUsers(GlobalVariable *GV,
         SI->eraseFromParent();
       } else if (Instruction *I = dyn_cast<Instruction>(V)) {
         if (I->hasOneUse())
-          Dead.push_back(MISTD::make_pair(I, SI));
+          Dead.push_back(std::make_pair(I, SI));
       }
     } else if (MemSetInst *MSI = dyn_cast<MemSetInst>(U)) {
       if (isa<Constant>(MSI->getValue())) {
@@ -214,7 +214,7 @@ static bool CleanupPointerRootUsers(GlobalVariable *GV,
         MSI->eraseFromParent();
       } else if (Instruction *I = dyn_cast<Instruction>(MSI->getValue())) {
         if (I->hasOneUse())
-          Dead.push_back(MISTD::make_pair(I, MSI));
+          Dead.push_back(std::make_pair(I, MSI));
       }
     } else if (MemTransferInst *MTI = dyn_cast<MemTransferInst>(U)) {
       GlobalVariable *MemSrc = dyn_cast<GlobalVariable>(MTI->getSource());
@@ -223,7 +223,7 @@ static bool CleanupPointerRootUsers(GlobalVariable *GV,
         MTI->eraseFromParent();
       } else if (Instruction *I = dyn_cast<Instruction>(MemSrc)) {
         if (I->hasOneUse())
-          Dead.push_back(MISTD::make_pair(I, MTI));
+          Dead.push_back(std::make_pair(I, MTI));
       }
     } else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(U)) {
       if (CE->use_empty()) {
@@ -475,7 +475,7 @@ static GlobalVariable *SRAGlobal(GlobalVariable *GV, const DataLayout &TD) {
   Constant *Init = GV->getInitializer();
   Type *Ty = Init->getType();
 
-  MISTD::vector<GlobalVariable*> NewGlobals;
+  std::vector<GlobalVariable*> NewGlobals;
   Module::GlobalListType &Globals = GV->getParent()->getGlobalList();
 
   // Get the alignment of the global, either explicit or target-specific.
@@ -1154,9 +1154,9 @@ static bool AllGlobalLoadUsesSimpleEnoughForHeapSRA(const GlobalVariable *GV,
 }
 
 static Value *GetHeapSROAValue(Value *V, unsigned FieldNo,
-               DenseMap<Value*, MISTD::vector<Value*> > &InsertedScalarizedValues,
-                   MISTD::vector<MISTD::pair<PHINode*, unsigned> > &PHIsToRewrite) {
-  MISTD::vector<Value*> &FieldVals = InsertedScalarizedValues[V];
+               DenseMap<Value*, std::vector<Value*> > &InsertedScalarizedValues,
+                   std::vector<std::pair<PHINode*, unsigned> > &PHIsToRewrite) {
+  std::vector<Value*> &FieldVals = InsertedScalarizedValues[V];
 
   if (FieldNo >= FieldVals.size())
     FieldVals.resize(FieldNo+1);
@@ -1185,7 +1185,7 @@ static Value *GetHeapSROAValue(Value *V, unsigned FieldNo,
                      PN->getNumIncomingValues(),
                      PN->getName()+".f"+Twine(FieldNo), PN);
     Result = NewPN;
-    PHIsToRewrite.push_back(MISTD::make_pair(PN, FieldNo));
+    PHIsToRewrite.push_back(std::make_pair(PN, FieldNo));
   } else {
     llvm_unreachable("Unknown usable value");
   }
@@ -1196,8 +1196,8 @@ static Value *GetHeapSROAValue(Value *V, unsigned FieldNo,
 /// RewriteHeapSROALoadUser - Given a load instruction and a value derived from
 /// the load, rewrite the derived value to use the HeapSRoA'd load.
 static void RewriteHeapSROALoadUser(Instruction *LoadUser,
-             DenseMap<Value*, MISTD::vector<Value*> > &InsertedScalarizedValues,
-                   MISTD::vector<MISTD::pair<PHINode*, unsigned> > &PHIsToRewrite) {
+             DenseMap<Value*, std::vector<Value*> > &InsertedScalarizedValues,
+                   std::vector<std::pair<PHINode*, unsigned> > &PHIsToRewrite) {
   // If this is a comparison against null, handle it.
   if (ICmpInst *SCI = dyn_cast<ICmpInst>(LoadUser)) {
     assert(isa<ConstantPointerNull>(SCI->getOperand(1)));
@@ -1243,8 +1243,8 @@ static void RewriteHeapSROALoadUser(Instruction *LoadUser,
   // already been seen first by another load, so its uses have already been
   // processed.
   PHINode *PN = cast<PHINode>(LoadUser);
-  if (!InsertedScalarizedValues.insert(MISTD::make_pair(PN,
-                                              MISTD::vector<Value*>())).second)
+  if (!InsertedScalarizedValues.insert(std::make_pair(PN,
+                                              std::vector<Value*>())).second)
     return;
 
   // If this is the first time we've seen this PHI, recursively process all
@@ -1260,8 +1260,8 @@ static void RewriteHeapSROALoadUser(Instruction *LoadUser,
 /// use FieldGlobals instead.  All uses of loaded values satisfy
 /// AllGlobalLoadUsesSimpleEnoughForHeapSRA.
 static void RewriteUsesOfLoadForHeapSRoA(LoadInst *Load,
-               DenseMap<Value*, MISTD::vector<Value*> > &InsertedScalarizedValues,
-                   MISTD::vector<MISTD::pair<PHINode*, unsigned> > &PHIsToRewrite) {
+               DenseMap<Value*, std::vector<Value*> > &InsertedScalarizedValues,
+                   std::vector<std::pair<PHINode*, unsigned> > &PHIsToRewrite) {
   for (Value::use_iterator UI = Load->use_begin(), E = Load->use_end();
        UI != E; ) {
     Instruction *User = cast<Instruction>(*UI++);
@@ -1291,8 +1291,8 @@ static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
 
   // Okay, at this point, there are no users of the malloc.  Insert N
   // new mallocs at the same place as CI, and N globals.
-  MISTD::vector<Value*> FieldGlobals;
-  MISTD::vector<Value*> FieldMallocs;
+  std::vector<Value*> FieldGlobals;
+  std::vector<Value*> FieldMallocs;
 
   for (unsigned FieldNo = 0, e = STy->getNumElements(); FieldNo != e;++FieldNo){
     Type *FieldTy = STy->getElementType(FieldNo);
@@ -1386,10 +1386,10 @@ static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
   /// InsertedScalarizedLoads - As we process loads, if we can't immediately
   /// update all uses of the load, keep track of what scalarized loads are
   /// inserted for a given load.
-  DenseMap<Value*, MISTD::vector<Value*> > InsertedScalarizedValues;
+  DenseMap<Value*, std::vector<Value*> > InsertedScalarizedValues;
   InsertedScalarizedValues[GV] = FieldGlobals;
 
-  MISTD::vector<MISTD::pair<PHINode*, unsigned> > PHIsToRewrite;
+  std::vector<std::pair<PHINode*, unsigned> > PHIsToRewrite;
 
   // Okay, the malloc site is completely handled.  All of the uses of GV are now
   // loads, and all uses of those loads are simple.  Rewrite them to use loads
@@ -1435,7 +1435,7 @@ static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
   }
 
   // Drop all inter-phi links and any loads that made it this far.
-  for (DenseMap<Value*, MISTD::vector<Value*> >::iterator
+  for (DenseMap<Value*, std::vector<Value*> >::iterator
        I = InsertedScalarizedValues.begin(), E = InsertedScalarizedValues.end();
        I != E; ++I) {
     if (PHINode *PN = dyn_cast<PHINode>(I->first))
@@ -1445,7 +1445,7 @@ static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
   }
 
   // Delete all the phis and loads now that inter-references are dead.
-  for (DenseMap<Value*, MISTD::vector<Value*> >::iterator
+  for (DenseMap<Value*, std::vector<Value*> >::iterator
        I = InsertedScalarizedValues.begin(), E = InsertedScalarizedValues.end();
        I != E; ++I) {
     if (PHINode *PN = dyn_cast<PHINode>(I->first))
@@ -1992,11 +1992,11 @@ GlobalVariable *GlobalOpt::FindGlobalCtors(Module &M) {
 
 /// ParseGlobalCtors - Given a llvm.global_ctors list that we can understand,
 /// return a list of the functions and null terminator as a vector.
-static MISTD::vector<Function*> ParseGlobalCtors(GlobalVariable *GV) {
+static std::vector<Function*> ParseGlobalCtors(GlobalVariable *GV) {
   if (GV->getInitializer()->isNullValue())
-    return MISTD::vector<Function*>();
+    return std::vector<Function*>();
   ConstantArray *CA = cast<ConstantArray>(GV->getInitializer());
-  MISTD::vector<Function*> Result;
+  std::vector<Function*> Result;
   Result.reserve(CA->getNumOperands());
   for (User::op_iterator i = CA->op_begin(), e = CA->op_end(); i != e; ++i) {
     ConstantStruct *CS = cast<ConstantStruct>(*i);
@@ -2008,7 +2008,7 @@ static MISTD::vector<Function*> ParseGlobalCtors(GlobalVariable *GV) {
 /// InstallGlobalCtors - Given a specified llvm.global_ctors list, install the
 /// specified array, returning the new global to use.
 static GlobalVariable *InstallGlobalCtors(GlobalVariable *GCL,
-                                          const MISTD::vector<Function*> &Ctors) {
+                                          const std::vector<Function*> &Ctors) {
   // If we made a change, reassemble the initializer list.
   Constant *CSVals[2];
   CSVals[0] = ConstantInt::get(Type::getInt32Ty(GCL->getContext()), 65535);
@@ -2018,7 +2018,7 @@ static GlobalVariable *InstallGlobalCtors(GlobalVariable *GCL,
     cast<StructType>(GCL->getType()->getElementType()->getArrayElementType());
 
   // Create the new init list.
-  MISTD::vector<Constant*> CAList;
+  std::vector<Constant*> CAList;
   for (unsigned i = 0, e = Ctors.size(); i != e; ++i) {
     if (Ctors[i]) {
       CSVals[1] = Ctors[i];
@@ -2720,7 +2720,7 @@ bool Evaluator::EvaluateFunction(Function *F, Constant *&RetVal,
                                  const SmallVectorImpl<Constant*> &ActualArgs) {
   // Check to see if this function is already executing (recursion).  If so,
   // bail out.  TODO: we might want to accept limited recursion.
-  if (MISTD::find(CallStack.begin(), CallStack.end(), F) != CallStack.end())
+  if (std::find(CallStack.begin(), CallStack.end(), F) != CallStack.end())
     return false;
 
   CallStack.push_back(F);
@@ -2808,7 +2808,7 @@ static bool EvaluateStaticConstructor(Function *F, const DataLayout *TD,
 /// OptimizeGlobalCtorsList - Simplify and evaluation global ctors if possible.
 /// Return true if anything changed.
 bool GlobalOpt::OptimizeGlobalCtorsList(GlobalVariable *&GCL) {
-  MISTD::vector<Function*> Ctors = ParseGlobalCtors(GCL);
+  std::vector<Function*> Ctors = ParseGlobalCtors(GCL);
   bool MadeChange = false;
   if (Ctors.empty()) return false;
 

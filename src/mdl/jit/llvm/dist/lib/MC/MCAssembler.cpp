@@ -248,9 +248,9 @@ MCSectionData::getSubsectionInsertionPoint(unsigned Subsection) {
   if (Subsection == 0 && SubsectionFragmentMap.empty())
     return end();
 
-  SmallVectorImpl<MISTD::pair<unsigned, MCFragment *> >::iterator MI =
-    MISTD::lower_bound(SubsectionFragmentMap.begin(), SubsectionFragmentMap.end(),
-                     MISTD::make_pair(Subsection, (MCFragment *)0));
+  SmallVectorImpl<std::pair<unsigned, MCFragment *> >::iterator MI =
+    std::lower_bound(SubsectionFragmentMap.begin(), SubsectionFragmentMap.end(),
+                     std::make_pair(Subsection, (MCFragment *)0));
   bool ExactMatch = false;
   if (MI != SubsectionFragmentMap.end()) {
     ExactMatch = MI->first == Subsection;
@@ -266,7 +266,7 @@ MCSectionData::getSubsectionInsertionPoint(unsigned Subsection) {
     // The GNU as documentation claims that subsections have an alignment of 4,
     // although this appears not to be the case.
     MCFragment *F = new MCDataFragment();
-    SubsectionFragmentMap.insert(MI, MISTD::make_pair(Subsection, F));
+    SubsectionFragmentMap.insert(MI, std::make_pair(Subsection, F));
     getFragmentList().insert(IP, F);
     F->setParent(this);
   }

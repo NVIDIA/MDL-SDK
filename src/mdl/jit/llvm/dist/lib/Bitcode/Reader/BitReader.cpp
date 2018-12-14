@@ -30,7 +30,7 @@ LLVMBool LLVMParseBitcodeInContext(LLVMContextRef ContextRef,
                                    LLVMMemoryBufferRef MemBuf,
                                    LLVMModuleRef *OutModule,
                                    char **OutMessage) {
-  MISTD::string Message;
+  std::string Message;
 
   *OutModule = wrap(ParseBitcodeFile(unwrap(MemBuf), *unwrap(ContextRef),
                                      &Message));
@@ -50,7 +50,7 @@ LLVMBool LLVMGetBitcodeModuleInContext(LLVMContextRef ContextRef,
                                        LLVMMemoryBufferRef MemBuf,
                                        LLVMModuleRef *OutM,
                                        char **OutMessage) {
-  MISTD::string Message;
+  std::string Message;
 
   *OutM = wrap(getLazyBitcodeModule(unwrap(MemBuf), *unwrap(ContextRef),
                                     &Message));

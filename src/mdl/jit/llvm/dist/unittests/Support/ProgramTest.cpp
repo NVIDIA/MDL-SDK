@@ -43,12 +43,12 @@ namespace {
 using namespace llvm;
 using namespace sys;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 ProgramTestStringArg1("program-test-string-arg1");
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 ProgramTestStringArg2("program-test-string-arg2");
 
-static void CopyEnvironment(MISTD::vector<const char *> &out) {
+static void CopyEnvironment(std::vector<const char *> &out) {
 #ifdef __APPLE__
   char **envp = *_NSGetEnviron();
 #else
@@ -70,7 +70,7 @@ TEST(ProgramTest, CreateProcessTrailingSlash) {
     exit(1);
   }
 
-  MISTD::string my_exe =
+  std::string my_exe =
       sys::fs::getMainExecutable(TestMainArgv0, &ProgramTestStringArg1);
   const char *argv[] = {
     my_exe.c_str(),
@@ -81,12 +81,12 @@ TEST(ProgramTest, CreateProcessTrailingSlash) {
   };
 
   // Add LLVM_PROGRAM_TEST_CHILD to the environment of the child.
-  MISTD::vector<const char *> envp;
+  std::vector<const char *> envp;
   CopyEnvironment(envp);
   envp.push_back("LLVM_PROGRAM_TEST_CHILD=1");
   envp.push_back(0);
 
-  MISTD::string error;
+  std::string error;
   bool ExecutionFailed;
   // Redirect stdout and stdin to NUL, but let stderr through.
 #ifdef LLVM_ON_WIN32
@@ -110,7 +110,7 @@ TEST(ProgramTest, TestExecuteNoWait) {
     exit(0);
   }
 
-  MISTD::string Executable =
+  std::string Executable =
       sys::fs::getMainExecutable(TestMainArgv0, &ProgramTestStringArg1);
   const char *argv[] = {
     Executable.c_str(),
@@ -119,12 +119,12 @@ TEST(ProgramTest, TestExecuteNoWait) {
   };
 
   // Add LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT to the environment of the child.
-  MISTD::vector<const char *> envp;
+  std::vector<const char *> envp;
   CopyEnvironment(envp);
   envp.push_back("LLVM_PROGRAM_TEST_EXECUTE_NO_WAIT=1");
   envp.push_back(0);
 
-  MISTD::string Error;
+  std::string Error;
   bool ExecutionFailed;
   ProcessInfo PI1 =
       ExecuteNoWait(Executable, argv, &envp[0], 0, 0, &Error, &ExecutionFailed);
@@ -164,11 +164,11 @@ TEST(ProgramTest, TestExecuteNoWait) {
 }
 
 TEST(ProgramTest, TestExecuteNegative) {
-  MISTD::string Executable = "i_dont_exist";
+  std::string Executable = "i_dont_exist";
   const char *argv[] = { Executable.c_str(), 0 };
 
   {
-    MISTD::string Error;
+    std::string Error;
     bool ExecutionFailed;
     int RetCode =
         ExecuteAndWait(Executable, argv, 0, 0, 0, 0, &Error, &ExecutionFailed);
@@ -179,7 +179,7 @@ TEST(ProgramTest, TestExecuteNegative) {
   }
 
   {
-    MISTD::string Error;
+    std::string Error;
     bool ExecutionFailed;
     ProcessInfo PI =
         ExecuteNoWait(Executable, argv, 0, 0, 0, &Error, &ExecutionFailed);

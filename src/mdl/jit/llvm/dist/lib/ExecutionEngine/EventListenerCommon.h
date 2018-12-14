@@ -28,12 +28,12 @@ class FilenameCache {
   // Holds the filename of each Scope, so that we can pass a null-terminated
   // string into oprofile.  Use an AssertingVH rather than a ValueMap because we
   // shouldn't be modifying any MDNodes while this map is alive.
-  DenseMap<AssertingVH<MDNode>, MISTD::string> Filenames;
-  DenseMap<AssertingVH<MDNode>, MISTD::string> Paths;
+  DenseMap<AssertingVH<MDNode>, std::string> Filenames;
+  DenseMap<AssertingVH<MDNode>, std::string> Paths;
 
  public:
   const char *getFilename(MDNode *Scope) {
-    MISTD::string &Filename = Filenames[Scope];
+    std::string &Filename = Filenames[Scope];
     if (Filename.empty()) {
       DIScope DIScope(Scope);
       Filename = DIScope.getFilename();
@@ -42,7 +42,7 @@ class FilenameCache {
   }
 
   const char *getFullPath(MDNode *Scope) {
-    MISTD::string &P = Paths[Scope];
+    std::string &P = Paths[Scope];
     if (P.empty()) {
       DIScope DIScope(Scope);
       StringRef DirName = DIScope.getDirectory();

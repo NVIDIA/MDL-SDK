@@ -98,7 +98,7 @@ private:
 
   Module *M;
   AnalysisManager *AM;
-  MISTD::vector<polymorphic_ptr<ModulePassConcept> > Passes;
+  std::vector<polymorphic_ptr<ModulePassConcept> > Passes;
 };
 
 class FunctionPassManager {
@@ -121,7 +121,7 @@ private:
   };
 
   AnalysisManager *AM;
-  MISTD::vector<polymorphic_ptr<FunctionPassConcept> > Passes;
+  std::vector<polymorphic_ptr<FunctionPassConcept> > Passes;
 };
 
 
@@ -353,8 +353,8 @@ private:
   /// Requires iterators to be valid across appending new entries and arbitrary
   /// erases. Provides both the pass ID and concept pointer such that it is
   /// half of a bijection and provides storage for the actual result concept.
-  typedef MISTD::list<
-      MISTD::pair<void *, polymorphic_ptr<AnalysisResultConcept<Function> > > >
+  typedef std::list<
+      std::pair<void *, polymorphic_ptr<AnalysisResultConcept<Function> > > >
   FunctionAnalysisResultListT;
 
   /// \brief Map type from function pointer to our custom list type.
@@ -368,7 +368,7 @@ private:
 
   /// \brief Map type from a pair of analysis ID and function pointer to an
   /// iterator into a particular result list.
-  typedef DenseMap<MISTD::pair<void *, Function *>,
+  typedef DenseMap<std::pair<void *, Function *>,
                    FunctionAnalysisResultListT::iterator>
   FunctionAnalysisResultMapT;
 

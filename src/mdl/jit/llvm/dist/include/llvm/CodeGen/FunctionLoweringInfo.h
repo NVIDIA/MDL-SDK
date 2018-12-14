@@ -113,7 +113,7 @@ public:
   /// be updated after processing the current basic block.
   /// TODO: This isn't per-function state, it's per-basic-block state. But
   /// there's no other convenient place for it to live right now.
-  MISTD::vector<MISTD::pair<MachineInstr*, unsigned> > PHINodesToUpdate;
+  std::vector<std::pair<MachineInstr*, unsigned> > PHINodesToUpdate;
 
   /// If the current MBB is a landing pad, the exception pointer and exception
   /// selector registers are copied into these virtual registers by

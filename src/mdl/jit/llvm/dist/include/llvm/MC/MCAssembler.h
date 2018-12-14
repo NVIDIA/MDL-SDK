@@ -593,7 +593,7 @@ private:
 
   /// Mapping from subsection number to insertion point for subsection numbers
   /// below that number.
-  SmallVector<MISTD::pair<unsigned, MCFragment *>, 1> SubsectionFragmentMap;
+  SmallVector<std::pair<unsigned, MCFragment *>, 1> SubsectionFragmentMap;
 
   /// @}
 
@@ -817,16 +817,16 @@ public:
   typedef SymbolDataListType::const_iterator const_symbol_iterator;
   typedef SymbolDataListType::iterator symbol_iterator;
 
-  typedef MISTD::vector<MISTD::string> FileNameVectorType;
+  typedef std::vector<std::string> FileNameVectorType;
   typedef FileNameVectorType::const_iterator const_file_name_iterator;
 
-  typedef MISTD::vector<IndirectSymbolData>::const_iterator
+  typedef std::vector<IndirectSymbolData>::const_iterator
     const_indirect_symbol_iterator;
-  typedef MISTD::vector<IndirectSymbolData>::iterator indirect_symbol_iterator;
+  typedef std::vector<IndirectSymbolData>::iterator indirect_symbol_iterator;
 
-  typedef MISTD::vector<DataRegionData>::const_iterator
+  typedef std::vector<DataRegionData>::const_iterator
     const_data_region_iterator;
-  typedef MISTD::vector<DataRegionData>::iterator data_region_iterator;
+  typedef std::vector<DataRegionData>::iterator data_region_iterator;
 
 private:
   MCAssembler(const MCAssembler&) LLVM_DELETED_FUNCTION;
@@ -856,12 +856,12 @@ private:
   // FIXME: Avoid this indirection?
   DenseMap<const MCSymbol*, MCSymbolData*> SymbolMap;
 
-  MISTD::vector<IndirectSymbolData> IndirectSymbols;
+  std::vector<IndirectSymbolData> IndirectSymbols;
 
-  MISTD::vector<DataRegionData> DataRegions;
+  std::vector<DataRegionData> DataRegions;
 
   /// The list of linker options to propagate into the object file.
-  MISTD::vector<MISTD::vector<MISTD::string> > LinkerOptions;
+  std::vector<std::vector<std::string> > LinkerOptions;
 
   /// List of declared file names
   FileNameVectorType FileNames;
@@ -1066,7 +1066,7 @@ public:
   // FIXME: This is a total hack, this should not be here. Once things are
   // factored so that the streamer has direct access to the .o writer, it can
   // disappear.
-  MISTD::vector<IndirectSymbolData> &getIndirectSymbols() {
+  std::vector<IndirectSymbolData> &getIndirectSymbols() {
     return IndirectSymbols;
   }
 
@@ -1090,7 +1090,7 @@ public:
   /// @name Linker Option List Access
   /// @{
 
-  MISTD::vector<MISTD::vector<MISTD::string> > &getLinkerOptions() {
+  std::vector<std::vector<std::string> > &getLinkerOptions() {
     return LinkerOptions;
   }
 
@@ -1101,7 +1101,7 @@ public:
   // FIXME: This is a total hack, this should not be here. Once things are
   // factored so that the streamer has direct access to the .o writer, it can
   // disappear.
-  MISTD::vector<DataRegionData> &getDataRegions() {
+  std::vector<DataRegionData> &getDataRegions() {
     return DataRegions;
   }
 
@@ -1168,7 +1168,7 @@ public:
   }
 
   void addFileName(StringRef FileName) {
-    if (MISTD::find(file_names_begin(), file_names_end(), FileName) ==
+    if (std::find(file_names_begin(), file_names_end(), FileName) ==
         file_names_end())
       FileNames.push_back(FileName);
   }

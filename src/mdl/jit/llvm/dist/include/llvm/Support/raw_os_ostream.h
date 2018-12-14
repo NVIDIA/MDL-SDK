@@ -1,4 +1,4 @@
-//===- raw_os_ostream.h - MISTD::ostream adaptor for raw_ostream --*- C++ -*-===//
+//===- raw_os_ostream.h - std::ostream adaptor for raw_ostream --*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,11 +19,11 @@
 
 namespace llvm {
 
-/// raw_os_ostream - A raw_ostream that writes to an MISTD::ostream.  This is a
+/// raw_os_ostream - A raw_ostream that writes to an std::ostream.  This is a
 /// simple adaptor class.  It does not check for output errors; clients should
 /// use the underlying stream to detect errors.
 class raw_os_ostream : public raw_ostream {
-  MISTD::ostream &OS;
+  std::ostream &OS;
 
   /// write_impl - See raw_ostream::write_impl.
   virtual void write_impl(const char *Ptr, size_t Size) LLVM_OVERRIDE;
@@ -33,7 +33,7 @@ class raw_os_ostream : public raw_ostream {
   virtual uint64_t current_pos() const LLVM_OVERRIDE;
 
 public:
-  raw_os_ostream(MISTD::ostream &O) : OS(O) {}
+  raw_os_ostream(std::ostream &O) : OS(O) {}
   ~raw_os_ostream();
 };
 

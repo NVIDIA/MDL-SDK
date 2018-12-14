@@ -117,7 +117,6 @@ function(LLVM_TARGET_SETUP)
     target_compile_definitions(${LLVM_TARGET_SETUP_TARGET} 
         PRIVATE
             "$<$<CONFIG:DEBUG>:_DEBUG>"
-            "MISTD=std"                       # Use system std lib rather than a custom one
             "MI_BUILDING_LLVM"
             "__USE_XOPEN2K8"
             "_REENTRANT"

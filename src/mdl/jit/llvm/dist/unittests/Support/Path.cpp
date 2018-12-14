@@ -373,7 +373,7 @@ TEST_F(FileSystemTest, DirectoryIteration) {
                   + "/recursive/z0/za1", existed));
   ASSERT_NO_ERROR(fs::create_directories(Twine(TestDirectory)
                   + "/recursive/pop/p1", existed));
-  typedef MISTD::vector<MISTD::string> v_t;
+  typedef std::vector<std::string> v_t;
   v_t visited;
   for (fs::recursive_directory_iterator i(Twine(TestDirectory)
          + "/recursive", ec), e; i != e; i.increment(ec)){
@@ -387,16 +387,16 @@ TEST_F(FileSystemTest, DirectoryIteration) {
       i.no_push();
     visited.push_back(path::filename(i->path()));
   }
-  v_t::const_iterator a0 = MISTD::find(visited.begin(), visited.end(), "a0");
-  v_t::const_iterator aa1 = MISTD::find(visited.begin(), visited.end(), "aa1");
-  v_t::const_iterator ab1 = MISTD::find(visited.begin(), visited.end(), "ab1");
-  v_t::const_iterator dontlookhere = MISTD::find(visited.begin(), visited.end(),
+  v_t::const_iterator a0 = std::find(visited.begin(), visited.end(), "a0");
+  v_t::const_iterator aa1 = std::find(visited.begin(), visited.end(), "aa1");
+  v_t::const_iterator ab1 = std::find(visited.begin(), visited.end(), "ab1");
+  v_t::const_iterator dontlookhere = std::find(visited.begin(), visited.end(),
                                                "dontlookhere");
-  v_t::const_iterator da1 = MISTD::find(visited.begin(), visited.end(), "da1");
-  v_t::const_iterator z0 = MISTD::find(visited.begin(), visited.end(), "z0");
-  v_t::const_iterator za1 = MISTD::find(visited.begin(), visited.end(), "za1");
-  v_t::const_iterator pop = MISTD::find(visited.begin(), visited.end(), "pop");
-  v_t::const_iterator p1 = MISTD::find(visited.begin(), visited.end(), "p1");
+  v_t::const_iterator da1 = std::find(visited.begin(), visited.end(), "da1");
+  v_t::const_iterator z0 = std::find(visited.begin(), visited.end(), "z0");
+  v_t::const_iterator za1 = std::find(visited.begin(), visited.end(), "za1");
+  v_t::const_iterator pop = std::find(visited.begin(), visited.end(), "pop");
+  v_t::const_iterator p1 = std::find(visited.begin(), visited.end(), "p1");
 
   // Make sure that each path was visited correctly.
   ASSERT_NE(a0, visited.end());
@@ -469,7 +469,7 @@ TEST_F(FileSystemTest, Magic) {
                                                                      ++i) {
     SmallString<128> file_pathname(TestDirectory);
     path::append(file_pathname, i->filename);
-    MISTD::string ErrMsg;
+    std::string ErrMsg;
     raw_fd_ostream file(file_pathname.c_str(), ErrMsg, sys::fs::F_Binary);
     ASSERT_FALSE(file.has_error());
     StringRef magic(i->magic_str, i->magic_str_len);
@@ -485,7 +485,7 @@ TEST_F(FileSystemTest, Magic) {
 #ifdef LLVM_ON_WIN32
 TEST_F(FileSystemTest, CarriageReturn) {
   SmallString<128> FilePathname(TestDirectory);
-  MISTD::string ErrMsg;
+  std::string ErrMsg;
   path::append(FilePathname, "test");
 
   {
@@ -529,7 +529,7 @@ TEST_F(FileSystemTest, FileMapping) {
                                0,
                                EC);
     ASSERT_NO_ERROR(EC);
-    MISTD::copy(Val.begin(), Val.end(), mfr.data());
+    std::copy(Val.begin(), Val.end(), mfr.data());
     // Explicitly add a 0.
     mfr.data()[Val.size()] = 0;
     // Unmap temp file

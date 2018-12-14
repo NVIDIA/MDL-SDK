@@ -19,7 +19,7 @@
 using namespace llvm;
 
 Pass *MachineFunctionPass::createPrinterPass(raw_ostream &O,
-                                             const MISTD::string &Banner) const {
+                                             const std::string &Banner) const {
   return createMachineFunctionPrinterPass(O, Banner);
 }
 

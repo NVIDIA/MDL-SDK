@@ -238,7 +238,7 @@ getprogpath(char ret[PATH_MAX], const char *bin)
 
 /// GetMainExecutable - Return the path to the main executable, given the
 /// value of argv[0] from program startup.
-MISTD::string getMainExecutable(const char *argv0, void *MainAddr) {
+std::string getMainExecutable(const char *argv0, void *MainAddr) {
 #if defined(__APPLE__)
   // On OS X the executable path is saved to the stack by dyld. Reading it
   // from there is much faster than calling dladdr, especially for large
@@ -582,7 +582,7 @@ mapped_file_region::mapped_file_region(const Twine &path,
   , Size(length)
   , Mapping() {
   // Make sure that the requested size fits within SIZE_T.
-  if (length > MISTD::numeric_limits<size_t>::max()) {
+  if (length > std::numeric_limits<size_t>::max()) {
     ec = make_error_code(errc::invalid_argument);
     return;
   }
@@ -611,7 +611,7 @@ mapped_file_region::mapped_file_region(int fd,
   , Size(length)
   , Mapping() {
   // Make sure that the requested size fits within SIZE_T.
-  if (length > MISTD::numeric_limits<size_t>::max()) {
+  if (length > std::numeric_limits<size_t>::max()) {
     ec = make_error_code(errc::invalid_argument);
     return;
   }

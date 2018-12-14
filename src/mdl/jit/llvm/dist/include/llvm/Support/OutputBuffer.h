@@ -22,13 +22,13 @@ namespace llvm {
 
   class OutputBuffer {
     /// Output buffer.
-    MISTD::vector<unsigned char> &Output;
+    std::vector<unsigned char> &Output;
 
     /// is64Bit/isLittleEndian - This information is inferred from the target
     /// machine directly, indicating what header values and flags to set.
     bool is64Bit, isLittleEndian;
   public:
-    OutputBuffer(MISTD::vector<unsigned char> &Out,
+    OutputBuffer(std::vector<unsigned char> &Out,
                  bool is64bit, bool le)
       : Output(Out), is64Bit(is64bit), isLittleEndian(le) {}
 
@@ -107,7 +107,7 @@ namespace llvm {
       else
         outxword(X);
     }
-    void outstring(const MISTD::string &S, unsigned Length) {
+    void outstring(const std::string &S, unsigned Length) {
       unsigned len_to_copy = static_cast<unsigned>(S.length()) < Length
         ? static_cast<unsigned>(S.length()) : Length;
       unsigned len_to_fill = static_cast<unsigned>(S.length()) < Length

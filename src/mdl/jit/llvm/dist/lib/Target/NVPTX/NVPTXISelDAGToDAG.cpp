@@ -670,7 +670,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoad(SDNode *N) {
   // Float  : ISD::NON_EXTLOAD or ISD::EXTLOAD and the type is float
   MVT ScalarVT = SimpleVT.getScalarType();
   // Read at least 8 bits (predicates are stored as 8-bit values)
-  unsigned fromTypeWidth = MISTD::max(8U, ScalarVT.getSizeInBits());
+  unsigned fromTypeWidth = std::max(8U, ScalarVT.getSizeInBits());
   unsigned int fromType;
   if ((LD->getExtensionType() == ISD::SEXTLOAD))
     fromType = NVPTX::PTXLdStInstCode::Signed;
@@ -896,7 +896,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoadVector(SDNode *N) {
   // Float  : ISD::NON_EXTLOAD or ISD::EXTLOAD and the type is float
   MVT ScalarVT = SimpleVT.getScalarType();
   // Read at least 8 bits (predicates are stored as 8-bit values)
-  unsigned FromTypeWidth = MISTD::max(8U, ScalarVT.getSizeInBits());
+  unsigned FromTypeWidth = std::max(8U, ScalarVT.getSizeInBits());
   unsigned int FromType;
   // The last operand holds the original LoadSDNode::getExtensionType() value
   unsigned ExtensionType = cast<ConstantSDNode>(
@@ -3031,7 +3031,7 @@ SDNode *NVPTXDAGToDAGISel::SelectBFE(SDNode *N) {
     // Canonicalize the operands
     // We want 'and %val, %mask'
     if (isa<ConstantSDNode>(LHS) && !isa<ConstantSDNode>(RHS)) {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
     }
 
     ConstantSDNode *Mask = dyn_cast<ConstantSDNode>(RHS);
@@ -3098,7 +3098,7 @@ SDNode *NVPTXDAGToDAGISel::SelectBFE(SDNode *N) {
 
       // Canonicalize the AND to have the mask on the RHS
       if (isa<ConstantSDNode>(AndLHS)) {
-        MISTD::swap(AndLHS, AndRHS);
+        std::swap(AndLHS, AndRHS);
       }
 
       ConstantSDNode *MaskCnst = dyn_cast<ConstantSDNode>(AndRHS);
@@ -5063,7 +5063,7 @@ bool NVPTXDAGToDAGISel::ChkMemSDNodeAddressSpace(SDNode *N,
 /// SelectInlineAsmMemoryOperand - Implement addressing mode selection for
 /// inline asm expressions.
 bool NVPTXDAGToDAGISel::SelectInlineAsmMemoryOperand(
-    const SDValue &Op, char ConstraintCode, MISTD::vector<SDValue> &OutOps) {
+    const SDValue &Op, char ConstraintCode, std::vector<SDValue> &OutOps) {
   SDValue Op0, Op1;
   switch (ConstraintCode) {
   default:

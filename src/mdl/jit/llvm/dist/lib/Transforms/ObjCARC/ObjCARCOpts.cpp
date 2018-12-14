@@ -56,7 +56,7 @@ namespace {
     typedef DenseMap<KeyT, size_t> MapTy;
     MapTy Map;
 
-    typedef MISTD::vector<MISTD::pair<KeyT, ValueT> > VectorTy;
+    typedef std::vector<std::pair<KeyT, ValueT> > VectorTy;
     /// Keys and values.
     VectorTy Vector;
 
@@ -85,28 +85,28 @@ namespace {
 #endif
 
     ValueT &operator[](const KeyT &Arg) {
-      MISTD::pair<typename MapTy::iterator, bool> Pair =
-        Map.insert(MISTD::make_pair(Arg, size_t(0)));
+      std::pair<typename MapTy::iterator, bool> Pair =
+        Map.insert(std::make_pair(Arg, size_t(0)));
       if (Pair.second) {
         size_t Num = Vector.size();
         Pair.first->second = Num;
-        Vector.push_back(MISTD::make_pair(Arg, ValueT()));
+        Vector.push_back(std::make_pair(Arg, ValueT()));
         return Vector[Num].second;
       }
       return Vector[Pair.first->second].second;
     }
 
-    MISTD::pair<iterator, bool>
-    insert(const MISTD::pair<KeyT, ValueT> &InsertPair) {
-      MISTD::pair<typename MapTy::iterator, bool> Pair =
-        Map.insert(MISTD::make_pair(InsertPair.first, size_t(0)));
+    std::pair<iterator, bool>
+    insert(const std::pair<KeyT, ValueT> &InsertPair) {
+      std::pair<typename MapTy::iterator, bool> Pair =
+        Map.insert(std::make_pair(InsertPair.first, size_t(0)));
       if (Pair.second) {
         size_t Num = Vector.size();
         Pair.first->second = Num;
         Vector.push_back(InsertPair);
-        return MISTD::make_pair(Vector.begin() + Num, true);
+        return std::make_pair(Vector.begin() + Num, true);
       }
-      return MISTD::make_pair(Vector.begin() + Pair.first->second, false);
+      return std::make_pair(Vector.begin() + Pair.first->second, false);
     }
 
     iterator find(const KeyT &Key) {
@@ -316,7 +316,7 @@ static Sequence MergeSeqs(Sequence A, Sequence B, bool TopDown) {
   if (A == S_None || B == S_None)
     return S_None;
 
-  if (A > B) MISTD::swap(A, B);
+  if (A > B) std::swap(A, B);
   if (TopDown) {
     // Choose the side which is further along in the sequence.
     if ((A == S_Retain || A == S_CanRelease) &&
@@ -731,7 +731,7 @@ void BBState::MergePred(const BBState &Other) {
   // entry.
   for (ptr_const_iterator MI = Other.top_down_ptr_begin(),
        ME = Other.top_down_ptr_end(); MI != ME; ++MI) {
-    MISTD::pair<ptr_iterator, bool> Pair = PerPtrTopDown.insert(*MI);
+    std::pair<ptr_iterator, bool> Pair = PerPtrTopDown.insert(*MI);
     Pair.first->second.Merge(Pair.second ? PtrState() : MI->second,
                              /*TopDown=*/true);
   }
@@ -775,7 +775,7 @@ void BBState::MergeSucc(const BBState &Other) {
   // it with an empty entry.
   for (ptr_const_iterator MI = Other.bottom_up_ptr_begin(),
        ME = Other.bottom_up_ptr_end(); MI != ME; ++MI) {
-    MISTD::pair<ptr_iterator, bool> Pair = PerPtrBottomUp.insert(*MI);
+    std::pair<ptr_iterator, bool> Pair = PerPtrBottomUp.insert(*MI);
     Pair.first->second.Merge(Pair.second ? PtrState() : MI->second,
                              /*TopDown=*/false);
   }
@@ -810,7 +810,7 @@ static cl::opt<bool>
 DisableCheckForCFGHazards("disable-objc-arc-checkforcfghazards", cl::init(false),
                           cl::desc("Disable check for cfg hazards when "
                                    "annotating"));
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 ARCAnnotationTargetIdentifier("objc-arc-annotation-target-identifier",
                               cl::init(""),
                               cl::desc("filter out all data flow annotations "
@@ -838,7 +838,7 @@ static MDString *AppendMDNodeToSourcePtr(unsigned NodeId,
       // of line at the module level and to provide a very simple format
       // encoding the information herein. Both of these makes it simpler to
       // parse the annotations by a simple external program.
-      MISTD::string Str;
+      std::string Str;
       raw_string_ostream os(Str);
       os << "(" << Inst->getParent()->getParent()->getName() << ",%"
          << Inst->getName() << ")";
@@ -852,7 +852,7 @@ static MDString *AppendMDNodeToSourcePtr(unsigned NodeId,
       Hash = cast<MDString>(Node->getOperand(0));
     }
   } else if (Argument *Arg = dyn_cast<Argument>(Ptr)) {
-    MISTD::string str;
+    std::string str;
     raw_string_ostream os(str);
     os << "(" << Arg->getParent()->getName() << ",%" << Arg->getName()
        << ")";
@@ -862,8 +862,8 @@ static MDString *AppendMDNodeToSourcePtr(unsigned NodeId,
   return Hash;
 }
 
-static MISTD::string SequenceToString(Sequence A) {
-  MISTD::string str;
+static std::string SequenceToString(Sequence A) {
+  std::string str;
   raw_string_ostream os(str);
   os << A;
   return os.str();
@@ -928,7 +928,7 @@ static void GenerateARCBBEntranceAnnotation(const char *Name, BasicBlock *BB,
   }
 
   Value *S;
-  MISTD::string SeqStr = SequenceToString(Seq);
+  std::string SeqStr = SequenceToString(Seq);
   if (0 == (S = M->getGlobalVariable(SeqStr, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(SeqStr,
                                                          SeqStr + "_STR");
@@ -971,7 +971,7 @@ static void GenerateARCBBTerminatorAnnotation(const char *Name, BasicBlock *BB,
   }
 
   Value *S;
-  MISTD::string SeqStr = SequenceToString(Seq);
+  std::string SeqStr = SequenceToString(Seq);
   if (0 == (S = M->getGlobalVariable(SeqStr, true))) {
     Value *ActualPtrName = Builder.CreateGlobalStringPtr(SeqStr,
                                                          SeqStr + "_STR");
@@ -1459,10 +1459,10 @@ void ObjCARCOpt::OptimizeIndividualCalls(Function &F) {
     // are no relevant side effects between the PHI and the call, the call
     // could be pushed up to just those paths with non-null incoming values.
     // For now, don't bother splitting critical edges for this.
-    SmallVector<MISTD::pair<Instruction *, const Value *>, 4> Worklist;
-    Worklist.push_back(MISTD::make_pair(Inst, Arg));
+    SmallVector<std::pair<Instruction *, const Value *>, 4> Worklist;
+    Worklist.push_back(std::make_pair(Inst, Arg));
     do {
-      MISTD::pair<Instruction *, const Value *> Pair = Worklist.pop_back_val();
+      std::pair<Instruction *, const Value *> Pair = Worklist.pop_back_val();
       Inst = Pair.first;
       Arg = Pair.second;
 
@@ -1542,7 +1542,7 @@ void ObjCARCOpt::OptimizeIndividualCalls(Function &F) {
               DEBUG(dbgs() << "Cloning "
                            << *CInst << "\n"
                            "And inserting clone at " << *InsertPos << "\n");
-              Worklist.push_back(MISTD::make_pair(Clone, Incoming));
+              Worklist.push_back(std::make_pair(Clone, Incoming));
             }
           }
           // Erase the original call.
@@ -2185,7 +2185,7 @@ ComputePostOrders(Function &F,
 
   // Do DFS, computing the PostOrder.
   SmallPtrSet<BasicBlock *, 16> OnStack;
-  SmallVector<MISTD::pair<BasicBlock *, succ_iterator>, 16> SuccStack;
+  SmallVector<std::pair<BasicBlock *, succ_iterator>, 16> SuccStack;
 
   // Functions always have exactly one entry block, and we don't have
   // any other block that we treat like an entry block.
@@ -2193,7 +2193,7 @@ ComputePostOrders(Function &F,
   BBState &MyStates = BBStates[EntryBB];
   MyStates.SetAsEntry();
   TerminatorInst *EntryTI = cast<TerminatorInst>(&EntryBB->back());
-  SuccStack.push_back(MISTD::make_pair(EntryBB, succ_iterator(EntryTI)));
+  SuccStack.push_back(std::make_pair(EntryBB, succ_iterator(EntryTI)));
   Visited.insert(EntryBB);
   OnStack.insert(EntryBB);
   do {
@@ -2206,7 +2206,7 @@ ComputePostOrders(Function &F,
       BasicBlock *SuccBB = *SuccStack.back().second++;
       if (Visited.insert(SuccBB)) {
         TerminatorInst *TI = cast<TerminatorInst>(&SuccBB->back());
-        SuccStack.push_back(MISTD::make_pair(SuccBB, succ_iterator(TI)));
+        SuccStack.push_back(std::make_pair(SuccBB, succ_iterator(TI)));
         BBStates[CurrBB].addSucc(SuccBB);
         BBState &SuccStates = BBStates[SuccBB];
         SuccStates.addPred(CurrBB);
@@ -2229,7 +2229,7 @@ ComputePostOrders(Function &F,
   // Do reverse-CFG DFS, computing the reverse-CFG PostOrder.
   // Functions may have many exits, and there also blocks which we treat
   // as exits due to ignored edges.
-  SmallVector<MISTD::pair<BasicBlock *, BBState::edge_iterator>, 16> PredStack;
+  SmallVector<std::pair<BasicBlock *, BBState::edge_iterator>, 16> PredStack;
   for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
     BasicBlock *ExitBB = I;
     BBState &MyStates = BBStates[ExitBB];
@@ -2238,7 +2238,7 @@ ComputePostOrders(Function &F,
 
     MyStates.SetAsExit();
 
-    PredStack.push_back(MISTD::make_pair(ExitBB, MyStates.pred_begin()));
+    PredStack.push_back(std::make_pair(ExitBB, MyStates.pred_begin()));
     Visited.insert(ExitBB);
     while (!PredStack.empty()) {
     reverse_dfs_next_succ:
@@ -2246,7 +2246,7 @@ ComputePostOrders(Function &F,
       while (PredStack.back().second != PE) {
         BasicBlock *BB = *PredStack.back().second++;
         if (Visited.insert(BB)) {
-          PredStack.push_back(MISTD::make_pair(BB, BBStates[BB].pred_begin()));
+          PredStack.push_back(std::make_pair(BB, BBStates[BB].pred_begin()));
           goto reverse_dfs_next_succ;
         }
       }

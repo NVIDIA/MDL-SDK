@@ -50,7 +50,7 @@ class IExpression;
 class IConst_fold_handler;
 
 
-/// The generic interface to expressions inside the MDl AST.
+/// The generic interface to expressions inside the MDL AST.
 class IExpression : public Interface_owned
 {
 public:
@@ -80,6 +80,7 @@ public:
         OK_POST_INCREMENT,                      ///< The post-increment operator.
         OK_POST_DECREMENT,                      ///< The post-decrement operator.
         OK_UNARY_LAST = OK_POST_DECREMENT,
+
         // binary
         OK_BINARY_FIRST,
         OK_SELECT = OK_BINARY_FIRST,            ///< The select operator.
@@ -103,7 +104,10 @@ public:
         OK_BITWISE_OR,                          ///< The bitwise or operator.
         OK_LOGICAL_AND,                         ///< The logical and operator.
         OK_LOGICAL_OR,                          ///< The logical or operator.
-        OK_ASSIGN,                              ///< The assign operator.
+
+        // binary assignments
+        OK_BINARY_ASSIGN_FIRST,
+        OK_ASSIGN = OK_BINARY_ASSIGN_FIRST,     ///< The assign operator.
         OK_MULTIPLY_ASSIGN,                     ///< The multiplication-assign operator.
         OK_DIVIDE_ASSIGN,                       ///< The division-assign operator.
         OK_MODULO_ASSIGN,                       ///< The modulus-assign operator.
@@ -115,8 +119,11 @@ public:
         OK_BITWISE_OR_ASSIGN,                   ///< The bitwise or-assign operator.
         OK_BITWISE_XOR_ASSIGN,                  ///< The bitwise xor-assign operator.
         OK_BITWISE_AND_ASSIGN,                  ///< The bitwise and-assign operator.
+        OK_BINARY_ASSIGN_LAST = OK_BITWISE_AND_ASSIGN,
+
         OK_SEQUENCE,                            ///< The comma operator.
         OK_BINARY_LAST = OK_SEQUENCE,
+
         // ternary
         OK_TERNARY,                             ///< The ternary operator (conditional).
         // variadic
@@ -717,6 +724,14 @@ static inline bool is_binary_operator(IExpression::Operator op)
     return
         unsigned(op - IExpression::OK_BINARY_FIRST) <=
         unsigned(IExpression::OK_BINARY_LAST - IExpression::OK_BINARY_FIRST);
+}
+
+/// Checks if the given operator is a binary assign operator.
+static inline bool is_binary_assign_operator(IExpression::Operator op)
+{
+    return
+        unsigned(op - IExpression::OK_BINARY_ASSIGN_FIRST) <=
+        unsigned(IExpression::OK_BINARY_ASSIGN_LAST - IExpression::OK_BINARY_ASSIGN_FIRST);
 }
 
 }  // mdl

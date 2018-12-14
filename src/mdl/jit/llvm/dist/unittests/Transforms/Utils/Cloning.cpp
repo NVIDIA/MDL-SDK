@@ -127,7 +127,7 @@ TEST_F(CloneInstruction, Inbounds) {
   V = new Argument(Type::getInt32PtrTy(context));
 
   Constant *Z = Constant::getNullValue(Type::getInt32Ty(context));
-  MISTD::vector<Value *> ops;
+  std::vector<Value *> ops;
   ops.push_back(Z);
   GetElementPtrInst *GEP = GetElementPtrInst::Create(V, ops);
   EXPECT_FALSE(this->clone(GEP)->isInBounds());

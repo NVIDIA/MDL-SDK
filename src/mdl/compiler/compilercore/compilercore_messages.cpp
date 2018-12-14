@@ -50,23 +50,33 @@ namespace mdl {
 /// \param messages  the vector of messages
 /// \param message   the message to insert
 template<typename A>
-static size_t insert_message(MISTD::vector<Message *, A> &messages, Message *message)
+static size_t insert_message(std::vector<Message *, A> &messages, Message *message)
 {
     Position const *pos = message->get_position();
-    int line = pos->get_start_line();
-    int column = pos->get_start_column();
-    typename MISTD::vector<Message *, A>::iterator it = messages.begin();
-    for(int i = 0; it != messages.end(); ++i, ++it) {
+    size_t ID     = message->get_filename_id();
+    int    line   = pos->get_start_line();
+    int    column = pos->get_start_column();
+
+    typename std::vector<Message *, A>::iterator it = messages.begin();
+
+    for (int i = 0; it != messages.end(); ++i, ++it) {
         Message *msg = *it;
         Position const *pos = msg->get_position();
-        if (pos->get_start_line() < line)
+
+        if (msg->get_filename_id() < ID)
             continue;
-        if ((pos->get_start_line() == line) && (pos->get_start_column() <= column))
+        if ((msg->get_filename_id() == ID) && (pos->get_start_line() < line))
             continue;
-        // insert AFTER it
+        if ((msg->get_filename_id() == ID) &&
+            (pos->get_start_line() == line) &&
+            (pos->get_start_column() <= column))
+            continue;
+
+        // insert BEFORE the current one
         messages.insert(it, message);
         return i;
     }
+    // insert last
     messages.push_back(message);
     return messages.size() - 1;
 }
@@ -408,7 +418,7 @@ void Messages_impl::copy_messages(Messages const &src)
 template<typename A>
 void Messages_impl::serialize_msg_list(
     Entity_serializer                 &serializer,
-    MISTD::vector<Message *, A> const &msgs) const
+    std::vector<Message *, A> const &msgs) const
 {
     size_t l = msgs.size();
     serializer.write_encoded_tag(l);
@@ -432,7 +442,7 @@ void Messages_impl::serialize_msg_list(
 template<typename A>
 void Messages_impl::deserialize_msg_list(
     Entity_deserializer         &deserializer,
-    MISTD::vector<Message *, A> &msgs)
+    std::vector<Message *, A> &msgs)
 {
     size_t l = deserializer.read_encoded_tag();
     msgs.reserve(l);

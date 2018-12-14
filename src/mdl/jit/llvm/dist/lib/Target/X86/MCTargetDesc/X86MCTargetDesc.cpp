@@ -43,9 +43,9 @@
 using namespace llvm;
 
 
-MISTD::string X86_MC::ParseX86Triple(StringRef TT) {
+std::string X86_MC::ParseX86Triple(StringRef TT) {
   Triple TheTriple(TT);
-  MISTD::string FS;
+  std::string FS;
   if (TheTriple.getArch() == Triple::x86_64)
     FS = "+64bit-mode";
   else
@@ -219,7 +219,7 @@ void X86_MC::InitLLVM2SEHRegisterMapping(MCRegisterInfo *MRI) {
 
 MCSubtargetInfo *X86_MC::createX86MCSubtargetInfo(StringRef TT, StringRef CPU,
                                                   StringRef FS) {
-  MISTD::string ArchFS = X86_MC::ParseX86Triple(TT);
+  std::string ArchFS = X86_MC::ParseX86Triple(TT);
   if (!FS.empty()) {
     if (!ArchFS.empty())
       ArchFS = ArchFS + "," + FS.str();
@@ -227,7 +227,7 @@ MCSubtargetInfo *X86_MC::createX86MCSubtargetInfo(StringRef TT, StringRef CPU,
       ArchFS = FS;
   }
 
-  MISTD::string CPUName = CPU;
+  std::string CPUName = CPU;
   if (CPUName.empty()) {
 #if defined(i386) || defined(__i386__) || defined(__x86__) || defined(_M_IX86)\
     || defined(__x86_64__) || defined(_M_AMD64) || defined (_M_X64)

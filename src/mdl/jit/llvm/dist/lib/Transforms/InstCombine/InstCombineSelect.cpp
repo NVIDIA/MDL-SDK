@@ -502,7 +502,7 @@ Instruction *InstCombiner::visitSelectInstWithICmp(SelectInst &SI,
 
         Pred = ICmpInst::getSwappedPredicate(Pred);
         CmpRHS = AdjustedRHS;
-        MISTD::swap(FalseVal, TrueVal);
+        std::swap(FalseVal, TrueVal);
         ICI->setPredicate(Pred);
         ICI->setOperand(0, CmpLHS);
         ICI->setOperand(1, CmpRHS);
@@ -908,7 +908,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
             Value *NewTrueOp = OtherAddOp;
             Value *NewFalseOp = NegVal;
             if (AddOp != TI)
-              MISTD::swap(NewTrueOp, NewFalseOp);
+              std::swap(NewTrueOp, NewFalseOp);
             Value *NewSel =
               Builder->CreateSelect(CondVal, NewTrueOp,
                                     NewFalseOp, SI.getName() + ".p");

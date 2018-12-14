@@ -10,7 +10,7 @@
 // This file implements a map that provides insertion order iteration. The
 // interface is purposefully minimal. The key is assumed to be cheap to copy
 // and 2 copies are kept, one for indexing in a DenseMap, one for iteration in
-// a MISTD::vector.
+// a std::vector.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,11 +25,11 @@
 namespace llvm {
 
 /// This class implements a map that also provides access to all stored values
-/// in a deterministic order. The values are kept in a MISTD::vector and the
+/// in a deterministic order. The values are kept in a std::vector and the
 /// mapping is done with DenseMap from Keys to indexes in that vector.
 template<typename KeyT, typename ValueT,
          typename MapType = llvm::DenseMap<KeyT, unsigned>,
-         typename VectorType = MISTD::vector<MISTD::pair<KeyT, ValueT> > >
+         typename VectorType = std::vector<std::pair<KeyT, ValueT> > >
 class MapVector {
   typedef typename VectorType::size_type SizeType;
 
@@ -64,10 +64,10 @@ public:
     return Vector.empty();
   }
 
-  MISTD::pair<KeyT, ValueT>       &front()       { return Vector.front(); }
-  const MISTD::pair<KeyT, ValueT> &front() const { return Vector.front(); }
-  MISTD::pair<KeyT, ValueT>       &back()        { return Vector.back(); }
-  const MISTD::pair<KeyT, ValueT> &back()  const { return Vector.back(); }
+  std::pair<KeyT, ValueT>       &front()       { return Vector.front(); }
+  const std::pair<KeyT, ValueT> &front() const { return Vector.front(); }
+  std::pair<KeyT, ValueT>       &back()        { return Vector.back(); }
+  const std::pair<KeyT, ValueT> &back()  const { return Vector.back(); }
 
   void clear() {
     Map.clear();
@@ -75,11 +75,11 @@ public:
   }
 
   ValueT &operator[](const KeyT &Key) {
-    MISTD::pair<KeyT, unsigned> Pair = MISTD::make_pair(Key, 0);
-    MISTD::pair<typename MapType::iterator, bool> Result = Map.insert(Pair);
+    std::pair<KeyT, unsigned> Pair = std::make_pair(Key, 0);
+    std::pair<typename MapType::iterator, bool> Result = Map.insert(Pair);
     unsigned &I = Result.first->second;
     if (Result.second) {
-      Vector.push_back(MISTD::make_pair(Key, ValueT()));
+      Vector.push_back(std::make_pair(Key, ValueT()));
       I = Vector.size() - 1;
     }
     return Vector[I].second;
@@ -90,16 +90,16 @@ public:
     return Pos == Map.end()? ValueT() : Vector[Pos->second].second;
   }
 
-  MISTD::pair<iterator, bool> insert(const MISTD::pair<KeyT, ValueT> &KV) {
-    MISTD::pair<KeyT, unsigned> Pair = MISTD::make_pair(KV.first, 0);
-    MISTD::pair<typename MapType::iterator, bool> Result = Map.insert(Pair);
+  std::pair<iterator, bool> insert(const std::pair<KeyT, ValueT> &KV) {
+    std::pair<KeyT, unsigned> Pair = std::make_pair(KV.first, 0);
+    std::pair<typename MapType::iterator, bool> Result = Map.insert(Pair);
     unsigned &I = Result.first->second;
     if (Result.second) {
-      Vector.push_back(MISTD::make_pair(KV.first, KV.second));
+      Vector.push_back(std::make_pair(KV.first, KV.second));
       I = Vector.size() - 1;
-      return MISTD::make_pair(llvm::prior(end()), true);
+      return std::make_pair(llvm::prior(end()), true);
     }
-    return MISTD::make_pair(begin() + I, false);
+    return std::make_pair(begin() + I, false);
   }
 
   unsigned count(const KeyT &Key) const {

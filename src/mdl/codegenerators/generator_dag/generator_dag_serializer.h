@@ -59,7 +59,7 @@ public:
 
     /// Serialize a vector of T.
     template<typename T, typename A>
-    void serialize(MISTD::vector<T, A> const &vec)
+    void serialize(std::vector<T, A> const &vec)
     {
         size_t l = vec.size();
 
@@ -188,7 +188,7 @@ public:
 
     /// Deserialize a vector of T.
     template<typename T, typename A>
-    void deserialize(MISTD::vector<T, A> &vec)
+    void deserialize(std::vector<T, A> &vec)
     {
         size_t l = read_encoded_tag();
         vec.reserve(l);

@@ -86,9 +86,9 @@ private:
   bool Is32Bit;
 
   /// The instruction name as listed in the tables
-  MISTD::string Name;
+  std::string Name;
   /// The AT&T AsmString for the instruction
-  MISTD::string AsmString;
+  std::string AsmString;
   
   /// Indicates whether the instruction is SSE
   bool IsSSE;
@@ -102,7 +102,7 @@ private:
   /// The operands of the instruction, as listed in the CodeGenInstruction.
   /// They are not one-to-one with operands listed in the MCInst; for example,
   /// memory operands expand to 5 operands in the MCInst
-  const MISTD::vector<CGIOperandList::OperandInfo>* Operands;
+  const std::vector<CGIOperandList::OperandInfo>* Operands;
   
   /// The description of the instruction that is emitted into the instruction
   /// info table
@@ -152,7 +152,7 @@ private:
   ///                         prefix.  If it does not, then 16-bit register
   ///                         operands stay 16-bit.
   /// @return               - The operand's type.
-  static OperandType typeFromString(const MISTD::string& s, 
+  static OperandType typeFromString(const std::string& s, 
                                     bool isSSE,
                                     bool hasREX_WPrefix,
                                     bool hasOpSizePrefix);
@@ -166,27 +166,27 @@ private:
   ///                           prefix.  If it does not, then 16-bit immediate
   ///                           operands stay 16-bit.
   /// @return                 - The operand's encoding.
-  static OperandEncoding immediateEncodingFromString(const MISTD::string &s,
+  static OperandEncoding immediateEncodingFromString(const std::string &s,
                                                      bool hasOpSizePrefix);
   
   /// rmRegisterEncodingFromString - Like immediateEncodingFromString, but
   ///   handles operands that are in the REG field of the ModR/M byte.
-  static OperandEncoding rmRegisterEncodingFromString(const MISTD::string &s,
+  static OperandEncoding rmRegisterEncodingFromString(const std::string &s,
                                                       bool hasOpSizePrefix);
   
   /// rmRegisterEncodingFromString - Like immediateEncodingFromString, but
   ///   handles operands that are in the REG field of the ModR/M byte.
-  static OperandEncoding roRegisterEncodingFromString(const MISTD::string &s,
+  static OperandEncoding roRegisterEncodingFromString(const std::string &s,
                                                       bool hasOpSizePrefix);
-  static OperandEncoding memoryEncodingFromString(const MISTD::string &s,
+  static OperandEncoding memoryEncodingFromString(const std::string &s,
                                                   bool hasOpSizePrefix);
-  static OperandEncoding relocationEncodingFromString(const MISTD::string &s,
+  static OperandEncoding relocationEncodingFromString(const std::string &s,
                                                       bool hasOpSizePrefix);
-  static OperandEncoding opcodeModifierEncodingFromString(const MISTD::string &s,
+  static OperandEncoding opcodeModifierEncodingFromString(const std::string &s,
                                                           bool hasOpSizePrefix);
-  static OperandEncoding vvvvRegisterEncodingFromString(const MISTD::string &s,
+  static OperandEncoding vvvvRegisterEncodingFromString(const std::string &s,
                                                         bool HasOpSizePrefix);
-  static OperandEncoding writemaskRegisterEncodingFromString(const MISTD::string &s,
+  static OperandEncoding writemaskRegisterEncodingFromString(const std::string &s,
                                                              bool HasOpSizePrefix);
   
   /// handleOperand - Converts a single operand from the LLVM table format to
@@ -213,7 +213,7 @@ private:
                      unsigned &numPhysicalOperands,
                      const unsigned *operandMapping,
                      OperandEncoding (*encodingFromString)
-                       (const MISTD::string&,
+                       (const std::string&,
                         bool hasOpSizePrefix));
   
   /// shouldBeEmitted - Returns the shouldBeEmitted field.  Although filter()

@@ -147,6 +147,15 @@ private:
     /// \returns  false if parsing failed
     bool demangle_name(char const *&strptr, char const *endptr, string &ref_str);
 
+    /// Parse the sequence id for a substitution.
+    ///
+    /// \param strptr   the string to parse. The referenced pointer will be advanced to after
+    ///                 the trailing '_'.
+    /// \param endptr   points to the end of the string
+    ///
+    /// \returns the parsed sequence id or ~0 on error.
+    unsigned long parse_sequence_id(char const *&strptr, char const *endptr);
+
 private:
     /// The allocator.
     IAllocator *m_alloc;

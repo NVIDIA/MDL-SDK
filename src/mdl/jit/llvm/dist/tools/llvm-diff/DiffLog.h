@@ -55,7 +55,7 @@ namespace llvm {
 
   /// A temporary-object class for building up diff messages.
   class DiffLogBuilder {
-    typedef MISTD::pair<Instruction*,Instruction*> DiffRecord;
+    typedef std::pair<Instruction*,Instruction*> DiffRecord;
     SmallVector<DiffRecord, 20> Diff;
 
     Consumer &consumer;

@@ -67,7 +67,7 @@
 #define strcasecmp(s1, s2) _stricmp(s1, s2)
 #endif
 
-using namespace MISTD;
+using namespace std;
 
 using mi::mdl::IMDL;
 using mi::mdl::ISymbol;
@@ -90,7 +90,7 @@ using mi::mdl::IInput_stream;
 using mi::mdl::IThread_context;
 
 
-using namespace MISTD;
+using namespace std;
 
 /// Print messages to a printer.
 ///
@@ -195,34 +195,35 @@ void Mdlc::usage()
 int Mdlc::run(int argc, char *argv[])
 {
     static mi::getopt::option const long_options[] = {
-        /* 0*/ { "optimize",        mi::getopt::REQUIRED_ARGUMENT, NULL, 'O' },
-        /* 1*/ { "warn",            mi::getopt::REQUIRED_ARGUMENT, NULL, 'W' },
-        /* 2*/ { "strict",          mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /* 3*/ { "no-strict",       mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /* 4*/ { "version",         mi::getopt::NO_ARGUMENT,       NULL, 'V' },
-        /* 5*/ { "verbose",         mi::getopt::NO_ARGUMENT,       NULL, 'v' },
-        /* 6*/ { "path",            mi::getopt::REQUIRED_ARGUMENT, NULL, 'p' },
-        /* 7*/ { "syntax-coloring", mi::getopt::NO_ARGUMENT,       NULL, 'C' },
-        /* 8*/ { "check-lib",       mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
-        /* 9*/ { "target",          mi::getopt::REQUIRED_ARGUMENT, NULL, 't' },
-        /*10*/ { "dump",            mi::getopt::REQUIRED_ARGUMENT, NULL, 'd' },
-        /*11*/ { "backend",         mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
-        /*12*/ { "internal-space",  mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
-        /*13*/ { "show-positions",  mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /*14*/ { "help",            mi::getopt::NO_ARGUMENT,       NULL, '?' },
-        /*15*/ { NULL,              0,                             NULL, 0 }
+        /* 0*/ { "optimize",               mi::getopt::REQUIRED_ARGUMENT, NULL, 'O' },
+        /* 1*/ { "warn",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'W' },
+        /* 2*/ { "strict",                 mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /* 3*/ { "no-strict",              mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /* 4*/ { "version",                mi::getopt::NO_ARGUMENT,       NULL, 'V' },
+        /* 5*/ { "verbose",                mi::getopt::NO_ARGUMENT,       NULL, 'v' },
+        /* 6*/ { "path",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'p' },
+        /* 7*/ { "syntax-coloring",        mi::getopt::NO_ARGUMENT,       NULL, 'C' },
+        /* 8*/ { "check-lib",              mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
+        /* 9*/ { "target",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 't' },
+        /*10*/ { "dump",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'd' },
+        /*11*/ { "backend",                mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
+        /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
+        /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*15*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*16*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
     bool show_version = false;
     int  c, longidx;
-    MISTD::string warn_options;
+    std::string warn_options;
 
     MDL_search_path *search_path(new MDL_search_path);
 
     m_imdl = mi::mdl::initialize();
 
     mi::mdl::Options &comp_options = m_imdl->access_options();
+
 
     while (
         (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvp:Ct:d:B:?", long_options, &longidx)) != -1
@@ -376,8 +377,8 @@ int Mdlc::run(int argc, char *argv[])
     }
 
     if (!warn_options.empty()) {
-        MISTD::string s(warn_options);
-        MISTD::transform(s.begin(), s.end(), s.begin(), ::tolower);
+        std::string s(warn_options);
+        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
         comp_options.set_option(MDL_OPTION_WARN, s.c_str());
     }
 
@@ -417,7 +418,7 @@ int Mdlc::run(int argc, char *argv[])
          it != end;
          ++it)
     {
-        MISTD::string const &input_module = *it;
+        std::string const &input_module = *it;
 
         unsigned errors = 0;
         mi::base::Handle<IModule const> module;
@@ -487,13 +488,13 @@ void Mdlc::apply_backend_options(mi::mdl::Options &opts)
 {
     String_list const &bo = m_backend_options;
     for (String_list::const_iterator it(bo.begin()), end(bo.end()); it != end; ++it) {
-        MISTD::string const &t = *it;
+        std::string const &t = *it;
 
         size_t pos = t.find('=');
 
-        if (pos != MISTD::string::npos) {
-            MISTD::string key(t.substr(0, pos));
-            MISTD::string val(t.substr(pos + 1));
+        if (pos != std::string::npos) {
+            std::string key(t.substr(0, pos));
+            std::string val(t.substr(pos + 1));
 
             bool res = opts.set_option(key.c_str(), val.c_str());
 
@@ -693,7 +694,7 @@ public:
 private:
     struct Hal_dir;
 
-    MISTD::string   m_path;         ///< last path passed to open()
+    std::string   m_path;         ///< last path passed to open()
     int             m_error;        ///< last error, 0 if none
     bool            m_eof;          ///< hit EOF while reading?
 #ifdef WIN_NT
@@ -751,7 +752,7 @@ bool Directory::open(
     if (m_dir->m_opened && !close())
         return false;
 
-    MISTD::string new_path(path ? path : "");
+    std::string new_path(path ? path : "");
 
     // if we find a '*', just leave things as they are
     // note that this will likely not work for a 'c:/users/*/log' call
@@ -759,7 +760,7 @@ bool Directory::open(
         size_t len = strlen(path);
 
         // need this as m_path is const char *
-        MISTD::string temp_path(new_path);
+        std::string temp_path(new_path);
 
         if (len == 0) { // empty string -- assume they just want the curr dir
             temp_path = "*";
@@ -862,7 +863,7 @@ char const *Directory::read()
 bool Directory::exists(
     char const *path)
 {
-    MISTD::string newpath = path ? path : "";
+    std::string newpath = path ? path : "";
 
     // let's strip off any trailing *'s, forward- or back-slashes
     size_t len = newpath.size();
@@ -1000,24 +1001,24 @@ void Mdlc::find_all_modules(
             fname[len - 2] == 'd' &&
             fname[len - 1] == 'l')
         {
-            MISTD::string mod_name;
+            std::string mod_name;
 
             if (package != NULL) {
                 mod_name = package;
                 mod_name += "::";
             }
 
-            mod_name += MISTD::string(fname, len - 4);
+            mod_name += std::string(fname, len - 4);
 
             m_input_modules.push_back(mod_name);
         } else {
             // not an mdl file
-            MISTD::string full_name(root);
+            std::string full_name(root);
             full_name += "/";
             full_name += fname;
 
             if (dir.isdir(full_name.c_str())) {
-                MISTD::string package_name;
+                std::string package_name;
 
                 if (package != NULL) {
                     package_name = package;

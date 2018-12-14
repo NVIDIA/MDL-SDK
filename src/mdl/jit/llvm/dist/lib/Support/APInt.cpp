@@ -95,7 +95,7 @@ void APInt::initFromArray(ArrayRef<uint64_t> bigVal) {
     // Get memory, cleared to 0
     pVal = getClearedMemory(getNumWords());
     // Calculate the number of words to copy
-    unsigned words = MISTD::min<unsigned>(bigVal.size(), getNumWords());
+    unsigned words = std::min<unsigned>(bigVal.size(), getNumWords());
     // Copy the words from bigVal to pVal
     memcpy(pVal, bigVal.data(), words * APINT_WORD_SIZE);
   }
@@ -238,7 +238,7 @@ static bool add(uint64_t *dest, const uint64_t *x, const uint64_t *y,
                 unsigned len) {
   bool carry = false;
   for (unsigned i = 0; i< len; ++i) {
-    uint64_t limit = MISTD::min(x[i],y[i]); // must come first in case dest == x
+    uint64_t limit = std::min(x[i],y[i]); // must come first in case dest == x
     dest[i] = x[i] + y[i] + carry;
     carry = dest[i] < limit || (carry && dest[i] == limit);
   }
@@ -534,7 +534,7 @@ bool APInt::ult(const APInt& RHS) const {
     return pVal[0] < RHS.pVal[0];
 
   // Otherwise, compare all words
-  unsigned topWord = whichWord(MISTD::max(n1,n2)-1);
+  unsigned topWord = whichWord(std::max(n1,n2)-1);
   for (int i = topWord; i >= 0; --i) {
     if (pVal[i] > RHS.pVal[i])
       return false;
@@ -735,14 +735,14 @@ unsigned APInt::countLeadingOnes() const {
 
 unsigned APInt::countTrailingZeros() const {
   if (isSingleWord())
-    return MISTD::min(unsigned(llvm::countTrailingZeros(VAL)), BitWidth);
+    return std::min(unsigned(llvm::countTrailingZeros(VAL)), BitWidth);
   unsigned Count = 0;
   unsigned i = 0;
   for (; i < getNumWords() && pVal[i] == 0; ++i)
     Count += APINT_BITS_PER_WORD;
   if (i < getNumWords())
     Count += llvm::countTrailingZeros(pVal[i]);
-  return MISTD::min(Count, BitWidth);
+  return std::min(Count, BitWidth);
 }
 
 unsigned APInt::countTrailingOnesSlowCase() const {
@@ -752,7 +752,7 @@ unsigned APInt::countTrailingOnesSlowCase() const {
     Count += APINT_BITS_PER_WORD;
   if (i < getNumWords())
     Count += CountTrailingOnes_64(pVal[i]);
-  return MISTD::min(Count, BitWidth);
+  return std::min(Count, BitWidth);
 }
 
 unsigned APInt::countPopulationSlowCase() const {
@@ -884,9 +884,9 @@ double APInt::roundToDouble(bool isSigned) const {
   // Return infinity for exponent overflow
   if (exp > 1023) {
     if (!isSigned || !isNeg)
-      return MISTD::numeric_limits<double>::infinity();
+      return std::numeric_limits<double>::infinity();
     else
-      return -MISTD::numeric_limits<double>::infinity();
+      return -std::numeric_limits<double>::infinity();
   }
   exp += 1023; // Increment for 1023 bias
 
@@ -1618,7 +1618,7 @@ static void KnuthDiv(unsigned *u, unsigned *v, unsigned *q, unsigned* r,
       // since it cancels with the borrow that occurred in D4.
       bool carry = false;
       for (unsigned i = 0; i < n; i++) {
-        unsigned limit = MISTD::min(u[j+i],v[i]);
+        unsigned limit = std::min(u[j+i],v[i]);
         u[j+i] += v[i] + carry;
         carry = u[j+i] < limit || (carry && u[j+i] == limit);
       }
@@ -2237,13 +2237,13 @@ void APInt::toString(SmallVectorImpl<char> &Str, unsigned Radix,
   }
 
   // Reverse the digits before returning.
-  MISTD::reverse(Str.begin()+StartDig, Str.end());
+  std::reverse(Str.begin()+StartDig, Str.end());
 }
 
-/// toString - This returns the APInt as a MISTD::string.  Note that this is an
+/// toString - This returns the APInt as a std::string.  Note that this is an
 /// inefficient method.  It is better to pass in a SmallVector/SmallString
 /// to the methods above.
-MISTD::string APInt::toString(unsigned Radix = 10, bool Signed = true) const {
+std::string APInt::toString(unsigned Radix = 10, bool Signed = true) const {
   SmallString<40> S;
   toString(S, Radix, Signed, /* formatAsCLiteral = */false);
   return S.str();

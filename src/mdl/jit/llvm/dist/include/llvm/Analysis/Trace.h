@@ -29,7 +29,7 @@ namespace llvm {
   class raw_ostream;
 
 class Trace {
-  typedef MISTD::vector<BasicBlock *> BasicBlockListType;
+  typedef std::vector<BasicBlock *> BasicBlockListType;
   BasicBlockListType BasicBlocks;
 
 public:
@@ -37,7 +37,7 @@ public:
   /// residing in the function which is the parent of the first
   /// basic block in the vector.
   ///
-  Trace(const MISTD::vector<BasicBlock *> &vBB) : BasicBlocks (vBB) {}
+  Trace(const std::vector<BasicBlock *> &vBB) : BasicBlocks (vBB) {}
 
   /// getEntryBasicBlock - Return the entry basic block (first block)
   /// of the trace.
@@ -86,8 +86,8 @@ public:
   // BasicBlock iterators...
   typedef BasicBlockListType::iterator iterator;
   typedef BasicBlockListType::const_iterator const_iterator;
-  typedef MISTD::reverse_iterator<const_iterator> const_reverse_iterator;
-  typedef MISTD::reverse_iterator<iterator> reverse_iterator;
+  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+  typedef std::reverse_iterator<iterator> reverse_iterator;
 
   iterator                begin()       { return BasicBlocks.begin(); }
   const_iterator          begin() const { return BasicBlocks.begin(); }

@@ -22,7 +22,7 @@
 
 using namespace llvm;
 
-MISTD::string
+std::string
 _system_error_category::message(int ev) const {
   LPVOID lpMsgBuf = 0;
   DWORD retval = ::FormatMessageA(
@@ -37,10 +37,10 @@ _system_error_category::message(int ev) const {
     NULL);
   if (retval == 0) {
     ::LocalFree(lpMsgBuf);
-    return MISTD::string("Unknown error");
+    return std::string("Unknown error");
   }
 
-  MISTD::string str( static_cast<LPCSTR>(lpMsgBuf) );
+  std::string str( static_cast<LPCSTR>(lpMsgBuf) );
   ::LocalFree(lpMsgBuf);
 
   while (str.size()

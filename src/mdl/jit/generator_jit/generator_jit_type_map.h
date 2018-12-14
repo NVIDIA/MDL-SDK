@@ -61,6 +61,7 @@ public:
     enum State_mapping {
         SM_USE_BITANGENT         = 1 << 0,  ///< Use bitangent instead of tangent_u and tangent_v.
         SM_INCLUDE_UNIFORM_STATE = 1 << 1,  ///< Include the uniform state.
+        SM_USE_DERIVATIVES       = 1 << 2,  ///< Use derivative types.
     };
 
     /// Supported state subsets.
@@ -143,15 +144,23 @@ public:
 
     /// Texture handler vtable access index.
     enum Tex_handler_vtable_index {
-        THV_tex_lookup_float4_2d,   ///< tex_lookup_float4_2d()
-        THV_tex_lookup_float3_2d,   ///< tex_lookup_float3_2d()
-        THV_tex_texel_float4_2d,    ///< tex_texel_float4_2d()
-        THV_tex_lookup_float4_3d,   ///< tex_lookup_float4_3d()
-        THV_tex_lookup_float3_3d,   ///< tex_lookup_float3_3d()
-        THV_tex_texel_float4_3d,    ///< tex_texel_float4_3d()
-        THV_tex_lookup_float4_cube, ///< tex_lookup_float4_cube()
-        THV_tex_lookup_float3_cube, ///< tex_lookup_float3_cube()
-        THV_tex_resolution_2d,      ///< tex_resolution_2d()
+        THV_tex_lookup_float4_2d,           ///< tex_lookup_float4_2d()
+        THV_tex_lookup_float3_2d,           ///< tex_lookup_float3_2d()
+        THV_tex_texel_float4_2d,            ///< tex_texel_float4_2d()
+        THV_tex_lookup_float4_3d,           ///< tex_lookup_float4_3d()
+        THV_tex_lookup_float3_3d,           ///< tex_lookup_float3_3d()
+        THV_tex_texel_float4_3d,            ///< tex_texel_float4_3d()
+        THV_tex_lookup_float4_cube,         ///< tex_lookup_float4_cube()
+        THV_tex_lookup_float3_cube,         ///< tex_lookup_float3_cube()
+        THV_tex_resolution_2d,              ///< tex_resolution_2d()
+        THV_bsdf_measurement_resolution,    ///< df_bsdf_measurement_resolution()
+        THV_bsdf_measurement_evaluate,      ///< df_bsdf_measurement_evaluate()
+        THV_bsdf_measurement_sample,        ///< df_bsdf_measurement_sample()
+        THV_bsdf_measurement_pdf,           ///< df_bsdf_measurement_pdf()
+        THV_bsdf_measurement_albedos,       ///< df_bsdf_measurement_albedos()
+        THV_light_profile_evaluate,         ///< df_light_profile_evaluate()
+        THV_light_profile_sample,           ///< df_light_profile_sample()
+        THV_light_profile_pdf,              ///< df_light_profile_pdf()
         THV_LAST
     };
 
@@ -198,6 +207,11 @@ public:
         return (m_tm_mode & TM_STRINGS_ARE_IDS) != 0;
     }
 
+    /// Returns true if derivatives are used.
+    bool use_derivatives() const {
+        return (m_state_mapping & SM_USE_DERIVATIVES) != 0;
+    }
+
     /// Get the index of a state field in the current state struct.
     ///
     /// \param state_field    the requested state field
@@ -215,7 +229,7 @@ public:
     /// \return the index of the state field inside the state struct depending on state options
     int get_state_index(State_field state_field);
 
-    /// Get an llvm type for an MDL type.
+    /// Get an LLVM type for an MDL type.
     ///
     /// \param context      the LLVM context to be used inside type construction
     /// \param type         the MDL type to lookup
@@ -224,6 +238,59 @@ public:
         llvm::LLVMContext &context,
         mdl::IType const  *type,
         int               arr_size = -1) const;
+
+    /// Get an LLVM type with derivatives for an MDL type.
+    /// This is always a struct type with the original type as first element and the
+    /// two more elements of this type for the x and y derivative, respectively.
+    ///
+    /// \param type         the MDL type to lookup
+    /// \param arr_size     if >= 0, the instantiated array size of type
+    llvm::Type *lookup_deriv_type(
+        mdl::IType const  *type,
+        int               arr_size = -1) const;
+
+    /// Get an LLVM type with derivatives for an LLVM type.
+    /// This is always a struct type with the original type as first element and the
+    /// two more elements of this type for the x and y derivative, respectively.
+    ///
+    /// \param type         the MDL type to lookup
+    llvm::Type *lookup_deriv_type(llvm::Type *type) const;
+
+    // TODO: Maybe this is not a reliable check, as other unidentified struct types might also match
+    /// Checks if the given LLVM type is a derivative type.
+    ///
+    /// \param type  the type to check
+    bool is_deriv_type(llvm::Type *type) const;
+
+    /// Checks if the given MDL type is a derivative type.
+    ///
+    /// \param type  the type to check
+    bool is_deriv_type(mi::mdl::IType const *type) const;
+
+    /// Checks if the given MDL type is based on a floating point type.
+    ///
+    /// \param type  the type to check
+    bool is_floating_point_based_type(IType const *type) const;
+
+    /// Get the base value type of a derivative type.
+    ///
+    /// \param type  the MDL type
+    ///
+    /// \returns the base value type of the derivative type or NULL if it is not a derivative type
+    mi::mdl::IType const *get_deriv_base_type(mi::mdl::IType const *type) const;
+
+    /// Get the base value LLVM type of a derivative LLVM type.
+    ///
+    /// \param type  the LLVM type
+    ///
+    /// \returns the base value type of the derivative type or NULL if it is not a derivative type
+    llvm::Type *get_deriv_base_type(llvm::Type *type) const;
+
+    /// Skip to the base value type of a derivative type or just return the type itself for
+    /// non-derivative types.
+    ///
+    /// \param type  the MDL type
+    mi::mdl::IType const *skip_deriv_type(mi::mdl::IType const *type) const;
 
     /// Checks if a given MDL type needs struct return calling convention.
     ///
@@ -332,6 +399,15 @@ public:
     /// Get the LLVM (float[4]) * type.
     llvm::PointerType *get_arr_float_4_ptr_type() const { return get_ptr(m_type_arr_float_4); }
 
+    /// Get the LLVM derivative type for float2.
+    llvm::StructType *get_deriv_float2_type() const { return m_type_deriv_float2; }
+
+        /// Get the LLVM derivative type for float[2].
+    llvm::StructType *get_deriv_arr_float_2_type() const { return m_type_deriv_arr_float_2; }
+
+    /// Get the LLVM derivative type for float3.
+    llvm::StructType *get_deriv_float3_type() const { return m_type_deriv_float3; }
+
     /// Get the LLVM float3x3 type.
     llvm::Type *get_float3x3_type() const { return m_type_float3x3; }
 
@@ -355,6 +431,9 @@ public:
 
     /// Get the LLVM float4 * type.
     llvm::PointerType *get_float4_ptr_type() const { return get_ptr(m_type_float4); }
+
+    /// Get the LLVM int3 type.
+    llvm::Type *get_int3_type() const { return m_type_int3; }
 
     /// Get the LLVM Res_data_pair type.
     llvm::StructType *get_res_data_pair_type() const { return m_type_res_data_pair; }
@@ -446,14 +525,15 @@ private:
 
     /// Construct the State type for the iray core context.
     ///
-    /// \param context        the LLVM context this type is build belongs to
-    /// \param data_layout    LLVM data layout info for the JIT mode
-    /// \param int_type       the LLVM integer type
-    /// \param float3_type    the LLVM float3 type
-    /// \param float4_type    the LLVM float4 type
-    /// \param float_type     the LLVM float type
-    /// \param byte_ptr_type  the LLVM byte * type
-    /// \param state_mapping  how to map the MDL state
+    /// \param context           the LLVM context this type is build belongs to
+    /// \param data_layout       LLVM data layout info for the JIT mode
+    /// \param int_type          the LLVM integer type
+    /// \param float3_type       the LLVM float3 type
+    /// \param float4_type       the LLVM float4 type
+    /// \param float_type        the LLVM float type
+    /// \param byte_ptr_type     the LLVM byte * type
+    /// \param deriv_float3_type the LLVM derivative float3 type
+    /// \param state_mapping     how to map the MDL state
     static llvm::StructType *construct_state_core_type(
         llvm::LLVMContext      &context,
         llvm::DataLayout const *data_layout,
@@ -462,6 +542,7 @@ private:
         llvm::Type             *float4_type,
         llvm::Type             *float_type,
         llvm::Type             *byte_ptr_type,
+        llvm::Type             *deriv_float3_type,
         unsigned               state_mapping);
 
     /// Construct the exception state type.
@@ -556,6 +637,11 @@ private:
     llvm::ArrayType   *m_type_arr_float_3;
     llvm::ArrayType   *m_type_arr_float_4;
 
+    llvm::StructType  *m_type_deriv_float2;
+    llvm::StructType  *m_type_deriv_float3;
+    llvm::StructType  *m_type_deriv_arr_float_2;
+    llvm::StructType  *m_type_deriv_arr_float_3;
+
     llvm::Type        *m_type_float2x2;
     llvm::Type        *m_type_float3x2;
     llvm::Type        *m_type_float4x2;
@@ -620,6 +706,18 @@ private:
 
     /// The type map cache: Stores mappings from MDL struct types to LLVM ones.
     mutable Type_struct_map m_type_struct_cache;
+
+    typedef ptr_hash_map<llvm::Type, llvm::Type *>::Type Deriv_type_map;
+
+    /// The derivative type cache: Stores mappings from LLVM types to LLVM derivative types.
+    mutable Deriv_type_map m_deriv_type_cache;
+
+    typedef ptr_hash_set<llvm::Type>::Type Deriv_type_set;
+
+    /// Stores all derivatives types to allow checking whether the type is a derivative type.
+    /// TODO: Probably, this approach does not work for unidentified types.
+    ///    Maybe switching to identified types isn't a problem though...
+    mutable Deriv_type_set m_deriv_type_set;
 
     /// An array type cache key.
     struct Array_type_cache_key {

@@ -43,7 +43,7 @@ namespace {
 }
 
 namespace llvm {
-  class ReducePassList : public ListReducer<MISTD::string> {
+  class ReducePassList : public ListReducer<std::string> {
     BugDriver &BD;
   public:
     ReducePassList(BugDriver &bd) : BD(bd) {}
@@ -52,17 +52,17 @@ namespace llvm {
     // running the "Kept" passes fail when run on the output of the "removed"
     // passes.  If we return true, we update the current module of bugpoint.
     //
-    virtual TestResult doTest(MISTD::vector<MISTD::string> &Removed,
-                              MISTD::vector<MISTD::string> &Kept,
-                              MISTD::string &Error);
+    virtual TestResult doTest(std::vector<std::string> &Removed,
+                              std::vector<std::string> &Kept,
+                              std::string &Error);
   };
 }
 
 ReducePassList::TestResult
-ReducePassList::doTest(MISTD::vector<MISTD::string> &Prefix,
-                       MISTD::vector<MISTD::string> &Suffix,
-                       MISTD::string &Error) {
-  MISTD::string PrefixOutput;
+ReducePassList::doTest(std::vector<std::string> &Prefix,
+                       std::vector<std::string> &Suffix,
+                       std::string &Error) {
+  std::string PrefixOutput;
   Module *OrigProgram = 0;
   if (!Prefix.empty()) {
     outs() << "Checking to see if these passes crash: "
@@ -110,9 +110,9 @@ namespace {
                                   bool (*testFn)(const BugDriver &, Module *))
       : BD(bd), TestFn(testFn) {}
 
-    virtual TestResult doTest(MISTD::vector<GlobalVariable*> &Prefix,
-                              MISTD::vector<GlobalVariable*> &Kept,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<GlobalVariable*> &Prefix,
+                              std::vector<GlobalVariable*> &Kept,
+                              std::string &Error) {
       if (!Kept.empty() && TestGlobalVariables(Kept))
         return KeepSuffix;
       if (!Prefix.empty() && TestGlobalVariables(Prefix))
@@ -120,19 +120,19 @@ namespace {
       return NoFailure;
     }
 
-    bool TestGlobalVariables(MISTD::vector<GlobalVariable*> &GVs);
+    bool TestGlobalVariables(std::vector<GlobalVariable*> &GVs);
   };
 }
 
 bool
 ReduceCrashingGlobalVariables::TestGlobalVariables(
-                              MISTD::vector<GlobalVariable*> &GVs) {
+                              std::vector<GlobalVariable*> &GVs) {
   // Clone the program to try hacking it apart...
   ValueToValueMapTy VMap;
   Module *M = CloneModule(BD.getProgram(), VMap);
 
   // Convert list to set for fast lookup...
-  MISTD::set<GlobalVariable*> GVSet;
+  std::set<GlobalVariable*> GVSet;
 
   for (unsigned i = 0, e = GVs.size(); i != e; ++i) {
     GlobalVariable* CMGV = cast<GlobalVariable>(VMap[GVs[i]]);
@@ -180,9 +180,9 @@ namespace {
                             bool (*testFn)(const BugDriver &, Module *))
       : BD(bd), TestFn(testFn) {}
 
-    virtual TestResult doTest(MISTD::vector<Function*> &Prefix,
-                              MISTD::vector<Function*> &Kept,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<Function*> &Prefix,
+                              std::vector<Function*> &Kept,
+                              std::string &Error) {
       if (!Kept.empty() && TestFuncs(Kept))
         return KeepSuffix;
       if (!Prefix.empty() && TestFuncs(Prefix))
@@ -190,13 +190,13 @@ namespace {
       return NoFailure;
     }
 
-    bool TestFuncs(MISTD::vector<Function*> &Prefix);
+    bool TestFuncs(std::vector<Function*> &Prefix);
   };
 }
 
-bool ReduceCrashingFunctions::TestFuncs(MISTD::vector<Function*> &Funcs) {
+bool ReduceCrashingFunctions::TestFuncs(std::vector<Function*> &Funcs) {
   // If main isn't present, claim there is no problem.
-  if (KeepMain && MISTD::find(Funcs.begin(), Funcs.end(),
+  if (KeepMain && std::find(Funcs.begin(), Funcs.end(),
                             BD.getProgram()->getFunction("main")) ==
                       Funcs.end())
     return false;
@@ -206,7 +206,7 @@ bool ReduceCrashingFunctions::TestFuncs(MISTD::vector<Function*> &Funcs) {
   Module *M = CloneModule(BD.getProgram(), VMap);
 
   // Convert list to set for fast lookup...
-  MISTD::set<Function*> Functions;
+  std::set<Function*> Functions;
   for (unsigned i = 0, e = Funcs.size(); i != e; ++i) {
     Function *CMF = cast<Function>(VMap[Funcs[i]]);
     assert(CMF && "Function not in module?!");
@@ -253,9 +253,9 @@ namespace {
                          bool (*testFn)(const BugDriver &, Module *))
       : BD(bd), TestFn(testFn) {}
 
-    virtual TestResult doTest(MISTD::vector<const BasicBlock*> &Prefix,
-                              MISTD::vector<const BasicBlock*> &Kept,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<const BasicBlock*> &Prefix,
+                              std::vector<const BasicBlock*> &Kept,
+                              std::string &Error) {
       if (!Kept.empty() && TestBlocks(Kept))
         return KeepSuffix;
       if (!Prefix.empty() && TestBlocks(Prefix))
@@ -263,11 +263,11 @@ namespace {
       return NoFailure;
     }
 
-    bool TestBlocks(MISTD::vector<const BasicBlock*> &Prefix);
+    bool TestBlocks(std::vector<const BasicBlock*> &Prefix);
   };
 }
 
-bool ReduceCrashingBlocks::TestBlocks(MISTD::vector<const BasicBlock*> &BBs) {
+bool ReduceCrashingBlocks::TestBlocks(std::vector<const BasicBlock*> &BBs) {
   // Clone the program to try hacking it apart...
   ValueToValueMapTy VMap;
   Module *M = CloneModule(BD.getProgram(), VMap);
@@ -310,15 +310,15 @@ bool ReduceCrashingBlocks::TestBlocks(MISTD::vector<const BasicBlock*> &BBs) {
   // a "persistent mapping" by turning basic blocks into <function, name> pairs.
   // This won't work well if blocks are unnamed, but that is just the risk we
   // have to take.
-  MISTD::vector<MISTD::pair<MISTD::string, MISTD::string> > BlockInfo;
+  std::vector<std::pair<std::string, std::string> > BlockInfo;
 
   for (SmallPtrSet<BasicBlock*, 8>::iterator I = Blocks.begin(),
          E = Blocks.end(); I != E; ++I)
-    BlockInfo.push_back(MISTD::make_pair((*I)->getParent()->getName(),
+    BlockInfo.push_back(std::make_pair((*I)->getParent()->getName(),
                                        (*I)->getName()));
 
   // Now run the CFG simplify pass on the function...
-  MISTD::vector<MISTD::string> Passes;
+  std::vector<std::string> Passes;
   Passes.push_back("simplifycfg");
   Passes.push_back("verify");
   Module *New = BD.runPassesOn(M, Passes);
@@ -362,9 +362,9 @@ namespace {
                                bool (*testFn)(const BugDriver &, Module *))
       : BD(bd), TestFn(testFn) {}
 
-    virtual TestResult doTest(MISTD::vector<const Instruction*> &Prefix,
-                              MISTD::vector<const Instruction*> &Kept,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<const Instruction*> &Prefix,
+                              std::vector<const Instruction*> &Kept,
+                              std::string &Error) {
       if (!Kept.empty() && TestInsts(Kept))
         return KeepSuffix;
       if (!Prefix.empty() && TestInsts(Prefix))
@@ -372,11 +372,11 @@ namespace {
       return NoFailure;
     }
 
-    bool TestInsts(MISTD::vector<const Instruction*> &Prefix);
+    bool TestInsts(std::vector<const Instruction*> &Prefix);
   };
 }
 
-bool ReduceCrashingInstructions::TestInsts(MISTD::vector<const Instruction*>
+bool ReduceCrashingInstructions::TestInsts(std::vector<const Instruction*>
                                            &Insts) {
   // Clone the program to try hacking it apart...
   ValueToValueMapTy VMap;
@@ -433,7 +433,7 @@ bool ReduceCrashingInstructions::TestInsts(MISTD::vector<const Instruction*>
 /// the predicate true.
 static bool DebugACrash(BugDriver &BD,
                         bool (*TestFn)(const BugDriver &, Module *),
-                        MISTD::string &Error) {
+                        std::string &Error) {
   // See if we can get away with nuking some of the global variable initializers
   // in the program...
   if (!NoGlobalRM &&
@@ -464,7 +464,7 @@ static bool DebugACrash(BugDriver &BD,
         outs() << "  - Removing all global inits hides problem!\n";
         delete M;
 
-        MISTD::vector<GlobalVariable*> GVs;
+        std::vector<GlobalVariable*> GVs;
 
         for (Module::global_iterator I = BD.getProgram()->global_begin(),
                E = BD.getProgram()->global_end(); I != E; ++I)
@@ -488,7 +488,7 @@ static bool DebugACrash(BugDriver &BD,
   }
 
   // Now try to reduce the number of functions in the module to something small.
-  MISTD::vector<Function*> Functions;
+  std::vector<Function*> Functions;
   for (Module::iterator I = BD.getProgram()->begin(),
          E = BD.getProgram()->end(); I != E; ++I)
     if (!I->isDeclaration())
@@ -511,7 +511,7 @@ static bool DebugACrash(BugDriver &BD,
   // shrinks the code dramatically quickly
   //
   if (!DisableSimplifyCFG && !BugpointIsInterrupted) {
-    MISTD::vector<const BasicBlock*> Blocks;
+    std::vector<const BasicBlock*> Blocks;
     for (Module::const_iterator I = BD.getProgram()->begin(),
            E = BD.getProgram()->end(); I != E; ++I)
       for (Function::const_iterator FI = I->begin(), E = I->end(); FI !=E; ++FI)
@@ -525,7 +525,7 @@ static bool DebugACrash(BugDriver &BD,
   // Attempt to delete instructions using bisection. This should help out nasty
   // cases with large basic blocks where the problem is at one end.
   if (!BugpointIsInterrupted) {
-    MISTD::vector<const Instruction*> Insts;
+    std::vector<const Instruction*> Insts;
     for (Module::const_iterator MI = BD.getProgram()->begin(),
            ME = BD.getProgram()->end(); MI != ME; ++MI)
       for (Function::const_iterator FI = MI->begin(), FE = MI->end(); FI != FE;
@@ -629,10 +629,10 @@ static bool TestForOptimizerCrash(const BugDriver &BD, Module *M) {
 /// It attempts to prune down the testcase to something reasonable, and figure
 /// out exactly which pass is crashing.
 ///
-bool BugDriver::debugOptimizerCrash(const MISTD::string &ID) {
+bool BugDriver::debugOptimizerCrash(const std::string &ID) {
   outs() << "\n*** Debugging optimizer crash!\n";
 
-  MISTD::string Error;
+  std::string Error;
   // Reduce the list of passes which causes the optimizer to crash...
   if (!BugpointIsInterrupted)
     ReducePassList(*this).reduceList(PassesToRun, Error);
@@ -650,7 +650,7 @@ bool BugDriver::debugOptimizerCrash(const MISTD::string &ID) {
 }
 
 static bool TestForCodeGenCrash(const BugDriver &BD, Module *M) {
-  MISTD::string Error;
+  std::string Error;
   BD.compileProgram(M, &Error);
   if (!Error.empty()) {
     errs() << "<crash>\n";
@@ -663,7 +663,7 @@ static bool TestForCodeGenCrash(const BugDriver &BD, Module *M) {
 /// debugCodeGeneratorCrash - This method is called when the code generator
 /// crashes on an input.  It attempts to reduce the input as much as possible
 /// while still causing the code generator to crash.
-bool BugDriver::debugCodeGeneratorCrash(MISTD::string &Error) {
+bool BugDriver::debugCodeGeneratorCrash(std::string &Error) {
   errs() << "*** Debugging code generator crash!\n";
 
   return DebugACrash(*this, TestForCodeGenCrash, Error);

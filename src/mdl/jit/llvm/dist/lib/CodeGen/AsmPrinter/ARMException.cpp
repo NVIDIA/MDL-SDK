@@ -100,8 +100,8 @@ void ARMException::EndFunction() {
 }
 
 void ARMException::EmitTypeInfos(unsigned TTypeEncoding) {
-  const MISTD::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
-  const MISTD::vector<unsigned> &FilterIds = MMI->getFilterIds();
+  const std::vector<const GlobalVariable *> &TypeInfos = MMI->getTypeInfos();
+  const std::vector<unsigned> &FilterIds = MMI->getFilterIds();
 
   bool VerboseAsm = Asm->OutStreamer.isVerboseAsm();
 
@@ -113,7 +113,7 @@ void ARMException::EmitTypeInfos(unsigned TTypeEncoding) {
     Entry = TypeInfos.size();
   }
 
-  for (MISTD::vector<const GlobalVariable *>::const_reverse_iterator
+  for (std::vector<const GlobalVariable *>::const_reverse_iterator
          I = TypeInfos.rbegin(), E = TypeInfos.rend(); I != E; ++I) {
     const GlobalVariable *GV = *I;
     if (VerboseAsm)
@@ -127,7 +127,7 @@ void ARMException::EmitTypeInfos(unsigned TTypeEncoding) {
     Asm->OutStreamer.AddBlankLine();
     Entry = 0;
   }
-  for (MISTD::vector<unsigned>::const_iterator
+  for (std::vector<unsigned>::const_iterator
          I = FilterIds.begin(), E = FilterIds.end(); I < E; ++I) {
     unsigned TypeID = *I;
     if (VerboseAsm) {

@@ -1440,12 +1440,12 @@ X86InstrInfo::AddTableEntry(RegOp2MemOpTableType &R2MTable,
                             unsigned RegOp, unsigned MemOp, unsigned Flags) {
     if ((Flags & TB_NO_FORWARD) == 0) {
       assert(!R2MTable.count(RegOp) && "Duplicate entry!");
-      R2MTable[RegOp] = MISTD::make_pair(MemOp, Flags);
+      R2MTable[RegOp] = std::make_pair(MemOp, Flags);
     }
     if ((Flags & TB_NO_REVERSE) == 0) {
       assert(!M2RTable.count(MemOp) &&
            "Duplicated entries in unfolding maps?");
-      M2RTable[MemOp] = MISTD::make_pair(RegOp, Flags);
+      M2RTable[MemOp] = std::make_pair(RegOp, Flags);
     }
 }
 
@@ -3220,7 +3220,7 @@ void X86InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   const MachineFunction &MF = *MBB.getParent();
   assert(MF.getFrameInfo()->getObjectSize(FrameIdx) >= RC->getSize() &&
          "Stack slot too small for store");
-  unsigned Alignment = MISTD::max<uint32_t>(RC->getSize(), 16);
+  unsigned Alignment = std::max<uint32_t>(RC->getSize(), 16);
   bool isAligned = (TM.getFrameLowering()->getStackAlignment() >= Alignment) ||
     RI.canRealignStack(MF);
   unsigned Opc = getStoreRegOpcode(SrcReg, RC, isAligned, TM);
@@ -3236,7 +3236,7 @@ void X86InstrInfo::storeRegToAddr(MachineFunction &MF, unsigned SrcReg,
                                   MachineInstr::mmo_iterator MMOBegin,
                                   MachineInstr::mmo_iterator MMOEnd,
                                   SmallVectorImpl<MachineInstr*> &NewMIs) const {
-  unsigned Alignment = MISTD::max<uint32_t>(RC->getSize(), 16);
+  unsigned Alignment = std::max<uint32_t>(RC->getSize(), 16);
   bool isAligned = MMOBegin != MMOEnd &&
                    (*MMOBegin)->getAlignment() >= Alignment;
   unsigned Opc = getStoreRegOpcode(SrcReg, RC, isAligned, TM);
@@ -3256,7 +3256,7 @@ void X86InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                         const TargetRegisterClass *RC,
                                         const TargetRegisterInfo *TRI) const {
   const MachineFunction &MF = *MBB.getParent();
-  unsigned Alignment = MISTD::max<uint32_t>(RC->getSize(), 16);
+  unsigned Alignment = std::max<uint32_t>(RC->getSize(), 16);
   bool isAligned = (TM.getFrameLowering()->getStackAlignment() >= Alignment) ||
     RI.canRealignStack(MF);
   unsigned Opc = getLoadRegOpcode(DestReg, RC, isAligned, TM);
@@ -3270,7 +3270,7 @@ void X86InstrInfo::loadRegFromAddr(MachineFunction &MF, unsigned DestReg,
                                  MachineInstr::mmo_iterator MMOBegin,
                                  MachineInstr::mmo_iterator MMOEnd,
                                  SmallVectorImpl<MachineInstr*> &NewMIs) const {
-  unsigned Alignment = MISTD::max<uint32_t>(RC->getSize(), 16);
+  unsigned Alignment = std::max<uint32_t>(RC->getSize(), 16);
   bool isAligned = MMOBegin != MMOEnd &&
                    (*MMOBegin)->getAlignment() >= Alignment;
   unsigned Opc = getLoadRegOpcode(DestReg, RC, isAligned, TM);
@@ -3610,7 +3610,7 @@ optimizeCompareInstr(MachineInstr *CmpInstr, unsigned SrcReg, unsigned SrcReg2,
   // If we are done with the basic block, we need to check whether EFLAGS is
   // live-out.
   bool IsSafe = false;
-  SmallVector<MISTD::pair<MachineInstr*, unsigned /*NewOpc*/>, 4> OpsToUpdate;
+  SmallVector<std::pair<MachineInstr*, unsigned /*NewOpc*/>, 4> OpsToUpdate;
   MachineBasicBlock::iterator E = CmpInstr->getParent()->end();
   for (++I; I != E; ++I) {
     const MachineInstr &Instr = *I;
@@ -3675,7 +3675,7 @@ optimizeCompareInstr(MachineInstr *CmpInstr, unsigned SrcReg, unsigned SrcReg2,
       // Push the MachineInstr to OpsToUpdate.
       // If it is safe to remove CmpInstr, the condition code of these
       // instructions will be modified.
-      OpsToUpdate.push_back(MISTD::make_pair(&*I, NewOpc));
+      OpsToUpdate.push_back(std::make_pair(&*I, NewOpc));
     }
     if (ModifyEFLAGS || Instr.killsRegister(X86::EFLAGS, TRI)) {
       // It is safe to remove CmpInstr if EFLAGS is updated again or killed.
@@ -3940,7 +3940,7 @@ X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
                                     MachineInstr *MI, unsigned i,
                                     const SmallVectorImpl<MachineOperand> &MOs,
                                     unsigned Size, unsigned Align) const {
-  const DenseMap<unsigned, MISTD::pair<unsigned,unsigned> > *OpcodeTablePtr = 0;
+  const DenseMap<unsigned, std::pair<unsigned,unsigned> > *OpcodeTablePtr = 0;
   bool isCallRegIndirect = TM.getSubtarget<X86Subtarget>().callRegIndirect();
   bool isTwoAddrFold = false;
 
@@ -3990,7 +3990,7 @@ X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF,
   // If table selected...
   if (OpcodeTablePtr) {
     // Find the Opcode to fuse
-    DenseMap<unsigned, MISTD::pair<unsigned,unsigned> >::const_iterator I =
+    DenseMap<unsigned, std::pair<unsigned,unsigned> >::const_iterator I =
       OpcodeTablePtr->find(MI->getOpcode());
     if (I != OpcodeTablePtr->end()) {
       unsigned Opcode = I->second.first;
@@ -4236,7 +4236,7 @@ static MachineInstr* foldPatchpoint(MachineFunction &MF,
 
   for (unsigned i = StartIdx; i < MI->getNumOperands(); ++i) {
     MachineOperand &MO = MI->getOperand(i);
-    if (MISTD::find(Ops.begin(), Ops.end(), i) != Ops.end()) {
+    if (std::find(Ops.begin(), Ops.end(), i) != Ops.end()) {
       assert(MO.getReg() && "patchpoint can only fold a vreg operand");
       // Compute the spill slot size and offset.
       const TargetRegisterClass *RC = MF.getRegInfo().getRegClass(MO.getReg());
@@ -4283,7 +4283,7 @@ X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF, MachineInstr *MI,
   // If the function stack isn't realigned we don't want to fold instructions
   // that need increased alignment.
   if (!RI.needsStackRealignment(MF))
-    Alignment = MISTD::min(Alignment, TM.getFrameLowering()->getStackAlignment());
+    Alignment = std::min(Alignment, TM.getFrameLowering()->getStackAlignment());
   if (Ops.size() == 2 && Ops[0] == 0 && Ops[1] == 1) {
     unsigned NewOpc = 0;
     unsigned RCSize = 0;
@@ -4487,7 +4487,7 @@ bool X86InstrInfo::canFoldMemoryOperand(const MachineInstr *MI,
   // Folding a memory location into the two-address part of a two-address
   // instruction is different than folding it other places.  It requires
   // replacing the *two* registers with the memory location.
-  const DenseMap<unsigned, MISTD::pair<unsigned,unsigned> > *OpcodeTablePtr = 0;
+  const DenseMap<unsigned, std::pair<unsigned,unsigned> > *OpcodeTablePtr = 0;
   if (isTwoAddr && NumOps >= 2 && OpNum < 2) {
     OpcodeTablePtr = &RegOp2MemOpTable2Addr;
   } else if (OpNum == 0) { // If operand 0
@@ -4511,7 +4511,7 @@ bool X86InstrInfo::canFoldMemoryOperand(const MachineInstr *MI,
 bool X86InstrInfo::unfoldMemoryOperand(MachineFunction &MF, MachineInstr *MI,
                                 unsigned Reg, bool UnfoldLoad, bool UnfoldStore,
                                 SmallVectorImpl<MachineInstr*> &NewMIs) const {
-  DenseMap<unsigned, MISTD::pair<unsigned,unsigned> >::const_iterator I =
+  DenseMap<unsigned, std::pair<unsigned,unsigned> >::const_iterator I =
     MemOp2RegOpTable.find(MI->getOpcode());
   if (I == MemOp2RegOpTable.end())
     return false;
@@ -4553,7 +4553,7 @@ bool X86InstrInfo::unfoldMemoryOperand(MachineFunction &MF, MachineInstr *MI,
 
   // Emit the load instruction.
   if (UnfoldLoad) {
-    MISTD::pair<MachineInstr::mmo_iterator,
+    std::pair<MachineInstr::mmo_iterator,
               MachineInstr::mmo_iterator> MMOs =
       MF.extractLoadMemRefs(MI->memoperands_begin(),
                             MI->memoperands_end());
@@ -4623,7 +4623,7 @@ bool X86InstrInfo::unfoldMemoryOperand(MachineFunction &MF, MachineInstr *MI,
   // Emit the store instruction.
   if (UnfoldStore) {
     const TargetRegisterClass *DstRC = getRegClass(MCID, 0, &RI, MF);
-    MISTD::pair<MachineInstr::mmo_iterator,
+    std::pair<MachineInstr::mmo_iterator,
               MachineInstr::mmo_iterator> MMOs =
       MF.extractStoreMemRefs(MI->memoperands_begin(),
                              MI->memoperands_end());
@@ -4639,7 +4639,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   if (!N->isMachineOpcode())
     return false;
 
-  DenseMap<unsigned, MISTD::pair<unsigned,unsigned> >::const_iterator I =
+  DenseMap<unsigned, std::pair<unsigned,unsigned> >::const_iterator I =
     MemOp2RegOpTable.find(N->getMachineOpcode());
   if (I == MemOp2RegOpTable.end())
     return false;
@@ -4651,9 +4651,9 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   MachineFunction &MF = DAG.getMachineFunction();
   const TargetRegisterClass *RC = getRegClass(MCID, Index, &RI, MF);
   unsigned NumDefs = MCID.NumDefs;
-  MISTD::vector<SDValue> AddrOps;
-  MISTD::vector<SDValue> BeforeOps;
-  MISTD::vector<SDValue> AfterOps;
+  std::vector<SDValue> AddrOps;
+  std::vector<SDValue> BeforeOps;
+  std::vector<SDValue> AfterOps;
   SDLoc dl(N);
   unsigned NumOps = N->getNumOperands();
   for (unsigned i = 0; i != NumOps-1; ++i) {
@@ -4672,7 +4672,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   SDNode *Load = 0;
   if (FoldedLoad) {
     EVT VT = *RC->vt_begin();
-    MISTD::pair<MachineInstr::mmo_iterator,
+    std::pair<MachineInstr::mmo_iterator,
               MachineInstr::mmo_iterator> MMOs =
       MF.extractLoadMemRefs(cast<MachineSDNode>(N)->memoperands_begin(),
                             cast<MachineSDNode>(N)->memoperands_end());
@@ -4693,7 +4693,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   }
 
   // Emit the data processing instruction.
-  MISTD::vector<EVT> VTs;
+  std::vector<EVT> VTs;
   const TargetRegisterClass *DstRC = 0;
   if (MCID.getNumDefs() > 0) {
     DstRC = getRegClass(MCID, 0, &RI, MF);
@@ -4706,7 +4706,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   }
   if (Load)
     BeforeOps.push_back(SDValue(Load, 0));
-  MISTD::copy(AfterOps.begin(), AfterOps.end(), MISTD::back_inserter(BeforeOps));
+  std::copy(AfterOps.begin(), AfterOps.end(), std::back_inserter(BeforeOps));
   SDNode *NewNode= DAG.getMachineNode(Opc, dl, VTs, BeforeOps);
   NewNodes.push_back(NewNode);
 
@@ -4715,7 +4715,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
     AddrOps.pop_back();
     AddrOps.push_back(SDValue(NewNode, 0));
     AddrOps.push_back(Chain);
-    MISTD::pair<MachineInstr::mmo_iterator,
+    std::pair<MachineInstr::mmo_iterator,
               MachineInstr::mmo_iterator> MMOs =
       MF.extractStoreMemRefs(cast<MachineSDNode>(N)->memoperands_begin(),
                              cast<MachineSDNode>(N)->memoperands_end());
@@ -4742,7 +4742,7 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
 unsigned X86InstrInfo::getOpcodeAfterMemoryUnfold(unsigned Opc,
                                       bool UnfoldLoad, bool UnfoldStore,
                                       unsigned *LoadRegIndex) const {
-  DenseMap<unsigned, MISTD::pair<unsigned,unsigned> >::const_iterator I =
+  DenseMap<unsigned, std::pair<unsigned,unsigned> >::const_iterator I =
     MemOp2RegOpTable.find(Opc);
   if (I == MemOp2RegOpTable.end())
     return 0;
@@ -5192,7 +5192,7 @@ static const uint16_t *lookupAVX2(unsigned opcode, unsigned domain) {
   return 0;
 }
 
-MISTD::pair<uint16_t, uint16_t>
+std::pair<uint16_t, uint16_t>
 X86InstrInfo::getExecutionDomain(const MachineInstr *MI) const {
   uint16_t domain = (MI->getDesc().TSFlags >> X86II::SSEDomainShift) & 3;
   bool hasAVX2 = TM.getSubtarget<X86Subtarget>().hasAVX2();
@@ -5201,7 +5201,7 @@ X86InstrInfo::getExecutionDomain(const MachineInstr *MI) const {
     validDomains = 0xe;
   else if (domain && lookupAVX2(MI->getOpcode(), domain))
     validDomains = hasAVX2 ? 0xe : 0x6;
-  return MISTD::make_pair(domain, validDomains);
+  return std::make_pair(domain, validDomains);
 }
 
 void X86InstrInfo::setExecutionDomain(MachineInstr *MI, unsigned Domain) const {

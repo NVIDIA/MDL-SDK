@@ -26,11 +26,11 @@ static cl::opt<bool>
 Quiet("quiet", cl::desc("Don't print unnecessary status information"),
       cl::init(false));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename("input-file", cl::desc("Input file (defaults to stdin)"),
               cl::init("-"), cl::value_desc("filename"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename(cl::Positional, cl::desc("<output-file>"), cl::Required);
 
 int main(int argc, char **argv) {
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
   if (!Quiet)
     errs() << argv[0] << ": Updating '" << OutputFilename
            << "', contents changed.\n";
-  MISTD::string ErrorStr;
+  std::string ErrorStr;
   tool_output_file OutStream(OutputFilename.c_str(), ErrorStr,
                              sys::fs::F_Binary);
   if (!ErrorStr.empty()) {

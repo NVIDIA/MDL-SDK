@@ -927,8 +927,8 @@ llvm::generateDITypeIdentifierMap(const NamedMDNode *CU_Nodes) {
       if (MDString *TypeId = Ty.getIdentifier()) {
         // Definition has priority over declaration.
         // Try to insert (TypeId, Ty) to Map.
-        MISTD::pair<DITypeIdentifierMap::iterator, bool> P =
-            Map.insert(MISTD::make_pair(TypeId, Ty));
+        std::pair<DITypeIdentifierMap::iterator, bool> P =
+            Map.insert(std::make_pair(TypeId, Ty));
         // If TypeId already exists in Map and this is a definition, replace
         // whatever we had (declaration or definition) with the definition.
         if (!P.second && !Ty.isForwardDecl())

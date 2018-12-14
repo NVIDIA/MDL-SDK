@@ -151,13 +151,13 @@ public:
     int result = pthread_mutex_lock( &mutex );
     assert( result == 0 );
     n ++;
-    //~ MISTD::cout << "block() n " << n << " waitFor " << waitFor << MISTD::endl;
+    //~ std::cout << "block() n " << n << " waitFor " << waitFor << std::endl;
 
     assert( waitFor == 0 || n <= waitFor );
     if ( waitFor > 0 && n == waitFor )
     {
       // There are enough threads blocked that we can release all of them
-      MISTD::cout << "Unblocking threads from block()" << MISTD::endl;
+      std::cout << "Unblocking threads from block()" << std::endl;
       unblockThreads();
     }
     else
@@ -181,7 +181,7 @@ public:
     assert( result == 0 );
 
     if ( n >= num ) {
-      MISTD::cout << "Unblocking threads from releaseThreads()" << MISTD::endl;
+      std::cout << "Unblocking threads from releaseThreads()" << std::endl;
       unblockThreads();
     }
     else
@@ -226,7 +226,7 @@ void* callFunc( void* param )
   struct threadParams* p = (struct threadParams*) param;
 
   // Call the `foo' function with no arguments:
-  MISTD::vector<GenericValue> Args(1);
+  std::vector<GenericValue> Args(1);
   Args[0].IntVal = APInt(32, p->value);
 
   synchronize.block(); // wait until other threads are at this point
@@ -248,8 +248,8 @@ int main() {
   // Now we create the JIT.
   ExecutionEngine* EE = EngineBuilder(M).create();
 
-  //~ MISTD::cout << "We just constructed this LLVM module:\n\n" << *M;
-  //~ MISTD::cout << "\n\nRunning foo: " << MISTD::flush;
+  //~ std::cout << "We just constructed this LLVM module:\n\n" << *M;
+  //~ std::cout << "\n\nRunning foo: " << std::flush;
 
   // Create one thread for add1 and two threads for fib
   struct threadParams add1 = { EE, add1F, 1000 };
@@ -259,21 +259,21 @@ int main() {
   pthread_t add1Thread;
   int result = pthread_create( &add1Thread, NULL, callFunc, &add1 );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not create thread" << MISTD::endl;
+          std::cerr << "Could not create thread" << std::endl;
           return 1;
   }
 
   pthread_t fibThread1;
   result = pthread_create( &fibThread1, NULL, callFunc, &fib1 );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not create thread" << MISTD::endl;
+          std::cerr << "Could not create thread" << std::endl;
           return 1;
   }
 
   pthread_t fibThread2;
   result = pthread_create( &fibThread2, NULL, callFunc, &fib2 );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not create thread" << MISTD::endl;
+          std::cerr << "Could not create thread" << std::endl;
           return 1;
   }
 
@@ -282,24 +282,24 @@ int main() {
   void* returnValue;
   result = pthread_join( add1Thread, &returnValue );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not join thread" << MISTD::endl;
+          std::cerr << "Could not join thread" << std::endl;
           return 1;
   }
-  MISTD::cout << "Add1 returned " << intptr_t(returnValue) << MISTD::endl;
+  std::cout << "Add1 returned " << intptr_t(returnValue) << std::endl;
 
   result = pthread_join( fibThread1, &returnValue );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not join thread" << MISTD::endl;
+          std::cerr << "Could not join thread" << std::endl;
           return 1;
   }
-  MISTD::cout << "Fib1 returned " << intptr_t(returnValue) << MISTD::endl;
+  std::cout << "Fib1 returned " << intptr_t(returnValue) << std::endl;
 
   result = pthread_join( fibThread2, &returnValue );
   if ( result != 0 ) {
-          MISTD::cerr << "Could not join thread" << MISTD::endl;
+          std::cerr << "Could not join thread" << std::endl;
           return 1;
   }
-  MISTD::cout << "Fib2 returned " << intptr_t(returnValue) << MISTD::endl;
+  std::cout << "Fib2 returned " << intptr_t(returnValue) << std::endl;
 
   return 0;
 }

@@ -39,11 +39,11 @@ namespace object {
 StringRef getELFRelocationTypeName(uint32_t Machine, uint32_t Type);
 
 // Subclasses of ELFFile may need this for template instantiation
-inline MISTD::pair<unsigned char, unsigned char>
+inline std::pair<unsigned char, unsigned char>
 getElfArchType(MemoryBuffer *Object) {
   if (Object->getBufferSize() < ELF::EI_NIDENT)
-    return MISTD::make_pair((uint8_t)ELF::ELFCLASSNONE,(uint8_t)ELF::ELFDATANONE);
-  return MISTD::make_pair((uint8_t) Object->getBufferStart()[ELF::EI_CLASS],
+    return std::make_pair((uint8_t)ELF::ELFCLASSNONE,(uint8_t)ELF::ELFDATANONE);
+  return std::make_pair((uint8_t) Object->getBufferStart()[ELF::EI_CLASS],
                         (uint8_t) Object->getBufferStart()[ELF::EI_DATA]);
 }
 
@@ -60,7 +60,7 @@ public:
   public:
     typedef ptrdiff_t difference_type;
     typedef EntT value_type;
-    typedef MISTD::random_access_iterator_tag iterator_category;
+    typedef std::random_access_iterator_tag iterator_category;
     typedef value_type &reference;
     typedef value_type *pointer;
 
@@ -153,7 +153,7 @@ public:
   public:
     typedef ptrdiff_t difference_type;
     typedef const Elf_Sym value_type;
-    typedef MISTD::random_access_iterator_tag iterator_category;
+    typedef std::random_access_iterator_tag iterator_category;
     typedef value_type &reference;
     typedef value_type *pointer;
 
@@ -312,7 +312,7 @@ public:
 
   /// \brief Get the symbol table section and symbol for a given relocation.
   template <class RelT>
-  MISTD::pair<const Elf_Shdr *, const Elf_Sym *>
+  std::pair<const Elf_Shdr *, const Elf_Sym *>
   getRelocationSymbol(const Elf_Shdr *RelSec, const RelT *Rel) const;
 
   ELFFile(MemoryBuffer *Object, error_code &ec);
@@ -561,13 +561,13 @@ void ELFFile<ELFT>::getRelocationTypeName(uint32_t Type,
 
 template <class ELFT>
 template <class RelT>
-MISTD::pair<const typename ELFFile<ELFT>::Elf_Shdr *,
+std::pair<const typename ELFFile<ELFT>::Elf_Shdr *,
           const typename ELFFile<ELFT>::Elf_Sym *>
 ELFFile<ELFT>::getRelocationSymbol(const Elf_Shdr *Sec, const RelT *Rel) const {
   if (!Sec->sh_link)
-    return MISTD::make_pair((const Elf_Shdr *)0, (const Elf_Sym *)0);
+    return std::make_pair((const Elf_Shdr *)0, (const Elf_Sym *)0);
   const Elf_Shdr *SymTable = getSection(Sec->sh_link);
-  return MISTD::make_pair(
+  return std::make_pair(
       SymTable, getEntry<Elf_Sym>(SymTable, Rel->getSymbol(isMips64EL())));
 }
 

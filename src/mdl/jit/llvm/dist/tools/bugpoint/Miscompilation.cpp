@@ -29,8 +29,8 @@
 using namespace llvm;
 
 namespace llvm {
-  extern cl::opt<MISTD::string> OutputPrefix;
-  extern cl::list<MISTD::string> InputArgv;
+  extern cl::opt<std::string> OutputPrefix;
+  extern cl::list<std::string> InputArgv;
 }
 
 namespace {
@@ -43,14 +43,14 @@ namespace {
         cl::desc("Don't extract blocks when searching for miscompilations"),
         cl::init(false));
 
-  class ReduceMiscompilingPasses : public ListReducer<MISTD::string> {
+  class ReduceMiscompilingPasses : public ListReducer<std::string> {
     BugDriver &BD;
   public:
     ReduceMiscompilingPasses(BugDriver &bd) : BD(bd) {}
 
-    virtual TestResult doTest(MISTD::vector<MISTD::string> &Prefix,
-                              MISTD::vector<MISTD::string> &Suffix,
-                              MISTD::string &Error);
+    virtual TestResult doTest(std::vector<std::string> &Prefix,
+                              std::vector<std::string> &Suffix,
+                              std::string &Error);
   };
 }
 
@@ -58,15 +58,15 @@ namespace {
 /// group, see if they still break the program.
 ///
 ReduceMiscompilingPasses::TestResult
-ReduceMiscompilingPasses::doTest(MISTD::vector<MISTD::string> &Prefix,
-                                 MISTD::vector<MISTD::string> &Suffix,
-                                 MISTD::string &Error) {
+ReduceMiscompilingPasses::doTest(std::vector<std::string> &Prefix,
+                                 std::vector<std::string> &Suffix,
+                                 std::string &Error) {
   // First, run the program with just the Suffix passes.  If it is still broken
   // with JUST the kept passes, discard the prefix passes.
   outs() << "Checking to see if '" << getPassesString(Suffix)
          << "' compiles correctly: ";
 
-  MISTD::string BitcodeResult;
+  std::string BitcodeResult;
   if (BD.runPasses(BD.getProgram(), Suffix, BitcodeResult, false/*delete*/,
                    true/*quiet*/)) {
     errs() << " Error running this sequence of passes"
@@ -175,16 +175,16 @@ ReduceMiscompilingPasses::doTest(MISTD::vector<MISTD::string> &Prefix,
 namespace {
   class ReduceMiscompilingFunctions : public ListReducer<Function*> {
     BugDriver &BD;
-    bool (*TestFn)(BugDriver &, Module *, Module *, MISTD::string &);
+    bool (*TestFn)(BugDriver &, Module *, Module *, std::string &);
   public:
     ReduceMiscompilingFunctions(BugDriver &bd,
                                 bool (*F)(BugDriver &, Module *, Module *,
-                                          MISTD::string &))
+                                          std::string &))
       : BD(bd), TestFn(F) {}
 
-    virtual TestResult doTest(MISTD::vector<Function*> &Prefix,
-                              MISTD::vector<Function*> &Suffix,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<Function*> &Prefix,
+                              std::vector<Function*> &Suffix,
+                              std::string &Error) {
       if (!Suffix.empty()) {
         bool Ret = TestFuncs(Suffix, Error);
         if (!Error.empty())
@@ -202,7 +202,7 @@ namespace {
       return NoFailure;
     }
 
-    bool TestFuncs(const MISTD::vector<Function*> &Prefix, MISTD::string &Error);
+    bool TestFuncs(const std::vector<Function*> &Prefix, std::string &Error);
   };
 }
 
@@ -214,10 +214,10 @@ namespace {
 /// modules before it returns.
 ///
 static Module *TestMergedProgram(const BugDriver &BD, Module *M1, Module *M2,
-                                 bool DeleteInputs, MISTD::string &Error,
+                                 bool DeleteInputs, std::string &Error,
                                  bool &Broken) {
   // Link the two portions of the program back to together.
-  MISTD::string ErrorMsg;
+  std::string ErrorMsg;
   if (!DeleteInputs) {
     M1 = CloneModule(M1);
     M2 = CloneModule(M2);
@@ -243,8 +243,8 @@ static Module *TestMergedProgram(const BugDriver &BD, Module *M1, Module *M2,
 /// under consideration for miscompilation vs. those that are not, and test
 /// accordingly. Each group of functions becomes a separate Module.
 ///
-bool ReduceMiscompilingFunctions::TestFuncs(const MISTD::vector<Function*> &Funcs,
-                                            MISTD::string &Error) {
+bool ReduceMiscompilingFunctions::TestFuncs(const std::vector<Function*> &Funcs,
+                                            std::string &Error) {
   // Test to see if the function is misoptimized if we ONLY run it on the
   // functions listed in Funcs.
   outs() << "Checking to see if the program is misoptimized when "
@@ -265,7 +265,7 @@ bool ReduceMiscompilingFunctions::TestFuncs(const MISTD::vector<Function*> &Func
   Module *Clone = CloneModule(BD.getProgram(), VMap);
   Module *Orig = BD.swapProgramIn(Clone);
 
-  MISTD::vector<Function*> FuncsOnClone;
+  std::vector<Function*> FuncsOnClone;
   for (unsigned i = 0, e = Funcs.size(); i != e; ++i) {
     Function *F = cast<Function>(VMap[Funcs[i]]);
     FuncsOnClone.push_back(F);
@@ -303,9 +303,9 @@ static void DisambiguateGlobalSymbols(Module *M) {
 ///
 static bool ExtractLoops(BugDriver &BD,
                          bool (*TestFn)(BugDriver &, Module *, Module *,
-                                        MISTD::string &),
-                         MISTD::vector<Function*> &MiscompiledFunctions,
-                         MISTD::string &Error) {
+                                        std::string &),
+                         std::vector<Function*> &MiscompiledFunctions,
+                         std::string &Error) {
   bool MadeChange = false;
   while (1) {
     if (BugpointIsInterrupted) return MadeChange;
@@ -389,14 +389,14 @@ static bool ExtractLoops(BugDriver &BD,
       // If the program is not still broken, then loop extraction did something
       // that masked the error.  Stop loop extraction now.
 
-      MISTD::vector<MISTD::pair<MISTD::string, FunctionType*> > MisCompFunctions;
+      std::vector<std::pair<std::string, FunctionType*> > MisCompFunctions;
       for (unsigned i = 0, e = MiscompiledFunctions.size(); i != e; ++i) {
         Function *F = MiscompiledFunctions[i];
-        MisCompFunctions.push_back(MISTD::make_pair(F->getName(),
+        MisCompFunctions.push_back(std::make_pair(F->getName(),
                                                   F->getFunctionType()));
       }
 
-      MISTD::string ErrorMsg;
+      std::string ErrorMsg;
       if (Linker::LinkModules(ToNotOptimize, ToOptimizeLoopExtracted, 
                               Linker::DestroySource, &ErrorMsg)){
         errs() << BD.getToolName() << ": Error linking modules together:"
@@ -419,18 +419,18 @@ static bool ExtractLoops(BugDriver &BD,
 
     outs() << "*** Loop extraction successful!\n";
 
-    MISTD::vector<MISTD::pair<MISTD::string, FunctionType*> > MisCompFunctions;
+    std::vector<std::pair<std::string, FunctionType*> > MisCompFunctions;
     for (Module::iterator I = ToOptimizeLoopExtracted->begin(),
            E = ToOptimizeLoopExtracted->end(); I != E; ++I)
       if (!I->isDeclaration())
-        MisCompFunctions.push_back(MISTD::make_pair(I->getName(),
+        MisCompFunctions.push_back(std::make_pair(I->getName(),
                                                   I->getFunctionType()));
 
     // Okay, great!  Now we know that we extracted a loop and that loop
     // extraction both didn't break the program, and didn't mask the problem.
     // Replace the current program with the loop extracted version, and try to
     // extract another loop.
-    MISTD::string ErrorMsg;
+    std::string ErrorMsg;
     if (Linker::LinkModules(ToNotOptimize, ToOptimizeLoopExtracted, 
                             Linker::DestroySource, &ErrorMsg)){
       errs() << BD.getToolName() << ": Error linking modules together:"
@@ -458,18 +458,18 @@ static bool ExtractLoops(BugDriver &BD,
 namespace {
   class ReduceMiscompiledBlocks : public ListReducer<BasicBlock*> {
     BugDriver &BD;
-    bool (*TestFn)(BugDriver &, Module *, Module *, MISTD::string &);
-    MISTD::vector<Function*> FunctionsBeingTested;
+    bool (*TestFn)(BugDriver &, Module *, Module *, std::string &);
+    std::vector<Function*> FunctionsBeingTested;
   public:
     ReduceMiscompiledBlocks(BugDriver &bd,
                             bool (*F)(BugDriver &, Module *, Module *,
-                                      MISTD::string &),
-                            const MISTD::vector<Function*> &Fns)
+                                      std::string &),
+                            const std::vector<Function*> &Fns)
       : BD(bd), TestFn(F), FunctionsBeingTested(Fns) {}
 
-    virtual TestResult doTest(MISTD::vector<BasicBlock*> &Prefix,
-                              MISTD::vector<BasicBlock*> &Suffix,
-                              MISTD::string &Error) {
+    virtual TestResult doTest(std::vector<BasicBlock*> &Prefix,
+                              std::vector<BasicBlock*> &Suffix,
+                              std::string &Error) {
       if (!Suffix.empty()) {
         bool Ret = TestFuncs(Suffix, Error);
         if (!Error.empty())
@@ -487,15 +487,15 @@ namespace {
       return NoFailure;
     }
 
-    bool TestFuncs(const MISTD::vector<BasicBlock*> &BBs, MISTD::string &Error);
+    bool TestFuncs(const std::vector<BasicBlock*> &BBs, std::string &Error);
   };
 }
 
 /// TestFuncs - Extract all blocks for the miscompiled functions except for the
 /// specified blocks.  If the problem still exists, return true.
 ///
-bool ReduceMiscompiledBlocks::TestFuncs(const MISTD::vector<BasicBlock*> &BBs,
-                                        MISTD::string &Error) {
+bool ReduceMiscompiledBlocks::TestFuncs(const std::vector<BasicBlock*> &BBs,
+                                        std::string &Error) {
   // Test to see if the function is misoptimized if we ONLY run it on the
   // functions listed in Funcs.
   outs() << "Checking to see if the program is misoptimized when all ";
@@ -513,8 +513,8 @@ bool ReduceMiscompiledBlocks::TestFuncs(const MISTD::vector<BasicBlock*> &BBs,
   ValueToValueMapTy VMap;
   Module *Clone = CloneModule(BD.getProgram(), VMap);
   Module *Orig = BD.swapProgramIn(Clone);
-  MISTD::vector<Function*> FuncsOnClone;
-  MISTD::vector<BasicBlock*> BBsOnClone;
+  std::vector<Function*> FuncsOnClone;
+  std::vector<BasicBlock*> BBsOnClone;
   for (unsigned i = 0, e = FunctionsBeingTested.size(); i != e; ++i) {
     Function *F = cast<Function>(VMap[FunctionsBeingTested[i]]);
     FuncsOnClone.push_back(F);
@@ -553,12 +553,12 @@ bool ReduceMiscompiledBlocks::TestFuncs(const MISTD::vector<BasicBlock*> &BBs,
 ///
 static bool ExtractBlocks(BugDriver &BD,
                           bool (*TestFn)(BugDriver &, Module *, Module *,
-                                         MISTD::string &),
-                          MISTD::vector<Function*> &MiscompiledFunctions,
-                          MISTD::string &Error) {
+                                         std::string &),
+                          std::vector<Function*> &MiscompiledFunctions,
+                          std::string &Error) {
   if (BugpointIsInterrupted) return false;
 
-  MISTD::vector<BasicBlock*> Blocks;
+  std::vector<BasicBlock*> Blocks;
   for (unsigned i = 0, e = MiscompiledFunctions.size(); i != e; ++i)
     for (Function::iterator I = MiscompiledFunctions[i]->begin(),
            E = MiscompiledFunctions[i]->end(); I != E; ++I)
@@ -571,7 +571,7 @@ static bool ExtractBlocks(BugDriver &BD,
 
   // Check to see if all blocks are extractible first.
   bool Ret = ReduceMiscompiledBlocks(BD, TestFn, MiscompiledFunctions)
-                                  .TestFuncs(MISTD::vector<BasicBlock*>(), Error);
+                                  .TestFuncs(std::vector<BasicBlock*>(), Error);
   if (!Error.empty())
     return false;
   if (Ret) {
@@ -603,14 +603,14 @@ static bool ExtractBlocks(BugDriver &BD,
   // together.
   delete ToExtract;
 
-  MISTD::vector<MISTD::pair<MISTD::string, FunctionType*> > MisCompFunctions;
+  std::vector<std::pair<std::string, FunctionType*> > MisCompFunctions;
   for (Module::iterator I = Extracted->begin(), E = Extracted->end();
        I != E; ++I)
     if (!I->isDeclaration())
-      MisCompFunctions.push_back(MISTD::make_pair(I->getName(),
+      MisCompFunctions.push_back(std::make_pair(I->getName(),
                                                 I->getFunctionType()));
 
-  MISTD::string ErrorMsg;
+  std::string ErrorMsg;
   if (Linker::LinkModules(ProgClone, Extracted, Linker::DestroySource, 
                           &ErrorMsg)) {
     errs() << BD.getToolName() << ": Error linking modules together:"
@@ -638,16 +638,16 @@ static bool ExtractBlocks(BugDriver &BD,
 /// DebugAMiscompilation - This is a generic driver to narrow down
 /// miscompilations, either in an optimization or a code generator.
 ///
-static MISTD::vector<Function*>
+static std::vector<Function*>
 DebugAMiscompilation(BugDriver &BD,
                      bool (*TestFn)(BugDriver &, Module *, Module *,
-                                    MISTD::string &),
-                     MISTD::string &Error) {
+                                    std::string &),
+                     std::string &Error) {
   // Okay, now that we have reduced the list of passes which are causing the
   // failure, see if we can pin down which functions are being
   // miscompiled... first build a list of all of the non-external functions in
   // the program.
-  MISTD::vector<Function*> MiscompiledFunctions;
+  std::vector<Function*> MiscompiledFunctions;
   Module *Prog = BD.getProgram();
   for (Module::iterator I = Prog->begin(), E = Prog->end(); I != E; ++I)
     if (!I->isDeclaration())
@@ -725,7 +725,7 @@ DebugAMiscompilation(BugDriver &BD,
 /// case, both module arguments are deleted.
 ///
 static bool TestOptimizer(BugDriver &BD, Module *Test, Module *Safe,
-                          MISTD::string &Error) {
+                          std::string &Error) {
   // Run the optimization passes on ToOptimize, producing a transformed version
   // of the functions being tested.
   outs() << "  Optimizing functions being tested: ";
@@ -750,7 +750,7 @@ static bool TestOptimizer(BugDriver &BD, Module *Test, Module *Safe,
 /// crashing, but the generated output is semantically different from the
 /// input.
 ///
-void BugDriver::debugMiscompilation(MISTD::string *Error) {
+void BugDriver::debugMiscompilation(std::string *Error) {
   // Make sure something was miscompiled...
   if (!BugpointIsInterrupted)
     if (!ReduceMiscompilingPasses(*this).reduceList(PassesToRun, *Error)) {
@@ -765,7 +765,7 @@ void BugDriver::debugMiscompilation(MISTD::string *Error) {
          << getPassesString(getPassesToRun()) << '\n';
   EmitProgressBitcode(Program, "passinput");
 
-  MISTD::vector<Function *> MiscompiledFunctions =
+  std::vector<Function *> MiscompiledFunctions =
     DebugAMiscompilation(*this, TestOptimizer, *Error);
   if (!Error->empty())
     return;
@@ -817,7 +817,7 @@ static void CleanupAndPrepareModules(BugDriver &BD, Module *&Test,
                                                 GlobalValue::ExternalLinkage,
                                                 oldMain->getName(), Test);
       // Set up and remember the argument list for the main function.
-      MISTD::vector<Value*> args;
+      std::vector<Value*> args;
       for (Function::arg_iterator
              I = newMain->arg_begin(), E = newMain->arg_end(),
              OI = oldMain->arg_begin(); I != E; ++I, ++OI) {
@@ -866,10 +866,10 @@ static void CleanupAndPrepareModules(BugDriver &BD, Module *&Test,
         // sbyte* so it matches the signature of the resolver function.
 
         // GetElementPtr *funcName, ulong 0, ulong 0
-        MISTD::vector<Constant*> GEPargs(2,
+        std::vector<Constant*> GEPargs(2,
                      Constant::getNullValue(Type::getInt32Ty(F->getContext())));
         Value *GEP = ConstantExpr::getGetElementPtr(funcName, GEPargs);
-        MISTD::vector<Value*> ResolverArgs;
+        std::vector<Value*> ResolverArgs;
         ResolverArgs.push_back(GEP);
 
         // Rewrite uses of F in global initializers, etc. to uses of a wrapper
@@ -923,7 +923,7 @@ static void CleanupAndPrepareModules(BugDriver &BD, Module *&Test,
           FuncPtr->addIncoming(CachedVal, EntryBB);
 
           // Save the argument list.
-          MISTD::vector<Value*> Args;
+          std::vector<Value*> Args;
           for (Function::arg_iterator i = FuncWrapper->arg_begin(),
                  e = FuncWrapper->arg_end(); i != e; ++i)
             Args.push_back(i);
@@ -958,7 +958,7 @@ static void CleanupAndPrepareModules(BugDriver &BD, Module *&Test,
 /// test.  If so, return true.  In any case, both module arguments are deleted.
 ///
 static bool TestCodeGenerator(BugDriver &BD, Module *Test, Module *Safe,
-                              MISTD::string &Error) {
+                              std::string &Error) {
   CleanupAndPrepareModules(BD, Test, Safe);
 
   SmallString<128> TestModuleBC;
@@ -998,7 +998,7 @@ static bool TestCodeGenerator(BugDriver &BD, Module *Test, Module *Safe,
 
   FileRemover SafeModuleBCRemover(SafeModuleBC.str(), !SaveTemps);
 
-  MISTD::string SharedObject = BD.compileSharedObject(SafeModuleBC.str(), Error);
+  std::string SharedObject = BD.compileSharedObject(SafeModuleBC.str(), Error);
   if (!Error.empty())
     return false;
   delete Safe;
@@ -1023,9 +1023,9 @@ static bool TestCodeGenerator(BugDriver &BD, Module *Test, Module *Safe,
 
 /// debugCodeGenerator - debug errors in LLC, LLI, or CBE.
 ///
-bool BugDriver::debugCodeGenerator(MISTD::string *Error) {
+bool BugDriver::debugCodeGenerator(std::string *Error) {
   if ((void*)SafeInterpreter == (void*)Interpreter) {
-    MISTD::string Result = executeProgramSafely(Program, "bugpoint.safe.out",
+    std::string Result = executeProgramSafely(Program, "bugpoint.safe.out",
                                               Error);
     if (Error->empty()) {
       outs() << "\n*** The \"safe\" i.e. 'known good' backend cannot match "
@@ -1042,7 +1042,7 @@ bool BugDriver::debugCodeGenerator(MISTD::string *Error) {
 
   DisambiguateGlobalSymbols(Program);
 
-  MISTD::vector<Function*> Funcs = DebugAMiscompilation(*this, TestCodeGenerator,
+  std::vector<Function*> Funcs = DebugAMiscompilation(*this, TestCodeGenerator,
                                                       *Error);
   if (!Error->empty())
     return true;
@@ -1088,7 +1088,7 @@ bool BugDriver::debugCodeGenerator(MISTD::string *Error) {
            << "'\nExiting.";
     exit(1);
   }
-  MISTD::string SharedObject = compileSharedObject(SafeModuleBC.str(), *Error);
+  std::string SharedObject = compileSharedObject(SafeModuleBC.str(), *Error);
   if (!Error->empty())
     return true;
   delete ToNotCodeGen;

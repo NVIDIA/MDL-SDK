@@ -49,7 +49,7 @@ namespace {
 class NVVMReflect : public ModulePass {
 private:
   StringMap<int> VarMap;
-  typedef DenseMap<MISTD::string, int>::iterator VarMapIter;
+  typedef DenseMap<std::string, int>::iterator VarMapIter;
 
 public:
   static char ID;
@@ -95,7 +95,7 @@ INITIALIZE_PASS(NVVMReflect, "nvvm-reflect",
                 "Replace occurrences of __nvvm_reflect() calls with 0/1", false,
                 false)
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ReflectList("nvvm-reflect-list", cl::value_desc("name=<int>"), cl::Hidden,
             cl::desc("A list of string=num assignments"),
             cl::ValueRequired);
@@ -115,7 +115,7 @@ void NVVMReflect::setVarMap() {
       SmallVector<StringRef, 2> NameValPair;
       NameValList[j].split(NameValPair, "=");
       assert(NameValPair.size() == 2 && "name=val expected");
-      MISTD::stringstream ValStream(NameValPair[1]);
+      std::stringstream ValStream(NameValPair[1]);
       int Val;
       ValStream >> Val;
       assert((!(ValStream.fail())) && "integer value expected");
@@ -131,7 +131,7 @@ bool NVVMReflect::handleFunction(Function *ReflectFunction) {
   assert(ReflectFunction->getReturnType()->isIntegerTy() &&
          "_reflect's return type should be integer");
 
-  MISTD::vector<Instruction *> ToRemove;
+  std::vector<Instruction *> ToRemove;
 
   // Go through the uses of ReflectFunction in this Function.
   // Each of them should a CallInst with a ConstantArray argument.
@@ -198,7 +198,7 @@ bool NVVMReflect::handleFunction(Function *ReflectFunction) {
     assert(cast<ConstantDataSequential>(Operand)->isCString() &&
            "Format of _reflect function not recognized");
 
-    MISTD::string ReflectArg =
+    std::string ReflectArg =
         cast<ConstantDataSequential>(Operand)->getAsString();
 
     ReflectArg = ReflectArg.substr(0, ReflectArg.size() - 1);

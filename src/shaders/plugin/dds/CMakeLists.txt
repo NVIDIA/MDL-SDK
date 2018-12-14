@@ -25,15 +25,12 @@ set(PROJECT_SOURCES
     ${PROJECT_HEADERS}
     )
 
-if(WINDOWS)
-    list(APPEND PROJECT_SOURCES "dds.rc")
-endif()
-
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE SHARED
     SOURCES ${PROJECT_SOURCES}
+    EMBED_RC "dds.rc"
 )
 
 # customize name

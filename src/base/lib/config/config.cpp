@@ -52,7 +52,7 @@ namespace MI {
 namespace CONFIG {
 
 using namespace LOG;
-using MISTD::string;
+using std::string;
 
 
 /// Module registration.
@@ -110,7 +110,7 @@ namespace {
 //--------------------------------------------------------------------------------------------------
 
 bool is_all_capital_letters_(
-    const MISTD::string& name,
+    const std::string& name,
     string::size_type begin,
     string::size_type end)
 {
@@ -127,7 +127,7 @@ bool is_all_capital_letters_(
 
 /// Functor for the \c parse() function.
 struct Stripper {
-    MISTD::string operator()(const MISTD::string& str) { return STRING::strip(str); }
+    std::string operator()(const std::string& str) { return STRING::strip(str); }
 };
 
 
@@ -140,10 +140,10 @@ struct Stripper {
 /// \note So far, only one value per variable is supported. Checked with an assertion.
 /// \param opt the line to parse
 /// \return a pair of <variable name, variable value> or an empty pair if there is a problem
-MISTD::pair<MISTD::string, STLEXT::Any> parse(
+std::pair<std::string, STLEXT::Any> parse(
     const char* opt)
 {
-    MISTD::pair<MISTD::string, STLEXT::Any> result;
+    std::pair<std::string, STLEXT::Any> result;
     if (!opt) {
         mod_log->error(M_CONFIG, Mod_log::C_MISC, 2, "Empty configuration option not allowed");
         return result;
@@ -151,7 +151,7 @@ MISTD::pair<MISTD::string, STLEXT::Any> parse(
 
     mod_log->debug(M_CONFIG, Mod_log::C_MISC, "Configure %s", opt);
 
-    MISTD::vector<MISTD::string> token_list;
+    std::vector<std::string> token_list;
     MI::STRING::split(opt, "=", token_list);
     if (token_list.size() != 2) {
         mod_log->error(M_CONFIG, Mod_log::C_MISC, 12,
@@ -159,7 +159,7 @@ MISTD::pair<MISTD::string, STLEXT::Any> parse(
         return result;
     }
     // strip white space
-    MISTD::transform(token_list.begin(), token_list.end(), token_list.begin(), Stripper());
+    std::transform(token_list.begin(), token_list.end(), token_list.begin(), Stripper());
 
     string key = token_list[0];
     // here we do remove all leading capital letters module identifiers
@@ -171,11 +171,11 @@ MISTD::pair<MISTD::string, STLEXT::Any> parse(
     const char* word = token_list[1].c_str();
 
     // comma-separated value list, no more whitespace allowed
-    MISTD::vector<MISTD::string> value;			// start of val in opt
+    std::vector<std::string> value;			// start of val in opt
     char	newtype = 0;				// detect type change
 
     int l;
-    MISTD::string str_value;
+    std::string str_value;
     while (true) {
         if (*word == '"') {				// string value:
             // this requires some caution: since the string starts with a \" it ends with a
@@ -183,7 +183,7 @@ MISTD::pair<MISTD::string, STLEXT::Any> parse(
             // eg ""string"" should be stripped to "string", """" to "", etc...
             newtype = 's';
             word++;
-            MISTD::string::size_type pos = token_list[1].find('\"', 1);
+            std::string::size_type pos = token_list[1].find('\"', 1);
             for (l=0; word[l] && word[l] != '"'; l++);	// find end of string
             if (word[l] != '"') {
                 mod_log->error(M_CONFIG, Mod_log::C_MISC, 14,
@@ -265,7 +265,7 @@ bool Config_module_impl::override(
         // comment
         return false;
 
-    MISTD::pair<MISTD::string, STLEXT::Any> record = parse(p);
+    std::pair<std::string, STLEXT::Any> record = parse(p);
     if (record.first.empty())
         return false;
 
@@ -285,7 +285,7 @@ string Config_module_impl::get_config_value_as_string(
     if (STLEXT::any_cast<string>(&v))
         return *STLEXT::any_cast<string>(&v);
     else if (STLEXT::any_cast<float>(&v))
-        return STRING::lexicographic_cast_s<MISTD::string>(*STLEXT::any_cast<float>(&v));
+        return STRING::lexicographic_cast_s<std::string>(*STLEXT::any_cast<float>(&v));
     else if (STLEXT::any_cast<bool>(&v)) {
         if (*STLEXT::any_cast<bool>(&v))
             return "true";
@@ -304,7 +304,7 @@ string Config_module_impl::get_config_value_as_string(
 bool Config_module_impl::update(
     const char* name,		// name of variable
     const char* help,		// meaning of var, for http/comments
-    MISTD::string& value)	// store pointers to string here
+    std::string& value)	// store pointers to string here
 {
     CONFIG::Config_registry& registry = get_configuration();
 
@@ -347,14 +347,14 @@ const Config_registry& Config_module_impl::get_configuration() const
 
 
 // Retrieve the product version.
-MISTD::string Config_module_impl::get_product_version() const
+std::string Config_module_impl::get_product_version() const
 {
-    MISTD::string result;
+    std::string result;
 
     const Config_registry& registry = get_configuration();
     STLEXT::Any any = registry.get_value("product_version");
     if (!any.empty()) {
-        MISTD::string* res = STLEXT::any_cast<MISTD::string>(&any);
+        std::string* res = STLEXT::any_cast<std::string>(&any);
         if (res)
             result = *res;
     }
@@ -363,14 +363,14 @@ MISTD::string Config_module_impl::get_product_version() const
 
 
 // Retrieve the product name.
-MISTD::string Config_module_impl::get_product_name() const
+std::string Config_module_impl::get_product_name() const
 {
-    MISTD::string result;
+    std::string result;
 
     const Config_registry& registry = get_configuration();
     STLEXT::Any any = registry.get_value("product_name");
     if (!any.empty()) {
-        MISTD::string* res = STLEXT::any_cast<MISTD::string>(&any);
+        std::string* res = STLEXT::any_cast<std::string>(&any);
         if (res)
             result = *res;
     }

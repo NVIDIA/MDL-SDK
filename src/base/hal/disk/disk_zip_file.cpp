@@ -50,7 +50,7 @@ Zip_file::~Zip_file()
 }
 
 
-bool Zip_file::open(const MISTD::string& path, IFile::Mode mode)
+bool Zip_file::open(const std::string& path, IFile::Mode mode)
 {
     if (mode != IFile::M_READ)
 	return false;
@@ -77,7 +77,7 @@ bool Zip_file::open(const char* path, IFile::Mode mode)
 {
     if (!path)
         return false;
-    return open(MISTD::string(path), mode);
+    return open(std::string(path), mode);
 }
 
 

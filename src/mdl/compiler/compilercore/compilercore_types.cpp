@@ -1984,7 +1984,7 @@ void Type_factory::serialize(Factory_serializer &serializer) const
         sizes.push_back(size);
     }
 
-    MISTD::sort(sizes.begin(), sizes.end(), Array_size_less());
+    std::sort(sizes.begin(), sizes.end(), Array_size_less());
 
     serializer.write_encoded_tag(array_sizes);
 

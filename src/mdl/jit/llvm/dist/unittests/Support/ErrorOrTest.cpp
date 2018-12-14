@@ -34,8 +34,8 @@ TEST(ErrorOr, SimpleValue) {
 }
 
 #if LLVM_HAS_CXX11_STDLIB
-ErrorOr<MISTD::unique_ptr<int> > t3() {
-  return MISTD::unique_ptr<int>(new int(3));
+ErrorOr<std::unique_ptr<int> > t3() {
+  return std::unique_ptr<int>(new int(3));
 }
 #endif
 
@@ -59,8 +59,8 @@ TEST(ErrorOr, Covariant) {
   b = ErrorOr<D*>(0);
 
 #if LLVM_HAS_CXX11_STDLIB
-  ErrorOr<MISTD::unique_ptr<B> > b1(ErrorOr<MISTD::unique_ptr<D> >(0));
-  b1 = ErrorOr<MISTD::unique_ptr<D> >(0);
+  ErrorOr<std::unique_ptr<B> > b1(ErrorOr<std::unique_ptr<D> >(0));
+  b1 = ErrorOr<std::unique_ptr<D> >(0);
 #endif
 }
 } // end anon namespace

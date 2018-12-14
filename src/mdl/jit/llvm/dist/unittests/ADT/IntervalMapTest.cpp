@@ -134,7 +134,7 @@ TEST(IntervalMapTest, SingleEntryMap) {
   // Erase last elem.
   I.erase();
   EXPECT_TRUE(map.empty());
-  EXPECT_EQ(0, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(0, std::distance(map.begin(), map.end()));
 }
 
 // Flat coalescing tests.
@@ -145,19 +145,19 @@ TEST(IntervalMapTest, RootCoalescing) {
 
   // Coalesce from the left.
   map.insert(90, 99, 1);
-  EXPECT_EQ(1, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(1, std::distance(map.begin(), map.end()));
   EXPECT_EQ(90u, map.start());
   EXPECT_EQ(150u, map.stop());
 
   // Coalesce from the right.
   map.insert(151, 200, 1);
-  EXPECT_EQ(1, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(1, std::distance(map.begin(), map.end()));
   EXPECT_EQ(90u, map.start());
   EXPECT_EQ(200u, map.stop());
 
   // Non-coalesce from the left.
   map.insert(60, 89, 2);
-  EXPECT_EQ(2, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(2, std::distance(map.begin(), map.end()));
   EXPECT_EQ(60u, map.start());
   EXPECT_EQ(200u, map.stop());
   EXPECT_EQ(2u, map.lookup(89));
@@ -176,7 +176,7 @@ TEST(IntervalMapTest, RootCoalescing) {
 
   // Non-coalesce from the right.
   map.insert(201, 210, 2);
-  EXPECT_EQ(3, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(3, std::distance(map.begin(), map.end()));
   EXPECT_EQ(60u, map.start());
   EXPECT_EQ(210u, map.stop());
   EXPECT_EQ(2u, map.lookup(201));
@@ -184,22 +184,22 @@ TEST(IntervalMapTest, RootCoalescing) {
 
   // Erase from the left.
   map.begin().erase();
-  EXPECT_EQ(2, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(2, std::distance(map.begin(), map.end()));
   EXPECT_EQ(90u, map.start());
   EXPECT_EQ(210u, map.stop());
 
   // Erase from the right.
   (--map.end()).erase();
-  EXPECT_EQ(1, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(1, std::distance(map.begin(), map.end()));
   EXPECT_EQ(90u, map.start());
   EXPECT_EQ(200u, map.stop());
 
   // Add non-coalescing, then trigger coalescing with setValue.
   map.insert(80, 89, 2);
   map.insert(201, 210, 2);
-  EXPECT_EQ(3, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(3, std::distance(map.begin(), map.end()));
   (++map.begin()).setValue(2);
-  EXPECT_EQ(1, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(1, std::distance(map.begin(), map.end()));
   I = map.begin();
   ASSERT_TRUE(I.valid());
   EXPECT_EQ(80u, I.start());
@@ -215,7 +215,7 @@ TEST(IntervalMapTest, RootMultiCoalescing) {
   map.insert(160, 170, 1);
   map.insert(100, 110, 1);
   map.insert(120, 130, 1);
-  EXPECT_EQ(4, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(4, std::distance(map.begin(), map.end()));
   EXPECT_EQ(100u, map.start());
   EXPECT_EQ(170u, map.stop());
 
@@ -560,7 +560,7 @@ TEST(IntervalMapTest, RandomCoalescing) {
   EXPECT_FALSE(map.empty());
   EXPECT_EQ(0u, map.start());
   EXPECT_EQ(40959u, map.stop());
-  EXPECT_EQ(1, MISTD::distance(map.begin(), map.end()));
+  EXPECT_EQ(1, std::distance(map.begin(), map.end()));
 
 }
 

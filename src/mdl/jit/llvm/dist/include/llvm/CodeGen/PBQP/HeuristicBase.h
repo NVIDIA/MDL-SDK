@@ -52,7 +52,7 @@ namespace PBQP {
   class HeuristicBase {
   private:
 
-    typedef MISTD::list<Graph::NodeId> OptimalList;
+    typedef std::list<Graph::NodeId> OptimalList;
 
     HeuristicSolverImpl<HImpl> &s;
     Graph &g;

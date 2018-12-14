@@ -73,10 +73,10 @@ protected:
 /// an assertion.
 template <typename T, unsigned BitNum, typename BitVectorTy = BitVector>
 class PackedVector : public PackedVectorBase<T, BitNum, BitVectorTy,
-                                            MISTD::numeric_limits<T>::is_signed> {
+                                            std::numeric_limits<T>::is_signed> {
   BitVectorTy Bits;
   typedef PackedVectorBase<T, BitNum, BitVectorTy,
-                           MISTD::numeric_limits<T>::is_signed> base;
+                           std::numeric_limits<T>::is_signed> base;
 
 public:
   class reference {

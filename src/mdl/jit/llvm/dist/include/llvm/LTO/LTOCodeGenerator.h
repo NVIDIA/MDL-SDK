@@ -65,7 +65,7 @@ struct LTOCodeGenerator {
   ~LTOCodeGenerator();
 
   // Merge given module, return true on success.
-  bool addModule(struct LTOModule*, MISTD::string &errMsg);
+  bool addModule(struct LTOModule*, std::string &errMsg);
 
   void setTargetOptions(llvm::TargetOptions options);
   void setDebugInfo(lto_debug_model);
@@ -89,7 +89,7 @@ struct LTOCodeGenerator {
 
   // Write the merged module to the file specified by the given path.
   // Return true on success.
-  bool writeMergedModules(const char *path, MISTD::string &errMsg);
+  bool writeMergedModules(const char *path, std::string &errMsg);
 
   // Compile the merged module into a *single* object file; the path to object
   // file is returned to the caller via argument "name". Return true on
@@ -103,7 +103,7 @@ struct LTOCodeGenerator {
                        bool disableOpt,
                        bool disableInline,
                        bool disableGVNLoadPRE,
-                       MISTD::string &errMsg);
+                       std::string &errMsg);
 
   // As with compile_to_file(), this function compiles the merged module into
   // single object file. Instead of returning the object-file-path to the caller
@@ -115,7 +115,7 @@ struct LTOCodeGenerator {
                       bool disableOpt,
                       bool disableInline,
                       bool disableGVNLoadPRE,
-                      MISTD::string &errMsg);
+                      std::string &errMsg);
 
 private:
   void initializeLTOPasses();
@@ -124,14 +124,14 @@ private:
                           bool disableOpt,
                           bool disableInline,
                           bool disableGVNLoadPRE,
-                          MISTD::string &errMsg);
+                          std::string &errMsg);
   void applyScopeRestrictions();
   void applyRestriction(llvm::GlobalValue &GV,
                         const llvm::ArrayRef<llvm::StringRef> &Libcalls,
-                        MISTD::vector<const char*> &MustPreserveList,
+                        std::vector<const char*> &MustPreserveList,
                         llvm::SmallPtrSet<llvm::GlobalValue*, 8> &AsmUsed,
                         llvm::Mangler &Mangler);
-  bool determineTarget(MISTD::string &errMsg);
+  bool determineTarget(std::string &errMsg);
 
   typedef llvm::StringMap<uint8_t> StringSet;
 
@@ -144,9 +144,9 @@ private:
   StringSet MustPreserveSymbols;
   StringSet AsmUndefinedRefs;
   llvm::MemoryBuffer *NativeObjectFile;
-  MISTD::vector<char *> CodegenOptions;
-  MISTD::string MCpu;
-  MISTD::string NativeObjectPath;
+  std::vector<char *> CodegenOptions;
+  std::string MCpu;
+  std::string NativeObjectPath;
   llvm::TargetOptions Options;
 };
 

@@ -62,7 +62,7 @@ class Attribute_spec
     /// Data retrieval
     //@{
     Uint get_id() const					{ return m_id; }
-    const MISTD::string& get_name() const		{ return m_name; }
+    const std::string& get_name() const		{ return m_name; }
     Type_code get_typecode() const			{ return m_type; }
     Uint get_array_size() const				{ return m_array_size; }
     STLEXT::Any get_default() const			{ return m_default; }
@@ -71,14 +71,14 @@ class Attribute_spec
     bool is_inheritable() const				{ return m_inheritable; }
     DB::Journal_type get_journal_flags() const		{ return m_journalflags; }
     // Support for deprecated names - for backward compatability.
-    const MISTD::string& get_deprecated_name() const	{ return m_deprecated_name; }
+    const std::string& get_deprecated_name() const	{ return m_deprecated_name; }
     //@}
 
   private:
     /// Constructor. Only the \c Attribute_registry can create such an object.
     Attribute_spec(
         Uint id,
-        const MISTD::string& name,
+        const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
         const STLEXT::Any& value=STLEXT::Any(),
@@ -86,8 +86,8 @@ class Attribute_spec
         DB::Journal_type journal_flags=DB::JOURNAL_NONE);
 
     Uint m_id;						///< id of attribute
-    MISTD::string m_name;				///< name of attribute
-    MISTD::string m_deprecated_name;			///< deprecated name
+    std::string m_name;				///< name of attribute
+    std::string m_deprecated_name;			///< deprecated name
     Type_code m_type;					///< required type of sttribute
     Uint m_array_size;					///< the arraysize
     STLEXT::Any m_default;				///< its default
@@ -121,7 +121,7 @@ class Attribute_registry
     /// Register an \c Attribute.
     /// \return the id of the \c Attribute or null_index else
     Uint add_entry(
-        const MISTD::string& name,
+        const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
         const STLEXT::Any& value=STLEXT::Any(),
@@ -130,13 +130,13 @@ class Attribute_registry
     /// Add an deprecated name for the given id. Currently only one deprecated name is allowed.
     /// \return success
     bool add_deprecated_name(
-        const MISTD::string& dep_name,
+        const std::string& dep_name,
         Uint id);
 
     /// Retrieve the \c Attribute_spec of the given \p name.
     /// \return found Attribute_spec or 0 else
     const Attribute_spec* get_attribute(
-        const MISTD::string& name) const;
+        const std::string& name) const;
     /// Retrieve the \c Attribute_spec of the given \p id.
     /// \return found Attribute_spec or 0 else
     const Attribute_spec* get_attribute(
@@ -145,23 +145,23 @@ class Attribute_registry
     /// Retrieve the id for a given name.
     /// \return the id registered under the given \p name or null_index else
     Uint get_id(
-        const MISTD::string& name);
+        const std::string& name);
 
   private:
-    MISTD::set<Attribute_spec> m_registry;		///< the actual collection
-    MISTD::map<MISTD::string, Uint> m_name_mapping;	///< mapping name to id
+    std::set<Attribute_spec> m_registry;		///< the actual collection
+    std::map<std::string, Uint> m_name_mapping;	///< mapping name to id
     STLEXT::Atomic_counter m_counter;
 
     /// Find a new unique id for a new registry entry.
     /// \return the id of the \c Attribute or null_index else
     Uint get_new_id(
-        const MISTD::string& name);
+        const std::string& name);
 
     /// Register an \c Attribute.
     /// \return the id of the \c Attribute or null_index else
     Uint add_entry(
         Uint id,
-        const MISTD::string& name,
+        const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
         const STLEXT::Any& value=STLEXT::Any(),
@@ -173,7 +173,7 @@ class Attribute_registry
     /// \sa Attribute::id_create
     /// \return success
     bool add_name_mapping(
-        const MISTD::string& name,
+        const std::string& name,
         Uint id);
 
     friend class Attr_module_impl;

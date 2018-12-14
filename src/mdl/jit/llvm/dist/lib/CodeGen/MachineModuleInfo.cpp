@@ -54,7 +54,7 @@ class MMIAddrLabelMap {
   struct AddrLabelSymEntry {
     /// Symbols - The symbols for the label.  This is a pointer union that is
     /// either one symbol (the common case) or a list of symbols.
-    PointerUnion<MCSymbol *, MISTD::vector<MCSymbol*>*> Symbols;
+    PointerUnion<MCSymbol *, std::vector<MCSymbol*>*> Symbols;
 
     Function *Fn;   // The containing function of the BasicBlock.
     unsigned Index; // The index in BBCallbacks for the BasicBlock.
@@ -64,13 +64,13 @@ class MMIAddrLabelMap {
 
   /// BBCallbacks - Callbacks for the BasicBlock's that we have entries for.  We
   /// use this so we get notified if a block is deleted or RAUWd.
-  MISTD::vector<MMIAddrLabelMapCallbackPtr> BBCallbacks;
+  std::vector<MMIAddrLabelMapCallbackPtr> BBCallbacks;
 
   /// DeletedAddrLabelsNeedingEmission - This is a per-function list of symbols
   /// whose corresponding BasicBlock got deleted.  These symbols need to be
   /// emitted at some point in the file, so AsmPrinter emits them after the
   /// function body.
-  DenseMap<AssertingVH<Function>, MISTD::vector<MCSymbol*> >
+  DenseMap<AssertingVH<Function>, std::vector<MCSymbol*> >
     DeletedAddrLabelsNeedingEmission;
 public:
 
@@ -82,15 +82,15 @@ public:
     // Deallocate any of the 'list of symbols' case.
     for (DenseMap<AssertingVH<BasicBlock>, AddrLabelSymEntry>::iterator
          I = AddrLabelSymbols.begin(), E = AddrLabelSymbols.end(); I != E; ++I)
-      if (I->second.Symbols.is<MISTD::vector<MCSymbol*>*>())
-        delete I->second.Symbols.get<MISTD::vector<MCSymbol*>*>();
+      if (I->second.Symbols.is<std::vector<MCSymbol*>*>())
+        delete I->second.Symbols.get<std::vector<MCSymbol*>*>();
   }
 
   MCSymbol *getAddrLabelSymbol(BasicBlock *BB);
-  MISTD::vector<MCSymbol*> getAddrLabelSymbolToEmit(BasicBlock *BB);
+  std::vector<MCSymbol*> getAddrLabelSymbolToEmit(BasicBlock *BB);
 
   void takeDeletedSymbolsForFunction(Function *F,
-                                     MISTD::vector<MCSymbol*> &Result);
+                                     std::vector<MCSymbol*> &Result);
 
   void UpdateForDeletedBlock(BasicBlock *BB);
   void UpdateForRAUWBlock(BasicBlock *Old, BasicBlock *New);
@@ -107,7 +107,7 @@ MCSymbol *MMIAddrLabelMap::getAddrLabelSymbol(BasicBlock *BB) {
     assert(BB->getParent() == Entry.Fn && "Parent changed");
     if (Entry.Symbols.is<MCSymbol*>())
       return Entry.Symbols.get<MCSymbol*>();
-    return (*Entry.Symbols.get<MISTD::vector<MCSymbol*>*>())[0];
+    return (*Entry.Symbols.get<std::vector<MCSymbol*>*>())[0];
   }
 
   // Otherwise, this is a new entry, create a new symbol for it and add an
@@ -121,13 +121,13 @@ MCSymbol *MMIAddrLabelMap::getAddrLabelSymbol(BasicBlock *BB) {
   return Result;
 }
 
-MISTD::vector<MCSymbol*>
+std::vector<MCSymbol*>
 MMIAddrLabelMap::getAddrLabelSymbolToEmit(BasicBlock *BB) {
   assert(BB->hasAddressTaken() &&
          "Shouldn't get label for block without address taken");
   AddrLabelSymEntry &Entry = AddrLabelSymbols[BB];
 
-  MISTD::vector<MCSymbol*> Result;
+  std::vector<MCSymbol*> Result;
 
   // If we already had an entry for this block, just return it.
   if (Entry.Symbols.isNull())
@@ -135,7 +135,7 @@ MMIAddrLabelMap::getAddrLabelSymbolToEmit(BasicBlock *BB) {
   else if (MCSymbol *Sym = Entry.Symbols.dyn_cast<MCSymbol*>())
     Result.push_back(Sym);
   else
-    Result = *Entry.Symbols.get<MISTD::vector<MCSymbol*>*>();
+    Result = *Entry.Symbols.get<std::vector<MCSymbol*>*>();
   return Result;
 }
 
@@ -143,15 +143,15 @@ MMIAddrLabelMap::getAddrLabelSymbolToEmit(BasicBlock *BB) {
 /// takeDeletedSymbolsForFunction - If we have any deleted symbols for F, return
 /// them.
 void MMIAddrLabelMap::
-takeDeletedSymbolsForFunction(Function *F, MISTD::vector<MCSymbol*> &Result) {
-  DenseMap<AssertingVH<Function>, MISTD::vector<MCSymbol*> >::iterator I =
+takeDeletedSymbolsForFunction(Function *F, std::vector<MCSymbol*> &Result) {
+  DenseMap<AssertingVH<Function>, std::vector<MCSymbol*> >::iterator I =
     DeletedAddrLabelsNeedingEmission.find(F);
 
   // If there are no entries for the function, just return.
   if (I == DeletedAddrLabelsNeedingEmission.end()) return;
 
   // Otherwise, take the list.
-  MISTD::swap(Result, I->second);
+  std::swap(Result, I->second);
   DeletedAddrLabelsNeedingEmission.erase(I);
 }
 
@@ -179,7 +179,7 @@ void MMIAddrLabelMap::UpdateForDeletedBlock(BasicBlock *BB) {
     // parent may already be removed, we have to get the function from 'Entry'.
     DeletedAddrLabelsNeedingEmission[Entry.Fn].push_back(Sym);
   } else {
-    MISTD::vector<MCSymbol*> *Syms = Entry.Symbols.get<MISTD::vector<MCSymbol*>*>();
+    std::vector<MCSymbol*> *Syms = Entry.Symbols.get<std::vector<MCSymbol*>*>();
 
     for (unsigned i = 0, e = Syms->size(); i != e; ++i) {
       MCSymbol *Sym = (*Syms)[i];
@@ -218,13 +218,13 @@ void MMIAddrLabelMap::UpdateForRAUWBlock(BasicBlock *Old, BasicBlock *New) {
   // Otherwise, we need to add the old symbol to the new block's set.  If it is
   // just a single entry, upgrade it to a symbol list.
   if (MCSymbol *PrevSym = NewEntry.Symbols.dyn_cast<MCSymbol*>()) {
-    MISTD::vector<MCSymbol*> *SymList = new MISTD::vector<MCSymbol*>();
+    std::vector<MCSymbol*> *SymList = new std::vector<MCSymbol*>();
     SymList->push_back(PrevSym);
     NewEntry.Symbols = SymList;
   }
 
-  MISTD::vector<MCSymbol*> *SymList =
-    NewEntry.Symbols.get<MISTD::vector<MCSymbol*>*>();
+  std::vector<MCSymbol*> *SymList =
+    NewEntry.Symbols.get<std::vector<MCSymbol*>*>();
 
   // If the old entry was a single symbol, add it.
   if (MCSymbol *Sym = OldEntry.Symbols.dyn_cast<MCSymbol*>()) {
@@ -233,7 +233,7 @@ void MMIAddrLabelMap::UpdateForRAUWBlock(BasicBlock *Old, BasicBlock *New) {
   }
 
   // Otherwise, concatenate the list.
-  MISTD::vector<MCSymbol*> *Syms =OldEntry.Symbols.get<MISTD::vector<MCSymbol*>*>();
+  std::vector<MCSymbol*> *Syms =OldEntry.Symbols.get<std::vector<MCSymbol*>*>();
   SymList->insert(SymList->end(), Syms->begin(), Syms->end());
   delete Syms;
 }
@@ -349,7 +349,7 @@ MCSymbol *MachineModuleInfo::getAddrLabelSymbol(const BasicBlock *BB) {
 /// getAddrLabelSymbolToEmit - Return the symbol to be used for the specified
 /// basic block when its address is taken.  If other blocks were RAUW'd to
 /// this one, we may have to emit them as well, return the whole set.
-MISTD::vector<MCSymbol*> MachineModuleInfo::
+std::vector<MCSymbol*> MachineModuleInfo::
 getAddrLabelSymbolToEmit(const BasicBlock *BB) {
   // Lazily create AddrLabelSymbols.
   if (AddrLabelSymbols == 0)
@@ -364,7 +364,7 @@ getAddrLabelSymbolToEmit(const BasicBlock *BB) {
 /// reference to a symbol that has no definition.
 void MachineModuleInfo::
 takeDeletedSymbolsForFunction(const Function *F,
-                              MISTD::vector<MCSymbol*> &Result) {
+                              std::vector<MCSymbol*> &Result) {
   // If no blocks have had their addresses taken, we're done.
   if (AddrLabelSymbols == 0) return;
   return AddrLabelSymbols->
@@ -441,7 +441,7 @@ void MachineModuleInfo::
 addFilterTypeInfo(MachineBasicBlock *LandingPad,
                   ArrayRef<const GlobalVariable *> TyInfo) {
   LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
-  MISTD::vector<unsigned> IdsInFilter(TyInfo.size());
+  std::vector<unsigned> IdsInFilter(TyInfo.size());
   for (unsigned I = 0, E = TyInfo.size(); I != E; ++I)
     IdsInFilter[I] = getTypeIDFor(TyInfo[I]);
   LP.TypeIds.push_back(getFilterIDFor(IdsInFilter));
@@ -518,11 +518,11 @@ unsigned MachineModuleInfo::getTypeIDFor(const GlobalVariable *TI) {
 
 /// getFilterIDFor - Return the filter id for the specified typeinfos.  This is
 /// function wide.
-int MachineModuleInfo::getFilterIDFor(MISTD::vector<unsigned> &TyIds) {
+int MachineModuleInfo::getFilterIDFor(std::vector<unsigned> &TyIds) {
   // If the new filter coincides with the tail of an existing filter, then
   // re-use the existing filter.  Folding filters more than this requires
   // re-ordering filters and/or their elements - probably not worth it.
-  for (MISTD::vector<unsigned>::iterator I = FilterEnds.begin(),
+  for (std::vector<unsigned>::iterator I = FilterEnds.begin(),
        E = FilterEnds.end(); I != E; ++I) {
     unsigned i = *I, j = TyIds.size();
 

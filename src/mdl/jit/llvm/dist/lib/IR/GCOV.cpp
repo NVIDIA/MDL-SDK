@@ -303,7 +303,7 @@ void FileInfo::print(raw_fd_ostream &OS, StringRef gcnoFile,
       } else {
         OS << "        -:";
       }
-      MISTD::pair<StringRef, StringRef> P = AllLines.split('\n');
+      std::pair<StringRef, StringRef> P = AllLines.split('\n');
       if (AllLines != P.first)
         OS << format("%5u:", i+1) << P.first;
       OS << "\n";

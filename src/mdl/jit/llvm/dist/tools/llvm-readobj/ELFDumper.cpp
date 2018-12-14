@@ -576,7 +576,7 @@ void ELFDumper<ELFT>::printRelocation(const Elf_Shdr *Sec,
   SmallString<32> RelocName;
   Obj->getRelocationTypeName(Rel.getType(Obj->isMips64EL()), RelocName);
   StringRef SymbolName;
-  MISTD::pair<const Elf_Shdr *, const Elf_Sym *> Sym =
+  std::pair<const Elf_Shdr *, const Elf_Sym *> Sym =
       Obj->getRelocationSymbol(Sec, &Rel);
   if (Sym.first)
     SymbolName = errorOrDefault(Obj->getSymbolName(Sym.first, Sym.second));
@@ -623,7 +623,7 @@ void ELFDumper<ELFT>::printSymbol(typename ELFO::Elf_Sym_Iter Symbol) {
   StringRef SymbolName = errorOrDefault(Obj->getSymbolName(Symbol));
   const Elf_Shdr *Sec = Obj->getSection(&*Symbol);
   StringRef SectionName = Sec ? errorOrDefault(Obj->getSectionName(Sec)) : "";
-  MISTD::string FullSymbolName(SymbolName);
+  std::string FullSymbolName(SymbolName);
   if (Symbol.isDynamic()) {
     bool IsDefault;
     ErrorOr<StringRef> Version = Obj->getSymbolVersion(0, &*Symbol, IsDefault);
@@ -778,7 +778,7 @@ void ELFDumper<ELFT>::printDynamicTable() {
   if (Start == End)
     return;
 
-  ptrdiff_t Total = MISTD::distance(Start, End);
+  ptrdiff_t Total = std::distance(Start, End);
   raw_ostream &OS = W.getOStream();
   W.startLine() << "DynamicSection [ (" << Total << " entries)\n";
 
@@ -803,7 +803,7 @@ template<class ELFT>
 void ELFDumper<ELFT>::printNeededLibraries() {
   ListScope D(W, "NeededLibraries");
 
-  typedef MISTD::vector<StringRef> LibsTy;
+  typedef std::vector<StringRef> LibsTy;
   LibsTy Libs;
 
   for (typename ELFO::Elf_Dyn_Iter DynI = Obj->begin_dynamic_table(),
@@ -812,7 +812,7 @@ void ELFDumper<ELFT>::printNeededLibraries() {
     if (DynI->d_tag == ELF::DT_NEEDED)
       Libs.push_back(Obj->getDynamicString(DynI->d_un.d_val));
 
-  MISTD::stable_sort(Libs.begin(), Libs.end());
+  std::stable_sort(Libs.begin(), Libs.end());
 
   for (LibsTy::const_iterator I = Libs.begin(), E = Libs.end(); I != E; ++I) {
     outs() << "  " << *I << "\n";

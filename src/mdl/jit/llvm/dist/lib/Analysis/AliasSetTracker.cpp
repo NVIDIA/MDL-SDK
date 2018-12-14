@@ -58,7 +58,7 @@ void AliasSet::mergeSetIn(AliasSet &AS, AliasSetTracker &AST) {
 
   if (UnknownInsts.empty()) {            // Merge call sites...
     if (!AS.UnknownInsts.empty())
-      MISTD::swap(UnknownInsts, AS.UnknownInsts);
+      std::swap(UnknownInsts, AS.UnknownInsts);
   } else if (!AS.UnknownInsts.empty()) {
     UnknownInsts.insert(UnknownInsts.end(), AS.UnknownInsts.begin(), AS.UnknownInsts.end());
     AS.UnknownInsts.clear();

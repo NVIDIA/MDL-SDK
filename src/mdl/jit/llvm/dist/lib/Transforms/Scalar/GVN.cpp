@@ -171,17 +171,17 @@ Expression ValueTable::create_expression(Instruction *I) {
     // Ensure that commutative instructions that only differ by a permutation
     // of their operands get the same value number by sorting the operand value
     // numbers.  Since all commutative instructions have two operands it is more
-    // efficient to sort by hand rather than using, say, MISTD::sort.
+    // efficient to sort by hand rather than using, say, std::sort.
     assert(I->getNumOperands() == 2 && "Unsupported commutative instruction!");
     if (e.varargs[0] > e.varargs[1])
-      MISTD::swap(e.varargs[0], e.varargs[1]);
+      std::swap(e.varargs[0], e.varargs[1]);
   }
 
   if (CmpInst *C = dyn_cast<CmpInst>(I)) {
     // Sort the operand value numbers so x<y and y>x get the same value number.
     CmpInst::Predicate Predicate = C->getPredicate();
     if (e.varargs[0] > e.varargs[1]) {
-      MISTD::swap(e.varargs[0], e.varargs[1]);
+      std::swap(e.varargs[0], e.varargs[1]);
       Predicate = CmpInst::getSwappedPredicate(Predicate);
     }
     e.opcode = (C->getOpcode() << 8) | Predicate;
@@ -206,7 +206,7 @@ Expression ValueTable::create_cmp_expression(unsigned Opcode,
 
   // Sort the operand value numbers so x<y and y>x get the same value number.
   if (e.varargs[0] > e.varargs[1]) {
-    MISTD::swap(e.varargs[0], e.varargs[1]);
+    std::swap(e.varargs[0], e.varargs[1]);
     Predicate = CmpInst::getSwappedPredicate(Predicate);
   }
   e.opcode = (Opcode << 8) | Predicate;
@@ -271,7 +271,7 @@ Expression ValueTable::create_extractvalue_expression(ExtractValueInst *EI) {
 
 /// add - Insert a value into the table with a specified value number.
 void ValueTable::add(Value *V, uint32_t num) {
-  valueNumbering.insert(MISTD::make_pair(V, num));
+  valueNumbering.insert(std::make_pair(V, num));
 }
 
 uint32_t ValueTable::lookup_or_add_call(CallInst *C) {
@@ -674,7 +674,7 @@ namespace {
     }
 
     // List of critical edges to be split between iterations.
-    SmallVector<MISTD::pair<TerminatorInst*, unsigned>, 4> toSplit;
+    SmallVector<std::pair<TerminatorInst*, unsigned>, 4> toSplit;
 
     // This transformation requires dominator postdominator info
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -762,8 +762,8 @@ static bool IsValueFullyAvailableInBlock(BasicBlock *BB,
 
   // Optimistically assume that the block is fully available and check to see
   // if we already know about this block in one lookup.
-  MISTD::pair<DenseMap<BasicBlock*, char>::iterator, char> IV =
-    FullyAvailableBlocks.insert(MISTD::make_pair(BB, 2));
+  std::pair<DenseMap<BasicBlock*, char>::iterator, char> IV =
+    FullyAvailableBlocks.insert(std::make_pair(BB, 2));
 
   // If the entry already existed for this block, return the precomputed value.
   if (!IV.second) {
@@ -1770,7 +1770,7 @@ static void patchReplacementInstruction(Instruction *I, Value *Repl) {
       ReplOp->setHasNoUnsignedWrap(false);
   }
   if (Instruction *ReplInst = dyn_cast<Instruction>(Repl)) {
-    SmallVector<MISTD::pair<unsigned, MDNode*>, 4> Metadata;
+    SmallVector<std::pair<unsigned, MDNode*>, 4> Metadata;
     ReplInst->getAllMetadataOtherThanDebugLoc(Metadata);
     for (int i = 0, n = Metadata.size(); i < n; ++i) {
       unsigned Kind = Metadata[i].first;
@@ -2062,15 +2062,15 @@ static bool isOnlyReachableViaThisEdge(const BasicBlockEdge &E,
 /// 'RHS' everywhere in the scope.  Returns whether a change was made.
 bool GVN::propagateEquality(Value *LHS, Value *RHS,
                             const BasicBlockEdge &Root) {
-  SmallVector<MISTD::pair<Value*, Value*>, 4> Worklist;
-  Worklist.push_back(MISTD::make_pair(LHS, RHS));
+  SmallVector<std::pair<Value*, Value*>, 4> Worklist;
+  Worklist.push_back(std::make_pair(LHS, RHS));
   bool Changed = false;
   // For speed, compute a conservative fast approximation to
   // DT->dominates(Root, Root.getEnd());
   bool RootDominatesEnd = isOnlyReachableViaThisEdge(Root, DT);
 
   while (!Worklist.empty()) {
-    MISTD::pair<Value*, Value*> Item = Worklist.pop_back_val();
+    std::pair<Value*, Value*> Item = Worklist.pop_back_val();
     LHS = Item.first; RHS = Item.second;
 
     if (LHS == RHS) continue;
@@ -2081,7 +2081,7 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
 
     // Prefer a constant on the right-hand side, or an Argument if no constants.
     if (isa<Constant>(LHS) || (isa<Argument>(LHS) && !isa<Constant>(RHS)))
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
     assert((isa<Argument>(LHS) || isa<Instruction>(LHS)) && "Unexpected value!");
 
     // If there is no obvious reason to prefer the left-hand side over the right-
@@ -2095,7 +2095,7 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
       // a proxy for age.
       uint32_t RVN = VN.lookup_or_add(RHS);
       if (LVN < RVN) {
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
         LVN = RVN;
       }
     }
@@ -2141,8 +2141,8 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
     Value *A, *B;
     if ((isKnownTrue && match(LHS, m_And(m_Value(A), m_Value(B)))) ||
         (isKnownFalse && match(LHS, m_Or(m_Value(A), m_Value(B))))) {
-      Worklist.push_back(MISTD::make_pair(A, RHS));
-      Worklist.push_back(MISTD::make_pair(B, RHS));
+      Worklist.push_back(std::make_pair(A, RHS));
+      Worklist.push_back(std::make_pair(B, RHS));
       continue;
     }
 
@@ -2156,7 +2156,7 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
       // A with B everywhere in the scope.
       if ((isKnownTrue && Cmp->getPredicate() == CmpInst::ICMP_EQ) ||
           (isKnownFalse && Cmp->getPredicate() == CmpInst::ICMP_NE))
-        Worklist.push_back(MISTD::make_pair(Op0, Op1));
+        Worklist.push_back(std::make_pair(Op0, Op1));
 
       // If "A >= B" is known true, replace "A < B" with false everywhere.
       CmpInst::Predicate NotPred = Cmp->getInversePredicate();
@@ -2418,7 +2418,7 @@ bool GVN::processBlock(BasicBlock *BB) {
 /// control flow patterns and attempts to perform simple PRE at the join point.
 bool GVN::performPRE(Function &F) {
   bool Changed = false;
-  SmallVector<MISTD::pair<Value*, BasicBlock*>, 8> predMap;
+  SmallVector<std::pair<Value*, BasicBlock*>, 8> predMap;
   for (df_iterator<BasicBlock*> DI = df_begin(&F.getEntryBlock()),
        DE = df_end(&F.getEntryBlock()); DI != DE; ++DI) {
     BasicBlock *CurrentBlock = *DI;
@@ -2481,7 +2481,7 @@ bool GVN::performPRE(Function &F) {
 
         Value* predV = findLeader(P, ValNo);
         if (predV == 0) {
-          predMap.push_back(MISTD::make_pair(static_cast<Value *>(0), P));
+          predMap.push_back(std::make_pair(static_cast<Value *>(0), P));
           PREPred = P;
           ++NumWithout;
         } else if (predV == CurInst) {
@@ -2489,7 +2489,7 @@ bool GVN::performPRE(Function &F) {
           NumWithout = 2;
           break;
         } else {
-          predMap.push_back(MISTD::make_pair(predV, P));
+          predMap.push_back(std::make_pair(predV, P));
           ++NumWith;
         }
       }
@@ -2508,7 +2508,7 @@ bool GVN::performPRE(Function &F) {
       // on the function.
       unsigned SuccNum = GetSuccessorNumber(PREPred, CurrentBlock);
       if (isCriticalEdge(PREPred->getTerminator(), SuccNum)) {
-        toSplit.push_back(MISTD::make_pair(PREPred->getTerminator(), SuccNum));
+        toSplit.push_back(std::make_pair(PREPred->getTerminator(), SuccNum));
         continue;
       }
 
@@ -2610,7 +2610,7 @@ bool GVN::splitCriticalEdges() {
   if (toSplit.empty())
     return false;
   do {
-    MISTD::pair<TerminatorInst*, unsigned> Edge = toSplit.pop_back_val();
+    std::pair<TerminatorInst*, unsigned> Edge = toSplit.pop_back_val();
     SplitCriticalEdge(Edge.first, Edge.second, this);
   } while (!toSplit.empty());
   if (MD) MD->invalidateCachedPredecessors();
@@ -2633,13 +2633,13 @@ bool GVN::iterateOnFunction(Function &F) {
   // Save the blocks this function have before transformation begins. GVN may
   // split critical edge, and hence may invalidate the RPO/DT iterator.
   //
-  MISTD::vector<BasicBlock *> BBVect;
+  std::vector<BasicBlock *> BBVect;
   BBVect.reserve(256);
   for (df_iterator<DomTreeNode*> DI = df_begin(DT->getRootNode()),
        DE = df_end(DT->getRootNode()); DI != DE; ++DI)
     BBVect.push_back(DI->getBlock());
 
-  for (MISTD::vector<BasicBlock *>::iterator I = BBVect.begin(), E = BBVect.end();
+  for (std::vector<BasicBlock *>::iterator I = BBVect.begin(), E = BBVect.end();
        I != E; I++)
     Changed |= processBlock(*I);
 #endif

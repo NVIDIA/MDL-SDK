@@ -662,7 +662,7 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     }
 
     // Necessary for dllexport support
-    MISTD::vector<const MCSymbol*> DLLExportedFns, DLLExportedGlobals;
+    std::vector<const MCSymbol*> DLLExportedFns, DLLExportedGlobals;
 
     const TargetLoweringObjectFileCOFF &TLOFCOFF =
       static_cast<const TargetLoweringObjectFileCOFF&>(getObjFileLowering());

@@ -34,8 +34,8 @@ namespace llvm { extern raw_ostream *CreateInfoOutputFile(); }
 // would get destroyed before the Statistic, causing havoc to ensue.  We "fix"
 // this by creating the string the first time it is needed and never destroying
 // it.
-static ManagedStatic<MISTD::string> LibSupportInfoOutputFilename;
-static MISTD::string &getLibSupportInfoOutputFilename() {
+static ManagedStatic<std::string> LibSupportInfoOutputFilename;
+static std::string &getLibSupportInfoOutputFilename() {
   return *LibSupportInfoOutputFilename;
 }
 
@@ -47,7 +47,7 @@ namespace {
                                       "tracking (this may be slow)"),
              cl::Hidden);
 
-  static cl::opt<MISTD::string, true>
+  static cl::opt<std::string, true>
   InfoOutputFilename("info-output-file", cl::value_desc("filename"),
                      cl::desc("File to append -stats and -timer output to"),
                    cl::Hidden, cl::location(getLibSupportInfoOutputFilename()));
@@ -55,7 +55,7 @@ namespace {
 
 // CreateInfoOutputFile - Return a file stream to print our output on.
 raw_ostream *llvm::CreateInfoOutputFile() {
-  const MISTD::string &OutputFilename = getLibSupportInfoOutputFilename();
+  const std::string &OutputFilename = getLibSupportInfoOutputFilename();
   if (OutputFilename.empty())
     return new raw_fd_ostream(2, false); // stderr.
   if (OutputFilename == "-")
@@ -65,7 +65,7 @@ raw_ostream *llvm::CreateInfoOutputFile() {
   // each time -stats or -time-passes wants to print output to it. To
   // compensate for this, the test-suite Makefiles have code to delete the
   // info output file before running commands which write to it.
-  MISTD::string Error;
+  std::string Error;
   raw_ostream *Result =
       new raw_fd_ostream(OutputFilename.c_str(), Error, sys::fs::F_Append);
   if (Error.empty())
@@ -144,7 +144,7 @@ TimeRecord TimeRecord::getCurrentTime(bool Start) {
   return Result;
 }
 
-static ManagedStatic<MISTD::vector<Timer*> > ActiveTimers;
+static ManagedStatic<std::vector<Timer*> > ActiveTimers;
 
 void Timer::startTimer() {
   Started = true;
@@ -158,8 +158,8 @@ void Timer::stopTimer() {
   if (ActiveTimers->back() == this) {
     ActiveTimers->pop_back();
   } else {
-    MISTD::vector<Timer*>::iterator I =
-      MISTD::find(ActiveTimers->begin(), ActiveTimers->end(), this);
+    std::vector<Timer*>::iterator I =
+      std::find(ActiveTimers->begin(), ActiveTimers->end(), this);
     assert(I != ActiveTimers->end() && "stop but no startTimer?");
     ActiveTimers->erase(I);
   }
@@ -197,10 +197,10 @@ namespace {
 typedef StringMap<Timer> Name2TimerMap;
 
 class Name2PairMap {
-  StringMap<MISTD::pair<TimerGroup*, Name2TimerMap> > Map;
+  StringMap<std::pair<TimerGroup*, Name2TimerMap> > Map;
 public:
   ~Name2PairMap() {
-    for (StringMap<MISTD::pair<TimerGroup*, Name2TimerMap> >::iterator
+    for (StringMap<std::pair<TimerGroup*, Name2TimerMap> >::iterator
          I = Map.begin(), E = Map.end(); I != E; ++I)
       delete I->second.first;
   }
@@ -208,7 +208,7 @@ public:
   Timer &get(StringRef Name, StringRef GroupName) {
     sys::SmartScopedLock<true> L(*TimerLock);
     
-    MISTD::pair<TimerGroup*, Name2TimerMap> &GroupEntry = Map[GroupName];
+    std::pair<TimerGroup*, Name2TimerMap> &GroupEntry = Map[GroupName];
     
     if (!GroupEntry.first)
       GroupEntry.first = new TimerGroup(GroupName);
@@ -281,7 +281,7 @@ void TimerGroup::removeTimer(Timer &T) {
   
   // If the timer was started, move its data to TimersToPrint.
   if (T.Started)
-    TimersToPrint.push_back(MISTD::make_pair(T.Time, T.Name));
+    TimersToPrint.push_back(std::make_pair(T.Time, T.Name));
 
   T.TG = 0;
   
@@ -313,19 +313,19 @@ void TimerGroup::addTimer(Timer &T) {
 
 void TimerGroup::PrintQueuedTimers(raw_ostream &OS) {
   // Sort the timers in descending order by amount of time taken.
-  MISTD::sort(TimersToPrint.begin(), TimersToPrint.end());
+  std::sort(TimersToPrint.begin(), TimersToPrint.end());
   
   TimeRecord Total;
   for (unsigned i = 0, e = TimersToPrint.size(); i != e; ++i)
     Total += TimersToPrint[i].first;
   
   // Print out timing header.
-  OS << "===" << MISTD::string(73, '-') << "===\n";
+  OS << "===" << std::string(73, '-') << "===\n";
   // Figure out how many spaces to indent TimerGroup name.
   unsigned Padding = (80-Name.length())/2;
   if (Padding > 80) Padding = 0;         // Don't allow "negative" numbers
   OS.indent(Padding) << Name << '\n';
-  OS << "===" << MISTD::string(73, '-') << "===\n";
+  OS << "===" << std::string(73, '-') << "===\n";
   
   // If this is not an collection of ungrouped times, print the total time.
   // Ungrouped timers don't really make sense to add up.  We still print the
@@ -348,7 +348,7 @@ void TimerGroup::PrintQueuedTimers(raw_ostream &OS) {
   
   // Loop through all of the timing data, printing it out.
   for (unsigned i = 0, e = TimersToPrint.size(); i != e; ++i) {
-    const MISTD::pair<TimeRecord, MISTD::string> &Entry = TimersToPrint[e-i-1];
+    const std::pair<TimeRecord, std::string> &Entry = TimersToPrint[e-i-1];
     Entry.first.print(Total, OS);
     OS << Entry.second << '\n';
   }
@@ -368,7 +368,7 @@ void TimerGroup::print(raw_ostream &OS) {
   // reset them.
   for (Timer *T = FirstTimer; T; T = T->Next) {
     if (!T->Started) continue;
-    TimersToPrint.push_back(MISTD::make_pair(T->Time, T->Name));
+    TimersToPrint.push_back(std::make_pair(T->Time, T->Name));
     
     // Clear out the time.
     T->Started = 0;

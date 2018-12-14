@@ -114,7 +114,7 @@ class GTEST_API_ TestPartResult {
 };
 
 // Prints a TestPartResult object.
-MISTD::ostream& operator<<(MISTD::ostream& os, const TestPartResult& result);
+std::ostream& operator<<(std::ostream& os, const TestPartResult& result);
 
 // An array of TestPartResult objects.
 //
@@ -134,7 +134,7 @@ class GTEST_API_ TestPartResultArray {
   int size() const;
 
  private:
-  MISTD::vector<TestPartResult> array_;
+  std::vector<TestPartResult> array_;
 
   GTEST_DISALLOW_COPY_AND_ASSIGN_(TestPartResultArray);
 };

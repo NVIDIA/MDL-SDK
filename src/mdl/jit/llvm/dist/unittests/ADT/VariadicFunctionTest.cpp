@@ -16,13 +16,13 @@ namespace {
 
 // Defines a variadic function StringCat() to join strings.
 // StringCat()'s arguments and return value have class types.
-MISTD::string StringCatImpl(ArrayRef<const MISTD::string *> Args) {
-  MISTD::string S;
+std::string StringCatImpl(ArrayRef<const std::string *> Args) {
+  std::string S;
   for (unsigned i = 0, e = Args.size(); i < e; ++i)
     S += *Args[i];
   return S;
 }
-const VariadicFunction<MISTD::string, MISTD::string, StringCatImpl> StringCat = {};
+const VariadicFunction<std::string, std::string, StringCatImpl> StringCat = {};
 
 TEST(VariadicFunctionTest, WorksForClassTypes) {
   EXPECT_EQ("", StringCat());
@@ -56,7 +56,7 @@ TEST(VariadicFunctionTest, WorksForPrimitiveTypes) {
 
 // Appends an array of strings to dest and returns the number of
 // characters appended.
-int StringAppendImpl(MISTD::string *Dest, ArrayRef<const MISTD::string *> Args) {
+int StringAppendImpl(std::string *Dest, ArrayRef<const std::string *> Args) {
   int Chars = 0;
   for (unsigned i = 0, e = Args.size(); i < e; ++i) {
     Chars += Args[i]->size();
@@ -64,19 +64,19 @@ int StringAppendImpl(MISTD::string *Dest, ArrayRef<const MISTD::string *> Args) 
   }
   return Chars;
 }
-const VariadicFunction1<int, MISTD::string *, MISTD::string,
+const VariadicFunction1<int, std::string *, std::string,
                         StringAppendImpl> StringAppend = {};
 
 TEST(VariadicFunction1Test, Works) {
-  MISTD::string S0("hi");
+  std::string S0("hi");
   EXPECT_EQ(0, StringAppend(&S0));
   EXPECT_EQ("hi", S0);
 
-  MISTD::string S1("bin");
+  std::string S1("bin");
   EXPECT_EQ(2, StringAppend(&S1, "go"));
   EXPECT_EQ("bingo", S1);
 
-  MISTD::string S4("Fab4");
+  std::string S4("Fab4");
   EXPECT_EQ(4 + 4 + 6 + 5,
             StringAppend(&S4, "John", "Paul", "George", "Ringo"));
   EXPECT_EQ("Fab4JohnPaulGeorgeRingo", S4);

@@ -63,7 +63,6 @@ class IString;
 class IUuid;
 class IVoid;
 class IRef;
-class IParameter;
 class IBoolean_2;
 class IBoolean_3;
 class IBoolean_4;
@@ -284,12 +283,6 @@ template<> struct Type_traits<mi::IRef>
 {
     static const char* get_type_name() { return "Ref"; }
     typedef const char* Primitive_type;
-};
-
-template<> struct Type_traits<mi::IParameter>
-{
-    static const char* get_type_name() { return "Parameter"; }
-    typedef mi::Uint32 Primitive_type;
 };
 
 template<> struct Type_traits<mi::IBoolean_2>

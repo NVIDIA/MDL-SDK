@@ -39,6 +39,22 @@ Messages const &Thread_context::access_messages() const
     return m_msg_list;
 }
 
+// Set the module replacement path.
+void Thread_context::set_module_replacement_path(
+    char const *module_name,
+    char const *file_name)
+{
+    if (module_name == NULL || file_name == NULL ||
+        module_name[0] == '\0' || file_name[0] == '\0')
+    {
+        m_repl_module_name.clear();
+        m_repl_file_name.clear();
+    } else {
+        m_repl_module_name = module_name;
+        m_repl_file_name = file_name;
+    }
+}
+
 // Access compiler options for the invocation.
 Options_impl const &Thread_context::access_options() const
 {
@@ -88,6 +104,8 @@ Thread_context::Thread_context(
 , m_options(alloc)
 , m_rrh(NULL)
 , m_front_path(alloc)
+, m_repl_module_name(alloc)
+, m_repl_file_name(alloc)
 {
     // copy options
     for (int i = 0, n = options->get_option_count(); i < n; ++i) {

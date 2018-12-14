@@ -116,16 +116,16 @@ unsigned StringRef::edit_distance(llvm::StringRef Other,
 // String Operations
 //===----------------------------------------------------------------------===//
 
-MISTD::string StringRef::lower() const {
-  MISTD::string Result(size(), char());
+std::string StringRef::lower() const {
+  std::string Result(size(), char());
   for (size_type i = 0, e = size(); i != e; ++i) {
     Result[i] = ascii_tolower(Data[i]);
   }
   return Result;
 }
 
-MISTD::string StringRef::upper() const {
-  MISTD::string Result(size(), char());
+std::string StringRef::upper() const {
+  std::string Result(size(), char());
   for (size_type i = 0, e = size(); i != e; ++i) {
     Result[i] = ascii_toupper(Data[i]);
   }
@@ -199,7 +199,7 @@ size_t StringRef::rfind(StringRef Str) const {
 /// Note: O(size() + Chars.size())
 StringRef::size_type StringRef::find_first_of(StringRef Chars,
                                               size_t From) const {
-  MISTD::bitset<1 << CHAR_BIT> CharBits;
+  std::bitset<1 << CHAR_BIT> CharBits;
   for (size_type i = 0; i != Chars.size(); ++i)
     CharBits.set((unsigned char)Chars[i]);
 
@@ -224,7 +224,7 @@ StringRef::size_type StringRef::find_first_not_of(char C, size_t From) const {
 /// Note: O(size() + Chars.size())
 StringRef::size_type StringRef::find_first_not_of(StringRef Chars,
                                                   size_t From) const {
-  MISTD::bitset<1 << CHAR_BIT> CharBits;
+  std::bitset<1 << CHAR_BIT> CharBits;
   for (size_type i = 0; i != Chars.size(); ++i)
     CharBits.set((unsigned char)Chars[i]);
 
@@ -240,7 +240,7 @@ StringRef::size_type StringRef::find_first_not_of(StringRef Chars,
 /// Note: O(size() + Chars.size())
 StringRef::size_type StringRef::find_last_of(StringRef Chars,
                                              size_t From) const {
-  MISTD::bitset<1 << CHAR_BIT> CharBits;
+  std::bitset<1 << CHAR_BIT> CharBits;
   for (size_type i = 0; i != Chars.size(); ++i)
     CharBits.set((unsigned char)Chars[i]);
 
@@ -265,7 +265,7 @@ StringRef::size_type StringRef::find_last_not_of(char C, size_t From) const {
 /// Note: O(size() + Chars.size())
 StringRef::size_type StringRef::find_last_not_of(StringRef Chars,
                                                  size_t From) const {
-  MISTD::bitset<1 << CHAR_BIT> CharBits;
+  std::bitset<1 << CHAR_BIT> CharBits;
   for (size_type i = 0, e = Chars.size(); i != e; ++i)
     CharBits.set((unsigned char)Chars[i]);
 
@@ -285,7 +285,7 @@ void StringRef::split(SmallVectorImpl<StringRef> &A,
   for (int splits = 0;
        rest.data() != NULL && (MaxSplit < 0 || splits < MaxSplit);
        ++splits) {
-    MISTD::pair<StringRef, StringRef> p = rest.split(Separators);
+    std::pair<StringRef, StringRef> p = rest.split(Separators);
 
     if (KeepEmpty || p.first.size() != 0)
       A.push_back(p.first);

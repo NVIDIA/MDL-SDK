@@ -161,7 +161,7 @@ class SCCPSolver : public InstVisitor<SCCPSolver> {
   /// StructValueState - This maintains ValueState for values that have
   /// StructType, for example for formal arguments, calls, insertelement, etc.
   ///
-  DenseMap<MISTD::pair<Value*, unsigned>, LatticeVal> StructValueState;
+  DenseMap<std::pair<Value*, unsigned>, LatticeVal> StructValueState;
 
   /// GlobalValue - If we are tracking any values for the contents of a global
   /// variable, we keep a mapping from the constant accessor to the element of
@@ -176,7 +176,7 @@ class SCCPSolver : public InstVisitor<SCCPSolver> {
 
   /// TrackedMultipleRetVals - Same as TrackedRetVals, but used for functions
   /// that return multiple values.
-  DenseMap<MISTD::pair<Function*, unsigned>, LatticeVal> TrackedMultipleRetVals;
+  DenseMap<std::pair<Function*, unsigned>, LatticeVal> TrackedMultipleRetVals;
 
   /// MRVFunctionsTracked - Each function in TrackedMultipleRetVals is
   /// represented here for efficient lookup.
@@ -202,7 +202,7 @@ class SCCPSolver : public InstVisitor<SCCPSolver> {
 
   /// KnownFeasibleEdges - Entries in this set are edges which have already had
   /// PHI nodes retriggered.
-  typedef MISTD::pair<BasicBlock*, BasicBlock*> Edge;
+  typedef std::pair<BasicBlock*, BasicBlock*> Edge;
   DenseSet<Edge> KnownFeasibleEdges;
 public:
   SCCPSolver(const DataLayout *td, const TargetLibraryInfo *tli)
@@ -240,10 +240,10 @@ public:
     if (StructType *STy = dyn_cast<StructType>(F->getReturnType())) {
       MRVFunctionsTracked.insert(F);
       for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
-        TrackedMultipleRetVals.insert(MISTD::make_pair(MISTD::make_pair(F, i),
+        TrackedMultipleRetVals.insert(std::make_pair(std::make_pair(F, i),
                                                      LatticeVal()));
     } else
-      TrackedRetVals.insert(MISTD::make_pair(F, LatticeVal()));
+      TrackedRetVals.insert(std::make_pair(F, LatticeVal()));
   }
 
   void AddArgumentTrackedFunction(Function *F) {
@@ -367,8 +367,8 @@ private:
   LatticeVal &getValueState(Value *V) {
     assert(!V->getType()->isStructTy() && "Should use getStructValueState");
 
-    MISTD::pair<DenseMap<Value*, LatticeVal>::iterator, bool> I =
-      ValueState.insert(MISTD::make_pair(V, LatticeVal()));
+    std::pair<DenseMap<Value*, LatticeVal>::iterator, bool> I =
+      ValueState.insert(std::make_pair(V, LatticeVal()));
     LatticeVal &LV = I.first->second;
 
     if (!I.second)
@@ -392,9 +392,9 @@ private:
     assert(i < cast<StructType>(V->getType())->getNumElements() &&
            "Invalid element #");
 
-    MISTD::pair<DenseMap<MISTD::pair<Value*, unsigned>, LatticeVal>::iterator,
+    std::pair<DenseMap<std::pair<Value*, unsigned>, LatticeVal>::iterator,
               bool> I = StructValueState.insert(
-                        MISTD::make_pair(MISTD::make_pair(V, i), LatticeVal()));
+                        std::make_pair(std::make_pair(V, i), LatticeVal()));
     LatticeVal &LV = I.first->second;
 
     if (!I.second)
@@ -724,7 +724,7 @@ void SCCPSolver::visitReturnInst(ReturnInst &I) {
     if (StructType *STy = dyn_cast<StructType>(ResultOp->getType()))
       if (MRVFunctionsTracked.count(F))
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
-          mergeInValue(TrackedMultipleRetVals[MISTD::make_pair(F, i)], F,
+          mergeInValue(TrackedMultipleRetVals[std::make_pair(F, i)], F,
                        getStructValueState(ResultOp, i));
 
   }
@@ -1152,7 +1152,7 @@ CallOverdefined:
     // into this call site.
     for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
       mergeInValue(getStructValueState(I, i), I,
-                   TrackedMultipleRetVals[MISTD::make_pair(F, i)]);
+                   TrackedMultipleRetVals[std::make_pair(F, i)]);
   } else {
     DenseMap<Function*, LatticeVal>::iterator TFRVI = TrackedRetVals.find(F);
     if (TFRVI == TrackedRetVals.end())

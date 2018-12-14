@@ -68,7 +68,7 @@ class TGLexer {
   // Information about the current token.
   const char *TokStart;
   tgtok::TokKind CurCode;
-  MISTD::string CurStrVal;  // This is valid for ID, STRVAL, VARNAME, CODEFRAGMENT
+  std::string CurStrVal;  // This is valid for ID, STRVAL, VARNAME, CODEFRAGMENT
   int64_t CurIntVal;      // This is valid for INTVAL.
 
   /// CurBuffer - This is the current buffer index we're lexing from as managed
@@ -76,7 +76,7 @@ class TGLexer {
   int CurBuffer;
 
 public:
-  typedef MISTD::map<MISTD::string, SMLoc> DependenciesMapTy;
+  typedef std::map<std::string, SMLoc> DependenciesMapTy;
 private:
   /// Dependencies - This is the list of all included files.
   DependenciesMapTy Dependencies;
@@ -95,7 +95,7 @@ public:
   
   tgtok::TokKind getCode() const { return CurCode; }
 
-  const MISTD::string &getCurStrVal() const {
+  const std::string &getCurStrVal() const {
     assert((CurCode == tgtok::Id || CurCode == tgtok::StrVal || 
             CurCode == tgtok::VarName || CurCode == tgtok::CodeFragment) &&
            "This token doesn't have a string value");

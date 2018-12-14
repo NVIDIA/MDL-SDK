@@ -26,9 +26,9 @@ namespace llvm {
 //===----------------------------------------------------------------------===//
 
 template <class Ptr, class USE_iterator> // Predecessor Iterator
-class PredIterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class PredIterator : public std::iterator<std::forward_iterator_tag,
                                           Ptr, ptrdiff_t, Ptr*, Ptr*> {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag, Ptr, ptrdiff_t, Ptr*,
+  typedef std::iterator<std::forward_iterator_tag, Ptr, ptrdiff_t, Ptr*,
                                                                     Ptr*> super;
   typedef PredIterator<Ptr, USE_iterator> Self;
   USE_iterator It;
@@ -101,11 +101,11 @@ inline const_pred_iterator pred_end(const BasicBlock *BB) {
 //===----------------------------------------------------------------------===//
 
 template <class Term_, class BB_>           // Successor Iterator
-class SuccIterator : public MISTD::iterator<MISTD::bidirectional_iterator_tag,
+class SuccIterator : public std::iterator<std::bidirectional_iterator_tag,
                                           BB_, ptrdiff_t, BB_*, BB_*> {
   const Term_ Term;
   unsigned idx;
-  typedef MISTD::iterator<MISTD::bidirectional_iterator_tag, BB_, ptrdiff_t, BB_*,
+  typedef std::iterator<std::bidirectional_iterator_tag, BB_, ptrdiff_t, BB_*,
                                                                     BB_*> super;
   typedef SuccIterator<Term_, BB_> Self;
 

@@ -54,8 +54,8 @@ namespace {
 // Tests on ARM, PowerPC and SystemZ disabled as we're running the old jit
 #if !defined(__arm__) && !defined(__powerpc__) && !defined(__s390__)
 
-Function *makeReturnGlobal(MISTD::string Name, GlobalVariable *G, Module *M) {
-  MISTD::vector<Type*> params;
+Function *makeReturnGlobal(std::string Name, GlobalVariable *G, Module *M) {
+  std::vector<Type*> params;
   FunctionType *FTy = FunctionType::get(G->getType()->getElementType(),
                                               params, false);
   Function *F = Function::Create(FTy, GlobalValue::ExternalLinkage, Name, M);
@@ -69,8 +69,8 @@ Function *makeReturnGlobal(MISTD::string Name, GlobalVariable *G, Module *M) {
   return F;
 }
 
-MISTD::string DumpFunction(const Function *F) {
-  MISTD::string Result;
+std::string DumpFunction(const Function *F) {
+  std::string Result;
   raw_string_ostream(Result) << "" << *F;
   return Result;
 }
@@ -82,7 +82,7 @@ public:
     : Base(JITMemoryManager::CreateDefaultMemManager()) {
     stubsAllocated = 0;
   }
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) {
     return Base->getPointerToNamedFunction(Name, AbortOnFailure);
   }
@@ -99,11 +99,11 @@ public:
         ActualSize(ActualSize), ActualSizeResult(ActualSizeResult) {}
     uint8_t *Result;
     const Function *F;
-    MISTD::string F_dump;
+    std::string F_dump;
     uintptr_t ActualSize;
     uintptr_t ActualSizeResult;
   };
-  MISTD::vector<StartFunctionBodyCall> startFunctionBodyCalls;
+  std::vector<StartFunctionBodyCall> startFunctionBodyCalls;
   virtual uint8_t *startFunctionBody(const Function *F,
                                      uintptr_t &ActualSize) {
     uintptr_t InitialActualSize = ActualSize;
@@ -124,11 +124,11 @@ public:
       : F(F), F_dump(DumpFunction(F)),
         FunctionStart(FunctionStart), FunctionEnd(FunctionEnd) {}
     const Function *F;
-    MISTD::string F_dump;
+    std::string F_dump;
     uint8_t *FunctionStart;
     uint8_t *FunctionEnd;
   };
-  MISTD::vector<EndFunctionBodyCall> endFunctionBodyCalls;
+  std::vector<EndFunctionBodyCall> endFunctionBodyCalls;
   virtual void endFunctionBody(const Function *F, uint8_t *FunctionStart,
                                uint8_t *FunctionEnd) {
     endFunctionBodyCalls.push_back(
@@ -147,7 +147,7 @@ public:
     return Base->allocateCodeSection(
       Size, Alignment, SectionID, SectionName);
   }
-  virtual bool finalizeMemory(MISTD::string *ErrMsg) { return false; }
+  virtual bool finalizeMemory(std::string *ErrMsg) { return false; }
   virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) {
     return Base->allocateSpace(Size, Alignment);
   }
@@ -158,7 +158,7 @@ public:
     DeallocateFunctionBodyCall(const void *Body) : Body(Body) {}
     const void *Body;
   };
-  MISTD::vector<DeallocateFunctionBodyCall> deallocateFunctionBodyCalls;
+  std::vector<DeallocateFunctionBodyCall> deallocateFunctionBodyCalls;
   virtual void deallocateFunctionBody(void *Body) {
     deallocateFunctionBodyCalls.push_back(DeallocateFunctionBodyCall(Body));
     Base->deallocateFunctionBody(Body);
@@ -169,7 +169,7 @@ bool LoadAssemblyInto(Module *M, const char *assembly) {
   SMDiagnostic Error;
   bool success =
     NULL != ParseAssemblyString(assembly, M, Error, M->getContext());
-  MISTD::string errMsg;
+  std::string errMsg;
   raw_string_ostream os(errMsg);
   Error.print("", os);
   EXPECT_TRUE(success) << os.str();
@@ -186,7 +186,7 @@ class JITTest : public testing::Test {
     M = new Module("<main>", Context);
     RJMM = createMemoryManager();
     RJMM->setPoisonMemory(true);
-    MISTD::string Error;
+    std::string Error;
     TargetOptions Options;
     TheJIT.reset(EngineBuilder(M).setEngineKind(EngineKind::JIT)
                  .setJITMemoryManager(RJMM)
@@ -218,7 +218,7 @@ TEST(JIT, GlobalInFunction) {
   // Tell the memory manager to poison freed memory so that accessing freed
   // memory is more easily tested.
   MemMgr->setPoisonMemory(true);
-  MISTD::string Error;
+  std::string Error;
   OwningPtr<ExecutionEngine> JIT(EngineBuilder(M)
                                  .setEngineKind(EngineKind::JIT)
                                  .setErrorStr(&Error)
@@ -315,7 +315,7 @@ TEST_F(JITTest, NonLazyCompilationStillNeedsStubs) {
 
   FunctionType *Func1Ty =
       cast<FunctionType>(TypeBuilder<void(void), false>::get(Context));
-  MISTD::vector<Type*> arg_types;
+  std::vector<Type*> arg_types;
   arg_types.push_back(Type::getInt1Ty(Context));
   FunctionType *FuncTy = FunctionType::get(
       Type::getVoidTy(Context), arg_types, false);
@@ -607,15 +607,15 @@ TEST_F(JITTest, EscapedLazyStubStillCallable) {
   EXPECT_EQ(42, stubbed());
 }
 
-// Converts the LLVM assembly to bitcode and returns it in a MISTD::string.  An
+// Converts the LLVM assembly to bitcode and returns it in a std::string.  An
 // empty string indicates an error.
-MISTD::string AssembleToBitcode(LLVMContext &Context, const char *Assembly) {
+std::string AssembleToBitcode(LLVMContext &Context, const char *Assembly) {
   Module TempModule("TempModule", Context);
   if (!LoadAssemblyInto(&TempModule, Assembly)) {
     return "";
   }
 
-  MISTD::string Result;
+  std::string Result;
   raw_string_ostream OS(Result);
   WriteBitcodeToFile(&TempModule, OS);
   OS.flush();
@@ -627,11 +627,11 @@ MISTD::string AssembleToBitcode(LLVMContext &Context, const char *Assembly) {
 // M.  Both will be NULL on an error.  Bitcode must live at least as long as the
 // ExecutionEngine.
 ExecutionEngine *getJITFromBitcode(
-  LLVMContext &Context, const MISTD::string &Bitcode, Module *&M) {
+  LLVMContext &Context, const std::string &Bitcode, Module *&M) {
   // c_str() is null-terminated like MemoryBuffer::getMemBuffer requires.
   MemoryBuffer *BitcodeBuffer =
     MemoryBuffer::getMemBuffer(Bitcode, "Bitcode for test");
-  MISTD::string errMsg;
+  std::string errMsg;
   M = getLazyBitcodeModule(BitcodeBuffer, Context, &errMsg);
   if (M == NULL) {
     ADD_FAILURE() << errMsg;
@@ -653,7 +653,7 @@ ExecutionEngine *getJITFromBitcode(
 
 TEST(LazyLoadedJITTest, MaterializableAvailableExternallyFunctionIsntCompiled) {
   LLVMContext Context;
-  const MISTD::string Bitcode =
+  const std::string Bitcode =
     AssembleToBitcode(Context,
                       "define available_externally i32 "
                       "    @JITTest_AvailableExternallyFunction() { "
@@ -687,7 +687,7 @@ TEST(LazyLoadedJITTest, MaterializableAvailableExternallyFunctionIsntCompiled) {
 
 TEST(LazyLoadedJITTest, EagerCompiledRecursionThroughGhost) {
   LLVMContext Context;
-  const MISTD::string Bitcode =
+  const std::string Bitcode =
     AssembleToBitcode(Context,
                       "define i32 @recur1(i32 %a) { "
                       "  %zero = icmp eq i32 %a, 0 "

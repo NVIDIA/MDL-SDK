@@ -60,7 +60,7 @@ inline size_t dynamic_memory_consumption(mi::base::Handle<T> const &) { return 0
 
 #if MDL_STD_HAS_UNORDERED
 
-namespace MISTD {
+namespace std {
 
 template <class T1, class T2, class T3, class T4, class T5>
 inline bool has_dynamic_memory_consumption(

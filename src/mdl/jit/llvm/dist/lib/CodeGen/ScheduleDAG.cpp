@@ -139,7 +139,7 @@ void SUnit::removePred(const SDep &D) {
       SDep P = D;
       P.setSUnit(this);
       SUnit *N = D.getSUnit();
-      SmallVectorImpl<SDep>::iterator Succ = MISTD::find(N->Succs.begin(),
+      SmallVectorImpl<SDep>::iterator Succ = std::find(N->Succs.begin(),
                                                        N->Succs.end(), P);
       assert(Succ != N->Succs.end() && "Mismatching preds / succs lists!");
       N->Succs.erase(Succ);
@@ -243,7 +243,7 @@ void SUnit::ComputeDepth() {
          E = Cur->Preds.end(); I != E; ++I) {
       SUnit *PredSU = I->getSUnit();
       if (PredSU->isDepthCurrent)
-        MaxPredDepth = MISTD::max(MaxPredDepth,
+        MaxPredDepth = std::max(MaxPredDepth,
                                 PredSU->Depth + I->getLatency());
       else {
         Done = false;
@@ -276,7 +276,7 @@ void SUnit::ComputeHeight() {
          E = Cur->Succs.end(); I != E; ++I) {
       SUnit *SuccSU = I->getSUnit();
       if (SuccSU->isHeightCurrent)
-        MaxSuccHeight = MISTD::max(MaxSuccHeight,
+        MaxSuccHeight = std::max(MaxSuccHeight,
                                  SuccSU->Height + I->getLatency());
       else {
         Done = false;
@@ -307,7 +307,7 @@ void SUnit::biasCriticalPath() {
       BestI = I;
   }
   if (BestI != Preds.begin())
-    MISTD::swap(*Preds.begin(), *BestI);
+    std::swap(*Preds.begin(), *BestI);
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -459,7 +459,7 @@ unsigned ScheduleDAG::VerifyScheduledDAG(bool isBottomUp) {
 /// immediately after X in Index2Node.
 void ScheduleDAGTopologicalSort::InitDAGTopologicalSorting() {
   unsigned DAGSize = SUnits.size();
-  MISTD::vector<SUnit*> WorkList;
+  std::vector<SUnit*> WorkList;
   WorkList.reserve(DAGSize);
 
   Index2Node.resize(DAGSize);
@@ -544,7 +544,7 @@ void ScheduleDAGTopologicalSort::RemovePred(SUnit *M, SUnit *N) {
 /// topological indexes by means of the Shift method.
 void ScheduleDAGTopologicalSort::DFS(const SUnit *SU, int UpperBound,
                                      bool &HasLoop) {
-  MISTD::vector<const SUnit*> WorkList;
+  std::vector<const SUnit*> WorkList;
   WorkList.reserve(SUnits.size());
 
   WorkList.push_back(SU);
@@ -573,7 +573,7 @@ void ScheduleDAGTopologicalSort::DFS(const SUnit *SU, int UpperBound,
 /// preserved.
 void ScheduleDAGTopologicalSort::Shift(BitVector& Visited, int LowerBound,
                                        int UpperBound) {
-  MISTD::vector<int> L;
+  std::vector<int> L;
   int shift = 0;
   int i;
 
@@ -636,7 +636,7 @@ void ScheduleDAGTopologicalSort::Allocate(int n, int index) {
 }
 
 ScheduleDAGTopologicalSort::
-ScheduleDAGTopologicalSort(MISTD::vector<SUnit> &sunits, SUnit *exitsu)
+ScheduleDAGTopologicalSort(std::vector<SUnit> &sunits, SUnit *exitsu)
   : SUnits(sunits), ExitSU(exitsu) {}
 
 ScheduleHazardRecognizer::~ScheduleHazardRecognizer() {}

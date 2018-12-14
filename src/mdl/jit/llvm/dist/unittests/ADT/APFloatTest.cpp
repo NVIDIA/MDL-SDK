@@ -24,11 +24,11 @@ static double convertToDoubleFromString(const char *Str) {
   return F.convertToDouble();
 }
 
-static MISTD::string convertToString(double d, unsigned Prec, unsigned Pad) {
+static std::string convertToString(double d, unsigned Prec, unsigned Pad) {
   llvm::SmallVector<char, 100> Buffer;
   llvm::APFloat F(d);
   F.toString(Buffer, Prec, Pad);
-  return MISTD::string(Buffer.data(), Buffer.size());
+  return std::string(Buffer.data(), Buffer.size());
 }
 
 namespace {

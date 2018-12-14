@@ -51,7 +51,7 @@ class Type;
 /// \param type the root type of the to-be-printed attribute
 /// \param value the value pointer of the to-be-printed attribute
 /// \return the description of the value of the given type as a string.
-MISTD::string get_type_value_desc(
+std::string get_type_value_desc(
     const Type& type,
     const char* value);
 
@@ -126,11 +126,11 @@ inline void set_value(
 // Set the given \p data at the looked-up \p address to the given \p value. Specialization for
 // values of type string.
 template <>
-inline void set_value<MISTD::string>(
+inline void set_value<std::string>(
     const Type& root,					// the root's type
     char* data,						// the data block
     const char* address,				// the name of the address
-    const MISTD::string& value)				// the given value
+    const std::string& value)				// the given value
 {
     set_value(root,data,address,value.c_str());
 }
@@ -182,12 +182,12 @@ inline void set_value<ATTR::Dynamic_array>(
 //--------------------------------------------------------------------------------------------------
 
 // Set the given \p data at the looked-up \p address to the given \p value (wrapper for
-// MISTD::string addresses).
+// std::string addresses).
 template <typename T>
 inline void set_value(
     const Type& root,					// the root's type
     char* data,						// the data block
-    const MISTD::string& address,			// the name of the address
+    const std::string& address,			// the name of the address
     const T& value)					// the given value
 {
     set_value<T>(root,data,address.c_str(),value);
@@ -229,13 +229,13 @@ inline const bool get_value<bool>(
     return !!*reinterpret_cast<char *>(ret_address);
 }
 
-/// Get the given \p data at the looked-up \p address as type T (wrapper for MISTD::string
+/// Get the given \p data at the looked-up \p address as type T (wrapper for std::string
 /// addresses).
 template<typename T>
 inline const T get_value(
     const Type& root,				        // the root's type
     const char* data,				        // the data block
-    const MISTD::string& address)			// the name of the address
+    const std::string& address)			// the name of the address
 {
     return get_value<T>(root,data,address.c_str());
 }
@@ -247,7 +247,7 @@ void dump_attr_values(
     const char* data,
     int depth);
 /// Retrieve the dump of the attribute value as a string.
-MISTD::string get_dump_attr_values_string(
+std::string get_dump_attr_values_string(
     const Type& type,
     const char* name,
     const char* data,

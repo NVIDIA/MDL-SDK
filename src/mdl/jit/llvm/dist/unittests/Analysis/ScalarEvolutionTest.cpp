@@ -38,7 +38,7 @@ protected:
 
 TEST_F(ScalarEvolutionsTest, SCEVUnknownRAUW) {
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(Context),
-                                              MISTD::vector<Type *>(), false);
+                                              std::vector<Type *>(), false);
   Function *F = cast<Function>(M.getOrInsertFunction("f", FTy));
   BasicBlock *BB = BasicBlock::Create(Context, "entry", F);
   ReturnInst::Create(Context, 0, BB);
@@ -103,7 +103,7 @@ TEST_F(ScalarEvolutionsTest, SCEVMultiplyAddRecs) {
   // It's possible to produce an empty loop through the default constructor,
   // but you can't add any blocks to it without a LoopInfo pass.
   Loop L;
-  const_cast<MISTD::vector<BasicBlock*>&>(L.getBlocks()).push_back(BB);
+  const_cast<std::vector<BasicBlock*>&>(L.getBlocks()).push_back(BB);
 
   Function::arg_iterator AI = F->arg_begin();
   SmallVector<const SCEV *, 5> A;

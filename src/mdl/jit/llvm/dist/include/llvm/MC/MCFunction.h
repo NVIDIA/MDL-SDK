@@ -40,7 +40,7 @@ class MCBasicBlock {
 
   /// \name Predecessors/Successors, to represent the CFG.
   /// @{
-  typedef MISTD::vector<const MCBasicBlock *> BasicBlockListTy;
+  typedef std::vector<const MCBasicBlock *> BasicBlockListTy;
   BasicBlockListTy Successors;
   BasicBlockListTy Predecessors;
   /// @}
@@ -86,9 +86,9 @@ class MCFunction {
   MCFunction           (const MCFunction&) LLVM_DELETED_FUNCTION;
   MCFunction& operator=(const MCFunction&) LLVM_DELETED_FUNCTION;
 
-  MISTD::string Name;
+  std::string Name;
   MCModule *ParentModule;
-  typedef MISTD::vector<MCBasicBlock*> BasicBlockListTy;
+  typedef std::vector<MCBasicBlock*> BasicBlockListTy;
   BasicBlockListTy Blocks;
 
   // MCModule owns the function.

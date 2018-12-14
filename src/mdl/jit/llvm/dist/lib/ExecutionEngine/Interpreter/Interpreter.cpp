@@ -32,7 +32,7 @@ extern "C" void LLVMLinkInInterpreter() { }
 
 /// create - Create a new interpreter object.  This can never fail.
 ///
-ExecutionEngine *Interpreter::create(Module *M, MISTD::string* ErrStr) {
+ExecutionEngine *Interpreter::create(Module *M, std::string* ErrStr) {
   // Tell this Module to materialize everything and release the GVMaterializer.
   if (M->MaterializeAllPermanently(ErrStr))
     // We got an error, just return 0
@@ -63,7 +63,7 @@ Interpreter::~Interpreter() {
 
 void Interpreter::runAtExitHandlers () {
   while (!AtExitHandlers.empty()) {
-    callFunction(AtExitHandlers.back(), MISTD::vector<GenericValue>());
+    callFunction(AtExitHandlers.back(), std::vector<GenericValue>());
     AtExitHandlers.pop_back();
     run();
   }
@@ -73,7 +73,7 @@ void Interpreter::runAtExitHandlers () {
 ///
 GenericValue
 Interpreter::runFunction(Function *F,
-                         const MISTD::vector<GenericValue> &ArgValues) {
+                         const std::vector<GenericValue> &ArgValues) {
   assert (F && "Function *F was null at entry to run()");
 
   // Try extra hard not to pass extra args to a function that isn't
@@ -83,7 +83,7 @@ Interpreter::runFunction(Function *F,
   // parameters than it is declared to take. This does not attempt to
   // take into account gratuitous differences in declared types,
   // though.
-  MISTD::vector<GenericValue> ActualArgs;
+  std::vector<GenericValue> ActualArgs;
   const unsigned ArgCount = F->getFunctionType()->getNumParams();
   for (unsigned i = 0; i < ArgCount; ++i)
     ActualArgs.push_back(ArgValues[i]);

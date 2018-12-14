@@ -31,17 +31,17 @@ namespace {
 
 class Tag {
 private:
-  const MISTD::string *Id;
+  const std::string *Id;
   SMLoc Loc;
 public:
-  Tag(const MISTD::string &Name, const SMLoc Location)
+  Tag(const std::string &Name, const SMLoc Location)
       : Id(&Name), Loc(Location) {}
   int operator<(const Tag &B) const { return *Id < *B.Id; }
   void emit(raw_ostream &OS) const {
     int BufferID = SrcMgr.FindBufferContainingLoc(Loc);
     MemoryBuffer *CurMB = SrcMgr.getBufferInfo(BufferID).Buffer;
     const char *BufferName = CurMB->getBufferIdentifier();
-    MISTD::pair<unsigned, unsigned> LineAndColumn = SrcMgr.getLineAndColumn(Loc);
+    std::pair<unsigned, unsigned> LineAndColumn = SrcMgr.getLineAndColumn(Loc);
     OS << *Id << "\t" << BufferName << "\t" << LineAndColumn.first << "\n";
   }
 };
@@ -70,24 +70,24 @@ SMLoc CTagsEmitter::locate(const Record *R) {
 }
 
 void CTagsEmitter::run(raw_ostream &OS) {
-  const MISTD::map<MISTD::string, Record *> &Classes = Records.getClasses();
-  const MISTD::map<MISTD::string, Record *> &Defs = Records.getDefs();
-  MISTD::vector<Tag> Tags;
+  const std::map<std::string, Record *> &Classes = Records.getClasses();
+  const std::map<std::string, Record *> &Defs = Records.getDefs();
+  std::vector<Tag> Tags;
   // Collect tags.
   Tags.reserve(Classes.size() + Defs.size());
-  for (MISTD::map<MISTD::string, Record *>::const_iterator I = Classes.begin(),
+  for (std::map<std::string, Record *>::const_iterator I = Classes.begin(),
                                                        E = Classes.end();
        I != E; ++I)
     Tags.push_back(Tag(I->first, locate(I->second)));
-  for (MISTD::map<MISTD::string, Record *>::const_iterator I = Defs.begin(),
+  for (std::map<std::string, Record *>::const_iterator I = Defs.begin(),
                                                        E = Defs.end();
        I != E; ++I)
     Tags.push_back(Tag(I->first, locate(I->second)));
   // Emit tags.
-  MISTD::sort(Tags.begin(), Tags.end());
+  std::sort(Tags.begin(), Tags.end());
   OS << "!_TAG_FILE_FORMAT\t1\t/original ctags format/\n";
   OS << "!_TAG_FILE_SORTED\t1\t/0=unsorted, 1=sorted, 2=foldcase/\n";
-  for (MISTD::vector<Tag>::const_iterator I = Tags.begin(), E = Tags.end();
+  for (std::vector<Tag>::const_iterator I = Tags.begin(), E = Tags.end();
        I != E; ++I)
     I->emit(OS);
 }

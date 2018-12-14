@@ -249,7 +249,7 @@ void PruneEH::DeleteBasicBlock(BasicBlock *BB) {
   }
 
   // Get the list of successors of this block.
-  MISTD::vector<BasicBlock*> Succs(succ_begin(BB), succ_end(BB));
+  std::vector<BasicBlock*> Succs(succ_begin(BB), succ_end(BB));
 
   for (unsigned i = 0, e = Succs.size(); i != e; ++i)
     Succs[i]->removePredecessor(BB);

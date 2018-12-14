@@ -145,11 +145,11 @@ public:
     return StringRef(SectionName);
   }
 
-  virtual MISTD::string getLabelBeginName() const {
+  virtual std::string getLabelBeginName() const {
     return StringRef(getSegmentName().str() + getSectionName().str() + "_begin");
   }
 
-  virtual MISTD::string getLabelEndName() const {
+  virtual std::string getLabelEndName() const {
     return StringRef(getSegmentName().str() + getSectionName().str() + "_end");
   }
 
@@ -167,7 +167,7 @@ public:
   /// parameters and returns an empty string.  When an invalid section
   /// specifier is present, this returns a string indicating the problem.
   /// If no TAA was parsed, TAA is not altered, and TAAWasSet becomes false.
-  static MISTD::string ParseSectionSpecifier(StringRef Spec,       // In.
+  static std::string ParseSectionSpecifier(StringRef Spec,       // In.
                                            StringRef &Segment,   // Out.
                                            StringRef &Section,   // Out.
                                            unsigned  &TAA,       // Out.

@@ -48,20 +48,20 @@ class TargetRegisterInfo;
     /// corresponding value is null. If the register is live but used in
     /// multiple register classes, the corresponding value is -1 casted to a
     /// pointer.
-    MISTD::vector<const TargetRegisterClass*> Classes;
+    std::vector<const TargetRegisterClass*> Classes;
 
     /// RegRefs - Map registers to all their references within a live range.
-    MISTD::multimap<unsigned, MachineOperand *> RegRefs;
-    typedef MISTD::multimap<unsigned, MachineOperand *>::const_iterator
+    std::multimap<unsigned, MachineOperand *> RegRefs;
+    typedef std::multimap<unsigned, MachineOperand *>::const_iterator
       RegRefIter;
 
     /// KillIndices - The index of the most recent kill (proceding bottom-up),
     /// or ~0u if the register is not live.
-    MISTD::vector<unsigned> KillIndices;
+    std::vector<unsigned> KillIndices;
 
     /// DefIndices - The index of the most recent complete def (proceding bottom
     /// up), or ~0u if the register is live.
-    MISTD::vector<unsigned> DefIndices;
+    std::vector<unsigned> DefIndices;
 
     /// KeepRegs - A set of registers which are live and cannot be changed to
     /// break anti-dependencies.
@@ -78,7 +78,7 @@ class TargetRegisterInfo;
     /// path
     /// of the ScheduleDAG and break them by renaming registers.
     ///
-    unsigned BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
+    unsigned BreakAntiDependencies(const std::vector<SUnit>& SUnits,
                                    MachineBasicBlock::iterator Begin,
                                    MachineBasicBlock::iterator End,
                                    unsigned InsertPosIndex,

@@ -17,7 +17,7 @@ using namespace llvm;
 /*===-- Operations on modules ---------------------------------------------===*/
 
 int LLVMWriteBitcodeToFile(LLVMModuleRef M, const char *Path) {
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   raw_fd_ostream OS(Path, ErrorInfo, sys::fs::F_Binary);
 
   if (!ErrorInfo.empty())

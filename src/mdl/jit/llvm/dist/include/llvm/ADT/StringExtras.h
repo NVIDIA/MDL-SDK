@@ -64,12 +64,12 @@ static inline char *utohex_buffer(IntTy X, char *BufferEnd) {
   return BufPtr;
 }
 
-static inline MISTD::string utohexstr(uint64_t X) {
+static inline std::string utohexstr(uint64_t X) {
   char Buffer[17];
   return utohex_buffer(X, Buffer+17);
 }
 
-static inline MISTD::string utostr_32(uint32_t X, bool isNeg = false) {
+static inline std::string utostr_32(uint32_t X, bool isNeg = false) {
   char Buffer[11];
   char *BufPtr = Buffer+11;
 
@@ -82,10 +82,10 @@ static inline MISTD::string utostr_32(uint32_t X, bool isNeg = false) {
 
   if (isNeg) *--BufPtr = '-';   // Add negative sign...
 
-  return MISTD::string(BufPtr, Buffer+11);
+  return std::string(BufPtr, Buffer+11);
 }
 
-static inline MISTD::string utostr(uint64_t X, bool isNeg = false) {
+static inline std::string utostr(uint64_t X, bool isNeg = false) {
   char Buffer[21];
   char *BufPtr = Buffer+21;
 
@@ -97,11 +97,11 @@ static inline MISTD::string utostr(uint64_t X, bool isNeg = false) {
   }
 
   if (isNeg) *--BufPtr = '-';   // Add negative sign...
-  return MISTD::string(BufPtr, Buffer+21);
+  return std::string(BufPtr, Buffer+21);
 }
 
 
-static inline MISTD::string itostr(int64_t X) {
+static inline std::string itostr(int64_t X) {
   if (X < 0)
     return utostr(static_cast<uint64_t>(-X), true);
   else
@@ -119,7 +119,7 @@ StringRef::size_type StrInStrNoCase(StringRef s1, StringRef s2);
 /// there are no tokens in the source string, an empty string is returned.
 /// The function returns a pair containing the extracted token and the
 /// remaining tail string.
-MISTD::pair<StringRef, StringRef> getToken(StringRef Source,
+std::pair<StringRef, StringRef> getToken(StringRef Source,
                                          StringRef Delimiters = " \t\n\v\f\r");
 
 /// SplitString - Split up the specified string according to the specified
@@ -161,9 +161,9 @@ static inline StringRef getOrdinalSuffix(unsigned Val) {
 }
 
 template <typename IteratorT>
-inline MISTD::string join_impl(IteratorT Begin, IteratorT End,
-                             StringRef Separator, MISTD::input_iterator_tag) {
-  MISTD::string S;
+inline std::string join_impl(IteratorT Begin, IteratorT End,
+                             StringRef Separator, std::input_iterator_tag) {
+  std::string S;
   if (Begin == End)
     return S;
 
@@ -176,13 +176,13 @@ inline MISTD::string join_impl(IteratorT Begin, IteratorT End,
 }
 
 template <typename IteratorT>
-inline MISTD::string join_impl(IteratorT Begin, IteratorT End,
-                             StringRef Separator, MISTD::forward_iterator_tag) {
-  MISTD::string S;
+inline std::string join_impl(IteratorT Begin, IteratorT End,
+                             StringRef Separator, std::forward_iterator_tag) {
+  std::string S;
   if (Begin == End)
     return S;
 
-  size_t Len = (MISTD::distance(Begin, End) - 1) * Separator.size();
+  size_t Len = (std::distance(Begin, End) - 1) * Separator.size();
   for (IteratorT I = Begin; I != End; ++I)
     Len += (*Begin).size();
   S.reserve(Len);
@@ -197,8 +197,8 @@ inline MISTD::string join_impl(IteratorT Begin, IteratorT End,
 /// Joins the strings in the range [Begin, End), adding Separator between
 /// the elements.
 template <typename IteratorT>
-inline MISTD::string join(IteratorT Begin, IteratorT End, StringRef Separator) {
-  typedef typename MISTD::iterator_traits<IteratorT>::iterator_category tag;
+inline std::string join(IteratorT Begin, IteratorT End, StringRef Separator) {
+  typedef typename std::iterator_traits<IteratorT>::iterator_category tag;
   return join_impl(Begin, End, Separator, tag());
 }
 

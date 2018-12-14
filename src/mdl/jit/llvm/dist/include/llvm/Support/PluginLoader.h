@@ -21,14 +21,14 @@
 
 namespace llvm {
   struct PluginLoader {
-    void operator=(const MISTD::string &Filename);
+    void operator=(const std::string &Filename);
     static unsigned getNumPlugins();
-    static MISTD::string& getPlugin(unsigned num);
+    static std::string& getPlugin(unsigned num);
   };
 
 #ifndef DONT_GET_PLUGIN_LOADER_OPTION
   // This causes operator= above to be invoked for every -load option.
-  static cl::opt<PluginLoader, false, cl::parser<MISTD::string> >
+  static cl::opt<PluginLoader, false, cl::parser<std::string> >
     LoadOpt("load", cl::ZeroOrMore, cl::value_desc("pluginfilename"),
             cl::desc("Load the specified plugin"));
 #endif

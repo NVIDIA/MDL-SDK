@@ -30,9 +30,12 @@
 
 #include "pch.h"
 
+#include "i_mdl_elements_material_instance.h"
+#include "i_mdl_elements_function_call.h"
 #include "mdl_elements_expression.h"
 #include "mdl_elements_type.h"
 #include "mdl_elements_value.h"
+#include "mdl_elements_utilities.h"
 
 #include <mi/neuraylib/istring.h>
 #include <cstring>
@@ -385,7 +388,10 @@ IAnnotation_list* Expression_factory::create_annotation_list() const
     return new Annotation_list;
 }
 
-IExpression* Expression_factory::clone( const IExpression* expr) const
+IExpression* Expression_factory::clone(
+    const IExpression* expr, 
+    DB::Transaction* transaction,
+    bool copy_immutable_calls) const
 {
     if( !expr)
         return 0;
@@ -405,6 +411,24 @@ IExpression* Expression_factory::clone( const IExpression* expr) const
             mi::base::Handle<const IType> type( expr->get_type());
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
+            if (copy_immutable_calls)
+            {
+                ASSERT(M_SCENE, transaction);
+                DB::Tag call_tag = expr_call->get_call();
+                SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
+                std::vector<mi::base::Handle<const IExpression> > dummy_context;
+                if (class_id == Mdl_function_call::id) {
+                    
+                    DB::Access<Mdl_function_call> f_call(call_tag, transaction);
+                    if (f_call->is_immutable())
+                        return deep_copy(this, transaction, expr_call.get(), dummy_context);
+                }
+                else if (class_id == Mdl_material_instance::id) {
+                    DB::Access<Mdl_material_instance> mat_inst(call_tag, transaction);
+                    if (mat_inst->is_immutable())
+                        return deep_copy(this, transaction, expr_call.get(), dummy_context);
+                }
+            }
             return create_call( type.get(), expr_call->get_call());
         }
         case IExpression::EK_PARAMETER: {
@@ -418,7 +442,8 @@ IExpression* Expression_factory::clone( const IExpression* expr) const
             mi::base::Handle<const IExpression_direct_call> expr_direct_call(
                 expr->get_interface<IExpression_direct_call>());
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
-            mi::base::Handle<IExpression_list> clone_arguments( clone( arguments.get()));
+            mi::base::Handle<IExpression_list> clone_arguments(
+                clone( arguments.get(), transaction, copy_immutable_calls));
             return create_direct_call(
                 type.get(), expr_direct_call->get_definition(), clone_arguments.get());
         }
@@ -437,7 +462,10 @@ IExpression* Expression_factory::clone( const IExpression* expr) const
     return 0;
 }
 
-IExpression_list* Expression_factory::clone( const IExpression_list* list) const
+IExpression_list* Expression_factory::clone(
+    const IExpression_list* list,
+    DB::Transaction* transaction,
+    bool copy_immutable_calls) const
 {
     if( !list)
         return 0;
@@ -445,8 +473,10 @@ IExpression_list* Expression_factory::clone( const IExpression_list* list) const
     IExpression_list* result = create_expression_list();
     mi::Size n = list->get_size();
     for( mi::Size i = 0; i < n; ++i) {
+
         mi::base::Handle<const IExpression> expr( list->get_expression( i));
-        mi::base::Handle<IExpression> clone_expr( clone( expr.get()));
+        mi::base::Handle<IExpression> clone_expr(
+            clone( expr.get(), transaction, copy_immutable_calls));
         const char* name = list->get_name( i);
         result->add_expression( name, clone_expr.get());
     }

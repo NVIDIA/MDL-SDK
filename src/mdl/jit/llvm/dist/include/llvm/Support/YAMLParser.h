@@ -72,7 +72,7 @@ bool dumpTokens(StringRef Input, raw_ostream &);
 bool scanTokens(StringRef Input);
 
 /// @brief Escape \a Input for a double quoted scalar.
-MISTD::string escape(StringRef Input);
+std::string escape(StringRef Input);
 
 /// @brief This class represents a YAML stream potentially containing multiple
 ///        documents.
@@ -129,7 +129,7 @@ public:
 
   /// \brief Get the verbatium tag for a given Node. This performs tag resoluton
   ///   and substitution.
-  MISTD::string getVerbatimTag() const;
+  std::string getVerbatimTag() const;
 
   SMRange getSourceRange() const { return SourceRange; }
   void setSourceRange(SMRange SR) { SourceRange = SR; }
@@ -277,7 +277,7 @@ private:
 /// increment() which must set CurrentEntry to 0 to create an end iterator.
 template <class BaseT, class ValueT>
 class basic_collection_iterator
-  : public MISTD::iterator<MISTD::forward_iterator_tag, ValueT> {
+  : public std::iterator<std::forward_iterator_tag, ValueT> {
 public:
   basic_collection_iterator() : Base(0) {}
   basic_collection_iterator(BaseT *B) : Base(B) {}
@@ -488,7 +488,7 @@ public:
     return Root = parseBlockNode();
   }
 
-  const MISTD::map<StringRef, StringRef> &getTagMap() const {
+  const std::map<StringRef, StringRef> &getTagMap() const {
     return TagMap;
   }
 
@@ -508,7 +508,7 @@ private:
   Node *Root;
 
   /// \brief Maps tag prefixes to their expansion.
-  MISTD::map<StringRef, StringRef> TagMap;
+  std::map<StringRef, StringRef> TagMap;
 
   Token &peekNext();
   Token getNext();

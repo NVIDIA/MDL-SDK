@@ -62,7 +62,7 @@ private:
   };
 
   class InfixCalculator {
-    typedef MISTD::pair< InfixCalculatorTok, int64_t > ICToken;
+    typedef std::pair< InfixCalculatorTok, int64_t > ICToken;
     SmallVector<InfixCalculatorTok, 4> InfixOperatorStack;
     SmallVector<ICToken, 4> PostfixStack;
     
@@ -77,7 +77,7 @@ private:
     void pushOperand(InfixCalculatorTok Op, int64_t Val = 0) {
       assert ((Op == IC_IMM || Op == IC_REGISTER) &&
               "Unexpected operand!");
-      PostfixStack.push_back(MISTD::make_pair(Op, Val));
+      PostfixStack.push_back(std::make_pair(Op, Val));
     }
     
     void popOperator() { InfixOperatorStack.pop_back(); }
@@ -124,7 +124,7 @@ private:
           InfixOperatorStack.pop_back();
         } else {
           InfixOperatorStack.pop_back();
-          PostfixStack.push_back(MISTD::make_pair(StackOp, 0));
+          PostfixStack.push_back(std::make_pair(StackOp, 0));
         }
       }
       // Push the new operator.
@@ -135,7 +135,7 @@ private:
       while (!InfixOperatorStack.empty()) {
         InfixCalculatorTok StackOp = InfixOperatorStack.pop_back_val();
         if (StackOp != IC_LPAREN && StackOp != IC_RPAREN)
-          PostfixStack.push_back(MISTD::make_pair(StackOp, 0));
+          PostfixStack.push_back(std::make_pair(StackOp, 0));
       }
       
       if (PostfixStack.empty())
@@ -157,24 +157,24 @@ private:
             break;
           case IC_PLUS:
             Val = Op1.second + Op2.second;
-            OperandStack.push_back(MISTD::make_pair(IC_IMM, Val));
+            OperandStack.push_back(std::make_pair(IC_IMM, Val));
             break;
           case IC_MINUS:
             Val = Op1.second - Op2.second;
-            OperandStack.push_back(MISTD::make_pair(IC_IMM, Val));
+            OperandStack.push_back(std::make_pair(IC_IMM, Val));
             break;
           case IC_MULTIPLY:
             assert (Op1.first == IC_IMM && Op2.first == IC_IMM &&
                     "Multiply operation with an immediate and a register!");
             Val = Op1.second * Op2.second;
-            OperandStack.push_back(MISTD::make_pair(IC_IMM, Val));
+            OperandStack.push_back(std::make_pair(IC_IMM, Val));
             break;
           case IC_DIVIDE:
             assert (Op1.first == IC_IMM && Op2.first == IC_IMM &&
                     "Divide operation with an immediate and a register!");
             assert (Op2.second != 0 && "Division by zero!");
             Val = Op1.second / Op2.second;
-            OperandStack.push_back(MISTD::make_pair(IC_IMM, Val));
+            OperandStack.push_back(std::make_pair(IC_IMM, Val));
             break;
           }
         }
@@ -1542,7 +1542,7 @@ bool X86AsmParser::ParseIntelDotOperator(const MCExpr *Disp,
     DotDispVal = DotDisp.getZExtValue();
   } else if (isParsingInlineAsm() && Tok.is(AsmToken::Identifier)) {
     unsigned DotDisp;
-    MISTD::pair<StringRef, StringRef> BaseMember = DotDispStr.split('.');
+    std::pair<StringRef, StringRef> BaseMember = DotDispStr.split('.');
     if (SemaCallback->LookupInlineAsmField(BaseMember.first, BaseMember.second,
                                            DotDisp))
       return Error(Tok.getLoc(), "Unable to lookup field reference!");
@@ -2427,7 +2427,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     assert(ErrorInfo && "Unknown missing feature!");
     // Special case the error message for the very common case where only
     // a single subtarget feature is missing.
-    MISTD::string Msg = "instruction requires:";
+    std::string Msg = "instruction requires:";
     unsigned Mask = 1;
     for (unsigned i = 0; i < (sizeof(ErrorInfo)*8-1); ++i) {
       if (ErrorInfo & Mask) {
@@ -2574,7 +2574,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   // missing feature.
   if ((Match1 == Match_MissingFeature) + (Match2 == Match_MissingFeature) +
       (Match3 == Match_MissingFeature) + (Match4 == Match_MissingFeature) == 1){
-    MISTD::string Msg = "instruction requires:";
+    std::string Msg = "instruction requires:";
     unsigned Mask = 1;
     for (unsigned i = 0; i < (sizeof(ErrorInfoMissingFeature)*8-1); ++i) {
       if (ErrorInfoMissingFeature & Mask) {

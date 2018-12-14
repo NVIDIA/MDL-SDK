@@ -35,7 +35,7 @@
 #include <string>
 #include <vector>
 
-inline bool MakeErrMsg(MISTD::string* ErrMsg, const MISTD::string& prefix) {
+inline bool MakeErrMsg(std::string* ErrMsg, const std::string& prefix) {
   if (!ErrMsg)
     return true;
   char *buffer = NULL;

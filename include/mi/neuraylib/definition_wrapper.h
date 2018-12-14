@@ -287,6 +287,25 @@ public:
     }
 
     //@}
+    /// \name Methods related to member access.
+    //@{
+
+    /// Get the transaction.
+    ITransaction* get_transaction() const;
+
+    /// Get the MDL factory.
+    IMdl_factory* get_mdl_factory() const;
+
+    /// Get the MDL function or material definition.
+    const IScene_element* get_scene_element() const;
+
+    /// Get the element type.
+    Element_type get_element_type() const;
+
+    /// Get the DB name of the MDL function or material definition.
+    const std::string& get_name() const;
+
+    //@}
 
 private:
 
@@ -750,7 +769,34 @@ inline IScene_element* Definition_wrapper::create_instance(
 
     } else
         return 0;
+}
 
+inline ITransaction* Definition_wrapper::get_transaction() const
+{
+    m_transaction->retain();
+    return m_transaction.get();
+}
+
+inline IMdl_factory* Definition_wrapper::get_mdl_factory() const
+{
+    m_mdl_factory->retain();
+    return m_mdl_factory.get();
+}
+
+inline const IScene_element* Definition_wrapper::get_scene_element() const
+{
+    m_access->retain();
+    return m_access.get();
+}
+
+inline Element_type Definition_wrapper::get_element_type() const
+{
+    return m_type;
+}
+
+inline const std::string& Definition_wrapper::get_name() const
+{
+    return m_name;
 }
 
 } // namespace neuraylib

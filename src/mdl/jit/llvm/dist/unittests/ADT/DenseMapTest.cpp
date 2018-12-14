@@ -33,7 +33,7 @@ uint32_t *getTestValue(int i, uint32_t **) {
 /// \brief A test class that tries to check that construction and destruction
 /// occur correctly.
 class CtorTester {
-  static MISTD::set<CtorTester *> Constructed;
+  static std::set<CtorTester *> Constructed;
   int Value;
 
 public:
@@ -55,7 +55,7 @@ public:
   bool operator==(const CtorTester &RHS) const { return Value == RHS.Value; }
 };
 
-MISTD::set<CtorTester *> CtorTester::Constructed;
+std::set<CtorTester *> CtorTester::Constructed;
 
 struct CtorTesterMapInfo {
   static inline CtorTester getEmptyKey() { return CtorTester(-1); }
@@ -195,7 +195,7 @@ TYPED_TEST(DenseMapTest, EraseTest2) {
 
 // Test insert() method
 TYPED_TEST(DenseMapTest, InsertTest) {
-  this->Map.insert(MISTD::make_pair(this->getKey(), this->getValue()));
+  this->Map.insert(std::make_pair(this->getKey(), this->getValue()));
   EXPECT_EQ(1u, this->Map.size());
   EXPECT_EQ(this->getValue(), this->Map[this->getKey()]);
 }
@@ -257,7 +257,7 @@ TYPED_TEST(DenseMapTest, SwapTest) {
 // A more complex iteration test
 TYPED_TEST(DenseMapTest, IterationTest) {
   bool visited[100];
-  MISTD::map<typename TypeParam::key_type, unsigned> visitedIndex;
+  std::map<typename TypeParam::key_type, unsigned> visitedIndex;
 
   // Insert 100 numbers into the map
   for (int i = 0; i < 100; ++i) {

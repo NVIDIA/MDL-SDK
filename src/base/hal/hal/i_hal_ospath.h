@@ -48,15 +48,15 @@ class Ospath
     /// returns 'bar', the basename() function returns an empty string ('').
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string basename(
-	const MISTD::string& path);
+    static std::string basename(
+	const std::string& path);
 
     /// Return the directory name of pathname path. This is the first half of
     /// the pair returned by split(path).
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string dirname(
-	const MISTD::string& path);
+    static std::string dirname(
+	const std::string& path);
 
     /// Joins two path components intelligently. The return value is the concatenation of path1, and
     /// optionally path2, etc., with exactly one directory separator (os.sep) inserted between
@@ -64,15 +64,15 @@ class Ospath
     /// \param path1 incoming path
     /// \param path2 incoming path
     /// \return the resulting string
-    static MISTD::string join(
-	const MISTD::string& path1,
-	const MISTD::string& path2);
+    static std::string join(
+	const std::string& path1,
+	const std::string& path2);
 
     /// Joins two path names.
     ///
     /// Returns the concatenation of \p path1 and \p path2 with one directory separator in between,
     /// unless one of the two paths is "." in which case the other path os returned.
-    static MISTD::string join_v2(const MISTD::string& path1, const MISTD::string& path2);
+    static std::string join_v2(const std::string& path1, const std::string& path2);
 
     /// Normalize a pathname. This collapses redundant separators and up-level
     /// references, e.g. A//B, A/./B and A/foo/../B all become A/B. It does not
@@ -80,15 +80,15 @@ class Ospath
     /// Note that paths like . and A/.. are normalized to the empty string.
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string normpath(
-	const MISTD::string& path);
+    static std::string normpath(
+	const std::string& path);
 
     /// Normalize a pathname. It does not normalize the case. On Windows, it converts forward
     /// slashes to backward slashes.
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string normpath_only(
-	const MISTD::string& path);
+    static std::string normpath_only(
+	const std::string& path);
 
     /// Normalizes a path name.
     ///
@@ -105,7 +105,7 @@ class Ospath
     ///
     /// The function considers only sep() as directory separator and does not do any conversion of
     /// "/" into "\" or vice versa. All examples above hold only for sep() == "/".
-    static MISTD::string normpath_v2( const MISTD::string& path);
+    static std::string normpath_v2( const std::string& path);
 
     /// Split the pathname path into a pair, (head, tail) where tail is the
     /// last pathname component and head is everything leading up to that. The
@@ -119,9 +119,9 @@ class Ospath
     /// \param[out] head the head part
     /// \param[out] tail the rest
     static void split(
-	const MISTD::string& path,
-	MISTD::string& head,
-	MISTD::string& tail);
+	const std::string& path,
+	std::string& head,
+	std::string& tail);
 
     /// Split the pathname path into a pair, (head, tail) where tail is the
     /// last pathname component and head is everything leading up to that.
@@ -130,9 +130,9 @@ class Ospath
     /// \param[out] head the head part
     /// \param[out] tail the rest
     static void split_only(
-	const MISTD::string& path,
-	MISTD::string& head,
-	MISTD::string& tail);
+	const std::string& path,
+	std::string& head,
+	std::string& tail);
 
     /// Split the pathname path into a pair (drive, tail) where drive is either
     /// a drive specification or the empty string. On systems which do not use
@@ -142,9 +142,9 @@ class Ospath
     /// \param[out] drive the drive part
     /// \param[out] tail the rest
     static void splitdrive(
-	const MISTD::string& path,
-	MISTD::string& drive,
-	MISTD::string& tail);
+	const std::string& path,
+	std::string& drive,
+	std::string& tail);
 
     /// Split the pathname path into a pair (root, ext) such that root + ext == path, and \p ext
     /// is empty or begins with a period and contains at most one period.
@@ -152,42 +152,42 @@ class Ospath
     /// \param[out] root the root part
     /// \param[out] ext the extension
     static void splitext(
-	const MISTD::string& path,
-	MISTD::string& root,
-	MISTD::string& ext);
+	const std::string& path,
+	std::string& root,
+	std::string& ext);
 
     /// Retrieve the extension from a given \p path such that the returned result is empty or begins
     /// with a period.
     /// \param path incoming path
     /// \return the extension string, or the empty string else
-    static MISTD::string get_ext(
-	const MISTD::string& path);
+    static std::string get_ext(
+	const std::string& path);
 
     /// Return the OS-dependent path separator. This is the character separating the single
     /// directories from each other. E.g.  "\\" or "/".
-    static MISTD::string sep();
+    static std::string sep();
 
     /// Return the OS independent path set separators. This is a string containing all characters
     /// which can be used to separate single paths from each other and might contain more than
     /// one character.On Linux and MacOSX, path set is separated by ":" and/or ";", e.g.,
     /// "/home/user0:/home/user0", on Windows "C:\home\user0;C:\home\user0"
-    static MISTD::string get_path_set_separator();
+    static std::string get_path_set_separator();
 
     /// Convert all separators to forward slashes.
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string convert_to_forward_slashes(
-	const MISTD::string& path);
+    static std::string convert_to_forward_slashes(
+	const std::string& path);
     /// Convert all separators to backward slashes.
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string convert_to_backward_slashes(
-	const MISTD::string& path);
+    static std::string convert_to_backward_slashes(
+	const std::string& path);
     /// Convert all separators to the current platform's separators.
     /// \param path incoming path
     /// \return the resulting string
-    static MISTD::string convert_to_platform_specific_path(
-	const MISTD::string& path);
+    static std::string convert_to_platform_specific_path(
+	const std::string& path);
 };
 
 }

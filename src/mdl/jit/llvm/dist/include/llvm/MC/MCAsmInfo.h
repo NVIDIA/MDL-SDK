@@ -313,7 +313,7 @@ namespace llvm {
 
     //===--- Prologue State ----------------------------------------------===//
 
-    MISTD::vector<MCCFIInstruction> InitialFrameState;
+    std::vector<MCCFIInstruction> InitialFrameState;
 
   public:
     explicit MCAsmInfo();
@@ -541,7 +541,7 @@ namespace llvm {
       InitialFrameState.push_back(Inst);
     }
 
-    const MISTD::vector<MCCFIInstruction> &getInitialFrameState() const {
+    const std::vector<MCCFIInstruction> &getInitialFrameState() const {
       return InitialFrameState;
     }
   };

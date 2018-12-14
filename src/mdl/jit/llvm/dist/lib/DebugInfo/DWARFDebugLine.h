@@ -57,9 +57,9 @@ public:
     uint8_t LineRange;
     // The number assigned to the first special opcode.
     uint8_t OpcodeBase;
-    MISTD::vector<uint8_t> StandardOpcodeLengths;
-    MISTD::vector<const char*> IncludeDirectories;
-    MISTD::vector<FileNameEntry> FileNames;
+    std::vector<uint8_t> StandardOpcodeLengths;
+    std::vector<const char*> IncludeDirectories;
+    std::vector<FileNameEntry> FileNames;
 
     // Length of the prologue in bytes.
     uint32_t getLength() const {
@@ -180,20 +180,20 @@ public:
 
     bool lookupAddressRange(uint64_t address,
                             uint64_t size, 
-                            MISTD::vector<uint32_t>& result) const;
+                            std::vector<uint32_t>& result) const;
 
     // Extracts filename by its index in filename table in prologue.
     // Returns true on success.
     bool getFileNameByIndex(uint64_t FileIndex,
                             bool NeedsAbsoluteFilePath,
-                            MISTD::string &Result) const;
+                            std::string &Result) const;
 
     void dump(raw_ostream &OS) const;
 
     struct Prologue Prologue;
-    typedef MISTD::vector<Row> RowVector;
+    typedef std::vector<Row> RowVector;
     typedef RowVector::const_iterator RowIter;
-    typedef MISTD::vector<Sequence> SequenceVector;
+    typedef std::vector<Sequence> SequenceVector;
     typedef SequenceVector::const_iterator SequenceIter;
     RowVector Rows;
     SequenceVector Sequences;
@@ -241,7 +241,7 @@ public:
                                        uint32_t offset);
 
 private:
-  typedef MISTD::map<uint32_t, LineTable> LineTableMapTy;
+  typedef std::map<uint32_t, LineTable> LineTableMapTy;
   typedef LineTableMapTy::iterator LineTableIter;
   typedef LineTableMapTy::const_iterator LineTableConstIter;
 

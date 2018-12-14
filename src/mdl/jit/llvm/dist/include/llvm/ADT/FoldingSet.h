@@ -46,7 +46,7 @@ namespace llvm {
 /// Eg.
 ///    class MyNode : public FoldingSetNode {
 ///    private:
-///      MISTD::string Name;
+///      std::string Name;
 ///      unsigned Value;
 ///    public:
 ///      MyNode(const char *N, unsigned V) : Name(N), Value(V) {}

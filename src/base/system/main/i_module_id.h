@@ -99,6 +99,7 @@ enum Module_id {
     M_STRING,		// base/lib/string
     M_STRINGID_MOD,     // base/lib/stringid_module
     M_ZLIB,		// base/lib/zlib
+    M_I18N,          // mdl/integration/i18n
     M_MDLC,             // mdl/integration/mdlnr
     M_IMAGE,		// io/image/image
     M_XML,		// io/parser/xml

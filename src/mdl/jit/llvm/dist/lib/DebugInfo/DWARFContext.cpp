@@ -295,8 +295,8 @@ void DWARFContext::parseCompileUnits() {
 }
 
 void DWARFContext::parseTypeUnits() {
-  const MISTD::map<object::SectionRef, Section> &Sections = getTypesSections();
-  for (MISTD::map<object::SectionRef, Section>::const_iterator
+  const std::map<object::SectionRef, Section> &Sections = getTypesSections();
+  for (std::map<object::SectionRef, Section>::const_iterator
            I = Sections.begin(),
            E = Sections.end();
        I != E; ++I) {
@@ -354,7 +354,7 @@ DWARFCompileUnit *DWARFContext::getCompileUnitForOffset(uint32_t Offset) {
     parseCompileUnits();
 
   DWARFCompileUnit **CU =
-      MISTD::lower_bound(CUs.begin(), CUs.end(), Offset, OffsetComparator());
+      std::lower_bound(CUs.begin(), CUs.end(), Offset, OffsetComparator());
   if (CU != CUs.end()) {
     return *CU;
   }
@@ -372,7 +372,7 @@ static bool getFileNameForCompileUnit(DWARFCompileUnit *CU,
                                       const DWARFLineTable *LineTable,
                                       uint64_t FileIndex,
                                       bool NeedsAbsoluteFilePath,
-                                      MISTD::string &FileName) {
+                                      std::string &FileName) {
   if (CU == 0 ||
       LineTable == 0 ||
       !LineTable->getFileNameByIndex(FileIndex, NeedsAbsoluteFilePath,
@@ -394,7 +394,7 @@ static bool getFileLineInfoForCompileUnit(DWARFCompileUnit *CU,
                                           const DWARFLineTable *LineTable,
                                           uint64_t Address,
                                           bool NeedsAbsoluteFilePath,
-                                          MISTD::string &FileName,
+                                          std::string &FileName,
                                           uint32_t &Line, uint32_t &Column) {
   if (CU == 0 || LineTable == 0)
     return false;
@@ -417,8 +417,8 @@ DILineInfo DWARFContext::getLineInfoForAddress(uint64_t Address,
   DWARFCompileUnit *CU = getCompileUnitForAddress(Address);
   if (!CU)
     return DILineInfo();
-  MISTD::string FileName = "<invalid>";
-  MISTD::string FunctionName = "<invalid>";
+  std::string FileName = "<invalid>";
+  std::string FunctionName = "<invalid>";
   uint32_t Line = 0;
   uint32_t Column = 0;
   if (Specifier.needs(DILineInfoSpecifier::FunctionName)) {
@@ -453,7 +453,7 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(uint64_t Address,
   if (!CU)
     return Lines;
 
-  MISTD::string FunctionName = "<invalid>";
+  std::string FunctionName = "<invalid>";
   if (Specifier.needs(DILineInfoSpecifier::FunctionName)) {
     // The address may correspond to instruction in some inlined function,
     // so we have to build the chain of inlined functions and take the
@@ -471,7 +471,7 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(uint64_t Address,
   // return the top-most function at the starting address.
   if (!Specifier.needs(DILineInfoSpecifier::FileLineInfo)) {
     Lines.push_back(
-        MISTD::make_pair(Address, DILineInfo("<invalid>", FunctionName, 0, 0)));
+        std::make_pair(Address, DILineInfo("<invalid>", FunctionName, 0, 0)));
     return Lines;
   }
 
@@ -480,7 +480,7 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(uint64_t Address,
       Specifier.needs(DILineInfoSpecifier::AbsoluteFilePath);
 
   // Get the index of row we're looking for in the line table.
-  MISTD::vector<uint32_t> RowVector;
+  std::vector<uint32_t> RowVector;
   if (!LineTable->lookupAddressRange(Address, Size, RowVector))
     return Lines;
 
@@ -489,10 +489,10 @@ DILineInfoTable DWARFContext::getLineInfoForAddressRange(uint64_t Address,
     uint32_t RowIndex = RowVector[i];
     // Take file number and line/column from the row.
     const DWARFDebugLine::Row &Row = LineTable->Rows[RowIndex];
-    MISTD::string FileName = "<invalid>";
+    std::string FileName = "<invalid>";
     getFileNameForCompileUnit(CU, LineTable, Row.File,
                               NeedsAbsoluteFilePath, FileName);
-    Lines.push_back(MISTD::make_pair(
+    Lines.push_back(std::make_pair(
         Row.Address, DILineInfo(FileName, FunctionName, Row.Line, Row.Column)));
   }
 
@@ -515,8 +515,8 @@ DIInliningInfo DWARFContext::getInliningInfoForAddress(uint64_t Address,
   const DWARFLineTable *LineTable = 0;
   for (uint32_t i = 0, n = InlinedChain.DIEs.size(); i != n; i++) {
     const DWARFDebugInfoEntryMinimal &FunctionDIE = InlinedChain.DIEs[i];
-    MISTD::string FileName = "<invalid>";
-    MISTD::string FunctionName = "<invalid>";
+    std::string FileName = "<invalid>";
+    std::string FunctionName = "<invalid>";
     uint32_t Line = 0;
     uint32_t Column = 0;
     // Get function name if necessary.
@@ -706,7 +706,7 @@ DWARFContextInMemory::DWARFContextInMemory(object::ObjectFile *Obj) :
                      << " at " << format("%p", Address)
                      << " with width " << format("%d", R.Width)
                      << "\n");
-        Map->insert(MISTD::make_pair(Address, MISTD::make_pair(R.Width, R.Value)));
+        Map->insert(std::make_pair(Address, std::make_pair(R.Width, R.Value)));
       }
     }
   }

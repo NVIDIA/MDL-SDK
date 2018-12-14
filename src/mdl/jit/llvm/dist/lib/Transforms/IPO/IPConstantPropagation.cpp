@@ -82,7 +82,7 @@ bool IPCP::PropagateConstantsIntoArguments(Function &F) {
 
   // For each argument, keep track of its constant value and whether it is a
   // constant or not.  The bool is driven to true when found to be non-constant.
-  SmallVector<MISTD::pair<Constant*, bool>, 16> ArgumentConstants;
+  SmallVector<std::pair<Constant*, bool>, 16> ArgumentConstants;
   ArgumentConstants.resize(F.arg_size());
 
   unsigned NumNonconstant = 0;

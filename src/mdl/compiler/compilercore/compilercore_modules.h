@@ -485,7 +485,14 @@ public:
         Module const      *&owner) const;
 
     /// Returns true if this is a native module.
-    bool is_native() const;
+    bool is_native() const {
+        return m_is_native;
+    }
+
+    /// Returns true if this is a owned module (by the compiler).
+    bool is_compiler_owned() const {
+        return m_is_compiler_owned;
+    }
 
     /// Get the owner file name of the message list.
     char const *get_msg_name() const;
@@ -501,12 +508,13 @@ public:
 
     /// Set the language version if possible.
     ///
-    /// \param compiler  the MDL compiler
-    /// \param major     desired major version
-    /// \param minor     desired minor version
+    /// \param compiler                      the MDL compiler
+    /// \param major                         desired major version
+    /// \param minor                         desired minor version
+    /// \param enable_experimental_features  if true, allow experimental MDL features
     /// 
     /// \return true on success, false on error
-    bool set_version(MDL *compiler, int major, int minor);
+    bool set_version(MDL *compiler, int major, int minor, bool enable_experimental_features);
 
     /// Access messages.
     Messages_impl &access_messages_impl();
@@ -1193,6 +1201,20 @@ private:
 IType_name *create_type_name(
     IType const *type,
     IModule     *owner);
+
+/// Promote a given expression to the MDL version of the owner module.
+///
+/// \param owner  the owner module
+/// \param expr   the expression
+///
+/// This function modifies a given expression to the MDL version of the owner module.
+/// Several restrictions apply:
+/// - only forward promotion is supported, i.e. only promotion to "newer" version
+/// - the detection of "deprecated" entities works solely on the names, i.e. this function
+///   expects that the "$version" prefixes are used.
+IExpression const *promote_expressions_to_mdl_version(
+    IModule           *owner,
+    IExpression const *expr);
 
 // Helper shims for calculation the dynamic memory consumption
 inline size_t dynamic_memory_consumption(Module::Import_entry const &s) { return 0; }

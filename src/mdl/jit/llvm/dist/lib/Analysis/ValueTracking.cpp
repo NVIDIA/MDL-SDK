@@ -99,7 +99,7 @@ static void ComputeMaskedBitsAddSub(bool Add, Value *Op0, Value *Op1, bool NSW,
       // If the known zeros are in the left operand for a subtract,
       // fall back to the minimum known zeros in both operands.
       KnownZero |= APInt::getLowBitsSet(BitWidth,
-                                        MISTD::min(LHSKnownZeroOut,
+                                        std::min(LHSKnownZeroOut,
                                                  RHSKnownZeroOut));
     }
   } else if (RHSKnownZeroOut >= LHSKnownZeroOut) {
@@ -172,12 +172,12 @@ static void ComputeMaskedBitsMul(Value *Op0, Value *Op1, bool NSW,
   KnownOne.clearAllBits();
   unsigned TrailZ = KnownZero.countTrailingOnes() +
                     KnownZero2.countTrailingOnes();
-  unsigned LeadZ =  MISTD::max(KnownZero.countLeadingOnes() +
+  unsigned LeadZ =  std::max(KnownZero.countLeadingOnes() +
                              KnownZero2.countLeadingOnes(),
                              BitWidth) - BitWidth;
 
-  TrailZ = MISTD::min(TrailZ, BitWidth);
-  LeadZ = MISTD::min(LeadZ, BitWidth);
+  TrailZ = std::min(TrailZ, BitWidth);
+  LeadZ = std::min(LeadZ, BitWidth);
   KnownZero = APInt::getLowBitsSet(BitWidth, TrailZ) |
               APInt::getHighBitsSet(BitWidth, LeadZ);
 
@@ -206,7 +206,7 @@ void llvm::computeMaskedBitsLoad(const MDNode &Ranges, APInt &KnownZero) {
     if (Range.isWrappedSet())
       MinLeadingZeros = 0; // -1 has no zeros
     unsigned LeadingZeros = (Upper->getValue() - 1).countLeadingZeros();
-    MinLeadingZeros = MISTD::min(LeadingZeros, MinLeadingZeros);
+    MinLeadingZeros = std::min(LeadingZeros, MinLeadingZeros);
   }
 
   KnownZero = APInt::getHighBitsSet(BitWidth, MinLeadingZeros);
@@ -398,7 +398,7 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
     ComputeMaskedBits(I->getOperand(1), KnownZero2, KnownOne2, TD, Depth+1);
     unsigned RHSUnknownLeadingOnes = KnownOne2.countLeadingZeros();
     if (RHSUnknownLeadingOnes != BitWidth)
-      LeadZ = MISTD::min(BitWidth,
+      LeadZ = std::min(BitWidth,
                        LeadZ + BitWidth - RHSUnknownLeadingOnes - 1);
 
     KnownZero = APInt::getHighBitsSet(BitWidth, LeadZ);
@@ -600,7 +600,7 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
     ComputeMaskedBits(I->getOperand(0), KnownZero, KnownOne, TD, Depth+1);
     ComputeMaskedBits(I->getOperand(1), KnownZero2, KnownOne2, TD, Depth+1);
 
-    unsigned Leaders = MISTD::max(KnownZero.countLeadingOnes(),
+    unsigned Leaders = std::max(KnownZero.countLeadingOnes(),
                                 KnownZero2.countLeadingOnes());
     KnownOne.clearAllBits();
     KnownZero = APInt::getHighBitsSet(BitWidth, Leaders);
@@ -644,7 +644,7 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
         unsigned Idx = cast<ConstantInt>(Index)->getZExtValue();
         const StructLayout *SL = TD->getStructLayout(STy);
         uint64_t Offset = SL->getElementOffset(Idx);
-        TrailZ = MISTD::min<unsigned>(TrailZ,
+        TrailZ = std::min<unsigned>(TrailZ,
                                     countTrailingZeros(Offset));
       } else {
         // Handle array index arithmetic.
@@ -654,7 +654,7 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
         uint64_t TypeSize = TD ? TD->getTypeAllocSize(IndexedTy) : 1;
         LocalKnownZero = LocalKnownOne = APInt(GEPOpiBits, 0);
         ComputeMaskedBits(Index, LocalKnownZero, LocalKnownOne, TD, Depth+1);
-        TrailZ = MISTD::min(TrailZ,
+        TrailZ = std::min(TrailZ,
                           unsigned(countTrailingZeros(TypeSize) +
                                    LocalKnownZero.countTrailingOnes()));
       }
@@ -702,7 +702,7 @@ void llvm::ComputeMaskedBits(Value *V, APInt &KnownZero, APInt &KnownOne,
           ComputeMaskedBits(L, KnownZero3, KnownOne3, TD, Depth+1);
 
           KnownZero = APInt::getLowBitsSet(BitWidth,
-                                           MISTD::min(KnownZero2.countTrailingOnes(),
+                                           std::min(KnownZero2.countTrailingOnes(),
                                                     KnownZero3.countTrailingOnes()));
           break;
         }
@@ -1183,7 +1183,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
     Tmp = ComputeNumSignBits(U->getOperand(0), TD, Depth+1);
     if (Tmp != 1) {
       Tmp2 = ComputeNumSignBits(U->getOperand(1), TD, Depth+1);
-      FirstAnswer = MISTD::min(Tmp, Tmp2);
+      FirstAnswer = std::min(Tmp, Tmp2);
       // We computed what we know about the sign bits as our first
       // answer. Now proceed to the generic code that uses
       // ComputeMaskedBits, and pick whichever answer is better.
@@ -1194,7 +1194,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
     Tmp = ComputeNumSignBits(U->getOperand(1), TD, Depth+1);
     if (Tmp == 1) return 1;  // Early out.
     Tmp2 = ComputeNumSignBits(U->getOperand(2), TD, Depth+1);
-    return MISTD::min(Tmp, Tmp2);
+    return std::min(Tmp, Tmp2);
 
   case Instruction::Add:
     // Add can have at most one carry bit.  Thus we know that the output
@@ -1221,7 +1221,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
 
     Tmp2 = ComputeNumSignBits(U->getOperand(1), TD, Depth+1);
     if (Tmp2 == 1) return 1;
-    return MISTD::min(Tmp, Tmp2)-1;
+    return std::min(Tmp, Tmp2)-1;
 
   case Instruction::Sub:
     Tmp2 = ComputeNumSignBits(U->getOperand(1), TD, Depth+1);
@@ -1249,7 +1249,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(U->getOperand(0), TD, Depth+1);
     if (Tmp == 1) return 1;  // Early out.
-    return MISTD::min(Tmp, Tmp2)-1;
+    return std::min(Tmp, Tmp2)-1;
 
   case Instruction::PHI: {
     PHINode *PN = cast<PHINode>(U);
@@ -1261,7 +1261,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
     Tmp = ComputeNumSignBits(PN->getIncomingValue(0), TD, Depth+1);
     for (unsigned i = 1, e = PN->getNumIncomingValues(); i != e; ++i) {
       if (Tmp == 1) return Tmp;
-      Tmp = MISTD::min(Tmp,
+      Tmp = std::min(Tmp,
                      ComputeNumSignBits(PN->getIncomingValue(i), TD, Depth+1));
     }
     return Tmp;
@@ -1294,7 +1294,7 @@ unsigned llvm::ComputeNumSignBits(Value *V, const DataLayout *TD,
   Mask <<= Mask.getBitWidth()-TyBits;
   // Return # leading zeros.  We use 'min' here in case Val was zero before
   // shifting.  We don't want to return '64' as for an i32 "0".
-  return MISTD::max(FirstAnswer, MISTD::min(TyBits, Mask.countLeadingZeros()));
+  return std::max(FirstAnswer, std::min(TyBits, Mask.countLeadingZeros()));
 }
 
 /// ComputeMultiple - This function computes the integer multiple of Base that

@@ -78,17 +78,17 @@ PassManagerBuilder::~PassManagerBuilder() {
 }
 
 /// Set of global extensions, automatically added as part of the standard set.
-static ManagedStatic<SmallVector<MISTD::pair<PassManagerBuilder::ExtensionPointTy,
+static ManagedStatic<SmallVector<std::pair<PassManagerBuilder::ExtensionPointTy,
    PassManagerBuilder::ExtensionFn>, 8> > GlobalExtensions;
 
 void PassManagerBuilder::addGlobalExtension(
     PassManagerBuilder::ExtensionPointTy Ty,
     PassManagerBuilder::ExtensionFn Fn) {
-  GlobalExtensions->push_back(MISTD::make_pair(Ty, Fn));
+  GlobalExtensions->push_back(std::make_pair(Ty, Fn));
 }
 
 void PassManagerBuilder::addExtension(ExtensionPointTy Ty, ExtensionFn Fn) {
-  Extensions.push_back(MISTD::make_pair(Ty, Fn));
+  Extensions.push_back(std::make_pair(Ty, Fn));
 }
 
 void PassManagerBuilder::addExtensionsToPM(ExtensionPointTy ETy,

@@ -52,6 +52,7 @@
 #include "compilercore_serializer.h"
 #include "compilercore_tools.h"
 #include "compilercore_archiver.h"
+#include "compilercore_comparator.h"
 #include "compilercore_mdl.h"
 
 #include "mdl_module.h"
@@ -72,6 +73,7 @@ char const *MDL::option_dump_call_graph               = MDL_OPTION_DUMP_CALL_GRA
 char const *MDL::option_warn                          = MDL_OPTION_WARN;
 char const *MDL::option_opt_level                     = MDL_OPTION_OPT_LEVEL;
 char const *MDL::option_strict                        = MDL_OPTION_STRICT;
+char const *MDL::option_experimental_features         = MDL_OPTION_EXPERIMENTAL_FEATURES;
 char const *MDL::option_limits_float_min              = MDL_OPTION_LIMITS_FLOAT_MIN;
 char const *MDL::option_limits_float_max              = MDL_OPTION_LIMITS_FLOAT_MAX;
 char const *MDL::option_limits_double_min             = MDL_OPTION_LIMITS_DOUBLE_MIN;
@@ -335,7 +337,23 @@ public:
     }
 };
 
+#ifdef DEBUG
+
+dbg::DebugMallocAllocator dbgMallocAlloc;
+
+#endif  // DEBUG
+
+/// Creates a new MDL compiler-
+static mi::mdl::MDL *create_mdl(IAllocator *alloc)
+{
+    Allocator_builder builder(alloc);
+
+    mi::mdl::MDL *p = builder.create<mi::mdl::MDL>(alloc);
+    return p;
+}
+
 }  // anonymous
+
 
 MDL::MDL(IAllocator *alloc)
 : Base(alloc)
@@ -546,19 +564,6 @@ void MDL::create_builtin_modules()
             // takes ownership
             register_builtin_module(std_mod);
         }
-
-        // load nvidia::df.mdl
-        {
-            mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
-                m_builder.get_allocator(),
-                mdl_module_nvidia_df, sizeof(mdl_module_nvidia_df), ""));
-            Module *df_mod = load_module(
-                NULL, ctx.get(), "::nvidia::df", s.get(), Module::MF_IS_STDLIB);
-
-            // takes ownership
-            register_builtin_module(df_mod);
-        }
-
         // finally load builtins.mdl
         {
             mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
@@ -631,6 +636,8 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_MATH_DISTANCE;
     m_builtin_semantics["::math::dot"] =
         IDefinition::DS_INTRINSIC_MATH_DOT;
+    m_builtin_semantics["::math::eval_at_wavelength"] =
+        IDefinition::DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH;
     m_builtin_semantics["::math::exp"] =
         IDefinition::DS_INTRINSIC_MATH_EXP;
     m_builtin_semantics["::math::exp2"] =
@@ -661,10 +668,14 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_MATH_MAX;
     m_builtin_semantics["::math::max_value"] =
         IDefinition::DS_INTRINSIC_MATH_MAX_VALUE;
+    m_builtin_semantics["::math::max_value_wavelength"] =
+        IDefinition::DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH;
     m_builtin_semantics["::math::min"] =
         IDefinition::DS_INTRINSIC_MATH_MIN;
     m_builtin_semantics["::math::min_value"] =
         IDefinition::DS_INTRINSIC_MATH_MIN_VALUE;
+    m_builtin_semantics["::math::min_value_wavelength"] =
+        IDefinition::DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH;
     m_builtin_semantics["::math::modf"] =
         IDefinition::DS_INTRINSIC_MATH_MODF;
     m_builtin_semantics["::math::normalize"] =
@@ -699,6 +710,10 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_MATH_BLACKBODY;
     m_builtin_semantics["::math::emission_color"] =
         IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR;
+    m_builtin_semantics["::math::DX"] =
+        IDefinition::DS_INTRINSIC_MATH_DX;
+    m_builtin_semantics["::math::DY"] =
+        IDefinition::DS_INTRINSIC_MATH_DY;
 
     // state module
     m_builtin_semantics["::state::position"] =
@@ -857,28 +872,6 @@ void MDL::create_builtin_semantics()
     m_builtin_semantics["::df::fresnel_factor"] =
         IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR;
 
-    // nvidia::df module
-    m_builtin_semantics["::nvidia::df::ashikhmin_shirley_glossy_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF;
-    m_builtin_semantics["::nvidia::df::ward_geisler_moroder_glossy_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF;
-    m_builtin_semantics["::nvidia::df::microfacet_beckmann_smith_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF;
-    m_builtin_semantics["::nvidia::df::microfacet_ggx_smith_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF;
-    m_builtin_semantics["::nvidia::df::microfacet_beckmann_vcavities_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF;
-    m_builtin_semantics["::nvidia::df::microfacet_ggx_vcavities_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF;
-    m_builtin_semantics["::nvidia::df::microfacet_phong_vcavities_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF;
-    m_builtin_semantics["::nvidia::df::simple_glossy_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF;
-    m_builtin_semantics["::nvidia::df::simple_glossy_bsdf_legacy"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY;
-    m_builtin_semantics["::nvidia::df::legacy_mcp_glossy_bsdf"] =
-        IDefinition::DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF;
-
     // debug module
     m_builtin_semantics["::debug::breakpoint"] =
         IDefinition::DS_INTRINSIC_DEBUG_BREAKPOINT;
@@ -950,6 +943,8 @@ void MDL::create_options()
         "optimization level [0-2]: 0 disables all optimizations, 2 maximum optimization");
     m_options.add_option(option_strict, "true",
         "Enables strict MDL compliance");
+    m_options.add_option(option_experimental_features, "false",
+        "Enables undocumented experimental MDL features");
 
     m_options.add_option(option_limits_float_min, STR(FLT_MIN),
         "The smallest positive normalized float value supported by the current platform");
@@ -970,12 +965,14 @@ void MDL::create_options()
 // Load a module from a stream.
 Module *MDL::load_module(
     IModule_cache   *cache,
-    IThread_context *ctx,
+    IThread_context *context,
     char const      *module_name,
     IInput_stream   *s,
     unsigned        flags,
     char const      *msg_name)
 {
+    Thread_context *ctx = impl_cast<Thread_context>(context);
+
     Module *module =
         create_module(module_name, s->get_filename(), IMDL::MDL_DEFAULT_VERSION, flags);
     if (module == NULL) {
@@ -996,7 +993,7 @@ Module *MDL::load_module(
 
     parser.set_imdl(get_allocator(), this);
 
-    parser.set_module(module);
+    parser.set_module(module, get_compiler_bool_option(ctx, option_experimental_features, false));
     parser.Parse();
 
     mi::base::Handle<IArchive_input_stream> ias(s->get_interface<IArchive_input_stream>());
@@ -1107,6 +1104,13 @@ Module const *MDL::compile_module(
         m_search_path_lock,
         ctx.access_messages_impl(),
         ctx.get_front_path());
+
+    if (char const *repl_module_name = ctx.get_replacement_module_name()) {
+        char const *repl_file_name = ctx.get_replacement_file_name();
+
+        MDL_ASSERT(repl_file_name != NULL && "Replacement file name must be set");
+        resolver.set_module_replacement(repl_module_name, repl_file_name);
+    }
 
     string mname(resolve_import(
         resolver, module_name, /*owner_module=*/NULL, /*pos=*/NULL));
@@ -1222,6 +1226,7 @@ IExpression const *MDL::parse_expression(
     int           start_line,
     int           start_col,
     Module        *module,
+    bool          enable_experimental_features,
     Messages_impl &msgs)
 {
     mi::base::Handle<IInput_stream> input(m_builder.create<Buffer_Input_stream>(
@@ -1233,7 +1238,7 @@ IExpression const *MDL::parse_expression(
 
     parser.set_imdl(get_allocator(), this);
 
-    parser.set_module(module);
+    parser.set_module(module, enable_experimental_features);
     return parser.parse_expression();
 }
 
@@ -1734,8 +1739,23 @@ IArchive_tool *MDL::create_archive_tool()
     return m_builder.create<Archive_tool>(get_allocator(), this);
 }
 
+// Create an MDL comparator tool using this compiler.
+IMDL_comparator *MDL::create_mdl_comparator()
+{
+    // creates a new compiler owned by the comparator
+    mi::base::Handle<MDL> compiler(create_mdl(get_allocator()));
+
+    mi::base::Handle<IMDL_search_path> const &sp = get_search_path();
+
+    // by default, get the search path of the parent
+    sp->retain(); // takes ownership!
+    compiler->install_search_path(sp.get());
+
+    return m_builder.create<MDL_comparator>(get_allocator(), compiler.get());
+}
+
 // Check if the compiler supports a requested MDL version.
-bool MDL::check_version(int major, int minor, MDL_version &version)
+bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_experimental_features)
 {
     version = MDL_DEFAULT_VERSION;
 
@@ -1755,6 +1775,11 @@ bool MDL::check_version(int major, int minor, MDL_version &version)
             return true;
         case 4:
             version = MDL_VERSION_1_4;
+            return true;
+        case 5:
+            if (!enable_experimental_features)
+                return false;
+            version = MDL_VERSION_1_5;
             return true;
         }
     }
@@ -1889,7 +1914,7 @@ char const *MDL::get_compiler_option(
             if (strcmp(opt.get_option_name(i), name) == 0) {
                 if (opt.is_option_modified(i)) {
                     // this option was set, use it
-                    return m_options.get_option_value(i);
+                    return opt.get_option_value(i);
                 }
                 break;
             }
@@ -2041,27 +2066,6 @@ static IAllocator *g_debug_log_allocator = NULL;
 
 IAllocator *get_debug_log_allocator() { return g_debug_log_allocator; }
 
-namespace {
-
-#ifdef DEBUG
-
-dbg::DebugMallocAllocator dbgMallocAlloc;
-
-#endif  // DEBUG
-
-static mi::mdl::MDL *create_mdl(IAllocator *alloc)
-{
-    // FIXME: This creates a non-ref-counted reference!
-    g_debug_log_allocator = alloc;
-
-    Allocator_builder builder(alloc);
-
-    mi::mdl::MDL *p = builder.create<mi::mdl::MDL>(alloc);
-    return p;
-}
-
-}  // anonymous
-
 //-----------------------------------------------------------------------------
 // Initialize MDL
 //
@@ -2069,8 +2073,12 @@ static mi::mdl::MDL *create_mdl(IAllocator *alloc)
 // Initializes the mdl library and obtains the primary mdl interface.
 mi::mdl::IMDL *initialize(IAllocator *allocator)
 {
-    if (allocator != NULL)
+    if (allocator != NULL) {
+        // FIXME: This creates a non-ref-counted reference!
+        g_debug_log_allocator = allocator;
+
         return create_mdl(allocator);
+    }
 
     mi::base::Handle<mi::base::IAllocator> alloc(
 #ifdef DEBUG
@@ -2082,6 +2090,8 @@ mi::mdl::IMDL *initialize(IAllocator *allocator)
 #endif
     );
 
+    // FIXME: This creates a non-ref-counted reference!
+    g_debug_log_allocator = alloc.get();
     return create_mdl(alloc.get());
 }
 

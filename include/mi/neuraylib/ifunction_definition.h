@@ -69,7 +69,7 @@ public:
     ///       \c FOO_LAST enumerators.
     enum Semantics
     {
-        DS_UNKNOWN,                               ///< Unknown semantics.
+        DS_UNKNOWN = 0,                            ///< Unknown semantics.
 
         DS_CONV_CONSTRUCTOR,                      ///< The conversion constructor.
         DS_ELEM_CONSTRUCTOR,                      ///< The elemental constructor.
@@ -83,7 +83,7 @@ public:
         DS_CONV_OPERATOR,                         ///< The type conversion operator.
 
         // Unary operators
-        DS_OPERATOR_FIRST,
+        DS_OPERATOR_FIRST = 0x0200,
         DS_UNARY_FIRST = DS_OPERATOR_FIRST,
         DS_BITWISE_COMPLEMENT = DS_UNARY_FIRST,   ///< The bitwise complement operator.
         DS_LOGICAL_NOT,                           ///< The unary logical negation operator.
@@ -138,7 +138,7 @@ public:
         DS_OPERATOR_LAST = DS_TERNARY,
 
         // ::math module intrinsics
-        DS_INTRINSIC_MATH_FIRST,
+        DS_INTRINSIC_MATH_FIRST = 0x0300,
         DS_INTRINSIC_MATH_ABS                     ///< The %math::abs() intrinsic function.
         = DS_INTRINSIC_MATH_FIRST,
         DS_INTRINSIC_MATH_ACOS,                   ///< The %math::acos() intrinsic function.
@@ -155,6 +155,8 @@ public:
         DS_INTRINSIC_MATH_DEGREES,                ///< The %math::degrees() intrinsic function.
         DS_INTRINSIC_MATH_DISTANCE,               ///< The %math::distance() intrinsic function.
         DS_INTRINSIC_MATH_DOT,                    ///< The %math::dot() intrinsic function.
+        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,     ///< The %math::eval_at_wavelength()
+                                                  ///  intrinsic function.
         DS_INTRINSIC_MATH_EXP,                    ///< The %math::exp() intrinsic function.
         DS_INTRINSIC_MATH_EXP2,                   ///< The %math::exp2() intrinsic function.
         DS_INTRINSIC_MATH_FLOOR,                  ///< The %math::floor() intrinsic function.
@@ -170,8 +172,12 @@ public:
         DS_INTRINSIC_MATH_LUMINANCE,              ///< The %math::luminance() intrinsic function.
         DS_INTRINSIC_MATH_MAX,                    ///< The %math::max() intrinsic function.
         DS_INTRINSIC_MATH_MAX_VALUE,              ///< The %math::max_value() intrinsic function.
+        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,   ///< The %math::max_value_wavelength()
+                                                  ///  intrinsic function.
         DS_INTRINSIC_MATH_MIN,                    ///< The %math::min() intrinsic function.
         DS_INTRINSIC_MATH_MIN_VALUE,              ///< The %math::min_value() intrinsic function.
+        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,   ///< The %math::min_value_wavelength()
+                                                  ///  intrinsic function.
         DS_INTRINSIC_MATH_MODF,                   ///< The %math::modf() intrinsic function.
         DS_INTRINSIC_MATH_NORMALIZE,              ///< The %math::normalize() intrinsic function.
         DS_INTRINSIC_MATH_POW,                    ///< The %math::pow() intrinsic function.
@@ -190,12 +196,14 @@ public:
         DS_INTRINSIC_MATH_BLACKBODY,              ///< The %math::blackbody() intrinsic function.
         DS_INTRINSIC_MATH_EMISSION_COLOR,         ///< The %math::emission_color() intrinsic
                                                   ///  function.
-        DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_EMISSION_COLOR,
+        DS_INTRINSIC_MATH_DX,                     ///< The %math::DX() intrinsic function.
+        DS_INTRINSIC_MATH_DY,                     ///< The %math::DY() intrinsic function.
+        DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
 
         // ::state module intrinsics
-        DS_INTRINSIC_STATE_FIRST,
+        DS_INTRINSIC_STATE_FIRST = 0x0400,
         DS_INTRINSIC_STATE_POSITION               ///< The %state::position() function.
-        = DS_INTRINSIC_STATE_FIRST,
+            = DS_INTRINSIC_STATE_FIRST,
         DS_INTRINSIC_STATE_NORMAL,                ///< The %state::normal() function.
         DS_INTRINSIC_STATE_GEOMETRY_NORMAL,       ///< The %state::geometry_normal() function.
         DS_INTRINSIC_STATE_MOTION,                ///< The %state::motion() function.
@@ -223,9 +231,9 @@ public:
         DS_INTRINSIC_STATE_LAST = DS_INTRINSIC_STATE_WAVELENGTH_MAX,
 
         // ::tex module intrinsics
-        DS_INTRINSIC_TEX_FIRST,
+        DS_INTRINSIC_TEX_FIRST = 0x0500,
         DS_INTRINSIC_TEX_WIDTH                    ///< The tex::width() function.
-        = DS_INTRINSIC_TEX_FIRST,
+            = DS_INTRINSIC_TEX_FIRST,
         DS_INTRINSIC_TEX_HEIGHT,                  ///< The tex::height() function.
         DS_INTRINSIC_TEX_DEPTH,                   ///< The tex::depth() function.
         DS_INTRINSIC_TEX_LOOKUP_FLOAT,            ///< The tex::lookup_float() function.
@@ -242,10 +250,10 @@ public:
         DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_TEXTURE_ISVALID,
 
         // ::df module intrinsics
-        DS_INTRINSIC_DF_FIRST,
+        DS_INTRINSIC_DF_FIRST = 0x0600,
 
         DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF   ///< The df::diffuse_reflection_bsdf() function.
-        = DS_INTRINSIC_DF_FIRST,
+            = DS_INTRINSIC_DF_FIRST,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,///< The df::diffuse_transmission_bsdf() function.
         DS_INTRINSIC_DF_SPECULAR_BSDF,            ///< The df::specular_bsdf() function.
         DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,       ///< The df::simple_glossy_bsdf() function.
@@ -291,38 +299,18 @@ public:
         DS_INTRINSIC_DF_FRESNEL_FACTOR,           ///< The df::fresnel_factor() function.
         DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_FRESNEL_FACTOR,
 
-        // ::nvidia::df module intrinsics
-        /// The nvidia::df::ashikhmin_shirley_glossy_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF,
-        /// The nvidia::df::ward_gm_glossy_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF,
-        /// The nvidia::df::microfacet_beckmann_smith_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF,
-        /// The nvidia::df::microfacet_ggx_smith_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF,
-        /// The nvidia::df::microfacet_beckmann_vc_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF,
-        /// The nvidia::df::microfacet_ggx_vc_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF,
-        /// The nvidia::df::microfacet_phong_vc_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF,
-        /// The nvidia::df::simple_glossy_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF,
-        /// The nvidia::df::simple_glossy_bsdf_legacy() function.
-        DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY,
-        /// The nvidia::df::legacy_mcp_glossy_bsdf() function.
-        DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF,
 
         // ::debug module intrinsics
-        DS_INTRINSIC_DEBUG_FIRST,
+        DS_INTRINSIC_DEBUG_FIRST = 0x0800,
+
         DS_INTRINSIC_DEBUG_BREAKPOINT             ///< The debug::breakpoint() function.
-        = DS_INTRINSIC_DEBUG_FIRST,
+            = DS_INTRINSIC_DEBUG_FIRST,
         DS_INTRINSIC_DEBUG_ASSERT,                ///< The debug::assert() function.
         DS_INTRINSIC_DEBUG_PRINT,                 ///< The debug::print() function.
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsics
-        DS_INTRINSIC_DAG_FIRST,
+        DS_INTRINSIC_DAG_FIRST = 0x0900,
         /// The structure field access function.
         DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,       ///< The array constructor.
@@ -511,3 +499,4 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IFUNCTION_DEFINITION_H
+

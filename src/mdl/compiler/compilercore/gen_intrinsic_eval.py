@@ -323,6 +323,14 @@ class SignatureParser:
 				# support average with one argument
 				self.intrinsic_modes[name + signature] = "math::average"
 				return True
+			elif name == "DX" or name == "DY":
+				vt = self.get_vector_type_and_size(params[0])
+				if (params[0] == "FF" or params[0] == "DD" or
+					(vt and (vt[0] == "float" or vt[0] == "double"))):
+					# support DX(floatX) and DY(floatX)
+					self.intrinsic_modes[name + signature] = "math::DX|DY"
+					return True
+				return False  # Not yet supported derivations cannot be handled component_wise
 
 		if len(params) == 2:
 			if name == "emission_color" and params[0] == "FAN" and params[1] == "FAn":
@@ -360,6 +368,10 @@ class SignatureParser:
 						# support max_value(floatX) and min_value(floatX)
 						self.intrinsic_modes[name + signature] = "math::max_value|min_value"
 						return True
+			elif name == "max_value_wavelength" or name == "min_value_wavelength":
+				# support max_value_wavelength(color) and min_value_wavelength(color)
+				self.intrinsic_modes[name + signature] = "math::max_value_wavelength|min_value_wavelength"
+				return True
 			elif name == "length" or name == "normalize":
 				vt = self.get_vector_type_and_size(params[0])
 				if params[0] != "CC" and vt and (vt[0] == "float" or vt[0] == "double"):
@@ -420,6 +432,10 @@ class SignatureParser:
 					self.intrinsic_modes[name + signature] = "math::modf"
 					return True
 			return False
+
+		if name == "eval_at_wavelength":
+			self.intrinsic_modes[name + signature] = "math::eval_at_wavelength"
+			return True
 
 		if all_base_same:
 			# assume component operation
@@ -548,6 +564,11 @@ class SignatureParser:
 			self.write(f, call);
 			return
 
+		elif mode == "math::eval_at_wavelength":
+			# FIXME: not supported yet
+			self.write(f, "return value_factory->create_float(0.0f);\n")
+			return
+
 		elif mode == "math::blackbody":
 			self.write(f, "float sRGB[3];\n")
 			self.write(f, "spectral::mdl_blackbody(sRGB, cast<IValue_float>(arguments[0])->get_value());\n")
@@ -566,6 +587,12 @@ class SignatureParser:
 		elif mode == "math::emission_color_color":
 			# FIXME: so far no-op
 			self.write(f, "return arguments[0];\n")
+			return
+
+		elif mode == "math::DX|DY":
+			# always zero IF called on a constant
+			self.write(f, "IType const *arg_tp = arguments[0]->get_type()->skip_type_alias();\n")
+			self.write(f, "return value_factory->create_zero(arg_tp);\n")
 			return
 
 		elif mode == "math::cross":
@@ -780,6 +807,11 @@ class SignatureParser:
 							self.write(f, "return do_%s<double>(value_factory, arguments);\n" % intrinsic)
 				return
 
+		elif mode == "math::max_value_wavelength|min_value_wavelength":
+			# FIXME: so far black
+			self.write(f, "return value_factory->create_float(0.0f);\n")
+			return
+
 		elif mode == "math::distance|dot":
 			if len(params) == 2 and params[0] == params[1]:
 					vt = self.get_vector_type_and_size(params[0])
@@ -816,7 +848,10 @@ class SignatureParser:
 			if ret_type == "CC":
 				self.write(f, "IValue_float const *res[3];\n")
 			else:
-				self.write(f, "IType_vector const *v_type = cast<IValue_vector>(arguments[0])->get_type();\n")
+				if self.get_vector_type_and_size(params[0]):
+					self.write(f, "IType_vector const *v_type = cast<IValue_vector>(arguments[0])->get_type();\n")
+				else:
+					self.write(f, "IType_vector const *v_type = cast<IValue_vector>(arguments[1])->get_type();\n")
 				self.write(f, "IValue const *res[%d];\n" % (vt[1]))
 
 			idx = 0

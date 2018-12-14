@@ -661,7 +661,7 @@ bool SelectionDAG::RemoveNodeFromCSEMaps(SDNode *N) {
   case ISD::TargetExternalSymbol: {
     ExternalSymbolSDNode *ESN = cast<ExternalSymbolSDNode>(N);
     Erased = TargetExternalSymbols.erase(
-               MISTD::pair<MISTD::string,unsigned char>(ESN->getSymbol(),
+               std::pair<std::string,unsigned char>(ESN->getSymbol(),
                                                     ESN->getTargetFlags()));
     break;
   }
@@ -906,9 +906,9 @@ void SelectionDAG::clear() {
   ExtendedValueTypeNodes.clear();
   ExternalSymbols.clear();
   TargetExternalSymbols.clear();
-  MISTD::fill(CondCodeNodes.begin(), CondCodeNodes.end(),
+  std::fill(CondCodeNodes.begin(), CondCodeNodes.end(),
             static_cast<CondCodeSDNode*>(0));
-  MISTD::fill(ValueTypeNodes.begin(), ValueTypeNodes.end(),
+  std::fill(ValueTypeNodes.begin(), ValueTypeNodes.end(),
             static_cast<SDNode*>(0));
 
   EntryNode.UseList = 0;
@@ -1016,7 +1016,7 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, EVT VT, bool isT) {
     // EltParts is currently in little endian order. If we actually want
     // big-endian order then reverse it now.
     if (TLI->isBigEndian())
-      MISTD::reverse(EltParts.begin(), EltParts.end());
+      std::reverse(EltParts.begin(), EltParts.end());
 
     // The elements must be reversed when the element order is different
     // to the endianness of the elements (because the BITCAST is itself a
@@ -1313,7 +1313,7 @@ SDValue SelectionDAG::getExternalSymbol(const char *Sym, EVT VT) {
 SDValue SelectionDAG::getTargetExternalSymbol(const char *Sym, EVT VT,
                                               unsigned char TargetFlags) {
   SDNode *&N =
-    TargetExternalSymbols[MISTD::pair<MISTD::string,unsigned char>(Sym,
+    TargetExternalSymbols[std::pair<std::string,unsigned char>(Sym,
                                                                TargetFlags)];
   if (N) return SDValue(N, 0);
   N = new (NodeAllocator) ExternalSymbolSDNode(true, Sym, TargetFlags, VT);
@@ -1338,7 +1338,7 @@ SDValue SelectionDAG::getCondCode(ISD::CondCode Cond) {
 // the shuffle mask M that point at N1 to point at N2, and indices that point
 // N2 to point at N1.
 static void commuteShuffle(SDValue &N1, SDValue &N2, SmallVectorImpl<int> &M) {
-  MISTD::swap(N1, N2);
+  std::swap(N1, N2);
   int NElts = M.size();
   for (int i = 0; i != NElts; ++i) {
     if (M[i] >= NElts)
@@ -1599,7 +1599,7 @@ SDValue SelectionDAG::CreateStackTemporary(EVT VT, unsigned minAlign) {
   Type *Ty = VT.getTypeForEVT(*getContext());
   const TargetLowering *TLI = TM.getTargetLowering();
   unsigned StackAlign =
-  MISTD::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty), minAlign);
+  std::max((unsigned)TLI->getDataLayout()->getPrefTypeAlignment(Ty), minAlign);
 
   int FrameIdx = FrameInfo->CreateStackObject(ByteSize, StackAlign, false);
   return getFrameIndex(FrameIdx, TLI->getPointerTy());
@@ -1608,13 +1608,13 @@ SDValue SelectionDAG::CreateStackTemporary(EVT VT, unsigned minAlign) {
 /// CreateStackTemporary - Create a stack temporary suitable for holding
 /// either of the specified value types.
 SDValue SelectionDAG::CreateStackTemporary(EVT VT1, EVT VT2) {
-  unsigned Bytes = MISTD::max(VT1.getStoreSizeInBits(),
+  unsigned Bytes = std::max(VT1.getStoreSizeInBits(),
                             VT2.getStoreSizeInBits())/8;
   Type *Ty1 = VT1.getTypeForEVT(*getContext());
   Type *Ty2 = VT2.getTypeForEVT(*getContext());
   const TargetLowering *TLI = TM.getTargetLowering();
   const DataLayout *TD = TLI->getDataLayout();
-  unsigned Align = MISTD::max(TD->getPrefTypeAlignment(Ty1),
+  unsigned Align = std::max(TD->getPrefTypeAlignment(Ty1),
                             TD->getPrefTypeAlignment(Ty2));
 
   MachineFrameInfo *FrameInfo = getMachineFunction().getFrameInfo();
@@ -1822,12 +1822,12 @@ void SelectionDAG::ComputeMaskedBits(SDValue Op, APInt &KnownZero,
     KnownOne.clearAllBits();
     unsigned TrailZ = KnownZero.countTrailingOnes() +
                       KnownZero2.countTrailingOnes();
-    unsigned LeadZ =  MISTD::max(KnownZero.countLeadingOnes() +
+    unsigned LeadZ =  std::max(KnownZero.countLeadingOnes() +
                                KnownZero2.countLeadingOnes(),
                                BitWidth) - BitWidth;
 
-    TrailZ = MISTD::min(TrailZ, BitWidth);
-    LeadZ = MISTD::min(LeadZ, BitWidth);
+    TrailZ = std::min(TrailZ, BitWidth);
+    LeadZ = std::min(LeadZ, BitWidth);
     KnownZero = APInt::getLowBitsSet(BitWidth, TrailZ) |
                 APInt::getHighBitsSet(BitWidth, LeadZ);
     return;
@@ -1844,7 +1844,7 @@ void SelectionDAG::ComputeMaskedBits(SDValue Op, APInt &KnownZero,
     ComputeMaskedBits(Op.getOperand(1), KnownZero2, KnownOne2, Depth+1);
     unsigned RHSUnknownLeadingOnes = KnownOne2.countLeadingZeros();
     if (RHSUnknownLeadingOnes != BitWidth)
-      LeadZ = MISTD::min(BitWidth,
+      LeadZ = std::min(BitWidth,
                        LeadZ + BitWidth - RHSUnknownLeadingOnes - 1);
 
     KnownZero = APInt::getHighBitsSet(BitWidth, LeadZ);
@@ -2111,7 +2111,7 @@ void SelectionDAG::ComputeMaskedBits(SDValue Op, APInt &KnownZero,
 
     ComputeMaskedBits(Op.getOperand(1), KnownZero2, KnownOne2, Depth+1);
     assert((KnownZero2 & KnownOne2) == 0 && "Bits known to be one AND zero?");
-    KnownZeroOut = MISTD::min(KnownZeroOut,
+    KnownZeroOut = std::min(KnownZeroOut,
                             KnownZero2.countTrailingOnes());
 
     if (Op.getOpcode() == ISD::ADD) {
@@ -2168,7 +2168,7 @@ void SelectionDAG::ComputeMaskedBits(SDValue Op, APInt &KnownZero,
     ComputeMaskedBits(Op.getOperand(0), KnownZero, KnownOne, Depth+1);
     ComputeMaskedBits(Op.getOperand(1), KnownZero2, KnownOne2, Depth+1);
 
-    uint32_t Leaders = MISTD::max(KnownZero.countLeadingOnes(),
+    uint32_t Leaders = std::max(KnownZero.countLeadingOnes(),
                                 KnownZero2.countLeadingOnes());
     KnownOne.clearAllBits();
     KnownZero = APInt::getHighBitsSet(BitWidth, Leaders);
@@ -2238,7 +2238,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
     Tmp = VTBits-Tmp+1;
 
     Tmp2 = ComputeNumSignBits(Op.getOperand(0), Depth+1);
-    return MISTD::max(Tmp, Tmp2);
+    return std::max(Tmp, Tmp2);
 
   case ISD::SRA:
     Tmp = ComputeNumSignBits(Op.getOperand(0), Depth+1);
@@ -2264,7 +2264,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
     Tmp = ComputeNumSignBits(Op.getOperand(0), Depth+1);
     if (Tmp != 1) {
       Tmp2 = ComputeNumSignBits(Op.getOperand(1), Depth+1);
-      FirstAnswer = MISTD::min(Tmp, Tmp2);
+      FirstAnswer = std::min(Tmp, Tmp2);
       // We computed what we know about the sign bits as our first
       // answer. Now proceed to the generic code that uses
       // ComputeMaskedBits, and pick whichever answer is better.
@@ -2275,7 +2275,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
     Tmp = ComputeNumSignBits(Op.getOperand(1), Depth+1);
     if (Tmp == 1) return 1;  // Early out.
     Tmp2 = ComputeNumSignBits(Op.getOperand(2), Depth+1);
-    return MISTD::min(Tmp, Tmp2);
+    return std::min(Tmp, Tmp2);
 
   case ISD::SADDO:
   case ISD::UADDO:
@@ -2332,7 +2332,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
 
     Tmp2 = ComputeNumSignBits(Op.getOperand(1), Depth+1);
     if (Tmp2 == 1) return 1;
-    return MISTD::min(Tmp, Tmp2)-1;
+    return std::min(Tmp, Tmp2)-1;
 
   case ISD::SUB:
     Tmp2 = ComputeNumSignBits(Op.getOperand(1), Depth+1);
@@ -2360,7 +2360,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(Op.getOperand(0), Depth+1);
     if (Tmp == 1) return 1;  // Early out.
-    return MISTD::min(Tmp, Tmp2)-1;
+    return std::min(Tmp, Tmp2)-1;
   case ISD::TRUNCATE:
     // FIXME: it's tricky to do anything useful for this, but it is an important
     // case for targets like X86.
@@ -2390,7 +2390,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
       Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
       Op.getOpcode() == ISD::INTRINSIC_VOID) {
     unsigned NumBits = TLI->ComputeNumSignBitsForTargetNode(Op, Depth);
-    if (NumBits > 1) FirstAnswer = MISTD::max(FirstAnswer, NumBits);
+    if (NumBits > 1) FirstAnswer = std::max(FirstAnswer, NumBits);
   }
 
   // Finally, if we can prove that the top bits of the result are 0's or 1's,
@@ -2414,7 +2414,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, unsigned Depth) const{
   Mask <<= Mask.getBitWidth()-VTBits;
   // Return # leading zeros.  We use 'min' here in case Val was zero before
   // shifting.  We don't want to return '64' as for an i32 "0".
-  return MISTD::max(FirstAnswer, MISTD::min(VTBits, Mask.countLeadingZeros()));
+  return std::max(FirstAnswer, std::min(VTBits, Mask.countLeadingZeros()));
 }
 
 /// isBaseWithConstantOffset - Return true if the specified operand is an
@@ -2768,7 +2768,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL,
 
 SDValue SelectionDAG::FoldConstantArithmetic(unsigned Opcode, EVT VT,
                                              SDNode *Cst1, SDNode *Cst2) {
-  SmallVector<MISTD::pair<ConstantSDNode *, ConstantSDNode *>, 4> Inputs;
+  SmallVector<std::pair<ConstantSDNode *, ConstantSDNode *>, 4> Inputs;
   SmallVector<SDValue, 4> Outputs;
   EVT SVT = VT.getScalarType();
 
@@ -2776,7 +2776,7 @@ SDValue SelectionDAG::FoldConstantArithmetic(unsigned Opcode, EVT VT,
   ConstantSDNode *Scalar2 = dyn_cast<ConstantSDNode>(Cst2);
   if (Scalar1 && Scalar2) {
     // Scalar instruction.
-    Inputs.push_back(MISTD::make_pair(Scalar1, Scalar2));
+    Inputs.push_back(std::make_pair(Scalar1, Scalar2));
   } else {
     // For vectors extract each constant element into Inputs so we can constant
     // fold them individually.
@@ -2798,7 +2798,7 @@ SDValue SelectionDAG::FoldConstantArithmetic(unsigned Opcode, EVT VT,
       if (V1->getValueType(0) != SVT || V2->getValueType(0) != SVT)
         return SDValue();
 
-      Inputs.push_back(MISTD::make_pair(V1, V2));
+      Inputs.push_back(std::make_pair(V1, V2));
     }
   }
 
@@ -3181,8 +3181,8 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
 
   // Canonicalize constant to RHS if commutative.
   if (N1C && !N2C && isCommutativeBinOp(Opcode)) {
-    MISTD::swap(N1C, N2C);
-    MISTD::swap(N1, N2);
+    std::swap(N1C, N2C);
+    std::swap(N1, N2);
   }
 
   // Constant fold FP operations.
@@ -3191,8 +3191,8 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
   if (N1CFP) {
     if (!N2CFP && isCommutativeBinOp(Opcode)) {
       // Canonicalize constant to RHS if commutative.
-      MISTD::swap(N1CFP, N2CFP);
-      MISTD::swap(N1, N2);
+      std::swap(N1CFP, N2CFP);
+      std::swap(N1, N2);
     } else if (N2CFP) {
       APFloat V1 = N1CFP->getValueAPF(), V2 = N2CFP->getValueAPF();
       APFloat::opStatus s;
@@ -3243,7 +3243,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
   // Canonicalize an UNDEF to the RHS, even over a constant.
   if (N1.getOpcode() == ISD::UNDEF) {
     if (isCommutativeBinOp(Opcode)) {
-      MISTD::swap(N1, N2);
+      std::swap(N1, N2);
     } else {
       switch (Opcode) {
       case ISD::FP_ROUND_INREG:
@@ -3535,7 +3535,7 @@ static SDValue getMemsetStringVal(EVT VT, SDLoc dl, SelectionDAG &DAG,
   assert(!VT.isVector() && "Can't handle vector type here!");
   unsigned NumVTBits = VT.getSizeInBits();
   unsigned NumVTBytes = NumVTBits / 8;
-  unsigned NumBytes = MISTD::min(NumVTBytes, unsigned(Str.size()));
+  unsigned NumBytes = std::min(NumVTBytes, unsigned(Str.size()));
 
   APInt Val(NumVTBits, 0);
   if (TLI.isLittleEndian()) {
@@ -3586,7 +3586,7 @@ static bool isMemSrcFromString(SDValue Src, StringRef &Str) {
 /// to replace the memset / memcpy. Return true if the number of memory ops
 /// is below the threshold. It returns the types of the sequence of
 /// memory ops to perform memset / memcpy by reference.
-static bool FindOptimalMemOpLowering(MISTD::vector<EVT> &MemOps,
+static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
                                      unsigned Limit, uint64_t Size,
                                      unsigned DstAlign, unsigned SrcAlign,
                                      bool IsMemset,
@@ -3703,7 +3703,7 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, SDLoc dl,
   // TODO: In the AlwaysInline case, if the size is big then generate a loop
   // rather than maybe a humongous number of loads and stores.
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  MISTD::vector<EVT> MemOps;
+  std::vector<EVT> MemOps;
   bool DstAlignCanChange = false;
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -3819,7 +3819,7 @@ static SDValue getMemmoveLoadsAndStores(SelectionDAG &DAG, SDLoc dl,
   // Expand memmove to a series of load and store ops if the size operand falls
   // below a certain threshold.
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  MISTD::vector<EVT> MemOps;
+  std::vector<EVT> MemOps;
   bool DstAlignCanChange = false;
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -3916,7 +3916,7 @@ static SDValue getMemsetStores(SelectionDAG &DAG, SDLoc dl,
   // Expand memset to a series of load/store ops if the size operand
   // falls below a certain threshold.
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  MISTD::vector<EVT> MemOps;
+  std::vector<EVT> MemOps;
   bool DstAlignCanChange = false;
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -4053,7 +4053,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, SDLoc dl, SDValue Dst,
                     getExternalSymbol(TLI->getLibcallName(RTLIB::MEMCPY),
                                       TLI->getPointerTy()),
                     Args, *this, dl);
-  MISTD::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
+  std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
 
   return CallResult.second;
 }
@@ -4111,7 +4111,7 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, SDLoc dl, SDValue Dst,
                     getExternalSymbol(TLI->getLibcallName(RTLIB::MEMMOVE),
                                       TLI->getPointerTy()),
                     Args, *this, dl);
-  MISTD::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
+  std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
 
   return CallResult.second;
 }
@@ -4176,7 +4176,7 @@ SDValue SelectionDAG::getMemset(SDValue Chain, SDLoc dl, SDValue Dst,
                     getExternalSymbol(TLI->getLibcallName(RTLIB::MEMSET),
                                       TLI->getPointerTy()),
                     Args, *this, dl);
-  MISTD::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
+  std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
 
   return CallResult.second;
 }
@@ -5049,7 +5049,7 @@ SDVTList SelectionDAG::getVTList(const EVT *VTs, unsigned NumVTs) {
   SDVTListNode *Result = VTListMap.FindNodeOrInsertPos(ID, IP);
   if (Result == NULL) {
     EVT *Array = Allocator.Allocate<EVT>(NumVTs);
-    MISTD::copy(VTs, VTs + NumVTs, Array);
+    std::copy(VTs, VTs + NumVTs, Array);
     Result = new (Allocator) SDVTListNode(ID.Intern(Allocator), Array, NumVTs);
     VTListMap.InsertNode(Result, IP);
   }
@@ -5305,7 +5305,7 @@ SDNode *SelectionDAG::UpdadeSDLocOnMergedSDNode(SDNode *N, SDLoc OLoc) {
     (OLoc.getDebugLoc() != NLoc)) {
     N->setDebugLoc(DebugLoc());
   }
-  unsigned Order = MISTD::min(N->getIROrder(), OLoc.getIROrder());
+  unsigned Order = std::min(N->getIROrder(), OLoc.getIROrder());
   N->setIROrder(Order);
   return N;
 }
@@ -5887,7 +5887,7 @@ void SelectionDAG::ReplaceAllUsesOfValuesWith(const SDValue *From,
   }
 
   // Sort the uses, so that all the uses from a given User are together.
-  MISTD::sort(Uses.begin(), Uses.end());
+  std::sort(Uses.begin(), Uses.end());
 
   for (unsigned UseIndex = 0, UseIndexEnd = Uses.size();
        UseIndex != UseIndexEnd; ) {
@@ -6086,7 +6086,7 @@ void SDNode::Profile(FoldingSetNodeID &ID) const {
 
 namespace {
   struct EVTArray {
-    MISTD::vector<EVT> VTs;
+    std::vector<EVT> VTs;
 
     EVTArray() {
       VTs.reserve(MVT::LAST_VALUETYPE);
@@ -6096,7 +6096,7 @@ namespace {
   };
 }
 
-static ManagedStatic<MISTD::set<EVT, EVT::compareRawBits> > EVTs;
+static ManagedStatic<std::set<EVT, EVT::compareRawBits> > EVTs;
 static ManagedStatic<EVTArray> SimpleVTArray;
 static ManagedStatic<sys::SmartMutex<true> > VTMutex;
 
@@ -6380,7 +6380,7 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
     llvm::ComputeMaskedBits(const_cast<GlobalValue*>(GV), KnownZero, KnownOne,
                             TLI->getDataLayout());
     unsigned AlignBits = KnownZero.countTrailingOnes();
-    unsigned Align = AlignBits ? 1 << MISTD::min(31U, AlignBits) : 0;
+    unsigned Align = AlignBits ? 1 << std::min(31U, AlignBits) : 0;
     if (Align)
       return MinAlign(Align, GVOffset);
   }
@@ -6410,7 +6410,7 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
 
 /// GetSplitDestVTs - Compute the VTs needed for the low/hi parts of a type
 /// which is split (or expanded) into two not necessarily identical pieces.
-MISTD::pair<EVT, EVT> SelectionDAG::GetSplitDestVTs(const EVT &VT) const {
+std::pair<EVT, EVT> SelectionDAG::GetSplitDestVTs(const EVT &VT) const {
   // Currently all types are split in half.
   EVT LoVT, HiVT;
   if (!VT.isVector()) {
@@ -6421,12 +6421,12 @@ MISTD::pair<EVT, EVT> SelectionDAG::GetSplitDestVTs(const EVT &VT) const {
     LoVT = HiVT = EVT::getVectorVT(*getContext(), VT.getVectorElementType(),
                                    NumElements/2);
   }
-  return MISTD::make_pair(LoVT, HiVT);
+  return std::make_pair(LoVT, HiVT);
 }
 
 /// SplitVector - Split the vector with EXTRACT_SUBVECTOR and return the
 /// low/high part.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 SelectionDAG::SplitVector(const SDValue &N, const SDLoc &DL, const EVT &LoVT,
                           const EVT &HiVT) {
   assert(LoVT.getVectorNumElements() + HiVT.getVectorNumElements() <=
@@ -6437,7 +6437,7 @@ SelectionDAG::SplitVector(const SDValue &N, const SDLoc &DL, const EVT &LoVT,
                getConstant(0, TLI->getVectorIdxTy()));
   Hi = getNode(ISD::EXTRACT_SUBVECTOR, DL, HiVT, N,
                getConstant(LoVT.getVectorNumElements(), TLI->getVectorIdxTy()));
-  return MISTD::make_pair(Lo, Hi);
+  return std::make_pair(Lo, Hi);
 }
 
 // getAddressSpace - Return the address space this GlobalAddress belongs to.

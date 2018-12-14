@@ -145,68 +145,86 @@ IValue* mdl_value_to_int_value(
     return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
 }
 
-/// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
-///
-/// \param ef                     The expression factory to use.
-/// \param transaction            The DB transaction to use.
-/// \param type_int               The expected type of the return value. Used to control whether
-///                               array arguments are converted to immediate-sized or deferred-sized
-///                               arrays. If \c NULL, the type of \p value is used.
-/// \param node                   The DAG node to convert.
-/// \param immutable_callees      \c true for defaults, \c false for arguments
-/// \param create_direct_calls    \c true creates EK_DIRECT_CALLs, \c false creates EK_CALLs
-/// \param module_filename        The filename of the module (used for string-based resources with
-///                               relative filenames).
-/// \param module_name            The fully-qualified MDL module name.
-/// \return                       The converted expression, or \c NULL in case of failures.
-IExpression* mdl_dag_node_to_int_expr(
-    IExpression_factory* ef,
-    DB::Transaction* transaction,
-    const IType* type_int,
-    const mi::mdl::DAG_node* node,
-    bool immutable_callees,
-    bool create_direct_calls,
-    const char* module_filename,
-    const char* module_name);
-
-/// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
-///
-/// Template version of the function above.
-template <class T>
-T* mdl_dag_node_to_int_expr(
-    IExpression_factory* ef,
-    DB::Transaction* transaction,
-    const IType* type_int,
-    const mi::mdl::DAG_node* node,
-    bool immutable_callees,
-    bool create_direct_calls,
-    const char* module_filename,
-    const char* module_name)
+/// Converts mi::mdl::DAG_node to MI::MDL::IExpression and MI::MDL::IAnnotation
+class Mdl_dag_converter
 {
-    mi::base::Handle<IExpression> ptr_expr( mdl_dag_node_to_int_expr(
-        ef, transaction, type_int, node, immutable_callees, create_direct_calls, module_filename,
-        module_name));
-    if( !ptr_expr)
-        return 0;
-    return static_cast<T*>( ptr_expr->get_interface( typename T::IID()));
-}
+public:
 
-/// Converts mi::mdl::DAG_call to MI::MDL::IAnnotation.
-IAnnotation* mdl_dag_call_to_int_annotation(
-    IExpression_factory* ef,
-    DB::Transaction* transaction,
-    const mi::mdl::DAG_call* call,
-    const char* module_filename,
-    const char* module_name);
+    /// Constructor.
+    ///
+    /// \param ef                     The expression factory to use.
+    /// \param transaction            The DB transaction to use.
+    /// \param immutable_callees      \c true for defaults, \c false for arguments
+    /// \param create_direct_calls    \c true creates EK_DIRECT_CALLs, \c false creates EK_CALLs
+    /// \param module_filename        The filename of the module (used for string-based resources
+    ///                               with relative filenames).
+    /// \param module_name            The fully-qualified MDL module name.
+    /// \param prototype_tag          The prototype_tag if relevant.
+    Mdl_dag_converter(
+        IExpression_factory* ef,
+        DB::Transaction* transaction,
+        bool immutable_callees,
+        bool create_direct_calls,
+        const char* module_filename,
+        const char* module_name,
+        DB::Tag prototype_tag);
 
-/// Converts a vector of mi::mdl::DAG_node pointers to MI::MDL::IAnnotation_block.
-IAnnotation_block* mdl_dag_node_vector_to_int_annotation_block(
-    IExpression_factory* ef,
-    DB::Transaction* transaction,
-    const Mdl_annotation_block& mdl_annotations,
-    const char* module_filename,
-    const char* module_name);
+    /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
+    ///
+    /// \param node       The DAG node to convert.
+    /// \param type_int   The expected type of the return value. Used to control whether
+    ///                   array arguments are converted to immediate-sized or deferred-sized
+    ///                   arrays. If \c NULL, the type of \p value is used.
+    ///
+    /// \return           The converted expression, or \c NULL in case of failures.
+    IExpression* mdl_dag_node_to_int_expr(
+        const mi::mdl::DAG_node* node,
+        const IType* type_int) const;
 
+    /// Converts a vector of mi::mdl::DAG_node pointers to MI::MDL::IAnnotation_block.
+    IAnnotation_block* mdl_dag_node_vector_to_int_annotation_block(
+        const Mdl_annotation_block& mdl_annotations,
+        const char* qualified_name) const;
+
+private:
+
+    /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
+    /// (creates IExpression_direct_call)
+    IExpression* mdl_call_to_int_expr_direct(
+        const mi::mdl::DAG_call* call, bool use_parameter_type) const;
+
+    /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
+    /// (creates IExpression_call)
+    IExpression* mdl_call_to_int_expr_indirect(
+        const mi::mdl::DAG_call* call, bool use_parameter_type) const;
+
+    /// Converts mi::mdl::DAG_call to MI::MDL::IAnnotation.
+    IAnnotation* mdl_dag_call_to_int_annotation(
+        const mi::mdl::DAG_call* call, const char* qualified_name) const;
+
+    /// Converts mi::mdl::DAG_node string and string array annotations
+    /// to MI::MDL::IExpression, thereby translating strings according to the
+    /// current locale.
+    IExpression* mdl_dag_node_to_int_expr_localized(
+        const mi::mdl::DAG_node* argument,
+        const mi::mdl::DAG_call* call,
+        const IType* type_int,
+        const char* qualified_name) const;
+
+private:
+    
+    mi::base::Handle<IExpression_factory> m_ef;
+    mi::base::Handle<IValue_factory> m_vf;
+    mi::base::Handle<IType_factory> m_tf;
+
+    DB::Transaction* m_transaction;
+    bool m_immutable_callees;
+    bool m_create_direct_calls;
+
+    const char* m_module_filename;
+    const char* m_module_name;
+    DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
+};
 
 // ********** Conversion from MI::MDL to mi::mdl ***************************************************
 
@@ -251,7 +269,6 @@ const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
     mi::Float32 mdl_wavelength_min,
     mi::Float32 mdl_wavelength_max);
 
-
 // ********** Misc utility functions around MI::MDL ************************************************
 
 /// Adds a "::" prefix for builtin enum/struct symbols.
@@ -281,23 +298,10 @@ bool return_type_is_varying( DB::Transaction* transaction, const IExpression* ar
 /// \param context                The context to resolve parameter references.
 /// \return                       An copy of \p expr with all expressions replaced by duplicates.
 IExpression* deep_copy(
-    IExpression_factory* ef,
+    const IExpression_factory* ef,
     DB::Transaction* transaction,
     const IExpression* expr,
     const std::vector<mi::base::Handle<const IExpression> >& context);
-
-/// Returns the tag of a material definition or function definition.
-///
-/// This method calls transaction->name_to_tag( name). If case of success it returns that tag. In
-/// case of failure it attempts to look up the corresponding module and re-creates the DB element
-/// for that definition. This is needed in some contexts because the user might have remove the
-/// DB element from the DB.
-///
-/// \param transaction            The DB transaction to use.
-/// \param name                   The DB name of the material definition or function definition.
-/// \return                       The tag of the  material definition or function definition, or
-///                               DB::Tag() in case of failures.
-DB::Tag definition_name_to_tag( DB::Transaction* transaction, const char* name);
 
 /// Converts an MDL name into the name of the corresponding DB element.
 ///
@@ -308,7 +312,7 @@ std::string add_mdl_db_prefix( const std::string& name);
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
 /// Uses the MDL file path if not empty, and the tag version otherwise.
-mi::Uint32 get_hash( const MISTD::string& mdl_file_path, DB::Tag_version tv);
+mi::Uint32 get_hash( const std::string& mdl_file_path, DB::Tag_version tv);
 
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
@@ -320,7 +324,7 @@ mi::Uint32 get_hash( const char* mdl_file_path, DB::Tag_version tv);
 /// Uses the MDL file path and gamma value if the MDL file path is not empty, and the two tag
 /// versions otherwise.
 mi::Uint32 get_hash(
-    const MISTD::string& mdl_file_path,
+    const std::string& mdl_file_path,
     mi::Float32 gamma,
     DB::Tag_version tv1,
     DB::Tag_version tv2);

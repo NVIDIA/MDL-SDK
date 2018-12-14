@@ -138,6 +138,18 @@ public:
     bool exists(
         char const *module_name);
 
+    /// Set a replacement path for a given (absolute) module name.
+    ///
+    /// \param module_name  the absolute module name
+    /// \param file_name    the replacement file name for this module
+    void set_module_replacement(
+        char const *module_name,
+        char const *file_name)
+    {
+        m_repl_module_name = module_name;
+        m_repl_file_name   = file_name;
+    }
+
     /// Get the allocator.
     IAllocator *get_allocator() const { return m_alloc; }
 
@@ -479,6 +491,12 @@ private:
 
     /// The entity we are trying to resolve.
     char const *m_resolve_entity;
+
+    /// If non-empty the name of the replacement module.
+    string m_repl_module_name;
+
+    /// If non-empty the name of the replacement module file name.
+    string m_repl_file_name;
 
     // Index of the last generated error message.
     int m_last_msg_idx;

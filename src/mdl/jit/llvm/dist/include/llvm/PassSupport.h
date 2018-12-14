@@ -47,7 +47,7 @@ private:
   const bool IsCFGOnlyPass;            // Pass only looks at the CFG.
   const bool IsAnalysis;               // True if an analysis pass.
   const bool IsAnalysisGroup;          // True if an analysis group.
-  MISTD::vector<const PassInfo*> ItfImpl;// Interfaces implemented by this pass
+  std::vector<const PassInfo*> ItfImpl;// Interfaces implemented by this pass
 
   NormalCtor_t NormalCtor;
 
@@ -121,7 +121,7 @@ public:
   /// getInterfacesImplemented - Return a list of all of the analysis group
   /// interfaces implemented by this pass.
   ///
-  const MISTD::vector<const PassInfo*> &getInterfacesImplemented() const {
+  const std::vector<const PassInfo*> &getInterfacesImplemented() const {
     return ItfImpl;
   }
 

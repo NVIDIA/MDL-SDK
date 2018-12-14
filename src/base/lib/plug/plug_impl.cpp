@@ -72,8 +72,8 @@ bool Plug_module_impl::load_library( const char* path)
         return false;
 
     // Update path (use canonical name in neuray).
-    MISTD::string s = library->get_filename( "mi_plugin_factory");
-    MISTD::string path_str = !s.empty() ? s : path;
+    std::string s = library->get_filename( "mi_plugin_factory");
+    std::string path_str = !s.empty() ? s : path;
     path = 0; // avoid accidental use
 
     // Do not load a library more than once
@@ -96,7 +96,7 @@ bool Plug_module_impl::load_library( const char* path)
     }
 
     // Invoke plugin factory for all plugins
-    MISTD::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > new_plugins;
+    std::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > new_plugins;
     for( size_t i = 0; true; ++i) {
 
         mi::base::Plugin* plugin = factory( i, NULL);

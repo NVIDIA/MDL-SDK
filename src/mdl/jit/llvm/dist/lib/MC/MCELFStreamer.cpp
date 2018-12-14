@@ -542,7 +542,7 @@ void MCELFStreamer::EmitBundleUnlock() {
 }
 
 void MCELFStreamer::Flush() {
-  for (MISTD::vector<LocalCommon>::const_iterator i = LocalCommons.begin(),
+  for (std::vector<LocalCommon>::const_iterator i = LocalCommons.begin(),
                                                 e = LocalCommons.end();
        i != e; ++i) {
     MCSymbolData *SD = i->SD;

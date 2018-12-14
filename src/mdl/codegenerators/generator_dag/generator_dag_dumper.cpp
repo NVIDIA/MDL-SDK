@@ -68,7 +68,7 @@ size_t DAG_dumper::get_id(DAG_node const *node)
 {
     Node_to_id_map::iterator it = m_node_to_is_map.find(node);
     if (it == m_node_to_is_map.end()) {
-        it = m_node_to_is_map.insert(MISTD::make_pair(node, get_unique_id())).first;
+        it = m_node_to_is_map.insert(std::make_pair(node, get_unique_id())).first;
     }
     return it->second;
 }

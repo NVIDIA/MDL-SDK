@@ -136,7 +136,7 @@ public:
 
 private:
   const static uint32_t kChunkSize = 4096 * 4;
-  mutable MISTD::vector<unsigned char> Bytes;
+  mutable std::vector<unsigned char> Bytes;
   OwningPtr<DataStreamer> Streamer;
   mutable size_t BytesRead;   // Bytes read from stream
   size_t BytesSkipped;// Bytes skipped at start of stream (e.g. wrapper/header)

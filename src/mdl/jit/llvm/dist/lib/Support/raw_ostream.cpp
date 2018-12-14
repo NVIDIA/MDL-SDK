@@ -193,7 +193,7 @@ raw_ostream &raw_ostream::write_escaped(StringRef Str,
       *this << '\\' << '"';
       break;
     default:
-      if (MISTD::isprint(c)) {
+      if (std::isprint(c)) {
         *this << c;
         break;
       }
@@ -399,7 +399,7 @@ raw_ostream &raw_ostream::indent(unsigned NumSpaces) {
     return write(Spaces, NumSpaces);
 
   while (NumSpaces) {
-    unsigned NumToWrite = MISTD::min(NumSpaces,
+    unsigned NumToWrite = std::min(NumSpaces,
                                    (unsigned)array_lengthof(Spaces)-1);
     write(Spaces, NumToWrite);
     NumSpaces -= NumToWrite;
@@ -424,7 +424,7 @@ void format_object_base::home() {
 /// occurs, information about the error is put into ErrorInfo, and the
 /// stream should be immediately destroyed; the string will be empty
 /// if no error occurred.
-raw_fd_ostream::raw_fd_ostream(const char *Filename, MISTD::string &ErrorInfo,
+raw_fd_ostream::raw_fd_ostream(const char *Filename, std::string &ErrorInfo,
                                sys::fs::OpenFlags Flags)
     : Error(false), UseAtomicWrites(false), pos(0) {
   assert(Filename != 0 && "Filename is null");
@@ -447,7 +447,7 @@ raw_fd_ostream::raw_fd_ostream(const char *Filename, MISTD::string &ErrorInfo,
   error_code EC = sys::fs::openFileForWrite(Filename, FD, Flags);
 
   if (EC) {
-    ErrorInfo = "Error opening output file '" + MISTD::string(Filename) + "': " +
+    ErrorInfo = "Error opening output file '" + std::string(Filename) + "': " +
                 EC.message();
     ShouldClose = false;
     return;

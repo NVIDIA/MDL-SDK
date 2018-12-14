@@ -48,7 +48,7 @@ int get_errno();
 /// The Disk module has error() functions that return system error codes.
 /// \param err the system error code
 /// \return error string describing the given system error code
-MISTD::string strerror(
+std::string strerror(
     int		err);
 
 /// Indicate whether we have somewhere to write stderr. Windows apps don't
@@ -91,15 +91,15 @@ void fprintf_stderr_utf8( const char* message);
 
 //------------------------------------ misc -------------------------------
 /// return the name of a writable temp directory (/tmp on Unix/Linux)
-MISTD::string get_tmpdir();
+std::string get_tmpdir();
 
 /// return the name of a suitable userdata directory
-MISTD::string get_userdata_dir();
+std::string get_userdata_dir();
 
 /// return the value of an environment variable or empty string else
 /// \param name name of env variable
-MISTD::string get_env(
-    const MISTD::string& name);
+std::string get_env(
+    const std::string& name);
 
 
 } // namespace HAL

@@ -55,7 +55,7 @@ INITIALIZE_PASS_END(PromotePass, "mem2reg", "Promote Memory to Register",
                 false, false)
 
 bool PromotePass::runOnFunction(Function &F) {
-  MISTD::vector<AllocaInst*> Allocas;
+  std::vector<AllocaInst*> Allocas;
 
   BasicBlock &BB = F.getEntryBlock();  // Get the entry node for the function
 

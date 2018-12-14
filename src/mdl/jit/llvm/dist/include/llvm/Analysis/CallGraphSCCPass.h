@@ -37,7 +37,7 @@ public:
 
   /// createPrinterPass - Get a pass that prints the Module
   /// corresponding to a CallGraph.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   using llvm::Pass::doInitialization;
   using llvm::Pass::doFinalization;
@@ -82,7 +82,7 @@ public:
 /// CallGraphSCC - This is a single SCC that a CallGraphSCCPass is run on. 
 class CallGraphSCC {
   void *Context; // The CGPassManager object that is vending this.
-  MISTD::vector<CallGraphNode*> Nodes;
+  std::vector<CallGraphNode*> Nodes;
 public:
   CallGraphSCC(void *context) : Context(context) {}
   
@@ -97,7 +97,7 @@ public:
   /// Old node has been deleted, and New is to be used in its place.
   void ReplaceNode(CallGraphNode *Old, CallGraphNode *New);
   
-  typedef MISTD::vector<CallGraphNode*>::const_iterator iterator;
+  typedef std::vector<CallGraphNode*>::const_iterator iterator;
   iterator begin() const { return Nodes.begin(); }
   iterator end() const { return Nodes.end(); }
 };

@@ -31,8 +31,8 @@ class DebugIR : public llvm::ModulePass {
   bool HideDebugMetadata;
 
   /// The location of the source file.
-  MISTD::string Directory;
-  MISTD::string Filename;
+  std::string Directory;
+  std::string Filename;
 
   /// True if a temporary file name was generated.
   bool GeneratedPath;
@@ -61,13 +61,13 @@ public:
         HideDebugMetadata(false), GeneratedPath(false), ParsedPath(false) {}
 
   /// Run pass on M and set Path to the source file path in the output module.
-  bool runOnModule(llvm::Module &M, MISTD::string &Path);
+  bool runOnModule(llvm::Module &M, std::string &Path);
   bool runOnModule(llvm::Module &M);
 
 private:
 
   /// Returns the concatenated Directory + Filename, without error checking
-  MISTD::string getPath();
+  std::string getPath();
 
   /// Attempts to read source information from debug information in M, and if
   /// that fails, from M's identifier. Returns true on success, false otherwise.

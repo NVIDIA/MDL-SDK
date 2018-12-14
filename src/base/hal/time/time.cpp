@@ -79,11 +79,11 @@ int Time::localtime(
 }
 
 #ifdef WIN_NT
-MISTD::string Time::to_string_rfc_2822() const
+std::string Time::to_string_rfc_2822() const
 {
     // strftime() on Windows generates "W. Europe Standard Time" instead of "+0100" for %z.
     // Therefore we omit %z at the end here and add the corresponding time zone offset ourselves.
-    MISTD::string result = to_string("%a, %d %b %Y %H:%M:%S ", false);
+    std::string result = to_string("%a, %d %b %Y %H:%M:%S ", false);
 
     int minutes = - static_cast<int>(_timezone / 60);
     int hours   = minutes / 60;
@@ -104,7 +104,7 @@ MISTD::string Time::to_string_rfc_2822() const
 }
 #endif
 
-MISTD::string Time::to_string(const char* format, bool gmt) const
+std::string Time::to_string(const char* format, bool gmt) const
 {
     time_t time_stamp_time_t = static_cast<time_t>(m_seconds);
 
@@ -117,12 +117,12 @@ MISTD::string Time::to_string(const char* format, bool gmt) const
 
     char buffer[1024];
     size_t result = ::strftime(&buffer[0], sizeof(buffer), format, &time_stamp_tm);
-    return result > 0 ? MISTD::string(buffer) : MISTD::string("");
+    return result > 0 ? std::string(buffer) : std::string("");
 }
 
 // Convert a time value to a readable string. The time value is considered being an interval and
 // not an absolute moment in time.
-MISTD::string Time::interval_to_string() const
+std::string Time::interval_to_string() const
 {
     Uint seconds = static_cast<Uint>(m_seconds);
     Uint const days = seconds / 86400u;

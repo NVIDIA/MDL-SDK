@@ -54,30 +54,30 @@ public:
   typedef DAGDeltaAlgorithm::edge_ty edge_ty;
 
 private:
-  typedef MISTD::vector<change_ty>::iterator pred_iterator_ty;
-  typedef MISTD::vector<change_ty>::iterator succ_iterator_ty;
-  typedef MISTD::set<change_ty>::iterator pred_closure_iterator_ty;
-  typedef MISTD::set<change_ty>::iterator succ_closure_iterator_ty;
+  typedef std::vector<change_ty>::iterator pred_iterator_ty;
+  typedef std::vector<change_ty>::iterator succ_iterator_ty;
+  typedef std::set<change_ty>::iterator pred_closure_iterator_ty;
+  typedef std::set<change_ty>::iterator succ_closure_iterator_ty;
 
   DAGDeltaAlgorithm &DDA;
 
   const changeset_ty &Changes;
-  const MISTD::vector<edge_ty> &Dependencies;
+  const std::vector<edge_ty> &Dependencies;
 
-  MISTD::vector<change_ty> Roots;
+  std::vector<change_ty> Roots;
 
   /// Cache of failed test results. Successful test results are never cached
   /// since we always reduce following a success. We maintain an independent
   /// cache from that used by the individual delta passes because we may get
   /// hits across multiple individual delta invocations.
-  mutable MISTD::set<changeset_ty> FailedTestsCache;
+  mutable std::set<changeset_ty> FailedTestsCache;
 
   // FIXME: Gross.
-  MISTD::map<change_ty, MISTD::vector<change_ty> > Predecessors;
-  MISTD::map<change_ty, MISTD::vector<change_ty> > Successors;
+  std::map<change_ty, std::vector<change_ty> > Predecessors;
+  std::map<change_ty, std::vector<change_ty> > Successors;
 
-  MISTD::map<change_ty, MISTD::set<change_ty> > PredClosure;
-  MISTD::map<change_ty, MISTD::set<change_ty> > SuccClosure;
+  std::map<change_ty, std::set<change_ty> > PredClosure;
+  std::map<change_ty, std::set<change_ty> > SuccClosure;
 
 private:
   pred_iterator_ty pred_begin(change_ty Node) {
@@ -139,7 +139,7 @@ private:
 public:
   DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
                         const changeset_ty &_Changes,
-                        const MISTD::vector<edge_ty> &_Dependencies);
+                        const std::vector<edge_ty> &_Dependencies);
 
   changeset_ty Run();
 
@@ -181,7 +181,7 @@ public:
 
 DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
                                              const changeset_ty &_Changes,
-                                             const MISTD::vector<edge_ty>
+                                             const std::vector<edge_ty>
                                                &_Dependencies)
   : DDA(_DDA),
     Changes(_Changes),
@@ -189,10 +189,10 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
 {
   for (changeset_ty::const_iterator it = Changes.begin(),
          ie = Changes.end(); it != ie; ++it) {
-    Predecessors.insert(MISTD::make_pair(*it, MISTD::vector<change_ty>()));
-    Successors.insert(MISTD::make_pair(*it, MISTD::vector<change_ty>()));
+    Predecessors.insert(std::make_pair(*it, std::vector<change_ty>()));
+    Successors.insert(std::make_pair(*it, std::vector<change_ty>()));
   }
-  for (MISTD::vector<edge_ty>::const_iterator it = Dependencies.begin(),
+  for (std::vector<edge_ty>::const_iterator it = Dependencies.begin(),
          ie = Dependencies.end(); it != ie; ++it) {
     Predecessors[it->second].push_back(it->first);
     Successors[it->first].push_back(it->second);
@@ -205,12 +205,12 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
       Roots.push_back(*it);
 
   // Pre-compute the closure of the successor relation.
-  MISTD::vector<change_ty> Worklist(Roots.begin(), Roots.end());
+  std::vector<change_ty> Worklist(Roots.begin(), Roots.end());
   while (!Worklist.empty()) {
     change_ty Change = Worklist.back();
     Worklist.pop_back();
 
-    MISTD::set<change_ty> &ChangeSuccs = SuccClosure[Change];
+    std::set<change_ty> &ChangeSuccs = SuccClosure[Change];
     for (pred_iterator_ty it = pred_begin(Change), 
            ie = pred_end(Change); it != ie; ++it) {
       SuccClosure[*it].insert(Change);
@@ -222,7 +222,7 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
   // Invert to form the predecessor closure map.
   for (changeset_ty::const_iterator it = Changes.begin(),
          ie = Changes.end(); it != ie; ++it)
-    PredClosure.insert(MISTD::make_pair(*it, MISTD::set<change_ty>()));
+    PredClosure.insert(std::make_pair(*it, std::set<change_ty>()));
   for (changeset_ty::const_iterator it = Changes.begin(),
          ie = Changes.end(); it != ie; ++it)
     for (succ_closure_iterator_ty it2 = succ_closure_begin(*it),
@@ -251,7 +251,7 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
       llvm::errs() << "]\n";
 
       llvm::errs() << "Roots: [";
-      for (MISTD::vector<change_ty>::const_iterator it = Roots.begin(),
+      for (std::vector<change_ty>::const_iterator it = Roots.begin(),
              ie = Roots.end(); it != ie; ++it) {
         if (it != Roots.begin()) llvm::errs() << ", ";
         llvm::errs() << *it;
@@ -355,6 +355,6 @@ void DAGDeltaAlgorithm::anchor() {
 
 DAGDeltaAlgorithm::changeset_ty
 DAGDeltaAlgorithm::Run(const changeset_ty &Changes,
-                       const MISTD::vector<edge_ty> &Dependencies) {
+                       const std::vector<edge_ty> &Dependencies) {
   return DAGDeltaAlgorithmImpl(*this, Changes, Dependencies).Run();
 }

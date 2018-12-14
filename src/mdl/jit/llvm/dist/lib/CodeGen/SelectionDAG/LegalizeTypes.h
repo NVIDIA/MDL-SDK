@@ -88,7 +88,7 @@ private:
 
   /// ExpandedIntegers - For integer nodes that need to be expanded this map
   /// indicates which operands are the expanded version of the input.
-  SmallDenseMap<SDValue, MISTD::pair<SDValue, SDValue>, 8> ExpandedIntegers;
+  SmallDenseMap<SDValue, std::pair<SDValue, SDValue>, 8> ExpandedIntegers;
 
   /// SoftenedFloats - For floating point nodes converted to integers of
   /// the same size, this map indicates the converted value to use.
@@ -96,7 +96,7 @@ private:
 
   /// ExpandedFloats - For float nodes that need to be expanded this map
   /// indicates which operands are the expanded version of the input.
-  SmallDenseMap<SDValue, MISTD::pair<SDValue, SDValue>, 8> ExpandedFloats;
+  SmallDenseMap<SDValue, std::pair<SDValue, SDValue>, 8> ExpandedFloats;
 
   /// ScalarizedVectors - For nodes that are <1 x ty>, this map indicates the
   /// scalar value of type 'ty' to use.
@@ -104,7 +104,7 @@ private:
 
   /// SplitVectors - For nodes that need to be split this map indicates
   /// which operands are the expanded version of the input.
-  SmallDenseMap<SDValue, MISTD::pair<SDValue, SDValue>, 8> SplitVectors;
+  SmallDenseMap<SDValue, std::pair<SDValue, SDValue>, 8> SplitVectors;
 
   /// WidenedVectors - For vector nodes that need to be widened, indicates
   /// the widened value to use.
@@ -164,9 +164,9 @@ private:
   SDValue JoinIntegers(SDValue Lo, SDValue Hi);
   SDValue LibCallify(RTLIB::Libcall LC, SDNode *N, bool isSigned);
   
-  MISTD::pair<SDValue, SDValue> ExpandChainLibCall(RTLIB::Libcall LC,
+  std::pair<SDValue, SDValue> ExpandChainLibCall(RTLIB::Libcall LC,
                                                  SDNode *Node, bool isSigned);
-  MISTD::pair<SDValue, SDValue> ExpandAtomic(SDNode *Node);
+  std::pair<SDValue, SDValue> ExpandAtomic(SDNode *Node);
 
   SDValue PromoteTargetBoolean(SDValue Bool, EVT VT);
   void ReplaceValueWith(SDValue From, SDValue To);

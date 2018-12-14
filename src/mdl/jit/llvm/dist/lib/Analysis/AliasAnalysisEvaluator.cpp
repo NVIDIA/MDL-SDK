@@ -91,7 +91,7 @@ FunctionPass *llvm::createAAEvalPass() { return new AAEval(); }
 static void PrintResults(const char *Msg, bool P, const Value *V1,
                          const Value *V2, const Module *M) {
   if (P) {
-    MISTD::string o1, o2;
+    std::string o1, o2;
     {
       raw_string_ostream os1(o1), os2(o2);
       WriteAsOperand(os1, V1, true, M);
@@ -99,7 +99,7 @@ static void PrintResults(const char *Msg, bool P, const Value *V1,
     }
     
     if (o2 < o1)
-      MISTD::swap(o1, o2);
+      std::swap(o1, o2);
     errs() << "  " << Msg << ":\t"
            << o1 << ", "
            << o2 << "\n";

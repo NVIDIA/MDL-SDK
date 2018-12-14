@@ -49,12 +49,12 @@ private:
 
   llvm::OwningPtr<llvm::Module>           _module;
   llvm::OwningPtr<llvm::TargetMachine>    _target;
-  MISTD::vector<NameAndAttributes>          _symbols;
+  std::vector<NameAndAttributes>          _symbols;
 
   // _defines and _undefines only needed to disambiguate tentative definitions
   StringSet                               _defines;
   llvm::StringMap<NameAndAttributes>      _undefines;
-  MISTD::vector<const char*>                _asm_undefines;
+  std::vector<const char*>                _asm_undefines;
   llvm::MCContext                         _context;
 
   // Use mangler to add GlobalPrefix to names to match linker names.
@@ -85,17 +85,17 @@ public:
   /// InitializeAllAsmParsers();
   static LTOModule *makeLTOModule(const char* path,
                                   llvm::TargetOptions options,
-                                  MISTD::string &errMsg);
+                                  std::string &errMsg);
   static LTOModule *makeLTOModule(int fd, const char *path,
                                   size_t size, llvm::TargetOptions options,
-                                  MISTD::string &errMsg);
+                                  std::string &errMsg);
   static LTOModule *makeLTOModule(int fd, const char *path,
                                   size_t map_size,
                                   off_t offset, llvm::TargetOptions options,
-                                  MISTD::string& errMsg);
+                                  std::string& errMsg);
   static LTOModule *makeLTOModule(const void *mem, size_t length,
                                   llvm::TargetOptions options,
-                                  MISTD::string &errMsg);
+                                  std::string &errMsg);
 
   /// getTargetTriple - Return the Module's target triple.
   const char *getTargetTriple() {
@@ -131,14 +131,14 @@ public:
   llvm::Module *getLLVVMModule() { return _module.get(); }
 
   /// getAsmUndefinedRefs -
-  const MISTD::vector<const char*> &getAsmUndefinedRefs() {
+  const std::vector<const char*> &getAsmUndefinedRefs() {
     return _asm_undefines;
   }
 
 private:
   /// parseSymbols - Parse the symbols from the module and model-level ASM and
   /// add them to either the defined or undefined lists.
-  bool parseSymbols(MISTD::string &errMsg);
+  bool parseSymbols(std::string &errMsg);
 
   /// addPotentialUndefinedSymbol - Add a symbol which isn't defined just yet
   /// to a list to be resolved later.
@@ -155,7 +155,7 @@ private:
 
   /// addAsmGlobalSymbols - Add global symbols from module-level ASM to the
   /// defined or undefined lists.
-  bool addAsmGlobalSymbols(MISTD::string &errMsg);
+  bool addAsmGlobalSymbols(std::string &errMsg);
 
   /// addAsmGlobalSymbol - Add a global symbol from module-level ASM to the
   /// defined list.
@@ -176,7 +176,7 @@ private:
 
   /// objcClassNameFromExpression - Get string that the data pointer points
   /// to.
-  bool objcClassNameFromExpression(const llvm::Constant* c, MISTD::string &name);
+  bool objcClassNameFromExpression(const llvm::Constant* c, std::string &name);
 
   /// isTargetMatch - Returns 'true' if the memory buffer is for the specified
   /// target triple.
@@ -187,7 +187,7 @@ private:
   /// method takes ownership of the buffer.
   static LTOModule *makeLTOModule(llvm::MemoryBuffer *buffer,
                                   llvm::TargetOptions options,
-                                  MISTD::string &errMsg);
+                                  std::string &errMsg);
 
   /// makeBuffer - Create a MemoryBuffer from a memory range.
   static llvm::MemoryBuffer *makeBuffer(const void *mem, size_t length);

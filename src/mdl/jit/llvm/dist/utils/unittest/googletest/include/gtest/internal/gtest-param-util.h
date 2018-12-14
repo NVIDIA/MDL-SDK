@@ -218,7 +218,7 @@ class RangeGenerator : public ParamGeneratorInterface<T> {
       // iterator is of the same type and we can downcast.
       GTEST_CHECK_(BaseGenerator() == other.BaseGenerator())
           << "The program attempted to compare iterators "
-          << "from different generators." << MISTD::endl;
+          << "from different generators." << std::endl;
       const int other_index =
           CheckedDowncastToActualType<const Iterator>(&other)->index_;
       return index_ == other_index;
@@ -280,7 +280,7 @@ class ValuesInIteratorRangeGenerator : public ParamGeneratorInterface<T> {
   }
 
  private:
-  typedef typename ::MISTD::vector<T> ContainerType;
+  typedef typename ::std::vector<T> ContainerType;
 
   class Iterator : public ParamIteratorInterface<T> {
    public:
@@ -316,7 +316,7 @@ class ValuesInIteratorRangeGenerator : public ParamGeneratorInterface<T> {
       // iterator is of the same type and we can downcast.
       GTEST_CHECK_(BaseGenerator() == other.BaseGenerator())
           << "The program attempted to compare iterators "
-          << "from different generators." << MISTD::endl;
+          << "from different generators." << std::endl;
       return iterator_ ==
           CheckedDowncastToActualType<const Iterator>(&other)->iterator_;
     }
@@ -476,7 +476,7 @@ class ParameterizedTestCaseInfo : public ParameterizedTestCaseInfoBase {
                                GeneratorCreationFunc* func,
                                const char* /* file */,
                                int /* line */) {
-    instantiations_.push_back(::MISTD::make_pair(instantiation_name, func));
+    instantiations_.push_back(::std::make_pair(instantiation_name, func));
     return 0;  // Return value used only to run this method in namespace scope.
   }
   // UnitTest class invokes this method to register tests in this test case
@@ -534,10 +534,10 @@ class ParameterizedTestCaseInfo : public ParameterizedTestCaseInfoBase {
     const string test_base_name;
     const scoped_ptr<TestMetaFactoryBase<ParamType> > test_meta_factory;
   };
-  typedef ::MISTD::vector<linked_ptr<TestInfo> > TestInfoContainer;
+  typedef ::std::vector<linked_ptr<TestInfo> > TestInfoContainer;
   // Keeps pairs of <Instantiation name, Sequence generator creation function>
   // received from INSTANTIATE_TEST_CASE_P macros.
-  typedef ::MISTD::vector<MISTD::pair<string, GeneratorCreationFunc*> >
+  typedef ::std::vector<std::pair<string, GeneratorCreationFunc*> >
       InstantiationContainer;
 
   const string test_case_name_;
@@ -604,7 +604,7 @@ class ParameterizedTestCaseRegistry {
   }
 
  private:
-  typedef ::MISTD::vector<ParameterizedTestCaseInfoBase*> TestCaseInfoContainer;
+  typedef ::std::vector<ParameterizedTestCaseInfoBase*> TestCaseInfoContainer;
 
   TestCaseInfoContainer test_case_infos_;
 

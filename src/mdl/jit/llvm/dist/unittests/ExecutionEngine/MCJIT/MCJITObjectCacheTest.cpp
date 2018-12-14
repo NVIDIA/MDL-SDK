@@ -38,7 +38,7 @@ public:
 
   virtual void notifyObjectCompiled(const Module *M, const MemoryBuffer *Obj) {
     // If we've seen this module before, note that.
-    const MISTD::string ModuleID = M->getModuleIdentifier();
+    const std::string ModuleID = M->getModuleIdentifier();
     if (ObjMap.find(ModuleID) != ObjMap.end())
       DuplicateInserted = true;
     // Store a copy of the buffer in our map.
@@ -65,7 +65,7 @@ public:
 
   const MemoryBuffer* getObjectInternal(const Module* M) {
     // Look for the module in our map.
-    const MISTD::string ModuleID = M->getModuleIdentifier();
+    const std::string ModuleID = M->getModuleIdentifier();
     StringMap<const MemoryBuffer *>::iterator it = ObjMap.find(ModuleID);
     if (it == ObjMap.end())
       return 0;

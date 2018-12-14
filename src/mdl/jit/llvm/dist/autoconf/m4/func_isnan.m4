@@ -19,9 +19,9 @@ if test "$ac_cv_func_isnan_in_cmath" = "yes" ; then
 fi
 
 AC_SINGLE_CXX_CHECK([ac_cv_func_std_isnan_in_cmath],
-                    [MISTD::isnan], [<cmath>],
-                    [float f; MISTD::isnan(f);])
+                    [std::isnan], [<cmath>],
+                    [float f; std::isnan(f);])
 if test "$ac_cv_func_std_isnan_in_cmath" = "yes" ; then
-  AC_DEFINE([HAVE_STD_ISNAN_IN_CMATH],1,[Set to 1 if the MISTD::isnan function is found in <cmath>])
+  AC_DEFINE([HAVE_STD_ISNAN_IN_CMATH],1,[Set to 1 if the std::isnan function is found in <cmath>])
 fi
 ])

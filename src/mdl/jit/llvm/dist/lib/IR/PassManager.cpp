@@ -56,7 +56,7 @@ void AnalysisManager::invalidateAll(Function *F) {
     }
   while (!InvalidatedPassIDs.empty())
     FunctionAnalysisResults.erase(
-        MISTD::make_pair(InvalidatedPassIDs.pop_back_val(), F));
+        std::make_pair(InvalidatedPassIDs.pop_back_val(), F));
 }
 
 void AnalysisManager::invalidateAll(Module *M) {
@@ -90,7 +90,7 @@ void AnalysisManager::invalidateAll(Module *M) {
       }
     while (!InvalidatedPassIDs.empty())
       FunctionAnalysisResults.erase(
-          MISTD::make_pair(InvalidatedPassIDs.pop_back_val(), F));
+          std::make_pair(InvalidatedPassIDs.pop_back_val(), F));
   }
 }
 
@@ -99,7 +99,7 @@ AnalysisManager::getResultImpl(void *PassID, Module *M) {
   assert(M == this->M && "Wrong module used when querying the AnalysisManager");
   ModuleAnalysisResultMapT::iterator RI;
   bool Inserted;
-  llvm::tie(RI, Inserted) = ModuleAnalysisResults.insert(MISTD::make_pair(
+  llvm::tie(RI, Inserted) = ModuleAnalysisResults.insert(std::make_pair(
       PassID, polymorphic_ptr<AnalysisResultConcept<Module> >()));
 
   if (Inserted) {
@@ -121,8 +121,8 @@ AnalysisManager::getResultImpl(void *PassID, Function *F) {
 
   FunctionAnalysisResultMapT::iterator RI;
   bool Inserted;
-  llvm::tie(RI, Inserted) = FunctionAnalysisResults.insert(MISTD::make_pair(
-      MISTD::make_pair(PassID, F), FunctionAnalysisResultListT::iterator()));
+  llvm::tie(RI, Inserted) = FunctionAnalysisResults.insert(std::make_pair(
+      std::make_pair(PassID, F), FunctionAnalysisResultListT::iterator()));
 
   if (Inserted) {
     // We don't have a cached result for this result. Look up the pass and run
@@ -132,7 +132,7 @@ AnalysisManager::getResultImpl(void *PassID, Function *F) {
     assert(PI != FunctionAnalysisPasses.end() &&
            "Analysis passes must be registered prior to being queried!");
     FunctionAnalysisResultListT &ResultList = FunctionAnalysisResultLists[F];
-    ResultList.push_back(MISTD::make_pair(PassID, PI->second->run(F)));
+    ResultList.push_back(std::make_pair(PassID, PI->second->run(F)));
     RI->second = llvm::prior(ResultList.end());
   }
 
@@ -149,7 +149,7 @@ void AnalysisManager::invalidateImpl(void *PassID, Function *F) {
          "Invalidating a pass over a function from another module!");
 
   FunctionAnalysisResultMapT::iterator RI =
-      FunctionAnalysisResults.find(MISTD::make_pair(PassID, F));
+      FunctionAnalysisResults.find(std::make_pair(PassID, F));
   if (RI == FunctionAnalysisResults.end())
     return;
 

@@ -35,7 +35,7 @@ public:
   void parse(DataExtractor Data);
 
 private:
-  typedef MISTD::vector<FrameEntry *> EntryVector;
+  typedef std::vector<FrameEntry *> EntryVector;
   EntryVector Entries;
 };
 

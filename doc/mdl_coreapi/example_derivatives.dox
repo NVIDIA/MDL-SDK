@@ -1,0 +1,147 @@
+/******************************************************************************
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_derivatives Example for Texture Filtering with Automatic Derivatives
+
+<div align="right">
+    [\link mi_mdl_core_example_df_cuda Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+</div>
+
+This example shows how to enable and use automatic derivatives for texture filtering.
+
+\section example_execution_ptx_new New Topics
+
+  - Automatic derivatives
+
+\section example_df_cuda_descr Detailed Description
+
+<dl>
+<dt><b>Automatic derivatives</b></dt>
+<dd><br>
+When rendering images with high-frequency content, like a checker board texture, you usually have to shoot an increased number of rays to avoid aliasing effects.
+By providing information to the texture lookup functions about the area covered by a ray, the integral over this area can be calculated (or approximated) to get good texture sampling with just a single ray.
+
+In \MDLCoreProductName, the renderer can provide the derivatives of texture coordinates with respect to x and y in screen space, when calling generated code for MDL expressions or distribution functions.
+The generated code then calculates the derivatives of expressions provided to 2D texture lookup functions as texture coordinate parameters using "Automatic Differentiation" (see Dan Piponi, "Automatic Differentiation, C++ Templates, and Photogrammetry", Journal of Graphics, GPU, and Game Tools (JGT), Vol 9, No 4, pp. 41-55 (2004)).
+The renderer-provided texture runtime can finally use texture filtering techniques like elliptically weighted average (EWA) to determine the texture result.
+
+Automatic derivatives are supported by the CUDA, LLVM IR and native backends of \MDLCoreProductName.
+To enable this feature, you need to:
+ - set the #MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES option to \c "true" on the Options object returned by ICode_generator_jit::access_options()
+ - replace #Shading_state_material by #Shading_state_material_with_derivs and provide the derivatives of the texture coordinates
+ - provide a texture runtime supporting \c "tex_lookup_deriv_float4_2d" and \c "tex_lookup_deriv_float3_2d"
+</dd>
+
+In the \c "example_df_cuda" example, the backend option is set in the constructor of the \c Material_ptx_compiler class in \c example_cuda_shared.h, when the \c "-d" option is provided via command line:
+
+\code
+    options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, "true");
+\endcode
+
+In this mode, the example will use a variant of \c example_df_cuda.cu compiled with a \c "ENABLE_DERIVATIVES" define, which will enable calculating the texture coordinate derivatives on the sphere.
+It does so by intersecting two additional rays, offset by one-pixel in x and y direction, with the plane given by the primary intersection point and the corresponding normal.
+Using the surface derivatives with respect to U and V and the new intersection points, it determines the derivatives of the texture coordinates with respect to screen-space x and y.
+See Matt Pharr et al., "Physically Based Rendering", 3rd edition (2016), chapter 10.1.1 for details.
+
+Instead of the usual #Shading_state_material, the example then fills in the derivative variant #Shading_state_material_with_derivs where the texture coordinates are #tct_deriv_float3 values consisting of \c val, the texture coordinate, \c dx and \c dy, the derivative of the texture coordinate with respect to screen-space x and screen-space y, respectively.
+
+The types could be written as:
+\code
+    struct tct_deriv_float3 {
+        tct_float3  val;    // value component
+        tct_float3  dx;     // derivative of value with respect to screen-space x
+        tct_float3  dy;     // derivative of value with respect to screen-space y
+    };
+
+    struct Shading_state_material_with_derivs {
+        tct_float3               normal;             // state::normal() result
+        tct_float3               geom_normal;        // state::geom_normal() result
+        tct_float3               position;           // state::position() result
+        tct_float                animation_time;     // state::animation_time() result
+        const tct_deriv_float3  *text_coords;        // state::texture_coordinate() table
+        const tct_float3        *tangent_u;          // state::texture_tangent_u() table
+        const tct_float3        *tangent_v;          // state::texture_tangent_v() table
+        tct_float4              *text_results;       // texture results lookup table
+        const char              *ro_data_segment;    // read-only data segment
+        const tct_float4        *world_to_object;    // world-to-object transform matrix
+        const tct_float4        *object_to_world;    // object-to-world transform matrix
+        tct_int                  object_id;          // state::object_id() result
+    };
+\endcode
+
+\note For the native backend, you have to cast the #Shading_state_material_with_derivs pointer to a #Shading_state_material pointer when calling the \c "run_*" methods of #mi::mdl::IGenerated_code_lambda_function, as these methods have not been duplicated for the derivative variants.
+
+Additionally, a different vtable \c "tex_deriv_vtable" defined in \c texture_support_cuda.h is provided for the texture handler, which contains derivative variants for the 2D texture lookup functions:
+The functions \c "tex_lookup_deriv_float4_2d" and \c "tex_lookup_deriv_float3_2d" expect a \c "tct_deriv_float2 const *" as \c "coord" parameter:
+\code
+    struct tct_deriv_float2 {
+        tct_float2  val;    // value component
+        tct_float2  dx;     // derivative of value with respect to screen-space x
+        tct_float2  dy;     // derivative of value with respect to screen-space y
+    };
+
+    extern "C" __device__ void tex_lookup_deriv_float3_2d(
+        float                       result[3],
+        Texture_handler_base const *self_base,
+        unsigned                    texture_idx,
+        tct_deriv_float2 const     *coord,
+        Tex_wrap_mode const         wrap_u,
+        Tex_wrap_mode const         wrap_v,
+        float const                 crop_u[2],
+        float const                 crop_v[2]);
+
+    extern "C" __device__ void tex_lookup_deriv_float4_2d(
+        float                       result[4],
+        Texture_handler_base const *self_base,
+        unsigned                    texture_idx,
+        tct_deriv_float2 const     *coord,
+        Tex_wrap_mode const         wrap_u,
+        Tex_wrap_mode const         wrap_v,
+        float const                 crop_u[2],
+        float const                 crop_v[2]);
+\endcode
+
+The example texture runtime uses the CUDA \c tex2DGrad() functions to perform anisotropic hardware filtering.
+The derivatives provided to the texture lookup handlers can directly be used for those functions.
+The mipmaps are generated by \c Material_gpu_context::prepare_texture() in \c example_cuda_shared.h via a simple example implementation in \c Material_gpu_context::gen_mip_level().
+</dd>
+</dl>
+
+<div align="right">
+    [\link mi_mdl_core_example_df_cuda Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+</div>
+
+*/
+
+}
+}

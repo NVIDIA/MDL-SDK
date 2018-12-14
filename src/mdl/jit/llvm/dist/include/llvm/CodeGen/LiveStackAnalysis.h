@@ -33,11 +33,11 @@ namespace llvm {
 
     /// S2IMap - Stack slot indices to live interval mapping.
     ///
-    typedef MISTD::map<int, LiveInterval> SS2IntervalMap;
+    typedef std::map<int, LiveInterval> SS2IntervalMap;
     SS2IntervalMap S2IMap;
 
     /// S2RCMap - Stack slot indices to register class mapping.
-    MISTD::map<int, const TargetRegisterClass*> S2RCMap;
+    std::map<int, const TargetRegisterClass*> S2RCMap;
     
   public:
     static char ID; // Pass identification, replacement for typeid
@@ -76,7 +76,7 @@ namespace llvm {
 
     const TargetRegisterClass *getIntervalRegClass(int Slot) const {
       assert(Slot >= 0 && "Spill slot indice must be >= 0");
-      MISTD::map<int, const TargetRegisterClass*>::const_iterator
+      std::map<int, const TargetRegisterClass*>::const_iterator
         I = S2RCMap.find(Slot);
       assert(I != S2RCMap.end() &&
              "Register class info does not exist for stack slot");

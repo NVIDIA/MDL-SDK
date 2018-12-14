@@ -51,7 +51,7 @@ namespace {
     AliasAnalysis *AA;
 
     // Remember which edges have been considered for breaking.
-    SmallSet<MISTD::pair<MachineBasicBlock*,MachineBasicBlock*>, 8>
+    SmallSet<std::pair<MachineBasicBlock*,MachineBasicBlock*>, 8>
     CEBCandidates;
 
   public:
@@ -297,7 +297,7 @@ bool MachineSinking::isWorthBreakingCriticalEdge(MachineInstr *MI,
   // If the pass has already considered breaking this edge (during this pass
   // through the function), then let's go ahead and break it. This means
   // sinking multiple "cheap" instructions into the same block.
-  if (!CEBCandidates.insert(MISTD::make_pair(From, To)))
+  if (!CEBCandidates.insert(std::make_pair(From, To)))
     return true;
 
   if (!MI->isCopy() && !MI->isAsCheapAsAMove())
@@ -553,7 +553,7 @@ MachineBasicBlock *MachineSinking::FindSuccToSinkTo(MachineInstr *MI,
       // we should sink to.
       // We give successors with smaller loop depth higher priority.
       SmallVector<MachineBasicBlock*, 4> Succs(MBB->succ_begin(), MBB->succ_end());
-      MISTD::stable_sort(Succs.begin(), Succs.end(), SuccessorSorter(LI));
+      std::stable_sort(Succs.begin(), Succs.end(), SuccessorSorter(LI));
       for (SmallVectorImpl<MachineBasicBlock *>::iterator SI = Succs.begin(),
              E = Succs.end(); SI != E; ++SI) {
         MachineBasicBlock *SuccBlock = *SI;

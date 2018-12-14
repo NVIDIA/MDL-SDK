@@ -479,6 +479,34 @@ public:
     Sint32 set_call( const char* parameter_name, const char* call_name);
 
     //@}
+    /// \name Methods related to member access.
+    //@{
+
+    /// Get the transaction.
+    ITransaction* get_transaction() const;
+
+    /// Get the MDL factory.
+    IMdl_factory* get_mdl_factory() const;
+
+    /// Get the value factory.
+    IValue_factory* get_value_factory() const;
+
+    /// Get the expression factory.
+    IExpression_factory* get_expression_factory() const;
+
+    /// Get the MDL function call or material instance.
+    const IScene_element* get_scene_element() const;
+
+    /// Get the MDL function call or material instance.
+    IScene_element* get_scene_element(); 
+
+    /// Get the element type.
+    Element_type get_element_type() const;
+
+    /// Get the DB name of the MDL function call or material instance.
+    const std::string& get_name() const;
+
+    //@}
 
 private:
     void promote_to_edit_if_needed();
@@ -1701,6 +1729,54 @@ inline Sint32 Argument_editor::set_call( const char* parameter_name, const char*
 
     } else
         return -1;
+}
+
+inline ITransaction* Argument_editor::get_transaction() const
+{
+    m_transaction->retain();
+    return m_transaction.get();
+}
+
+inline IMdl_factory* Argument_editor::get_mdl_factory() const
+{
+    m_mdl_factory->retain();
+    return m_mdl_factory.get();
+}
+
+inline IValue_factory* Argument_editor::get_value_factory() const
+{
+    m_value_factory->retain();
+    return m_value_factory.get();
+}
+
+inline IExpression_factory* Argument_editor::get_expression_factory() const
+{
+    m_expression_factory->retain();
+    return m_expression_factory.get();
+}
+
+inline const IScene_element* Argument_editor::get_scene_element() const
+{
+    m_access->retain();
+    return m_access.get();
+}
+
+inline IScene_element* Argument_editor::get_scene_element()
+{
+    promote_to_edit_if_needed();
+
+    m_edit->retain();
+    return m_edit.get();
+}
+
+inline Element_type Argument_editor::get_element_type() const
+{
+    return m_type;
+}
+
+inline const std::string& Argument_editor::get_name() const
+{
+    return m_name;
 }
 
 inline void Argument_editor::promote_to_edit_if_needed()

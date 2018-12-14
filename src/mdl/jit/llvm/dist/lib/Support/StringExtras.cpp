@@ -35,7 +35,7 @@ StringRef::size_type llvm::StrInStrNoCase(StringRef s1, StringRef s2) {
 /// there are no tokens in the source string, an empty string is returned.
 /// The function returns a pair containing the extracted token and the
 /// remaining tail string.
-MISTD::pair<StringRef, StringRef> llvm::getToken(StringRef Source,
+std::pair<StringRef, StringRef> llvm::getToken(StringRef Source,
                                                StringRef Delimiters) {
   // Figure out where the token starts.
   StringRef::size_type Start = Source.find_first_not_of(Delimiters);
@@ -43,7 +43,7 @@ MISTD::pair<StringRef, StringRef> llvm::getToken(StringRef Source,
   // Find the next occurrence of the delimiter.
   StringRef::size_type End = Source.find_first_of(Delimiters, Start);
 
-  return MISTD::make_pair(Source.slice(Start, End), Source.substr(End));
+  return std::make_pair(Source.slice(Start, End), Source.substr(End));
 }
 
 /// SplitString - Split up the specified string according to the specified
@@ -51,7 +51,7 @@ MISTD::pair<StringRef, StringRef> llvm::getToken(StringRef Source,
 void llvm::SplitString(StringRef Source,
                        SmallVectorImpl<StringRef> &OutFragments,
                        StringRef Delimiters) {
-  MISTD::pair<StringRef, StringRef> S = getToken(Source, Delimiters);
+  std::pair<StringRef, StringRef> S = getToken(Source, Delimiters);
   while (!S.first.empty()) {
     OutFragments.push_back(S.first);
     S = getToken(S.second, Delimiters);

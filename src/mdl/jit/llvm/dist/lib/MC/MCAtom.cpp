@@ -64,10 +64,10 @@ MCDataAtom *MCDataAtom::split(uint64_t SplitPt) {
   MCDataAtom *RightAtom = Parent->createDataAtom(RBegin, REnd);
   RightAtom->setName(getName());
 
-  MISTD::vector<MCData>::iterator I = Data.begin() + (RBegin - LBegin);
+  std::vector<MCData>::iterator I = Data.begin() + (RBegin - LBegin);
   assert(I != Data.end() && "Split point not found in range!");
 
-  MISTD::copy(I, Data.end(), MISTD::back_inserter(RightAtom->Data));
+  std::copy(I, Data.end(), std::back_inserter(RightAtom->Data));
   Data.erase(I, Data.end());
   return RightAtom;
 }
@@ -107,7 +107,7 @@ MCTextAtom *MCTextAtom::split(uint64_t SplitPt) {
   assert(I->Address == SplitPt &&
          "Split point does not fall on instruction boundary!");
 
-  MISTD::copy(I, Insts.end(), MISTD::back_inserter(RightAtom->Insts));
+  std::copy(I, Insts.end(), std::back_inserter(RightAtom->Insts));
   Insts.erase(I, Insts.end());
   Parent->splitBasicBlocksForAtom(this, RightAtom);
   return RightAtom;

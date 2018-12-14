@@ -78,7 +78,7 @@ static cl::opt<bool> PrintGCInfo("print-gc", cl::Hidden,
 static cl::opt<bool> VerifyMachineCode("verify-machineinstrs", cl::Hidden,
     cl::desc("Verify generated machine code"),
     cl::init(getenv("LLVM_VERIFY_MACHINEINSTRS")!=NULL));
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 PrintMachineInstrs("print-machineinstrs", cl::ValueOptional,
                    cl::desc("Print machine instrs"),
                    cl::value_desc("pass-name"), cl::init("option-unspecified"));
@@ -205,7 +205,7 @@ public:
 
   /// Store the pairs of <AnalysisID, AnalysisID> of which the second pass
   /// is inserted after each instance of the first one.
-  SmallVector<MISTD::pair<AnalysisID, IdentifyingPassPtr>, 4> InsertedPasses;
+  SmallVector<std::pair<AnalysisID, IdentifyingPassPtr>, 4> InsertedPasses;
 };
 } // namespace llvm
 
@@ -246,7 +246,7 @@ void TargetPassConfig::insertPass(AnalysisID TargetPassID,
           (InsertedPassID.isInstance() &&
            TargetPassID != InsertedPassID.getInstance()->getPassID())) &&
          "Insert a pass after itself!");
-  MISTD::pair<AnalysisID, IdentifyingPassPtr> P(TargetPassID, InsertedPassID);
+  std::pair<AnalysisID, IdentifyingPassPtr> P(TargetPassID, InsertedPassID);
   Impl->InsertedPasses.push_back(P);
 }
 
@@ -331,7 +331,7 @@ AnalysisID TargetPassConfig::addPass(AnalysisID PassID) {
   addPass(P); // Ends the lifetime of P.
 
   // Add the passes after the pass P if there is any.
-  for (SmallVectorImpl<MISTD::pair<AnalysisID, IdentifyingPassPtr> >::iterator
+  for (SmallVectorImpl<std::pair<AnalysisID, IdentifyingPassPtr> >::iterator
          I = Impl->InsertedPasses.begin(), E = Impl->InsertedPasses.end();
        I != E; ++I) {
     if ((*I).first == PassID) {

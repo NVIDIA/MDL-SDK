@@ -33,7 +33,7 @@ namespace llvm {
 
   DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
-    static MISTD::string getGraphName(const ScheduleDAG *G) {
+    static std::string getGraphName(const ScheduleDAG *G) {
       return G->MF.getName();
     }
 
@@ -52,7 +52,7 @@ namespace llvm {
 
     /// If you want to override the dot attributes printed for a particular
     /// edge, override this method.
-    static MISTD::string getEdgeAttributes(const SUnit *Node,
+    static std::string getEdgeAttributes(const SUnit *Node,
                                          SUnitIterator EI,
                                          const ScheduleDAG *Graph) {
       if (EI.isArtificialDep())
@@ -63,8 +63,8 @@ namespace llvm {
     }
 
 
-    MISTD::string getNodeLabel(const SUnit *Node, const ScheduleDAG *Graph);
-    static MISTD::string getNodeAttributes(const SUnit *N,
+    std::string getNodeLabel(const SUnit *Node, const ScheduleDAG *Graph);
+    static std::string getNodeAttributes(const SUnit *N,
                                          const ScheduleDAG *Graph) {
       return "shape=Mrecord";
     }
@@ -76,7 +76,7 @@ namespace llvm {
   };
 }
 
-MISTD::string DOTGraphTraits<ScheduleDAG*>::getNodeLabel(const SUnit *SU,
+std::string DOTGraphTraits<ScheduleDAG*>::getNodeLabel(const SUnit *SU,
                                                        const ScheduleDAG *G) {
   return G->getGraphNodeLabel(SU);
 }

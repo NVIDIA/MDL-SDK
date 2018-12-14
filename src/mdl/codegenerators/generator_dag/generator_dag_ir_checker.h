@@ -38,6 +38,8 @@
 namespace mi {
 namespace mdl {
 
+#if !defined(NDEBUG) || defined(DEBUG)
+
 /// Checks a DAG-IR.
 class DAG_ir_checker : private IDAG_ir_visitor {
 public:
@@ -141,8 +143,8 @@ public:
     /// \param alloc          the allocator
     /// \param call_resolver  an MDL call name resolver
     DAG_ir_checker(
-        IAllocator                  *alloc,
-        ICall_name_resolver         *call_resolver);
+        IAllocator          *alloc,
+        ICall_name_resolver *call_resolver);
 
 private:
     /// The allocator.
@@ -177,6 +179,92 @@ private:
     /// If true, collect temporaries.
     bool m_collect_temporary;
 };
+
+#else
+
+/// Checks a DAG-IR.
+class DAG_ir_checker {
+public:
+    enum Error_code {
+        EC_OK = 0,
+        EC_PARAMETER_NOT_ALLOWED,
+        EC_TEMPORARY_NOT_ALLOWED,
+        EC_UNRESOLVED_MODULE_NAME,
+        EC_UNDECLARED_NAME,
+        EC_PARAM_COUNT,
+        EC_PARAM_NAME_MISMATCH,
+        EC_NULL_ARG,
+        EC_ARG_TYPE_MISMATCH,
+        EC_ARG_NON_UNIFORM,
+        EC_WRONG_RET_TYPE,
+        EC_RET_TYPE_NON_UNIFORM,
+        EC_NULL_TEMP,
+        EC_SEMANTIC_MISMATCH,
+        EC_NULL_DAG,
+        EC_NULL_TYPE,
+        EC_NULL_VALUE,
+        EC_VALUE_NOT_OWNED,
+        EC_TYPE_NOT_OWNED,
+        EC_DAG_NOT_OWNED,
+        EC_TEMP_INDEX_USED_TWICE,
+        EC_WRONG_TEMP,
+        EC_TEMP_INDEX_TOO_HIGH,
+    };
+
+public:
+    /// Check the given instance.
+    ///
+    /// \param inst   the instance to check
+    bool check_instance(Generated_code_dag::Material_instance const *inst) {
+        return true;
+    }
+
+    /// Check a DAG node.
+    size_t check_node(DAG_node const *node) {
+        return 0;
+    }
+
+    /// Check a constant.
+    size_t check_const(DAG_constant const *c) {
+        return 0;
+    }
+
+    /// Check a call.
+    size_t check_call(DAG_call const *call) {
+        return 0;
+    }
+
+    /// Check a parameter.
+    size_t check_parameter(DAG_parameter const *param) {
+        return 0;
+    }
+
+    /// Check a temporary.
+    size_t check_temp(DAG_temporary const *temp) {
+        return 0;
+    }
+
+    /// Set the node owner for following check operations.
+    DAG_node_factory_impl const *set_owner(DAG_node_factory_impl const *) {
+        return NULL;
+    }
+
+    /// Enable/disable temporaries.
+    void enable_temporaries(bool) {}
+
+    /// Enable/disable parameter.
+    void enable_parameters(bool) {}
+
+public:
+    /// Constructor.
+    DAG_ir_checker(
+        IAllocator          *,
+        ICall_name_resolver *)
+    {
+    }
+};
+
+#endif
 
 
 } // mdl

@@ -91,7 +91,7 @@ Value *SSAUpdater::GetValueInMiddleOfBlock(BasicBlock *BB) {
 
   // Otherwise, we have the hard case.  Get the live-in values for each
   // predecessor.
-  SmallVector<MISTD::pair<BasicBlock*, Value*>, 8> PredValues;
+  SmallVector<std::pair<BasicBlock*, Value*>, 8> PredValues;
   Value *SingularValue = 0;
 
   // We can get our predecessor info by walking the pred_iterator list, but it
@@ -101,7 +101,7 @@ Value *SSAUpdater::GetValueInMiddleOfBlock(BasicBlock *BB) {
     for (unsigned i = 0, e = SomePhi->getNumIncomingValues(); i != e; ++i) {
       BasicBlock *PredBB = SomePhi->getIncomingBlock(i);
       Value *PredVal = GetValueAtEndOfBlock(PredBB);
-      PredValues.push_back(MISTD::make_pair(PredBB, PredVal));
+      PredValues.push_back(std::make_pair(PredBB, PredVal));
 
       // Compute SingularValue.
       if (i == 0)
@@ -114,7 +114,7 @@ Value *SSAUpdater::GetValueInMiddleOfBlock(BasicBlock *BB) {
     for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI) {
       BasicBlock *PredBB = *PI;
       Value *PredVal = GetValueAtEndOfBlock(PredBB);
-      PredValues.push_back(MISTD::make_pair(PredBB, PredVal));
+      PredValues.push_back(std::make_pair(PredBB, PredVal));
 
       // Compute SingularValue.
       if (isFirstPred) {
@@ -488,5 +488,5 @@ bool
 LoadAndStorePromoter::isInstInList(Instruction *I,
                                    const SmallVectorImpl<Instruction*> &Insts)
                                    const {
-  return MISTD::find(Insts.begin(), Insts.end(), I) != Insts.end();
+  return std::find(Insts.begin(), Insts.end(), I) != Insts.end();
 }

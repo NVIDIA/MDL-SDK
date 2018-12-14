@@ -63,6 +63,7 @@ Mdl_function_call::Mdl_function_call()
 : m_tf(get_type_factory())
 , m_vf(get_value_factory())
 , m_ef(get_expression_factory())
+, m_module_tag()
 , m_definition_tag()
 , m_function_index(~0u)
 , m_mdl_semantic(mi::mdl::IDefinition::DS_UNKNOWN)
@@ -83,6 +84,7 @@ static inline T *check_non_null(T *obj)
 }
 
 Mdl_function_call::Mdl_function_call(
+    DB::Tag module_tag,
     DB::Tag definition_tag,
     mi::Uint32 function_index,
     IExpression_list* arguments,
@@ -95,6 +97,7 @@ Mdl_function_call::Mdl_function_call(
 : m_tf(get_type_factory())
 , m_vf(get_value_factory())
 , m_ef(get_expression_factory())
+, m_module_tag(module_tag)
 , m_definition_tag(definition_tag)
 , m_function_index(function_index)
 , m_mdl_semantic(semantic)
@@ -112,6 +115,7 @@ Mdl_function_call::Mdl_function_call( const Mdl_function_call& other)
 , m_tf(other.m_tf)
 , m_vf(other.m_vf)
 , m_ef(other.m_ef)
+, m_module_tag(other.m_module_tag)
 , m_definition_tag(other.m_definition_tag)
 , m_function_index(other.m_function_index)
 , m_mdl_semantic(other.m_mdl_semantic)
@@ -119,7 +123,8 @@ Mdl_function_call::Mdl_function_call( const Mdl_function_call& other)
 , m_immutable(other.m_immutable)
 , m_parameter_types(other.m_parameter_types)
 , m_return_type(other.m_return_type)
-, m_arguments(m_ef->clone(other.m_arguments.get()))
+, m_arguments(m_ef->clone(
+    other.m_arguments.get(), /*transaction*/ nullptr, /*copy_immutable_calls*/ false))
 , m_enable_if_conditions(other.m_enable_if_conditions)  // shared, no clone necessary
 {
 }
@@ -214,7 +219,8 @@ mi::Sint32 Mdl_function_call::set_argument(
         return -6;
     if( expected_type_uniform && return_type_is_varying( transaction, argument))
         return -8;
-    mi::base::Handle<IExpression> argument_copy( m_ef->clone( argument));
+    mi::base::Handle<IExpression> argument_copy( m_ef->clone(
+        argument, /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
     m_arguments->set_expression( index, argument_copy.get());
     return 0;
 }
@@ -226,6 +232,18 @@ mi::Sint32 Mdl_function_call::set_argument(
         return -1;
     mi::Size index = get_parameter_index( name);
     return set_argument( transaction, index, argument);
+}
+
+void Mdl_function_call::make_mutable(DB::Transaction* transaction) {
+
+    // function calls, which are defaults in their own module, do not
+    // keep a reference to their module, get it now
+    if (!m_module_tag.is_valid()) {
+        DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
+        m_module_tag = definition->get_module(transaction);
+        ASSERT(M_SCENE, m_module_tag.is_valid());
+    }
+    m_immutable = false;
 }
 
 mi::mdl::IDefinition::Semantics Mdl_function_call::get_mdl_semantic() const
@@ -250,6 +268,7 @@ void Mdl_function_call::swap( Mdl_function_call& other)
 {
     SCENE::Scene_element<Mdl_function_call, Mdl_function_call::id>::swap( other);
 
+    std::swap( m_module_tag, other.m_module_tag);
     std::swap( m_definition_tag, other.m_definition_tag);
     std::swap( m_function_index, other.m_function_index);
     std::swap( m_mdl_semantic, other.m_mdl_semantic);
@@ -318,7 +337,8 @@ Mdl_function_call::create_jitted_function(
     }
 
     // get code DAG
-    DB::Access<Mdl_module> module( function_definition->get_module(), transaction);
+    ASSERT(M_SCENE, m_module_tag.is_valid());
+    DB::Access<Mdl_module> module(m_module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
 
     // create a lambda function for an environment function
@@ -425,6 +445,7 @@ const SERIAL::Serializable* Mdl_function_call::serialize( SERIAL::Serializer* se
 {
     Scene_element_base::serialize( serializer);
 
+    serializer->write( m_module_tag);
     serializer->write( m_definition_tag);
     serializer->write( m_function_index);
     serializer->write( static_cast<mi::Uint32>( m_mdl_semantic));
@@ -443,6 +464,7 @@ SERIAL::Serializable* Mdl_function_call::deserialize( SERIAL::Deserializer* dese
 {
     Scene_element_base::deserialize( deserializer);
 
+    deserializer->read( &m_module_tag);
     deserializer->read( &m_definition_tag);
     deserializer->read( &m_function_index);
     mi::Uint32 semantic;
@@ -465,6 +487,7 @@ void Mdl_function_call::dump( DB::Transaction* transaction) const
     s << std::boolalpha;
     mi::base::Handle<const mi::IString> tmp;
 
+    s << "MDL module tag: " << m_module_tag.get_uint() << std::endl;
     s << "Function definition tag: " << m_definition_tag.get_uint() << std::endl;
     s << "Function definition MDL name: \"" << m_definition_name << "\"" << std::endl;
     tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ 0);
@@ -500,8 +523,12 @@ Uint Mdl_function_call::bundle( DB::Tag* results, Uint size) const
 
 void Mdl_function_call::get_scene_element_references( DB::Tag_set* result) const
 {
-    ASSERT( M_SCENE, m_definition_tag);
-    result->insert( m_definition_tag);
+  
+    // default functions are held by the module, avoid cycle.
+    if (!m_immutable) { 
+        ASSERT( M_SCENE, m_module_tag);
+        result->insert(m_module_tag);
+    }
     collect_references( m_arguments.get(), result);
     collect_references( m_enable_if_conditions.get(), result);
 }

@@ -86,7 +86,7 @@ public:
   /// OutOps vector.
   virtual bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                             char ConstraintCode,
-                                            MISTD::vector<SDValue> &OutOps) {
+                                            std::vector<SDValue> &OutOps) {
     return true;
   }
 
@@ -197,7 +197,7 @@ protected:
 
   /// SelectInlineAsmMemoryOperands - Calls to this are automatically generated
   /// by tblgen.  Others should not call it.
-  void SelectInlineAsmMemoryOperands(MISTD::vector<SDValue> &Ops);
+  void SelectInlineAsmMemoryOperands(std::vector<SDValue> &Ops);
 
 
 public:
@@ -226,7 +226,7 @@ public:
 
   virtual bool CheckComplexPattern(SDNode *Root, SDNode *Parent, SDValue N,
                                    unsigned PatternNo,
-                        SmallVectorImpl<MISTD::pair<SDValue, SDNode*> > &Result) {
+                        SmallVectorImpl<std::pair<SDValue, SDNode*> > &Result) {
     llvm_unreachable("Tblgen should generate the implementation of this!");
   }
 
@@ -279,7 +279,7 @@ private:
 
   /// OpcodeOffset - This is a cache used to dispatch efficiently into isel
   /// state machines that start with a OPC_SwitchOpcode node.
-  MISTD::vector<unsigned> OpcodeOffset;
+  std::vector<unsigned> OpcodeOffset;
 
   void UpdateChainsAndGlue(SDNode *NodeToMatch, SDValue InputChain,
                            const SmallVectorImpl<SDNode*> &ChainNodesMatched,

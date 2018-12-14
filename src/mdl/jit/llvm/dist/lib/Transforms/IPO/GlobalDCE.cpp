@@ -94,7 +94,7 @@ bool GlobalDCE::runOnModule(Module &M) {
   //
 
   // The first pass is to drop initializers of global variables which are dead.
-  MISTD::vector<GlobalVariable*> DeadGlobalVars;   // Keep track of dead globals
+  std::vector<GlobalVariable*> DeadGlobalVars;   // Keep track of dead globals
   for (Module::global_iterator I = M.global_begin(), E = M.global_end();
        I != E; ++I)
     if (!AliveGlobals.count(I)) {
@@ -103,7 +103,7 @@ bool GlobalDCE::runOnModule(Module &M) {
     }
 
   // The second pass drops the bodies of functions which are dead...
-  MISTD::vector<Function*> DeadFunctions;
+  std::vector<Function*> DeadFunctions;
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I)
     if (!AliveGlobals.count(I)) {
       DeadFunctions.push_back(I);         // Keep track of dead globals
@@ -112,7 +112,7 @@ bool GlobalDCE::runOnModule(Module &M) {
     }
 
   // The third pass drops targets of aliases which are dead...
-  MISTD::vector<GlobalAlias*> DeadAliases;
+  std::vector<GlobalAlias*> DeadAliases;
   for (Module::alias_iterator I = M.alias_begin(), E = M.alias_end(); I != E;
        ++I)
     if (!AliveGlobals.count(I)) {

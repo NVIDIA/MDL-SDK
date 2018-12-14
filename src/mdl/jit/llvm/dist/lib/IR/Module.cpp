@@ -66,7 +66,7 @@ Module::Endianness Module::getEndianness() const {
   Module::Endianness ret = AnyEndianness;
 
   while (!temp.empty()) {
-    MISTD::pair<StringRef, StringRef> P = getToken(temp, "-");
+    std::pair<StringRef, StringRef> P = getToken(temp, "-");
 
     StringRef token = P.first;
     temp = P.second;
@@ -87,7 +87,7 @@ Module::PointerSize Module::getPointerSize() const {
   Module::PointerSize ret = AnyPointerSize;
 
   while (!temp.empty()) {
-    MISTD::pair<StringRef, StringRef> TmpP = getToken(temp, "-");
+    std::pair<StringRef, StringRef> TmpP = getToken(temp, "-");
     temp = TmpP.second;
     TmpP = getToken(TmpP.first, ":");
     StringRef token = TmpP.second, signalToken = TmpP.first;
@@ -185,7 +185,7 @@ Constant *Module::getOrInsertFunction(StringRef Name,
   va_start(Args, RetTy);
 
   // Build the list of argument types...
-  MISTD::vector<Type*> ArgTys;
+  std::vector<Type*> ArgTys;
   while (Type *ArgTy = va_arg(Args, Type*))
     ArgTys.push_back(ArgTy);
 
@@ -203,7 +203,7 @@ Constant *Module::getOrInsertFunction(StringRef Name,
   va_start(Args, RetTy);
 
   // Build the list of argument types...
-  MISTD::vector<Type*> ArgTys;
+  std::vector<Type*> ArgTys;
   while (Type *ArgTy = va_arg(Args, Type*))
     ArgTys.push_back(ArgTy);
 
@@ -405,7 +405,7 @@ bool Module::isDematerializable(const GlobalValue *GV) const {
   return false;
 }
 
-bool Module::Materialize(GlobalValue *GV, MISTD::string *ErrInfo) {
+bool Module::Materialize(GlobalValue *GV, std::string *ErrInfo) {
   if (!Materializer)
     return false;
 
@@ -422,7 +422,7 @@ void Module::Dematerialize(GlobalValue *GV) {
     return Materializer->Dematerialize(GV);
 }
 
-bool Module::MaterializeAll(MISTD::string *ErrInfo) {
+bool Module::MaterializeAll(std::string *ErrInfo) {
   if (!Materializer)
     return false;
   error_code EC = Materializer->MaterializeModule(this);
@@ -433,7 +433,7 @@ bool Module::MaterializeAll(MISTD::string *ErrInfo) {
   return true;
 }
 
-bool Module::MaterializeAllPermanently(MISTD::string *ErrInfo) {
+bool Module::MaterializeAllPermanently(std::string *ErrInfo) {
   if (MaterializeAll(ErrInfo))
     return true;
   Materializer.reset();

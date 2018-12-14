@@ -1123,7 +1123,7 @@ void Dependence_node::add_edge(
 
     // check if it's already in our list
     // FIXME: this is O(n^2)
-    Edge_iterator it = MISTD::find_if(m_edgess.begin(), m_edgess.end(), predicate);
+    Edge_iterator it = std::find_if(m_edgess.begin(), m_edgess.end(), predicate);
     if (it == m_edgess.end()) {
         Arena_builder builder(arena);
 

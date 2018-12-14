@@ -259,8 +259,8 @@ optimizeExtInstr(MachineInstr *MI, MachineBasicBlock *MBB,
 
   if (ExtendLife && !ExtendedUses.empty())
     // Extend the liveness of the extension result.
-    MISTD::copy(ExtendedUses.begin(), ExtendedUses.end(),
-              MISTD::back_inserter(Uses));
+    std::copy(ExtendedUses.begin(), ExtendedUses.end(),
+              std::back_inserter(Uses));
 
   // Now replace all uses.
   bool Changed = false;
@@ -368,8 +368,8 @@ static bool shareSameRegisterFile(const TargetRegisterInfo &TRI,
   // At most one of the register is a sub register, make it Src to avoid
   // duplicating the test.
   if (!SrcSubReg) {
-    MISTD::swap(DefSubReg, SrcSubReg);
-    MISTD::swap(DefRC, SrcRC);
+    std::swap(DefSubReg, SrcSubReg);
+    std::swap(DefRC, SrcRC);
   }
 
   // One of the register is a sub register, check if we can get a superclass.
@@ -527,7 +527,7 @@ bool PeepholeOptimizer::isMoveImmediate(MachineInstr *MI,
     return false;
   unsigned Reg = MI->getOperand(0).getReg();
   if (TargetRegisterInfo::isVirtualRegister(Reg)) {
-    ImmDefMIs.insert(MISTD::make_pair(Reg, MI));
+    ImmDefMIs.insert(std::make_pair(Reg, MI));
     ImmDefRegs.insert(Reg);
     return true;
   }

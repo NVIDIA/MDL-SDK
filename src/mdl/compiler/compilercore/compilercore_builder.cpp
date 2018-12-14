@@ -169,6 +169,8 @@ enum Version_flags {
     REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),
     SINCE_1_4   = IMDL::MDL_VERSION_1_4,
     REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),
+    SINCE_1_5   = IMDL::MDL_VERSION_1_5,
+    REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
 };
 
 // compilercore_known_defs.h is too big to be compiled in one function, use this class to split

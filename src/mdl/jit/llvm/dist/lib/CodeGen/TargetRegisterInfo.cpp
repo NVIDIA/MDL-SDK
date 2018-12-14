@@ -219,9 +219,9 @@ getCommonSuperRegClass(const TargetRegisterClass *RCA, unsigned SubA,
   unsigned *BestPreA = &PreA;
   unsigned *BestPreB = &PreB;
   if (RCA->getSize() < RCB->getSize()) {
-    MISTD::swap(RCA, RCB);
-    MISTD::swap(SubA, SubB);
-    MISTD::swap(BestPreA, BestPreB);
+    std::swap(RCA, RCB);
+    std::swap(SubA, SubB);
+    std::swap(BestPreA, BestPreB);
   }
 
   // Also terminate the search one we have found a register class as small as
@@ -267,7 +267,7 @@ TargetRegisterInfo::getRegAllocationHints(unsigned VirtReg,
                                           const MachineFunction &MF,
                                           const VirtRegMap *VRM) const {
   const MachineRegisterInfo &MRI = MF.getRegInfo();
-  MISTD::pair<unsigned, unsigned> Hint = MRI.getRegAllocationHint(VirtReg);
+  std::pair<unsigned, unsigned> Hint = MRI.getRegAllocationHint(VirtReg);
 
   // Hints with HintType != 0 were set by target-dependent code.
   // Such targets must provide their own implementation of
@@ -287,7 +287,7 @@ TargetRegisterInfo::getRegAllocationHints(unsigned VirtReg,
   // Check that Phys is in the allocation order. We shouldn't heed hints
   // from VirtReg's register class if they aren't in the allocation order. The
   // target probably has a reason for removing the register.
-  if (MISTD::find(Order.begin(), Order.end(), Phys) == Order.end())
+  if (std::find(Order.begin(), Order.end(), Phys) == Order.end())
     return;
 
   // All clear, tell the register allocator to prefer this register.

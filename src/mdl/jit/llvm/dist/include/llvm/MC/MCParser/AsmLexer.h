@@ -54,7 +54,7 @@ public:
 
 private:
   int getNextChar();
-  AsmToken ReturnError(const char *Loc, const MISTD::string &Msg);
+  AsmToken ReturnError(const char *Loc, const std::string &Msg);
 
   AsmToken LexIdentifier();
   AsmToken LexSlash();

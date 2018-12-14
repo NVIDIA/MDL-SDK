@@ -69,7 +69,7 @@ public:
     typedef ValueT value_type;
     typedef value_type *pointer;
     typedef value_type &reference;
-    typedef MISTD::forward_iterator_tag iterator_category;
+    typedef std::forward_iterator_tag iterator_category;
 
     Iterator(const typename MapTy::iterator &i) : I(i) {}
 
@@ -89,7 +89,7 @@ public:
     typedef ValueT value_type;
     typedef value_type *pointer;
     typedef value_type &reference;
-    typedef MISTD::forward_iterator_tag iterator_category;
+    typedef std::forward_iterator_tag iterator_category;
 
     ConstIterator(const typename MapTy::const_iterator &i) : I(i) {}
 
@@ -114,8 +114,8 @@ public:
   void erase(Iterator I) { return TheMap.erase(I.I); }
   void erase(ConstIterator CI) { return TheMap.erase(CI.I); }
 
-  MISTD::pair<iterator, bool> insert(const ValueT &V) {
-    return TheMap.insert(MISTD::make_pair(V, 0));
+  std::pair<iterator, bool> insert(const ValueT &V) {
+    return TheMap.insert(std::make_pair(V, 0));
   }
   
   // Range insertion of values.

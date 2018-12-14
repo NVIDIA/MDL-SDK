@@ -56,6 +56,7 @@ Mdl_material_instance::Mdl_material_instance()
 : m_tf(get_type_factory())
 , m_vf(get_value_factory())
 , m_ef(get_expression_factory())
+, m_module_tag()
 , m_definition_tag()
 , m_material_index( ~0u)
 , m_definition_name()
@@ -73,6 +74,7 @@ static inline char const *check_str(char const *s)
 }
 
 Mdl_material_instance::Mdl_material_instance(
+    DB::Tag module_tag,
     DB::Tag definition_tag,
     mi::Uint32 material_index,
     IExpression_list* arguments,
@@ -83,6 +85,7 @@ Mdl_material_instance::Mdl_material_instance(
 : m_tf(get_type_factory())
 , m_vf(get_value_factory())
 , m_ef(get_expression_factory())
+, m_module_tag(module_tag)
 , m_definition_tag(definition_tag)
 , m_material_index(material_index)
 , m_definition_name(check_str(definition_name))
@@ -98,12 +101,14 @@ Mdl_material_instance::Mdl_material_instance( const Mdl_material_instance& other
 , m_tf( other.m_tf)
 , m_vf( other.m_vf)
 , m_ef( other.m_ef)
+, m_module_tag(other.m_module_tag)
 , m_definition_tag( other.m_definition_tag)
 , m_material_index( other.m_material_index)
 , m_definition_name( other.m_definition_name)
 , m_immutable( other.m_immutable)
 , m_parameter_types( other.m_parameter_types)
-, m_arguments( m_ef->clone( other.m_arguments.get()))
+, m_arguments( m_ef->clone(
+    other.m_arguments.get(), /*transaction*/ nullptr, /*copy_immutable_calls*/ false))
 , m_enable_if_conditions( other.m_enable_if_conditions)  // shared, no clone necessary
 {
 }
@@ -191,7 +196,8 @@ mi::Sint32 Mdl_material_instance::set_argument(
         return -6;
     if( expected_type_uniform && return_type_is_varying( transaction, argument))
         return -8;
-    mi::base::Handle<IExpression> argument_copy( m_ef->clone( argument));
+    mi::base::Handle<IExpression> argument_copy( m_ef->clone(
+        argument, /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
     m_arguments->set_expression( index, argument_copy.get());
     return 0;
 }
@@ -205,46 +211,67 @@ mi::Sint32 Mdl_material_instance::set_argument(
     return set_argument( transaction, index, argument);
 }
 
+void Mdl_material_instance::make_mutable(DB::Transaction* transaction) {
+
+    // material instances, which are defaults in their own module, do not
+    // keep a reference to their module, get it now
+    if (!m_module_tag.is_valid()) {
+        DB::Access<Mdl_material_definition> definition(m_definition_tag, transaction);
+        m_module_tag = definition->get_module(transaction);
+        ASSERT(M_SCENE, m_module_tag.is_valid());
+    }
+    m_immutable = false;
+}
+
 Mdl_compiled_material* Mdl_material_instance::create_compiled_material(
     DB::Transaction* transaction,
     bool class_compilation,
-    mi::Float32 mdl_meters_per_scene_unit,
-    mi::Float32 mdl_wavelength_min,
-    mi::Float32 mdl_wavelength_max,
-    mi::Sint32* errors) const
+    Execution_context* context) const
 {
+    context->clear_messages();
+
     mi::base::Handle<const mi::mdl::IGenerated_code_dag::IMaterial_instance> instance(
         create_dag_material_instance( transaction, /*use_temporaries*/ true, class_compilation,
-            mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, errors));
+           context));
     if( !instance.is_valid_interface())
         return 0;
 
+    ASSERT(M_SCENE, m_module_tag.is_valid());
     DB::Access<Mdl_material_definition> material_definition( m_definition_tag, transaction);
-    DB::Access<Mdl_module> module( material_definition->get_module(), transaction);
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
     const char* module_filename = module->get_filename();
     const char* module_name = module->get_mdl_name();
 
+    mi::Float32 mdl_meters_per_scene_unit = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MIN);
+    mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MAX);
+
     return new Mdl_compiled_material(
-        transaction, instance.get(), module_filename, module_name, mdl_meters_per_scene_unit,
-        mdl_wavelength_min, mdl_wavelength_max);
+        transaction, instance.get(), module_filename, module_name,
+        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max);
 }
+
+namespace{
+
+    void add_and_log_message(Execution_context* context, const Message& message, mi::Sint32 result)
+    {
+        context->add_message(message);
+        context->add_error_message(message);
+        context->set_result(result);
+        LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE, "%s", message.m_message.c_str());
+    }
+};
 
 const mi::mdl::IGenerated_code_dag::IMaterial_instance*
 Mdl_material_instance::create_dag_material_instance(
     DB::Transaction* transaction,
     bool use_temporaries,
     bool class_compilation,
-    mi::Float32 mdl_meters_per_scene_unit,
-    mi::Float32 mdl_wavelength_min,
-    mi::Float32 mdl_wavelength_max,
-    mi::Sint32* errors) const
+   Execution_context* context) const
 {
-    mi::Sint32 dummy_error = 0;
-    if( !errors) errors = &dummy_error;
-
     // get code DAG
-    DB::Access<Mdl_material_definition> material_definition( m_definition_tag, transaction);
-    DB::Access<Mdl_module> module( material_definition->get_module(), transaction);
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
 
     // create new MDL material instance
@@ -254,10 +281,18 @@ Mdl_material_instance::create_dag_material_instance(
     ASSERT( M_SCENE, error_code == 0);
     ASSERT( M_SCENE, instance.is_valid_interface());
 
+    mi::Float32 mdl_meters_per_scene_unit = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_WAVELENGTH_MIN);
+    mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_WAVELENGTH_MAX);
+
     // convert m_arguments to DAG nodes
     mi::Uint32 n = code_dag->get_material_parameter_count( m_material_index);
     std::vector<const mi::mdl::DAG_node*> mdl_arguments( n);
     for( mi::Uint32 i = 0; i < n; ++i) {
+
         const mi::mdl::IType* parameter_type
             = code_dag->get_material_parameter_type( m_material_index, i);
         mi::base::Handle<const IExpression> argument( m_arguments->get_expression( i));
@@ -265,11 +300,11 @@ Mdl_material_instance::create_dag_material_instance(
             transaction, instance.get(), parameter_type, argument.get(), mdl_meters_per_scene_unit,
             mdl_wavelength_min, mdl_wavelength_max);
         if( !mdl_arguments[i]) {
-            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+
+            add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
                 "Type mismatch, call of an unsuitable DB element, or call cycle in a graph rooted "
-                "at the material definition \"%s\".",
-                add_mdl_db_prefix( code_dag->get_material_name( m_material_index)).c_str());
-            *errors = -1;
+                "at the material definition \"" +
+                add_mdl_db_prefix(code_dag->get_material_name(m_material_index)) + "\"."), -1);
             return 0;
         }
     }
@@ -300,19 +335,23 @@ Mdl_material_instance::create_dag_material_instance(
         case mi::mdl::IGenerated_code_dag::EC_NONE:
             break;
         case mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH: {
-            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+            
+            add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
                 "Type mismatch for an argument in a graph rooted at the material "
-                "definition \"%s\".",
-                add_mdl_db_prefix( code_dag->get_material_name( m_material_index)).c_str());
-            *errors = -1;
+                "definition \"" + 
+                add_mdl_db_prefix( code_dag->get_material_name( m_material_index)) + "\".", 
+                mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH, 
+                Message::MSG_COMPILER_DAG), -1);
             return 0;
         }
         case mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED: {
-            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-                "The thin-walled material instance rooted of the material definition \"%s\" has "
+
+            add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
+                "The thin-walled material instance rooted of the material definition \"" +
+                add_mdl_db_prefix(code_dag->get_material_name(m_material_index)) + "\" has "
                 "different transmission for surface and backface.",
-                add_mdl_db_prefix( code_dag->get_material_name( m_material_index)).c_str());
-            *errors = -2;
+                mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED, 
+                Message::MSG_COMPILER_DAG), -2);
             return 0;
         }
         case mi::mdl::IGenerated_code_dag::EC_INSTANTIATION_ERROR:
@@ -325,14 +364,12 @@ Mdl_material_instance::create_dag_material_instance(
     }
 
     const mi::mdl::Messages& msgs = instance->access_messages();
-    report_messages( msgs, /*out_messages=*/0);
+    report_messages( msgs, context);
 
-    if( msgs.get_error_message_count() > 0) {
-        *errors = -3;
+    if (msgs.get_error_message_count() > 0) {
+        context->set_result(-3);
         return 0;
     }
-
-    *errors = 0;
     instance->retain();
     return instance.get();
 }
@@ -348,6 +385,7 @@ void Mdl_material_instance::swap( Mdl_material_instance& other)
 {
     SCENE::Scene_element<Mdl_material_instance, Mdl_material_instance::id>::swap( other);
 
+    std::swap( m_module_tag, other.m_module_tag);
     std::swap( m_definition_tag, other.m_definition_tag);
     std::swap( m_material_index, other.m_material_index);
     m_definition_name.swap( other.m_definition_name);
@@ -362,6 +400,7 @@ const SERIAL::Serializable* Mdl_material_instance::serialize( SERIAL::Serializer
 {
     Scene_element_base::serialize( serializer);
 
+    serializer->write( m_module_tag);
     serializer->write( m_definition_tag);
     serializer->write( m_material_index);
     serializer->write( m_definition_name);
@@ -378,6 +417,7 @@ SERIAL::Serializable* Mdl_material_instance::deserialize( SERIAL::Deserializer* 
 {
     Scene_element_base::deserialize( deserializer);
 
+    deserializer->read( &m_module_tag);
     deserializer->read( &m_definition_tag);
     deserializer->read( &m_material_index);
     deserializer->read( &m_definition_name);
@@ -396,6 +436,7 @@ void Mdl_material_instance::dump( DB::Transaction* transaction) const
     s << std::boolalpha;
     mi::base::Handle<const mi::IString> tmp;
 
+    s << "MDL module tag: " << m_module_tag.get_uint() << std::endl;
     s << "Material definition tag: " << m_definition_tag.get_uint() << std::endl;
     s << "Material definition MDL name: \"" << m_definition_name << "\"" << std::endl;
     tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ 0);
@@ -430,8 +471,11 @@ Uint Mdl_material_instance::bundle( DB::Tag* results, Uint size) const
 
 void Mdl_material_instance::get_scene_element_references( DB::Tag_set* result) const
 {
-    ASSERT( M_SCENE, m_definition_tag);
-    result->insert( m_definition_tag);
+    // default functions are held by the module, avoid cycle.
+    if (!m_immutable) {
+        ASSERT(M_SCENE, m_module_tag);
+        result->insert(m_module_tag);
+    }
     collect_references( m_arguments.get(), result);
     collect_references( m_enable_if_conditions.get(), result);
 }

@@ -54,6 +54,12 @@ struct Options {
     // Whether class compilation should be used for the materials.
     bool use_class_compilation;
 
+    // Disables pixel oversampling.
+    bool no_aa;
+
+    // Whether derivative support should be enabled.
+    bool enable_derivatives;
+
     // List of materials to use.
     std::vector<std::string> material_names;
 
@@ -67,6 +73,8 @@ struct Options {
         , res_x(700)
         , res_y(520)
         , use_class_compilation(false)
+        , no_aa(false)
+        , enable_derivatives(false)
     {
     }
 };
@@ -76,21 +84,21 @@ struct Options {
 // resolution and the given number of samples for super-sampling and export it.
 void bake_expression_cuda_ptx(
     std::vector<std::unique_ptr<Ptx_code> > const &target_codes,
-    mi::Uint32                                    width,
-    mi::Uint32                                    height,
-    mi::Uint32                                    num_samples,
-    char const                                   *out_path)
+    Options                                       &options,
+    mi::Uint32                                    num_samples)
 {
     // Build the full CUDA kernel with all the generated code
     CUfunction  cuda_function;
+    char const *ptx_name = options.enable_derivatives ?
+        "example_execution_cuda_derivatives.ptx" : "example_execution_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + "example_execution_cuda.ptx").c_str(),
+        (get_executable_folder() + ptx_name).c_str(),
         "evaluate_mat_expr",
         &cuda_function);
 
     // Prepare the needed data of all target codes for the GPU
-    Material_gpu_context material_gpu_context;
+    Material_gpu_context material_gpu_context(options.enable_derivatives);
     for (size_t i = 0, num_target_codes = target_codes.size(); i < num_target_codes; ++i) {
         if (!material_gpu_context.prepare_target_code_data(target_codes[i].get()))
             return;
@@ -101,17 +109,17 @@ void bake_expression_cuda_ptx(
 
     // Allocate GPU output buffer
     CUdeviceptr device_outbuf;
-    check_cuda_success(cuMemAlloc(&device_outbuf, width * height * sizeof(float3)));
+    check_cuda_success(cuMemAlloc(&device_outbuf, options.res_x * options.res_y * sizeof(float3)));
 
     // Launch kernel for the whole image
     dim3 threads_per_block(16, 16);
-    dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
+    dim3 num_blocks((options.res_x + 15) / 16, (options.res_y + 15) / 16);
     void *kernel_params[] = {
         &device_outbuf,
         &device_tc_data_list,
         &device_arg_block_list,
-        &width,
-        &height,
+        &options.res_x,
+        &options.res_y,
         &num_samples
     };
 
@@ -122,10 +130,11 @@ void bake_expression_cuda_ptx(
         0, nullptr, kernel_params, nullptr));
 
     // Copy the result image data to the host and export it.
-    float3 *data = static_cast<float3*>(malloc(width * height * sizeof(float3)));
+    float3 *data = static_cast<float3*>(malloc(options.res_x * options.res_y * sizeof(float3)));
     if (data != nullptr) {
-        check_cuda_success(cuMemcpyDtoH(data, device_outbuf, width * height * sizeof(float3)));
-        export_image_rgbf(out_path, width, height, data);
+        check_cuda_success(cuMemcpyDtoH(
+            data, device_outbuf, options.res_x * options.res_y * sizeof(float3)));
+        export_image_rgbf(options.outputfile.c_str(), options.res_x, options.res_y, data);
         free(data);
     }
 
@@ -141,6 +150,8 @@ void usage(char const *prog_name)
         << "Options:\n"
         << "  --res <x> <y>       resolution (default: 700x520)\n"
         << "  --cc                use class compilation\n"
+        << "  --noaa              disable pixel oversampling\n"
+        << "  -d                  enable use of derivatives\n"
         << "  -o <outputfile>     image file to write result to\n"
         << "                      (default: example_cuda_<material_pattern>.png)\n"
         << "  --mdl_path <path>   mdl search path, can occur multiple times.\n"
@@ -176,6 +187,10 @@ int main(int argc, char* argv[])
                 options.res_y = std::max(atoi(argv[++i]), 1);
             } else if (strcmp(opt, "--cc") == 0) {
                 options.use_class_compilation = true;
+            } else if (strcmp(opt, "--noaa") == 0) {
+                options.no_aa = true;
+            } else if (strcmp(opt, "-d") == 0) {
+                options.enable_derivatives = true;
             } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
                 options.mdl_paths.push_back(argv[++i]);
             } else {
@@ -213,7 +228,11 @@ int main(int argc, char* argv[])
     FreeImage_Initialise();
 
     {
-        Material_ptx_compiler mc(mdl_compiler.get(), 0);
+        Material_ptx_compiler mc(
+            mdl_compiler.get(),
+            /*num_texture_results=*/ 0,
+            options.enable_derivatives);
+
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
             mc.add_module_path(options.mdl_paths[i].c_str());
 
@@ -250,10 +269,8 @@ int main(int argc, char* argv[])
             CUcontext cuda_context = init_cuda();
             bake_expression_cuda_ptx(
                 ptx_codes,
-                options.res_x,
-                options.res_y,
-                8,
-                options.outputfile.c_str());
+                options,
+                options.no_aa ? 1 : 8);
             uninit_cuda(cuda_context);
         }
     }

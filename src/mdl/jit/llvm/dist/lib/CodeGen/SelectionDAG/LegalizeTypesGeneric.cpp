@@ -64,7 +64,7 @@ void DAGTypeLegalizer::ExpandRes_BITCAST(SDNode *N, SDValue &Lo, SDValue &Hi) {
     case TargetLowering::TypeSplitVector:
       GetSplitVector(InOp, Lo, Hi);
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
       Lo = DAG.getNode(ISD::BITCAST, dl, NOutVT, Lo);
       Hi = DAG.getNode(ISD::BITCAST, dl, NOutVT, Hi);
       return;
@@ -81,7 +81,7 @@ void DAGTypeLegalizer::ExpandRes_BITCAST(SDNode *N, SDValue &Lo, SDValue &Hi) {
       llvm::tie(LoVT, HiVT) = DAG.GetSplitDestVTs(InVT);
       llvm::tie(Lo, Hi) = DAG.SplitVector(InOp, dl, LoVT, HiVT);
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
       Lo = DAG.getNode(ISD::BITCAST, dl, NOutVT, Lo);
       Hi = DAG.getNode(ISD::BITCAST, dl, NOutVT, Hi);
       return;
@@ -124,7 +124,7 @@ void DAGTypeLegalizer::ExpandRes_BITCAST(SDNode *N, SDValue &Lo, SDValue &Hi) {
         SDValue RHS = Vals[Slot + 1];
 
         if (TLI.isBigEndian())
-          MISTD::swap(LHS, RHS);
+          std::swap(LHS, RHS);
 
         Vals.push_back(DAG.getNode(ISD::BUILD_PAIR, dl,
                                    EVT::getIntegerVT(
@@ -136,7 +136,7 @@ void DAGTypeLegalizer::ExpandRes_BITCAST(SDNode *N, SDValue &Lo, SDValue &Hi) {
       Hi = Vals[Slot++];
 
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
 
       return;
     }
@@ -175,7 +175,7 @@ void DAGTypeLegalizer::ExpandRes_BITCAST(SDNode *N, SDValue &Lo, SDValue &Hi) {
 
   // Handle endianness of the load.
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 }
 
 void DAGTypeLegalizer::ExpandRes_BUILD_PAIR(SDNode *N, SDValue &Lo,
@@ -234,7 +234,7 @@ void DAGTypeLegalizer::ExpandRes_EXTRACT_VECTOR_ELT(SDNode *N, SDValue &Lo,
   Hi = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, NewVT, NewVec, Idx);
 
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 }
 
 void DAGTypeLegalizer::ExpandRes_NormalLoad(SDNode *N, SDValue &Lo,
@@ -274,7 +274,7 @@ void DAGTypeLegalizer::ExpandRes_NormalLoad(SDNode *N, SDValue &Lo,
 
   // Handle endianness of the load.
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 
   // Modified the chain - switch anything that used the old chain to use
   // the new one.
@@ -294,7 +294,7 @@ void DAGTypeLegalizer::ExpandRes_VAARG(SDNode *N, SDValue &Lo, SDValue &Hi) {
 
   // Handle endianness of the load.
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 
   // Modified the chain - switch anything that used the old chain to use
   // the new one.
@@ -317,7 +317,7 @@ void DAGTypeLegalizer::IntegerToVector(SDValue Op, unsigned NumElements,
     NumElements >>= 1;
     SplitInteger(Op, Parts[0], Parts[1]);
       if (TLI.isBigEndian())
-        MISTD::swap(Parts[0], Parts[1]);
+        std::swap(Parts[0], Parts[1]);
     IntegerToVector(Parts[0], NumElements, Ops, EltVT);
     IntegerToVector(Parts[1], NumElements, Ops, EltVT);
   } else {
@@ -373,14 +373,14 @@ SDValue DAGTypeLegalizer::ExpandOp_BUILD_VECTOR(SDNode *N) {
 
   // Build a vector of twice the length out of the expanded elements.
   // For example <3 x i64> -> <6 x i32>.
-  MISTD::vector<SDValue> NewElts;
+  std::vector<SDValue> NewElts;
   NewElts.reserve(NumElts*2);
 
   for (unsigned i = 0; i < NumElts; ++i) {
     SDValue Lo, Hi;
     GetExpandedOp(N->getOperand(i), Lo, Hi);
     if (TLI.isBigEndian())
-      MISTD::swap(Lo, Hi);
+      std::swap(Lo, Hi);
     NewElts.push_back(Lo);
     NewElts.push_back(Hi);
   }
@@ -422,7 +422,7 @@ SDValue DAGTypeLegalizer::ExpandOp_INSERT_VECTOR_ELT(SDNode *N) {
   SDValue Lo, Hi;
   GetExpandedOp(Val, Lo, Hi);
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 
   SDValue Idx = N->getOperand(2);
   Idx = DAG.getNode(ISD::ADD, dl, Idx.getValueType(), Idx, Idx);
@@ -472,7 +472,7 @@ SDValue DAGTypeLegalizer::ExpandOp_NormalStore(SDNode *N, unsigned OpNo) {
   GetExpandedOp(St->getValue(), Lo, Hi);
 
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 
   Lo = DAG.getStore(Chain, dl, Lo, Ptr, St->getPointerInfo(),
                     isVolatile, isNonTemporal, Alignment, TBAAInfo);

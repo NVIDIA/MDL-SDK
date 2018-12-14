@@ -234,7 +234,7 @@ unsigned BasicTTI::getArithmeticInstrCost(unsigned Opcode, Type *Ty,
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
   assert(ISD && "Invalid opcode");
 
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Ty);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Ty);
 
   bool IsFloat = Ty->getScalarType()->isFloatingPointTy();
   // Assume that floating point arithmetic operations cost twice as much as
@@ -281,8 +281,8 @@ unsigned BasicTTI::getCastInstrCost(unsigned Opcode, Type *Dst,
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
   assert(ISD && "Invalid opcode");
 
-  MISTD::pair<unsigned, MVT> SrcLT = TLI->getTypeLegalizationCost(Src);
-  MISTD::pair<unsigned, MVT> DstLT = TLI->getTypeLegalizationCost(Dst);
+  std::pair<unsigned, MVT> SrcLT = TLI->getTypeLegalizationCost(Src);
+  std::pair<unsigned, MVT> DstLT = TLI->getTypeLegalizationCost(Dst);
 
   // Check for NOOP conversions.
   if (SrcLT.first == DstLT.first &&
@@ -382,7 +382,7 @@ unsigned BasicTTI::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
       ISD = ISD::VSELECT;
   }
 
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
 
   if (!TLI->isOperationExpand(ISD, LT.second)) {
     // The operation is legal. Assume it costs 1. Multiply
@@ -416,7 +416,7 @@ unsigned BasicTTI::getMemoryOpCost(unsigned Opcode, Type *Src,
                                    unsigned Alignment,
                                    unsigned AddressSpace) const {
   assert(!Src->isVoidTy() && "Invalid type");
-  MISTD::pair<unsigned, MVT> LT = getTLI()->getTypeLegalizationCost(Src);
+  std::pair<unsigned, MVT> LT = getTLI()->getTypeLegalizationCost(Src);
 
   // Assume that all loads of legal types cost 1.
   return LT.first;
@@ -432,12 +432,12 @@ unsigned BasicTTI::getIntrinsicInstrCost(Intrinsic::ID IID, Type *RetTy,
     unsigned ScalarCalls = 1;
     if (RetTy->isVectorTy()) {
       ScalarizationCost = getScalarizationOverhead(RetTy, true, false);
-      ScalarCalls = MISTD::max(ScalarCalls, RetTy->getVectorNumElements());
+      ScalarCalls = std::max(ScalarCalls, RetTy->getVectorNumElements());
     }
     for (unsigned i = 0, ie = Tys.size(); i != ie; ++i) {
       if (Tys[i]->isVectorTy()) {
         ScalarizationCost += getScalarizationOverhead(Tys[i], false, true);
-        ScalarCalls = MISTD::max(ScalarCalls, RetTy->getVectorNumElements());
+        ScalarCalls = std::max(ScalarCalls, RetTy->getVectorNumElements());
       }
     }
 
@@ -471,7 +471,7 @@ unsigned BasicTTI::getIntrinsicInstrCost(Intrinsic::ID IID, Type *RetTy,
   }
 
   const TargetLoweringBase *TLI = getTLI();
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(RetTy);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(RetTy);
 
   if (TLI->isOperationLegalOrPromote(ISD, LT.second)) {
     // The operation is legal. Assume it costs 1.
@@ -504,7 +504,7 @@ unsigned BasicTTI::getIntrinsicInstrCost(Intrinsic::ID IID, Type *RetTy,
 }
 
 unsigned BasicTTI::getNumberOfParts(Type *Tp) const {
-  MISTD::pair<unsigned, MVT> LT = getTLI()->getTypeLegalizationCost(Tp);
+  std::pair<unsigned, MVT> LT = getTLI()->getTypeLegalizationCost(Tp);
   return LT.first;
 }
 

@@ -442,7 +442,7 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
     for (MachineRegisterInfo::livein_iterator LI = RegInfo->livein_begin(),
            E = RegInfo->livein_end(); LI != E; ++LI)
       if (LI->second)
-        LiveInMap.insert(MISTD::make_pair(LI->first, LI->second));
+        LiveInMap.insert(std::make_pair(LI->first, LI->second));
 
   // Insert DBG_VALUE instructions for function arguments to the entry block.
   for (unsigned i = 0, e = FuncInfo->ArgDbgValues.size(); i != e; ++i) {
@@ -626,10 +626,10 @@ void SelectionDAGISel::ComputeLiveOutVRegInfo() {
 }
 
 void SelectionDAGISel::CodeGenAndEmitDAG() {
-  MISTD::string GroupName;
+  std::string GroupName;
   if (TimePassesIsEnabled)
     GroupName = "Instruction Selection and Scheduling";
-  MISTD::string BlockName;
+  std::string BlockName;
   int BlockNumber = -1;
   (void)BlockNumber;
 #ifdef NDEBUG
@@ -1068,7 +1068,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
           FastIS->setLastLocalValue(0);
       }
 
-      unsigned NumFastIselRemaining = MISTD::distance(Begin, End);
+      unsigned NumFastIselRemaining = std::distance(Begin, End);
       // Do FastISel on as many instructions as possible.
       for (; BI != Begin; --BI) {
         const Instruction *Inst = llvm::prior(BI);
@@ -1140,7 +1140,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
 
           // Recompute NumFastIselRemaining as Selection DAG instruction
           // selection may have handled the call, input args, etc.
-          unsigned RemainingNow = MISTD::distance(Begin, BI);
+          unsigned RemainingNow = std::distance(Begin, BI);
           NumFastIselFailures += NumFastIselRemaining - RemainingNow;
           NumFastIselRemaining = RemainingNow;
           continue;
@@ -1619,9 +1619,9 @@ bool SelectionDAGISel::CheckOrMask(SDValue LHS, ConstantSDNode *RHS,
 /// SelectInlineAsmMemoryOperands - Calls to this are automatically generated
 /// by tblgen.  Others should not call it.
 void SelectionDAGISel::
-SelectInlineAsmMemoryOperands(MISTD::vector<SDValue> &Ops) {
-  MISTD::vector<SDValue> InOps;
-  MISTD::swap(InOps, Ops);
+SelectInlineAsmMemoryOperands(std::vector<SDValue> &Ops) {
+  std::vector<SDValue> InOps;
+  std::swap(InOps, Ops);
 
   Ops.push_back(InOps[InlineAsm::Op_InputChain]); // 0
   Ops.push_back(InOps[InlineAsm::Op_AsmString]);  // 1
@@ -1643,7 +1643,7 @@ SelectInlineAsmMemoryOperands(MISTD::vector<SDValue> &Ops) {
       assert(InlineAsm::getNumOperandRegisters(Flags) == 1 &&
              "Memory operand with multiple values?");
       // Otherwise, this is a memory operand.  Ask the target to select it.
-      MISTD::vector<SDValue> SelOps;
+      std::vector<SDValue> SelOps;
       if (SelectInlineAsmMemoryOperand(InOps[i+1], 'm', SelOps))
         report_fatal_error("Could not match memory address.  Inline asm"
                            " failure!");
@@ -1797,7 +1797,7 @@ bool SelectionDAGISel::IsLegalToFold(SDValue N, SDNode *U, SDNode *Root,
 }
 
 SDNode *SelectionDAGISel::Select_INLINEASM(SDNode *N) {
-  MISTD::vector<SDValue> Ops(N->op_begin(), N->op_end());
+  std::vector<SDValue> Ops(N->op_begin(), N->op_end());
   SelectInlineAsmMemoryOperands(Ops);
 
   EVT VTs[] = { MVT::Other, MVT::Glue };
@@ -1866,7 +1866,7 @@ UpdateChainsAndGlue(SDNode *NodeToMatch, SDValue InputChain,
 
       // If the node became dead and we haven't already seen it, delete it.
       if (ChainNode->use_empty() &&
-          !MISTD::count(NowDeadNodes.begin(), NowDeadNodes.end(), ChainNode))
+          !std::count(NowDeadNodes.begin(), NowDeadNodes.end(), ChainNode))
         NowDeadNodes.push_back(ChainNode);
     }
   }
@@ -1889,7 +1889,7 @@ UpdateChainsAndGlue(SDNode *NodeToMatch, SDValue InputChain,
 
       // If the node became dead and we haven't already seen it, delete it.
       if (FRN->use_empty() &&
-          !MISTD::count(NowDeadNodes.begin(), NowDeadNodes.end(), FRN))
+          !std::count(NowDeadNodes.begin(), NowDeadNodes.end(), FRN))
         NowDeadNodes.push_back(FRN);
     }
   }
@@ -1960,7 +1960,7 @@ WalkChainUsers(const SDNode *ChainedNode,
       // Because we structurally match the load/store as a read/modify/write,
       // but the call is chained between them.  We cannot fold in this case
       // because it would induce a cycle in the graph.
-      if (!MISTD::count(ChainedNodesInPattern.begin(),
+      if (!std::count(ChainedNodesInPattern.begin(),
                       ChainedNodesInPattern.end(), User))
         return CR_InducesCycle;
 
@@ -2054,7 +2054,7 @@ HandleMergeInputChains(SmallVectorImpl<SDNode*> &ChainNodesMatched,
     // the operands of the generated TokenFactor) if it's not an interior node.
     SDNode *N = ChainNodesMatched[i];
     if (N->getOpcode() != ISD::TokenFactor) {
-      if (MISTD::count(InteriorChainedNodes.begin(),InteriorChainedNodes.end(),N))
+      if (std::count(InteriorChainedNodes.begin(),InteriorChainedNodes.end(),N))
         continue;
 
       // Otherwise, add the input chain.
@@ -2067,7 +2067,7 @@ HandleMergeInputChains(SmallVectorImpl<SDNode*> &ChainNodesMatched,
     // If we have a token factor, we want to add all inputs of the token factor
     // that are not part of the pattern we're matching.
     for (unsigned op = 0, e = N->getNumOperands(); op != e; ++op) {
-      if (!MISTD::count(ChainNodesMatched.begin(), ChainNodesMatched.end(),
+      if (!std::count(ChainNodesMatched.begin(), ChainNodesMatched.end(),
                       N->getOperand(op).getNode()))
         InputChains.push_back(N->getOperand(op));
     }
@@ -2141,7 +2141,7 @@ MorphNode(SDNode *Node, unsigned TargetOpc, SDVTList VTList,
 LLVM_ATTRIBUTE_ALWAYS_INLINE static bool
 CheckSame(const unsigned char *MatcherTable, unsigned &MatcherIndex,
           SDValue N,
-          const SmallVectorImpl<MISTD::pair<SDValue, SDNode*> > &RecordedNodes) {
+          const SmallVectorImpl<std::pair<SDValue, SDNode*> > &RecordedNodes) {
   // Accept if it is exactly the same as a previously recorded node.
   unsigned RecNo = MatcherTable[MatcherIndex++];
   assert(RecNo < RecordedNodes.size() && "Invalid CheckSame");
@@ -2152,7 +2152,7 @@ CheckSame(const unsigned char *MatcherTable, unsigned &MatcherIndex,
 LLVM_ATTRIBUTE_ALWAYS_INLINE static bool
 CheckChildSame(const unsigned char *MatcherTable, unsigned &MatcherIndex,
              SDValue N,
-             const SmallVectorImpl<MISTD::pair<SDValue, SDNode*> > &RecordedNodes,
+             const SmallVectorImpl<std::pair<SDValue, SDNode*> > &RecordedNodes,
              unsigned ChildNo) {
   if (ChildNo >= N.getNumOperands())
     return false;  // Match fails if out of range child #.
@@ -2266,7 +2266,7 @@ static unsigned IsPredicateKnownToFail(const unsigned char *Table,
                                        unsigned Index, SDValue N,
                                        bool &Result,
                                        const SelectionDAGISel &SDISel,
-                 SmallVectorImpl<MISTD::pair<SDValue, SDNode*> > &RecordedNodes) {
+                 SmallVectorImpl<std::pair<SDValue, SDNode*> > &RecordedNodes) {
   switch (Table[Index++]) {
   default:
     Result = false;
@@ -2401,7 +2401,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
   // RecordedNodes - This is the set of nodes that have been recorded by the
   // state machine.  The second value is the parent of the node, or null if the
   // root is recorded.
-  SmallVector<MISTD::pair<SDValue, SDNode*>, 8> RecordedNodes;
+  SmallVector<std::pair<SDValue, SDNode*>, 8> RecordedNodes;
 
   // MatchedMemRefs - This is the set of MemRef's we've seen in the input
   // pattern.
@@ -2532,7 +2532,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
       SDNode *Parent = 0;
       if (NodeStack.size() > 1)
         Parent = NodeStack[NodeStack.size()-2].getNode();
-      RecordedNodes.push_back(MISTD::make_pair(N, Parent));
+      RecordedNodes.push_back(std::make_pair(N, Parent));
       continue;
     }
 
@@ -2544,7 +2544,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
       if (ChildNo >= N.getNumOperands())
         break;  // Match fails if out of range child #.
 
-      RecordedNodes.push_back(MISTD::make_pair(N->getOperand(ChildNo),
+      RecordedNodes.push_back(std::make_pair(N->getOperand(ChildNo),
                                              N.getNode()));
       continue;
     }
@@ -2729,7 +2729,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
       int64_t Val = MatcherTable[MatcherIndex++];
       if (Val & 128)
         Val = GetVBR(Val, MatcherTable, MatcherIndex);
-      RecordedNodes.push_back(MISTD::pair<SDValue, SDNode*>(
+      RecordedNodes.push_back(std::pair<SDValue, SDNode*>(
                               CurDAG->getTargetConstant(Val, VT), (SDNode*)0));
       continue;
     }
@@ -2737,7 +2737,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
       MVT::SimpleValueType VT =
         (MVT::SimpleValueType)MatcherTable[MatcherIndex++];
       unsigned RegNo = MatcherTable[MatcherIndex++];
-      RecordedNodes.push_back(MISTD::pair<SDValue, SDNode*>(
+      RecordedNodes.push_back(std::pair<SDValue, SDNode*>(
                               CurDAG->getRegister(RegNo, VT), (SDNode*)0));
       continue;
     }
@@ -2749,7 +2749,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
         (MVT::SimpleValueType)MatcherTable[MatcherIndex++];
       unsigned RegNo = MatcherTable[MatcherIndex++];
       RegNo |= MatcherTable[MatcherIndex++] << 8;
-      RecordedNodes.push_back(MISTD::pair<SDValue, SDNode*>(
+      RecordedNodes.push_back(std::pair<SDValue, SDNode*>(
                               CurDAG->getRegister(RegNo, VT), (SDNode*)0));
       continue;
     }
@@ -2768,7 +2768,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
         Imm = CurDAG->getConstantFP(*Val, Imm.getValueType(), true);
       }
 
-      RecordedNodes.push_back(MISTD::make_pair(Imm, RecordedNodes[RecNo].second));
+      RecordedNodes.push_back(std::make_pair(Imm, RecordedNodes[RecNo].second));
       continue;
     }
 
@@ -2865,7 +2865,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
       unsigned RecNo = MatcherTable[MatcherIndex++];
       assert(RecNo < RecordedNodes.size() && "Invalid EmitNodeXForm");
       SDValue Res = RunSDNodeXForm(RecordedNodes[RecNo].first, XFormNo);
-      RecordedNodes.push_back(MISTD::pair<SDValue,SDNode*>(Res, (SDNode*) 0));
+      RecordedNodes.push_back(std::pair<SDValue,SDNode*>(Res, (SDNode*) 0));
       continue;
     }
 
@@ -2945,7 +2945,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
         // Add all the non-glue/non-chain results to the RecordedNodes list.
         for (unsigned i = 0, e = VTs.size(); i != e; ++i) {
           if (VTs[i] == MVT::Other || VTs[i] == MVT::Glue) break;
-          RecordedNodes.push_back(MISTD::pair<SDValue,SDNode*>(SDValue(Res, i),
+          RecordedNodes.push_back(std::pair<SDValue,SDNode*>(SDValue(Res, i),
                                                              (SDNode*) 0));
         }
 
@@ -3146,7 +3146,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
 
 
 void SelectionDAGISel::CannotYetSelect(SDNode *N) {
-  MISTD::string msg;
+  std::string msg;
   raw_string_ostream Msg(msg);
   Msg << "Cannot select: ";
 

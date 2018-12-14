@@ -36,7 +36,9 @@
 #include <math.h>
 #include <mi/neuraylib/iimage.h>
 #include <mi/math/color.h>
+#include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
+#include <io/image/image/i_image_utilities.h>
 #include <io/scene/texture/i_texture.h>
 #include <io/scene/dbimage/i_dbimage.h>
 #include <base/data/db/i_db_access.h>
@@ -81,7 +83,7 @@ static void apply_gamma4(mi::math::Color &c, const float gamma_val)
 }
 
 static float saturate(const float f) {
-    return MISTD::max(0.0f, MISTD::min(1.0f, f));
+    return std::max(0.0f, std::min(1.0f, f));
 }
 static unsigned int float_as_uint(const float f) {
     union {
@@ -114,7 +116,7 @@ static mi::Uint32_2 texremapll(
     {
 	// Wrap or Clamp
         if (wrap_u == mi::mdl::stdlib::wrap_clamp || wrap_u == mi::mdl::stdlib::wrap_clip)
-	    texi.x = (int)MISTD::min(MISTD::max(texix, 0ll), (long long)(texres.x-1));
+	    texi.x = (int)std::min(std::max(texix, 0ll), (long long)(texres.x-1));
 	else
 	{
 	    const int s = signbit(tex.x); // extract sign to handle all < 0 magic below
@@ -141,7 +143,7 @@ static mi::Uint32_2 texremapll(
     {
 	// Wrap or Clamp
         if (wrap_v == mi::mdl::stdlib::wrap_clamp || wrap_v == mi::mdl::stdlib::wrap_clip)
-	    texi.y = (int)MISTD::min(MISTD::max(texiy, 0ll), (long long)(texres.y-1));
+	    texi.y = (int)std::min(std::max(texiy, 0ll), (long long)(texres.y-1));
 	else
 	{
 	    const int s = signbit(tex.y); // extract sign to handle all < 0 magic below
@@ -181,7 +183,7 @@ static unsigned int texremapzll(
     {
 	// Wrap or Clamp
         if (wrap_w == mi::mdl::stdlib::wrap_clamp || wrap_w == mi::mdl::stdlib::wrap_clip)
-	    texi = (int)MISTD::min(MISTD::max(texiz, 0ll), (long long)(texresz-1));
+	    texi = (int)std::min(std::max(texiz, 0ll), (long long)(texresz-1));
 	else
 	{
 	    const int s = signbit(texz); // extract sign to handle all < 0 magic below
@@ -236,8 +238,8 @@ static mi::Float32_4 interpolate_biquintic(
 
     ASSERT(M_BACKENDS, uv_crop.x >= 0.0f && uv_crop.y >= 0.0f);
     const mi::Uint32_2 texres(
-        MISTD::max(__float2uint_rz(__uint2float_rn(texture_res.x) * uv_crop.y),1u),
-        MISTD::max(__float2uint_rz(__uint2float_rn(texture_res.y) * uv_crop.w),1u));
+        std::max(__float2uint_rz(__uint2float_rn(texture_res.x) * uv_crop.y),1u),
+        std::max(__float2uint_rz(__uint2float_rn(texture_res.y) * uv_crop.w),1u));
 
     //!! opt.? use floor'ed float values of texres instead of cast?
     const mi::Float32_2 tex(texo.x * __uint2float_rn(texres.x) - 0.5f,
@@ -271,7 +273,7 @@ static mi::Float32_4 interpolate_biquintic(
 	const int crop_ofs_z = __float2int_rz(__uint2float_rn(texture_res.z-1) * w_crop.x);
 
 	ASSERT(M_BACKENDS, w_crop.x >= 0.0f && w_crop.y >= 0.0f);
-	const unsigned int crop_texres_z = MISTD::max(
+	const unsigned int crop_texres_z = std::max(
             __float2uint_rz(__uint2float_rn(texture_res.z) * w_crop.y), 1u);
 
 	//!! opt.? use floor'ed float values of texres instead of cast?
@@ -366,10 +368,20 @@ Texture_2d::Texture_2d()
 Texture_2d::Texture_2d(
     const DB::Typed_tag<TEXTURE::Texture>& tex_t,
     Gamma_mode gamma_mode,
+    bool use_derivatives,
     DB::Transaction* trans)
     : Texture(gamma_mode)
+    , m_is_udim(false)
+    , m_udim_num_u(1)
+    , m_udim_num_v(1)
+    , m_udim_offset_u(0)
+    , m_udim_offset_v(0)
 {
+    SYSTEM::Access_module<MI::IMAGE::Image_module> image_module(false);
     DB::Access<TEXTURE::Texture> texture(tex_t, trans);
+    if (!texture)
+        return;
+
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
     m_is_valid = image->is_valid();
 
@@ -400,22 +412,51 @@ Texture_2d::Texture_2d(
     m_tile_resolutions.resize(num_tiles);
 
     for (unsigned int i = 0; i < num_tiles; ++i) {
+        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(i));
+        mi::Uint32 num_levels = use_derivatives ? mipmap->get_nlevels() : 1;
 
-        mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap(i) );
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0 ));
+        m_canvases[i].resize(num_levels);
+        m_tile_resolutions[i].resize(num_levels);
 
-        m_canvases[i] = IMAGE::Access_canvas(canvas.get(), true);
+        mi::base::Handle<const mi::neuraylib::ICanvas> base_canvas(mipmap->get_level(0));
+
+        if (i == 0) {
+            m_resolution.x = base_canvas->get_resolution_x();
+            m_resolution.y = base_canvas->get_resolution_y();
+        }
 
         m_gamma[i] = texture->get_effective_gamma(trans, i);
         if (m_gamma[i] <= 0.f)
             m_gamma[i] = 1.f;
 
-        m_tile_resolutions[i] = mi::Uint32_3(
-            canvas->get_resolution_x(),
-            canvas->get_resolution_y(), 0);        
-        if (i == 0){
-            m_resolution.x = canvas->get_resolution_x();
-            m_resolution.y = canvas->get_resolution_y();
+        // for derivative mode, convert to linear first, if necessary.
+        // Note: for non-derivative mode, the gamma is still (incorrectly) applied after filtering
+        if (use_derivatives && m_gamma[i] != 1.0f) {
+            // Copy canvas and adjust gamma from "effective gamma" to 1
+            mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
+                image_module->convert_canvas(
+                    base_canvas.get(),
+                    MI::IMAGE::convert_pixel_type_string_to_enum(base_canvas->get_type())));
+            gamma_canvas->set_gamma(m_gamma[i]);
+            image_module->adjust_gamma(gamma_canvas.get(), 1.0f);
+            base_canvas = gamma_canvas;
+            m_gamma[i] = 1.0f;
+        }
+
+        std::vector< mi::base::Handle<mi::neuraylib::ICanvas> > mipmaps;
+        if (use_derivatives)
+            image_module->create_mipmaps(mipmaps, base_canvas.get(), 1.0f);
+
+        for (mi::Uint32 level = 0; level < num_levels; ++level) {
+            mi::base::Handle<const mi::neuraylib::ICanvas> canvas;
+            if (level == 0) canvas = base_canvas;
+            else canvas = mipmaps[level - 1];
+
+            m_canvases[i][level] = IMAGE::Access_canvas(canvas.get(), true);
+
+            m_tile_resolutions[i][level] = mi::Uint32_3(
+                canvas->get_resolution_x(),
+                canvas->get_resolution_y(), 0);
         }
     }
 }
@@ -429,7 +470,7 @@ mi::Sint32_2 Texture_2d::get_resolution(const mi::Sint32_2& uv_tile) const
     const unsigned int tile_id = get_tile_id(uv_tile.x, uv_tile.y);
     if (tile_id == ~0u)
         return mi::Sint32_2(0);
-    return mi::Sint32_2(m_tile_resolutions[tile_id].x, m_tile_resolutions[tile_id].y);
+    return mi::Sint32_2(m_tile_resolutions[tile_id][0].x, m_tile_resolutions[tile_id][0].y);
 }
 
 float Texture_2d::texel_float(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const
@@ -439,7 +480,7 @@ float Texture_2d::texel_float(const mi::Sint32_2& coord, const mi::Sint32_2& uv_
         return 0.0f;
     
     mi::math::Color res(0.0f);
-    m_canvases[tile_id].lookup(res,coord.x,coord.y,0);
+    m_canvases[tile_id][0].lookup(res,coord.x,coord.y,0);
     apply_gamma1(res, m_gamma[tile_id]);
     return res.r;
 }
@@ -454,7 +495,7 @@ mi::Float32_2 Texture_2d::texel_float2(
         return mi::Float32_2(0.0f);
 
     mi::math::Color res(0.0f);
-    m_canvases[tile_id].lookup(res,coord.x,coord.y,0);
+    m_canvases[tile_id][0].lookup(res,coord.x,coord.y,0);
     apply_gamma2(res, m_gamma[tile_id]);
     return mi::Float32_2(res.r,res.g);
 }
@@ -469,7 +510,7 @@ mi::Float32_3 Texture_2d::texel_float3(
         return mi::Float32_3(0.0f);
 
     mi::math::Color res(0.0f);
-    m_canvases[tile_id].lookup(res,coord.x,coord.y,0);
+    m_canvases[tile_id][0].lookup(res,coord.x,coord.y,0);
     apply_gamma3(res, m_gamma[tile_id]);
     return mi::Float32_3(res.r,res.g,res.b);
 }
@@ -484,7 +525,7 @@ mi::Float32_4 Texture_2d::texel_float4(
         return mi::Float32_4(0.0f);
 
     mi::math::Color res(0.0f);
-    m_canvases[tile_id].lookup(res,coord.x,coord.y,0);
+    m_canvases[tile_id][0].lookup(res,coord.x,coord.y,0);
     apply_gamma4(res, m_gamma[tile_id]);
     return mi::Float32_4(res.r,res.g,res.b,res.a);
 }
@@ -497,7 +538,7 @@ mi::Spectrum Texture_2d::texel_color(const mi::Sint32_2& coord, const mi::Sint32
         return mi::Spectrum(0.0f);
 
     mi::math::Color res(0.0f);
-    m_canvases[tile_id].lookup(res,coord.x,coord.y,0);
+    m_canvases[tile_id][0].lookup(res,coord.x,coord.y,0);
     apply_gamma3(res, m_gamma[tile_id]);
     return mi::Spectrum(res.r,res.g,res.b);
 }
@@ -549,6 +590,9 @@ mi::Float32_4 Texture_2d::lookup_float4(
         const mi::Float32_2& crop_v
         ) const
 {
+    if (!m_is_valid)
+        return mi::Float32_4(0.0f);
+
     const mi::Float32_4 uv_crop(
         saturate(crop_u.x), saturate(crop_u.y - crop_u.x),
         saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
@@ -578,13 +622,97 @@ mi::Float32_4 Texture_2d::lookup_float4(
     }
 
     return interpolate_biquintic(
-        m_canvases[tile_id],
-        m_tile_resolutions[tile_id],
+        m_canvases[tile_id][0],
+        m_tile_resolutions[tile_id][0],
         wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
         uv_crop, w_crop,
         coords, false, m_gamma[tile_id]);
 }
 
+mi::Float32_4 Texture_2d::lookup_deriv_float4(
+        const mi::Float32_2& coord_val,
+        const mi::Float32_2& coord_dx,
+        const mi::Float32_2& coord_dy,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v
+        ) const
+{
+    if (!m_is_valid)
+        return mi::Float32_4(0.0f);
+
+    const mi::Float32_4 uv_crop(
+        saturate(crop_u.x), saturate(crop_u.y - crop_u.x),
+        saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
+    const mi::Float32_2 w_crop(0.f, 1.f);
+
+    mi::Float32_3 coords(coord_val.x, coord_val.y, 0.0f);
+    unsigned int tile_id = 0;
+    if (m_is_udim)
+    {
+        coords.x += (float)m_udim_offset_u;
+        coords.y += (float)m_udim_offset_v;
+        if (coords.x < 0.0f || coords.y < 0.0f)
+            return mi::Float32_4(0.0f);
+
+        const unsigned int tu = (unsigned int)(coords.x);
+        const unsigned int tv = (unsigned int)(coords.y);
+
+        if (tu >= m_udim_num_u || tv >= m_udim_num_v)
+            return mi::Float32_4(0.0f);
+
+        tile_id = m_udim_mapping[tv * m_udim_num_u + tu];
+        if (tile_id == ~0u)
+            return mi::Float32_4(0.0f);
+
+        coords.x -= floorf(coords.x);
+        coords.y -= floorf(coords.y);
+    }
+
+    unsigned int num_levels = (unsigned int)(m_canvases[tile_id].size());
+
+    // isotropic filtering
+    float dx_len_sqr = coord_dx.x * coord_dx.x + coord_dx.y * coord_dx.y;
+    float dy_len_sqr = coord_dy.x * coord_dy.x + coord_dy.y * coord_dy.y;
+    float max_len_sqr = std::max(dx_len_sqr, dy_len_sqr);
+    float level = num_levels - 1 + 0.5f * std::log2f(std::max(max_len_sqr, 1e-8f));
+
+    if (level < 0) {
+        return interpolate_biquintic(
+            m_canvases[tile_id][0],
+            m_tile_resolutions[tile_id][0],
+            wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+            uv_crop, w_crop,
+            coords, false, 1.0f);
+    } else if (level >= num_levels - 1) {
+        // just read the single pixel of the smallest mipmap
+        mi::math::Color col;
+        m_canvases[tile_id][num_levels - 1].lookup(col, 0, 0);
+        mi::Float32_4 rgba(col.r, col.g, col.b, col.a);
+        return rgba;
+    } else {
+        // do trilinear filtering between the two mipmap levels
+        unsigned int level_a = (unsigned int) floorf(level);
+        float lerp = level - level_a;
+
+        mi::Float32_4 rgba_0 = interpolate_biquintic(
+            m_canvases[tile_id][level_a],
+            m_tile_resolutions[tile_id][level_a],
+            wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+            uv_crop, w_crop,
+            coords, false, 1.0f);
+
+        mi::Float32_4 rgba_1 = interpolate_biquintic(
+            m_canvases[tile_id][level_a + 1],
+            m_tile_resolutions[tile_id][level_a + 1],
+            wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+            uv_crop, w_crop,
+            coords, false, 1.0f);
+
+        return (1 - lerp) * rgba_0 + lerp * rgba_1;
+    }
+}
 
 mi::Spectrum Texture_2d::lookup_color(
         const mi::Float32_2& coord,
@@ -605,7 +733,8 @@ mi::Spectrum Texture_2d::lookup_color(
 
 
 Texture_3d::Texture_3d()
-    : Texture(mi::mdl::stdlib::gamma_default), m_gamma(0.0f)
+    : Texture(mi::mdl::stdlib::gamma_default)
+    , m_gamma(0.0f)
 {
 }
 
@@ -621,13 +750,16 @@ Texture_3d::Texture_3d(
     : Texture(mi::mdl::stdlib::gamma_default)
 {
     DB::Access<TEXTURE::Texture> texture(tex_t, trans);
+    if (!texture)
+        return;
+
     m_gamma = texture->get_effective_gamma(trans);
     if (m_gamma <= 0.f)
         m_gamma = 1.f;
 
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
     m_is_valid = image->is_valid();
-    
+
     mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap() );
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0 ));
     m_canvas = IMAGE::Access_canvas(canvas.get(), true);
@@ -693,6 +825,9 @@ mi::Float32_4 Texture_3d::lookup_float4(
         const mi::Float32_2& crop_w
         ) const
 {
+    if (!m_is_valid)
+        return mi::Float32_4(0.0f);
+
     const mi::Float32_4 uv_crop(
         saturate(crop_u.x), saturate(crop_u.y - crop_u.x),
         saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
@@ -724,6 +859,9 @@ mi::Spectrum Texture_3d::lookup_color(
 
 float Texture_3d::texel_float(const mi::Sint32_3& coord) const
 {
+    if (!m_is_valid)
+        return 0.0f;
+
     mi::math::Color c(0.0f);
     m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma1(c, m_gamma);
@@ -734,6 +872,9 @@ float Texture_3d::texel_float(const mi::Sint32_3& coord) const
 
 mi::Float32_2 Texture_3d::texel_float2(const mi::Sint32_3& coord) const
 {
+    if (!m_is_valid)
+        return mi::Float32_2(0.0f);
+
     mi::math::Color c(0.0f);
     m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma2(c, m_gamma);
@@ -743,6 +884,9 @@ mi::Float32_2 Texture_3d::texel_float2(const mi::Sint32_3& coord) const
 
 mi::Float32_3 Texture_3d::texel_float3(const mi::Sint32_3& coord) const
 {
+    if (!m_is_valid)
+        return mi::Float32_3(0.0f);
+
     mi::math::Color c(0.0f);
     m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma3(c, m_gamma);
@@ -761,6 +905,9 @@ mi::Float32_4 Texture_3d::texel_float4(const mi::Sint32_3& coord) const
 
 mi::Spectrum Texture_3d::texel_color(const mi::Sint32_3& coord) const
 {
+    if (!m_is_valid)
+        return mi::Spectrum(0.0f);
+
     mi::math::Color c(0.0f);
     m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma3(c, m_gamma);
@@ -773,7 +920,8 @@ mi::Spectrum Texture_3d::texel_color(const mi::Sint32_3& coord) const
 
 
 Texture_cube::Texture_cube()
-    : Texture(mi::mdl::stdlib::gamma_default), m_gamma(0.0f)
+    : Texture(mi::mdl::stdlib::gamma_default)
+    , m_gamma(0.0f)
 {
 }
 
@@ -785,6 +933,9 @@ Texture_cube::Texture_cube(
     : Texture(mi::mdl::stdlib::gamma_default)
 {
     DB::Access<TEXTURE::Texture> texture(tex_t, trans);
+    if (!texture)
+        return;
+
     m_gamma = texture->get_effective_gamma(trans);
     if (m_gamma <= 0.f)
         m_gamma = 1.f;

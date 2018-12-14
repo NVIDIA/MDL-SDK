@@ -1719,7 +1719,7 @@ getPICJumpTableRelocBaseExpr(const MachineFunction *MF, unsigned JTI,
 }
 
 // FIXME: Why this routine is here? Move to RegInfo!
-MISTD::pair<const TargetRegisterClass*, uint8_t>
+std::pair<const TargetRegisterClass*, uint8_t>
 X86TargetLowering::findRepresentativeClass(MVT VT) const{
   const TargetRegisterClass *RRC = 0;
   uint8_t Cost = 1;
@@ -1742,7 +1742,7 @@ X86TargetLowering::findRepresentativeClass(MVT VT) const{
     RRC = &X86::VR128RegClass;
     break;
   }
-  return MISTD::make_pair(RRC, Cost);
+  return std::make_pair(RRC, Cost);
 }
 
 bool X86TargetLowering::getStackCookieLocation(unsigned &AddressSpace,
@@ -2580,7 +2580,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Chain = EmitTailCallLoadRetAddr(DAG, RetAddrFrIdx, Chain, isTailCall,
                                     Is64Bit, FPDiff, dl);
 
-  SmallVector<MISTD::pair<unsigned, SDValue>, 8> RegsToPass;
+  SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
 
@@ -2630,7 +2630,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     }
 
     if (VA.isRegLoc()) {
-      RegsToPass.push_back(MISTD::make_pair(VA.getLocReg(), Arg));
+      RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
       if (isVarArg && IsWin64) {
         // Win64 ABI requires argument XMM reg to be copied to the corresponding
         // shadow reg if callee is a varargs function.
@@ -2642,7 +2642,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         case X86::XMM3: ShadowReg = X86::R9; break;
         }
         if (ShadowReg)
-          RegsToPass.push_back(MISTD::make_pair(ShadowReg, Arg));
+          RegsToPass.push_back(std::make_pair(ShadowReg, Arg));
       }
     } else if (!IsSibcall && (!isTailCall || isByVal)) {
       assert(VA.isMemLoc());
@@ -2662,7 +2662,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // ELF / PIC requires GOT in the EBX register before function calls via PLT
     // GOT pointer.
     if (!isTailCall) {
-      RegsToPass.push_back(MISTD::make_pair(unsigned(X86::EBX),
+      RegsToPass.push_back(std::make_pair(unsigned(X86::EBX),
                DAG.getNode(X86ISD::GlobalBaseReg, SDLoc(), getPointerTy())));
     } else {
       // If we are tail calling and generating PIC/GOT style code load the
@@ -2701,7 +2701,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     assert((Subtarget->hasSSE1() || !NumXMMRegs)
            && "SSE registers cannot be used when SSE is disabled");
 
-    RegsToPass.push_back(MISTD::make_pair(unsigned(X86::AL),
+    RegsToPass.push_back(std::make_pair(unsigned(X86::AL),
                                         DAG.getConstant(NumXMMRegs, MVT::i8)));
   }
 
@@ -3459,7 +3459,7 @@ static unsigned TranslateX86CC(ISD::CondCode SetCCOpcode, bool isFP,
   if (ISD::isNON_EXTLoad(LHS.getNode()) &&
       !ISD::isNON_EXTLoad(RHS.getNode())) {
     SetCCOpcode = getSetCCSwappedOperands(SetCCOpcode);
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
   }
 
   switch (SetCCOpcode) {
@@ -3468,7 +3468,7 @@ static unsigned TranslateX86CC(ISD::CondCode SetCCOpcode, bool isFP,
   case ISD::SETOLE:
   case ISD::SETUGT:
   case ISD::SETUGE:
-    MISTD::swap(LHS, RHS);
+    std::swap(LHS, RHS);
     break;
   }
 
@@ -5092,7 +5092,7 @@ static unsigned getNumOfConsecutiveZeros(ShuffleVectorSDNode *SVOp,
     if (X86::isZeroNode(Elt))
       ++NumZeros;
     else if (Elt.getOpcode() == ISD::UNDEF) // Undef as zero up to PreferredNum.
-      NumZeros = MISTD::min(NumZeros + 1, PreferredNum);
+      NumZeros = std::min(NumZeros + 1, PreferredNum);
     else
       break;
   }
@@ -6247,7 +6247,7 @@ LowerVECTOR_SHUFFLEv8i16(SDValue Op, const X86Subtarget *Subtarget,
   // mask values count as coming from any quadword, for better codegen.
   unsigned LoQuad[] = { 0, 0, 0, 0 };
   unsigned HiQuad[] = { 0, 0, 0, 0 };
-  MISTD::bitset<4> InputQuads;
+  std::bitset<4> InputQuads;
   for (unsigned i = 0; i < 8; ++i) {
     unsigned *Quad = i < 4 ? LoQuad : HiQuad;
     int EltIdx = SVOp->getMaskElt(i);
@@ -6409,7 +6409,7 @@ LowerVECTOR_SHUFFLEv8i16(SDValue Op, const X86Subtarget *Subtarget,
 
   // If BestLoQuad >= 0, generate a pshuflw to put the low elements in order,
   // and update MaskVals with new element order.
-  MISTD::bitset<8> InOrder;
+  std::bitset<8> InOrder;
   if (BestLoQuad >= 0) {
     int MaskV[] = { -1, -1, -1, -1, 4, 5, 6, 7 };
     for (int i = 0; i != 4; ++i) {
@@ -6863,7 +6863,7 @@ LowerVECTOR_SHUFFLE_128v4(ShuffleVectorSDNode *SVOp, SelectionDAG &DAG) {
 
   assert(VT.is128BitVector() && "Unsupported vector size");
 
-  MISTD::pair<int, int> Locs[4];
+  std::pair<int, int> Locs[4];
   int Mask1[] = { -1, -1, -1, -1 };
   SmallVector<int, 8> PermMask(SVOp->getMask().begin(), SVOp->getMask().end());
 
@@ -6872,15 +6872,15 @@ LowerVECTOR_SHUFFLE_128v4(ShuffleVectorSDNode *SVOp, SelectionDAG &DAG) {
   for (unsigned i = 0; i != 4; ++i) {
     int Idx = PermMask[i];
     if (Idx < 0) {
-      Locs[i] = MISTD::make_pair(-1, -1);
+      Locs[i] = std::make_pair(-1, -1);
     } else {
       assert(Idx < 8 && "Invalid VECTOR_SHUFFLE index!");
       if (Idx < 4) {
-        Locs[i] = MISTD::make_pair(0, NumLo);
+        Locs[i] = std::make_pair(0, NumLo);
         Mask1[NumLo] = Idx;
         NumLo++;
       } else {
-        Locs[i] = MISTD::make_pair(1, NumHi);
+        Locs[i] = std::make_pair(1, NumHi);
         if (2+NumHi < 4)
           Mask1[2+NumHi] = Idx;
         NumHi++;
@@ -6918,7 +6918,7 @@ LowerVECTOR_SHUFFLE_128v4(ShuffleVectorSDNode *SVOp, SelectionDAG &DAG) {
     if (NumHi == 3) {
       // Normalize it so the 3 elements come from V1.
       CommuteVectorShuffleMask(PermMask, 4);
-      MISTD::swap(V1, V2);
+      std::swap(V1, V2);
     }
 
     // Find the element from V2.
@@ -6973,13 +6973,13 @@ LowerVECTOR_SHUFFLE_128v4(ShuffleVectorSDNode *SVOp, SelectionDAG &DAG) {
     }
     int Idx = PermMask[i];
     if (Idx < 0) {
-      Locs[i] = MISTD::make_pair(-1, -1);
+      Locs[i] = std::make_pair(-1, -1);
     } else if (Idx < 4) {
-      Locs[i] = MISTD::make_pair(MaskIdx, LoIdx);
+      Locs[i] = std::make_pair(MaskIdx, LoIdx);
       MaskPtr[LoIdx] = Idx;
       LoIdx++;
     } else {
-      Locs[i] = MISTD::make_pair(MaskIdx, HiIdx);
+      Locs[i] = std::make_pair(MaskIdx, HiIdx);
       MaskPtr[HiIdx] = Idx;
       HiIdx++;
     }
@@ -7411,8 +7411,8 @@ X86TargetLowering::LowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG) const {
   // Canonicalize the splat or undef, if present, to be on the RHS.
   if (!V2IsUndef && V1IsSplat && !V2IsSplat) {
     CommuteVectorShuffleMask(M, NumElems);
-    MISTD::swap(V1, V2);
-    MISTD::swap(V1IsSplat, V2IsSplat);
+    std::swap(V1, V2);
+    std::swap(V1IsSplat, V2IsSplat);
     Commuted = true;
   }
 
@@ -7448,8 +7448,8 @@ X86TargetLowering::LowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG) const {
     // Commute is back and try unpck* again.
     // FIXME: this seems wrong.
     CommuteVectorShuffleMask(M, NumElems);
-    MISTD::swap(V1, V2);
-    MISTD::swap(V1IsSplat, V2IsSplat);
+    std::swap(V1, V2);
+    std::swap(V1IsSplat, V2IsSplat);
     Commuted = false;
 
     if (isUNPCKLMask(M, VT, HasInt256))
@@ -8787,7 +8787,7 @@ SDValue X86TargetLowering::LowerUINT_TO_FP(SDValue Op,
   return DAG.getNode(ISD::FP_ROUND, dl, DstVT, Add, DAG.getIntPtrConstant(0));
 }
 
-MISTD::pair<SDValue,SDValue>
+std::pair<SDValue,SDValue>
 X86TargetLowering:: FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
                                     bool IsSigned, bool IsReplace) const {
   SDLoc DL(Op);
@@ -8806,11 +8806,11 @@ X86TargetLowering:: FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
   // These are really Legal.
   if (DstTy == MVT::i32 &&
       isScalarFPTypeInSSEReg(Op.getOperand(0).getValueType()))
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
   if (Subtarget->is64Bit() &&
       DstTy == MVT::i64 &&
       isScalarFPTypeInSSEReg(Op.getOperand(0).getValueType()))
-    return MISTD::make_pair(SDValue(), SDValue());
+    return std::make_pair(SDValue(), SDValue());
 
   // We lower FP->int64 either into FISTP64 followed by a load from a temporary
   // stack slot, or into the FTOL runtime function.
@@ -8865,7 +8865,7 @@ X86TargetLowering:: FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
     SDValue FIST = DAG.getMemIntrinsicNode(Opc, DL, DAG.getVTList(MVT::Other),
                                            Ops, array_lengthof(Ops), DstTy,
                                            MMO);
-    return MISTD::make_pair(FIST, StackSlot);
+    return std::make_pair(FIST, StackSlot);
   } else {
     SDValue ftol = DAG.getNode(X86ISD::WIN_FTOL, DL,
       DAG.getVTList(MVT::Other, MVT::Glue),
@@ -8878,7 +8878,7 @@ X86TargetLowering:: FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
     SDValue pair = IsReplace
       ? DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i64, Ops, array_lengthof(Ops))
       : DAG.getMergeValues(Ops, array_lengthof(Ops), DL);
-    return MISTD::make_pair(pair, SDValue());
+    return std::make_pair(pair, SDValue());
   }
 }
 
@@ -9140,7 +9140,7 @@ SDValue X86TargetLowering::LowerFP_TO_SINT(SDValue Op,
     return SDValue();
   }
 
-  MISTD::pair<SDValue,SDValue> Vals = FP_TO_INTHelper(Op, DAG,
+  std::pair<SDValue,SDValue> Vals = FP_TO_INTHelper(Op, DAG,
     /*IsSigned=*/ true, /*IsReplace=*/ false);
   SDValue FIST = Vals.first, StackSlot = Vals.second;
   // If FP_TO_INTHelper failed, the node is actually supposed to be Legal.
@@ -9158,7 +9158,7 @@ SDValue X86TargetLowering::LowerFP_TO_SINT(SDValue Op,
 
 SDValue X86TargetLowering::LowerFP_TO_UINT(SDValue Op,
                                            SelectionDAG &DAG) const {
-  MISTD::pair<SDValue,SDValue> Vals = FP_TO_INTHelper(Op, DAG,
+  std::pair<SDValue,SDValue> Vals = FP_TO_INTHelper(Op, DAG,
     /*IsSigned=*/ false, /*IsReplace=*/ false);
   SDValue FIST = Vals.first, StackSlot = Vals.second;
   assert(FIST.getNode() && "Unexpected failure");
@@ -9400,7 +9400,7 @@ static SDValue LowerVectorAllZeroTest(SDValue Op, const X86Subtarget *Subtarget,
       if (VecInMap.begin() != VecInMap.end() &&
           VT != VecInMap.begin()->first.getValueType())
         return SDValue();
-      M = VecInMap.insert(MISTD::make_pair(ExtractedFromVec, 0)).first;
+      M = VecInMap.insert(std::make_pair(ExtractedFromVec, 0)).first;
     }
     M->second |= 1U << cast<ConstantSDNode>(Idx)->getZExtValue();
   }
@@ -9711,7 +9711,7 @@ SDValue X86TargetLowering::LowerToBT(SDValue And, ISD::CondCode CC,
 
   SDValue LHS, RHS;
   if (Op1.getOpcode() == ISD::SHL)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
   if (Op0.getOpcode() == ISD::SHL) {
     if (ConstantSDNode *And00C = dyn_cast<ConstantSDNode>(Op0.getOperand(0)))
       if (And00C->getZExtValue() == 1) {
@@ -9809,7 +9809,7 @@ static int translateX86FSETCC(ISD::CondCode SetCCOpcode, SDValue &Op0,
   case ISD::SETONE: SSECC = 8; break;
   }
   if (Swap)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   return SSECC;
 }
@@ -9984,7 +9984,7 @@ static SDValue LowerVSETCC(SDValue Op, const X86Subtarget *Subtarget,
   }
   
   if (Swap)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   // Check that the operation in question is available (most are plain SSE2,
   // but PCMPGTQ and PCMPEQQ have different requirements).
@@ -12863,7 +12863,7 @@ static SDValue LowerScalarVariableShift(SDValue Op, SelectionDAG &DAG,
     Amt = Amt.getOperand(0);
     unsigned Ratio = Amt.getValueType().getVectorNumElements() /
                      VT.getVectorNumElements();
-    MISTD::vector<SDValue> Vals(Ratio);
+    std::vector<SDValue> Vals(Ratio);
     for (unsigned i = 0; i != Ratio; ++i)
       Vals[i] = Amt.getOperand(i);
     for (unsigned i = Ratio; i != Amt.getNumOperands(); i += Ratio) {
@@ -13380,7 +13380,7 @@ static SDValue LowerFSINCOS(SDValue Op, const X86Subtarget *Subtarget,
                          CallingConv::C, /*isTaillCall=*/false,
                          /*doesNotRet=*/false, /*isReturnValueUsed*/true,
                          Callee, Args, DAG, dl);
-  MISTD::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
   if (isF64)
     // Returned in xmm0 and xmm1.
@@ -13549,7 +13549,7 @@ void X86TargetLowering::ReplaceNodeResults(SDNode *N,
     if (!IsSigned && !isIntegerTypeFTOL(SDValue(N, 0).getValueType()))
       return;
 
-    MISTD::pair<SDValue,SDValue> Vals =
+    std::pair<SDValue,SDValue> Vals =
         FP_TO_INTHelper(SDValue(N, 0), DAG, IsSigned, /*IsReplace=*/ true);
     SDValue FIST = Vals.first, StackSlot = Vals.second;
     if (FIST.getNode() != 0) {
@@ -16523,28 +16523,28 @@ static SDValue PerformEXTRACT_VECTOR_ELTCombine(SDNode *N, SelectionDAG &DAG,
 }
 
 /// \brief Matches a VSELECT onto min/max or return 0 if the node doesn't match.
-static MISTD::pair<unsigned, bool>
+static std::pair<unsigned, bool>
 matchIntegerMINMAX(SDValue Cond, EVT VT, SDValue LHS, SDValue RHS,
                    SelectionDAG &DAG, const X86Subtarget *Subtarget) {
   if (!VT.isVector())
-    return MISTD::make_pair(0, false);
+    return std::make_pair(0, false);
 
   bool NeedSplit = false;
   switch (VT.getSimpleVT().SimpleTy) {
-  default: return MISTD::make_pair(0, false);
+  default: return std::make_pair(0, false);
   case MVT::v32i8:
   case MVT::v16i16:
   case MVT::v8i32:
     if (!Subtarget->hasAVX2())
       NeedSplit = true;
     if (!Subtarget->hasAVX())
-      return MISTD::make_pair(0, false);
+      return std::make_pair(0, false);
     break;
   case MVT::v16i8:
   case MVT::v8i16:
   case MVT::v4i32:
     if (!Subtarget->hasSSE2())
-      return MISTD::make_pair(0, false);
+      return std::make_pair(0, false);
   }
 
   // SSE2 has only a small subset of the operations.
@@ -16594,7 +16594,7 @@ matchIntegerMINMAX(SDValue Cond, EVT VT, SDValue LHS, SDValue RHS,
     }
   }
 
-  return MISTD::make_pair(Opc, NeedSplit);
+  return std::make_pair(Opc, NeedSplit);
 }
 
 /// PerformSELECTCombine - Do target-specific dag combines on SELECT and VSELECT
@@ -16634,7 +16634,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
           if (!DAG.getTarget().Options.UnsafeFPMath &&
               !(DAG.isKnownNeverZero(LHS) || DAG.isKnownNeverZero(RHS)))
             break;
-          MISTD::swap(LHS, RHS);
+          std::swap(LHS, RHS);
         }
         Opcode = X86ISD::FMIN;
         break;
@@ -16649,7 +16649,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
       case ISD::SETULE:
         // Converting this to a min would handle both negative zeros and NaNs
         // incorrectly, but we can swap the operands to fix both.
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
       case ISD::SETOLT:
       case ISD::SETLT:
       case ISD::SETLE:
@@ -16672,14 +16672,14 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
           if (!DAG.getTarget().Options.UnsafeFPMath &&
               !(DAG.isKnownNeverZero(LHS) || DAG.isKnownNeverZero(RHS)))
             break;
-          MISTD::swap(LHS, RHS);
+          std::swap(LHS, RHS);
         }
         Opcode = X86ISD::FMAX;
         break;
       case ISD::SETUGE:
         // Converting this to a max would handle both negative zeros and NaNs
         // incorrectly, but we can swap the operands to fix both.
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
       case ISD::SETOGT:
       case ISD::SETGT:
       case ISD::SETGE:
@@ -16699,7 +16699,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
             !(DAG.isKnownNeverZero(LHS) || DAG.isKnownNeverZero(RHS))) {
           if (!DAG.isKnownNeverNaN(LHS) || !DAG.isKnownNeverNaN(RHS))
             break;
-          MISTD::swap(LHS, RHS);
+          std::swap(LHS, RHS);
         }
         Opcode = X86ISD::FMIN;
         break;
@@ -16713,7 +16713,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
       case ISD::SETUGE:
         // Converting this to a min would handle both negative zeros and NaNs
         // incorrectly, but we can swap the operands to fix both.
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
       case ISD::SETOGT:
       case ISD::SETGT:
       case ISD::SETGE:
@@ -16734,14 +16734,14 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
             !DAG.isKnownNeverZero(LHS) && !DAG.isKnownNeverZero(RHS)) {
           if (!DAG.isKnownNeverNaN(LHS) || !DAG.isKnownNeverNaN(RHS))
             break;
-          MISTD::swap(LHS, RHS);
+          std::swap(LHS, RHS);
         }
         Opcode = X86ISD::FMAX;
         break;
       case ISD::SETULE:
         // Converting this to a max would handle both negative zeros and NaNs
         // incorrectly, but we can swap the operands to fix both.
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
       case ISD::SETOLT:
       case ISD::SETLT:
       case ISD::SETLE:
@@ -16786,7 +16786,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
              (Cond.getOpcode() == ISD::XOR &&   // xor(X, C) -> invertible.
               isa<ConstantSDNode>(Cond.getOperand(1))))) {
           NeedsCondInvert = true;
-          MISTD::swap(TrueC, FalseC);
+          std::swap(TrueC, FalseC);
         }
 
         // Optimize C ? 8 : 0 -> zext(C) << 3.  Likewise for any pow2/0.
@@ -16954,7 +16954,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
 
   // Try to match a min/max vector operation.
   if (N->getOpcode() == ISD::VSELECT && Cond.getOpcode() == ISD::SETCC) {
-    MISTD::pair<unsigned, bool> ret = matchIntegerMINMAX(Cond, VT, LHS, RHS, DAG, Subtarget);
+    std::pair<unsigned, bool> ret = matchIntegerMINMAX(Cond, VT, LHS, RHS, DAG, Subtarget);
     unsigned Opc = ret.first;
     bool NeedSplit = ret.second;
 
@@ -17002,7 +17002,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
           ISD::getSetCCInverse(cast<CondCodeSDNode>(CC)->get(),
                                Cond.getOperand(0).getValueType().isInteger());
         Cond = DAG.getSetCC(DL, IntVT, Cond.getOperand(0), Cond.getOperand(1), NewCC);
-        MISTD::swap(LHS, RHS);
+        std::swap(LHS, RHS);
         TValIsAllOnes = FValIsAllOnes;
         FValIsAllZeros = TValIsAllZeros;
       }
@@ -17238,8 +17238,8 @@ static SDValue PerformCMOVCombine(SDNode *N, SelectionDAG &DAG,
       // larger than FalseC (the false value).
       if (TrueC->getAPIntValue().ult(FalseC->getAPIntValue())) {
         CC = X86::GetOppositeBranchCondition(CC);
-        MISTD::swap(TrueC, FalseC);
-        MISTD::swap(TrueOp, FalseOp);
+        std::swap(TrueC, FalseC);
+        std::swap(TrueOp, FalseOp);
       }
 
       // Optimize C ? 8 : 0 -> zext(setcc(C)) << 3.  Likewise for any pow2/0.
@@ -17349,7 +17349,7 @@ static SDValue PerformCMOVCombine(SDNode *N, SelectionDAG &DAG,
       if (CC == X86::COND_NE &&
           CmpAgainst == dyn_cast<ConstantSDNode>(FalseOp)) {
         CC = X86::GetOppositeBranchCondition(CC);
-        MISTD::swap(TrueOp, FalseOp);
+        std::swap(TrueOp, FalseOp);
       }
 
       if (CC == X86::COND_E &&
@@ -17405,7 +17405,7 @@ static SDValue PerformMulCombine(SDNode *N, SelectionDAG &DAG,
       // If second multiplifer is pow2, issue it first. We want the multiply by
       // 3, 5, or 9 to be folded into the addressing mode unless the lone use
       // is an add.
-      MISTD::swap(MulAmt1, MulAmt2);
+      std::swap(MulAmt1, MulAmt2);
 
     SDValue NewMul;
     if (isPowerOf2_64(MulAmt1))
@@ -17847,7 +17847,7 @@ static SDValue PerformOrCombine(SDNode *N, SelectionDAG &DAG,
 
     // Canonicalize pandn to RHS
     if (N0.getOpcode() == X86ISD::ANDNP)
-      MISTD::swap(N0, N1);
+      std::swap(N0, N1);
     // or (and (m, y), (pandn m, x))
     if (N0.getOpcode() == ISD::AND && N1.getOpcode() == X86ISD::ANDNP) {
       SDValue Mask = N1.getOperand(0);
@@ -17924,7 +17924,7 @@ static SDValue PerformOrCombine(SDNode *N, SelectionDAG &DAG,
 
   // fold (or (x << c) | (y >> (64 - c))) ==> (shld64 x, y, c)
   if (N0.getOpcode() == ISD::SRL && N1.getOpcode() == ISD::SHL)
-    MISTD::swap(N0, N1);
+    std::swap(N0, N1);
   if (N0.getOpcode() != ISD::SHL || N1.getOpcode() != ISD::SRL)
     return SDValue();
   if (!N0.hasOneUse() || !N1.hasOneUse())
@@ -17947,8 +17947,8 @@ static SDValue PerformOrCombine(SDNode *N, SelectionDAG &DAG,
   SDValue Op1 = N1.getOperand(0);
   if (ShAmt0.getOpcode() == ISD::SUB) {
     Opc = X86ISD::SHRD;
-    MISTD::swap(Op0, Op1);
-    MISTD::swap(ShAmt0, ShAmt1);
+    std::swap(Op0, Op1);
+    std::swap(ShAmt0, ShAmt1);
   }
 
   unsigned Bits = VT.getSizeInBits();
@@ -18085,7 +18085,7 @@ static SDValue PerformLOADCombine(SDNode *N, SelectionDAG &DAG,
     SDValue Load2 = DAG.getLoad(HalfVT, dl, Ld->getChain(), Ptr,
                                 Ld->getPointerInfo(), Ld->isVolatile(),
                                 Ld->isNonTemporal(), Ld->isInvariant(),
-                                MISTD::min(16U, Alignment));
+                                std::min(16U, Alignment));
     SDValue TF = DAG.getNode(ISD::TokenFactor, dl, MVT::Other,
                              Load1.getValue(1),
                              Load2.getValue(1));
@@ -18282,7 +18282,7 @@ static SDValue PerformSTORECombine(SDNode *N, SelectionDAG &DAG,
     SDValue Ch1 = DAG.getStore(St->getChain(), dl, Value1, Ptr1,
                                 St->getPointerInfo(), St->isVolatile(),
                                 St->isNonTemporal(),
-                                MISTD::min(16U, Alignment));
+                                std::min(16U, Alignment));
     return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Ch0, Ch1);
   }
 
@@ -18538,7 +18538,7 @@ static bool isHorizontalBinOp(SDValue &LHS, SDValue &RHS, bool IsCommutative) {
     if (LHS.getOperand(1).getOpcode() != ISD::UNDEF)
       B = LHS.getOperand(1);
     ArrayRef<int> Mask = cast<ShuffleVectorSDNode>(LHS.getNode())->getMask();
-    MISTD::copy(Mask.begin(), Mask.end(), LMask.begin());
+    std::copy(Mask.begin(), Mask.end(), LMask.begin());
   } else {
     if (LHS.getOpcode() != ISD::UNDEF)
       A = LHS;
@@ -18556,7 +18556,7 @@ static bool isHorizontalBinOp(SDValue &LHS, SDValue &RHS, bool IsCommutative) {
     if (RHS.getOperand(1).getOpcode() != ISD::UNDEF)
       D = RHS.getOperand(1);
     ArrayRef<int> Mask = cast<ShuffleVectorSDNode>(RHS.getNode())->getMask();
-    MISTD::copy(Mask.begin(), Mask.end(), RMask.begin());
+    std::copy(Mask.begin(), Mask.end(), RMask.begin());
   } else {
     if (RHS.getOpcode() != ISD::UNDEF)
       C = RHS;
@@ -19312,13 +19312,13 @@ namespace {
 static bool clobbersFlagRegisters(const SmallVector<StringRef, 4> &AsmPieces) {
 
   if (AsmPieces.size() == 3 || AsmPieces.size() == 4) {
-    if (MISTD::count(AsmPieces.begin(), AsmPieces.end(), "~{cc}") &&
-        MISTD::count(AsmPieces.begin(), AsmPieces.end(), "~{flags}") &&
-        MISTD::count(AsmPieces.begin(), AsmPieces.end(), "~{fpsr}")) {
+    if (std::count(AsmPieces.begin(), AsmPieces.end(), "~{cc}") &&
+        std::count(AsmPieces.begin(), AsmPieces.end(), "~{flags}") &&
+        std::count(AsmPieces.begin(), AsmPieces.end(), "~{fpsr}")) {
 
       if (AsmPieces.size() == 3)
         return true;
-      else if (MISTD::count(AsmPieces.begin(), AsmPieces.end(), "~{dirflag}"))
+      else if (std::count(AsmPieces.begin(), AsmPieces.end(), "~{dirflag}"))
         return true;
     }
   }
@@ -19328,7 +19328,7 @@ static bool clobbersFlagRegisters(const SmallVector<StringRef, 4> &AsmPieces) {
 bool X86TargetLowering::ExpandInlineAsm(CallInst *CI) const {
   InlineAsm *IA = cast<InlineAsm>(CI->getCalledValue());
 
-  MISTD::string AsmStr = IA->getAsmString();
+  std::string AsmStr = IA->getAsmString();
 
   IntegerType *Ty = dyn_cast<IntegerType>(CI->getType());
   if (!Ty || Ty->getBitWidth() % 16 != 0)
@@ -19363,7 +19363,7 @@ bool X86TargetLowering::ExpandInlineAsm(CallInst *CI) const {
         (matchAsm(AsmPieces[0], "rorw", "$$8,", "${0:w}") ||
          matchAsm(AsmPieces[0], "rolw", "$$8,", "${0:w}"))) {
       AsmPieces.clear();
-      const MISTD::string &ConstraintsStr = IA->getConstraintString();
+      const std::string &ConstraintsStr = IA->getConstraintString();
       SplitString(StringRef(ConstraintsStr).substr(5), AsmPieces, ",");
       array_pod_sort(AsmPieces.begin(), AsmPieces.end());
       if (clobbersFlagRegisters(AsmPieces))
@@ -19377,7 +19377,7 @@ bool X86TargetLowering::ExpandInlineAsm(CallInst *CI) const {
         matchAsm(AsmPieces[1], "rorl", "$$16,", "$0") &&
         matchAsm(AsmPieces[2], "rorw", "$$8,", "${0:w}")) {
       AsmPieces.clear();
-      const MISTD::string &ConstraintsStr = IA->getConstraintString();
+      const std::string &ConstraintsStr = IA->getConstraintString();
       SplitString(StringRef(ConstraintsStr).substr(5), AsmPieces, ",");
       array_pod_sort(AsmPieces.begin(), AsmPieces.end());
       if (clobbersFlagRegisters(AsmPieces))
@@ -19404,7 +19404,7 @@ bool X86TargetLowering::ExpandInlineAsm(CallInst *CI) const {
 /// getConstraintType - Given a constraint letter, return the type of
 /// constraint it is for this target.
 X86TargetLowering::ConstraintType
-X86TargetLowering::getConstraintType(const MISTD::string &Constraint) const {
+X86TargetLowering::getConstraintType(const std::string &Constraint) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'R':
@@ -19569,8 +19569,8 @@ LowerXConstraint(EVT ConstraintVT) const {
 /// LowerAsmOperandForConstraint - Lower the specified operand into the Ops
 /// vector.  If it is invalid, don't add anything to Ops.
 void X86TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
-                                                     MISTD::string &Constraint,
-                                                     MISTD::vector<SDValue>&Ops,
+                                                     std::string &Constraint,
+                                                     std::vector<SDValue>&Ops,
                                                      SelectionDAG &DAG) const {
   SDValue Result(0, 0);
 
@@ -19701,8 +19701,8 @@ void X86TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
   return TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
 }
 
-MISTD::pair<unsigned, const TargetRegisterClass*>
-X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
+std::pair<unsigned, const TargetRegisterClass*>
+X86TargetLowering::getRegForInlineAsmConstraint(const std::string &Constraint,
                                                 MVT VT) const {
   // First, see if this is a constraint that directly corresponds to an LLVM
   // register class.
@@ -19716,54 +19716,54 @@ X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
     case 'q':   // GENERAL_REGS in 64-bit mode, Q_REGS in 32-bit mode.
       if (Subtarget->is64Bit()) {
         if (VT == MVT::i32 || VT == MVT::f32)
-          return MISTD::make_pair(0U, &X86::GR32RegClass);
+          return std::make_pair(0U, &X86::GR32RegClass);
         if (VT == MVT::i16)
-          return MISTD::make_pair(0U, &X86::GR16RegClass);
+          return std::make_pair(0U, &X86::GR16RegClass);
         if (VT == MVT::i8 || VT == MVT::i1)
-          return MISTD::make_pair(0U, &X86::GR8RegClass);
+          return std::make_pair(0U, &X86::GR8RegClass);
         if (VT == MVT::i64 || VT == MVT::f64)
-          return MISTD::make_pair(0U, &X86::GR64RegClass);
+          return std::make_pair(0U, &X86::GR64RegClass);
         break;
       }
       // 32-bit fallthrough
     case 'Q':   // Q_REGS
       if (VT == MVT::i32 || VT == MVT::f32)
-        return MISTD::make_pair(0U, &X86::GR32_ABCDRegClass);
+        return std::make_pair(0U, &X86::GR32_ABCDRegClass);
       if (VT == MVT::i16)
-        return MISTD::make_pair(0U, &X86::GR16_ABCDRegClass);
+        return std::make_pair(0U, &X86::GR16_ABCDRegClass);
       if (VT == MVT::i8 || VT == MVT::i1)
-        return MISTD::make_pair(0U, &X86::GR8_ABCD_LRegClass);
+        return std::make_pair(0U, &X86::GR8_ABCD_LRegClass);
       if (VT == MVT::i64)
-        return MISTD::make_pair(0U, &X86::GR64_ABCDRegClass);
+        return std::make_pair(0U, &X86::GR64_ABCDRegClass);
       break;
     case 'r':   // GENERAL_REGS
     case 'l':   // INDEX_REGS
       if (VT == MVT::i8 || VT == MVT::i1)
-        return MISTD::make_pair(0U, &X86::GR8RegClass);
+        return std::make_pair(0U, &X86::GR8RegClass);
       if (VT == MVT::i16)
-        return MISTD::make_pair(0U, &X86::GR16RegClass);
+        return std::make_pair(0U, &X86::GR16RegClass);
       if (VT == MVT::i32 || VT == MVT::f32 || !Subtarget->is64Bit())
-        return MISTD::make_pair(0U, &X86::GR32RegClass);
-      return MISTD::make_pair(0U, &X86::GR64RegClass);
+        return std::make_pair(0U, &X86::GR32RegClass);
+      return std::make_pair(0U, &X86::GR64RegClass);
     case 'R':   // LEGACY_REGS
       if (VT == MVT::i8 || VT == MVT::i1)
-        return MISTD::make_pair(0U, &X86::GR8_NOREXRegClass);
+        return std::make_pair(0U, &X86::GR8_NOREXRegClass);
       if (VT == MVT::i16)
-        return MISTD::make_pair(0U, &X86::GR16_NOREXRegClass);
+        return std::make_pair(0U, &X86::GR16_NOREXRegClass);
       if (VT == MVT::i32 || !Subtarget->is64Bit())
-        return MISTD::make_pair(0U, &X86::GR32_NOREXRegClass);
-      return MISTD::make_pair(0U, &X86::GR64_NOREXRegClass);
+        return std::make_pair(0U, &X86::GR32_NOREXRegClass);
+      return std::make_pair(0U, &X86::GR64_NOREXRegClass);
     case 'f':  // FP Stack registers.
       // If SSE is enabled for this VT, use f80 to ensure the isel moves the
       // value to the correct fpstack register class.
       if (VT == MVT::f32 && !isScalarFPTypeInSSEReg(VT))
-        return MISTD::make_pair(0U, &X86::RFP32RegClass);
+        return std::make_pair(0U, &X86::RFP32RegClass);
       if (VT == MVT::f64 && !isScalarFPTypeInSSEReg(VT))
-        return MISTD::make_pair(0U, &X86::RFP64RegClass);
-      return MISTD::make_pair(0U, &X86::RFP80RegClass);
+        return std::make_pair(0U, &X86::RFP64RegClass);
+      return std::make_pair(0U, &X86::RFP80RegClass);
     case 'y':   // MMX_REGS if MMX allowed.
       if (!Subtarget->hasMMX()) break;
-      return MISTD::make_pair(0U, &X86::VR64RegClass);
+      return std::make_pair(0U, &X86::VR64RegClass);
     case 'Y':   // SSE_REGS if SSE2 allowed
       if (!Subtarget->hasSSE2()) break;
       // FALL THROUGH.
@@ -19775,10 +19775,10 @@ X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
       // Scalar SSE types.
       case MVT::f32:
       case MVT::i32:
-        return MISTD::make_pair(0U, &X86::FR32RegClass);
+        return std::make_pair(0U, &X86::FR32RegClass);
       case MVT::f64:
       case MVT::i64:
-        return MISTD::make_pair(0U, &X86::FR64RegClass);
+        return std::make_pair(0U, &X86::FR64RegClass);
       // Vector types.
       case MVT::v16i8:
       case MVT::v8i16:
@@ -19786,7 +19786,7 @@ X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
       case MVT::v2i64:
       case MVT::v4f32:
       case MVT::v2f64:
-        return MISTD::make_pair(0U, &X86::VR128RegClass);
+        return std::make_pair(0U, &X86::VR128RegClass);
       // AVX types.
       case MVT::v32i8:
       case MVT::v16i16:
@@ -19794,12 +19794,12 @@ X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
       case MVT::v4i64:
       case MVT::v8f32:
       case MVT::v4f64:
-        return MISTD::make_pair(0U, &X86::VR256RegClass);
+        return std::make_pair(0U, &X86::VR256RegClass);
       case MVT::v8f64:
       case MVT::v16f32:
       case MVT::v16i32:
       case MVT::v8i64:
-        return MISTD::make_pair(0U, &X86::VR512RegClass);
+        return std::make_pair(0U, &X86::VR512RegClass);
       }
       break;
     }
@@ -19807,7 +19807,7 @@ X86TargetLowering::getRegForInlineAsmConstraint(const MISTD::string &Constraint,
 
   // Use the default implementation in TargetLowering to convert the register
   // constraint into a member of a register class.
-  MISTD::pair<unsigned, const TargetRegisterClass*> Res;
+  std::pair<unsigned, const TargetRegisterClass*> Res;
   Res = TargetLowering::getRegForInlineAsmConstraint(Constraint, VT);
 
   // Not found as a standard register?

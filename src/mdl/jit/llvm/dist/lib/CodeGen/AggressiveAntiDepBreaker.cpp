@@ -67,8 +67,8 @@ unsigned AggressiveAntiDepState::GetGroup(unsigned Reg) {
 
 void AggressiveAntiDepState::GetGroupRegs(
   unsigned Group,
-  MISTD::vector<unsigned> &Regs,
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference> *RegRefs)
+  std::vector<unsigned> &Regs,
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference> *RegRefs)
 {
   for (unsigned Reg = 0; Reg != NumTargetRegs; ++Reg) {
     if ((GetGroup(Reg) == Group) && (RegRefs->count(Reg) > 0))
@@ -148,8 +148,8 @@ void AggressiveAntiDepBreaker::StartBlock(MachineBasicBlock *BB) {
   State = new AggressiveAntiDepState(TRI->getNumRegs(), BB);
 
   bool IsReturnBlock = (!BB->empty() && BB->back().isReturn());
-  MISTD::vector<unsigned> &KillIndices = State->GetKillIndices();
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::vector<unsigned> &KillIndices = State->GetKillIndices();
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
 
   // Examine the live-in regs of all successors.
   for (MachineBasicBlock::succ_iterator SI = BB->succ_begin(),
@@ -190,7 +190,7 @@ void AggressiveAntiDepBreaker::Observe(MachineInstr *MI, unsigned Count,
                                        unsigned InsertPosIndex) {
   assert(Count < InsertPosIndex && "Instruction index out of expected range!");
 
-  MISTD::set<unsigned> PassthruRegs;
+  std::set<unsigned> PassthruRegs;
   GetPassthruRegs(MI, PassthruRegs);
   PrescanInstruction(MI, Count, PassthruRegs);
   ScanInstruction(MI, Count);
@@ -199,7 +199,7 @@ void AggressiveAntiDepBreaker::Observe(MachineInstr *MI, unsigned Count,
   DEBUG(MI->dump());
   DEBUG(dbgs() << "\tRegs:");
 
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
   for (unsigned Reg = 0; Reg != TRI->getNumRegs(); ++Reg) {
     // If Reg is current live, then mark that it can't be renamed as
     // we don't know the extent of its live-range anymore (now that it
@@ -240,7 +240,7 @@ bool AggressiveAntiDepBreaker::IsImplicitDefUse(MachineInstr *MI,
 }
 
 void AggressiveAntiDepBreaker::GetPassthruRegs(MachineInstr *MI,
-                                           MISTD::set<unsigned>& PassthruRegs) {
+                                           std::set<unsigned>& PassthruRegs) {
   for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {
     MachineOperand &MO = MI->getOperand(i);
     if (!MO.isReg()) continue;
@@ -256,7 +256,7 @@ void AggressiveAntiDepBreaker::GetPassthruRegs(MachineInstr *MI,
 
 /// AntiDepEdges - Return in Edges the anti- and output- dependencies
 /// in SU that we want to consider for breaking.
-static void AntiDepEdges(const SUnit *SU, MISTD::vector<const SDep*>& Edges) {
+static void AntiDepEdges(const SUnit *SU, std::vector<const SDep*>& Edges) {
   SmallSet<unsigned, 4> RegSet;
   for (SUnit::const_pred_iterator P = SU->Preds.begin(), PE = SU->Preds.end();
        P != PE; ++P) {
@@ -299,9 +299,9 @@ void AggressiveAntiDepBreaker::HandleLastUse(unsigned Reg, unsigned KillIdx,
                                              const char *tag,
                                              const char *header,
                                              const char *footer) {
-  MISTD::vector<unsigned> &KillIndices = State->GetKillIndices();
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
+  std::vector<unsigned> &KillIndices = State->GetKillIndices();
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
     RegRefs = State->GetRegRefs();
 
   if (!State->IsLive(Reg)) {
@@ -333,9 +333,9 @@ void AggressiveAntiDepBreaker::HandleLastUse(unsigned Reg, unsigned KillIdx,
 
 void AggressiveAntiDepBreaker::PrescanInstruction(MachineInstr *MI,
                                                   unsigned Count,
-                                             MISTD::set<unsigned>& PassthruRegs) {
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
+                                             std::set<unsigned>& PassthruRegs) {
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
     RegRefs = State->GetRegRefs();
 
   // Handle dead defs by simulating a last-use of the register just
@@ -386,7 +386,7 @@ void AggressiveAntiDepBreaker::PrescanInstruction(MachineInstr *MI,
     if (i < MI->getDesc().getNumOperands())
       RC = TII->getRegClass(MI->getDesc(), i, TRI, MF);
     AggressiveAntiDepState::RegisterReference RR = { &MO, RC };
-    RegRefs.insert(MISTD::make_pair(Reg, RR));
+    RegRefs.insert(std::make_pair(Reg, RR));
   }
 
   DEBUG(dbgs() << '\n');
@@ -411,7 +411,7 @@ void AggressiveAntiDepBreaker::PrescanInstruction(MachineInstr *MI,
 void AggressiveAntiDepBreaker::ScanInstruction(MachineInstr *MI,
                                                unsigned Count) {
   DEBUG(dbgs() << "\tUse Groups:");
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
     RegRefs = State->GetRegRefs();
 
   // If MI's uses have special allocation requirement, don't allow
@@ -460,7 +460,7 @@ void AggressiveAntiDepBreaker::ScanInstruction(MachineInstr *MI,
     if (i < MI->getDesc().getNumOperands())
       RC = TII->getRegClass(MI->getDesc(), i, TRI, MF);
     AggressiveAntiDepState::RegisterReference RR = { &MO, RC };
-    RegRefs.insert(MISTD::make_pair(Reg, RR));
+    RegRefs.insert(std::make_pair(Reg, RR));
   }
 
   DEBUG(dbgs() << '\n');
@@ -497,12 +497,12 @@ BitVector AggressiveAntiDepBreaker::GetRenameRegisters(unsigned Reg) {
   // Check all references that need rewriting for Reg. For each, use
   // the corresponding register class to narrow the set of registers
   // that are appropriate for renaming.
-  MISTD::pair<MISTD::multimap<unsigned,
+  std::pair<std::multimap<unsigned,
                      AggressiveAntiDepState::RegisterReference>::iterator,
-            MISTD::multimap<unsigned,
+            std::multimap<unsigned,
                      AggressiveAntiDepState::RegisterReference>::iterator>
     Range = State->GetRegRefs().equal_range(Reg);
-  for (MISTD::multimap<unsigned,
+  for (std::multimap<unsigned,
        AggressiveAntiDepState::RegisterReference>::iterator Q = Range.first,
        QE = Range.second; Q != QE; ++Q) {
     const TargetRegisterClass *RC = Q->second.RC;
@@ -525,16 +525,16 @@ BitVector AggressiveAntiDepBreaker::GetRenameRegisters(unsigned Reg) {
 bool AggressiveAntiDepBreaker::FindSuitableFreeRegisters(
                                 unsigned AntiDepGroupIndex,
                                 RenameOrderType& RenameOrder,
-                                MISTD::map<unsigned, unsigned> &RenameMap) {
-  MISTD::vector<unsigned> &KillIndices = State->GetKillIndices();
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
+                                std::map<unsigned, unsigned> &RenameMap) {
+  std::vector<unsigned> &KillIndices = State->GetKillIndices();
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
     RegRefs = State->GetRegRefs();
 
   // Collect all referenced registers in the same group as
   // AntiDepReg. These all need to be renamed together if we are to
   // break the anti-dependence.
-  MISTD::vector<unsigned> Regs;
+  std::vector<unsigned> Regs;
   State->GetGroupRegs(AntiDepGroupIndex, Regs, &RegRefs);
   assert(Regs.size() > 0 && "Empty register group!");
   if (Regs.size() == 0)
@@ -545,7 +545,7 @@ bool AggressiveAntiDepBreaker::FindSuitableFreeRegisters(
   // each register.
   DEBUG(dbgs() << "\tRename Candidates for Group g" << AntiDepGroupIndex
         << ":\n");
-  MISTD::map<unsigned, BitVector> RenameRegisterMap;
+  std::map<unsigned, BitVector> RenameRegisterMap;
   unsigned SuperReg = 0;
   for (unsigned i = 0, e = Regs.size(); i != e; ++i) {
     unsigned Reg = Regs[i];
@@ -557,7 +557,7 @@ bool AggressiveAntiDepBreaker::FindSuitableFreeRegisters(
       DEBUG(dbgs() << "\t\t" << TRI->getName(Reg) << ":");
 
       BitVector BV = GetRenameRegisters(Reg);
-      RenameRegisterMap.insert(MISTD::pair<unsigned, BitVector>(Reg, BV));
+      RenameRegisterMap.insert(std::pair<unsigned, BitVector>(Reg, BV));
 
       DEBUG(dbgs() << " ::");
       DEBUG(for (int r = BV.find_first(); r != -1; r = BV.find_next(r))
@@ -671,7 +671,7 @@ bool AggressiveAntiDepBreaker::FindSuitableFreeRegisters(
       }
 
       // Record that 'Reg' can be renamed to 'NewReg'.
-      RenameMap.insert(MISTD::pair<unsigned, unsigned>(Reg, NewReg));
+      RenameMap.insert(std::pair<unsigned, unsigned>(Reg, NewReg));
     }
 
     // If we fall-out here, then every register in the group can be
@@ -695,15 +695,15 @@ bool AggressiveAntiDepBreaker::FindSuitableFreeRegisters(
 /// ScheduleDAG and break them by renaming registers.
 ///
 unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
-                              const MISTD::vector<SUnit>& SUnits,
+                              const std::vector<SUnit>& SUnits,
                               MachineBasicBlock::iterator Begin,
                               MachineBasicBlock::iterator End,
                               unsigned InsertPosIndex,
                               DbgValueVector &DbgValues) {
 
-  MISTD::vector<unsigned> &KillIndices = State->GetKillIndices();
-  MISTD::vector<unsigned> &DefIndices = State->GetDefIndices();
-  MISTD::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
+  std::vector<unsigned> &KillIndices = State->GetKillIndices();
+  std::vector<unsigned> &DefIndices = State->GetDefIndices();
+  std::multimap<unsigned, AggressiveAntiDepState::RegisterReference>&
     RegRefs = State->GetRegRefs();
 
   // The code below assumes that there is at least one instruction,
@@ -714,10 +714,10 @@ unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
   RenameOrderType RenameOrder;
 
   // ...need a map from MI to SUnit.
-  MISTD::map<MachineInstr *, const SUnit *> MISUnitMap;
+  std::map<MachineInstr *, const SUnit *> MISUnitMap;
   for (unsigned i = 0, e = SUnits.size(); i != e; ++i) {
     const SUnit *SU = &SUnits[i];
-    MISUnitMap.insert(MISTD::pair<MachineInstr *, const SUnit *>(SU->getInstr(),
+    MISUnitMap.insert(std::pair<MachineInstr *, const SUnit *>(SU->getInstr(),
                                                                SU));
   }
 
@@ -764,7 +764,7 @@ unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
     DEBUG(dbgs() << "Anti: ");
     DEBUG(MI->dump());
 
-    MISTD::set<unsigned> PassthruRegs;
+    std::set<unsigned> PassthruRegs;
     GetPassthruRegs(MI, PassthruRegs);
 
     // Process the defs in MI...
@@ -772,7 +772,7 @@ unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
 
     // The dependence edges that represent anti- and output-
     // dependencies that are candidates for breaking.
-    MISTD::vector<const SDep *> Edges;
+    std::vector<const SDep *> Edges;
     const SUnit *PathSU = MISUnitMap[MI];
     AntiDepEdges(PathSU, Edges);
 
@@ -876,13 +876,13 @@ unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
         DEBUG(dbgs() << '\n');
 
         // Look for a suitable register to use to break the anti-dependence.
-        MISTD::map<unsigned, unsigned> RenameMap;
+        std::map<unsigned, unsigned> RenameMap;
         if (FindSuitableFreeRegisters(GroupIndex, RenameOrder, RenameMap)) {
           DEBUG(dbgs() << "\tBreaking anti-dependence edge on "
                 << TRI->getName(AntiDepReg) << ":");
 
           // Handle each group register...
-          for (MISTD::map<unsigned, unsigned>::iterator
+          for (std::map<unsigned, unsigned>::iterator
                  S = RenameMap.begin(), E = RenameMap.end(); S != E; ++S) {
             unsigned CurrReg = S->first;
             unsigned NewReg = S->second;
@@ -893,12 +893,12 @@ unsigned AggressiveAntiDepBreaker::BreakAntiDependencies(
 
             // Update the references to the old register CurrReg to
             // refer to the new register NewReg.
-            MISTD::pair<MISTD::multimap<unsigned,
+            std::pair<std::multimap<unsigned,
                            AggressiveAntiDepState::RegisterReference>::iterator,
-                      MISTD::multimap<unsigned,
+                      std::multimap<unsigned,
                            AggressiveAntiDepState::RegisterReference>::iterator>
               Range = RegRefs.equal_range(CurrReg);
-            for (MISTD::multimap<unsigned,
+            for (std::multimap<unsigned,
                  AggressiveAntiDepState::RegisterReference>::iterator
                    Q = Range.first, QE = Range.second; Q != QE; ++Q) {
               Q->second.Operand->setReg(NewReg);

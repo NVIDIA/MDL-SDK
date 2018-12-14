@@ -636,7 +636,7 @@ namespace llvm {
 
     virtual bool ExpandInlineAsm(CallInst *CI) const;
 
-    ConstraintType getConstraintType(const MISTD::string &Constraint) const;
+    ConstraintType getConstraintType(const std::string &Constraint) const;
 
     /// Examine constraint string and operand type and determine a weight value.
     /// The operand object must already have been set up with the operand type.
@@ -650,16 +650,16 @@ namespace llvm {
     /// true it means one of the asm constraint of the inline asm instruction
     /// being processed is 'm'.
     virtual void LowerAsmOperandForConstraint(SDValue Op,
-                                              MISTD::string &Constraint,
-                                              MISTD::vector<SDValue> &Ops,
+                                              std::string &Constraint,
+                                              std::vector<SDValue> &Ops,
                                               SelectionDAG &DAG) const;
 
     /// getRegForInlineAsmConstraint - Given a physical register constraint
     /// (e.g. {edx}), return the register number and the register class for the
     /// register.  This should only be used for C_Register constraints.  On
     /// error, this returns a register number of 0.
-    MISTD::pair<unsigned, const TargetRegisterClass*>
-      getRegForInlineAsmConstraint(const MISTD::string &Constraint,
+    std::pair<unsigned, const TargetRegisterClass*>
+      getRegForInlineAsmConstraint(const std::string &Constraint,
                                    MVT VT) const;
 
     /// isLegalAddressingMode - Return true if the addressing mode represented
@@ -781,7 +781,7 @@ namespace llvm {
     virtual void resetOperationActions();
 
   protected:
-    MISTD::pair<const TargetRegisterClass*, uint8_t>
+    std::pair<const TargetRegisterClass*, uint8_t>
     findRepresentativeClass(MVT VT) const;
 
   private:
@@ -802,7 +802,7 @@ namespace llvm {
     bool X86ScalarSSEf64;
 
     /// LegalFPImmediates - A list of legal fp immediates.
-    MISTD::vector<APFloat> LegalFPImmediates;
+    std::vector<APFloat> LegalFPImmediates;
 
     /// addLegalFPImmediate - Indicate that this x86 target can instruction
     /// select the specified FP immediate natively.
@@ -849,7 +849,7 @@ namespace llvm {
     unsigned GetAlignedArgumentStackSize(unsigned StackSize,
                                          SelectionDAG &DAG) const;
 
-    MISTD::pair<SDValue,SDValue> FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
+    std::pair<SDValue,SDValue> FP_TO_INTHelper(SDValue Op, SelectionDAG &DAG,
                                                bool isSigned,
                                                bool isReplace) const;
 

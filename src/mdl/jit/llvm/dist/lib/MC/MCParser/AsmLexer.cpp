@@ -43,7 +43,7 @@ void AsmLexer::setBuffer(const MemoryBuffer *buf, const char *ptr) {
 
 /// ReturnError - Set the error to the specified string at the specified
 /// location.  This is defined to always return AsmToken::Error.
-AsmToken AsmLexer::ReturnError(const char *Loc, const MISTD::string &Msg) {
+AsmToken AsmLexer::ReturnError(const char *Loc, const std::string &Msg) {
   SetError(SMLoc::getFromPointer(Loc), Msg);
 
   return AsmToken(AsmToken::Error, StringRef(Loc, 0));

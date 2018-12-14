@@ -26,7 +26,7 @@ static ManagedStatic<sys::ThreadLocal<const CrashRecoveryContextImpl> > CurrentC
 
 struct CrashRecoveryContextImpl {
   CrashRecoveryContext *CRC;
-  MISTD::string Backtrace;
+  std::string Backtrace;
   ::jmp_buf JumpBuffer;
   volatile unsigned Failed : 1;
   unsigned SwitchedThread : 1;
@@ -323,7 +323,7 @@ void CrashRecoveryContext::HandleCrash() {
   CRCI->HandleCrash();
 }
 
-const MISTD::string &CrashRecoveryContext::getBacktrace() const {
+const std::string &CrashRecoveryContext::getBacktrace() const {
   CrashRecoveryContextImpl *CRC = (CrashRecoveryContextImpl *) Impl;
   assert(CRC && "Crash recovery context never initialized!");
   assert(CRC->Failed && "No crash was detected!");

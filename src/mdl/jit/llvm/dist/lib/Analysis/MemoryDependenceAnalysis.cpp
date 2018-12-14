@@ -654,7 +654,7 @@ MemoryDependenceAnalysis::getNonLocalCallDependency(CallSite QueryCS) {
         DirtyBlocks.push_back(I->getBB());
 
     // Sort the cache so that we can do fast binary search lookups below.
-    MISTD::sort(Cache.begin(), Cache.end());
+    std::sort(Cache.begin(), Cache.end());
 
     ++NumCacheDirtyNonLocal;
     //cerr << "CACHED CASE: " << DirtyBlocks.size() << " dirty: "
@@ -688,7 +688,7 @@ MemoryDependenceAnalysis::getNonLocalCallDependency(CallSite QueryCS) {
     // the cache set.  If so, find it.
     DEBUG(AssertSorted(Cache, NumSortedEntries));
     NonLocalDepInfo::iterator Entry =
-      MISTD::upper_bound(Cache.begin(), Cache.begin()+NumSortedEntries,
+      std::upper_bound(Cache.begin(), Cache.begin()+NumSortedEntries,
                        NonLocalDepEntry(DirtyBB));
     if (Entry != Cache.begin() && prior(Entry)->getBB() == DirtyBB)
       --Entry;
@@ -799,7 +799,7 @@ GetNonLocalInfoForBlock(const AliasAnalysis::Location &Loc,
   // Do a binary search to see if we already have an entry for this block in
   // the cache set.  If so, find it.
   NonLocalDepInfo::iterator Entry =
-    MISTD::upper_bound(Cache->begin(), Cache->begin()+NumSortedEntries,
+    std::upper_bound(Cache->begin(), Cache->begin()+NumSortedEntries,
                      NonLocalDepEntry(BB));
   if (Entry != Cache->begin() && (Entry-1)->getBB() == BB)
     --Entry;
@@ -872,7 +872,7 @@ SortNonLocalDepInfoCache(MemoryDependenceAnalysis::NonLocalDepInfo &Cache,
     NonLocalDepEntry Val = Cache.back();
     Cache.pop_back();
     MemoryDependenceAnalysis::NonLocalDepInfo::iterator Entry =
-      MISTD::upper_bound(Cache.begin(), Cache.end()-1, Val);
+      std::upper_bound(Cache.begin(), Cache.end()-1, Val);
     Cache.insert(Entry, Val);
     // FALL THROUGH.
   }
@@ -882,13 +882,13 @@ SortNonLocalDepInfoCache(MemoryDependenceAnalysis::NonLocalDepInfo &Cache,
       NonLocalDepEntry Val = Cache.back();
       Cache.pop_back();
       MemoryDependenceAnalysis::NonLocalDepInfo::iterator Entry =
-        MISTD::upper_bound(Cache.begin(), Cache.end(), Val);
+        std::upper_bound(Cache.begin(), Cache.end(), Val);
       Cache.insert(Entry, Val);
     }
     break;
   default:
     // Added many values, do a full scale sort.
-    MISTD::sort(Cache.begin(), Cache.end());
+    std::sort(Cache.begin(), Cache.end());
     break;
   }
 }
@@ -925,8 +925,8 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
 
   // Get the NLPI for CacheKey, inserting one into the map if it doesn't
   // already have one.
-  MISTD::pair<CachedNonLocalPointerInfo::iterator, bool> Pair =
-    NonLocalPointerDeps.insert(MISTD::make_pair(CacheKey, InitialNLPI));
+  std::pair<CachedNonLocalPointerInfo::iterator, bool> Pair =
+    NonLocalPointerDeps.insert(std::make_pair(CacheKey, InitialNLPI));
   NonLocalPointerInfo *CacheInfo = &Pair.first->second;
 
   // If we already have a cache entry for this CacheKey, we may need to do some
@@ -998,7 +998,7 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
     Value *Addr = Pointer.getAddr();
     for (NonLocalDepInfo::iterator I = Cache->begin(), E = Cache->end();
          I != E; ++I) {
-      Visited.insert(MISTD::make_pair(I->getBB(), Addr));
+      Visited.insert(std::make_pair(I->getBB(), Addr));
       if (I->getResult().isNonLocal()) {
         continue;
       }
@@ -1028,7 +1028,7 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
   Worklist.push_back(StartBB);
 
   // PredList used inside loop.
-  SmallVector<MISTD::pair<BasicBlock*, PHITransAddr>, 16> PredList;
+  SmallVector<std::pair<BasicBlock*, PHITransAddr>, 16> PredList;
 
   // Keep track of the entries that we know are sorted.  Previously cached
   // entries will all be sorted.  The entries we add we only sort on demand (we
@@ -1076,8 +1076,8 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
       SmallVector<BasicBlock*, 16> NewBlocks;
       for (BasicBlock **PI = PredCache->GetPreds(BB); *PI; ++PI) {
         // Verify that we haven't looked at this block yet.
-        MISTD::pair<DenseMap<BasicBlock*,Value*>::iterator, bool>
-          InsertRes = Visited.insert(MISTD::make_pair(*PI, Pointer.getAddr()));
+        std::pair<DenseMap<BasicBlock*,Value*>::iterator, bool>
+          InsertRes = Visited.insert(std::make_pair(*PI, Pointer.getAddr()));
         if (InsertRes.second) {
           // First time we've looked at *PI.
           NewBlocks.push_back(*PI);
@@ -1118,7 +1118,7 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
     PredList.clear();
     for (BasicBlock **PI = PredCache->GetPreds(BB); *PI; ++PI) {
       BasicBlock *Pred = *PI;
-      PredList.push_back(MISTD::make_pair(Pred, Pointer));
+      PredList.push_back(std::make_pair(Pred, Pointer));
 
       // Get the PHI translated pointer in this predecessor.  This can fail if
       // not translatable, in which case the getAddr() returns null.
@@ -1132,8 +1132,8 @@ getNonLocalPointerDepFromBB(const PHITransAddr &Pointer,
       // with PHI translation when a critical edge exists and the PHI node in
       // the successor translates to a pointer value different than the
       // pointer the block was first analyzed with.
-      MISTD::pair<DenseMap<BasicBlock*,Value*>::iterator, bool>
-        InsertRes = Visited.insert(MISTD::make_pair(Pred, PredPtrVal));
+      std::pair<DenseMap<BasicBlock*,Value*>::iterator, bool>
+        InsertRes = Visited.insert(std::make_pair(Pred, PredPtrVal));
 
       if (!InsertRes.second) {
         // We found the pred; take it off the list of preds to visit.
@@ -1351,7 +1351,7 @@ void MemoryDependenceAnalysis::removeInstruction(Instruction *RemInst) {
 
   // Loop over all of the things that depend on the instruction we're removing.
   //
-  SmallVector<MISTD::pair<Instruction*, Instruction*>, 8> ReverseDepsToAdd;
+  SmallVector<std::pair<Instruction*, Instruction*>, 8> ReverseDepsToAdd;
 
   // If we find RemInst as a clobber or Def in any of the maps for other values,
   // we need to replace its entry with a dirty version of the instruction after
@@ -1381,7 +1381,7 @@ void MemoryDependenceAnalysis::removeInstruction(Instruction *RemInst) {
       // Make sure to remember that new things depend on NewDepInst.
       assert(NewDirtyVal.getInst() && "There is no way something else can have "
              "a local dep on this if it is a terminator!");
-      ReverseDepsToAdd.push_back(MISTD::make_pair(NewDirtyVal.getInst(),
+      ReverseDepsToAdd.push_back(std::make_pair(NewDirtyVal.getInst(),
                                                 InstDependingOnRemInst));
     }
 
@@ -1415,7 +1415,7 @@ void MemoryDependenceAnalysis::removeInstruction(Instruction *RemInst) {
         DI->setResult(NewDirtyVal);
 
         if (Instruction *NextI = NewDirtyVal.getInst())
-          ReverseDepsToAdd.push_back(MISTD::make_pair(NextI, *I));
+          ReverseDepsToAdd.push_back(std::make_pair(NextI, *I));
       }
     }
 
@@ -1435,7 +1435,7 @@ void MemoryDependenceAnalysis::removeInstruction(Instruction *RemInst) {
     ReverseNonLocalPtrDeps.find(RemInst);
   if (ReversePtrDepIt != ReverseNonLocalPtrDeps.end()) {
     SmallPtrSet<ValueIsLoadPair, 4> &Set = ReversePtrDepIt->second;
-    SmallVector<MISTD::pair<Instruction*, ValueIsLoadPair>,8> ReversePtrDepsToAdd;
+    SmallVector<std::pair<Instruction*, ValueIsLoadPair>,8> ReversePtrDepsToAdd;
 
     for (SmallPtrSet<ValueIsLoadPair, 4>::iterator I = Set.begin(),
          E = Set.end(); I != E; ++I) {
@@ -1457,12 +1457,12 @@ void MemoryDependenceAnalysis::removeInstruction(Instruction *RemInst) {
         DI->setResult(NewDirtyVal);
 
         if (Instruction *NewDirtyInst = NewDirtyVal.getInst())
-          ReversePtrDepsToAdd.push_back(MISTD::make_pair(NewDirtyInst, P));
+          ReversePtrDepsToAdd.push_back(std::make_pair(NewDirtyInst, P));
       }
 
       // Re-sort the NonLocalDepInfo.  Changing the dirty entry to its
       // subsequent value may invalidate the sortedness.
-      MISTD::sort(NLPDI.begin(), NLPDI.end());
+      std::sort(NLPDI.begin(), NLPDI.end());
     }
 
     ReverseNonLocalPtrDeps.erase(ReversePtrDepIt);

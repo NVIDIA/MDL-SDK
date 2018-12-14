@@ -743,7 +743,7 @@ inline Sint32 log2_int( const Float32 v) {
 
 /// Returns the integer log2 of \p v.
 inline Sint32 log2_int( const Float64 v) { 
-    return (Sint32)(mi::base::binary_cast<Uint64>(v) >> 52) - 1023;
+    return static_cast<Sint32>(mi::base::binary_cast<Uint64>(v) >> 52) - 1023;
 }
 
 /// Returns the integer log2 of \p v, i.e., rounded up to the next integer.

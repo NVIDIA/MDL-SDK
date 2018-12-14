@@ -60,7 +60,7 @@ FunctionPass *createVerifierPass(
 bool verifyModule(
   const Module &M,  ///< The module to be verified
   VerifierFailureAction action = AbortProcessAction, ///< Action to take
-  MISTD::string *ErrorInfo = 0      ///< Information about failures.
+  std::string *ErrorInfo = 0      ///< Information about failures.
 );
 
 // verifyFunction - Check a function for errors, useful for use when debugging a

@@ -135,12 +135,12 @@ static bool isValidName(StringRef MDName) {
   if (MDName.empty())
     return false;
 
-  if (!MISTD::isalpha(static_cast<unsigned char>(MDName[0])))
+  if (!std::isalpha(static_cast<unsigned char>(MDName[0])))
     return false;
 
   for (StringRef::iterator I = MDName.begin() + 1, E = MDName.end(); I != E;
        ++I) {
-    if (!MISTD::isalnum(static_cast<unsigned char>(*I)) && *I != '_' &&
+    if (!std::isalnum(static_cast<unsigned char>(*I)) && *I != '_' &&
         *I != '-' && *I != '.')
       return false;
   }

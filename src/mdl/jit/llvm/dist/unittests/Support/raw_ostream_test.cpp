@@ -16,8 +16,8 @@ using namespace llvm;
 
 namespace {
 
-template<typename T> MISTD::string printToString(const T &Value) {
-  MISTD::string res;
+template<typename T> std::string printToString(const T &Value) {
+  std::string res;
   llvm::raw_string_ostream(res) << Value;
   return res;    
 }
@@ -25,7 +25,7 @@ template<typename T> MISTD::string printToString(const T &Value) {
 /// printToString - Print the given value to a stream which only has \arg
 /// BytesLeftInBuffer bytes left in the buffer. This is useful for testing edge
 /// cases in the buffer handling logic.
-template<typename T> MISTD::string printToString(const T &Value,
+template<typename T> std::string printToString(const T &Value,
                                                unsigned BytesLeftInBuffer) {
   // FIXME: This is relying on internal knowledge of how raw_ostream works to
   // get the buffer position right.
@@ -39,8 +39,8 @@ template<typename T> MISTD::string printToString(const T &Value,
   return OS.str().substr(StartIndex);
 }
 
-template<typename T> MISTD::string printToStringUnbuffered(const T &Value) {
-  MISTD::string res;
+template<typename T> std::string printToStringUnbuffered(const T &Value) {
+  std::string res;
   llvm::raw_string_ostream OS(res);
   OS.SetUnbuffered();
   OS << Value;
@@ -53,7 +53,7 @@ TEST(raw_ostreamTest, Types_Buffered) {
 
   // String
   EXPECT_EQ("hello", printToString("hello"));
-  EXPECT_EQ("hello", printToString(MISTD::string("hello")));
+  EXPECT_EQ("hello", printToString(std::string("hello")));
 
   // Int
   EXPECT_EQ("0", printToString(0));
@@ -84,7 +84,7 @@ TEST(raw_ostreamTest, Types_Unbuffered) {
 
   // String
   EXPECT_EQ("hello", printToStringUnbuffered("hello"));
-  EXPECT_EQ("hello", printToStringUnbuffered(MISTD::string("hello")));
+  EXPECT_EQ("hello", printToStringUnbuffered(std::string("hello")));
 
   // Int
   EXPECT_EQ("0", printToStringUnbuffered(0));
@@ -118,7 +118,7 @@ TEST(raw_ostreamTest, BufferEdge) {
 }
 
 TEST(raw_ostreamTest, TinyBuffer) {
-  MISTD::string Str;
+  std::string Str;
   raw_string_ostream OS(Str);
   OS.SetBufferSize(1);
   OS << "hello";
@@ -128,7 +128,7 @@ TEST(raw_ostreamTest, TinyBuffer) {
 }
 
 TEST(raw_ostreamTest, WriteEscaped) {
-  MISTD::string Str;
+  std::string Str;
 
   Str = "";
   raw_string_ostream(Str).write_escaped("hi");

@@ -42,13 +42,13 @@ public:
   /// top of the graph.
   ///
   template<typename GraphType>
-  static MISTD::string getGraphName(const GraphType &) { return ""; }
+  static std::string getGraphName(const GraphType &) { return ""; }
 
   /// getGraphProperties - Return any custom properties that should be included
   /// in the top level graph structure for dot.
   ///
   template<typename GraphType>
-  static MISTD::string getGraphProperties(const GraphType &) {
+  static std::string getGraphProperties(const GraphType &) {
     return "";
   }
 
@@ -68,7 +68,7 @@ public:
   /// getNodeLabel - Given a node and a pointer to the top level graph, return
   /// the label to print in the node.
   template<typename GraphType>
-  MISTD::string getNodeLabel(const void *, const GraphType &) {
+  std::string getNodeLabel(const void *, const GraphType &) {
     return "";
   }
 
@@ -80,14 +80,14 @@ public:
   }
 
   template<typename GraphType>
-  static MISTD::string getNodeDescription(const void *, const GraphType &) {
+  static std::string getNodeDescription(const void *, const GraphType &) {
     return "";
   }
 
   /// If you want to specify custom node attributes, this is the place to do so
   ///
   template<typename GraphType>
-  static MISTD::string getNodeAttributes(const void *,
+  static std::string getNodeAttributes(const void *,
                                        const GraphType &) {
     return "";
   }
@@ -95,7 +95,7 @@ public:
   /// If you want to override the dot attributes printed for a particular edge,
   /// override this method.
   template<typename EdgeIter, typename GraphType>
-  static MISTD::string getEdgeAttributes(const void *, EdgeIter,
+  static std::string getEdgeAttributes(const void *, EdgeIter,
                                        const GraphType &) {
     return "";
   }
@@ -103,7 +103,7 @@ public:
   /// getEdgeSourceLabel - If you want to label the edge source itself,
   /// implement this method.
   template<typename EdgeIter>
-  static MISTD::string getEdgeSourceLabel(const void *, EdgeIter) {
+  static std::string getEdgeSourceLabel(const void *, EdgeIter) {
     return "";
   }
 
@@ -137,7 +137,7 @@ public:
 
   /// getEdgeDestLabel - If hasEdgeDestLabels, this function returns the
   /// incoming edge label with the given index in the given node.
-  static MISTD::string getEdgeDestLabel(const void *, unsigned) {
+  static std::string getEdgeDestLabel(const void *, unsigned) {
     return "";
   }
 

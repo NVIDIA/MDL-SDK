@@ -32,7 +32,7 @@ namespace llvm {
 /// a method which can produce a (heap allocated) clone.
 ///
 /// Note that in almost all scenarios use of this could be avoided if we could
-/// build move-only containers of a MISTD::unique_ptr, but until then this
+/// build move-only containers of a std::unique_ptr, but until then this
 /// provides an effective way to place polymorphic objects in a container.
 template <typename T> class polymorphic_ptr {
   T *ptr;

@@ -43,10 +43,10 @@ struct EncodingField {
 };
 
 struct OperandInfo {
-  MISTD::vector<EncodingField> Fields;
-  MISTD::string Decoder;
+  std::vector<EncodingField> Fields;
+  std::string Decoder;
 
-  OperandInfo(MISTD::string D)
+  OperandInfo(std::string D)
     : Decoder(D) { }
 
   void addField(unsigned Base, unsigned Width, unsigned Offset) {
@@ -55,18 +55,18 @@ struct OperandInfo {
 
   unsigned numFields() const { return Fields.size(); }
 
-  typedef MISTD::vector<EncodingField>::const_iterator const_iterator;
+  typedef std::vector<EncodingField>::const_iterator const_iterator;
 
   const_iterator begin() const { return Fields.begin(); }
   const_iterator end() const   { return Fields.end();   }
 };
 
-typedef MISTD::vector<uint8_t> DecoderTable;
+typedef std::vector<uint8_t> DecoderTable;
 typedef uint32_t DecoderFixup;
-typedef MISTD::vector<DecoderFixup> FixupList;
-typedef MISTD::vector<FixupList> FixupScopeList;
-typedef SetVector<MISTD::string> PredicateSet;
-typedef SetVector<MISTD::string> DecoderSet;
+typedef std::vector<DecoderFixup> FixupList;
+typedef std::vector<FixupList> FixupScopeList;
+typedef SetVector<std::string> PredicateSet;
+typedef SetVector<std::string> DecoderSet;
 struct DecoderTableInfo {
   DecoderTable Table;
   FixupScopeList FixupStack;
@@ -78,19 +78,19 @@ struct DecoderTableInfo {
 
 namespace {
 class FixedLenDecoderEmitter {
-  const MISTD::vector<const CodeGenInstruction*> *NumberedInstructions;
+  const std::vector<const CodeGenInstruction*> *NumberedInstructions;
 public:
 
   // Defaults preserved here for documentation, even though they aren't
   // strictly necessary given the way that this is currently being called.
   FixedLenDecoderEmitter(RecordKeeper &R,
-                         MISTD::string PredicateNamespace,
-                         MISTD::string GPrefix  = "if (",
-                         MISTD::string GPostfix = " == MCDisassembler::Fail)"
+                         std::string PredicateNamespace,
+                         std::string GPrefix  = "if (",
+                         std::string GPostfix = " == MCDisassembler::Fail)"
                          " return MCDisassembler::Fail;",
-                         MISTD::string ROK      = "MCDisassembler::Success",
-                         MISTD::string RFail    = "MCDisassembler::Fail",
-                         MISTD::string L        = "") :
+                         std::string ROK      = "MCDisassembler::Success",
+                         std::string RFail    = "MCDisassembler::Fail",
+                         std::string L        = "") :
     Target(R),
     PredicateNamespace(PredicateNamespace),
     GuardPrefix(GPrefix), GuardPostfix(GPostfix),
@@ -113,10 +113,10 @@ public:
 private:
   CodeGenTarget Target;
 public:
-  MISTD::string PredicateNamespace;
-  MISTD::string GuardPrefix, GuardPostfix;
-  MISTD::string ReturnOK, ReturnFail;
-  MISTD::string Locals;
+  std::string PredicateNamespace;
+  std::string GuardPrefix, GuardPostfix;
+  std::string ReturnOK, ReturnFail;
+  std::string Locals;
 };
 } // End anonymous namespace
 
@@ -178,7 +178,7 @@ class FilterChooser;
 } // End anonymous namespace
 
 // Representation of the instruction to work on.
-typedef MISTD::vector<bit_value_t> insn_t;
+typedef std::vector<bit_value_t> insn_t;
 
 /// Filter - Filter works with FilterChooser to produce the decoding tree for
 /// the ISA.
@@ -225,13 +225,13 @@ protected:
   bool Mixed; // a mixed region contains both set and unset bits
 
   // Map of well-known segment value to the set of uid's with that value.
-  MISTD::map<uint64_t, MISTD::vector<unsigned> > FilteredInstructions;
+  std::map<uint64_t, std::vector<unsigned> > FilteredInstructions;
 
   // Set of uid's with non-constant segment values.
-  MISTD::vector<unsigned> VariableInstructions;
+  std::vector<unsigned> VariableInstructions;
 
   // Map of well-known segment value to its delegate.
-  MISTD::map<unsigned, const FilterChooser*> FilterChooserMap;
+  std::map<unsigned, const FilterChooser*> FilterChooserMap;
 
   // Number of instructions which fall under FilteredInstructions category.
   unsigned NumFiltered;
@@ -307,20 +307,20 @@ protected:
   friend class Filter;
 
   // Vector of codegen instructions to choose our filter.
-  const MISTD::vector<const CodeGenInstruction*> &AllInstructions;
+  const std::vector<const CodeGenInstruction*> &AllInstructions;
 
   // Vector of uid's for this filter chooser to work on.
-  const MISTD::vector<unsigned> &Opcodes;
+  const std::vector<unsigned> &Opcodes;
 
   // Lookup table for the operand decoding of instructions.
-  const MISTD::map<unsigned, MISTD::vector<OperandInfo> > &Operands;
+  const std::map<unsigned, std::vector<OperandInfo> > &Operands;
 
   // Vector of candidate filters.
-  MISTD::vector<Filter> Filters;
+  std::vector<Filter> Filters;
 
   // Array of bit values passed down from our parent.
   // Set to all BIT_UNFILTERED's for Parent == NULL.
-  MISTD::vector<bit_value_t> FilterBitValues;
+  std::vector<bit_value_t> FilterBitValues;
 
   // Links to the FilterChooser above us in the decoding tree.
   const FilterChooser *Parent;
@@ -342,9 +342,9 @@ public:
       BestIndex(FC.BestIndex), BitWidth(FC.BitWidth),
       Emitter(FC.Emitter) { }
 
-  FilterChooser(const MISTD::vector<const CodeGenInstruction*> &Insts,
-                const MISTD::vector<unsigned> &IDs,
-                const MISTD::map<unsigned, MISTD::vector<OperandInfo> > &Ops,
+  FilterChooser(const std::vector<const CodeGenInstruction*> &Insts,
+                const std::vector<unsigned> &IDs,
+                const std::map<unsigned, std::vector<OperandInfo> > &Ops,
                 unsigned BW,
                 const FixedLenDecoderEmitter *E)
     : AllInstructions(Insts), Opcodes(IDs), Operands(Ops), Filters(),
@@ -355,10 +355,10 @@ public:
     doFilter();
   }
 
-  FilterChooser(const MISTD::vector<const CodeGenInstruction*> &Insts,
-                const MISTD::vector<unsigned> &IDs,
-                const MISTD::map<unsigned, MISTD::vector<OperandInfo> > &Ops,
-                const MISTD::vector<bit_value_t> &ParentFilterBitValues,
+  FilterChooser(const std::vector<const CodeGenInstruction*> &Insts,
+                const std::vector<unsigned> &IDs,
+                const std::map<unsigned, std::vector<OperandInfo> > &Ops,
+                const std::vector<bit_value_t> &ParentFilterBitValues,
                 const FilterChooser &parent)
     : AllInstructions(Insts), Opcodes(IDs), Operands(Ops),
       Filters(), FilterBitValues(ParentFilterBitValues),
@@ -391,7 +391,7 @@ protected:
   }
 
   // Returns the record name.
-  const MISTD::string &nameWithID(unsigned Opcode) const {
+  const std::string &nameWithID(unsigned Opcode) const {
     return AllInstructions[Opcode]->TheDef->getName();
   }
 
@@ -406,7 +406,7 @@ protected:
   /// dumpFilterArray - dumpFilterArray prints out debugging info for the given
   /// filter array as a series of chars.
   void dumpFilterArray(raw_ostream &o,
-                       const MISTD::vector<bit_value_t> & filter) const;
+                       const std::vector<bit_value_t> & filter) const;
 
   /// dumpStack - dumpStack traverses the filter chooser chain and calls
   /// dumpFilterArray on each filter chooser up to the top level one.
@@ -428,9 +428,9 @@ protected:
   // This returns a lit of undecoded bits of an instructions, for example,
   // Inst{20} = 1 && Inst{3-0} == 0b1111 represents two islands of yet-to-be
   // decoded bits in order to verify that the instruction matches the Opcode.
-  unsigned getIslands(MISTD::vector<unsigned> &StartBits,
-                      MISTD::vector<unsigned> &EndBits,
-                      MISTD::vector<uint64_t> &FieldVals,
+  unsigned getIslands(std::vector<unsigned> &StartBits,
+                      std::vector<unsigned> &EndBits,
+                      std::vector<uint64_t> &FieldVals,
                       const insn_t &Insn) const;
 
   // Emits code to check the Predicates member of an instruction are true.
@@ -535,7 +535,7 @@ Filter::Filter(FilterChooser &owner, unsigned startBit, unsigned numBits,
 }
 
 Filter::~Filter() {
-  MISTD::map<unsigned, const FilterChooser*>::iterator filterIterator;
+  std::map<unsigned, const FilterChooser*>::iterator filterIterator;
   for (filterIterator = FilterChooserMap.begin();
        filterIterator != FilterChooserMap.end();
        filterIterator++) {
@@ -550,10 +550,10 @@ Filter::~Filter() {
 // instructions.  In order to unambiguously decode the singleton, we need to
 // match the remaining undecoded encoding bits against the singleton.
 void Filter::recurse() {
-  MISTD::map<uint64_t, MISTD::vector<unsigned> >::const_iterator mapIterator;
+  std::map<uint64_t, std::vector<unsigned> >::const_iterator mapIterator;
 
   // Starts by inheriting our parent filter chooser's filter bit values.
-  MISTD::vector<bit_value_t> BitValueArray(Owner->FilterBitValues);
+  std::vector<bit_value_t> BitValueArray(Owner->FilterBitValues);
 
   if (VariableInstructions.size()) {
     // Conservatively marks each segment position as BIT_UNSET.
@@ -562,7 +562,7 @@ void Filter::recurse() {
 
     // Delegates to an inferior filter chooser for further processing on this
     // group of instructions whose segment values are variable.
-    FilterChooserMap.insert(MISTD::pair<unsigned, const FilterChooser*>(
+    FilterChooserMap.insert(std::pair<unsigned, const FilterChooser*>(
                               (unsigned)-1,
                               new FilterChooser(Owner->AllInstructions,
                                                 VariableInstructions,
@@ -595,7 +595,7 @@ void Filter::recurse() {
 
     // Delegates to an inferior filter chooser for further processing on this
     // category of instructions.
-    FilterChooserMap.insert(MISTD::pair<unsigned, const FilterChooser*>(
+    FilterChooserMap.insert(std::pair<unsigned, const FilterChooser*>(
                               mapIterator->first,
                               new FilterChooser(Owner->AllInstructions,
                                                 mapIterator->second,
@@ -637,7 +637,7 @@ void Filter::emitTableEntry(DecoderTableInfo &TableInfo) const {
   // A new filter entry begins a new scope for fixup resolution.
   TableInfo.FixupStack.push_back(FixupList());
 
-  MISTD::map<unsigned, const FilterChooser*>::const_iterator filterIterator;
+  std::map<unsigned, const FilterChooser*>::const_iterator filterIterator;
 
   DecoderTable &Table = TableInfo.Table;
 
@@ -946,7 +946,7 @@ bool FilterChooser::fieldFromInsn(uint64_t &Field, insn_t &Insn,
 /// dumpFilterArray - dumpFilterArray prints out debugging info for the given
 /// filter array as a series of chars.
 void FilterChooser::dumpFilterArray(raw_ostream &o,
-                                 const MISTD::vector<bit_value_t> &filter) const {
+                                 const std::vector<bit_value_t> &filter) const {
   for (unsigned bitIndex = BitWidth; bitIndex > 0; bitIndex--) {
     switch (filter[bitIndex - 1]) {
     case BIT_UNFILTERED:
@@ -993,7 +993,7 @@ void FilterChooser::SingletonExists(unsigned Opc) const {
 
   dumpStack(errs(), "\t\t");
   for (unsigned i = 0; i < Opcodes.size(); ++i) {
-    const MISTD::string &Name = nameWithID(Opcodes[i]);
+    const std::string &Name = nameWithID(Opcodes[i]);
 
     errs() << '\t' << Name << " ";
     dumpBits(errs(),
@@ -1006,9 +1006,9 @@ void FilterChooser::SingletonExists(unsigned Opc) const {
 // This returns a list of undecoded bits of an instructions, for example,
 // Inst{20} = 1 && Inst{3-0} == 0b1111 represents two islands of yet-to-be
 // decoded bits in order to verify that the instruction matches the Opcode.
-unsigned FilterChooser::getIslands(MISTD::vector<unsigned> &StartBits,
-                                   MISTD::vector<unsigned> &EndBits,
-                                   MISTD::vector<uint64_t> &FieldVals,
+unsigned FilterChooser::getIslands(std::vector<unsigned> &StartBits,
+                                   std::vector<unsigned> &EndBits,
+                                   std::vector<uint64_t> &FieldVals,
                                    const insn_t &Insn) const {
   unsigned Num, BitNo;
   Num = BitNo = 0;
@@ -1065,7 +1065,7 @@ unsigned FilterChooser::getIslands(MISTD::vector<unsigned> &StartBits,
 
 void FilterChooser::emitBinaryParser(raw_ostream &o, unsigned &Indentation,
                                      const OperandInfo &OpInfo) const {
-  const MISTD::string &Decoder = OpInfo.Decoder;
+  const std::string &Decoder = OpInfo.Decoder;
 
   if (OpInfo.numFields() == 1) {
     OperandInfo::const_iterator OI = OpInfo.begin();
@@ -1093,10 +1093,10 @@ void FilterChooser::emitBinaryParser(raw_ostream &o, unsigned &Indentation,
 
 void FilterChooser::emitDecoder(raw_ostream &OS, unsigned Indentation,
                                 unsigned Opc) const {
-  MISTD::map<unsigned, MISTD::vector<OperandInfo> >::const_iterator OpIter =
+  std::map<unsigned, std::vector<OperandInfo> >::const_iterator OpIter =
     Operands.find(Opc);
-  const MISTD::vector<OperandInfo>& InsnOperands = OpIter->second;
-  for (MISTD::vector<OperandInfo>::const_iterator
+  const std::vector<OperandInfo>& InsnOperands = OpIter->second;
+  for (std::vector<OperandInfo>::const_iterator
        I = InsnOperands.begin(), E = InsnOperands.end(); I != E; ++I) {
     // If a custom instruction decoder was specified, use that.
     if (I->numFields() == 0 && I->Decoder.size()) {
@@ -1130,14 +1130,14 @@ unsigned FilterChooser::getDecoderIndex(DecoderSet &Decoders,
   // Make sure the predicate is in the table.
   Decoders.insert(Decoder.str());
   // Now figure out the index for when we write out the table.
-  DecoderSet::const_iterator P = MISTD::find(Decoders.begin(),
+  DecoderSet::const_iterator P = std::find(Decoders.begin(),
                                            Decoders.end(),
                                            Decoder.str());
   return (unsigned)(P - Decoders.begin());
 }
 
 static void emitSinglePredicateMatch(raw_ostream &o, StringRef str,
-                                     const MISTD::string &PredicateNamespace) {
+                                     const std::string &PredicateNamespace) {
   if (str[0] == '!')
     o << "!(Bits & " << PredicateNamespace << "::"
       << str.slice(1,str.size()) << ")";
@@ -1154,7 +1154,7 @@ bool FilterChooser::emitPredicateMatch(raw_ostream &o, unsigned &Indentation,
     if (!Pred->getValue("AssemblerMatcherPredicate"))
       continue;
 
-    MISTD::string P = Pred->getValueAsString("AssemblerCondString");
+    std::string P = Pred->getValueAsString("AssemblerCondString");
 
     if (!P.length())
       continue;
@@ -1163,7 +1163,7 @@ bool FilterChooser::emitPredicateMatch(raw_ostream &o, unsigned &Indentation,
       o << " && ";
 
     StringRef SR(P);
-    MISTD::pair<StringRef, StringRef> pairs = SR.split(',');
+    std::pair<StringRef, StringRef> pairs = SR.split(',');
     while (pairs.second.size()) {
       emitSinglePredicateMatch(o, pairs.first, Emitter->PredicateNamespace);
       o << " && ";
@@ -1182,7 +1182,7 @@ bool FilterChooser::doesOpcodeNeedPredicate(unsigned Opc) const {
     if (!Pred->getValue("AssemblerMatcherPredicate"))
       continue;
 
-    MISTD::string P = Pred->getValueAsString("AssemblerCondString");
+    std::string P = Pred->getValueAsString("AssemblerCondString");
 
     if (!P.length())
       continue;
@@ -1203,7 +1203,7 @@ unsigned FilterChooser::getPredicateIndex(DecoderTableInfo &TableInfo,
   // Make sure the predicate is in the table.
   TableInfo.Predicates.insert(Predicate.str());
   // Now figure out the index for when we write out the table.
-  PredicateSet::const_iterator P = MISTD::find(TableInfo.Predicates.begin(),
+  PredicateSet::const_iterator P = std::find(TableInfo.Predicates.begin(),
                                              TableInfo.Predicates.end(),
                                              Predicate.str());
   return (unsigned)(P - TableInfo.Predicates.begin());
@@ -1306,9 +1306,9 @@ void FilterChooser::emitSoftFailTableEntry(DecoderTableInfo &TableInfo,
 // Emits table entries to decode the singleton.
 void FilterChooser::emitSingletonTableEntry(DecoderTableInfo &TableInfo,
                                             unsigned Opc) const {
-  MISTD::vector<unsigned> StartBits;
-  MISTD::vector<unsigned> EndBits;
-  MISTD::vector<uint64_t> FieldVals;
+  std::vector<unsigned> StartBits;
+  std::vector<unsigned> EndBits;
+  std::vector<uint64_t> FieldVals;
   insn_t Insn;
   insnWithID(Insn, Opc);
 
@@ -1421,9 +1421,9 @@ bool FilterChooser::filterProcessor(bool AllowMixed, bool Greedy) {
     assert(numInstructions == 3);
 
     for (unsigned i = 0; i < Opcodes.size(); ++i) {
-      MISTD::vector<unsigned> StartBits;
-      MISTD::vector<unsigned> EndBits;
-      MISTD::vector<uint64_t> FieldVals;
+      std::vector<unsigned> StartBits;
+      std::vector<unsigned> EndBits;
+      std::vector<uint64_t> FieldVals;
       insn_t Insn;
 
       insnWithID(Insn, Opcodes[i]);
@@ -1456,7 +1456,7 @@ bool FilterChooser::filterProcessor(bool AllowMixed, bool Greedy) {
   // (MIXED) ------ . ----> (MIXED)
   // (FILTERED)---- . ----> (FILTERED)
 
-  MISTD::vector<bitAttr_t> bitAttrs;
+  std::vector<bitAttr_t> bitAttrs;
 
   // FILTERED bit positions provide no entropy and are not worthy of pursuing.
   // Filter::recurse() set either BIT_TRUE or BIT_FALSE for each position.
@@ -1689,7 +1689,7 @@ void FilterChooser::emitTableEntries(DecoderTableInfo &TableInfo) const {
   dumpStack(errs(), "\t\t");
 
   for (unsigned i = 0; i < Opcodes.size(); ++i) {
-    const MISTD::string &Name = nameWithID(Opcodes[i]);
+    const std::string &Name = nameWithID(Opcodes[i]);
 
     errs() << '\t' << Name << " ";
     dumpBits(errs(),
@@ -1699,7 +1699,7 @@ void FilterChooser::emitTableEntries(DecoderTableInfo &TableInfo) const {
 }
 
 static bool populateInstruction(const CodeGenInstruction &CGI, unsigned Opc,
-                       MISTD::map<unsigned, MISTD::vector<OperandInfo> > &Operands){
+                       std::map<unsigned, std::vector<OperandInfo> > &Operands){
   const Record &Def = *CGI.TheDef;
   // If all the bit positions are not specified; do not decode this instruction.
   // We are bound to fail!  For proper disassembly, the well-known encoding bits
@@ -1715,11 +1715,11 @@ static bool populateInstruction(const CodeGenInstruction &CGI, unsigned Opc,
   BitsInit &Bits = getBitsField(Def, "Inst");
   if (Bits.allInComplete()) return false;
 
-  MISTD::vector<OperandInfo> InsnOperands;
+  std::vector<OperandInfo> InsnOperands;
 
   // If the instruction has specified a custom decoding hook, use that instead
   // of trying to auto-generate the decoder.
-  MISTD::string InstDecoder = Def.getValueAsString("DecoderMethod");
+  std::string InstDecoder = Def.getValueAsString("DecoderMethod");
   if (InstDecoder != "") {
     InsnOperands.push_back(OperandInfo(InstDecoder));
     Operands[Opc] = InsnOperands;
@@ -1733,17 +1733,17 @@ static bool populateInstruction(const CodeGenInstruction &CGI, unsigned Opc,
   // Gather the outputs/inputs of the instruction, so we can find their
   // positions in the encoding.  This assumes for now that they appear in the
   // MCInst in the order that they're listed.
-  MISTD::vector<MISTD::pair<Init*, MISTD::string> > InOutOperands;
+  std::vector<std::pair<Init*, std::string> > InOutOperands;
   DagInit *Out  = Def.getValueAsDag("OutOperandList");
   DagInit *In  = Def.getValueAsDag("InOperandList");
   for (unsigned i = 0; i < Out->getNumArgs(); ++i)
-    InOutOperands.push_back(MISTD::make_pair(Out->getArg(i), Out->getArgName(i)));
+    InOutOperands.push_back(std::make_pair(Out->getArg(i), Out->getArgName(i)));
   for (unsigned i = 0; i < In->getNumArgs(); ++i)
-    InOutOperands.push_back(MISTD::make_pair(In->getArg(i), In->getArgName(i)));
+    InOutOperands.push_back(std::make_pair(In->getArg(i), In->getArgName(i)));
 
   // Search for tied operands, so that we can correctly instantiate
   // operands that are not explicitly represented in the encoding.
-  MISTD::map<MISTD::string, MISTD::string> TiedNames;
+  std::map<std::string, std::string> TiedNames;
   for (unsigned i = 0; i < CGI.Operands.size(); ++i) {
     int tiedTo = CGI.Operands[i].getTiedRegister();
     if (tiedTo != -1) {
@@ -1753,9 +1753,9 @@ static bool populateInstruction(const CodeGenInstruction &CGI, unsigned Opc,
   }
 
   // For each operand, see if we can figure out where it is encoded.
-  for (MISTD::vector<MISTD::pair<Init*, MISTD::string> >::const_iterator
+  for (std::vector<std::pair<Init*, std::string> >::const_iterator
        NI = InOutOperands.begin(), NE = InOutOperands.end(); NI != NE; ++NI) {
-    MISTD::string Decoder = "";
+    std::string Decoder = "";
 
     // At this point, we can locate the field, but we need to know how to
     // interpret it.  As a first step, require the target to provide callbacks
@@ -1847,7 +1847,7 @@ static bool populateInstruction(const CodeGenInstruction &CGI, unsigned Opc,
       // Dumps the list of operand info.
       for (unsigned i = 0, e = CGI.Operands.size(); i != e; ++i) {
         const CGIOperandList::OperandInfo &Info = CGI.Operands[i];
-        const MISTD::string &OperandName = Info.Name;
+        const std::string &OperandName = Info.Name;
         const Record &OperandDef = *Info.Rec;
 
         errs() << "\t" << OperandName << " (" << OperandDef.getName() << ")\n";
@@ -2014,9 +2014,9 @@ void FixedLenDecoderEmitter::run(raw_ostream &o) {
 
   // Parameterize the decoders based on namespace and instruction width.
   NumberedInstructions = &Target.getInstructionsByEnumValue();
-  MISTD::map<MISTD::pair<MISTD::string, unsigned>,
-           MISTD::vector<unsigned> > OpcMap;
-  MISTD::map<unsigned, MISTD::vector<OperandInfo> > Operands;
+  std::map<std::pair<std::string, unsigned>,
+           std::vector<unsigned> > OpcMap;
+  std::map<unsigned, std::vector<OperandInfo> > Operands;
 
   for (unsigned i = 0; i < NumberedInstructions->size(); ++i) {
     const CodeGenInstruction *Inst = NumberedInstructions->at(i);
@@ -2028,18 +2028,18 @@ void FixedLenDecoderEmitter::run(raw_ostream &o) {
         Def->getValueAsBit("isCodeGenOnly"))
       continue;
 
-    MISTD::string DecoderNamespace = Def->getValueAsString("DecoderNamespace");
+    std::string DecoderNamespace = Def->getValueAsString("DecoderNamespace");
 
     if (Size) {
       if (populateInstruction(*Inst, i, Operands)) {
-        OpcMap[MISTD::make_pair(DecoderNamespace, Size)].push_back(i);
+        OpcMap[std::make_pair(DecoderNamespace, Size)].push_back(i);
       }
     }
   }
 
   DecoderTableInfo TableInfo;
-  for (MISTD::map<MISTD::pair<MISTD::string, unsigned>,
-                MISTD::vector<unsigned> >::const_iterator
+  for (std::map<std::pair<std::string, unsigned>,
+                std::vector<unsigned> >::const_iterator
        I = OpcMap.begin(), E = OpcMap.end(); I != E; ++I) {
     // Emit the decoder for this namespace+width combination.
     FilterChooser FC(*NumberedInstructions, I->second, Operands,
@@ -2083,12 +2083,12 @@ void FixedLenDecoderEmitter::run(raw_ostream &o) {
 namespace llvm {
 
 void EmitFixedLenDecoder(RecordKeeper &RK, raw_ostream &OS,
-                         MISTD::string PredicateNamespace,
-                         MISTD::string GPrefix,
-                         MISTD::string GPostfix,
-                         MISTD::string ROK,
-                         MISTD::string RFail,
-                         MISTD::string L) {
+                         std::string PredicateNamespace,
+                         std::string GPrefix,
+                         std::string GPostfix,
+                         std::string ROK,
+                         std::string RFail,
+                         std::string L) {
   FixedLenDecoderEmitter(RK, PredicateNamespace, GPrefix, GPostfix,
                          ROK, RFail, L).run(OS);
 }

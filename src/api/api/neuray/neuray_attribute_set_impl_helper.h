@@ -48,7 +48,6 @@ namespace mi { namespace neuraylib { class ITransaction; } }
 namespace MI {
 
 namespace ATTR { class Attribute_set; class Attribute; class Type; }
-namespace MDL { class IType; }
 
 namespace NEURAY {
 
@@ -75,8 +74,7 @@ public:
         ATTR::Attribute_set* attribute_set,
         IDb_element* db_element,
         const char* name, const char* type_name,
-        bool skip_type_check,
-        bool warn_for_typed_refs);
+        bool skip_type_check);
 
     static bool destroy_attribute(
         ATTR::Attribute_set* attribute_set,
@@ -131,12 +129,6 @@ public:
     /// \return                 The attribute, or \c NULL in case of failure.
     static mi::IData* get_attribute(
         const IAttribute_context* owner, const std::string& attribute_name);
-
-    /// Registers a callback with the MDLC module for type registration.
-    static void register_mdl_callback();
-
-    /// Unregisters the callback with the MDLC module for type registration.
-    static void unregister_mdl_callback();
 
     /// The mill variant re-uses get_attribute(), get_attribute_type(), and
     /// get_attribute_type_name() from this class.
@@ -229,11 +221,6 @@ private:
     /// Locks #m_register_decls_lock and calls #register_decls_locked().
     static void register_decls( const ATTR::Type& type);
 
-    /// Registers all structure and enum declarations for an MDL type.
-    ///
-    /// Locks #m_register_decls_lock and calls #register_decls_locked().
-    static void register_decls( const MDL::IType* type);
-
     /// Registers all structure and enum declarations for an ATTR type.
     ///
     /// The method traverses the ATTR type and registers a structure or enum declaration for each
@@ -244,15 +231,6 @@ private:
     ///
     /// \param type                An ATTR type.
     static void register_decls_locked( const ATTR::Type& type);
-
-    /// Registers all structure and enum declarations for an MDL type.
-    ///
-    /// The method traverses the MDL type and registers a structure or enum declaration for each
-    /// TK_STRUCT and TK_ENUM node (unless there is already one registered). The symbol name is used
-    /// as type name.
-    ///
-    /// \param type                An MDL type.
-    static void register_decls_locked( const MDL::IType* type);
 
     /// Checks whether an ATTR type matches a structure declaration.
     ///

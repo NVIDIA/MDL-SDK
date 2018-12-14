@@ -52,10 +52,10 @@ MCAsmParserSemaCallback::~MCAsmParserSemaCallback() {}
 namespace {
 
 /// \brief Helper types for tracking macro definitions.
-typedef MISTD::vector<AsmToken> MCAsmMacroArgument;
-typedef MISTD::vector<MCAsmMacroArgument> MCAsmMacroArguments;
-typedef MISTD::pair<StringRef, MCAsmMacroArgument> MCAsmMacroParameter;
-typedef MISTD::vector<MCAsmMacroParameter> MCAsmMacroParameters;
+typedef std::vector<AsmToken> MCAsmMacroArgument;
+typedef std::vector<MCAsmMacroArgument> MCAsmMacroArguments;
+typedef std::pair<StringRef, MCAsmMacroArgument> MCAsmMacroParameter;
+typedef std::vector<MCAsmMacroParameter> MCAsmMacroParameters;
 
 struct MCAsmMacro {
   StringRef Name;
@@ -136,7 +136,7 @@ private:
   int CurBuffer;
 
   AsmCond TheCondState;
-  MISTD::vector<AsmCond> TheCondStack;
+  std::vector<AsmCond> TheCondStack;
 
   /// \brief maps directive names to handler methods in parser
   /// extensions. Extensions register themselves in this map by calling
@@ -147,10 +147,10 @@ private:
   StringMap<MCAsmMacro*> MacroMap;
 
   /// \brief Stack of active macro instantiations.
-  MISTD::vector<MacroInstantiation*> ActiveMacros;
+  std::vector<MacroInstantiation*> ActiveMacros;
 
   /// \brief List of bodies of anonymous macros.
-  MISTD::deque<MCAsmMacro> MacroLikeBodies;
+  std::deque<MCAsmMacro> MacroLikeBodies;
 
   /// Boolean tracking whether macro substitution is enabled.
   unsigned MacrosEnabledFlag : 1;
@@ -220,11 +220,11 @@ public:
   void setParsingInlineAsm(bool V) { ParsingInlineAsm = V; }
   bool isParsingInlineAsm() { return ParsingInlineAsm; }
 
-  bool parseMSInlineAsm(void *AsmLoc, MISTD::string &AsmString,
+  bool parseMSInlineAsm(void *AsmLoc, std::string &AsmString,
                         unsigned &NumOutputs, unsigned &NumInputs,
-                        SmallVectorImpl<MISTD::pair<void *,bool> > &OpDecls,
-                        SmallVectorImpl<MISTD::string> &Constraints,
-                        SmallVectorImpl<MISTD::string> &Clobbers,
+                        SmallVectorImpl<std::pair<void *,bool> > &OpDecls,
+                        SmallVectorImpl<std::string> &Constraints,
+                        SmallVectorImpl<std::string> &Clobbers,
                         const MCInstrInfo *MII,
                         const MCInstPrinter *IP,
                         MCAsmParserSemaCallback &SI);
@@ -302,11 +302,11 @@ private:
   static void DiagHandler(const SMDiagnostic &Diag, void *Context);
 
   /// \brief Enter the specified file. This returns true on failure.
-  bool enterIncludeFile(const MISTD::string &Filename);
+  bool enterIncludeFile(const std::string &Filename);
 
   /// \brief Process the specified file for the .incbin directive.
   /// This returns true on failure.
-  bool processIncbinFile(const MISTD::string &Filename);
+  bool processIncbinFile(const std::string &Filename);
 
   /// \brief Reset the current lexer position to that given by \p Loc. The
   /// current token is not set; clients should ensure Lex() is called
@@ -442,7 +442,7 @@ private:
   bool parseDirectiveElseIf(SMLoc DirectiveLoc); // ".elseif"
   bool parseDirectiveElse(SMLoc DirectiveLoc); // ".else"
   bool parseDirectiveEndIf(SMLoc DirectiveLoc); // .endif
-  virtual bool parseEscapedString(MISTD::string &Data);
+  virtual bool parseEscapedString(std::string &Data);
 
   const MCExpr *applyModifierToExpr(const MCExpr *E,
                                     MCSymbolRefExpr::VariantKind Variant);
@@ -523,7 +523,7 @@ AsmParser::~AsmParser() {
 
 void AsmParser::printMacroInstantiations() {
   // Print the active macro instantiation stack.
-  for (MISTD::vector<MacroInstantiation *>::const_reverse_iterator
+  for (std::vector<MacroInstantiation *>::const_reverse_iterator
            it = ActiveMacros.rbegin(),
            ie = ActiveMacros.rend();
        it != ie; ++it)
@@ -546,8 +546,8 @@ bool AsmParser::Error(SMLoc L, const Twine &Msg, ArrayRef<SMRange> Ranges) {
   return true;
 }
 
-bool AsmParser::enterIncludeFile(const MISTD::string &Filename) {
-  MISTD::string IncludedFile;
+bool AsmParser::enterIncludeFile(const std::string &Filename) {
+  std::string IncludedFile;
   int NewBuf = SrcMgr.AddIncludeFile(Filename, Lexer.getLoc(), IncludedFile);
   if (NewBuf == -1)
     return true;
@@ -562,8 +562,8 @@ bool AsmParser::enterIncludeFile(const MISTD::string &Filename) {
 /// Process the specified .incbin file by searching for it in the include paths
 /// then just emitting the byte contents of the file to the streamer. This
 /// returns true on failure.
-bool AsmParser::processIncbinFile(const MISTD::string &Filename) {
-  MISTD::string IncludedFile;
+bool AsmParser::processIncbinFile(const std::string &Filename) {
+  std::string IncludedFile;
   int NewBuf = SrcMgr.AddIncludeFile(Filename, Lexer.getLoc(), IncludedFile);
   if (NewBuf == -1)
     return true;
@@ -795,7 +795,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     // This is a symbol reference.
     StringRef SymbolName = Identifier;
     MCSymbolRefExpr::VariantKind Variant = MCSymbolRefExpr::VK_None;
-    MISTD::pair<StringRef, StringRef> Split = Identifier.split('@');
+    std::pair<StringRef, StringRef> Split = Identifier.split('@');
 
     // Lookup the symbol variant if used.
     if (Split.first.size() != Identifier.size()) {
@@ -836,7 +836,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     if (Lexer.getKind() == AsmToken::Identifier) {
       StringRef IDVal = getTok().getString();
       // Lookup the symbol variant if used.
-      MISTD::pair<StringRef, StringRef> Split = IDVal.split('@');
+      std::pair<StringRef, StringRef> Split = IDVal.split('@');
       MCSymbolRefExpr::VariantKind Variant = MCSymbolRefExpr::VK_None;
       if (Split.first.size() != IDVal.size()) {
         Variant = MCSymbolRefExpr::getVariantKindForName(Split.second);
@@ -1313,7 +1313,7 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info) {
 
     // Next, check the extention directive map to see if any extension has
     // registered itself to parse this directive.
-    MISTD::pair<MCAsmParserExtension *, DirectiveHandler> Handler =
+    std::pair<MCAsmParserExtension *, DirectiveHandler> Handler =
         ExtensionDirectiveMap.lookup(IDVal);
     if (Handler.first)
       return (*Handler.second)(Handler.first, IDVal, IDLoc);
@@ -1509,7 +1509,7 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info) {
   checkForValidSection();
 
   // Canonicalize the opcode to lower case.
-  MISTD::string OpcodeStr = IDVal.lower();
+  std::string OpcodeStr = IDVal.lower();
   ParseInstructionInfo IInfo(Info.AsmRewrites);
   bool HadError = getTargetParser().ParseInstruction(IInfo, OpcodeStr, IDLoc,
                                                      Info.ParsedOperands);
@@ -1664,7 +1664,7 @@ void AsmParser::DiagHandler(const SMDiagnostic &Diag, void *Context) {
   // Use the CppHashFilename and calculate a line number based on the
   // CppHashLoc and CppHashLineNumber relative to this Diag's SMLoc for
   // the diagnostic.
-  const MISTD::string &Filename = Parser->CppHashFilename;
+  const std::string &Filename = Parser->CppHashFilename;
 
   int DiagLocLineNo = DiagSrcMgr.FindLineNumber(DiagLoc, DiagBuf);
   int CppHashLocLineNo =
@@ -1702,7 +1702,7 @@ bool AsmParser::expandMacro(raw_svector_ostream &OS, StringRef Body,
   // gas accepts no arguments and does no substitutions
   while (!Body.empty()) {
     // Scan for the next substitution.
-    MISTD::size_t End = Body.size(), Pos = 0;
+    std::size_t End = Body.size(), Pos = 0;
     for (; Pos != End; ++Pos) {
       // Check for a substitution or escape.
       if (!NParameters) {
@@ -2164,7 +2164,7 @@ bool AsmParser::parseDirectiveSet(StringRef IDVal, bool allow_redef) {
   return parseAssignment(Name, allow_redef, true);
 }
 
-bool AsmParser::parseEscapedString(MISTD::string &Data) {
+bool AsmParser::parseEscapedString(std::string &Data) {
   assert(getLexer().is(AsmToken::String) && "Unexpected current token!");
 
   Data = "";
@@ -2232,7 +2232,7 @@ bool AsmParser::parseDirectiveAscii(StringRef IDVal, bool ZeroTerminated) {
       if (getLexer().isNot(AsmToken::String))
         return TokError("expected string in '" + Twine(IDVal) + "' directive");
 
-      MISTD::string Data;
+      std::string Data;
       if (parseEscapedString(Data))
         return true;
 
@@ -2566,14 +2566,14 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
 
   // Usually the directory and filename together, otherwise just the directory.
   // Allow the strings to have escaped octal character sequence.
-  MISTD::string Path = getTok().getString();
+  std::string Path = getTok().getString();
   if (parseEscapedString(Path))
     return true;
   Lex();
 
   StringRef Directory;
   StringRef Filename;
-  MISTD::string FilenameData;
+  std::string FilenameData;
   if (getLexer().is(AsmToken::String)) {
     if (FileNumber == -1)
       return TokError("explicit path specified, but no file number");
@@ -3002,7 +3002,7 @@ bool AsmParser::parseDirectiveCFIRestore(SMLoc DirectiveLoc) {
 /// parseDirectiveCFIEscape
 /// ::= .cfi_escape expression[,...]
 bool AsmParser::parseDirectiveCFIEscape() {
-  MISTD::string Values;
+  std::string Values;
   int64_t CurrValue;
   if (parseAbsoluteExpression(CurrValue))
     return true;
@@ -3159,7 +3159,7 @@ void AsmParser::checkForBadMacro(SMLoc DirectiveLoc, StringRef Name,
   // doing when it finds the parameters in the body.
   while (!Body.empty()) {
     // Scan for the next possible parameter.
-    MISTD::size_t End = Body.size(), Pos = 0;
+    std::size_t End = Body.size(), Pos = 0;
     for (; Pos != End; ++Pos) {
       // Check for a substitution or escape.
       // This macro is defined with parameters, look for \foo, \bar, etc.
@@ -3524,7 +3524,7 @@ bool AsmParser::parseDirectiveInclude() {
     return TokError("expected string in '.include' directive");
 
   // Allow the strings to have escaped octal character sequence.
-  MISTD::string Filename;
+  std::string Filename;
   if (parseEscapedString(Filename))
     return true;
   SMLoc IncludeLoc = getLexer().getLoc();
@@ -3550,7 +3550,7 @@ bool AsmParser::parseDirectiveIncbin() {
     return TokError("expected string in '.incbin' directive");
 
   // Allow the strings to have escaped octal character sequence.
-  MISTD::string Filename;
+  std::string Filename;
   if (parseEscapedString(Filename))
     return true;
   SMLoc IncbinLoc = getLexer().getLoc();
@@ -4030,7 +4030,7 @@ bool AsmParser::parseDirectiveIrpc(SMLoc DirectiveLoc) {
   raw_svector_ostream OS(Buf);
 
   StringRef Values = A.front().front().getString();
-  MISTD::size_t I, End = Values.size();
+  std::size_t I, End = Values.size();
   for (I = 0; I < End; ++I) {
     MCAsmMacroArgument Arg;
     Arg.push_back(AsmToken(AsmToken::Identifier, Values.slice(I, I + 1)));
@@ -4117,17 +4117,17 @@ static int rewritesSort(const AsmRewrite *AsmRewriteA,
 }
 
 bool AsmParser::parseMSInlineAsm(
-    void *AsmLoc, MISTD::string &AsmString, unsigned &NumOutputs,
-    unsigned &NumInputs, SmallVectorImpl<MISTD::pair<void *, bool> > &OpDecls,
-    SmallVectorImpl<MISTD::string> &Constraints,
-    SmallVectorImpl<MISTD::string> &Clobbers, const MCInstrInfo *MII,
+    void *AsmLoc, std::string &AsmString, unsigned &NumOutputs,
+    unsigned &NumInputs, SmallVectorImpl<std::pair<void *, bool> > &OpDecls,
+    SmallVectorImpl<std::string> &Constraints,
+    SmallVectorImpl<std::string> &Clobbers, const MCInstrInfo *MII,
     const MCInstPrinter *IP, MCAsmParserSemaCallback &SI) {
   SmallVector<void *, 4> InputDecls;
   SmallVector<void *, 4> OutputDecls;
   SmallVector<bool, 4> InputDeclsAddressOf;
   SmallVector<bool, 4> OutputDeclsAddressOf;
-  SmallVector<MISTD::string, 4> InputConstraints;
-  SmallVector<MISTD::string, 4> OutputConstraints;
+  SmallVector<std::string, 4> InputConstraints;
+  SmallVector<std::string, 4> OutputConstraints;
   SmallVector<unsigned, 4> ClobberRegs;
 
   SmallVector<AsmRewrite, 4> AsmStrRewrites;
@@ -4200,9 +4200,9 @@ bool AsmParser::parseMSInlineAsm(
 
   // Set the unique clobbers.
   array_pod_sort(ClobberRegs.begin(), ClobberRegs.end());
-  ClobberRegs.erase(MISTD::unique(ClobberRegs.begin(), ClobberRegs.end()),
+  ClobberRegs.erase(std::unique(ClobberRegs.begin(), ClobberRegs.end()),
                     ClobberRegs.end());
-  Clobbers.assign(ClobberRegs.size(), MISTD::string());
+  Clobbers.assign(ClobberRegs.size(), std::string());
   for (unsigned I = 0, E = ClobberRegs.size(); I != E; ++I) {
     raw_string_ostream OS(Clobbers[I]);
     IP->printRegName(OS, ClobberRegs[I]);
@@ -4214,17 +4214,17 @@ bool AsmParser::parseMSInlineAsm(
     OpDecls.resize(NumExprs);
     Constraints.resize(NumExprs);
     for (unsigned i = 0; i < NumOutputs; ++i) {
-      OpDecls[i] = MISTD::make_pair(OutputDecls[i], OutputDeclsAddressOf[i]);
+      OpDecls[i] = std::make_pair(OutputDecls[i], OutputDeclsAddressOf[i]);
       Constraints[i] = OutputConstraints[i];
     }
     for (unsigned i = 0, j = NumOutputs; i < NumInputs; ++i, ++j) {
-      OpDecls[j] = MISTD::make_pair(InputDecls[i], InputDeclsAddressOf[i]);
+      OpDecls[j] = std::make_pair(InputDecls[i], InputDeclsAddressOf[i]);
       Constraints[j] = InputConstraints[i];
     }
   }
 
   // Build the IR assembly string.
-  MISTD::string AsmStringIR;
+  std::string AsmStringIR;
   raw_string_ostream OS(AsmStringIR);
   const char *AsmStart = SrcMgr.getMemoryBuffer(0)->getBufferStart();
   const char *AsmEnd = SrcMgr.getMemoryBuffer(0)->getBufferEnd();

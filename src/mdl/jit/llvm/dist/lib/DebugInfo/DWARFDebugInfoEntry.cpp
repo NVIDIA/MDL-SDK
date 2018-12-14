@@ -335,6 +335,6 @@ DWARFDebugInfoEntryMinimal::getInlinedChainForAddress(
     DIE = Child;
   }
   // Reverse the obtained chain to make the root of inlined chain last.
-  MISTD::reverse(InlinedChain.DIEs.begin(), InlinedChain.DIEs.end());
+  std::reverse(InlinedChain.DIEs.begin(), InlinedChain.DIEs.end());
   return InlinedChain;
 }

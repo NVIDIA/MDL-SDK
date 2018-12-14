@@ -217,7 +217,7 @@ const SectionRef *MCObjectSymbolizer::findSectionContaining(uint64_t Addr) {
 
   SortedSectionList::iterator
     EndIt = SortedSections.end(),
-    It = MISTD::lower_bound(SortedSections.begin(), EndIt,
+    It = std::lower_bound(SortedSections.begin(), EndIt,
                           Addr, SectionStartsBefore);
   if (It == EndIt)
     return 0;
@@ -249,7 +249,7 @@ void MCObjectSymbolizer::buildSectionList() {
       continue;
     uint64_t SAddr; SI->getAddress(SAddr);
     uint64_t SSize; SI->getSize(SSize);
-    SortedSectionList::iterator It = MISTD::lower_bound(SortedSections.begin(),
+    SortedSectionList::iterator It = std::lower_bound(SortedSections.begin(),
                                                       SortedSections.end(),
                                                       SAddr,
                                                       SectionStartsBefore);

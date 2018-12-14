@@ -36,7 +36,7 @@ enum UnicodeEncodingForm {
 
 /// EncodingInfo - Holds the encoding type and length of the byte order mark if
 ///                it exists. Length is in {0, 2, 3, 4}.
-typedef MISTD::pair<UnicodeEncodingForm, unsigned> EncodingInfo;
+typedef std::pair<UnicodeEncodingForm, unsigned> EncodingInfo;
 
 /// getUnicodeEncoding - Reads up to the first 4 bytes to determine the Unicode
 ///                      encoding form of \a Input.
@@ -46,7 +46,7 @@ typedef MISTD::pair<UnicodeEncodingForm, unsigned> EncodingInfo;
 ///          and how long the byte order mark is if one exists.
 static EncodingInfo getUnicodeEncoding(StringRef Input) {
   if (Input.size() == 0)
-    return MISTD::make_pair(UEF_Unknown, 0);
+    return std::make_pair(UEF_Unknown, 0);
 
   switch (uint8_t(Input[0])) {
   case 0x00:
@@ -54,44 +54,44 @@ static EncodingInfo getUnicodeEncoding(StringRef Input) {
       if (  Input[1] == 0
          && uint8_t(Input[2]) == 0xFE
          && uint8_t(Input[3]) == 0xFF)
-        return MISTD::make_pair(UEF_UTF32_BE, 4);
+        return std::make_pair(UEF_UTF32_BE, 4);
       if (Input[1] == 0 && Input[2] == 0 && Input[3] != 0)
-        return MISTD::make_pair(UEF_UTF32_BE, 0);
+        return std::make_pair(UEF_UTF32_BE, 0);
     }
 
     if (Input.size() >= 2 && Input[1] != 0)
-      return MISTD::make_pair(UEF_UTF16_BE, 0);
-    return MISTD::make_pair(UEF_Unknown, 0);
+      return std::make_pair(UEF_UTF16_BE, 0);
+    return std::make_pair(UEF_Unknown, 0);
   case 0xFF:
     if (  Input.size() >= 4
        && uint8_t(Input[1]) == 0xFE
        && Input[2] == 0
        && Input[3] == 0)
-      return MISTD::make_pair(UEF_UTF32_LE, 4);
+      return std::make_pair(UEF_UTF32_LE, 4);
 
     if (Input.size() >= 2 && uint8_t(Input[1]) == 0xFE)
-      return MISTD::make_pair(UEF_UTF16_LE, 2);
-    return MISTD::make_pair(UEF_Unknown, 0);
+      return std::make_pair(UEF_UTF16_LE, 2);
+    return std::make_pair(UEF_Unknown, 0);
   case 0xFE:
     if (Input.size() >= 2 && uint8_t(Input[1]) == 0xFF)
-      return MISTD::make_pair(UEF_UTF16_BE, 2);
-    return MISTD::make_pair(UEF_Unknown, 0);
+      return std::make_pair(UEF_UTF16_BE, 2);
+    return std::make_pair(UEF_Unknown, 0);
   case 0xEF:
     if (  Input.size() >= 3
        && uint8_t(Input[1]) == 0xBB
        && uint8_t(Input[2]) == 0xBF)
-      return MISTD::make_pair(UEF_UTF8, 3);
-    return MISTD::make_pair(UEF_Unknown, 0);
+      return std::make_pair(UEF_UTF8, 3);
+    return std::make_pair(UEF_Unknown, 0);
   }
 
   // It could still be utf-32 or utf-16.
   if (Input.size() >= 4 && Input[1] == 0 && Input[2] == 0 && Input[3] == 0)
-    return MISTD::make_pair(UEF_UTF32_LE, 0);
+    return std::make_pair(UEF_UTF32_LE, 0);
 
   if (Input.size() >= 2 && Input[1] == 0)
-    return MISTD::make_pair(UEF_UTF16_LE, 0);
+    return std::make_pair(UEF_UTF16_LE, 0);
 
-  return MISTD::make_pair(UEF_UTF8, 0);
+  return std::make_pair(UEF_UTF8, 0);
 }
 
 namespace llvm {
@@ -202,7 +202,7 @@ struct SimpleKey {
 /// @brief The Unicode scalar value of a UTF-8 minimal well-formed code unit
 ///        subsequence and the subsequence's length in code units (uint8_t).
 ///        A length of 0 represents an error.
-typedef MISTD::pair<uint32_t, unsigned> UTF8Decoded;
+typedef std::pair<uint32_t, unsigned> UTF8Decoded;
 
 static UTF8Decoded decodeUTF8(StringRef Range) {
   StringRef::iterator Position= Range.begin();
@@ -210,7 +210,7 @@ static UTF8Decoded decodeUTF8(StringRef Range) {
   // 1 byte: [0x00, 0x7f]
   // Bit pattern: 0xxxxxxx
   if ((*Position & 0x80) == 0) {
-     return MISTD::make_pair(*Position, 1);
+     return std::make_pair(*Position, 1);
   }
   // 2 bytes: [0x80, 0x7ff]
   // Bit pattern: 110xxxxx 10xxxxxx
@@ -220,7 +220,7 @@ static UTF8Decoded decodeUTF8(StringRef Range) {
     uint32_t codepoint = ((*Position & 0x1F) << 6) |
                           (*(Position + 1) & 0x3F);
     if (codepoint >= 0x80)
-      return MISTD::make_pair(codepoint, 2);
+      return std::make_pair(codepoint, 2);
   }
   // 3 bytes: [0x8000, 0xffff]
   // Bit pattern: 1110xxxx 10xxxxxx 10xxxxxx
@@ -235,7 +235,7 @@ static UTF8Decoded decodeUTF8(StringRef Range) {
     // they are high / low surrogate halves used by UTF-16.
     if (codepoint >= 0x800 &&
         (codepoint < 0xD800 || codepoint > 0xDFFF))
-      return MISTD::make_pair(codepoint, 3);
+      return std::make_pair(codepoint, 3);
   }
   // 4 bytes: [0x10000, 0x10FFFF]
   // Bit pattern: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
@@ -249,9 +249,9 @@ static UTF8Decoded decodeUTF8(StringRef Range) {
                          ((*(Position + 2) & 0x3F) << 6) |
                           (*(Position + 3) & 0x3F);
     if (codepoint >= 0x10000 && codepoint <= 0x10FFFF)
-      return MISTD::make_pair(codepoint, 4);
+      return std::make_pair(codepoint, 4);
   }
-  return MISTD::make_pair(0, 0);
+  return std::make_pair(0, 0);
 }
 
 namespace llvm {
@@ -639,8 +639,8 @@ bool yaml::scanTokens(StringRef Input) {
   return true;
 }
 
-MISTD::string yaml::escape(StringRef Input) {
-  MISTD::string EscapedInput;
+std::string yaml::escape(StringRef Input) {
+  std::string EscapedInput;
   for (StringRef::iterator i = Input.begin(), e = Input.end(); i != e; ++i) {
     if (*i == '\\')
       EscapedInput += "\\\\";
@@ -665,8 +665,8 @@ MISTD::string yaml::escape(StringRef Input) {
     else if (*i == 0x1B)
       EscapedInput += "\\e";
     else if ((unsigned char)*i < 0x20) { // Control characters not handled above.
-      MISTD::string HexStr = utohexstr(*i);
-      EscapedInput += "\\x" + MISTD::string(2 - HexStr.size(), '0') + HexStr;
+      std::string HexStr = utohexstr(*i);
+      EscapedInput += "\\x" + std::string(2 - HexStr.size(), '0') + HexStr;
     } else if (*i & 0x80) { // UTF-8 multiple code unit subsequence.
       UTF8Decoded UnicodeScalarValue
         = decodeUTF8(StringRef(i, Input.end() - i));
@@ -687,13 +687,13 @@ MISTD::string yaml::escape(StringRef Input) {
       else if (UnicodeScalarValue.first == 0x2029)
         EscapedInput += "\\P";
       else {
-        MISTD::string HexStr = utohexstr(UnicodeScalarValue.first);
+        std::string HexStr = utohexstr(UnicodeScalarValue.first);
         if (HexStr.size() <= 2)
-          EscapedInput += "\\x" + MISTD::string(2 - HexStr.size(), '0') + HexStr;
+          EscapedInput += "\\x" + std::string(2 - HexStr.size(), '0') + HexStr;
         else if (HexStr.size() <= 4)
-          EscapedInput += "\\u" + MISTD::string(4 - HexStr.size(), '0') + HexStr;
+          EscapedInput += "\\u" + std::string(4 - HexStr.size(), '0') + HexStr;
         else if (HexStr.size() <= 8)
-          EscapedInput += "\\U" + MISTD::string(8 - HexStr.size(), '0') + HexStr;
+          EscapedInput += "\\U" + std::string(8 - HexStr.size(), '0') + HexStr;
       }
       i += UnicodeScalarValue.second - 1;
     } else
@@ -750,7 +750,7 @@ Token &Scanner::peekNext() {
     removeStaleSimpleKeyCandidates();
     SimpleKey SK;
     SK.Tok = TokenQueue.front();
-    if (MISTD::find(SimpleKeys.begin(), SimpleKeys.end(), SK)
+    if (std::find(SimpleKeys.begin(), SimpleKeys.end(), SK)
         == SimpleKeys.end())
       break;
     else
@@ -1610,10 +1610,10 @@ Node::Node(unsigned int Type, OwningPtr<Document> &D, StringRef A, StringRef T)
   SourceRange = SMRange(Start, Start);
 }
 
-MISTD::string Node::getVerbatimTag() const {
+std::string Node::getVerbatimTag() const {
   StringRef Raw = getRawTag();
   if (!Raw.empty() && Raw != "!") {
-    MISTD::string Ret;
+    std::string Ret;
     if (Raw.find_last_of('!') == 0) {
       Ret = Doc->getTagMap().find("!")->second;
       Ret += Raw.substr(1);
@@ -1624,7 +1624,7 @@ MISTD::string Node::getVerbatimTag() const {
       return llvm_move(Ret);
     } else {
       StringRef TagHandle = Raw.substr(0, Raw.find_last_of('!') + 1);
-      MISTD::map<StringRef, StringRef>::const_iterator It =
+      std::map<StringRef, StringRef>::const_iterator It =
           Doc->getTagMap().find(TagHandle);
       if (It != Doc->getTagMap().end())
         Ret = It->second;
@@ -2220,7 +2220,7 @@ void Document::parseTAGDirective() {
   StringRef T = Tag.Range;
   // Strip %TAG
   T = T.substr(T.find_first_of(" \t")).ltrim(" \t");
-  MISTD::size_t HandleEnd = T.find_first_of(" \t");
+  std::size_t HandleEnd = T.find_first_of(" \t");
   StringRef TagHandle = T.substr(0, HandleEnd);
   StringRef TagPrefix = T.substr(HandleEnd).ltrim(" \t");
   TagMap[TagHandle] = TagPrefix;

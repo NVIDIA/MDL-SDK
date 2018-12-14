@@ -54,11 +54,11 @@
 #endif
 
 /// Defined as true if the compiler supports rvalue references and <utility> provides the
-/// one-argument MISTD::move.
+/// one-argument std::move.
 #if (__cplusplus >= 201103L) || __has_feature(cxx_rvalue_references) \
     || (defined(_MSC_VER) && _MSC_VER >= 1600)
 #define MDL_RVALUE_REFERENCES 1
-#define MDL_MOVE(e) MISTD::move(e)
+#define MDL_MOVE(e) std::move(e)
 #else
 #define MDL_RVALUE_REFERENCES 0
 #define MDL_MOVE(e) e

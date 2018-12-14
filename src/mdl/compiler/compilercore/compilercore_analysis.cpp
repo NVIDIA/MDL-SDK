@@ -132,6 +132,22 @@ void dump_ast(IModule const *module)
     printer->print(module);
 }
 
+// Debug helper: Dump the AST of a declaration.
+void dump_ast(IDeclaration const *decl)
+{
+    if (decl == NULL)
+        return;
+
+    mi::base::Handle<IAllocator> mallocator(MallocAllocator::create_instance());
+    Alloc alloc(mallocator.get());
+
+    mi::base::Handle<Debug_Output_stream> dbg(alloc.dbg());
+    mi::base::Handle<Printer>             printer(alloc.prt(dbg.get()));
+
+    printer->show_positions(g_position_enabled);
+    printer->print(decl, /*is_toplevel=*/ true);
+}
+
 // Debug helper: Dump the definition table of a compilation unit.
 void dump_def_tab(IModule const *module)
 {
@@ -718,6 +734,9 @@ static void replace_since_version(
         case 4:
             flags |= unsigned(IMDL::MDL_VERSION_1_4);
             break;
+        case 5:
+            flags |= unsigned(IMDL::MDL_VERSION_1_5);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -753,6 +772,9 @@ static void replace_removed_version(
             break;
         case 4:
             flags |= (unsigned(IMDL::MDL_VERSION_1_4) << 8);
+            break;
+        case 5:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_5) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -921,7 +943,7 @@ public:
     , m_param_expr(ana.get_allocator(), num_args)
     , m_auto_imports(ana.m_auto_imports)
     {
-        MISTD::fill_n(m_param_expr.data(), m_param_expr.size(), (IExpression const *)0);
+        std::fill_n(m_param_expr.data(), m_param_expr.size(), (IExpression const *)0);
     }
 
     /// Set a parameter value.
@@ -1754,7 +1776,7 @@ public:
         if (min_dist >= m_dist)
             return;
 
-        // limit the possible best match: we do not what that "abc" is a substitute for "def".
+        // limit the possible best match: we do not want that "abc" is a substitute for "def".
         // If more than half of the letters were misspelled, ignore the suggestion.
         size_t threshold = t_len > m_s_len ? t_len >> 1 : m_s_len >> 1;
 
@@ -1769,7 +1791,6 @@ public:
             // found a better match
             m_dist  = dist;
             m_best  = dst;
-            m_s_len = t_len;
         }
     }
 
@@ -2298,6 +2319,8 @@ Analysis::Analysis(
 , m_all_warnings_are_errors(false)
 , m_strict_mode(
     compiler->get_compiler_bool_option(&ctx, MDL::option_strict, true))
+, m_enable_experimental_features(
+    compiler->get_compiler_bool_option(&ctx, MDL::option_experimental_features, false))
 , m_modid_2_fileid(Module_2_file_id_map::key_compare(), module.get_allocator())
 , m_import_locations(
     0, Import_locations::hasher(), Import_locations::key_equal(), module.get_allocator())
@@ -2369,7 +2392,7 @@ Auto_imports::Entry const *Auto_imports::find(Definition const *def) const
 // Insert a new foreign definition.
 bool Auto_imports::insert(Definition const *def)
 {
-    MISTD::pair<Index_map::iterator, bool> res =
+    std::pair<Index_map::iterator, bool> res =
         m_index_map.insert(Index_map::value_type(def, 0u));
     if (res.second) {
         // new entry
@@ -2405,6 +2428,7 @@ NT_analysis::NT_analysis(
 , m_opt_dump_cg(
     compiler->get_compiler_bool_option(&ctx, MDL::option_dump_call_graph, /*def_value=*/false))
 , m_is_module_annotation(false)
+, m_is_return_annotation(false)
 , m_has_array_assignment(module.get_mdl_version() >= IMDL::MDL_VERSION_1_3)
 , m_module_cache(cache)
 , m_annotated_def(NULL)
@@ -2569,6 +2593,15 @@ void NT_analysis::enter_builtin_annotations()
 
         Definition *def = m_def_tab->enter_definition(Definition::DK_ANNOTATION, sym, type, NULL);
         def->set_semantic(Definition::DS_CONST_EXPR_ANNOTATION);
+    }
+
+    // the derivable() annotation: marks a parameter or a return type as derivable
+    {
+        ISymbol const        *sym  = m_st->get_symbol("derivable");
+        IType_function const *type = m_tc.create_function(NULL, Type_cache::Function_parameters());
+
+        Definition *def = m_def_tab->enter_definition(Definition::DK_ANNOTATION, sym, type, NULL);
+        def->set_semantic(Definition::DS_DERIVABLE_ANNOTATION);
     }
 }
 
@@ -5029,6 +5062,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
     // create new scope for the parameters and the body
     m_next_param_idx = 0;
+    unsigned deriv_mask = 0;
     {
         Flag_store params_are_used(m_params_are_used, body == NULL);
 
@@ -5045,6 +5079,10 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
             ISimple_name const *p_name = param->get_name();
             ISymbol const      *p_sym  = p_name->get_symbol();
+
+            Definition const *p_def = impl_cast<Definition>(p_name->get_definition());
+            if (p_def->has_flag(Definition::DEF_IS_DERIVABLE))
+                deriv_mask |= unsigned(1 << i);
 
             IType const *bad_type = has_forbidden_function_parameter_type(p_type, m_is_stdlib);
             if (bad_type != NULL) {
@@ -5099,10 +5137,6 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
         for (int i = 0; i < n_params; ++i) {
             IParameter const *param = fkt_decl->get_parameter(i);
             handle_enable_ifs(param);
-        }
-
-        if (IAnnotation_block const *ret_anno = fkt_decl->get_return_annotations()) {
-            visit(ret_anno);
         }
 
         IType const *ret_type = as_type(ret_name);
@@ -5162,6 +5196,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                 f_def->set_flag(Definition::DEF_USES_DEBUG_CALLS);
             }
         }
+        f_def->set_parameter_derivable_mask(deriv_mask);
         f_def->set_declaration(fkt_decl);
 
         if (has_initializers)
@@ -5231,6 +5266,13 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
         Definition_store store(m_annotated_def, f_def);
         visit(anno);
     }
+
+    if (IAnnotation_block const *ret_anno = fkt_decl->get_return_annotations()) {
+        Definition_store store(m_annotated_def, f_def);
+        Flag_store is_return_annotation(m_is_return_annotation, true);
+        visit(ret_anno);
+    }
+
 
     // add it to the call graph
     if (!has_error) {
@@ -5606,6 +5648,7 @@ void NT_analysis::handle_enable_ifs(IParameter const *param)
                 lit->access_position().get_start_line(),
                 lit->access_position().get_start_column() + 1,  // skip '"'
                 &m_module,
+                m_enable_experimental_features,
                 msgs);
 
             // visit the condition in special "enable_if" mode
@@ -5874,10 +5917,6 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
             handle_enable_ifs(param);
         }
 
-        if (IAnnotation_block const *ret_anno = mat_decl->get_return_annotations()) {
-            visit(ret_anno);
-        }
-
         // create the function type
         con_type = m_tc.create_function(m_tc.material_type, params);
     }
@@ -5989,6 +6028,13 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
         Definition_store store(m_annotated_def, con_def);
         visit(anno);
     }
+
+    if (IAnnotation_block const *ret_anno = mat_decl->get_return_annotations()) {
+        Definition_store stor(m_annotated_def, con_def);
+        Flag_store is_return_annotation(m_is_return_annotation, true);
+        visit(ret_anno);
+    }
+
 
     if (!is_error(con_def)) {
         // Don't check for is_error here: even enter it in that case to suppress further
@@ -7152,6 +7198,8 @@ static void update_flags(
         REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),
         SINCE_1_4   = IMDL::MDL_VERSION_1_4,
         REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),
+        SINCE_1_5   = IMDL::MDL_VERSION_1_5,
+        REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
     };
 
     size_t id = sym->get_id();
@@ -8955,6 +9003,24 @@ bool NT_analysis::handle_array_constructor(
 
         IType const *mod_arg_types[1];
 
+        // we do not allow array of pointers, so produce a better error message here
+        if (IType_function const *f_type = as<IType_function>(arg_type)) {
+            IType const *ret_type = f_type->get_return_type();
+            if (ret_type != NULL && is_material_type(ret_type)) {
+                error(
+                    MATERIAL_PTR_USED,
+                    expr->access_position(),
+                    Error_params(*this));
+            } else {
+                error(
+                    FUNCTION_PTR_USED,
+                    expr->access_position(),
+                    Error_params(*this));
+            }
+            res = false;
+            continue;
+        }
+
         mod_arg_types[0] = arg_type->skip_type_alias();
         m_printer->print(arg_type);
 
@@ -9060,11 +9126,20 @@ IExpression const *NT_analysis::find_init_constructor(
         }
 
         IType const *from_type = init_expr->get_type()->skip_type_alias();
-        if (is<IType_function>(from_type)) {
-            error(
-                FUNCTION_PTR_USED,
-                init_expr->access_position(),
-                Error_params(*this));
+        if (IType_function const *f_type = as<IType_function>(from_type)) {
+            IType const *ret_type = f_type->get_return_type();
+
+            if (ret_type != NULL && is_material_type(ret_type)) {
+                error(
+                    MATERIAL_PTR_USED,
+                    init_expr->access_position(),
+                    Error_params(*this));
+            } else {
+                error(
+                    FUNCTION_PTR_USED,
+                    init_expr->access_position(),
+                    Error_params(*this));
+            }
             const_cast<IExpression *>(init_expr)->set_type(m_tc.error_type);
             return init_expr;
         }
@@ -12358,6 +12433,7 @@ Definition const *NT_analysis::handle_known_annotation(
 {
     if (m_annotated_def == NULL) {
         if (m_is_module_annotation) {
+            // check for annotations allowed on modules
             switch (def->get_semantics()) {
             case IDefinition::DS_VERSION_ANNOTATION:
                 {
@@ -12403,14 +12479,15 @@ Definition const *NT_analysis::handle_known_annotation(
                 }
                 return def;
             case Definition::DS_THROWS_ANNOTATION:
+            case Definition::DS_SINCE_ANNOTATION:
+            case Definition::DS_REMOVED_ANNOTATION:
+            case Definition::DS_CONST_EXPR_ANNOTATION:
+            case Definition::DS_DERIVABLE_ANNOTATION:
             case Definition::DS_NATIVE_ANNOTATION:
             case Definition::DS_UNUSED_ANNOTATION:
             case Definition::DS_NOINLINE_ANNOTATION:
-            case Definition::DS_SINCE_ANNOTATION:
-            case Definition::DS_REMOVED_ANNOTATION:
             case Definition::DS_SOFT_RANGE_ANNOTATION:
             case Definition::DS_HARD_RANGE_ANNOTATION:
-            case Definition::DS_CONST_EXPR_ANNOTATION:
             case Definition::DS_DEPRECATED_ANNOTATION:
             case Definition::DS_UI_ORDER_ANNOTATION:
             case Definition::DS_USAGE_ANNOTATION:
@@ -12426,22 +12503,31 @@ Definition const *NT_analysis::handle_known_annotation(
                 // do nothing
                 return def;
             }
-        } else {
-            // check for annotations allowed on return types
-            switch (def->get_semantics()) {
-            case Definition::DS_USAGE_ANNOTATION:
-            case Definition::DS_DESCRIPTION_ANNOTATION:
-            case Definition::DS_DISPLAY_NAME_ANNOTATION:
-                return def;
+        }
+        MDL_ASSERT(!"Unexpected annotation without definition");
+        return get_error_definition();
+    }
 
-            default:
-                // not allowed on return values
-                warning(
-                    RETURN_VALUE_DOES_NOT_SUPPORT_ANNOTATION,
-                    anno->access_position(),
-                    Error_params(*this).add(def->get_sym()));
-                break;
-            }
+    if (m_is_return_annotation) {
+        // check for annotations allowed on return types
+        switch (def->get_semantics()) {
+        case Definition::DS_DERIVABLE_ANNOTATION:
+            m_annotated_def->set_flag(Definition::DEF_IS_DERIVABLE);
+            // ensure the annotation is deleted from the source for later ...
+            return get_error_definition();
+
+        case Definition::DS_USAGE_ANNOTATION:
+        case Definition::DS_DESCRIPTION_ANNOTATION:
+        case Definition::DS_DISPLAY_NAME_ANNOTATION:
+            return def;
+
+        default:
+            // not allowed on return values
+            warning(
+                RETURN_VALUE_DOES_NOT_SUPPORT_ANNOTATION,
+                anno->access_position(),
+                Error_params(*this).add(def->get_sym()));
+            break;
         }
         return get_error_definition();
     }
@@ -12486,13 +12572,22 @@ Definition const *NT_analysis::handle_known_annotation(
                 case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
                 case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
                 case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+                    // these functions from the tex module use textures and derivatives
+                    m_annotated_def->set_flag(Definition::DEF_USES_TEXTURES);
+                    m_annotated_def->set_flag(Definition::DEF_USES_DERIVATIVES);
+                    break;
                 case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
                 case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
                 case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
                 case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
                 case IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
-                    // these functions from the tex module uses textures
+                    // these functions from the tex module use textures
                     m_annotated_def->set_flag(Definition::DEF_USES_TEXTURES);
+                    break;
+                case IDefinition::DS_INTRINSIC_MATH_DX:
+                case IDefinition::DS_INTRINSIC_MATH_DY:
+                    // these functions from the math module use derivatives
+                    m_annotated_def->set_flag(Definition::DEF_USES_DERIVATIVES);
                     break;
                 case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
                 case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:
@@ -12868,6 +12963,14 @@ Definition const *NT_analysis::handle_known_annotation(
                 def = get_error_definition();
             }
         }
+        break;
+    case Definition::DS_DERIVABLE_ANNOTATION:
+        if (m_annotated_def->get_kind() == Definition::DK_PARAMETER) {
+            // handle the derivable() annotation
+            m_annotated_def->set_flag(Definition::DEF_IS_DERIVABLE);
+        }
+        // ensure the annotation is deleted from the source for later ...
+        def = get_error_definition();
         break;
     default:
         MDL_ASSERT(!"missing handler for known annotation");
@@ -14240,6 +14343,24 @@ void NT_analysis::calc_state_usage()
                     }
                     if (callee_def->has_flag(Definition::DEF_USES_TEXTURES)) {
                         attr |= need_tex;
+                    }
+                    if (callee_def->has_flag(Definition::DEF_USES_DERIVATIVES)) {
+                        switch (callee_def->get_semantics()) {
+                        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+                        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+                        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+                        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+                        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+                        case IDefinition::DS_INTRINSIC_MATH_DX:
+                        case IDefinition::DS_INTRINSIC_MATH_DY:
+                            {
+                                Definition *def = node->get_definition();
+                                def->set_flag(Definition::DEF_USES_DERIVATIVES);
+                            }
+                            break;
+                        default:
+                            break;
+                        }
                     }
                     if (callee_def->has_flag(Definition::DEF_CAN_THROW_BOUNDS)) {
                         attr |= can_thow_bounds;

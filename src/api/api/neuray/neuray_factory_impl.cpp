@@ -58,7 +58,6 @@
 #include <mi/neuraylib/iuuid.h>
 #include <mi/neuraylib/ivector.h>
 
-
 #include <mi/neuraylib/ibbox.h>
 #include <mi/neuraylib/icolor.h>
 #include <mi/neuraylib/ispectrum.h>
@@ -238,7 +237,6 @@ mi::Uint32 Factory_impl::assign_from_to(
 {
     ASSERT( M_NEURAY_API, source && target);
 
-
     // handle INumber
     mi::base::Handle<const mi::INumber> source_value(
         source->get_interface<mi::INumber>());
@@ -275,7 +273,6 @@ mi::Uint32 Factory_impl::assign_from_to(
     mi::base::Handle<mi::ISint32> target_sint32( target->get_interface<mi::ISint32>());
     if( source_enum.is_valid_interface() && target_sint32.is_valid_interface())
         return assign_from_to( source_enum.get(), target_sint32.get(), options);
-
 
     // handle IUuid
     mi::base::Handle<const mi::IUuid> source_uuid(
@@ -500,7 +497,6 @@ mi::Uint32 Factory_impl::assign_from_to(
     return result;
 }
 
-
 mi::Uint32 Factory_impl::assign_from_to( const mi::INumber* source, mi::INumber* target)
 {
     ASSERT( M_NEURAY_API, source && target);
@@ -557,8 +553,6 @@ mi::Uint32 Factory_impl::assign_from_to( const mi::IRef* source, mi::IRef* targe
     mi::Sint32 result = target->set_reference( reference.get());
     if( result == -4)
         return INCOMPATIBLE_PRIVACY_LEVELS;
-    if( result == -5)
-        return INCOMPATIBLE_REF_TYPES;
 
     return 0;
 }
@@ -587,7 +581,6 @@ mi::Uint32 Factory_impl::assign_from_to(
     target->set_value( value);
     return 0;
 }
-
 
 mi::Uint32 Factory_impl::assign_from_to( const mi::IUuid* source, mi::IUuid* target)
 {
@@ -707,7 +700,6 @@ mi::IData_simple* Factory_impl::clone( const mi::IData_simple* source, mi::Uint3
 {
     ASSERT( M_NEURAY_API, source);
 
-
     // handle IRef
     mi::base::Handle<const mi::IRef> source_ref(
         source->get_interface<mi::IRef>());
@@ -771,7 +763,6 @@ mi::IData_collection* Factory_impl::clone( const mi::IData_collection* source, m
     ASSERT( M_NEURAY_API, false);
     return 0;
 }
-
 
 mi::IRef* Factory_impl::clone( const mi::IRef* source, mi::Uint32 options)
 {
@@ -998,7 +989,6 @@ mi::Sint32 Factory_impl::compare( const mi::IData_simple* lhs, const mi::IData_s
 {
     ASSERT( M_NEURAY_API, lhs && rhs);
 
-
     // handle INumber
     mi::base::Handle<const mi::INumber> lhs_value(
         lhs->get_interface<mi::INumber>());
@@ -1030,7 +1020,6 @@ mi::Sint32 Factory_impl::compare( const mi::IData_simple* lhs, const mi::IData_s
         rhs->get_interface<mi::IEnum>());
     if( lhs_enum.is_valid_interface() && rhs_enum.is_valid_interface())
         return compare( lhs_enum.get(), rhs_enum.get());
-
 
     // handle IUuid
     mi::base::Handle<const mi::IUuid> lhs_uuid(
@@ -1117,7 +1106,6 @@ mi::Sint32 Factory_impl::compare( const mi::IData_collection* lhs, const mi::IDa
     return 0;
 }
 
-
 mi::Sint32 Factory_impl::compare( const mi::INumber* lhs, const mi::INumber* rhs)
 {
     const char* lhs_type_name = lhs->get_type_name();
@@ -1189,7 +1177,6 @@ mi::Sint32 Factory_impl::compare( const mi::IEnum* lhs, const mi::IEnum* rhs)
     return 0;
 }
 
-
 mi::Sint32 Factory_impl::compare( const mi::IUuid* lhs, const mi::IUuid* rhs)
 {
     mi::base::Uuid lhs_uuid = lhs->get_uuid();
@@ -1259,19 +1246,11 @@ mi::neuraylib::ITransaction* Factory_impl::get_transaction( const mi::IData* dat
 {
     ASSERT( M_NEURAY_API, data);
 
-
     // extract transaction from IRef
     mi::base::Handle<const mi::IRef> ref( data->get_interface<mi::IRef>());
     if( ref.is_valid_interface()) {
-        const char* ref_type_name = ref->get_type_name();
-            if( strcmp( ref_type_name, "Ref") == 0) {
-                const Ref_impl<REF_UNTYPED>* impl
-                    = static_cast<const Ref_impl<REF_UNTYPED>*>( data);
-                return impl->get_transaction();
-            } else {
-                ASSERT( M_NEURAY_API, false);
-                return 0;
-            }
+            const Ref_impl* impl = static_cast<const Ref_impl*>( data);
+           return impl->get_transaction();
     }
 
     // extract transaction from IStructure
@@ -1338,8 +1317,8 @@ mi::base::IInterface* Factory_impl::create_with_transaction(
     if( result)
         return result;
 
-    // The first create() call might have failed for IRef's, IAttachable's, non-IData's or no longer
-    // registered type names. Extract transaction from prototype for fallback.
+    // The first create() call might have failed for IRef's, non-IData's or no longer registered
+    // type names. Extract transaction from prototype for fallback.
     mi::base::Handle<mi::neuraylib::ITransaction> transaction( get_transaction( prototype));
     if( !transaction.is_valid_interface())
         return 0;
@@ -1507,7 +1486,6 @@ void Factory_impl::dump(
             s << "(void)";
             return;
         }
-
 
         case mi::IColor::IID::hash32: {
             mi::base::Handle<const mi::IColor> color( data->get_interface<mi::IColor>());

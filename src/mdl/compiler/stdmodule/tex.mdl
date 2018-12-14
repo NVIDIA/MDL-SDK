@@ -63,7 +63,7 @@ export int height(uniform texture_cube tex) uniform [[ intrinsic() ]];
 
 export float lookup_float(
     uniform texture_2d tex,
-    float2             coord,
+    float2             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform float2     crop_u = float2(0.0, 1.0),
@@ -71,7 +71,7 @@ export float lookup_float(
 
 export float lookup_float(
     uniform texture_3d tex,
-    float3             coord,
+    float3             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform wrap_mode  wrap_w = wrap_repeat,
@@ -89,7 +89,7 @@ export float lookup_float(
 
 export float2 lookup_float2(
     uniform texture_2d tex,
-    float2             coord,
+    float2             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform float2     crop_u = float2(0.0, 1.0),
@@ -97,7 +97,7 @@ export float2 lookup_float2(
 
 export float2 lookup_float2(
     uniform texture_3d tex,
-    float3             coord,
+    float3             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform wrap_mode  wrap_w = wrap_repeat,
@@ -115,7 +115,7 @@ export float2 lookup_float2(
 
 export float3 lookup_float3(
     uniform texture_2d tex,
-    float2             coord,
+    float2             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform float2     crop_u = float2(0.0, 1.0),
@@ -123,7 +123,7 @@ export float3 lookup_float3(
 
 export float3 lookup_float3(
     uniform texture_3d tex,
-    float3             coord,
+    float3             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform wrap_mode  wrap_w = wrap_repeat,
@@ -141,7 +141,7 @@ export float3 lookup_float3(
 
 export float4 lookup_float4(
     uniform texture_2d tex,
-    float2             coord,
+    float2             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform float2     crop_u = float2(0.0, 1.0),
@@ -149,7 +149,7 @@ export float4 lookup_float4(
 
 export float4 lookup_float4(
     uniform texture_3d tex,
-    float3             coord,
+    float3             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform wrap_mode  wrap_w = wrap_repeat,
@@ -167,7 +167,7 @@ export float4 lookup_float4(
 
 export color lookup_color(
     uniform texture_2d tex,
-    float2             coord,
+    float2             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform float2     crop_u = float2(0.0, 1.0),
@@ -175,7 +175,7 @@ export color lookup_color(
 
 export color lookup_color(
     uniform texture_3d tex,
-    float3             coord,
+    float3             coord [[ derivable() ]],
     uniform wrap_mode  wrap_u = wrap_repeat,
     uniform wrap_mode  wrap_v = wrap_repeat,
     uniform wrap_mode  wrap_w = wrap_repeat,

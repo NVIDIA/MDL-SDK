@@ -19,7 +19,7 @@ class NVPTXMachineFunctionInfo : public MachineFunctionInfo {
 private:
   /// Stores a mapping from index to symbol name for removing image handles
   /// on Fermi.
-  SmallVector<MISTD::string, 8> ImageHandleList;
+  SmallVector<std::string, 8> ImageHandleList;
 
 public:
   NVPTXMachineFunctionInfo(MachineFunction &MF) {}
@@ -30,7 +30,7 @@ public:
   unsigned getImageHandleSymbolIndex(const char *Symbol) {
     // Is the symbol already present?
     for (unsigned i = 0, e = ImageHandleList.size(); i != e; ++i)
-      if (ImageHandleList[i] == MISTD::string(Symbol))
+      if (ImageHandleList[i] == std::string(Symbol))
         return i;
     // Nope, insert it
     ImageHandleList.push_back(Symbol);

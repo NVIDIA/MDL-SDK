@@ -28,7 +28,7 @@
 
 // examples/texture_support_cuda.h
 //
-// This file contains the implementations and the vtable of the texture access functions.
+// This file contains the implementations and the vtables of the texture access functions.
 
 #ifndef TEXTURE_SUPPORT_CUDA_H
 #define TEXTURE_SUPPORT_CUDA_H
@@ -39,8 +39,12 @@
 
 #include <mi/mdl/mdl_target_types.h>
 
-typedef mi::mdl::Texture_handler_base  Texture_handler_base;
-typedef mi::mdl::stdlib::Tex_wrap_mode Tex_wrap_mode;
+#define USE_SMOOTHERSTEP_FILTER
+
+typedef mi::mdl::tct_deriv_float2       tct_deriv_float2;
+typedef mi::mdl::Texture_handler_base   Texture_handler_base;
+typedef mi::mdl::stdlib::Tex_wrap_mode  Tex_wrap_mode;
+typedef mi::mdl::stdlib::Mbsdf_part     Mbsdf_part;
 
 
 // Custom structure representing an MDL texture, containing filtered and unfiltered CUDA texture
@@ -56,6 +60,15 @@ struct Texture
 
 // The texture handler structure required by the MDL SDK with custom additional fields.
 struct Texture_handler : Texture_handler_base {
+    // additional data for the texture access functions can be provided here
+    size_t         num_textures;        // the number of textures used by the material
+                                        // (without the invalid texture)
+    Texture const *textures;            // the textures used by the material
+                                        // (without the invalid texture)
+};
+
+// The texture handler structure required by the MDL SDK with custom additional fields.
+struct Texture_handler_deriv : mi::mdl::Texture_handler_deriv_base {
     // additional data for the texture access functions can be provided here
     size_t         num_textures;       // the number of textures used by the material
                                        // (without the invalid texture)
@@ -74,14 +87,14 @@ __device__ inline void store_result4(float res[4], const float4 &v)
 }
 
 // Stores a float in all elements of a float[4] array.
-__device__ inline void store_result4(float res[4], const float v)
+__device__ inline void store_result4(float res[4], float s)
 {
-    res[0] = res[1] = res[2] = res[3] = v;
+    res[0] = res[1] = res[2] = res[3] = s;
 }
 
 // Stores the given float values in a float[4] array.
 __device__ inline void store_result4(
-    float res[4], const float v0, const float v1, const float v2, const float v3)
+    float res[4], float v0, float v1, float v2, float v3)
 {
     res[0] = v0;
     res[1] = v1;
@@ -98,13 +111,13 @@ __device__ inline void store_result3(float res[3], const float4 &v)
 }
 
 // Stores a float in all elements of a float[3] array.
-__device__ inline void store_result3(float res[3], const float v)
+__device__ inline void store_result3(float res[3], float s)
 {
-    res[0] = res[1] = res[2] = v;
+    res[0] = res[1] = res[2] = s;
 }
 
 // Stores the given float values in a float[3] array.
-__device__ inline void store_result3(float res[3], const float v0, const float v1, const float v2)
+__device__ inline void store_result3(float res[3], float v0, float v1, float v2)
 {
     res[0] = v0;
     res[1] = v1;
@@ -144,6 +157,29 @@ __device__ inline void store_result3(float res[3], const float v0, const float v
   } while ( 0 )
 
 
+#ifdef USE_SMOOTHERSTEP_FILTER
+// Modify texture coordinates to get better texture filtering,
+// see http://www.iquilezles.org/www/articles/texture/texture.htm
+#define APPLY_SMOOTHERSTEP_FILTER()                                                         \
+    do {                                                                                    \
+        u = u * tex.size.x + 0.5f;                                                          \
+        v = v * tex.size.y + 0.5f;                                                          \
+                                                                                            \
+        float u_i = floorf(u), v_i = floorf(v);                                             \
+        float u_f = u - u_i;                                                                \
+        float v_f = v - v_i;                                                                \
+        u_f = u_f * u_f * u_f * (u_f * (u_f * 6.f - 15.f) + 10.f);                          \
+        v_f = v_f * v_f * v_f * (v_f * (v_f * 6.f - 15.f) + 10.f);                          \
+        u = u_i + u_f;                                                                      \
+        v = v_i + v_f;                                                                      \
+                                                                                            \
+        u = (u - 0.5f) * tex.inv_size.x;                                                    \
+        v = (v - 0.5f) * tex.inv_size.y;                                                    \
+    } while ( 0 )
+#else
+#define APPLY_SMOOTHERSTEP_FILTER()
+#endif
+
 // Implementation of tex::lookup_float4() for a texture_2d texture.
 extern "C" __device__ void tex_lookup_float4_2d(
     float                       result[4],
@@ -168,8 +204,40 @@ extern "C" __device__ void tex_lookup_float4_2d(
     WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result4);
     WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result4);
 
+    APPLY_SMOOTHERSTEP_FILTER();
+
     store_result4(result, tex2D<float4>(tex.filtered_object, u, v));
 }
+
+// Implementation of tex::lookup_float4() for a texture_2d texture.
+extern "C" __device__ void tex_lookup_deriv_float4_2d(
+    float                       result[4],
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx,
+    tct_deriv_float2 const     *coord,
+    Tex_wrap_mode const         wrap_u,
+    Tex_wrap_mode const         wrap_v,
+    float const                 crop_u[2],
+    float const                 crop_v[2])
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures ) {
+        // invalid texture returns zero
+        store_result4(result, 0.0f);
+        return;
+    }
+
+    Texture const &tex = self->textures[texture_idx - 1];
+    float u = coord->val.x, v = coord->val.y;
+    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result4);
+    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result4);
+
+    APPLY_SMOOTHERSTEP_FILTER();
+
+    store_result4(result, tex2DGrad<float4>(tex.filtered_object, u, v, coord->dx, coord->dy));
+}
+
 
 // Implementation of tex::lookup_float3() for a texture_2d texture.
 extern "C" __device__ void tex_lookup_float3_2d(
@@ -184,12 +252,9 @@ extern "C" __device__ void tex_lookup_float3_2d(
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    //store_result3(result, coord[0], coord[1], 0.5);
-
     if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures ) {
         // invalid texture returns zero
-        //store_result3(result, 0.0f);
-        store_result3(result, 0.2, 0, 1);
+        store_result3(result, 0.0f);
         return;
     }
 
@@ -198,7 +263,38 @@ extern "C" __device__ void tex_lookup_float3_2d(
     WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result3);
     WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result3);
 
+    APPLY_SMOOTHERSTEP_FILTER();
+
     store_result3(result, tex2D<float4>(tex.filtered_object, u, v));
+}
+
+// Implementation of tex::lookup_float3() for a texture_2d texture.
+extern "C" __device__ void tex_lookup_deriv_float3_2d(
+    float                       result[3],
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx,
+    tct_deriv_float2 const     *coord,
+    Tex_wrap_mode const         wrap_u,
+    Tex_wrap_mode const         wrap_v,
+    float const                 crop_u[2],
+    float const                 crop_v[2])
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if ( texture_idx == 0 || texture_idx - 1 >= self->num_textures ) {
+        // invalid texture returns zero
+        store_result3(result, 0.0f);
+        return;
+    }
+
+    Texture const &tex = self->textures[texture_idx - 1];
+    float u = coord->val.x, v = coord->val.y;
+    WRAP_AND_CROP_OR_RETURN_BLACK(u, tex.inv_size.x, wrap_u, crop_u, store_result3);
+    WRAP_AND_CROP_OR_RETURN_BLACK(v, tex.inv_size.y, wrap_v, crop_v, store_result3);
+
+    APPLY_SMOOTHERSTEP_FILTER();
+
+    store_result3(result, tex2DGrad<float4>(tex.filtered_object, u, v, coord->dx, coord->dy));
 }
 
 // Implementation of tex::texel_float4() for a texture_2d texture.
@@ -374,6 +470,135 @@ extern "C" __device__ void tex_resolution_2d(
     result[1] = tex.size.y;
 }
 
+
+// ------------------------------------------------------------------------------------------------
+// Light Profiles
+// ------------------------------------------------------------------------------------------------
+
+// Implementation of df::light_profile_evaluate() for a light profile.
+extern "C" __device__ float df_light_profile_evaluate(
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi[2])
+{
+    // Light profiles are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    return 0.0f;
+}
+
+// Implementation of df::light_profile_sample() for a light profile.
+extern "C" __device__ void df_light_profile_sample(
+    float                       result[3],          // output: theta, phi, pdf
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 xi[3])              // uniform random values
+{
+    // Light profiles are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    result[0] = -1.0f;  // negative theta means no emission
+    result[1] = -1.0f;
+    result[2] = 0.0f;
+}
+
+// Implementation of df::light_profile_pdf() for a light profile.
+extern "C" __device__ float df_light_profile_pdf(
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi[2])
+{
+    // Light profiles are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    return 0.0f;
+}
+
+// Implementation of df::bsdf_measurement_resolution() function needed by generated code,
+// which retrieves the angular and chromatic resolution of the given MBSDF.
+// The returned triple consists of: number of equi-spaced steps of theta_i and theta_o,
+// number of equi-spaced steps of phi, and number of color channels (1 or 3).
+extern "C" __device__ void df_bsdf_measurement_resolution(
+    unsigned                    result[3],
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    Mbsdf_part                  part)
+{
+    // Measured BSDFs are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    result[0] = 0;
+    result[1] = 0;
+    result[2] = 0;
+}
+
+// Implementation of df::bsdf_measurement_evaluate() for an MBSDF.
+extern "C" __device__ void df_bsdf_measurement_evaluate(
+    float                       result[3],
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi_in[2],
+    float const                 theta_phi_out[2],
+    Mbsdf_part                  part)
+{
+    // Measured BSDFs are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    store_result3(result, 0.0f);
+}
+
+// Implementation of df::bsdf_measurement_sample() for an MBSDF.
+extern "C" __device__ void df_bsdf_measurement_sample(
+    float                       result[3],          // output: theta, phi, pdf
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi_out[2],
+    float const                 xi[3],              // uniform random values
+    Mbsdf_part                  part)
+{
+    // Measured BSDFs are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    result[0] = -1.0f;  // negative theta means absorption
+    result[1] = -1.0f;
+    result[2] = 0.0f;
+}
+
+// Implementation of df::bsdf_measurement_pdf() for an MBSDF.
+extern "C" __device__ float df_bsdf_measurement_pdf(
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi_in[2],
+    float const                 theta_phi_out[2],
+    Mbsdf_part                  part)
+{
+    // Measured BSDFs are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    return 0.0f;
+}
+
+// Implementation of df::bsdf_measurement_albedos() for an MBSDF.
+extern "C" __device__ void df_bsdf_measurement_albedos(
+    float                       result[4],          // output: [0] albedo refl. for theta_phi
+                                                    //         [1] max albedo refl. global
+                                                    //         [2] albedo trans. for theta_phi
+                                                    //         [3] max albedo trans. global
+    Texture_handler_base const  *self_base,
+    unsigned                    resource_idx,
+    float const                 theta_phi[2])
+{
+    // Measured BSDFs are not implemented for the MDL Core examples.
+    // See the MDL SDK counterpart for details.
+
+    store_result4(result, 0.0f);
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Vtables
+// ------------------------------------------------------------------------------------------------
+
 // The vtable containing all texture access handlers required by the generated code
 // in "vtable" mode.
 __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
@@ -385,7 +610,37 @@ __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
     tex_texel_float4_3d,
     tex_lookup_float4_cube,
     tex_lookup_float3_cube,
-    tex_resolution_2d
+    tex_resolution_2d,
+    df_light_profile_evaluate,
+    df_light_profile_sample,
+    df_light_profile_pdf,
+    df_bsdf_measurement_resolution,
+    df_bsdf_measurement_evaluate,
+    df_bsdf_measurement_sample,
+    df_bsdf_measurement_pdf,
+    df_bsdf_measurement_albedos
+};
+
+// The vtable containing all texture access handlers required by the generated code
+// in "vtable" mode with derivatives.
+__device__ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
+    tex_lookup_deriv_float4_2d,
+    tex_lookup_deriv_float3_2d,
+    tex_texel_float4_2d,
+    tex_lookup_float4_3d,
+    tex_lookup_float3_3d,
+    tex_texel_float4_3d,
+    tex_lookup_float4_cube,
+    tex_lookup_float3_cube,
+    tex_resolution_2d,
+    df_light_profile_evaluate,
+    df_light_profile_sample,
+    df_light_profile_pdf,
+    df_bsdf_measurement_resolution,
+    df_bsdf_measurement_evaluate,
+    df_bsdf_measurement_sample,
+    df_bsdf_measurement_pdf,
+    df_bsdf_measurement_albedos
 };
 
 #endif  // TEXTURE_SUPPORT_CUDA_H

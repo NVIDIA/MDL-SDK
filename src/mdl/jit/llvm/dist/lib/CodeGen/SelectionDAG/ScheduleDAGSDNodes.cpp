@@ -73,7 +73,7 @@ SUnit *ScheduleDAGSDNodes::newSUnit(SDNode *N) {
 #endif
   SUnits.push_back(SUnit(N, (unsigned)SUnits.size()));
   assert((Addr == 0 || Addr == &SUnits[0]) &&
-         "SUnits MISTD::vector reallocated on the fly!");
+         "SUnits std::vector reallocated on the fly!");
   SUnits.back().OrigNode = &SUnits.back();
   SUnit *SU = &SUnits.back();
   const TargetLowering &TLI = DAG->getTargetLoweringInfo();
@@ -230,9 +230,9 @@ void ScheduleDAGSDNodes::ClusterNeighboringLoads(SDNode *Node) {
       // FIXME: Should be ok if they addresses are identical. But earlier
       // optimizations really should have eliminated one of the loads.
       continue;
-    if (O2SMap.insert(MISTD::make_pair(Offset1, Base)).second)
+    if (O2SMap.insert(std::make_pair(Offset1, Base)).second)
       Offsets.push_back(Offset1);
-    O2SMap.insert(MISTD::make_pair(Offset2, User));
+    O2SMap.insert(std::make_pair(Offset2, User));
     Offsets.push_back(Offset2);
     if (Offset2 < Offset1)
       Base = User;
@@ -243,7 +243,7 @@ void ScheduleDAGSDNodes::ClusterNeighboringLoads(SDNode *Node) {
     return;
 
   // Sort them in increasing order.
-  MISTD::sort(Offsets.begin(), Offsets.end());
+  std::sort(Offsets.begin(), Offsets.end());
 
   // Check if the loads are close enough.
   SmallVector<SDNode*, 4> Loads;
@@ -544,7 +544,7 @@ void ScheduleDAGSDNodes::RegDefIter::InitNodeNumDefs() {
   unsigned NRegDefs = SchedDAG->TII->get(Node->getMachineOpcode()).getNumDefs();
   // Some instructions define regs that are not represented in the selection DAG
   // (e.g. unused flags). See tMOVi8. Make sure we don't access past NumValues.
-  NodeNumDefs = MISTD::min(Node->getNumValues(), NRegDefs);
+  NodeNumDefs = std::min(Node->getNumValues(), NRegDefs);
   DefIdx = 0;
 }
 
@@ -693,7 +693,7 @@ void ScheduleDAGSDNodes::VerifyScheduledSequence(bool isBottomUp) {
 /// ProcessSDDbgValues - Process SDDbgValues associated with this node.
 static void
 ProcessSDDbgValues(SDNode *N, SelectionDAG *DAG, InstrEmitter &Emitter,
-                   SmallVectorImpl<MISTD::pair<unsigned, MachineInstr*> > &Orders,
+                   SmallVectorImpl<std::pair<unsigned, MachineInstr*> > &Orders,
                    DenseMap<SDValue, unsigned> &VRBaseMap, unsigned Order) {
   if (!N->getHasDebugValue())
     return;
@@ -710,7 +710,7 @@ ProcessSDDbgValues(SDNode *N, SelectionDAG *DAG, InstrEmitter &Emitter,
     if (!Order || DVOrder == ++Order) {
       MachineInstr *DbgMI = Emitter.EmitDbgValue(DVs[i], VRBaseMap);
       if (DbgMI) {
-        Orders.push_back(MISTD::make_pair(DVOrder, DbgMI));
+        Orders.push_back(std::make_pair(DVOrder, DbgMI));
         BB->insert(InsertPos, DbgMI);
       }
       DVs[i]->setIsInvalidated();
@@ -724,7 +724,7 @@ ProcessSDDbgValues(SDNode *N, SelectionDAG *DAG, InstrEmitter &Emitter,
 static void
 ProcessSourceNode(SDNode *N, SelectionDAG *DAG, InstrEmitter &Emitter,
                   DenseMap<SDValue, unsigned> &VRBaseMap,
-                  SmallVectorImpl<MISTD::pair<unsigned, MachineInstr*> > &Orders,
+                  SmallVectorImpl<std::pair<unsigned, MachineInstr*> > &Orders,
                   SmallSet<unsigned, 8> &Seen) {
   unsigned Order = N->getIROrder();
   if (!Order || !Seen.insert(Order)) {
@@ -740,11 +740,11 @@ ProcessSourceNode(SDNode *N, SelectionDAG *DAG, InstrEmitter &Emitter,
       // BB->back().isPHI() test will not fire when we want it to.
       prior(Emitter.getInsertPos())->isPHI()) {
     // Did not insert any instruction.
-    Orders.push_back(MISTD::make_pair(Order, (MachineInstr*)0));
+    Orders.push_back(std::make_pair(Order, (MachineInstr*)0));
     return;
   }
 
-  Orders.push_back(MISTD::make_pair(Order, prior(Emitter.getInsertPos())));
+  Orders.push_back(std::make_pair(Order, prior(Emitter.getInsertPos())));
   ProcessSDDbgValues(N, DAG, Emitter, Orders, VRBaseMap, Order);
 }
 
@@ -774,7 +774,7 @@ EmitPhysRegCopy(SUnit *SU, DenseMap<SUnit*, unsigned> &VRBaseMap,
       // Copy from physical register.
       assert(I->getReg() && "Unknown physical register!");
       unsigned VRBase = MRI.createVirtualRegister(SU->CopyDstRC);
-      bool isNew = VRBaseMap.insert(MISTD::make_pair(SU, VRBase)).second;
+      bool isNew = VRBaseMap.insert(std::make_pair(SU, VRBase)).second;
       (void)isNew; // Silence compiler warning.
       assert(isNew && "Node emitted out of order - early");
       BuildMI(*BB, InsertPos, DebugLoc(), TII->get(TargetOpcode::COPY), VRBase)
@@ -793,7 +793,7 @@ EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
   InstrEmitter Emitter(BB, InsertPos);
   DenseMap<SDValue, unsigned> VRBaseMap;
   DenseMap<SUnit*, unsigned> CopyVRBaseMap;
-  SmallVector<MISTD::pair<unsigned, MachineInstr*>, 32> Orders;
+  SmallVector<std::pair<unsigned, MachineInstr*>, 32> Orders;
   SmallSet<unsigned, 8> Seen;
   bool HasDbg = DAG->hasDebugValues();
 
@@ -851,7 +851,7 @@ EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
 
     // Sort the source order instructions and use the order to insert debug
     // values.
-    MISTD::sort(Orders.begin(), Orders.end(), less_first());
+    std::sort(Orders.begin(), Orders.end(), less_first());
 
     SDDbgInfo::DbgIterator DI = DAG->DbgBegin();
     SDDbgInfo::DbgIterator DE = DAG->DbgEnd();
@@ -902,6 +902,6 @@ EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
 }
 
 /// Return the basic block label.
-MISTD::string ScheduleDAGSDNodes::getDAGName() const {
+std::string ScheduleDAGSDNodes::getDAGName() const {
   return "sunit-dag." + BB->getFullName();
 }

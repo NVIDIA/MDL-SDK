@@ -42,7 +42,7 @@ class SUnit;
 
 class DFAPacketizer {
 private:
-  typedef MISTD::pair<unsigned, unsigned> UnsignPair;
+  typedef std::pair<unsigned, unsigned> UnsignPair;
   const InstrItineraryData *InstrItins;
   int CurrentState;
   const int (*DFAStateInputTable)[2];
@@ -99,12 +99,12 @@ protected:
   DefaultVLIWScheduler *VLIWScheduler;
 
   // Vector of instructions assigned to the current packet.
-  MISTD::vector<MachineInstr*> CurrentPacketMIs;
+  std::vector<MachineInstr*> CurrentPacketMIs;
   // DFA resource tracker.
   DFAPacketizer *ResourceTracker;
 
   // Generate MI -> SU map.
-  MISTD::map<MachineInstr*, SUnit*> MIToSUnit;
+  std::map<MachineInstr*, SUnit*> MIToSUnit;
 
 public:
   VLIWPacketizerList(

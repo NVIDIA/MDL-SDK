@@ -58,6 +58,7 @@ class IValue_factory;
 class IGenerated_code_dag;
 class ISerializer;
 class IDeserializer;
+class IMDL_comparator;
 class IMDL_exporter;
 
 /// An interface handling MDL search paths.
@@ -117,6 +118,7 @@ public:
         MDL_VERSION_1_2,                        ///< compile MDL 1.2
         MDL_VERSION_1_3,                        ///< compile MDL 1.3
         MDL_VERSION_1_4,                        ///< compile MDL 1.4
+        MDL_VERSION_1_5,                        ///< compile MDL 1.5
         MDL_LATEST_VERSION = MDL_VERSION_1_4,   ///< always the latest supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
@@ -136,6 +138,9 @@ public:
 
     /// The name of the option that switches the strict compilation mode.
     #define MDL_OPTION_STRICT "strict"
+
+    /// The name of the option that enables undocumented experimental MDL features.
+    #define MDL_OPTION_EXPERIMENTAL_FEATURES "experimental"
 
     /// The value of \c limits::FLOAT_MIN.
     #define MDL_OPTION_LIMITS_FLOAT_MIN "limits::FLOAT_MIN"
@@ -461,6 +466,11 @@ public:
     ///
     /// The archive tool is used to create and unpack MDL archives.
     virtual IArchive_tool *create_archive_tool() = 0;
+
+    /// Create an MDL comparator tool using this compiler.
+    ///
+    /// The comparator tool is used to compare MDL modules and archives for "compatibility".
+    virtual IMDL_comparator *create_mdl_comparator() = 0;
 };
 
 

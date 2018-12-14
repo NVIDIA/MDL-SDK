@@ -40,7 +40,7 @@ namespace llvm {
     const InstrItineraryData *InstrItins;
 
     /// The schedule. Null SUnit*'s represent noop instructions.
-    MISTD::vector<SUnit*> Sequence;
+    std::vector<SUnit*> Sequence;
 
     explicit ScheduleDAGSDNodes(MachineFunction &mf);
 
@@ -121,9 +121,9 @@ namespace llvm {
 
     void dumpSchedule() const;
 
-    virtual MISTD::string getGraphNodeLabel(const SUnit *SU) const;
+    virtual std::string getGraphNodeLabel(const SUnit *SU) const;
 
-    virtual MISTD::string getDAGName() const;
+    virtual std::string getDAGName() const;
 
     virtual void getCustomGraphFeatures(GraphWriter<ScheduleDAG*> &GW) const;
 

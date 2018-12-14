@@ -89,7 +89,7 @@ AdjustStackOffset(MachineFrameInfo *MFI, int FrameIdx,
 
   // If the alignment of this object is greater than that of the stack, then
   // increase the stack alignment to match.
-  MaxAlign = MISTD::max(MaxAlign, Align);
+  MaxAlign = std::max(MaxAlign, Align);
 
   // Adjust to alignment boundary.
   Offset = (Offset + Align - 1) / Align * Align;
@@ -165,7 +165,7 @@ NVPTXPrologEpilogPass::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
     // Resolve offsets for objects in the local block.
     for (unsigned i = 0, e = MFI->getLocalFrameObjectCount(); i != e; ++i) {
-      MISTD::pair<int, int64_t> Entry = MFI->getLocalFrameObjectMap(i);
+      std::pair<int, int64_t> Entry = MFI->getLocalFrameObjectMap(i);
       int64_t FIOffset = (StackGrowsDown ? -Offset : Offset) + Entry.second;
       DEBUG(dbgs() << "alloc FI(" << Entry.first << ") at SP[" <<
             FIOffset << "]\n");
@@ -174,7 +174,7 @@ NVPTXPrologEpilogPass::calculateFrameObjectOffsets(MachineFunction &Fn) {
     // Allocate the local block
     Offset += MFI->getLocalFrameSize();
 
-    MaxAlign = MISTD::max(Align, MaxAlign);
+    MaxAlign = std::max(Align, MaxAlign);
   }
 
   // No stack protector
@@ -214,7 +214,7 @@ NVPTXPrologEpilogPass::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
     // If the frame pointer is eliminated, all frame offsets will be relative to
     // SP not FP. Align to MaxAlign so this works.
-    StackAlign = MISTD::max(StackAlign, MaxAlign);
+    StackAlign = std::max(StackAlign, MaxAlign);
     unsigned AlignMask = StackAlign - 1;
     Offset = (Offset + AlignMask) & ~uint64_t(AlignMask);
   }

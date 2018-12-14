@@ -36,10 +36,10 @@ class raw_ostream;
 
 class ValueEnumerator {
 public:
-  typedef MISTD::vector<Type*> TypeList;
+  typedef std::vector<Type*> TypeList;
 
   // For each value, we remember its Value* and occurrence frequency.
-  typedef MISTD::vector<MISTD::pair<const Value*, unsigned> > ValueList;
+  typedef std::vector<std::pair<const Value*, unsigned> > ValueList;
 private:
   typedef DenseMap<Type*, unsigned> TypeMapType;
   TypeMapType TypeMap;
@@ -54,11 +54,11 @@ private:
 
   typedef DenseMap<AttributeSet, unsigned> AttributeGroupMapType;
   AttributeGroupMapType AttributeGroupMap;
-  MISTD::vector<AttributeSet> AttributeGroups;
+  std::vector<AttributeSet> AttributeGroups;
 
   typedef DenseMap<AttributeSet, unsigned> AttributeMapType;
   AttributeMapType AttributeMap;
-  MISTD::vector<AttributeSet> Attribute;
+  std::vector<AttributeSet> Attribute;
 
   /// GlobalBasicBlockIDs - This map memoizes the basic block ID's referenced by
   /// the "getGlobalBasicBlockID" method.
@@ -70,7 +70,7 @@ private:
 
   /// BasicBlocks - This contains all the basic blocks for the currently
   /// incorporated function.  Their reverse mapping is stored in ValueMap.
-  MISTD::vector<const BasicBlock*> BasicBlocks;
+  std::vector<const BasicBlock*> BasicBlocks;
 
   /// When a function is incorporated, this is the size of the Values list
   /// before incorporation.
@@ -129,13 +129,13 @@ public:
     return FunctionLocalMDs;
   }
   const TypeList &getTypes() const { return Types; }
-  const MISTD::vector<const BasicBlock*> &getBasicBlocks() const {
+  const std::vector<const BasicBlock*> &getBasicBlocks() const {
     return BasicBlocks;
   }
-  const MISTD::vector<AttributeSet> &getAttributes() const {
+  const std::vector<AttributeSet> &getAttributes() const {
     return Attribute;
   }
-  const MISTD::vector<AttributeSet> &getAttributeGroups() const {
+  const std::vector<AttributeSet> &getAttributeGroups() const {
     return AttributeGroups;
   }
 

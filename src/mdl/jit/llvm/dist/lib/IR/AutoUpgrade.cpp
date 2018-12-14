@@ -323,7 +323,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     return;
   }
 
-  MISTD::string Name = CI->getName().str();
+  std::string Name = CI->getName().str();
   CI->setName(Name + ".old");
 
   switch (NewFn->getIntrinsicID()) {

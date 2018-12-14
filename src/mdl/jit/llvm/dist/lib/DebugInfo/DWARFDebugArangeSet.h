@@ -43,7 +43,7 @@ public:
   };
 
 private:
-  typedef MISTD::vector<Descriptor> DescriptorColl;
+  typedef std::vector<Descriptor> DescriptorColl;
   typedef DescriptorColl::const_iterator DescriptorConstIter;
 
   uint32_t Offset;

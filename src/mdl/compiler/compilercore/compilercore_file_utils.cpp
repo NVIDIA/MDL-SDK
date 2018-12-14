@@ -351,6 +351,8 @@ string simplify_path(
     string result(alloc);
     if (file_path[0] == sep)
         result += sep;
+    if (file_path[1] == sep)
+        result += sep;
     if (!directory_names.empty())
         result += directory_names[0];
     for (size_t i = 1, n = directory_names.size(); i < n; ++i) {

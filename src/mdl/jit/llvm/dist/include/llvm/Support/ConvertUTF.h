@@ -231,13 +231,13 @@ static inline ConversionResult convertUTF8Sequence(const UTF8 **source,
 bool hasUTF16ByteOrderMark(ArrayRef<char> SrcBytes);
 
 /**
- * Converts a stream of raw bytes assumed to be UTF16 into a UTF8 MISTD::string.
+ * Converts a stream of raw bytes assumed to be UTF16 into a UTF8 std::string.
  *
  * \param [in] SrcBytes A buffer of what is assumed to be UTF-16 encoded text.
  * \param [out] Out Converted UTF-8 is stored here on success.
  * \returns true on success
  */
-bool convertUTF16ToUTF8String(ArrayRef<char> SrcBytes, MISTD::string &Out);
+bool convertUTF16ToUTF8String(ArrayRef<char> SrcBytes, std::string &Out);
 
 } /* end namespace llvm */
 

@@ -62,7 +62,7 @@ protected:
 
   /// An entry may contain CFI instructions. An instruction consists of an
   /// opcode and an optional sequence of operands.
-  typedef MISTD::vector<uint64_t> Operands;
+  typedef std::vector<uint64_t> Operands;
   struct Instruction {
     Instruction(uint8_t Opcode)
       : Opcode(Opcode)
@@ -72,7 +72,7 @@ protected:
     Operands Ops;
   };
 
-  MISTD::vector<Instruction> Instructions;
+  std::vector<Instruction> Instructions;
 
   /// Convenience methods to add a new instruction with the given opcode and
   /// operands to the Instructions vector.
@@ -185,7 +185,7 @@ void FrameEntry::parseInstructions(uint32_t *Offset, uint32_t EndOffset) {
 void FrameEntry::dumpInstructions(raw_ostream &OS) const {
   // TODO: at the moment only instruction names are dumped. Expand this to
   // dump operands as well.
-  for (MISTD::vector<Instruction>::const_iterator I = Instructions.begin(),
+  for (std::vector<Instruction>::const_iterator I = Instructions.begin(),
                                                 E = Instructions.end();
        I != E; ++I) {
     uint8_t Opcode = I->Opcode;
@@ -368,7 +368,7 @@ void DWARFDebugFrame::parse(DataExtractor Data) {
       // Entry instrucitons parsed successfully.
       Entries.push_back(Entry);
     } else {
-      MISTD::string Str;
+      std::string Str;
       raw_string_ostream OS(Str);
       OS << format("Parsing entry instructions at %lx failed",
                    Entry->getOffset());

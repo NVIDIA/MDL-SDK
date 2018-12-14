@@ -131,14 +131,14 @@ class ExeDepsFix : public MachineFunctionPass {
   MachineFunction *MF;
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  MISTD::vector<int> AliasMap;
+  std::vector<int> AliasMap;
   const unsigned NumRegs;
   LiveReg *LiveRegs;
   typedef DenseMap<MachineBasicBlock*, LiveReg*> LiveOutMap;
   LiveOutMap LiveOuts;
 
   /// List of undefined register reads in this block in forward order.
-  MISTD::vector<MISTD::pair<MachineInstr*, unsigned> > UndefReads;
+  std::vector<std::pair<MachineInstr*, unsigned> > UndefReads;
 
   /// Storage for register unit liveness.
   LiveRegUnits LiveUnits;
@@ -392,7 +392,7 @@ void ExeDepsFix::enterBasicBlock(MachineBasicBlock *MBB) {
 
     for (unsigned rx = 0; rx != NumRegs; ++rx) {
       // Use the most recent predecessor def for each register.
-      LiveRegs[rx].Def = MISTD::max(LiveRegs[rx].Def, fi->second[rx].Def);
+      LiveRegs[rx].Def = std::max(LiveRegs[rx].Def, fi->second[rx].Def);
 
       DomainValue *pdv = resolve(fi->second[rx].Value);
       if (!pdv)
@@ -426,7 +426,7 @@ void ExeDepsFix::leaveBasicBlock(MachineBasicBlock *MBB) {
   assert(LiveRegs && "Must enter basic block first.");
   // Save live registers at end of MBB - used by enterBasicBlock().
   // Also use LiveOuts as a visited set to detect back-edges.
-  bool First = LiveOuts.insert(MISTD::make_pair(MBB, LiveRegs)).second;
+  bool First = LiveOuts.insert(std::make_pair(MBB, LiveRegs)).second;
 
   if (First) {
     // LiveRegs was inserted in LiveOuts.  Adjust all defs to be relative to
@@ -448,7 +448,7 @@ void ExeDepsFix::visitInstr(MachineInstr *MI) {
     return;
 
   // Update instructions with explicit execution domains.
-  MISTD::pair<uint16_t, uint16_t> DomP = TII->getExecutionDomain(MI);
+  std::pair<uint16_t, uint16_t> DomP = TII->getExecutionDomain(MI);
   if (DomP.first) {
     if (DomP.second)
       visitSoftInstr(MI, DomP.second);
@@ -499,7 +499,7 @@ void ExeDepsFix::processDefs(MachineInstr *MI, bool Kill) {
   unsigned Pref = TII->getUndefRegClearance(MI, OpNum, TRI);
   if (Pref) {
     if (shouldBreakDependence(MI, OpNum, Pref))
-      UndefReads.push_back(MISTD::make_pair(MI, OpNum));
+      UndefReads.push_back(std::make_pair(MI, OpNum));
   }
   const MCInstrDesc &MCID = MI->getDesc();
   for (unsigned i = 0,

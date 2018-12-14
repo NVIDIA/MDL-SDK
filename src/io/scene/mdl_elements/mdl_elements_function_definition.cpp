@@ -60,7 +60,7 @@ Mdl_function_definition::Mdl_function_definition()
 : m_tf( get_type_factory())
 , m_vf( get_value_factory())
 , m_ef( get_expression_factory())
-, m_module_tag()
+, m_module_db_name()
 , m_function_tag()
 , m_function_index( ~0u)
 , m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN)
@@ -71,7 +71,6 @@ Mdl_function_definition::Mdl_function_definition()
 , m_prototype_tag()
 , m_is_exported( false)
 , m_is_uniform( false)
-, m_call_references()
 , m_parameter_types()
 , m_return_type()
 , m_defaults()
@@ -94,7 +93,7 @@ Mdl_function_definition::Mdl_function_definition(
 : m_tf( get_type_factory())
 , m_vf( get_value_factory())
 , m_ef( get_expression_factory())
-, m_module_tag( module_tag)
+, m_module_db_name(add_mdl_db_prefix(module_name))
 , m_function_tag( function_tag)
 , m_function_index( function_index)
 , m_mdl_semantic( code_dag->get_function_semantics( function_index))
@@ -107,7 +106,6 @@ Mdl_function_definition::Mdl_function_definition(
     function_index, mi::mdl::IGenerated_code_dag::FP_IS_EXPORTED))
 , m_is_uniform(code_dag->get_function_property(
     function_index, mi::mdl::IGenerated_code_dag::FP_IS_UNIFORM))
-, m_call_references()
 , m_parameter_types()
 , m_return_type()
 , m_defaults()
@@ -131,22 +129,25 @@ Mdl_function_definition::Mdl_function_definition(
     m_vf = get_value_factory();
     m_ef = get_expression_factory();
 
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
-    MDLC::Mdlc_module::Register_mdl_type_with_api* register_type_callback
-        = mdlc_module->get_register_mdl_type_with_api_callback();
+    Mdl_dag_converter converter(
+        m_ef.get(),
+        transaction,
+        /*immutable*/ true,
+        /*create_direct_calls*/ false,
+        module_filename,
+        module_name,
+        m_prototype_tag);
 
     const mi::mdl::IType* return_type = code_dag->get_function_return_type( function_index);
     m_return_type = mdl_type_to_int_type( m_tf.get(), return_type);
-    if( register_type_callback)
-        register_type_callback( m_return_type.get());
 
     // function annotations
     mi::Uint32 annotation_count = code_dag->get_function_annotation_count( function_index);
     Mdl_annotation_block annotations( annotation_count);
     for( mi::Uint32 i = 0; i < annotation_count; ++i)
         annotations[i] = code_dag->get_function_annotation( function_index, i);
-    m_annotations = mdl_dag_node_vector_to_int_annotation_block(
-        m_ef.get(), transaction, annotations, module_filename, module_name);
+    m_annotations = converter.mdl_dag_node_vector_to_int_annotation_block(
+         annotations, m_name.c_str());
 
     // return type annotations
     mi::Uint32 return_annotation_count
@@ -154,8 +155,8 @@ Mdl_function_definition::Mdl_function_definition(
     Mdl_annotation_block return_annotations( return_annotation_count);
     for( mi::Uint32 i = 0; i < return_annotation_count; ++i)
         return_annotations[i] = code_dag->get_function_return_annotation( function_index, i);
-    m_return_annotations = mdl_dag_node_vector_to_int_annotation_block(
-        m_ef.get(), transaction, return_annotations, module_filename, module_name);
+    m_return_annotations = converter.mdl_dag_node_vector_to_int_annotation_block(
+       return_annotations, m_name.c_str());
 
     // parameters/arguments
     m_defaults = m_ef->create_expression_list();
@@ -165,6 +166,7 @@ Mdl_function_definition::Mdl_function_definition(
 
     mi::Uint32 parameter_count = code_dag->get_function_parameter_count( function_index);
     m_enable_if_users.resize( parameter_count);
+
     for( mi::Uint32 i = 0; i < parameter_count; ++i) {
 
         const char* parameter_name = code_dag->get_function_parameter_name( function_index, i);
@@ -174,22 +176,13 @@ Mdl_function_definition::Mdl_function_definition(
             = code_dag->get_function_parameter_type( function_index, i);
         mi::base::Handle<const IType> type( mdl_type_to_int_type( m_tf.get(), parameter_type));
         m_parameter_types->add_type( parameter_name, type.get());
-        if( register_type_callback)
-            register_type_callback( type.get());
 
         // update m_defaults
         const mi::mdl::DAG_node* default_
             = code_dag->get_function_parameter_default( function_index, i);
         if( default_) {
-            mi::base::Handle<IExpression> default_int( mdl_dag_node_to_int_expr(
-                m_ef.get(),
-                transaction,
-                type.get(),
-                default_,
-                /*immutable*/ true,
-                /*create_direct_calls*/ false,
-                module_filename,
-                module_name));
+            mi::base::Handle<IExpression> default_int( converter.mdl_dag_node_to_int_expr(
+               default_, type.get()));
             ASSERT( M_SCENE, default_int);
             m_defaults->add_expression( parameter_name, default_int.get());
         }
@@ -198,15 +191,8 @@ Mdl_function_definition::Mdl_function_definition(
         const mi::mdl::DAG_node* enable_if_cond
             = code_dag->get_function_parameter_enable_if_condition(function_index, i);
         if (enable_if_cond) {
-            mi::base::Handle<IExpression> enable_if_cond_int(mdl_dag_node_to_int_expr(
-                m_ef.get(),
-                transaction,
-                type.get(),
-                enable_if_cond,
-                /*immutable*/ true,
-                /*create_direct_calls*/ false,
-                module_filename,
-                module_name));
+            mi::base::Handle<IExpression> enable_if_cond_int(converter.mdl_dag_node_to_int_expr(
+                enable_if_cond, type.get()));
             ASSERT(M_SCENE, enable_if_cond_int);
             m_enable_if_conditions->add_expression(parameter_name, enable_if_cond_int.get());
         }
@@ -226,17 +212,16 @@ Mdl_function_definition::Mdl_function_definition(
         for( mi::Uint32 j = 0; j < parameter_annotation_count; ++j)
             parameter_annotations[j]
                 = code_dag->get_function_parameter_annotation( function_index, i, j);
-        mi::base::Handle<IAnnotation_block> block( mdl_dag_node_vector_to_int_annotation_block(
-            m_ef.get(), transaction, parameter_annotations, module_filename, module_name));
+        mi::base::Handle<IAnnotation_block> block(
+            converter.mdl_dag_node_vector_to_int_annotation_block(
+                parameter_annotations, m_name.c_str()));
         if( block)
             m_parameter_annotations->add_annotation_block( parameter_name, block.get());
     }
 
-    // update m_call_references
-    collect_function_references( transaction, code_dag, function_index, m_call_references);
-
     if (m_is_exported && module_filename)
     {
+        SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
         mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
         mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
         m_thumbnail = DETAIL::lookup_thumbnail(
@@ -320,7 +305,8 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
             arguments ? arguments->get_expression( name) : NULL);
         if( argument) {
             // use provided argument
-            mi::base::Handle<IExpression> argument_copy( m_ef->clone( argument.get()));
+            mi::base::Handle<IExpression> argument_copy( m_ef->clone( argument.get(),
+                /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
             ASSERT( M_SCENE, argument_copy);
             argument = argument_copy;
         } else {
@@ -349,6 +335,7 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
     }
 
     Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
         m_function_tag,
         m_function_index,
         complete_arguments.get(),
@@ -422,7 +409,8 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
     }
 
     // clone arguments
-    mi::base::Handle<IExpression_list> complete_arguments( m_ef->clone( arguments));
+    mi::base::Handle<IExpression_list> complete_arguments(
+        m_ef->clone(arguments, /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
     ASSERT( M_SCENE, complete_arguments);
 
     // compute parameter types and return type
@@ -433,6 +421,7 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
         m_tf->create_immediate_sized_array( expected_type.get(), n));
 
     Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
         m_function_tag,
         m_function_index,
         complete_arguments.get(),
@@ -447,9 +436,9 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
     return function_call;
 }
 
-DB::Tag Mdl_function_definition::get_module() const
+DB::Tag Mdl_function_definition::get_module(DB::Transaction* transaction) const
 {
-    return m_module_tag;
+    return transaction->name_to_tag(m_module_db_name.c_str());
 }
 
 const char* Mdl_function_definition::get_mdl_name() const
@@ -570,7 +559,9 @@ const mi::mdl::IType* Mdl_function_definition::get_mdl_return_type(
 {
     ASSERT( M_SCENE, m_mdl_semantic != mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR &&
         "DAG array constructor return type must be calculated");
-    DB::Access<Mdl_module> module( m_module_tag, transaction);
+    DB::Tag module_tag = transaction->name_to_tag(m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+    DB::Access<Mdl_module> module( module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
     return code_dag->get_function_return_type( m_function_index);
 }
@@ -580,7 +571,9 @@ const mi::mdl::IType* Mdl_function_definition::get_mdl_parameter_type(
 {
     ASSERT( M_SCENE, m_mdl_semantic != mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR &&
         "DAG array constructor parameter types cannot be retrieved, signature is (...)");
-    DB::Access<Mdl_module> module( m_module_tag, transaction);
+    DB::Tag module_tag = transaction->name_to_tag(m_module_db_name.c_str());
+    ASSERT(M_SCENE, module_tag);
+    DB::Access<Mdl_module> module(module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
     return code_dag->get_function_parameter_type( m_function_index, index);
 }
@@ -590,12 +583,24 @@ const char* Mdl_function_definition::get_mdl_original_name() const
     return m_original_name.empty() ? 0 : m_original_name.c_str();
 }
 
+const char* Mdl_function_definition::get_module_name() const
+{
+    ASSERT(M_SCENE, !m_module_db_name.empty());
+    return &m_module_db_name.c_str()[3]; // strip "mdl"-prefix
+}
+
+const char* Mdl_function_definition::get_module_db_name() const
+{
+    ASSERT(M_SCENE, !m_module_db_name.empty());
+    return m_module_db_name.c_str();
+}
+
 const SERIAL::Serializable* Mdl_function_definition::serialize(
     SERIAL::Serializer* serializer) const
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_module_tag);
+    serializer->write( m_module_db_name);
     serializer->write( m_function_tag);
     serializer->write( m_function_index);
     serializer->write( static_cast<mi::Uint32>( m_mdl_semantic));
@@ -606,7 +611,6 @@ const SERIAL::Serializable* Mdl_function_definition::serialize(
     serializer->write( m_prototype_tag);
     serializer->write( m_is_exported);
     serializer->write( m_is_uniform);
-    SERIAL::write( serializer, m_call_references);
 
     m_tf->serialize_list( serializer, m_parameter_types.get());
     m_tf->serialize( serializer, m_return_type.get());
@@ -625,7 +629,7 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_module_tag);
+    deserializer->read( &m_module_db_name);
     deserializer->read( &m_function_tag);
     deserializer->read( &m_function_index);
     mi::Uint32 semantic;
@@ -639,7 +643,6 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     deserializer->read( &m_prototype_tag);
     deserializer->read( &m_is_exported);
     deserializer->read( &m_is_uniform);
-    SERIAL::read( deserializer, &m_call_references);
 
     m_parameter_types = m_tf->deserialize_list( deserializer);
     m_return_type = m_tf->deserialize( deserializer);
@@ -650,18 +653,6 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     m_enable_if_conditions = m_ef->deserialize_list( deserializer);
 
     deserializer->read( &m_enable_if_users);
-
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
-    MDLC::Mdlc_module::Register_mdl_type_with_api* register_type_callback
-        = mdlc_module->get_register_mdl_type_with_api_callback();
-    if( register_type_callback) {
-        register_type_callback( m_return_type.get());
-        mi::Size n = m_parameter_types->get_size();
-        for( mi::Size i = 0; i < n; ++i) {
-            mi::base::Handle<const IType> type( m_parameter_types->get_type( i));
-            register_type_callback( type.get());
-        }
-    }
 
     if( !m_thumbnail.empty())
     {
@@ -677,8 +668,7 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     std::ostringstream s;
     s << std::boolalpha;
     mi::base::Handle<const mi::IString> tmp;
-
-    s << "Module tag: " << m_module_tag.get_uint() << std::endl;
+    s << "Module DB name: " << m_module_db_name << std::endl;
     s << "Function definition tag: " << m_function_tag.get_uint() << std::endl;
     s << "Function index: " << m_function_index << std::endl;
     s << "Function MDL semantic: " << m_mdl_semantic << std::endl;
@@ -688,7 +678,7 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     s << "Prototype tag: " << m_prototype_tag.get_uint() << std::endl;
     s << "Is exported: " << m_is_exported << std::endl;
     s << "Is uniform: " << m_is_uniform << std::endl;
-    // m_call_references missing
+
     tmp = m_tf->dump( m_parameter_types.get());
     s << "Parameter types: " << tmp->get_c_str() << std::endl;
     tmp = m_tf->dump( m_return_type.get());
@@ -714,7 +704,6 @@ size_t Mdl_function_definition::get_size() const
         + dynamic_memory_consumption( m_name)
         + dynamic_memory_consumption( m_original_name)
         + dynamic_memory_consumption( m_thumbnail)
-        + dynamic_memory_consumption( m_call_references)
         + dynamic_memory_consumption( m_parameter_types)
         + dynamic_memory_consumption( m_return_type)
         + dynamic_memory_consumption( m_defaults)
@@ -736,9 +725,7 @@ Uint Mdl_function_definition::bundle( DB::Tag* results, Uint size) const
 
 void Mdl_function_definition::get_scene_element_references( DB::Tag_set* result) const
 {
-    result->insert( m_module_tag);
     // skip m_function_tag (own tag)
-    result->insert( m_call_references.begin(), m_call_references.end());
     collect_references( m_defaults.get(), result);
     collect_references( m_annotations.get(), result);
     collect_references( m_parameter_annotations.get(), result);

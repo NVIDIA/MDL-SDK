@@ -191,10 +191,10 @@ public:
     MCLineDivisions[CUID].push_back(LineEntry);
   }
 
-  typedef MISTD::vector<MCLineEntry> MCLineEntryCollection;
+  typedef std::vector<MCLineEntry> MCLineEntryCollection;
   typedef MCLineEntryCollection::iterator iterator;
   typedef MCLineEntryCollection::const_iterator const_iterator;
-  typedef MISTD::map<unsigned, MCLineEntryCollection> MCLineDivisionMap;
+  typedef std::map<unsigned, MCLineEntryCollection> MCLineDivisionMap;
 
 private:
   // A collection of MCLineEntry for each Compile Unit ID.
@@ -302,7 +302,7 @@ private:
     int Offset;
     unsigned Register2;
   };
-  MISTD::vector<char> Values;
+  std::vector<char> Values;
 
   MCCFIInstruction(OpType Op, MCSymbol *L, unsigned R, int O, StringRef V)
       : Operation(Op), Label(L), Register(R), Offset(O),
@@ -444,7 +444,7 @@ struct MCDwarfFrameInfo {
   const MCSymbol *Personality;
   const MCSymbol *Lsda;
   const MCSymbol *Function;
-  MISTD::vector<MCCFIInstruction> Instructions;
+  std::vector<MCCFIInstruction> Instructions;
   unsigned PersonalityEncoding;
   unsigned LsdaEncoding;
   uint32_t CompactUnwindEncoding;

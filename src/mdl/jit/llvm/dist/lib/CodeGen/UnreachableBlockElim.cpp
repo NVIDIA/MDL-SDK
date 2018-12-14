@@ -70,7 +70,7 @@ bool UnreachableBlockElim::runOnFunction(Function &F) {
 
   // Loop over all dead blocks, remembering them and deleting all instructions
   // in them.
-  MISTD::vector<BasicBlock*> DeadBlocks;
+  std::vector<BasicBlock*> DeadBlocks;
   for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
     if (!Reachable.count(I)) {
       BasicBlock *BB = I;
@@ -132,7 +132,7 @@ bool UnreachableMachineBlockElim::runOnMachineFunction(MachineFunction &F) {
 
   // Loop over all dead blocks, remembering them and deleting all instructions
   // in them.
-  MISTD::vector<MachineBasicBlock*> DeadBlocks;
+  std::vector<MachineBasicBlock*> DeadBlocks;
   for (MachineFunction::iterator I = F.begin(), E = F.end(); I != E; ++I) {
     MachineBasicBlock *BB = I;
 

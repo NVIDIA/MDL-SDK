@@ -152,7 +152,7 @@ public:
     if (Alignment == 0) Alignment = 1;
     uint8_t *NewPtr = (uint8_t*)RoundUpToAlignment((uintptr_t)CurBufferPtr,
                                                    Alignment);
-    CurBufferPtr = MISTD::min(NewPtr, BufferEnd);
+    CurBufferPtr = std::min(NewPtr, BufferEnd);
   }
 
   /// emitAlignmentWithFill - Similar to emitAlignment, except that the
@@ -206,7 +206,7 @@ public:
 
   /// emitString - This callback is invoked when a String needs to be
   /// written to the output stream.
-  void emitString(const MISTD::string &String) {
+  void emitString(const std::string &String) {
     for (size_t i = 0, N = String.size(); i < N; ++i) {
       uint8_t C = String[i];
       emitByte(C);

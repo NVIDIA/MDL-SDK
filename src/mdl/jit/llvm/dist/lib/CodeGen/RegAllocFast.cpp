@@ -111,7 +111,7 @@ namespace {
     };
 
     // PhysRegState - One of the RegState enums, or a virtreg.
-    MISTD::vector<unsigned> PhysRegState;
+    std::vector<unsigned> PhysRegState;
 
     // Set of register units.
     typedef SparseSet<unsigned> UsedInInstrSet;

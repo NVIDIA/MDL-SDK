@@ -24,7 +24,7 @@ namespace llvm {
 
   /// An error handler callback.
   typedef void (*fatal_error_handler_t)(void *user_data,
-                                        const MISTD::string& reason,
+                                        const std::string& reason,
                                         bool gen_crash_diag);
 
   /// install_fatal_error_handler - Installs a new error handler to be used
@@ -76,7 +76,7 @@ namespace llvm {
   /// does not return.
   LLVM_ATTRIBUTE_NORETURN void report_fatal_error(const char *reason,
                                                   bool gen_crash_diag = true);
-  LLVM_ATTRIBUTE_NORETURN void report_fatal_error(const MISTD::string &reason,
+  LLVM_ATTRIBUTE_NORETURN void report_fatal_error(const std::string &reason,
                                                   bool gen_crash_diag = true);
   LLVM_ATTRIBUTE_NORETURN void report_fatal_error(StringRef reason,
                                                   bool gen_crash_diag = true);

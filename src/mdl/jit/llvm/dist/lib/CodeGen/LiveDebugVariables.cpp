@@ -240,7 +240,7 @@ public:
   /// @param NewDefs Append (Idx, LocNo) of inserted defs here.
   void addDefsFromCopies(LiveInterval *LI, unsigned LocNo,
                       const SmallVectorImpl<SlotIndex> &Kills,
-                      SmallVectorImpl<MISTD::pair<SlotIndex, unsigned> > &NewDefs,
+                      SmallVectorImpl<std::pair<SlotIndex, unsigned> > &NewDefs,
                       MachineRegisterInfo &MRI,
                       LiveIntervals &LIS);
 
@@ -398,7 +398,7 @@ void UserValue::coalesceLocation(unsigned LocNo) {
   // Keep the smaller location, erase the larger one.
   unsigned EraseLoc = LocNo;
   if (KeepLoc > EraseLoc)
-    MISTD::swap(KeepLoc, EraseLoc);
+    std::swap(KeepLoc, EraseLoc);
   locations.erase(locations.begin() + EraseLoc);
 
   // Rewrite values.
@@ -545,7 +545,7 @@ void UserValue::extendDef(SlotIndex Idx, unsigned LocNo,
     // If we extended to the MBB end, propagate down the dominator tree.
     if (!ToEnd)
       continue;
-    const MISTD::vector<MachineDomTreeNode*> &Children =
+    const std::vector<MachineDomTreeNode*> &Children =
       MDT.getNode(MBB)->getChildren();
     for (unsigned i = 0, e = Children.size(); i != e; ++i) {
       MachineBasicBlock *MBB = Children[i]->getBlock();
@@ -558,7 +558,7 @@ void UserValue::extendDef(SlotIndex Idx, unsigned LocNo,
 void
 UserValue::addDefsFromCopies(LiveInterval *LI, unsigned LocNo,
                       const SmallVectorImpl<SlotIndex> &Kills,
-                      SmallVectorImpl<MISTD::pair<SlotIndex, unsigned> > &NewDefs,
+                      SmallVectorImpl<std::pair<SlotIndex, unsigned> > &NewDefs,
                       MachineRegisterInfo &MRI, LiveIntervals &LIS) {
   if (Kills.empty())
     return;
@@ -567,7 +567,7 @@ UserValue::addDefsFromCopies(LiveInterval *LI, unsigned LocNo,
     return;
 
   // Collect all the (vreg, valno) pairs that are copies of LI.
-  SmallVector<MISTD::pair<LiveInterval*, const VNInfo*>, 8> CopyValues;
+  SmallVector<std::pair<LiveInterval*, const VNInfo*>, 8> CopyValues;
   for (MachineRegisterInfo::use_nodbg_iterator
          UI = MRI.use_nodbg_begin(LI->reg),
          UE = MRI.use_nodbg_end(); UI != UE; ++UI) {
@@ -596,7 +596,7 @@ UserValue::addDefsFromCopies(LiveInterval *LI, unsigned LocNo,
     LiveInterval *DstLI = &LIS.getInterval(DstReg);
     const VNInfo *DstVNI = DstLI->getVNInfoAt(Idx.getRegSlot());
     assert(DstVNI && DstVNI->def == Idx.getRegSlot() && "Bad copy value");
-    CopyValues.push_back(MISTD::make_pair(DstLI, DstVNI));
+    CopyValues.push_back(std::make_pair(DstLI, DstVNI));
   }
 
   if (CopyValues.empty())
@@ -622,7 +622,7 @@ UserValue::addDefsFromCopies(LiveInterval *LI, unsigned LocNo,
       assert(CopyMI && CopyMI->isCopy() && "Bad copy value");
       unsigned LocNo = getLocationNo(CopyMI->getOperand(0));
       I.insert(Idx, Idx.getNextSlot(), LocNo);
-      NewDefs.push_back(MISTD::make_pair(Idx, LocNo));
+      NewDefs.push_back(std::make_pair(Idx, LocNo));
       break;
     }
   }
@@ -634,12 +634,12 @@ UserValue::computeIntervals(MachineRegisterInfo &MRI,
                             LiveIntervals &LIS,
                             MachineDominatorTree &MDT,
                             UserValueScopes &UVS) {
-  SmallVector<MISTD::pair<SlotIndex, unsigned>, 16> Defs;
+  SmallVector<std::pair<SlotIndex, unsigned>, 16> Defs;
 
   // Collect all defs to be extended (Skipping undefs).
   for (LocMap::const_iterator I = locInts.begin(); I.valid(); ++I)
     if (I.value() != ~0u)
-      Defs.push_back(MISTD::make_pair(I.start(), I.value()));
+      Defs.push_back(std::make_pair(I.start(), I.value()));
 
   // Extend all defs, and possibly add new ones along the way.
   for (unsigned i = 0; i != Defs.size(); ++i) {

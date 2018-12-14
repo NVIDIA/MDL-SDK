@@ -43,12 +43,12 @@ namespace llvm {
       return ((const SDNode *) Node)->getNumValues();
     }
 
-    static MISTD::string getEdgeDestLabel(const void *Node, unsigned i) {
+    static std::string getEdgeDestLabel(const void *Node, unsigned i) {
       return ((const SDNode *) Node)->getValueType(i).getEVTString();
     }
 
     template<typename EdgeIter>
-    static MISTD::string getEdgeSourceLabel(const void *Node, EdgeIter I) {
+    static std::string getEdgeSourceLabel(const void *Node, EdgeIter I) {
       return itostr(I - SDNodeIterator::begin((const SDNode *) Node));
     }
 
@@ -67,11 +67,11 @@ namespace llvm {
     static EdgeIter getEdgeTarget(const void *Node, EdgeIter I) {
       SDNode *TargetNode = *I;
       SDNodeIterator NI = SDNodeIterator::begin(TargetNode);
-      MISTD::advance(NI, I.getNode()->getOperand(I.getOperand()).getResNo());
+      std::advance(NI, I.getNode()->getOperand(I.getOperand()).getResNo());
       return NI;
     }
 
-    static MISTD::string getGraphName(const SelectionDAG *G) {
+    static std::string getGraphName(const SelectionDAG *G) {
       return G->getMachineFunction().getName();
     }
 
@@ -87,7 +87,7 @@ namespace llvm {
     /// If you want to override the dot attributes printed for a particular
     /// edge, override this method.
     template<typename EdgeIter>
-    static MISTD::string getEdgeAttributes(const void *Node, EdgeIter EI,
+    static std::string getEdgeAttributes(const void *Node, EdgeIter EI,
                                          const SelectionDAG *Graph) {
       SDValue Op = EI.getNode()->getOperand(EI.getOperand());
       EVT VT = Op.getValueType();
@@ -99,23 +99,23 @@ namespace llvm {
     }
 
 
-    static MISTD::string getSimpleNodeLabel(const SDNode *Node,
+    static std::string getSimpleNodeLabel(const SDNode *Node,
                                           const SelectionDAG *G) {
-      MISTD::string Result = Node->getOperationName(G);
+      std::string Result = Node->getOperationName(G);
       {
         raw_string_ostream OS(Result);
         Node->print_details(OS, G);
       }
       return Result;
     }
-    MISTD::string getNodeLabel(const SDNode *Node, const SelectionDAG *Graph);
-    static MISTD::string getNodeAttributes(const SDNode *N,
+    std::string getNodeLabel(const SDNode *Node, const SelectionDAG *Graph);
+    static std::string getNodeAttributes(const SDNode *N,
                                          const SelectionDAG *Graph) {
 #ifndef NDEBUG
-      const MISTD::string &Attrs = Graph->getGraphAttrs(N);
+      const std::string &Attrs = Graph->getGraphAttrs(N);
       if (!Attrs.empty()) {
-        if (Attrs.find("shape=") == MISTD::string::npos)
-          return MISTD::string("shape=Mrecord,") + Attrs;
+        if (Attrs.find("shape=") == std::string::npos)
+          return std::string("shape=Mrecord,") + Attrs;
         else
           return Attrs;
       }
@@ -133,7 +133,7 @@ namespace llvm {
   };
 }
 
-MISTD::string DOTGraphTraits<SelectionDAG*>::getNodeLabel(const SDNode *Node,
+std::string DOTGraphTraits<SelectionDAG*>::getNodeLabel(const SDNode *Node,
                                                         const SelectionDAG *G) {
   return DOTGraphTraits<SelectionDAG*>::getSimpleNodeLabel(Node, G);
 }
@@ -142,7 +142,7 @@ MISTD::string DOTGraphTraits<SelectionDAG*>::getNodeLabel(const SDNode *Node,
 /// viewGraph - Pop up a ghostview window with the reachable parts of the DAG
 /// rendered using 'dot'.
 ///
-void SelectionDAG::viewGraph(const MISTD::string &Title) {
+void SelectionDAG::viewGraph(const std::string &Title) {
 // This code is only for debugging!
 #ifndef NDEBUG
   ViewGraph(this, "dag." + getMachineFunction().getName(),
@@ -185,9 +185,9 @@ void SelectionDAG::setGraphAttrs(const SDNode *N, const char *Attrs) {
 
 /// getGraphAttrs - Get graph attributes for a node. (eg. "color=red".)
 /// Used from getNodeAttributes.
-const MISTD::string SelectionDAG::getGraphAttrs(const SDNode *N) const {
+const std::string SelectionDAG::getGraphAttrs(const SDNode *N) const {
 #ifndef NDEBUG
-  MISTD::map<const SDNode *, MISTD::string>::const_iterator I =
+  std::map<const SDNode *, std::string>::const_iterator I =
     NodeGraphAttrs.find(N);
 
   if (I != NodeGraphAttrs.end())
@@ -197,7 +197,7 @@ const MISTD::string SelectionDAG::getGraphAttrs(const SDNode *N) const {
 #else
   errs() << "SelectionDAG::getGraphAttrs is only available in debug builds"
          << " on systems with Graphviz or gv!\n";
-  return MISTD::string();
+  return std::string();
 #endif
 }
 
@@ -205,7 +205,7 @@ const MISTD::string SelectionDAG::getGraphAttrs(const SDNode *N) const {
 ///
 void SelectionDAG::setGraphColor(const SDNode *N, const char *Color) {
 #ifndef NDEBUG
-  NodeGraphAttrs[N] = MISTD::string("color=") + Color;
+  NodeGraphAttrs[N] = std::string("color=") + Color;
 #else
   errs() << "SelectionDAG::setGraphColor is only available in debug builds"
          << " on systems with Graphviz or gv!\n";
@@ -266,8 +266,8 @@ void SelectionDAG::setSubgraphColor(SDNode *N, const char *Color) {
 #endif
 }
 
-MISTD::string ScheduleDAGSDNodes::getGraphNodeLabel(const SUnit *SU) const {
-  MISTD::string s;
+std::string ScheduleDAGSDNodes::getGraphNodeLabel(const SUnit *SU) const {
+  std::string s;
   raw_string_ostream O(s);
   O << "SU(" << SU->NodeNum << "): ";
   if (SU->getNode()) {

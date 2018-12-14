@@ -279,7 +279,7 @@ public:
   StringMap<ConstantDataSequential*> CDSConstants;
 
   
-  DenseMap<MISTD::pair<Function*, BasicBlock*> , BlockAddress*> BlockAddresses;
+  DenseMap<std::pair<Function*, BasicBlock*> , BlockAddress*> BlockAddresses;
   ConstantUniqueMap<ExprMapKeyType, const ExprMapKeyType&, Type, ConstantExpr>
     ExprConstants;
 
@@ -310,10 +310,10 @@ public:
   StringMap<StructType*> NamedStructTypes;
   unsigned NamedStructTypesUniqueID;
     
-  DenseMap<MISTD::pair<Type *, uint64_t>, ArrayType*> ArrayTypes;
-  DenseMap<MISTD::pair<Type *, unsigned>, VectorType*> VectorTypes;
+  DenseMap<std::pair<Type *, uint64_t>, ArrayType*> ArrayTypes;
+  DenseMap<std::pair<Type *, unsigned>, VectorType*> VectorTypes;
   DenseMap<Type*, PointerType*> PointerTypes;  // Pointers in AddrSpace = 0
-  DenseMap<MISTD::pair<Type*, unsigned>, PointerType*> ASPointerTypes;
+  DenseMap<std::pair<Type*, unsigned>, PointerType*> ASPointerTypes;
 
 
   /// ValueHandles - This map keeps track of all of the value handles that are
@@ -325,7 +325,7 @@ public:
   /// CustomMDKindNames - Map to hold the metadata string to ID mapping.
   StringMap<unsigned> CustomMDKindNames;
   
-  typedef MISTD::pair<unsigned, TrackingVH<MDNode> > MDPairTy;
+  typedef std::pair<unsigned, TrackingVH<MDNode> > MDPairTy;
   typedef SmallVector<MDPairTy, 2> MDMapTy;
 
   /// MetadataStore - Collection of per-instruction metadata used in this
@@ -339,16 +339,16 @@ public:
   /// ScopeRecords - These are the actual mdnodes (in a value handle) for an
   /// index.  The ValueHandle ensures that ScopeRecordIdx stays up to date if
   /// the MDNode is RAUW'd.
-  MISTD::vector<DebugRecVH> ScopeRecords;
+  std::vector<DebugRecVH> ScopeRecords;
   
   /// ScopeInlinedAtIdx - This is the index in ScopeInlinedAtRecords for an
   /// scope/inlined-at pair.
-  DenseMap<MISTD::pair<MDNode*, MDNode*>, int> ScopeInlinedAtIdx;
+  DenseMap<std::pair<MDNode*, MDNode*>, int> ScopeInlinedAtIdx;
   
   /// ScopeInlinedAtRecords - These are the actual mdnodes (in value handles)
   /// for an index.  The ValueHandle ensures that ScopeINlinedAtIdx stays up
   /// to date.
-  MISTD::vector<MISTD::pair<DebugRecVH, DebugRecVH> > ScopeInlinedAtRecords;
+  std::vector<std::pair<DebugRecVH, DebugRecVH> > ScopeInlinedAtRecords;
   
   /// IntrinsicIDCache - Cache of intrinsic name (string) to numeric ID mappings
   /// requested in this context

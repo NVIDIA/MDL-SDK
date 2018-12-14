@@ -58,10 +58,10 @@ static int CompareOptionRecords(Record *const *Av, Record *const *Bv) {
       return Cmp;
 
   if (!ASent) {
-    MISTD::vector<MISTD::string> APrefixes = A->getValueAsListOfStrings("Prefixes");
-    MISTD::vector<MISTD::string> BPrefixes = B->getValueAsListOfStrings("Prefixes");
+    std::vector<std::string> APrefixes = A->getValueAsListOfStrings("Prefixes");
+    std::vector<std::string> BPrefixes = B->getValueAsListOfStrings("Prefixes");
 
-    for (MISTD::vector<MISTD::string>::const_iterator APre = APrefixes.begin(),
+    for (std::vector<std::string>::const_iterator APre = APrefixes.begin(),
                                                   AEPre = APrefixes.end(),
                                                   BPre = BPrefixes.begin(),
                                                   BEPre = BPrefixes.end();
@@ -86,7 +86,7 @@ static int CompareOptionRecords(Record *const *Av, Record *const *Bv) {
   return APrec < BPrec ? -1 : 1;
 }
 
-static const MISTD::string getOptionName(const Record &R) {
+static const std::string getOptionName(const Record &R) {
   // Use the record name unless EnumName is defined.
   if (isa<UnsetInit>(R.getValueInit("EnumName")))
     return R.getName();
@@ -107,25 +107,25 @@ static raw_ostream &write_cstring(raw_ostream &OS, llvm::StringRef Str) {
 namespace llvm {
 void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
   // Get the option groups and options.
-  const MISTD::vector<Record*> &Groups =
+  const std::vector<Record*> &Groups =
     Records.getAllDerivedDefinitions("OptionGroup");
-  MISTD::vector<Record*> Opts = Records.getAllDerivedDefinitions("Option");
+  std::vector<Record*> Opts = Records.getAllDerivedDefinitions("Option");
 
   emitSourceFileHeader("Option Parsing Definitions", OS);
 
   array_pod_sort(Opts.begin(), Opts.end(), CompareOptionRecords);
   // Generate prefix groups.
   typedef SmallVector<SmallString<2>, 2> PrefixKeyT;
-  typedef MISTD::map<PrefixKeyT, MISTD::string> PrefixesT;
+  typedef std::map<PrefixKeyT, std::string> PrefixesT;
   PrefixesT Prefixes;
-  Prefixes.insert(MISTD::make_pair(PrefixKeyT(), "prefix_0"));
+  Prefixes.insert(std::make_pair(PrefixKeyT(), "prefix_0"));
   unsigned CurPrefix = 0;
   for (unsigned i = 0, e = Opts.size(); i != e; ++i) {
     const Record &R = *Opts[i];
-    MISTD::vector<MISTD::string> prf = R.getValueAsListOfStrings("Prefixes");
+    std::vector<std::string> prf = R.getValueAsListOfStrings("Prefixes");
     PrefixKeyT prfkey(prf.begin(), prf.end());
     unsigned NewPrefix = CurPrefix + 1;
-    if (Prefixes.insert(MISTD::make_pair(prfkey, (Twine("prefix_") +
+    if (Prefixes.insert(std::make_pair(prfkey, (Twine("prefix_") +
                                               Twine(NewPrefix)).str())).second)
       CurPrefix = NewPrefix;
   }
@@ -207,7 +207,7 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
     OS << "OPTION(";
 
     // The option prefix;
-    MISTD::vector<MISTD::string> prf = R.getValueAsListOfStrings("Prefixes");
+    std::vector<std::string> prf = R.getValueAsListOfStrings("Prefixes");
     OS << Prefixes[PrefixKeyT(prf.begin(), prf.end())] << ", ";
 
     // The option string.
@@ -238,7 +238,7 @@ void EmitOptParser(RecordKeeper &Records, raw_ostream &OS) {
     // would become "foo\0bar\0". Note that the compiler adds an implicit
     // terminating \0 at the end.
     OS << ", ";
-    MISTD::vector<MISTD::string> AliasArgs = R.getValueAsListOfStrings("AliasArgs");
+    std::vector<std::string> AliasArgs = R.getValueAsListOfStrings("AliasArgs");
     if (AliasArgs.size() == 0) {
       OS << "0";
     } else {

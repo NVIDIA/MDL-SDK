@@ -528,7 +528,7 @@ namespace {
 
   private:
     // AliasCache - Track alias queries to guard against recursion.
-    typedef MISTD::pair<Location, Location> LocPair;
+    typedef std::pair<Location, Location> LocPair;
     typedef SmallDenseMap<LocPair, AliasResult, 8> AliasCacheTy;
     AliasCacheTy AliasCache;
 
@@ -1102,7 +1102,7 @@ BasicAliasAnalysis::aliasPHI(const PHINode *PN, uint64_t PNSize,
       LocPair Locs(Location(PN, PNSize, PNTBAAInfo),
                    Location(V2, V2Size, V2TBAAInfo));
       if (PN > V2)
-        MISTD::swap(Locs.first, Locs.second);
+        std::swap(Locs.first, Locs.second);
       // Analyse the PHIs' inputs under the assumption that the PHIs are
       // NoAlias.
       // If the PHIs are May/MustAlias there must be (recursively) an input
@@ -1253,19 +1253,19 @@ BasicAliasAnalysis::aliasCheck(const Value *V1, uint64_t V1Size,
   LocPair Locs(Location(V1, V1Size, V1TBAAInfo),
                Location(V2, V2Size, V2TBAAInfo));
   if (V1 > V2)
-    MISTD::swap(Locs.first, Locs.second);
-  MISTD::pair<AliasCacheTy::iterator, bool> Pair =
-    AliasCache.insert(MISTD::make_pair(Locs, MayAlias));
+    std::swap(Locs.first, Locs.second);
+  std::pair<AliasCacheTy::iterator, bool> Pair =
+    AliasCache.insert(std::make_pair(Locs, MayAlias));
   if (!Pair.second)
     return Pair.first->second;
 
   // FIXME: This isn't aggressively handling alias(GEP, PHI) for example: if the
   // GEP can't simplify, we don't even look at the PHI cases.
   if (!isa<GEPOperator>(V1) && isa<GEPOperator>(V2)) {
-    MISTD::swap(V1, V2);
-    MISTD::swap(V1Size, V2Size);
-    MISTD::swap(O1, O2);
-    MISTD::swap(V1TBAAInfo, V2TBAAInfo);
+    std::swap(V1, V2);
+    std::swap(V1Size, V2Size);
+    std::swap(O1, O2);
+    std::swap(V1TBAAInfo, V2TBAAInfo);
   }
   if (const GEPOperator *GV1 = dyn_cast<GEPOperator>(V1)) {
     AliasResult Result = aliasGEP(GV1, V1Size, V1TBAAInfo, V2, V2Size, V2TBAAInfo, O1, O2);
@@ -1273,9 +1273,9 @@ BasicAliasAnalysis::aliasCheck(const Value *V1, uint64_t V1Size,
   }
 
   if (isa<PHINode>(V2) && !isa<PHINode>(V1)) {
-    MISTD::swap(V1, V2);
-    MISTD::swap(V1Size, V2Size);
-    MISTD::swap(V1TBAAInfo, V2TBAAInfo);
+    std::swap(V1, V2);
+    std::swap(V1Size, V2Size);
+    std::swap(V1TBAAInfo, V2TBAAInfo);
   }
   if (const PHINode *PN = dyn_cast<PHINode>(V1)) {
     AliasResult Result = aliasPHI(PN, V1Size, V1TBAAInfo,
@@ -1284,9 +1284,9 @@ BasicAliasAnalysis::aliasCheck(const Value *V1, uint64_t V1Size,
   }
 
   if (isa<SelectInst>(V2) && !isa<SelectInst>(V1)) {
-    MISTD::swap(V1, V2);
-    MISTD::swap(V1Size, V2Size);
-    MISTD::swap(V1TBAAInfo, V2TBAAInfo);
+    std::swap(V1, V2);
+    std::swap(V1Size, V2Size);
+    std::swap(V1TBAAInfo, V2TBAAInfo);
   }
   if (const SelectInst *S1 = dyn_cast<SelectInst>(V1)) {
     AliasResult Result = aliasSelect(S1, V1Size, V1TBAAInfo,

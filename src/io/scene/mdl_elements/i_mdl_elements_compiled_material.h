@@ -100,6 +100,8 @@ public:
 
     mi::Float32 get_mdl_wavelength_max() const;
 
+    const char* get_internal_space() const;
+
     bool depends_on_state_transform() const;
 
     bool depends_on_state_object_id() const;
@@ -210,6 +212,8 @@ private:
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Properties
         m_properties;                                 ///< Instance properties.
+
+    std::string m_internal_space;                     ///< Internal space.
 };
 
 } // namespace MDL

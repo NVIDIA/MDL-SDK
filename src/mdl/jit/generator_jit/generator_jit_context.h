@@ -191,19 +191,29 @@ public:
     llvm::Value *get_exec_ctx_parameter();
 
     /// Get the state parameter of the current function.
-    llvm::Value *get_state_parameter();
+    ///
+    /// \param exec_ctx  if non-null, the execution context to retrieve the state from
+    llvm::Value *get_state_parameter(llvm::Value *exec_ctx=NULL);
 
     /// Get the resource_data parameter of the current function.
-    llvm::Value *get_resource_data_parameter();
+    ///
+    /// \param exec_ctx  if non-null, the execution context to retrieve the state from
+    llvm::Value *get_resource_data_parameter(llvm::Value *exec_ctx=NULL);
 
     /// Get the exc_state parameter of the current function.
-    llvm::Value *get_exc_state_parameter();
+    ///
+    /// \param exec_ctx  if non-null, the execution context to retrieve the state from
+    llvm::Value *get_exc_state_parameter(llvm::Value *exec_ctx=NULL);
 
     /// Get the cap_args parameter of the current function.
-    llvm::Value *get_cap_args_parameter();
+    ///
+    /// \param exec_ctx  if non-null, the execution context to retrieve the state from
+    llvm::Value *get_cap_args_parameter(llvm::Value *exec_ctx=NULL);
 
     /// Get the lambda_results parameter of the current function.
-    llvm::Value *get_lambda_results_parameter();
+    ///
+    /// \param exec_ctx  if non-null, the execution context to retrieve the state from
+    llvm::Value *get_lambda_results_parameter(llvm::Value *exec_ctx=NULL);
 
     /// Get the object_id value of the current function.
     llvm::Value *get_object_id_value();
@@ -274,6 +284,16 @@ public:
     /// \param name   its name
     llvm::Value *create_local(llvm::Type *type, char const *name) {
         return new llvm::AllocaInst(type, 0, name, m_function->front().begin());
+    }
+
+    /// Create a new local array variable and return its address.
+    ///
+    /// \param type        the LLVM element type of the local
+    /// \param array_size  the size of the array
+    /// \param name        its name
+    llvm::Value *create_local(llvm::Type *type, unsigned array_size, char const *name) {
+        return new llvm::AllocaInst(
+            type, get_constant(int(array_size)), name, m_function->front().begin());
     }
 
     /// Creates a void return at the current block.
@@ -407,6 +427,20 @@ public:
     /// \param mask  the mask values
     llvm::Constant *get_shuffle(llvm::ArrayRef<int> values);
 
+    /// Creates a single LLVM addition instruction (integer OR FP).
+    ///
+    /// \param type  the LLVM result type
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_add(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates a single LLVM subtraction instruction (integer OR FP).
+    ///
+    /// \param type  the LLVM result type
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_sub(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
     /// Creates a single LLVM multiplication instruction (integer OR FP).
     ///
     /// \param type  the LLVM result type
@@ -414,11 +448,114 @@ public:
     /// \param rhs   the right operand
     llvm::Value *create_mul(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
 
+    /// Creates LLVM code for a 3-element vector by state matrix multiplication.
+    /// Note: the state matrices have a different LLVM type than normal matrices.
+    ///
+    /// \param type                the LLVM result type
+    /// \param lhs_V3              the left operand, the 3-element vector
+    /// \param rhs_M               the right operand, the state matrix
+    /// \param ignore_translation  if true, the translation component of the matrix is ignored
+    /// \param transposed          use the transposed matrix for the multiplication.
+    ///                            not supported in combination with ignore_translation = false
+    llvm::Value *create_mul_state_V3xM(
+        llvm::Type *res_type,
+        llvm::Value *lhs_V,
+        llvm::Value *rhs_M,
+        bool ignore_translation,
+        bool transposed);
+
+    /// Creates LLVM code for a state matrix by dual 3-element vector multiplication.
+    /// Note: the state matrices have a different LLVM type than normal matrices.
+    ///
+    /// \param type                the LLVM result type
+    /// \param lhs_V               the left operand, the dual vector
+    /// \param rhs_M               the right operand, the matrix
+    /// \param ignore_translation  if true, the translation component of the matrix is ignored
+    /// \param transposed          use the transposed matrix for the multiplication.
+    ///                            not supported in combination with ignore_translation = false
+    llvm::Value *create_deriv_mul_state_V3xM(
+        llvm::Type *res_type,
+        llvm::Value *lhs_V,
+        llvm::Value *rhs_M,
+        bool ignore_translation,
+        bool transposed);
+
+    /// Creates a single LLVM FP division instruction.
+    ///
+    /// \param type  the LLVM result type
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_fdiv(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates addition instructions for two dual values.
+    ///
+    /// \param type  the LLVM result type of the value component
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_deriv_add(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates subtraction instructions for two dual values.
+    ///
+    /// \param type  the LLVM result type of the value component
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_deriv_sub(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates multiplication instructions for two dual values.
+    ///
+    /// \param type  the LLVM result type of the value component
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_deriv_mul(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates division instructions for two dual values.
+    ///
+    /// \param type  the LLVM result type of the value component
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_deriv_fdiv(llvm::Type *res_type, llvm::Value *lhs, llvm::Value *rhs);
+
+    /// Creates a cross product on non-dual vectors.
+    ///
+    /// \param lhs   the left operand
+    /// \param rhs   the right operand
+    llvm::Value *create_cross(llvm::Value *lhs, llvm::Value *rhs);
+
     /// Creates a splat vector from a scalar value.
     ///
     /// \param type  the LLVM result type
     /// \param v     the scalar value
     llvm::Value *create_vector_splat(llvm::VectorType *res_type, llvm::Value *v);
+
+    /// Creates a splat value from a scalar value.
+    ///
+    /// \param type  the LLVM result type
+    /// \param v     the scalar value
+    llvm::Value *create_splat(llvm::Type *res_type, llvm::Value *v);
+
+    /// Get the number of elements for a vector or an array.
+    ///
+    /// \param val   the value
+    unsigned get_num_elements(llvm::Value *val);
+
+    /// Creates a ExtractValue or ExtractElement instruction.
+    ///
+    /// \param comp_val  the compound value to extract from
+    /// \param index     the index at which a subcomponent should be extracted
+    llvm::Value *create_extract(llvm::Value *val, unsigned index);
+
+    /// Extracts a value from a compound value, also supporting derivative values.
+    ///
+    /// \param comp_val  the compound value to extract from
+    /// \param index     the index at which a subcomponent should be extracted
+    llvm::Value *create_extract_allow_deriv(llvm::Value *val, unsigned index);
+
+    /// Creates an InsertValue or InsertElement instruction.
+    ///
+    /// \param agg_val   the compound aggregate value
+    /// \param val       the value to insert
+    /// \param index     the index at which the should be inserted
+    llvm::Value *create_insert(llvm::Value *agg_value, llvm::Value *val, unsigned index);
 
     /// Creates a bounds check compare.
     ///
@@ -441,6 +578,21 @@ public:
         llvm::Value        *index,
         llvm::Value        *bound,
         Exc_location const &loc);
+
+    /// Selects the given value if the index is smaller than the bound value.
+    /// Otherwise selects the out-of-bounds value.
+    ///
+    /// \param index              the index value (int in MDL)
+    /// \param bound              the bound value (size_t)
+    /// \param val                the value to select, if the index is within the bounds
+    /// \param out_of_bounds_val  the value to select, if the index is out-of-bounds
+    ///
+    /// \returns the selected value
+    llvm::Value *create_select_if_in_bounds(
+        llvm::Value        *index,
+        llvm::Value        *bound,
+        llvm::Value        *val,
+        llvm::Value        *out_of_bounds_val);
 
     /// Creates a non-zero check compare.
     ///
@@ -553,6 +705,62 @@ public:
     /// \param size          the array size
     void set_deferred_size(llvm::Value *arr_desc_ptr, llvm::Value *size);
 
+    /// Returns true, if the given LLVM type is a derivative type.
+    ///
+    /// \param type  the type to check
+    bool is_deriv_type(llvm::Type *type);
+
+    /// Get the base value LLVM type of a derivative LLVM type.
+    ///
+    /// \param type  the LLVM type
+    ///
+    /// \returns the base value type of the derivative type or NULL if it is not a derivative type
+    llvm::Type *get_deriv_base_type(llvm::Type *type);
+
+    /// Get a dual value.
+    ///
+    /// \param val  the value component for the dual value
+    /// \param dx   the dx component for the dual value
+    /// \param dy   the dy component for the dual value
+    llvm::Value *get_dual(llvm::Value *val, llvm::Value *dx, llvm::Value *dy);
+
+    /// Get a dual value with dx and dy set to zero.
+    ///
+    /// \param val  the value component for the dual value
+    llvm::Value *get_dual(llvm::Value *val);
+
+    /// Get a component of the dual value.
+    ///
+    /// \param dual        the dual value
+    /// \param comp_index  the index of the component: 0 = value, 1 = dx, 2 = dy
+    llvm::Value *get_dual_comp(llvm::Value *dual, unsigned int comp_index);
+
+    /// Get the value of the dual value, or the value itself for non-dual values.
+    ///
+    /// \param dual  the dual value
+    llvm::Value *get_dual_val(llvm::Value *dual);
+
+    /// Get the pointer to the value component of a dual value.
+    ///
+    /// \param dual_ptr  the pointer to the dual value
+    llvm::Value *get_dual_val_ptr(llvm::Value *dual_ptr);
+
+    /// Get the dx component of the dual value, or zero for non-dual values.
+    ///
+    /// \param dual  the dual value
+    llvm::Value *get_dual_dx(llvm::Value *dual);
+
+    /// Get the dy component of the dual value, or zero for non-dual values.
+    ///
+    /// \param dual  the dual value
+    llvm::Value *get_dual_dy(llvm::Value *dual);
+
+    /// Extract a dual component from a dual compound value.
+    ///
+    /// \param compound_val  the compound value
+    /// \param index         the index of the component to extract
+    llvm::Value *extract_dual(llvm::Value *compound_val, unsigned int index);
+
     /// Get a pointer type from a base type.
     ///
     /// \param type  the base type
@@ -587,6 +795,10 @@ public:
 
     /// Get the real return type of the function (i.e. does NOT return void for sret functions).
     llvm::Type *get_return_type() const;
+
+    /// Get the real non-derivative return type of the function (i.e. does NOT return void for sret
+    /// functions, for derivative return types returns the type of the value component).
+    llvm::Type *get_non_deriv_return_type() const;
 
     /// Override a (possibly not existing) lambda_results parameter.
     void override_lambda_results(llvm::Value *lambda_results)
@@ -778,9 +990,6 @@ private:
 
     /// Helper: Accessible function parameters when translating an expression.
     Definition_vector m_accesible_parameters;
-
-    /// The call mode for tex_lookup() calls.
-    Tex_lookup_call_mode m_tex_loookup_call_mode;
 };
 
 }  // mdl

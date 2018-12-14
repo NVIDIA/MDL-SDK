@@ -27,11 +27,11 @@ namespace llvm {
   template <typename T>
   class MaximumSpanningTree {
   public:
-    typedef MISTD::pair<const T*, const T*> Edge;
-    typedef MISTD::pair<Edge, double> EdgeWeight;
-    typedef MISTD::vector<EdgeWeight> EdgeWeights;
+    typedef std::pair<const T*, const T*> Edge;
+    typedef std::pair<Edge, double> EdgeWeight;
+    typedef std::vector<EdgeWeight> EdgeWeights;
   protected:
-    typedef MISTD::vector<Edge> MaxSpanTree;
+    typedef std::vector<Edge> MaxSpanTree;
 
     MaxSpanTree MST;
 
@@ -69,7 +69,7 @@ namespace llvm {
     /// spanning tree.
     MaximumSpanningTree(EdgeWeights &EdgeVector) {
 
-      MISTD::stable_sort(EdgeVector.begin(), EdgeVector.end(), EdgeWeightCompare());
+      std::stable_sort(EdgeVector.begin(), EdgeVector.end(), EdgeWeightCompare());
 
       // Create spanning tree, Forest contains a special data structure
       // that makes checking if two nodes are already in a common (sub-)tree

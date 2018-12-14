@@ -133,14 +133,14 @@ MI_INLINE Type* Type::get_child()
 }
 
 
-MI_INLINE MISTD::vector<MISTD::pair<int, MISTD::string> >** Type::set_enum()
+MI_INLINE std::vector<std::pair<int, std::string> >** Type::set_enum()
 {
     ASSERT(M_ATTR, m_typecode == TYPE_ENUM);
     return &m_enum;
 }
 
 
-MI_INLINE MISTD::vector<MISTD::pair<int, MISTD::string> >* Type::get_enum() const
+MI_INLINE std::vector<std::pair<int, std::string> >* Type::get_enum() const
 {
     ASSERT(M_ATTR, m_typecode == TYPE_ENUM);
     return m_enum;
@@ -303,7 +303,7 @@ MI_INLINE size_t Type::get_size() const
         child_size = m_child ? m_child->get_size() : 0;
     else {
         if (m_enum)
-            child_size += MISTD::dynamic_memory_consumption(*m_enum);
+            child_size += std::dynamic_memory_consumption(*m_enum);
     }
     return sizeof(*this) + child_size
                          + (m_next  ? m_next ->get_size() : 0);

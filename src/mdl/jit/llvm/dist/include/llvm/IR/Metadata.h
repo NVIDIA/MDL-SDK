@@ -199,7 +199,7 @@ class NamedMDNode : public ilist_node<NamedMDNode> {
   friend class Module;
   NamedMDNode(const NamedMDNode &) LLVM_DELETED_FUNCTION;
 
-  MISTD::string Name;
+  std::string Name;
   Module *Parent;
   void *Operands; // SmallVector<TrackingVH<MDNode>, 4>
 

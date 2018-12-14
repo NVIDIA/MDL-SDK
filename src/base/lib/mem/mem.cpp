@@ -205,7 +205,7 @@ extern "C" __declspec(dllexport) void neuray_free_block(void *memory)
 // Overwritten global new operator
 void* operator new(
     size_t size)			// requested size
-    throw(MISTD::bad_alloc)		// we don't throw bad_alloc
+    throw(std::bad_alloc)		// we don't throw bad_alloc
 {
     return MI::MEM::dbg_alloc()->malloc(size);
 }
@@ -225,7 +225,7 @@ void operator delete(
 // Forward 'operator new []' to 'operator new'.
 void * operator new [] (
     size_t	n)			// number of _bytes_ to allocate
-    throw(MISTD::bad_alloc)		// we don't throw bad_alloc
+    throw(std::bad_alloc)		// we don't throw bad_alloc
 {
     return operator new(n);
 }
@@ -245,7 +245,7 @@ void operator delete [] (
 // Forward non-throwing 'operator new' to standard 'operator new'.
 void * operator new(
     size_t	n,			// number of _bytes_ to allocate
-    const MISTD::nothrow_t &)		// dummy argument required by standard
+    const std::nothrow_t &)		// dummy argument required by standard
     throw()				// never throw
 {
     return operator new(n);
@@ -256,7 +256,7 @@ void * operator new(
 // Forward non-throwing 'operator new []' to standard 'operator new'.
 void * operator new [] (
     size_t	n,			// number of _bytes_ to allocate
-    const MISTD::nothrow_t &)		// dummy argument required by standard
+    const std::nothrow_t &)		// dummy argument required by standard
     throw()				// never throw
 {
     return operator new(n);
@@ -273,7 +273,7 @@ void * operator new [] (
 // Forward non-throwing 'operator delete' to standard 'operator delete'.
 void operator delete(
     void *	ptr, 			// pointer to to-be-freed memory
-    const MISTD::nothrow_t &)		// dummy argument required by standard
+    const std::nothrow_t &)		// dummy argument required by standard
     throw()				// never throw
 {
     operator delete(ptr);
@@ -284,7 +284,7 @@ void operator delete(
 // Forward non-throwing 'operator delete []' to standard 'operator delete'.
 void operator delete [] (
     void *	ptr,			// pointer to to-be-freed memory
-    const MISTD::nothrow_t &)		// dummy argument required by standard
+    const std::nothrow_t &)		// dummy argument required by standard
     throw()				// never throw
 {
     operator delete(ptr);

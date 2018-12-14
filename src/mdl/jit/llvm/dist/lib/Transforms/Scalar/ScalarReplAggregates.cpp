@@ -162,7 +162,7 @@ namespace {
                                   Type *&IdxTy);
 
     void DoScalarReplacement(AllocaInst *AI,
-                             MISTD::vector<AllocaInst*> &WorkList);
+                             std::vector<AllocaInst*> &WorkList);
     void DeleteDeadInstructions();
 
     void RewriteForScalarRepl(Instruction *I, AllocaInst *AI, uint64_t Offset,
@@ -1194,7 +1194,7 @@ static bool isSafePHIToSpeculate(PHINode *PN, const DataLayout *TD) {
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = MISTD::max(MaxAlign, LI->getAlignment());
+    MaxAlign = std::max(MaxAlign, LI->getAlignment());
   }
 
   // Okay, we know that we have one or more loads in the same block as the PHI.
@@ -1404,7 +1404,7 @@ static bool tryToMakeAllocaBePromotable(AllocaInst *AI, const DataLayout *TD) {
 }
 
 bool SROA::performPromotion(Function &F) {
-  MISTD::vector<AllocaInst*> Allocas;
+  std::vector<AllocaInst*> Allocas;
   DominatorTree *DT = 0;
   if (HasDomTree)
     DT = &getAnalysis<DominatorTree>();
@@ -1466,7 +1466,7 @@ bool SROA::ShouldAttemptScalarRepl(AllocaInst *AI) {
 // them if they are only used by getelementptr instructions.
 //
 bool SROA::performScalarRepl(Function &F) {
-  MISTD::vector<AllocaInst*> WorkList;
+  std::vector<AllocaInst*> WorkList;
 
   // Scan the entry basic block, adding allocas to the worklist.
   BasicBlock &BB = F.getEntryBlock();
@@ -1537,7 +1537,7 @@ bool SROA::performScalarRepl(Function &F) {
 /// DoScalarReplacement - This alloca satisfied the isSafeAllocaToScalarRepl
 /// predicate, do SROA now.
 void SROA::DoScalarReplacement(AllocaInst *AI,
-                               MISTD::vector<AllocaInst*> &WorkList) {
+                               std::vector<AllocaInst*> &WorkList) {
   DEBUG(dbgs() << "Found inst to SROA: " << *AI << '\n');
   SmallVector<AllocaInst*, 32> ElementAllocas;
   if (StructType *ST = dyn_cast<StructType>(AI->getAllocatedType())) {

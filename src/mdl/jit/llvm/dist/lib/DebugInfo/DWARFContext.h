@@ -138,7 +138,7 @@ public:
   virtual bool isLittleEndian() const = 0;
   virtual uint8_t getAddressSize() const = 0;
   virtual const Section &getInfoSection() = 0;
-  virtual const MISTD::map<object::SectionRef, Section> &getTypesSections() = 0;
+  virtual const std::map<object::SectionRef, Section> &getTypesSections() = 0;
   virtual StringRef getAbbrevSection() = 0;
   virtual const Section &getLocSection() = 0;
   virtual StringRef getARangeSection() = 0;
@@ -179,7 +179,7 @@ class DWARFContextInMemory : public DWARFContext {
   bool IsLittleEndian;
   uint8_t AddressSize;
   Section InfoSection;
-  MISTD::map<object::SectionRef, Section> TypesSections;
+  std::map<object::SectionRef, Section> TypesSections;
   StringRef AbbrevSection;
   Section LocSection;
   StringRef ARangeSection;
@@ -208,7 +208,7 @@ public:
   virtual bool isLittleEndian() const { return IsLittleEndian; }
   virtual uint8_t getAddressSize() const { return AddressSize; }
   virtual const Section &getInfoSection() { return InfoSection; }
-  virtual const MISTD::map<object::SectionRef, Section> &getTypesSections() {
+  virtual const std::map<object::SectionRef, Section> &getTypesSections() {
     return TypesSections;
   }
   virtual StringRef getAbbrevSection() { return AbbrevSection; }

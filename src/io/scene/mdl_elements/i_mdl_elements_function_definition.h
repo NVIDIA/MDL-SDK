@@ -87,7 +87,7 @@ public:
 
     // methods corresponding to mi::neuraylib::IFunction_definition
 
-    DB::Tag get_module() const;
+    DB::Tag get_module(DB::Transaction* transaction) const;
 
     const char* get_mdl_name() const;
 
@@ -181,6 +181,12 @@ public:
     /// Returns the original function name (or \c NULL if this definition is not re-exported).
     const char* get_mdl_original_name() const;
 
+    /// Returns the name of the module this definition belongs to.
+    const char* get_module_name() const;
+
+    /// Returns the database name of the module this definition belongs to.
+    const char* get_module_db_name() const;
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -218,7 +224,7 @@ private:
     mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;  ///< The expression factory.
 
-    DB::Tag m_module_tag;                        ///< The corresponding module.
+    std::string m_module_db_name;                ///< The DB name of the corresponding module.
     DB::Tag m_function_tag;                      ///< The tag of this function definition.
     mi::Uint32 m_function_index;                 ///< The index in the corresponding module.
     mi::mdl::IDefinition::Semantics m_mdl_semantic;  ///< The MDL semantic.
@@ -229,7 +235,6 @@ private:
     DB::Tag m_prototype_tag;                     ///< The prototype of this fct. def. (or inv. tag).
     bool m_is_exported;                          ///< The export flag.
     bool m_is_uniform;                           ///< The uniform flag.
-    DB::Tag_set m_call_references;               ///< Call references in the function body.
 
     mi::base::Handle<IType_list> m_parameter_types;
     mi::base::Handle<const IType> m_return_type;

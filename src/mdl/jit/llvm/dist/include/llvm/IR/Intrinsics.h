@@ -45,7 +45,7 @@ namespace Intrinsic {
   
   /// Intrinsic::getName(ID) - Return the LLVM name for an intrinsic, such as
   /// "llvm.ppc.altivec.lvx".
-  MISTD::string getName(ID id, ArrayRef<Type*> Tys = None);
+  std::string getName(ID id, ArrayRef<Type*> Tys = None);
 
   /// Intrinsic::getType(ID) - Return the function type for an intrinsic.
   ///

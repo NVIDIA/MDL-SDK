@@ -79,7 +79,7 @@ namespace {
 template <bool preserveNames = true>
 class IRBuilderPrefixedInserter :
     public IRBuilderDefaultInserter<preserveNames> {
-  MISTD::string Prefix;
+  std::string Prefix;
 
 public:
   void SetNamePrefix(const Twine &P) { Prefix = P.str(); }
@@ -101,13 +101,8 @@ public:
 };
 
 /// \brief Provide a typedef for IRBuilder that drops names in release builds.
-#ifndef NDEBUG
-typedef llvm::IRBuilder<true, ConstantFolder,
-                        IRBuilderPrefixedInserter<true> > IRBuilderTy;
-#else
 typedef llvm::IRBuilder<false, ConstantFolder,
                         IRBuilderPrefixedInserter<false> > IRBuilderTy;
-#endif
 }
 
 namespace {
@@ -488,7 +483,7 @@ private:
     bool Inserted;
     SmallDenseMap<Instruction *, unsigned>::iterator MTPI;
     llvm::tie(MTPI, Inserted) =
-        MemTransferSliceMap.insert(MISTD::make_pair(&II, S.Slices.size()));
+        MemTransferSliceMap.insert(std::make_pair(&II, S.Slices.size()));
     unsigned PrevIdx = MTPI->second;
     if (!Inserted) {
       Slice &PrevP = S.Slices[PrevIdx];
@@ -523,7 +518,7 @@ private:
     if (II.getIntrinsicID() == Intrinsic::lifetime_start ||
         II.getIntrinsicID() == Intrinsic::lifetime_end) {
       ConstantInt *Length = cast<ConstantInt>(II.getArgOperand(0));
-      uint64_t Size = MISTD::min(AllocSize - Offset.getLimitedValue(),
+      uint64_t Size = std::min(AllocSize - Offset.getLimitedValue(),
                                Length->getLimitedValue());
       insertUse(II, Offset, Size, true);
       return;
@@ -538,9 +533,9 @@ private:
     // are considered unsplittable and the size is the maximum loaded or stored
     // size.
     SmallPtrSet<Instruction *, 4> Visited;
-    SmallVector<MISTD::pair<Instruction *, Instruction *>, 4> Uses;
+    SmallVector<std::pair<Instruction *, Instruction *>, 4> Uses;
     Visited.insert(Root);
-    Uses.push_back(MISTD::make_pair(cast<Instruction>(*U), Root));
+    Uses.push_back(std::make_pair(cast<Instruction>(*U), Root));
     // If there are no loads or stores, the access is dead. We mark that as
     // a size zero access.
     Size = 0;
@@ -549,14 +544,14 @@ private:
       llvm::tie(UsedI, I) = Uses.pop_back_val();
 
       if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-        Size = MISTD::max(Size, DL.getTypeStoreSize(LI->getType()));
+        Size = std::max(Size, DL.getTypeStoreSize(LI->getType()));
         continue;
       }
       if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
         Value *Op = SI->getOperand(0);
         if (Op == UsedI)
           return SI;
-        Size = MISTD::max(Size, DL.getTypeStoreSize(Op->getType()));
+        Size = std::max(Size, DL.getTypeStoreSize(Op->getType()));
         continue;
       }
 
@@ -571,7 +566,7 @@ private:
       for (Value::use_iterator UI = I->use_begin(), UE = I->use_end(); UI != UE;
            ++UI)
         if (Visited.insert(cast<Instruction>(*UI)))
-          Uses.push_back(MISTD::make_pair(I, cast<Instruction>(*UI)));
+          Uses.push_back(std::make_pair(I, cast<Instruction>(*UI)));
     } while (!Uses.empty());
 
     return 0;
@@ -670,13 +665,13 @@ AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
     return;
   }
 
-  Slices.erase(MISTD::remove_if(Slices.begin(), Slices.end(),
-                              MISTD::mem_fun_ref(&Slice::isDead)),
+  Slices.erase(std::remove_if(Slices.begin(), Slices.end(),
+                              std::mem_fun_ref(&Slice::isDead)),
                Slices.end());
 
   // Sort the uses. This arranges for the offsets to be in ascending order,
   // and the sizes to be in descending order.
-  MISTD::sort(Slices.begin(), Slices.end());
+  std::sort(Slices.begin(), Slices.end());
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -876,7 +871,7 @@ class SROA : public FunctionPass {
   SetVector<AllocaInst *, SmallVector<AllocaInst *, 16> > PostPromotionWorklist;
 
   /// \brief A collection of alloca instructions we can directly promote.
-  MISTD::vector<AllocaInst *> PromotableAllocas;
+  std::vector<AllocaInst *> PromotableAllocas;
 
   /// \brief A worklist of PHIs to speculate prior to promoting allocas.
   ///
@@ -1029,7 +1024,7 @@ static bool isSafePHIToSpeculate(PHINode &PN,
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = MISTD::max(MaxAlign, LI->getAlignment());
+    MaxAlign = std::max(MaxAlign, LI->getAlignment());
     HaveLoad = true;
   }
 
@@ -1542,13 +1537,13 @@ static bool isVectorPromotionViableForSlice(
     AllocaSlices::const_iterator I) {
   // First validate the slice offsets.
   uint64_t BeginOffset =
-      MISTD::max(I->beginOffset(), SliceBeginOffset) - SliceBeginOffset;
+      std::max(I->beginOffset(), SliceBeginOffset) - SliceBeginOffset;
   uint64_t BeginIndex = BeginOffset / ElementSize;
   if (BeginIndex * ElementSize != BeginOffset ||
       BeginIndex >= Ty->getNumElements())
     return false;
   uint64_t EndOffset =
-      MISTD::min(I->endOffset(), SliceEndOffset) - SliceBeginOffset;
+      std::min(I->endOffset(), SliceEndOffset) - SliceBeginOffset;
   uint64_t EndIndex = EndOffset / ElementSize;
   if (EndIndex * ElementSize != EndOffset || EndIndex > Ty->getNumElements())
     return false;
@@ -2096,8 +2091,8 @@ private:
     // Compute the intersecting offset range.
     assert(BeginOffset < NewAllocaEndOffset);
     assert(EndOffset > NewAllocaBeginOffset);
-    uint64_t NewBeginOffset = MISTD::max(BeginOffset, NewAllocaBeginOffset);
-    uint64_t NewEndOffset = MISTD::min(EndOffset, NewAllocaEndOffset);
+    uint64_t NewBeginOffset = std::max(BeginOffset, NewAllocaBeginOffset);
+    uint64_t NewEndOffset = std::min(EndOffset, NewAllocaEndOffset);
 
     uint64_t Size = NewEndOffset - NewBeginOffset;
 
@@ -2220,8 +2215,8 @@ private:
     // Compute the intersecting offset range.
     assert(BeginOffset < NewAllocaEndOffset);
     assert(EndOffset > NewAllocaBeginOffset);
-    uint64_t NewBeginOffset = MISTD::max(BeginOffset, NewAllocaBeginOffset);
-    uint64_t NewEndOffset = MISTD::min(EndOffset, NewAllocaEndOffset);
+    uint64_t NewBeginOffset = std::max(BeginOffset, NewAllocaBeginOffset);
+    uint64_t NewEndOffset = std::min(EndOffset, NewAllocaEndOffset);
 
     uint64_t Size = NewEndOffset - NewBeginOffset;
     if (Size < DL.getTypeStoreSize(V->getType())) {
@@ -2326,8 +2321,8 @@ private:
     // Compute the intersecting offset range.
     assert(BeginOffset < NewAllocaEndOffset);
     assert(EndOffset > NewAllocaBeginOffset);
-    uint64_t NewBeginOffset = MISTD::max(BeginOffset, NewAllocaBeginOffset);
-    uint64_t NewEndOffset = MISTD::min(EndOffset, NewAllocaEndOffset);
+    uint64_t NewBeginOffset = std::max(BeginOffset, NewAllocaBeginOffset);
+    uint64_t NewEndOffset = std::min(EndOffset, NewAllocaEndOffset);
     uint64_t SliceOffset = NewBeginOffset - NewAllocaBeginOffset;
 
     // If this doesn't map cleanly onto the alloca type, and that type isn't
@@ -2422,8 +2417,8 @@ private:
     // Compute the intersecting offset range.
     assert(BeginOffset < NewAllocaEndOffset);
     assert(EndOffset > NewAllocaBeginOffset);
-    uint64_t NewBeginOffset = MISTD::max(BeginOffset, NewAllocaBeginOffset);
-    uint64_t NewEndOffset = MISTD::min(EndOffset, NewAllocaEndOffset);
+    uint64_t NewBeginOffset = std::max(BeginOffset, NewAllocaBeginOffset);
+    uint64_t NewEndOffset = std::min(EndOffset, NewAllocaEndOffset);
 
     assert(II.getRawSource() == OldPtr || II.getRawDest() == OldPtr);
     bool IsDest = II.getRawDest() == OldPtr;
@@ -2550,7 +2545,7 @@ private:
     Value *SrcPtr = getAdjustedPtr(IRB, DL, OtherPtr, RelOffset, OtherPtrTy);
     Value *DstPtr = &NewAI;
     if (!IsDest)
-      MISTD::swap(SrcPtr, DstPtr);
+      std::swap(SrcPtr, DstPtr);
 
     Value *Src;
     if (VecTy && !IsWholeAlloca && !IsDest) {
@@ -2597,8 +2592,8 @@ private:
     // Compute the intersecting offset range.
     assert(BeginOffset < NewAllocaEndOffset);
     assert(EndOffset > NewAllocaBeginOffset);
-    uint64_t NewBeginOffset = MISTD::max(BeginOffset, NewAllocaBeginOffset);
-    uint64_t NewEndOffset = MISTD::min(EndOffset, NewAllocaEndOffset);
+    uint64_t NewBeginOffset = std::max(BeginOffset, NewAllocaBeginOffset);
+    uint64_t NewEndOffset = std::min(EndOffset, NewAllocaEndOffset);
 
     // Record this instruction for deletion.
     Pass.DeadInsts.insert(&II);
@@ -2635,7 +2630,7 @@ private:
     Value *NewPtr =
         getAdjustedAllocaPtr(PtrBuilder, BeginOffset, OldPtr->getType());
     // Replace the operands which were using the old pointer.
-    MISTD::replace(PN.op_begin(), PN.op_end(), cast<Value>(OldPtr), NewPtr);
+    std::replace(PN.op_begin(), PN.op_end(), cast<Value>(OldPtr), NewPtr);
 
     DEBUG(dbgs() << "          to: " << PN << "\n");
     deleteIfTriviallyDead(OldPtr);
@@ -3143,7 +3138,7 @@ bool SROA::rewritePartition(AllocaInst &AI, AllocaSlices &S,
 
   NumAllocaPartitionUses += NumUses;
   MaxUsesPerAllocaPartition =
-      MISTD::max<unsigned>(NumUses, MaxUsesPerAllocaPartition);
+      std::max<unsigned>(NumUses, MaxUsesPerAllocaPartition);
 
   if (Promotable && !Rewriter.isUsedByRewrittenSpeculatableInstructions()) {
     DEBUG(dbgs() << "  and queuing for promotion\n");
@@ -3199,7 +3194,7 @@ removeFinishedSplitUses(SmallVectorImpl<AllocaSlices::iterator> &SplitUses,
   }
 
   size_t SplitUsesOldSize = SplitUses.size();
-  SplitUses.erase(MISTD::remove_if(SplitUses.begin(), SplitUses.end(),
+  SplitUses.erase(std::remove_if(SplitUses.begin(), SplitUses.end(),
                                  IsSliceEndLessOrEqualTo(Offset)),
                   SplitUses.end());
   if (SplitUsesOldSize == SplitUses.size())
@@ -3211,7 +3206,7 @@ removeFinishedSplitUses(SmallVectorImpl<AllocaSlices::iterator> &SplitUses,
            SUI = SplitUses.begin(),
            SUE = SplitUses.end();
        SUI != SUE; ++SUI)
-    MaxSplitUseEndOffset = MISTD::max((*SUI)->endOffset(), MaxSplitUseEndOffset);
+    MaxSplitUseEndOffset = std::max((*SUI)->endOffset(), MaxSplitUseEndOffset);
 }
 
 /// \brief Walks the slices of an alloca and form partitions based on them,
@@ -3240,7 +3235,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &S) {
       // unsplittable slice.
       while (SJ != SE && SJ->beginOffset() < MaxEndOffset) {
         if (!SJ->isSplittable())
-          MaxEndOffset = MISTD::max(MaxEndOffset, SJ->endOffset());
+          MaxEndOffset = std::max(MaxEndOffset, SJ->endOffset());
         ++SJ;
       }
     } else {
@@ -3249,7 +3244,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &S) {
       // Collect all of the overlapping splittable slices.
       while (SJ != SE && SJ->beginOffset() < MaxEndOffset &&
              SJ->isSplittable()) {
-        MaxEndOffset = MISTD::max(MaxEndOffset, SJ->endOffset());
+        MaxEndOffset = std::max(MaxEndOffset, SJ->endOffset());
         ++SJ;
       }
 
@@ -3277,7 +3272,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &S) {
     for (AllocaSlices::iterator SK = SI; SK != SJ; ++SK)
       if (SK->isSplittable() && SK->endOffset() > MaxEndOffset) {
         SplitUses.push_back(SK);
-        MaxSplitUseEndOffset = MISTD::max(SK->endOffset(), MaxSplitUseEndOffset);
+        MaxSplitUseEndOffset = std::max(SK->endOffset(), MaxSplitUseEndOffset);
       }
 
     // If we're already at the end and we have no split uses, we're done.
@@ -3321,7 +3316,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &S) {
 
   NumAllocaPartitions += NumPartitions;
   MaxPartitionsPerAlloca =
-      MISTD::max<unsigned>(NumPartitions, MaxPartitionsPerAlloca);
+      std::max<unsigned>(NumPartitions, MaxPartitionsPerAlloca);
 
   return Changed;
 }
@@ -3566,7 +3561,7 @@ bool SROA::runOnFunction(Function &F) {
       if (!DeletedAllocas.empty()) {
         Worklist.remove_if(IsAllocaInSet(DeletedAllocas));
         PostPromotionWorklist.remove_if(IsAllocaInSet(DeletedAllocas));
-        PromotableAllocas.erase(MISTD::remove_if(PromotableAllocas.begin(),
+        PromotableAllocas.erase(std::remove_if(PromotableAllocas.begin(),
                                                PromotableAllocas.end(),
                                                IsAllocaInSet(DeletedAllocas)),
                                 PromotableAllocas.end());

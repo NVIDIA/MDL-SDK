@@ -1,0 +1,5 @@
+module MdlQtPlugin
+BrowserApp 1.0 qrc:///mdlqtplugin/BrowserApp.qml
+BrowserDialog 1.0 qrc:///mdlqtplugin/BrowserDialog.qml
+BrowserMain 1.0 qrc:///mdlqtplugin/BrowserMain.qml
+plugin mdl_qt_plugin

@@ -38,8 +38,8 @@
 //
 // It uses the << operator when possible, and prints the bytes in the
 // object otherwise.  A user can override its behavior for a class
-// type Foo by defining either operator<<(::MISTD::ostream&, const Foo&)
-// or void PrintTo(const Foo&, ::MISTD::ostream*) in the namespace that
+// type Foo by defining either operator<<(::std::ostream&, const Foo&)
+// or void PrintTo(const Foo&, ::std::ostream*) in the namespace that
 // defines Foo.
 
 #include "gtest/gtest-printers.h"
@@ -53,7 +53,7 @@ namespace testing {
 
 namespace {
 
-using ::MISTD::ostream;
+using ::std::ostream;
 
 #if GTEST_OS_WINDOWS_MOBILE  // Windows CE does not define _snprintf_s.
 # define snprintf _snprintf
@@ -242,10 +242,10 @@ void PrintCharAndCodeTo(Char c, ostream* os) {
   *os << ")";
 }
 
-void PrintTo(unsigned char c, ::MISTD::ostream* os) {
+void PrintTo(unsigned char c, ::std::ostream* os) {
   PrintCharAndCodeTo<unsigned char>(c, os);
 }
-void PrintTo(signed char c, ::MISTD::ostream* os) {
+void PrintTo(signed char c, ::std::ostream* os) {
   PrintCharAndCodeTo<unsigned char>(c, os);
 }
 
@@ -334,7 +334,7 @@ void PrintStringTo(const ::string& s, ostream* os) {
 }
 #endif  // GTEST_HAS_GLOBAL_STRING
 
-void PrintStringTo(const ::MISTD::string& s, ostream* os) {
+void PrintStringTo(const ::std::string& s, ostream* os) {
   PrintCharsAsStringTo(s.data(), s.size(), os);
 }
 
@@ -346,7 +346,7 @@ void PrintWideStringTo(const ::wstring& s, ostream* os) {
 #endif  // GTEST_HAS_GLOBAL_WSTRING
 
 #if GTEST_HAS_STD_WSTRING
-void PrintWideStringTo(const ::MISTD::wstring& s, ostream* os) {
+void PrintWideStringTo(const ::std::wstring& s, ostream* os) {
   PrintWideCharsAsStringTo(s.data(), s.size(), os);
 }
 #endif  // GTEST_HAS_STD_WSTRING

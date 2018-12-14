@@ -131,7 +131,7 @@ namespace {
     DominatorTree *DT;    // Dominator Tree, caution can be null!
     const DataLayout *DL;
 
-    MISTD::string Messages;
+    std::string Messages;
     raw_string_ostream MessagesStr;
 
     /// InstInThisBlock - when verifying a basic block, keep track of all of the
@@ -324,7 +324,7 @@ namespace {
 
     void VerifyCallSite(CallSite CS);
     bool PerformTypeCheck(Intrinsic::ID ID, Function *F, Type *Ty,
-                          int VT, unsigned ArgNo, MISTD::string &Suffix);
+                          int VT, unsigned ArgNo, std::string &Suffix);
     bool VerifyIntrinsicType(Type *Ty,
                              ArrayRef<Intrinsic::IITDescriptor> &Infos,
                              SmallVectorImpl<Type*> &ArgTys);
@@ -731,7 +731,7 @@ void Verifier::visitModuleFlag(MDNode *Op, DenseMap<MDString*, MDNode*>&SeenIDs,
 
   // Unless this is a "requires" flag, check the ID is unique.
   if (BehaviorValue != Module::Require) {
-    bool Inserted = SeenIDs.insert(MISTD::make_pair(ID, Op)).second;
+    bool Inserted = SeenIDs.insert(std::make_pair(ID, Op)).second;
     Assert1(Inserted,
             "module flag identifiers must be unique (or of 'require' type)",
             ID);
@@ -1115,8 +1115,8 @@ void Verifier::visitBasicBlock(BasicBlock &BB) {
   // it.
   if (isa<PHINode>(BB.front())) {
     SmallVector<BasicBlock*, 8> Preds(pred_begin(&BB), pred_end(&BB));
-    SmallVector<MISTD::pair<BasicBlock*, Value*>, 8> Values;
-    MISTD::sort(Preds.begin(), Preds.end());
+    SmallVector<std::pair<BasicBlock*, Value*>, 8> Values;
+    std::sort(Preds.begin(), Preds.end());
     PHINode *PN;
     for (BasicBlock::iterator I = BB.begin(); (PN = dyn_cast<PHINode>(I));++I) {
       // Ensure that PHI nodes have at least one entry!
@@ -1131,9 +1131,9 @@ void Verifier::visitBasicBlock(BasicBlock &BB) {
       Values.clear();
       Values.reserve(PN->getNumIncomingValues());
       for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
-        Values.push_back(MISTD::make_pair(PN->getIncomingBlock(i),
+        Values.push_back(std::make_pair(PN->getIncomingBlock(i),
                                         PN->getIncomingValue(i)));
-      MISTD::sort(Values.begin(), Values.end());
+      std::sort(Values.begin(), Values.end());
 
       for (unsigned i = 0, e = Values.size(); i != e; ++i) {
         // Check to make sure that if there is more than one entry for a
@@ -2430,7 +2430,7 @@ bool llvm::verifyFunction(const Function &f, VerifierFailureAction action) {
 /// Return true if the module is corrupt.
 ///
 bool llvm::verifyModule(const Module &M, VerifierFailureAction action,
-                        MISTD::string *ErrorInfo) {
+                        std::string *ErrorInfo) {
   PassManager PM;
   Verifier *V = new Verifier(action);
   PM.add(V);

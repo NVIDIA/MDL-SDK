@@ -41,19 +41,19 @@ STATISTIC(NumGlobals  , "Number of global vars internalized");
 
 // APIFile - A file which contains a list of symbols that should not be marked
 // external.
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 APIFile("internalize-public-api-file", cl::value_desc("filename"),
         cl::desc("A file containing list of symbol names to preserve"));
 
 // APIList - A list of symbols that should not be marked internal.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 APIList("internalize-public-api-list", cl::value_desc("list"),
         cl::desc("A list of symbol names to preserve"),
         cl::CommaSeparated);
 
 namespace {
   class InternalizePass : public ModulePass {
-    MISTD::set<MISTD::string> ExternalNames;
+    std::set<std::string> ExternalNames;
   public:
     static char ID; // Pass identification, replacement for typeid
     explicit InternalizePass();
@@ -91,14 +91,14 @@ InternalizePass::InternalizePass(ArrayRef<const char *> ExportList)
 
 void InternalizePass::LoadFile(const char *Filename) {
   // Load the APIFile...
-  MISTD::ifstream In(Filename);
+  std::ifstream In(Filename);
   if (!In.good()) {
     errs() << "WARNING: Internalize couldn't load file '" << Filename
          << "'! Continuing as if it's empty.\n";
     return; // Just continue as if the file were empty
   }
   while (In) {
-    MISTD::string Symbol;
+    std::string Symbol;
     In >> Symbol;
     if (!Symbol.empty())
       ExternalNames.insert(Symbol);
@@ -106,7 +106,7 @@ void InternalizePass::LoadFile(const char *Filename) {
 }
 
 static bool shouldInternalize(const GlobalValue &GV,
-                              const MISTD::set<MISTD::string> &ExternalNames) {
+                              const std::set<std::string> &ExternalNames) {
   // Function must be defined here
   if (GV.isDeclaration())
     return false;

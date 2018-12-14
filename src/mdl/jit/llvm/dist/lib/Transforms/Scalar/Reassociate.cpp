@@ -208,7 +208,7 @@ XorOpnd::XorOpnd(Value *V) {
     Value *V0 = I->getOperand(0);
     Value *V1 = I->getOperand(1);
     if (isa<ConstantInt>(V0))
-      MISTD::swap(V0, V1);
+      std::swap(V0, V1);
 
     if (ConstantInt *C = dyn_cast<ConstantInt>(V1)) {
       ConstPart = C->getValue();
@@ -300,7 +300,7 @@ unsigned Reassociate::getRank(Value *V) {
   unsigned Rank = 0, MaxRank = RankMap[I->getParent()];
   for (unsigned i = 0, e = I->getNumOperands();
        i != e && Rank != MaxRank; ++i)
-    Rank = MISTD::max(Rank, getRank(I->getOperand(i)));
+    Rank = std::max(Rank, getRank(I->getOperand(i)));
 
   // If this is a not or neg instruction, do not count it for rank.  This
   // assures us that X and ~X will have the same rank.
@@ -418,7 +418,7 @@ static void IncorporateWeight(APInt &LHS, const APInt &RHS, unsigned Opcode) {
   }
 }
 
-typedef MISTD::pair<Value*, APInt> RepeatedValue;
+typedef std::pair<Value*, APInt> RepeatedValue;
 
 /// LinearizeExprTree - Given an associative binary expression, return the leaf
 /// nodes in Ops along with their weights (how many times the leaf occurs).  The
@@ -513,8 +513,8 @@ static bool LinearizeExprTree(BinaryOperator *I,
   // with their weights, representing a certain number of paths to the operator.
   // If an operator occurs in the worklist multiple times then we found multiple
   // ways to get to it.
-  SmallVector<MISTD::pair<BinaryOperator*, APInt>, 8> Worklist; // (Op, Weight)
-  Worklist.push_back(MISTD::make_pair(I, APInt(Bitwidth, 1)));
+  SmallVector<std::pair<BinaryOperator*, APInt>, 8> Worklist; // (Op, Weight)
+  Worklist.push_back(std::make_pair(I, APInt(Bitwidth, 1)));
   bool MadeChange = false;
 
   // Leaves of the expression are values that either aren't the right kind of
@@ -540,7 +540,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
   SmallPtrSet<Value*, 8> Visited; // For sanity checking the iteration scheme.
 #endif
   while (!Worklist.empty()) {
-    MISTD::pair<BinaryOperator*, APInt> P = Worklist.pop_back_val();
+    std::pair<BinaryOperator*, APInt> P = Worklist.pop_back_val();
     I = P.first; // We examine the operands of this binary operator.
 
     for (unsigned OpIdx = 0; OpIdx < 2; ++OpIdx) { // Visit operands.
@@ -554,7 +554,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
       if (BinaryOperator *BO = isReassociableOp(Op, Opcode)) {
         assert(Visited.insert(Op) && "Not first visit!");
         DEBUG(dbgs() << "DIRECT ADD: " << *Op << " (" << Weight << ")\n");
-        Worklist.push_back(MISTD::make_pair(BO, Weight));
+        Worklist.push_back(std::make_pair(BO, Weight));
         continue;
       }
 
@@ -592,7 +592,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
         // its operands to the expression.
         if (BinaryOperator *BO = isReassociableOp(Op, Opcode)) {
           DEBUG(dbgs() << "UNLEAF: " << *Op << " (" << It->second << ")\n");
-          Worklist.push_back(MISTD::make_pair(BO, It->second));
+          Worklist.push_back(std::make_pair(BO, It->second));
           Leaves.erase(It);
           continue;
         }
@@ -624,7 +624,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
         DEBUG(dbgs() << "MORPH LEAF: " << *Op << " (" << Weight << ") TO ");
         BO = LowerNegateToMultiply(BO);
         DEBUG(dbgs() << *BO << 'n');
-        Worklist.push_back(MISTD::make_pair(BO, Weight));
+        Worklist.push_back(std::make_pair(BO, Weight));
         MadeChange = true;
         continue;
       }
@@ -653,7 +653,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
       continue;
     // Ensure the leaf is only output once.
     It->second = 0;
-    Ops.push_back(MISTD::make_pair(V, Weight));
+    Ops.push_back(std::make_pair(V, Weight));
   }
 
   // For nilpotent operations or addition there may be no operands, for example
@@ -662,7 +662,7 @@ static bool LinearizeExprTree(BinaryOperator *I,
   if (Ops.empty()) {
     Constant *Identity = ConstantExpr::getBinOpIdentity(Opcode, I->getType());
     assert(Identity && "Associative operation without identity!");
-    Ops.push_back(MISTD::make_pair(Identity, APInt(Bitwidth, 1)));
+    Ops.push_back(std::make_pair(Identity, APInt(Bitwidth, 1)));
   }
 
   return MadeChange;
@@ -1203,7 +1203,7 @@ bool Reassociate::CombineXorOpnd(Instruction *I, XorOpnd *Opnd1, XorOpnd *Opnd2,
   //
   if (Opnd1->isOrExpr() != Opnd2->isOrExpr()) {
     if (Opnd2->isOrExpr())
-      MISTD::swap(Opnd1, Opnd2);
+      std::swap(Opnd1, Opnd2);
 
     const APInt &C1 = Opnd1->getConstPart();
     const APInt &C2 = Opnd2->getConstPart();
@@ -1293,7 +1293,7 @@ Value *Reassociate::OptimizeXor(Instruction *I,
   //  the same symbolic value cluster together. For instance, the input operand
   //  sequence ("x | 123", "y & 456", "x & 789") will be sorted into:
   //  ("x | 123", "x & 789", "y & 456").
-  MISTD::sort(OpndPtrs.begin(), OpndPtrs.end(), XorOpnd::PtrSortFunctor());
+  std::sort(OpndPtrs.begin(), OpndPtrs.end(), XorOpnd::PtrSortFunctor());
 
   // Step 3: Combine adjacent operands
   XorOpnd *PrevOpnd = 0;
@@ -1619,7 +1619,7 @@ bool Reassociate::collectMultiplyFactors(SmallVectorImpl<ValueEntry> &Ops,
   // below our mininum of '4'.
   assert(FactorPowerSum >= 4);
 
-  MISTD::sort(Factors.begin(), Factors.end(), Factor::PowerDescendingSorter());
+  std::sort(Factors.begin(), Factors.end(), Factor::PowerDescendingSorter());
   return true;
 }
 
@@ -1674,7 +1674,7 @@ Value *Reassociate::buildMinimalMultiplyDAG(IRBuilder<> &Builder,
   }
   // Unique factors with equal powers -- we've folded them into the first one's
   // base.
-  Factors.erase(MISTD::unique(Factors.begin(), Factors.end(),
+  Factors.erase(std::unique(Factors.begin(), Factors.end(),
                             Factor::PowerEqual()),
                 Factors.end());
 
@@ -1718,7 +1718,7 @@ Value *Reassociate::OptimizeMul(BinaryOperator *I,
     return V;
 
   ValueEntry NewEntry = ValueEntry(getRank(V), V);
-  Ops.insert(MISTD::lower_bound(Ops.begin(), Ops.end(), NewEntry), NewEntry);
+  Ops.insert(std::lower_bound(Ops.begin(), Ops.end(), NewEntry), NewEntry);
   return 0;
 }
 
@@ -1919,7 +1919,7 @@ void Reassociate::ReassociateExpression(BinaryOperator *I) {
   // positions maintained (and so the compiler is deterministic).  Note that
   // this sorts so that the highest ranking values end up at the beginning of
   // the vector.
-  MISTD::stable_sort(Ops.begin(), Ops.end());
+  std::stable_sort(Ops.begin(), Ops.end());
 
   // OptimizeExpression - Now that we have the expression tree in a convenient
   // sorted form, optimize it globally if possible.

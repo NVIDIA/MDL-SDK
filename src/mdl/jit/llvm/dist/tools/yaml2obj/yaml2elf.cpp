@@ -31,7 +31,7 @@ using namespace llvm;
 // implementation variation is possible.
 //
 // TODO: Use an ordered container with a suffix-based comparison in order
-// to deduplicate suffixes. MISTD::map<> with a custom comparator is likely
+// to deduplicate suffixes. std::map<> with a custom comparator is likely
 // to be the simplest implementation, but a suffix trie could be more
 // suitable for the job.
 namespace {
@@ -39,7 +39,7 @@ class StringTableBuilder {
   /// \brief Indices of strings currently present in `Buf`.
   StringMap<unsigned> StringIndices;
   /// \brief The contents of the string table as we build it.
-  MISTD::string Buf;
+  std::string Buf;
 public:
   StringTableBuilder() {
     Buf.push_back('\0');
@@ -185,8 +185,8 @@ public:
 // ELF type names are insane.
 template <class ELFT>
 static void
-addSymbols(const MISTD::vector<ELFYAML::Symbol> &Symbols, ELFState<ELFT> &State,
-           MISTD::vector<typename object::ELFFile<ELFT>::Elf_Sym> &Syms,
+addSymbols(const std::vector<ELFYAML::Symbol> &Symbols, ELFState<ELFT> &State,
+           std::vector<typename object::ELFFile<ELFT>::Elf_Sym> &Syms,
            unsigned SymbolBinding) {
   typedef typename object::ELFFile<ELFT>::Elf_Sym Elf_Sym;
   for (unsigned i = 0, e = Symbols.size(); i != e; ++i) {
@@ -224,7 +224,7 @@ handleSymtabSectionHeader(const ELFYAML::LocalGlobalWeakSymbols &Symbols,
   SHeader.sh_info = Symbols.Local.size() + 1;
   SHeader.sh_entsize = sizeof(Elf_Sym);
 
-  MISTD::vector<Elf_Sym> Syms;
+  std::vector<Elf_Sym> Syms;
   {
     // Ensure STN_UNDEF is present
     Elf_Sym Sym;
@@ -273,7 +273,7 @@ static int writeELF(raw_ostream &OS, const ELFYAML::Object &Doc) {
   Header.e_shentsize = sizeof(Elf_Shdr);
   // Immediately following the ELF header.
   Header.e_shoff = sizeof(Header);
-  const MISTD::vector<ELFYAML::Section> &Sections = Doc.Sections;
+  const std::vector<ELFYAML::Section> &Sections = Doc.Sections;
   // "+ 4" for
   // - SHT_NULL entry (placed first, i.e. 0'th entry)
   // - symbol table (.symtab) (placed third to last)
@@ -305,7 +305,7 @@ static int writeELF(raw_ostream &OS, const ELFYAML::Object &Doc) {
   ELFState<ELFT> State(Header, CBA, DotStrtabSecNo, SN2I);
 
   StringTableBuilder SHStrTab;
-  MISTD::vector<Elf_Shdr> SHeaders;
+  std::vector<Elf_Shdr> SHeaders;
   {
     // Ensure SHN_UNDEF entry is present. An all-zero section header is a
     // valid SHN_UNDEF entry since SHT_NULL == 0.

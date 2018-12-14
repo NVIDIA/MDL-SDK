@@ -363,8 +363,28 @@ public:
     virtual size_t get_index() const = 0;
 };
 
+/// A floating-point value.
+class IValue_FP : public IValue_atomic
+{
+public:
+    /// Additional classes to differentiate between special FP values.
+    enum FP_class {
+        FPC_PLUS_ZERO,       ///< The +0.0.
+        FPC_MINUS_ZERO,      ///< The -0.0.
+        FPC_PLUS_INF,        ///< The +inf.
+        FPC_MINUS_INF,       ///< The -inf.
+        FPC_NAN,             ///< Is a NaN.
+        FPC_NORMAL,          ///< Any other Fp value.
+    };
+
+public:
+    /// Return the FP class of this value.
+    virtual FP_class get_fp_class() const = 0;
+};
+
+
 /// A value of type float.
-class IValue_float : public IValue_atomic
+class IValue_float : public IValue_FP
 {
 public:
     /// The kind of this subclass.
@@ -378,7 +398,7 @@ public:
 };
 
 /// A value of type double.
-class IValue_double : public IValue_atomic
+class IValue_double : public IValue_FP
 {
 public:
     /// The kind of this subclass.
@@ -605,6 +625,24 @@ inline IValue_atomic *as<IValue_atomic>(IValue *value) {
 template<>
 inline IValue_atomic const *as<IValue_atomic>(IValue const *value) { //-V659 PVS
     return const_cast<IValue_atomic const *>(as<IValue_atomic>(const_cast<IValue *>(value)));
+}
+
+/// Cast to IValue_FP or return NULL if types do not match.
+template<>
+inline IValue_FP *as<IValue_FP>(IValue *value) {
+    switch (value->get_kind()) {
+    case IValue::VK_FLOAT:
+    case IValue::VK_DOUBLE:
+        return static_cast<IValue_FP *>(value);
+    default:
+        return NULL;
+    }
+}
+
+/// Cast to IValue_FP or return NULL if types do not match.
+template<>
+inline IValue_FP const *as<IValue_FP>(IValue const *value) { //-V659 PVS
+    return const_cast<IValue_FP const *>(as<IValue_FP>(const_cast<IValue *>(value)));
 }
 
 /// Cast to IValue_int_valued or return NULL if types do not match.

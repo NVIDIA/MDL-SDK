@@ -20670,8 +20670,8 @@ _ACEOF
 fi
 
 
-  { echo "$as_me:$LINENO: checking for MISTD::isnan in <cmath>" >&5
-echo $ECHO_N "checking for MISTD::isnan in <cmath>... $ECHO_C" >&6; }
+  { echo "$as_me:$LINENO: checking for std::isnan in <cmath>" >&5
+echo $ECHO_N "checking for std::isnan in <cmath>... $ECHO_C" >&6; }
 if test "${ac_cv_func_std_isnan_in_cmath+set}" = set; then
   echo $ECHO_N "(cached) $ECHO_C" >&6
 else
@@ -20692,7 +20692,7 @@ cat >>conftest.$ac_ext <<_ACEOF
 int
 main ()
 {
-float f; MISTD::isnan(f);
+float f; std::isnan(f);
   ;
   return 0;
 }
@@ -20942,8 +20942,8 @@ _ACEOF
 fi
 
 
-  { echo "$as_me:$LINENO: checking for MISTD::isinf in <cmath>" >&5
-echo $ECHO_N "checking for MISTD::isinf in <cmath>... $ECHO_C" >&6; }
+  { echo "$as_me:$LINENO: checking for std::isinf in <cmath>" >&5
+echo $ECHO_N "checking for std::isinf in <cmath>... $ECHO_C" >&6; }
 if test "${ac_cv_func_std_isinf_in_cmath+set}" = set; then
   echo $ECHO_N "(cached) $ECHO_C" >&6
 else
@@ -20964,7 +20964,7 @@ cat >>conftest.$ac_ext <<_ACEOF
 int
 main ()
 {
-float f; MISTD::isinf(f);
+float f; std::isinf(f);
   ;
   return 0;
 }

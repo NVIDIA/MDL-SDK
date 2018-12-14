@@ -127,7 +127,7 @@ public:
   };
 
 private:
-  MISTD::string Data;
+  std::string Data;
 
   /// The parsed arch type.
   ArchType Arch;
@@ -162,7 +162,7 @@ public:
   /// triple form (or something sensible that the Triple class understands if
   /// nothing better can reasonably be done).  In particular, it handles the
   /// common case in which otherwise valid components are in the wrong order.
-  static MISTD::string normalize(StringRef Str);
+  static std::string normalize(StringRef Str);
 
   /// @}
   /// @name Typed Component Access
@@ -218,9 +218,9 @@ public:
   /// @name Direct Component Access
   /// @{
 
-  const MISTD::string &str() const { return Data; }
+  const std::string &str() const { return Data; }
 
-  const MISTD::string &getTriple() const { return Data; }
+  const std::string &getTriple() const { return Data; }
 
   /// getArchName - Get the architecture (first) component of the
   /// triple.

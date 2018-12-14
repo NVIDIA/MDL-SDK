@@ -88,13 +88,18 @@ void load_module( mi::neuraylib::INeuray* neuray)
     {
         mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
             neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+
         mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
             neuray->get_api_component<mi::neuraylib::IMdl_factory>());
+
+        mi::base::Handle < mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
 
         // Load the module "example". There is no need to configure any module search paths since
         // the current directory is by default in the search path.
         check_success( mdl_compiler->load_module(
-            transaction.get(), "::nvidia::sdk_examples::tutorials") >= 0);
+            transaction.get(), "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
+        print_messages( context.get());
 
         // Access the module by its name. The name to be used here is the MDL name of the module
         // ("example") plus the "mdl::" prefix.
@@ -172,12 +177,12 @@ void load_module( mi::neuraylib::INeuray* neuray)
 
         // Dump the resources referenced by this module
         std::cout << "Dumping resources of this module: \n";
-        for (mi::Size r = 0, rn = module->get_resources_count(); r < rn; ++r)
+        for( mi::Size r = 0, rn = module->get_resources_count(); r < rn; ++r)
         {
-            const char* db_name = module->get_resource_name(r);
-            const char* mdl_file_path = module->get_resource_mdl_file_path(r);
+            const char* db_name = module->get_resource_name( r);
+            const char* mdl_file_path = module->get_resource_mdl_file_path( r);
 
-            if (db_name == NULL)
+            if( db_name == nullptr)
             {
                 std::cout << "    The module contains a resource that could not be resolved:"
                           << std::endl;
@@ -189,22 +194,22 @@ void load_module( mi::neuraylib::INeuray* neuray)
             std::cout << "    mdl_file_path:         " << mdl_file_path << std::endl;
 
             const mi::base::Handle<const mi::neuraylib::IType_resource> type(
-                module->get_resource_type(r));
-            switch (type->get_kind())
+                module->get_resource_type( r));
+            switch( type->get_kind())
             {
                 case mi::neuraylib::IType::TK_TEXTURE:
                 {
                     const mi::base::Handle<const mi::neuraylib::ITexture> texture(
-                        transaction->access<mi::neuraylib::ITexture>(db_name));
-                    if (texture)
+                        transaction->access<mi::neuraylib::ITexture>( db_name));
+                    if( texture)
                     {
                         const mi::base::Handle<const mi::neuraylib::IImage> image(
-                            transaction->access<mi::neuraylib::IImage>(texture->get_image()));
+                            transaction->access<mi::neuraylib::IImage>( texture->get_image()));
 
-                        for (mi::Size t = 0, tn = image->get_uvtile_length(); t < tn; ++t)
+                        for( mi::Size t = 0, tn = image->get_uvtile_length(); t < tn; ++t)
                         {
                             const char* system_file_path = image->get_filename(
-                                static_cast<mi::Uint32>(t));
+                                static_cast<mi::Uint32>( t));
                             std::cout << "    resolved_file_path[" << t << "]: " 
                                       << system_file_path << std::endl;
                         }
@@ -215,8 +220,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
                 case mi::neuraylib::IType::TK_LIGHT_PROFILE:
                 {
                     const mi::base::Handle<const mi::neuraylib::ILightprofile> light_profile(
-                        transaction->access<mi::neuraylib::ILightprofile>(db_name));
-                    if (light_profile)
+                        transaction->access<mi::neuraylib::ILightprofile>( db_name));
+                    if( light_profile)
                     {
                         const char* system_file_path = light_profile->get_filename();
                         std::cout << "    resolved_file_path:    " << system_file_path << std::endl;
@@ -227,8 +232,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
                 case mi::neuraylib::IType::TK_BSDF_MEASUREMENT:
                 {
                     const mi::base::Handle<const mi::neuraylib::IBsdf_measurement> mbsdf(
-                        transaction->access<mi::neuraylib::IBsdf_measurement>(db_name));
-                    if (mbsdf)
+                        transaction->access<mi::neuraylib::IBsdf_measurement>( db_name));
+                    if( mbsdf)
                     {
                         const char* system_file_path = mbsdf->get_filename();
                         std::cout << "    resolved_file_path:    " << system_file_path << std::endl;
@@ -254,7 +259,7 @@ int main( int /*argc*/, char* /*argv*/[])
     check_success( neuray.is_valid_interface());
 
     // Configure the MDL SDK
-    configure(neuray.get());
+    configure( neuray.get());
 
     // Start the MDL SDK
     mi::Sint32 result = neuray->start();

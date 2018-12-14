@@ -39,7 +39,7 @@ namespace llvm {
     /// isMachineInstrOperand, this is the PrinterMethodName for the operand..
     /// For isLiteralStatementOperand, this is the code to insert verbatim
     /// into the asm writer.
-    MISTD::string Str;
+    std::string Str;
 
     /// CGIOpNo - For isMachineInstrOperand, this is the index of the operand in
     /// the CodeGenInstruction.
@@ -51,19 +51,19 @@ namespace llvm {
 
     /// MiModifier - For isMachineInstrOperand, this is the modifier string for
     /// an operand, specified with syntax like ${opname:modifier}.
-    MISTD::string MiModifier;
+    std::string MiModifier;
 
     // To make VS STL happy
     AsmWriterOperand(OpType op = isLiteralTextOperand):OperandType(op) {}
 
-    AsmWriterOperand(const MISTD::string &LitStr,
+    AsmWriterOperand(const std::string &LitStr,
                      OpType op = isLiteralTextOperand)
     : OperandType(op), Str(LitStr) {}
 
-    AsmWriterOperand(const MISTD::string &Printer,
+    AsmWriterOperand(const std::string &Printer,
                      unsigned _CGIOpNo,
                      unsigned _MIOpNo,
-                     const MISTD::string &Modifier,
+                     const std::string &Modifier,
                      OpType op = isMachineInstrOperand)
     : OperandType(op), Str(Printer), CGIOpNo(_CGIOpNo), MIOpNo(_MIOpNo),
     MiModifier(Modifier) {}
@@ -79,12 +79,12 @@ namespace llvm {
     }
 
     /// getCode - Return the code that prints this operand.
-    MISTD::string getCode() const;
+    std::string getCode() const;
   };
 
   class AsmWriterInst {
   public:
-    MISTD::vector<AsmWriterOperand> Operands;
+    std::vector<AsmWriterOperand> Operands;
     const CodeGenInstruction *CGI;
 
     AsmWriterInst(const CodeGenInstruction &CGI,
@@ -98,7 +98,7 @@ namespace llvm {
     unsigned MatchesAllButOneOp(const AsmWriterInst &Other) const;
 
   private:
-    void AddLiteralString(const MISTD::string &Str) {
+    void AddLiteralString(const std::string &Str) {
       // If the last operand was already a literal text string, append this to
       // it, otherwise add a new operand.
       if (!Operands.empty() &&

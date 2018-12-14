@@ -47,7 +47,7 @@ class DWARFUnit {
   uint8_t AddrSize;
   uint64_t BaseAddr;
   // The compile unit debug information entry items.
-  MISTD::vector<DWARFDebugInfoEntryMinimal> DieArray;
+  std::vector<DWARFDebugInfoEntryMinimal> DieArray;
 
   class DWOHolder {
     OwningPtr<object::ObjectFile> DWOFile;
@@ -145,7 +145,7 @@ private:
   size_t extractDIEsIfNeeded(bool CUDieOnly);
   /// extractDIEsToVector - Appends all parsed DIEs to a vector.
   void extractDIEsToVector(bool AppendCUDie, bool AppendNonCUDIEs,
-                           MISTD::vector<DWARFDebugInfoEntryMinimal> &DIEs) const;
+                           std::vector<DWARFDebugInfoEntryMinimal> &DIEs) const;
   /// setDIERelations - We read in all of the DIE entries into our flat list
   /// of DIE entries and now we need to go back through all of them and set the
   /// parent, sibling and child pointers for quick DIE navigation.

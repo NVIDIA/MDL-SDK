@@ -209,8 +209,8 @@ void LoopBase<BlockT, LoopT>::
 replaceChildLoopWith(LoopT *OldChild, LoopT *NewChild) {
   assert(OldChild->ParentLoop == this && "This loop is already broken!");
   assert(NewChild->ParentLoop == 0 && "NewChild already has a parent!");
-  typename MISTD::vector<LoopT *>::iterator I =
-    MISTD::find(SubLoops.begin(), SubLoops.end(), OldChild);
+  typename std::vector<LoopT *>::iterator I =
+    std::find(SubLoops.begin(), SubLoops.end(), OldChild);
   assert(I != SubLoops.end() && "OldChild not in loop!");
   *I = NewChild;
   OldChild->ParentLoop = 0;
@@ -295,7 +295,7 @@ void LoopBase<BlockT, LoopT>::verifyLoop() const {
 
   // Check the parent loop pointer.
   if (ParentLoop) {
-    assert(MISTD::find(ParentLoop->begin(), ParentLoop->end(), this) !=
+    assert(std::find(ParentLoop->begin(), ParentLoop->end(), this) !=
            ParentLoop->end() &&
            "Loop is not a subloop of its parent!");
   }
@@ -351,7 +351,7 @@ static void discoverAndMapSubloop(LoopT *L, ArrayRef<BlockT*> Backedges,
   unsigned NumSubloops = 0;
 
   // Perform a backward CFG traversal using a worklist.
-  MISTD::vector<BlockT *> ReverseCFGWorklist(Backedges.begin(), Backedges.end());
+  std::vector<BlockT *> ReverseCFGWorklist(Backedges.begin(), Backedges.end());
   while (!ReverseCFGWorklist.empty()) {
     BlockT *PredBB = ReverseCFGWorklist.back();
     ReverseCFGWorklist.pop_back();
@@ -410,7 +410,7 @@ class PopulateLoopsDFS {
 
   LoopInfoBase<BlockT, LoopT> *LI;
   DenseSet<const BlockT *> VisitedBlocks;
-  MISTD::vector<MISTD::pair<BlockT*, SuccIterTy> > DFSStack;
+  std::vector<std::pair<BlockT*, SuccIterTy> > DFSStack;
 
 public:
   PopulateLoopsDFS(LoopInfoBase<BlockT, LoopT> *li):
@@ -426,7 +426,7 @@ protected:
   SuccIterTy dfsSuccEnd() { return BlockTraits::child_end(dfsSource()); }
 
   void pushBlock(BlockT *Block) {
-    DFSStack.push_back(MISTD::make_pair(Block, BlockTraits::child_begin(Block)));
+    DFSStack.push_back(std::make_pair(Block, BlockTraits::child_begin(Block)));
   }
 };
 } // anonymous
@@ -470,7 +470,7 @@ void PopulateLoopsDFS<BlockT, LoopT>::insertIntoLoop(BlockT *Block) {
     // For convenience, Blocks and Subloops are inserted in postorder. Reverse
     // the lists, except for the loop header, which is always at the beginning.
     Subloop->reverseBlock(1);
-    MISTD::reverse(Subloop->getSubLoopsVector().begin(),
+    std::reverse(Subloop->getSubLoopsVector().begin(),
                  Subloop->getSubLoopsVector().end());
 
     Subloop = Subloop->getParentLoop();

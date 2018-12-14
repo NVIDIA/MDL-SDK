@@ -208,7 +208,7 @@ static uint8_t byteFromBitsInit(BitsInit &init) {
 /// @param rec  - The record from which to extract the value.
 /// @param name - The name of the field in the record.
 /// @return     - The field, as translated by byteFromBitsInit().
-static uint8_t byteFromRec(const Record* rec, const MISTD::string &name) {
+static uint8_t byteFromRec(const Record* rec, const std::string &name) {
   BitsInit* bits = rec->getValueAsBitsInit(name);
   return byteFromBitsInit(*bits);
 }
@@ -263,7 +263,7 @@ RecognizableInstr::RecognizableInstr(DisassemblerTables &tables,
   Is32Bit = false;
   Is64Bit = false;
   // FIXME: Is there some better way to check for In64BitMode?
-  MISTD::vector<Record*> Predicates = Rec->getValueAsListOfDefs("Predicates");
+  std::vector<Record*> Predicates = Rec->getValueAsListOfDefs("Predicates");
   for (unsigned i = 0, e = Predicates.size(); i != e; ++i) {
     if (Predicates[i]->getName().find("32Bit") != Name.npos) {
       Is32Bit = true;
@@ -548,11 +548,11 @@ RecognizableInstr::filter_ret RecognizableInstr::filter() const {
 }
 
 bool RecognizableInstr::hasFROperands() const {
-  const MISTD::vector<CGIOperandList::OperandInfo> &OperandList = *Operands;
+  const std::vector<CGIOperandList::OperandInfo> &OperandList = *Operands;
   unsigned numOperands = OperandList.size();
 
   for (unsigned operandIndex = 0; operandIndex < numOperands; ++operandIndex) {
-    const MISTD::string &recName = OperandList[operandIndex].Rec->getName();
+    const std::string &recName = OperandList[operandIndex].Rec->getName();
 
     if (recName.find("FR") != recName.npos)
       return true;
@@ -565,7 +565,7 @@ void RecognizableInstr::handleOperand(bool optional, unsigned &operandIndex,
                                       unsigned &numPhysicalOperands,
                                       const unsigned *operandMapping,
                                       OperandEncoding (*encodingFromString)
-                                        (const MISTD::string&,
+                                        (const std::string&,
                                          bool hasOpSizePrefix)) {
   if (optional) {
     if (physicalOperandIndex >= numPhysicalOperands)
@@ -581,7 +581,7 @@ void RecognizableInstr::handleOperand(bool optional, unsigned &operandIndex,
     ++operandIndex;
   }
 
-  const MISTD::string &typeName = (*Operands)[operandIndex].Rec->getName();
+  const std::string &typeName = (*Operands)[operandIndex].Rec->getName();
 
   Spec->operands[operandIndex].encoding = encodingFromString(typeName,
                                                               HasOpSizePrefix);
@@ -613,7 +613,7 @@ void RecognizableInstr::emitInstructionSpecifier(DisassemblerTables &tables) {
 
   Spec->insnContext = insnContext();
 
-  const MISTD::vector<CGIOperandList::OperandInfo> &OperandList = *Operands;
+  const std::vector<CGIOperandList::OperandInfo> &OperandList = *Operands;
 
   unsigned numOperands = OperandList.size();
   unsigned numPhysicalOperands = 0;
@@ -1185,7 +1185,7 @@ void RecognizableInstr::emitDecodePath(DisassemblerTables &tables) const {
 }
 
 #define TYPE(str, type) if (s == str) return type;
-OperandType RecognizableInstr::typeFromString(const MISTD::string &s,
+OperandType RecognizableInstr::typeFromString(const std::string &s,
                                               bool isSSE,
                                               bool hasREX_WPrefix,
                                               bool hasOpSizePrefix) {
@@ -1290,7 +1290,7 @@ OperandType RecognizableInstr::typeFromString(const MISTD::string &s,
 
 #define ENCODING(str, encoding) if (s == str) return encoding;
 OperandEncoding RecognizableInstr::immediateEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   if(!hasOpSizePrefix) {
     // For instructions without an OpSize prefix, a declared 16-bit register or
@@ -1323,7 +1323,7 @@ OperandEncoding RecognizableInstr::immediateEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::rmRegisterEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("GR16",            ENCODING_RM)
   ENCODING("GR32",            ENCODING_RM)
@@ -1347,7 +1347,7 @@ OperandEncoding RecognizableInstr::rmRegisterEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::roRegisterEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("GR16",            ENCODING_REG)
   ENCODING("GR32",            ENCODING_REG)
@@ -1376,7 +1376,7 @@ OperandEncoding RecognizableInstr::roRegisterEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::vvvvRegisterEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("GR32",            ENCODING_VVVV)
   ENCODING("GR64",            ENCODING_VVVV)
@@ -1396,7 +1396,7 @@ OperandEncoding RecognizableInstr::vvvvRegisterEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::writemaskRegisterEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("VK8WM",           ENCODING_WRITEMASK)
   ENCODING("VK16WM",          ENCODING_WRITEMASK)
@@ -1405,7 +1405,7 @@ OperandEncoding RecognizableInstr::writemaskRegisterEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::memoryEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("i16mem",          ENCODING_RM)
   ENCODING("i32mem",          ENCODING_RM)
@@ -1441,7 +1441,7 @@ OperandEncoding RecognizableInstr::memoryEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::relocationEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   if(!hasOpSizePrefix) {
     // For instructions without an OpSize prefix, a declared 16-bit register or
@@ -1470,7 +1470,7 @@ OperandEncoding RecognizableInstr::relocationEncodingFromString
 }
 
 OperandEncoding RecognizableInstr::opcodeModifierEncodingFromString
-  (const MISTD::string &s,
+  (const std::string &s,
    bool hasOpSizePrefix) {
   ENCODING("RST",             ENCODING_I)
   ENCODING("GR32",            ENCODING_Rv)

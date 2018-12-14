@@ -20,7 +20,7 @@ class SourceMgrTest : public testing::Test {
 public:
   SourceMgr SM;
   unsigned MainBufferID;
-  MISTD::string Output;
+  std::string Output;
 
   void setMainBuffer(StringRef Text, StringRef BufferName) {
     MemoryBuffer *MainBuffer = MemoryBuffer::getMemBuffer(Text, BufferName);

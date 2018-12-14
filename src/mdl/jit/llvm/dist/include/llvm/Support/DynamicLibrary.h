@@ -65,7 +65,7 @@ namespace sys {
     /// It is safe to call this function multiple times for the same library.
     /// @brief Open a dynamic library permanently.
     static DynamicLibrary getPermanentLibrary(const char *filename,
-                                              MISTD::string *errMsg = 0);
+                                              std::string *errMsg = 0);
 
     /// This function permanently loads the dynamic library at the given path.
     /// Use this instead of getPermanentLibrary() when you won't need to get
@@ -73,7 +73,7 @@ namespace sys {
     ///
     /// It is safe to call this function multiple times for the same library.
     static bool LoadLibraryPermanently(const char *Filename,
-                                       MISTD::string *ErrMsg = 0) {
+                                       std::string *ErrMsg = 0) {
       return !getPermanentLibrary(Filename, ErrMsg).isValid();
     }
 
@@ -82,12 +82,12 @@ namespace sys {
     /// that symbol is returned. If not, null is returned. Note that this will
     /// search permanently loaded libraries (getPermanentLibrary()) as well
     /// as explicitly registered symbols (AddSymbol()).
-    /// @throws MISTD::string on error.
+    /// @throws std::string on error.
     /// @brief Search through libraries for address of a symbol
     static void *SearchForAddressOfSymbol(const char *symbolName);
 
     /// @brief Convenience function for C++ophiles.
-    static void *SearchForAddressOfSymbol(const MISTD::string &symbolName) {
+    static void *SearchForAddressOfSymbol(const std::string &symbolName) {
       return SearchForAddressOfSymbol(symbolName.c_str());
     }
 

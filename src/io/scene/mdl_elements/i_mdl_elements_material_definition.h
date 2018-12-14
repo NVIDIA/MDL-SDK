@@ -85,7 +85,7 @@ public:
 
     // methods corresponding to mi::neuraylib::IMaterial_definition
 
-    DB::Tag get_module() const;
+    DB::Tag get_module(DB::Transaction* transaction) const;
 
     const char* get_mdl_name() const;
 
@@ -148,6 +148,12 @@ public:
     /// Returns the original material name (or \c NULL if this definition is not re-exported).
     const char* get_mdl_original_name() const;
 
+    /// Returns the name of the module this definition belongs to.
+    const char* get_module_name() const;
+
+    /// Returns the database name of the module this definition belongs to.
+    const char* get_module_db_name() const;
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -185,7 +191,7 @@ private:
     mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;  ///< The expression factory.
 
-    DB::Tag m_module_tag;                        ///< The corresponding module.
+    std::string m_module_db_name;                ///< The DB name of the corresponding module.
     DB::Tag m_material_tag;                      ///< The tag of this material definition.
     mi::Uint32 m_material_index;                 ///< The index in the corresponding module.
     std::string m_name;                          ///< The MDL name of the material definition.
@@ -193,7 +199,6 @@ private:
     std::string m_thumbnail;                     ///< The thumbnail image for this definition.
     DB::Tag m_prototype_tag;                     ///< The prototype of this mat. def. (or inv. tag).
     bool m_is_exported;                          ///< The export flag.
-    DB::Tag_set m_call_references;               ///< Call references in the material body.
 
     mi::base::Handle<IType_list> m_parameter_types;
     mi::base::Handle<IExpression_list> m_defaults;

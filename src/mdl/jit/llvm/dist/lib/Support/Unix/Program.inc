@@ -53,16 +53,16 @@ using namespace sys;
 ProcessInfo::ProcessInfo() : Pid(0), ReturnCode(0) {}
 
 // This function just uses the PATH environment variable to find the program.
-MISTD::string
-sys::FindProgramByName(const MISTD::string& progName) {
+std::string
+sys::FindProgramByName(const std::string& progName) {
 
   // Check some degenerate cases
   if (progName.length() == 0) // no program
     return "";
-  MISTD::string temp = progName;
+  std::string temp = progName;
   // Use the given path verbatim if it contains any slashes; this matches
   // the behavior of sh(1) and friends.
-  if (progName.find('/') != MISTD::string::npos)
+  if (progName.find('/') != std::string::npos)
     return temp;
 
   // At this point, the file name is valid and does not contain slashes. Search
@@ -77,7 +77,7 @@ sys::FindProgramByName(const MISTD::string& progName) {
   size_t PathLen = strlen(PathStr);
   while (PathLen) {
     // Find the first colon...
-    const char *Colon = MISTD::find(PathStr, PathStr+PathLen, ':');
+    const char *Colon = std::find(PathStr, PathStr+PathLen, ':');
 
     // Check to see if this first directory contains the executable...
     SmallString<128> FilePath(PathStr,Colon);
@@ -98,10 +98,10 @@ sys::FindProgramByName(const MISTD::string& progName) {
   return "";
 }
 
-static bool RedirectIO(const StringRef *Path, int FD, MISTD::string* ErrMsg) {
+static bool RedirectIO(const StringRef *Path, int FD, std::string* ErrMsg) {
   if (Path == 0) // Noop
     return false;
-  MISTD::string File;
+  std::string File;
   if (Path->empty())
     // Redirect empty paths to /dev/null
     File = "/dev/null";
@@ -127,7 +127,7 @@ static bool RedirectIO(const StringRef *Path, int FD, MISTD::string* ErrMsg) {
 }
 
 #ifdef HAVE_POSIX_SPAWN
-static bool RedirectIO_PS(const MISTD::string *Path, int FD, MISTD::string *ErrMsg,
+static bool RedirectIO_PS(const std::string *Path, int FD, std::string *ErrMsg,
                           posix_spawn_file_actions_t *FileActions) {
   if (Path == 0) // Noop
     return false;
@@ -182,11 +182,11 @@ static void SetMemoryLimits (unsigned size)
 
 static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
                     const char **envp, const StringRef **redirects,
-                    unsigned memoryLimit, MISTD::string *ErrMsg) {
+                    unsigned memoryLimit, std::string *ErrMsg) {
   if (!llvm::sys::fs::exists(Program)) {
     if (ErrMsg)
-      *ErrMsg = MISTD::string("Executable \"") + Program.str() +
-                MISTD::string("\" doesn't exist!");
+      *ErrMsg = std::string("Executable \"") + Program.str() +
+                std::string("\" doesn't exist!");
     return false;
   }
 
@@ -200,10 +200,10 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
     // If we call posix_spawn_file_actions_addopen we have to make sure the
     // c strings we pass to it stay alive until the call to posix_spawn,
     // so we copy any StringRefs into this variable.
-    MISTD::string RedirectsStorage[3];
+    std::string RedirectsStorage[3];
 
     if (redirects) {
-      MISTD::string *RedirectsStr[3] = {0, 0, 0};
+      std::string *RedirectsStr[3] = {0, 0, 0};
       for (int I = 0; I < 3; ++I) {
         if (redirects[I]) {
           RedirectsStorage[I] = *redirects[I];
@@ -293,7 +293,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
       }
 
       // Execute!
-      MISTD::string PathStr = Program;
+      std::string PathStr = Program;
       if (envp != 0)
         execve(PathStr.c_str(),
                const_cast<char **>(args),
@@ -323,7 +323,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
 namespace llvm {
 
 ProcessInfo sys::Wait(const ProcessInfo &PI, unsigned SecondsToWait,
-                      bool WaitUntilTerminates, MISTD::string *ErrMsg) {
+                      bool WaitUntilTerminates, std::string *ErrMsg) {
 #ifdef HAVE_SYS_WAIT_H
   struct sigaction Act, Old;
   assert(PI.Pid && "invalid pid to wait on, process not started?");

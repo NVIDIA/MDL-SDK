@@ -81,9 +81,9 @@ namespace {
       UnswitchedValsMap UnswitchedVals;
     };
 
-    // Here we use MISTD::map instead of DenseMap, since we need to keep valid
+    // Here we use std::map instead of DenseMap, since we need to keep valid
     // LoopProperties pointer for current loop for better performance.
-    typedef MISTD::map<const Loop*, LoopProperties> LoopPropsMap;
+    typedef std::map<const Loop*, LoopProperties> LoopPropsMap;
     typedef LoopPropsMap::iterator LoopPropsMapIt;
 
     LoopPropsMap LoopsProperties;
@@ -128,7 +128,7 @@ namespace {
 
     // LoopProcessWorklist - Used to check if second loop needs processing
     // after RewriteLoopBodyWithConditionConstant rewrites first loop.
-    MISTD::vector<Loop*> LoopProcessWorklist;
+    std::vector<Loop*> LoopProcessWorklist;
 
     LUAnalysisCache BranchesInfo;
 
@@ -143,9 +143,9 @@ namespace {
     // LoopBlocks contains all of the basic blocks of the loop, including the
     // preheader of the loop, the body of the loop, and the exit blocks of the
     // loop, in that order.
-    MISTD::vector<BasicBlock*> LoopBlocks;
+    std::vector<BasicBlock*> LoopBlocks;
     // NewBlocks contained cloned copy of basic blocks from LoopBlocks.
-    MISTD::vector<BasicBlock*> NewBlocks;
+    std::vector<BasicBlock*> NewBlocks;
 
   public:
     static char ID; // Pass ID, replacement for typeid
@@ -183,7 +183,7 @@ namespace {
     /// RemoveLoopFromWorklist - If the specified loop is on the loop worklist,
     /// remove it.
     void RemoveLoopFromWorklist(Loop *L) {
-      MISTD::vector<Loop*>::iterator I = MISTD::find(LoopProcessWorklist.begin(),
+      std::vector<Loop*>::iterator I = std::find(LoopProcessWorklist.begin(),
                                                  LoopProcessWorklist.end(), L);
       if (I != LoopProcessWorklist.end())
         LoopProcessWorklist.erase(I);
@@ -211,7 +211,7 @@ namespace {
                                         BasicBlock *FalseDest,
                                         Instruction *InsertPt);
 
-    void SimplifyCode(MISTD::vector<Instruction*> &Worklist, Loop *L);
+    void SimplifyCode(std::vector<Instruction*> &Worklist, Loop *L);
     void RemoveLoopFromHierarchy(Loop *L);
     bool IsTrivialUnswitchCondition(Value *Cond, Constant **Val = 0,
                                     BasicBlock **LoopExit = 0);
@@ -226,7 +226,7 @@ bool LUAnalysisCache::countLoop(const Loop *L, const TargetTransformInfo &TTI) {
   LoopPropsMapIt PropsIt;
   bool Inserted;
   llvm::tie(PropsIt, Inserted) =
-      LoopsProperties.insert(MISTD::make_pair(L, LoopProperties()));
+      LoopsProperties.insert(std::make_pair(L, LoopProperties()));
 
   LoopProperties &Props = PropsIt->second;
 
@@ -246,7 +246,7 @@ bool LUAnalysisCache::countLoop(const Loop *L, const TargetTransformInfo &TTI) {
          I != E; ++I)
       Metrics.analyzeBasicBlock(*I, TTI);
 
-    Props.SizeEstimation = MISTD::min(Metrics.NumInsts, Metrics.NumBlocks * 5);
+    Props.SizeEstimation = std::min(Metrics.NumInsts, Metrics.NumBlocks * 5);
     Props.CanBeUnswitchedCount = MaxSize / (Props.SizeEstimation);
     MaxSize -= Props.SizeEstimation * Props.CanBeUnswitchedCount;
 
@@ -504,7 +504,7 @@ bool LoopUnswitch::processCurrentLoop() {
 ///
 static bool isTrivialLoopExitBlockHelper(Loop *L, BasicBlock *BB,
                                          BasicBlock *&ExitBB,
-                                         MISTD::set<BasicBlock*> &Visited) {
+                                         std::set<BasicBlock*> &Visited) {
   if (!Visited.insert(BB).second) {
     // Already visited. Without more analysis, this could indicate an infinite
     // loop.
@@ -538,7 +538,7 @@ static bool isTrivialLoopExitBlockHelper(Loop *L, BasicBlock *BB,
 /// leads to an exit from the specified loop, and has no side-effects in the
 /// process.  If so, return the block that is exited to, otherwise return null.
 static BasicBlock *isTrivialLoopExitBlock(Loop *L, BasicBlock *BB) {
-  MISTD::set<BasicBlock*> Visited;
+  std::set<BasicBlock*> Visited;
   Visited.insert(L->getHeader());  // Branches to header make infinite loops.
   BasicBlock *ExitBB = 0;
   if (isTrivialLoopExitBlockHelper(L, BB, ExitBB, Visited))
@@ -691,7 +691,7 @@ void LoopUnswitch::EmitPreheaderBranchOnCondition(Value *LIC, Constant *Val,
     BranchVal = new ICmpInst(InsertPt, ICmpInst::ICMP_EQ, LIC, Val);
   else if (Val != ConstantInt::getTrue(Val->getContext()))
     // We want to enter the new loop when the condition is true.
-    MISTD::swap(TrueDest, FalseDest);
+    std::swap(TrueDest, FalseDest);
 
   // Insert the new branch.
   BranchInst *BI = BranchInst::Create(TrueDest, FalseDest, BranchVal, InsertPt);
@@ -915,16 +915,16 @@ void LoopUnswitch::UnswitchNontrivialCondition(Value *LIC, Constant *Val,
 /// RemoveFromWorklist - Remove all instances of I from the worklist vector
 /// specified.
 static void RemoveFromWorklist(Instruction *I,
-                               MISTD::vector<Instruction*> &Worklist) {
+                               std::vector<Instruction*> &Worklist) {
 
-  Worklist.erase(MISTD::remove(Worklist.begin(), Worklist.end(), I),
+  Worklist.erase(std::remove(Worklist.begin(), Worklist.end(), I),
                  Worklist.end());
 }
 
 /// ReplaceUsesOfWith - When we find that I really equals V, remove I from the
 /// program, replacing all uses with V and update the worklist.
 static void ReplaceUsesOfWith(Instruction *I, Value *V,
-                              MISTD::vector<Instruction*> &Worklist,
+                              std::vector<Instruction*> &Worklist,
                               Loop *L, LPPassManager *LPM) {
   DEBUG(dbgs() << "Replace with '" << *V << "': " << *I);
 
@@ -972,7 +972,7 @@ void LoopUnswitch::RewriteLoopBodyWithConditionConstant(Loop *L, Value *LIC,
 
   // FOLD boolean conditions (X|LIC), (X&LIC).  Fold conditional branches,
   // selects, switches.
-  MISTD::vector<Instruction*> Worklist;
+  std::vector<Instruction*> Worklist;
   LLVMContext &Context = Val->getContext();
 
   // If we know that LIC == Val, or that LIC == NotVal, just replace uses of LIC
@@ -994,7 +994,7 @@ void LoopUnswitch::RewriteLoopBodyWithConditionConstant(Loop *L, Value *LIC,
       Worklist.push_back(U);
     }
 
-    for (MISTD::vector<Instruction*>::iterator UI = Worklist.begin(),
+    for (std::vector<Instruction*>::iterator UI = Worklist.begin(),
          UE = Worklist.end(); UI != UE; ++UI)
       (*UI)->replaceUsesOfWith(LIC, Replacement);
 
@@ -1086,7 +1086,7 @@ void LoopUnswitch::RewriteLoopBodyWithConditionConstant(Loop *L, Value *LIC,
 /// FIXME: When the loop optimizer is more mature, separate this out to a new
 /// pass.
 ///
-void LoopUnswitch::SimplifyCode(MISTD::vector<Instruction*> &Worklist, Loop *L) {
+void LoopUnswitch::SimplifyCode(std::vector<Instruction*> &Worklist, Loop *L) {
   while (!Worklist.empty()) {
     Instruction *I = Worklist.back();
     Worklist.pop_back();

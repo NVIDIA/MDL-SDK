@@ -82,7 +82,7 @@ public:
     /// \return              The filename of the dynamic library, or the empty string in case of
     ///                      failure. Usually this path is absolute. It might not be absolute on
     ///                      Linux if the filename passed to dlopen() contained a slash.
-    virtual MISTD::string get_filename( const char* symbol_name) = 0;
+    virtual std::string get_filename( const char* symbol_name) = 0;
 };
 
 } // namespace LINK

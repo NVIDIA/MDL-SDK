@@ -70,7 +70,7 @@ class Scene_element_base : public DB::Element_base
 
     /// Return a human readable version of the class id.
     /// \return a human readable version, eg "Group"
-    virtual MISTD::string get_class_name() const;
+    virtual std::string get_class_name() const;
 
   protected:
     /// Fast exchange of two Scene_element_base.

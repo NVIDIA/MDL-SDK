@@ -35,8 +35,8 @@ namespace llvm {
   /// CodeGenSubRegIndex - Represents a sub-register index.
   class CodeGenSubRegIndex {
     Record *const TheDef;
-    MISTD::string Name;
-    MISTD::string Namespace;
+    std::string Name;
+    std::string Namespace;
 
   public:
     uint16_t Size;
@@ -51,9 +51,9 @@ namespace llvm {
     CodeGenSubRegIndex(Record *R, unsigned Enum);
     CodeGenSubRegIndex(StringRef N, StringRef Nspace, unsigned Enum);
 
-    const MISTD::string &getName() const { return Name; }
-    const MISTD::string &getNamespace() const { return Namespace; }
-    MISTD::string getQualifiedName() const;
+    const std::string &getName() const { return Name; }
+    const std::string &getNamespace() const { return Namespace; }
+    std::string getQualifiedName() const;
 
     // Order CodeGenSubRegIndex pointers by EnumValue.
     struct Less {
@@ -65,7 +65,7 @@ namespace llvm {
     };
 
     // Map of composite subreg indices.
-    typedef MISTD::map<CodeGenSubRegIndex*, CodeGenSubRegIndex*, Less> CompMap;
+    typedef std::map<CodeGenSubRegIndex*, CodeGenSubRegIndex*, Less> CompMap;
 
     // Returns the subreg index that results from composing this with Idx.
     // Returns NULL if this and Idx don't compose.
@@ -79,8 +79,8 @@ namespace llvm {
     CodeGenSubRegIndex *addComposite(CodeGenSubRegIndex *A,
                                      CodeGenSubRegIndex *B) {
       assert(A && B);
-      MISTD::pair<CompMap::iterator, bool> Ins =
-        Composed.insert(MISTD::make_pair(A, B));
+      std::pair<CompMap::iterator, bool> Ins =
+        Composed.insert(std::make_pair(A, B));
       // Synthetic subreg indices that aren't contiguous (for instance ARM
       // register tuples) don't have a bit range, so it's OK to let
       // B->Offset == -1. For the other cases, accumulate the offset and set
@@ -114,12 +114,12 @@ namespace llvm {
     bool CoveredBySubRegs;
 
     // Map SubRegIndex -> Register.
-    typedef MISTD::map<CodeGenSubRegIndex*, CodeGenRegister*,
+    typedef std::map<CodeGenSubRegIndex*, CodeGenRegister*,
                      CodeGenSubRegIndex::Less> SubRegMap;
 
     CodeGenRegister(Record *R, unsigned Enum);
 
-    const MISTD::string &getName() const;
+    const std::string &getName() const;
 
     // Extract more information from TheDef. This is used to build an object
     // graph after all CodeGenRegister objects have been created.
@@ -151,7 +151,7 @@ namespace llvm {
       return SubReg2Idx.lookup(Reg);
     }
 
-    typedef MISTD::vector<const CodeGenRegister*> SuperRegList;
+    typedef std::vector<const CodeGenRegister*> SuperRegList;
 
     // Get the list of super-registers in topological order, small to large.
     // This is valid after computeSubRegs visits all registers during RegBank
@@ -214,7 +214,7 @@ namespace llvm {
     };
 
     // Canonically ordered set.
-    typedef MISTD::set<const CodeGenRegister*, Less> Set;
+    typedef std::set<const CodeGenRegister*, Less> Set;
 
   private:
     bool SubRegsComplete;
@@ -241,14 +241,14 @@ namespace llvm {
   class CodeGenRegisterClass {
     CodeGenRegister::Set Members;
     // Allocation orders. Order[0] always contains all registers in Members.
-    MISTD::vector<SmallVector<Record*, 16> > Orders;
+    std::vector<SmallVector<Record*, 16> > Orders;
     // Bit mask of sub-classes including this, indexed by their EnumValue.
     BitVector SubClasses;
     // List of super-classes, topologocally ordered to have the larger classes
     // first.  This is the same as sorting by EnumValue.
     SmallVector<CodeGenRegisterClass*, 4> SuperClasses;
     Record *TheDef;
-    MISTD::string Name;
+    std::string Name;
 
     // For a synthesized class, inherit missing properties from the nearest
     // super-class.
@@ -272,20 +272,20 @@ namespace llvm {
 
   public:
     unsigned EnumValue;
-    MISTD::string Namespace;
+    std::string Namespace;
     SmallVector<MVT::SimpleValueType, 4> VTs;
     unsigned SpillSize;
     unsigned SpillAlignment;
     int CopyCost;
     bool Allocatable;
-    MISTD::string AltOrderSelect;
+    std::string AltOrderSelect;
 
     // Return the Record that defined this class, or NULL if the class was
     // created by TableGen.
     Record *getDef() const { return TheDef; }
 
-    const MISTD::string &getName() const { return Name; }
-    MISTD::string getQualifiedName() const;
+    const std::string &getName() const { return Name; }
+    std::string getQualifiedName() const;
     ArrayRef<MVT::SimpleValueType> getValueTypes() const {return VTs;}
     unsigned getNumValueTypes() const { return VTs.size(); }
 
@@ -362,7 +362,7 @@ namespace llvm {
     const BitVector &getTopoSigs() const { return TopoSigs; }
 
     // Populate a unique sorted list of units from a register set.
-    void buildRegUnitSet(MISTD::vector<unsigned> &RegUnits) const;
+    void buildRegUnitSet(std::vector<unsigned> &RegUnits) const;
 
     CodeGenRegisterClass(CodeGenRegBank&, Record *R);
 
@@ -429,10 +429,10 @@ namespace llvm {
 
   // Each RegUnitSet is a sorted vector with a name.
   struct RegUnitSet {
-    typedef MISTD::vector<unsigned>::const_iterator iterator;
+    typedef std::vector<unsigned>::const_iterator iterator;
 
-    MISTD::string Name;
-    MISTD::vector<unsigned> Units;
+    std::string Name;
+    std::vector<unsigned> Units;
     unsigned Weight; // Cache the sum of all unit weights.
     unsigned Order;  // Cache the sort key.
 
@@ -449,36 +449,36 @@ namespace llvm {
     SetTheory Sets;
 
     // SubRegIndices.
-    MISTD::vector<CodeGenSubRegIndex*> SubRegIndices;
+    std::vector<CodeGenSubRegIndex*> SubRegIndices;
     DenseMap<Record*, CodeGenSubRegIndex*> Def2SubRegIdx;
 
     CodeGenSubRegIndex *createSubRegIndex(StringRef Name, StringRef NameSpace);
 
-    typedef MISTD::map<SmallVector<CodeGenSubRegIndex*, 8>,
+    typedef std::map<SmallVector<CodeGenSubRegIndex*, 8>,
                      CodeGenSubRegIndex*> ConcatIdxMap;
     ConcatIdxMap ConcatIdx;
 
     // Registers.
-    MISTD::vector<CodeGenRegister*> Registers;
+    std::vector<CodeGenRegister*> Registers;
     StringMap<CodeGenRegister*> RegistersByName;
     DenseMap<Record*, CodeGenRegister*> Def2Reg;
     unsigned NumNativeRegUnits;
 
-    MISTD::map<TopoSigId, unsigned> TopoSigs;
+    std::map<TopoSigId, unsigned> TopoSigs;
 
     // Includes native (0..NumNativeRegUnits-1) and adopted register units.
     SmallVector<RegUnit, 8> RegUnits;
 
     // Register classes.
-    MISTD::vector<CodeGenRegisterClass*> RegClasses;
+    std::vector<CodeGenRegisterClass*> RegClasses;
     DenseMap<Record*, CodeGenRegisterClass*> Def2RC;
-    typedef MISTD::map<CodeGenRegisterClass::Key, CodeGenRegisterClass*> RCKeyMap;
+    typedef std::map<CodeGenRegisterClass::Key, CodeGenRegisterClass*> RCKeyMap;
     RCKeyMap Key2RC;
 
     // Remember each unique set of register units. Initially, this contains a
     // unique set for each register class. Simliar sets are coalesced with
     // pruneUnitSets and new supersets are inferred during computeRegUnitSets.
-    MISTD::vector<RegUnitSet> RegUnitSets;
+    std::vector<RegUnitSet> RegUnitSets;
 
     // Map RegisterClass index to the index of the RegUnitSet that contains the
     // class's units and any inferred RegUnit supersets.
@@ -486,10 +486,10 @@ namespace llvm {
     // NOTE: This could grow beyond the number of register classes when we map
     // register units to lists of unit sets. If the list of unit sets does not
     // already exist for a register class, we create a new entry in this vector.
-    MISTD::vector<MISTD::vector<unsigned> > RegClassUnitSets;
+    std::vector<std::vector<unsigned> > RegClassUnitSets;
 
     // Give each register unit set an order based on sorting criteria.
-    MISTD::vector<unsigned> RegUnitSetOrder;
+    std::vector<unsigned> RegUnitSetOrder;
 
     // Add RC to *2RC maps.
     void addToMaps(CodeGenRegisterClass*);
@@ -546,10 +546,10 @@ namespace llvm {
     void
     addConcatSubRegIndex(const SmallVector<CodeGenSubRegIndex *, 8> &Parts,
                          CodeGenSubRegIndex *Idx) {
-      ConcatIdx.insert(MISTD::make_pair(Parts, Idx));
+      ConcatIdx.insert(std::make_pair(Parts, Idx));
     }
 
-    const MISTD::vector<CodeGenRegister*> &getRegisters() { return Registers; }
+    const std::vector<CodeGenRegister*> &getRegisters() { return Registers; }
     const StringMap<CodeGenRegister*> &getRegistersByName() {
       return RegistersByName;
     }
@@ -572,7 +572,7 @@ namespace llvm {
     // This function is only for use by CodeGenRegister::computeSuperRegs().
     // Others should simply use Reg->getTopoSig().
     unsigned getTopoSig(const TopoSigId &Id) {
-      return TopoSigs.insert(MISTD::make_pair(Id, TopoSigs.size())).first->second;
+      return TopoSigs.insert(std::make_pair(Id, TopoSigs.size())).first->second;
     }
 
     // Create a native register unit that is associated with one or two root
@@ -621,9 +621,9 @@ namespace llvm {
     const CodeGenRegisterClass* getRegClassForRegister(Record *R);
 
     // Get the sum of unit weights.
-    unsigned getRegUnitSetWeight(const MISTD::vector<unsigned> &Units) const {
+    unsigned getRegUnitSetWeight(const std::vector<unsigned> &Units) const {
       unsigned Weight = 0;
-      for (MISTD::vector<unsigned>::const_iterator
+      for (std::vector<unsigned>::const_iterator
              I = Units.begin(), E = Units.end(); I != E; ++I)
         Weight += getRegUnit(*I).Weight;
       return Weight;

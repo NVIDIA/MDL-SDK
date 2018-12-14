@@ -2100,7 +2100,7 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
         (Op0Cplxity == Op1Cplxity &&
          swapMayExposeCSEOpportunities(Op0, Op1))) {
     I.swapOperands();
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
     Changed = true;
   }
 
@@ -2139,28 +2139,28 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
       return BinaryOperator::CreateXor(Op0, Op1);
 
     case ICmpInst::ICMP_UGT:
-      MISTD::swap(Op0, Op1);                   // Change icmp ugt -> icmp ult
+      std::swap(Op0, Op1);                   // Change icmp ugt -> icmp ult
       // FALL THROUGH
     case ICmpInst::ICMP_ULT:{               // icmp ult i1 A, B -> ~A & B
       Value *Not = Builder->CreateNot(Op0, I.getName()+"tmp");
       return BinaryOperator::CreateAnd(Not, Op1);
     }
     case ICmpInst::ICMP_SGT:
-      MISTD::swap(Op0, Op1);                   // Change icmp sgt -> icmp slt
+      std::swap(Op0, Op1);                   // Change icmp sgt -> icmp slt
       // FALL THROUGH
     case ICmpInst::ICMP_SLT: {               // icmp slt i1 A, B -> A & ~B
       Value *Not = Builder->CreateNot(Op1, I.getName()+"tmp");
       return BinaryOperator::CreateAnd(Not, Op0);
     }
     case ICmpInst::ICMP_UGE:
-      MISTD::swap(Op0, Op1);                   // Change icmp uge -> icmp ule
+      std::swap(Op0, Op1);                   // Change icmp uge -> icmp ule
       // FALL THROUGH
     case ICmpInst::ICMP_ULE: {               //  icmp ule i1 A, B -> ~A | B
       Value *Not = Builder->CreateNot(Op0, I.getName()+"tmp");
       return BinaryOperator::CreateOr(Not, Op1);
     }
     case ICmpInst::ICMP_SGE:
-      MISTD::swap(Op0, Op1);                   // Change icmp sge -> icmp sle
+      std::swap(Op0, Op1);                   // Change icmp sge -> icmp sle
       // FALL THROUGH
     case ICmpInst::ICMP_SLE: {               //  icmp sle i1 A, B -> A | ~B
       Value *Not = Builder->CreateNot(Op1, I.getName()+"tmp");

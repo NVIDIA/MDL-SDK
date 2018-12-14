@@ -28,7 +28,7 @@ cl::opt<ObjectFileType> InputFormat(
     cl::desc("Choose input format"),
     cl::values(clEnumVal(coff, "process COFF object files"), clEnumValEnd));
 
-cl::opt<MISTD::string> InputFilename(cl::Positional, cl::desc("<input file>"),
+cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<input file>"),
                                    cl::init("-"));
 
 int main(int argc, char *argv[]) {

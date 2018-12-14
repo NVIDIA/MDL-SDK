@@ -324,7 +324,7 @@ public:
   subtype_iterator subtype_begin() const { return ContainedTys; }
   subtype_iterator subtype_end() const { return &ContainedTys[NumContainedTys];}
 
-  typedef MISTD::reverse_iterator<subtype_iterator> subtype_reverse_iterator;
+  typedef std::reverse_iterator<subtype_iterator> subtype_reverse_iterator;
   subtype_reverse_iterator subtype_rbegin() const {
     return subtype_reverse_iterator(subtype_end());
   }

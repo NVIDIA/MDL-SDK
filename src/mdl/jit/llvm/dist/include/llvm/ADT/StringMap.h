@@ -109,10 +109,10 @@ public:
   unsigned size() const { return NumItems; }
 
   void swap(StringMapImpl &Other) {
-    MISTD::swap(TheTable, Other.TheTable);
-    MISTD::swap(NumBuckets, Other.NumBuckets);
-    MISTD::swap(NumItems, Other.NumItems);
-    MISTD::swap(NumTombstones, Other.NumTombstones);
+    std::swap(TheTable, Other.TheTable);
+    std::swap(NumBuckets, Other.NumBuckets);
+    std::swap(NumItems, Other.NumItems);
+    std::swap(NumTombstones, Other.NumTombstones);
   }
 };
 

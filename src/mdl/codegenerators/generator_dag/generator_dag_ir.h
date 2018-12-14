@@ -47,7 +47,6 @@ class IValue_matrix;
 /// The node factory for DAG IR nodes.
 class DAG_node_factory_impl : public IGenerated_code_dag::DAG_node_factory
 {
-
 public:
     /// The type of vectors of values.
     typedef vector<IValue const *>::Type Value_vector;

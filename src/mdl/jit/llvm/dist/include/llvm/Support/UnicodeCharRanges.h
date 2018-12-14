@@ -56,7 +56,7 @@ public:
   /// \brief Returns true if the character set contains the Unicode code point
   /// \p C.
   bool contains(uint32_t C) const {
-    return MISTD::binary_search(Ranges.begin(), Ranges.end(), C);
+    return std::binary_search(Ranges.begin(), Ranges.end(), C);
   }
 
 private:

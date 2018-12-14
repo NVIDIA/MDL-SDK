@@ -82,13 +82,13 @@ inline void Deserializer::read(CONT::Array<T*>* array)
 }
 
 template <typename T, typename A1, typename A2>
-inline void Deserializer::read(MISTD::vector< MISTD::vector<T, A1>, A2>* array)
+inline void Deserializer::read(std::vector< std::vector<T, A1>, A2>* array)
 {
     size_t size;
     this->read_size_t(&size);
     array->resize(size);
     for (Uint32 i = 0u; i != size; ++i) {
-        MISTD::vector<T, A1> &inner = (*array)[i];
+        std::vector<T, A1> &inner = (*array)[i];
 
         size_t isize;
         this->read_size_t(&isize);
@@ -102,12 +102,12 @@ inline void Deserializer::read(MISTD::vector< MISTD::vector<T, A1>, A2>* array)
 }
 
 template <typename T, typename A1, typename A2>
-inline void Serializer::write(const MISTD::vector< MISTD::vector<T, A1>, A2>& array)
+inline void Serializer::write(const std::vector< std::vector<T, A1>, A2>& array)
 {
     size_t size = array.size();
     this->write_size_t(size);
     for (size_t i = 0; i < size; ++i) {
-        const MISTD::vector<T, A1> &inner = array[i];
+        const std::vector<T, A1> &inner = array[i];
 
         size_t isize = inner.size();
         this->write_size_t(isize);
@@ -160,7 +160,7 @@ inline void write(Serializer* serial, const char* value)
     serial->write( value );
 }
 
-inline void write(Serializer* serial,  const MISTD::string& value)
+inline void write(Serializer* serial,  const std::string& value)
 {
     serial->write( value );
 }
@@ -240,7 +240,7 @@ inline void read(Deserializer* deser, char** value_pointer)
     deser->read( value_pointer );
 }
 
-inline void read(Deserializer* deser, MISTD::string* value_pointer)
+inline void read(Deserializer* deser, std::string* value_pointer)
 {
     deser->read( value_pointer );
 }
@@ -293,21 +293,21 @@ inline void write_range(Serializer& serializer, Iterator begin, Iterator end)
 }
 
 template <typename T>
-inline void write(Serializer* serializer, const MISTD::vector<T>& array)
+inline void write(Serializer* serializer, const std::vector<T>& array)
 {
     serializer->write_size_t(array.size());
     write_range(*serializer, array.begin(), array.end());
 }
 
 template <typename T,typename A>
-inline void write(Serializer* serializer, const MISTD::vector<T,A>& array)
+inline void write(Serializer* serializer, const std::vector<T,A>& array)
 {
     serializer->write_size_t(array.size());
     write_range(*serializer, array.begin(), array.end());
 }
 
 template <typename T>
-inline void write(Serializer* serializer, const MISTD::vector<T*>& array)
+inline void write(Serializer* serializer, const std::vector<T*>& array)
 {
     const size_t size(array.size());
     serializer->write_size_t(size);
@@ -316,7 +316,7 @@ inline void write(Serializer* serializer, const MISTD::vector<T*>& array)
 }
 
 template <typename T,typename A>
-inline void write(Serializer* serializer, const MISTD::vector<T*,A>& array)
+inline void write(Serializer* serializer, const std::vector<T*,A>& array)
 {
     const size_t size(array.size());
     serializer->write_size_t(size);
@@ -325,7 +325,7 @@ inline void write(Serializer* serializer, const MISTD::vector<T*,A>& array)
 }
 
 template <typename T>
-inline void read(Deserializer* deserializer, MISTD::vector<T>* array)
+inline void read(Deserializer* deserializer, std::vector<T>* array)
 {
     size_t size;
     deserializer->read_size_t(&size);
@@ -333,12 +333,12 @@ inline void read(Deserializer* deserializer, MISTD::vector<T>* array)
     read_range(*deserializer, array->begin(), array->end());
 }
 
-inline void read(Deserializer* deserializer, MISTD::vector<bool>* array)
+inline void read(Deserializer* deserializer, std::vector<bool>* array)
 {
     size_t size;
     deserializer->read_size_t(&size);
     array->resize(size);
-    for (MISTD::vector<bool>::iterator it = array->begin(), end = array->end(); it != end; ++it)
+    for (std::vector<bool>::iterator it = array->begin(), end = array->end(); it != end; ++it)
     {
         bool tmp;
         deserializer->read(&tmp);
@@ -347,7 +347,7 @@ inline void read(Deserializer* deserializer, MISTD::vector<bool>* array)
 }
 
 template <typename T,typename A>
-inline void read(Deserializer* deserializer, MISTD::vector<T,A>* array)
+inline void read(Deserializer* deserializer, std::vector<T,A>* array)
 {
     size_t size;
     deserializer->read_size_t(&size);
@@ -356,7 +356,7 @@ inline void read(Deserializer* deserializer, MISTD::vector<T,A>* array)
 }
 
 template <typename T>
-inline void read(Deserializer* deserializer, MISTD::vector<T*>* array)
+inline void read(Deserializer* deserializer, std::vector<T*>* array)
 {
     size_t size;
     deserializer->read_size_t(&size);
@@ -366,7 +366,7 @@ inline void read(Deserializer* deserializer, MISTD::vector<T*>* array)
 }
 
 template <typename T,typename A>
-inline void read(Deserializer* deserializer, MISTD::vector<T*,A>* array)
+inline void read(Deserializer* deserializer, std::vector<T*,A>* array)
 {
     size_t size;
     deserializer->read_size_t(&size);
@@ -376,39 +376,39 @@ inline void read(Deserializer* deserializer, MISTD::vector<T*,A>* array)
 }
 
 template <typename T>
-inline void write(Serializer* serializer, const MISTD::list<T>& list)
+inline void write(Serializer* serializer, const std::list<T>& list)
 {
     serializer->write_size_t(list.size());
-    for (typename MISTD::list<T>::const_iterator i=list.begin(),e=list.end(); i!=e; ++i)
+    for (typename std::list<T>::const_iterator i=list.begin(),e=list.end(); i!=e; ++i)
         write(serializer,*i);
 }
 
 template <typename T>
-inline void read(Deserializer* deserializer, MISTD::list<T>* list)
+inline void read(Deserializer* deserializer, std::list<T>* list)
 {
     size_t size = 0;
     deserializer->read_size_t(&size);
     list->resize(size);
-    for (typename MISTD::list<T>::iterator i=list->begin(),e=list->end(); i!=e; ++i)
+    for (typename std::list<T>::iterator i=list->begin(),e=list->end(); i!=e; ++i)
         read(deserializer,&*i);
 }
 
 template <typename T, typename U>
-inline void write(Serializer* serializer, const MISTD::pair<T, U>& pair)
+inline void write(Serializer* serializer, const std::pair<T, U>& pair)
 {
     write(serializer, pair.first);
     write(serializer, pair.second);
 }
 
 template <typename T, typename U>
-inline void read(Deserializer* deserializer, MISTD::pair<T, U>* pair)
+inline void read(Deserializer* deserializer, std::pair<T, U>* pair)
 {
     read(deserializer, &(pair->first));
     read(deserializer, &(pair->second));
 }
 
 template <typename T, typename SWO>
-void write(Serializer* serializer, const MISTD::set<T,SWO>& set)
+void write(Serializer* serializer, const std::set<T,SWO>& set)
 {
     const size_t size(set.size());
     serializer->write_size_t(size);
@@ -416,7 +416,7 @@ void write(Serializer* serializer, const MISTD::set<T,SWO>& set)
 }
 
 template <typename T, typename SWO>
-void read(Deserializer* deserializer, MISTD::set<T,SWO>* set)
+void read(Deserializer* deserializer, std::set<T,SWO>* set)
 {
     size_t size;
     set->clear();
@@ -431,7 +431,7 @@ void read(Deserializer* deserializer, MISTD::set<T,SWO>* set)
 }
 
 template <typename T, typename U, typename SWO>
-void write(Serializer* serializer, const MISTD::map<T,U,SWO>& map)
+void write(Serializer* serializer, const std::map<T,U,SWO>& map)
 {
     const size_t size(map.size());
     serializer->write_size_t(size);
@@ -439,12 +439,12 @@ void write(Serializer* serializer, const MISTD::map<T,U,SWO>& map)
 }
 
 template <typename T, typename U, typename SWO>
-void read(Deserializer* deserializer, MISTD::map<T,U,SWO>* map)
+void read(Deserializer* deserializer, std::map<T,U,SWO>* map)
 {
     size_t size;
     map->clear();
     deserializer->read_size_t(&size);
-    MISTD::pair<T,U> value;
+    std::pair<T,U> value;
     for ( size_t i(0); i != size; ++i ) {
         read( deserializer, &value );
         // Values were serialized in sequence, so we can use end position as hint.
@@ -454,7 +454,7 @@ void read(Deserializer* deserializer, MISTD::map<T,U,SWO>* map)
 }
 
 template<class K, class V, class C, class A>
-void write(Serializer* ser, const MISTD::multimap<K,V,C,A>& map)
+void write(Serializer* ser, const std::multimap<K,V,C,A>& map)
 {
     const size_t size(map.size());
     ser->write_size_t(size);
@@ -462,12 +462,12 @@ void write(Serializer* ser, const MISTD::multimap<K,V,C,A>& map)
 }
 
 template<class K, class V, class C, class A>
-void read(Deserializer* deser, MISTD::multimap<K,V,C,A>* map)
+void read(Deserializer* deser, std::multimap<K,V,C,A>* map)
 {
     size_t size;
     map->clear();
     deser->read_size_t(&size);
-    MISTD::pair<K,V> value;
+    std::pair<K,V> value;
     for (size_t i(0); i != size; ++i) {
         read(deser,&value);
         // Values were serialized in sequence, so we can use end position as hint.

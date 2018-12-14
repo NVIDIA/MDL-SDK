@@ -138,7 +138,7 @@ void Call_graph::remove_node(Definition const *def)
         Call_node *node = it->second;
         m_call_nodes.erase(it);
 
-        Call_node_vec::iterator rit = MISTD::find(m_root_set.begin(), m_root_set.end(), node);
+        Call_node_vec::iterator rit = std::find(m_root_set.begin(), m_root_set.end(), node);
         if (rit != m_root_set.end()) {
             m_root_set.erase(rit);
         }

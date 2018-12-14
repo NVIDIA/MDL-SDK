@@ -37,14 +37,14 @@
 using namespace llvm;
 
 namespace llvm {
-  extern cl::opt<MISTD::string> OutputPrefix;
+  extern cl::opt<std::string> OutputPrefix;
 }
 
 namespace {
   // ChildOutput - This option captures the name of the child output file that
   // is set up by the parent bugpoint process
-  cl::opt<MISTD::string> ChildOutput("child-output", cl::ReallyHidden);
-  cl::opt<MISTD::string> OptCmd("opt-command", cl::init(""),
+  cl::opt<std::string> ChildOutput("child-output", cl::ReallyHidden);
+  cl::opt<std::string> OptCmd("opt-command", cl::init(""),
                               cl::desc("Path to opt. (default: search path "
                                        "for 'opt'.)"));
 }
@@ -62,15 +62,15 @@ static bool writeProgramToFileAux(tool_output_file &Out, const Module *M) {
   return true;
 }
 
-bool BugDriver::writeProgramToFile(const MISTD::string &Filename, int FD,
+bool BugDriver::writeProgramToFile(const std::string &Filename, int FD,
                                    const Module *M) const {
   tool_output_file Out(Filename.c_str(), FD);
   return writeProgramToFileAux(Out, M);
 }
 
-bool BugDriver::writeProgramToFile(const MISTD::string &Filename,
+bool BugDriver::writeProgramToFile(const std::string &Filename,
                                    const Module *M) const {
-  MISTD::string ErrInfo;
+  std::string ErrInfo;
   tool_output_file Out(Filename.c_str(), ErrInfo, sys::fs::F_Binary);
   if (ErrInfo.empty())
     return writeProgramToFileAux(Out, M);
@@ -82,12 +82,12 @@ bool BugDriver::writeProgramToFile(const MISTD::string &Filename,
 /// to a file named "bugpoint-ID.bc".
 ///
 void BugDriver::EmitProgressBitcode(const Module *M,
-                                    const MISTD::string &ID,
+                                    const std::string &ID,
                                     bool NoFlyer)  const {
   // Output the input to the current pass to a bitcode file, emit a message
   // telling the user how to reproduce it: opt -foo blah.bc
   //
-  MISTD::string Filename = OutputPrefix + "-" + ID + ".bc";
+  std::string Filename = OutputPrefix + "-" + ID + ".bc";
   if (writeProgramToFile(Filename, M)) {
     errs() <<  "Error opening file '" << Filename << "' for writing!\n";
     return;
@@ -107,7 +107,7 @@ void BugDriver::EmitProgressBitcode(const Module *M,
 cl::opt<bool> SilencePasses("silence-passes",
         cl::desc("Suppress output of running passes (both stdout and stderr)"));
 
-static cl::list<MISTD::string> OptArgs("opt-args", cl::Positional,
+static cl::list<std::string> OptArgs("opt-args", cl::Positional,
                                      cl::desc("<opt arguments>..."),
                                      cl::ZeroOrMore, cl::PositionalEatsArgs);
 
@@ -120,8 +120,8 @@ static cl::list<MISTD::string> OptArgs("opt-args", cl::Positional,
 /// or failed.
 ///
 bool BugDriver::runPasses(Module *Program,
-                          const MISTD::vector<MISTD::string> &Passes,
-                          MISTD::string &OutputFilename, bool DeleteOutput,
+                          const std::vector<std::string> &Passes,
+                          std::string &OutputFilename, bool DeleteOutput,
                           bool Quiet, unsigned NumExtraArgs,
                           const char * const *ExtraArgs) const {
   // setup the output file name
@@ -157,7 +157,7 @@ bool BugDriver::runPasses(Module *Program,
     return 1;
   }
 
-  MISTD::string tool = OptCmd.empty()? sys::FindProgramByName("opt") : OptCmd;
+  std::string tool = OptCmd.empty()? sys::FindProgramByName("opt") : OptCmd;
   if (tool.empty()) {
     errs() << "Cannot find `opt' in PATH!\n";
     return 1;
@@ -180,15 +180,15 @@ bool BugDriver::runPasses(Module *Program,
   Args.push_back(OutputFilename.c_str());
   for (unsigned i = 0, e = OptArgs.size(); i != e; ++i)
     Args.push_back(OptArgs[i].c_str());
-  MISTD::vector<MISTD::string> pass_args;
+  std::vector<std::string> pass_args;
   for (unsigned i = 0, e = PluginLoader::getNumPlugins(); i != e; ++i) {
-    pass_args.push_back( MISTD::string("-load"));
+    pass_args.push_back( std::string("-load"));
     pass_args.push_back( PluginLoader::getPlugin(i));
   }
-  for (MISTD::vector<MISTD::string>::const_iterator I = Passes.begin(),
+  for (std::vector<std::string>::const_iterator I = Passes.begin(),
        E = Passes.end(); I != E; ++I )
-    pass_args.push_back( MISTD::string("-") + (*I) );
-  for (MISTD::vector<MISTD::string>::const_iterator I = pass_args.begin(),
+    pass_args.push_back( std::string("-") + (*I) );
+  for (std::vector<std::string>::const_iterator I = pass_args.begin(),
        E = pass_args.end(); I != E; ++I )
     Args.push_back(I->c_str());
   Args.push_back(InputFilename.c_str());
@@ -202,7 +202,7 @@ bool BugDriver::runPasses(Module *Program,
         errs() << "\n";
         );
 
-  MISTD::string Prog;
+  std::string Prog;
   if (UseValgrind)
     Prog = sys::FindProgramByName("valgrind");
   else
@@ -212,7 +212,7 @@ bool BugDriver::runPasses(Module *Program,
   StringRef Nowhere;
   const StringRef *Redirects[3] = {0, &Nowhere, &Nowhere};
 
-  MISTD::string ErrMsg;
+  std::string ErrMsg;
   int result = sys::ExecuteAndWait(Prog, Args.data(), 0,
                                    (SilencePasses ? Redirects : 0), Timeout,
                                    MemoryLimit, &ErrMsg);
@@ -249,10 +249,10 @@ bool BugDriver::runPasses(Module *Program,
 /// module, returning the transformed module on success, or a null pointer on
 /// failure.
 Module *BugDriver::runPassesOn(Module *M,
-                               const MISTD::vector<MISTD::string> &Passes,
+                               const std::vector<std::string> &Passes,
                                bool AutoDebugCrashes, unsigned NumExtraArgs,
                                const char * const *ExtraArgs) {
-  MISTD::string BitcodeResult;
+  std::string BitcodeResult;
   if (runPasses(M, Passes, BitcodeResult, false/*delete*/, true/*quiet*/,
                 NumExtraArgs, ExtraArgs)) {
     if (AutoDebugCrashes) {

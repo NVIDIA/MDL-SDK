@@ -49,7 +49,7 @@ protected:
 private:
   /// createPrinterPass - Get a machine function printer pass.
   virtual Pass *createPrinterPass(raw_ostream &O,
-                                  const MISTD::string &Banner) const;
+                                  const std::string &Banner) const;
 
   virtual bool runOnFunction(Function &F);
 };

@@ -38,7 +38,7 @@ typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
 //
 class AllocaHolder {
   friend class AllocaHolderHandle;
-  MISTD::vector<void*> Allocations;
+  std::vector<void*> Allocations;
   unsigned RefCnt;
 public:
   AllocaHolder() : RefCnt(0) {}
@@ -62,7 +62,7 @@ public:
   void add(void *mem) { H->add(mem); }
 };
 
-typedef MISTD::vector<GenericValue> ValuePlaneTy;
+typedef std::vector<GenericValue> ValuePlaneTy;
 
 // ExecutionContext struct - This struct represents one stack frame currently
 // executing.
@@ -71,8 +71,8 @@ struct ExecutionContext {
   Function             *CurFunction;// The currently executing function
   BasicBlock           *CurBB;      // The currently executing BB
   BasicBlock::iterator  CurInst;    // The next instruction to execute
-  MISTD::map<Value *, GenericValue> Values; // LLVM values used in this invocation
-  MISTD::vector<GenericValue>  VarArgs; // Values passed through an ellipsis
+  std::map<Value *, GenericValue> Values; // LLVM values used in this invocation
+  std::vector<GenericValue>  VarArgs; // Values passed through an ellipsis
   CallSite             Caller;     // Holds the call that called subframes.
                                    // NULL if main func or debugger invoked fn
   AllocaHolderHandle    Allocas;    // Track memory allocated by alloca
@@ -87,11 +87,11 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
 
   // The runtime stack of executing code.  The top of the stack is the current
   // function record.
-  MISTD::vector<ExecutionContext> ECStack;
+  std::vector<ExecutionContext> ECStack;
 
   // AtExitHandlers - List of functions to call when the program exits,
   // registered with the atexit() library function.
-  MISTD::vector<Function*> AtExitHandlers;
+  std::vector<Function*> AtExitHandlers;
 
 public:
   explicit Interpreter(Module *M);
@@ -108,14 +108,14 @@ public:
   
   /// create - Create an interpreter ExecutionEngine. This can never fail.
   ///
-  static ExecutionEngine *create(Module *M, MISTD::string *ErrorStr = 0);
+  static ExecutionEngine *create(Module *M, std::string *ErrorStr = 0);
 
   /// run - Start execution with the specified function and arguments.
   ///
   virtual GenericValue runFunction(Function *F,
-                                   const MISTD::vector<GenericValue> &ArgValues);
+                                   const std::vector<GenericValue> &ArgValues);
 
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) {
     // FIXME: not implemented.
     return 0;
@@ -134,7 +134,7 @@ public:
 
   // Methods used to execute code:
   // Place a call on the stack
-  void callFunction(Function *F, const MISTD::vector<GenericValue> &ArgVals);
+  void callFunction(Function *F, const std::vector<GenericValue> &ArgVals);
   void run();                // Execute instructions until nothing left to do
 
   // Opcode Implementations
@@ -191,7 +191,7 @@ public:
   }
 
   GenericValue callExternalFunction(Function *F,
-                                    const MISTD::vector<GenericValue> &ArgVals);
+                                    const std::vector<GenericValue> &ArgVals);
   void exitCalled(GenericValue GV);
 
   void addAtExitHandler(Function *F) {

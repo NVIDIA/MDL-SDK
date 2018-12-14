@@ -343,7 +343,7 @@ public:
   bool anyCommon(const BitVector &RHS) const {
     unsigned ThisWords = NumBitWords(size());
     unsigned RHSWords  = NumBitWords(RHS.size());
-    for (unsigned i = 0, e = MISTD::min(ThisWords, RHSWords); i != e; ++i)
+    for (unsigned i = 0, e = std::min(ThisWords, RHSWords); i != e; ++i)
       if (Bits[i] & RHS.Bits[i])
         return true;
     return false;
@@ -354,7 +354,7 @@ public:
     unsigned ThisWords = NumBitWords(size());
     unsigned RHSWords  = NumBitWords(RHS.size());
     unsigned i;
-    for (i = 0; i != MISTD::min(ThisWords, RHSWords); ++i)
+    for (i = 0; i != std::min(ThisWords, RHSWords); ++i)
       if (Bits[i] != RHS.Bits[i])
         return false;
 
@@ -380,7 +380,7 @@ public:
     unsigned ThisWords = NumBitWords(size());
     unsigned RHSWords  = NumBitWords(RHS.size());
     unsigned i;
-    for (i = 0; i != MISTD::min(ThisWords, RHSWords); ++i)
+    for (i = 0; i != std::min(ThisWords, RHSWords); ++i)
       Bits[i] &= RHS.Bits[i];
 
     // Any bits that are just in this bitvector become zero, because they aren't
@@ -397,7 +397,7 @@ public:
     unsigned ThisWords = NumBitWords(size());
     unsigned RHSWords  = NumBitWords(RHS.size());
     unsigned i;
-    for (i = 0; i != MISTD::min(ThisWords, RHSWords); ++i)
+    for (i = 0; i != std::min(ThisWords, RHSWords); ++i)
       Bits[i] &= ~RHS.Bits[i];
     return *this;
   }
@@ -408,7 +408,7 @@ public:
     unsigned ThisWords = NumBitWords(size());
     unsigned RHSWords  = NumBitWords(RHS.size());
     unsigned i;
-    for (i = 0; i != MISTD::min(ThisWords, RHSWords); ++i)
+    for (i = 0; i != std::min(ThisWords, RHSWords); ++i)
       if ((Bits[i] & ~RHS.Bits[i]) != 0)
         return true;
 
@@ -476,9 +476,9 @@ public:
 #endif
 
   void swap(BitVector &RHS) {
-    MISTD::swap(Bits, RHS.Bits);
-    MISTD::swap(Size, RHS.Size);
-    MISTD::swap(Capacity, RHS.Capacity);
+    std::swap(Bits, RHS.Bits);
+    std::swap(Size, RHS.Size);
+    std::swap(Capacity, RHS.Capacity);
   }
 
   //===--------------------------------------------------------------------===//
@@ -546,7 +546,7 @@ private:
   }
 
   void grow(unsigned NewSize) {
-    Capacity = MISTD::max(NumBitWords(NewSize), Capacity * 2);
+    Capacity = std::max(NumBitWords(NewSize), Capacity * 2);
     Bits = (BitWord *)::realloc(Bits, Capacity * sizeof(BitWord));
 
     clear_unused_bits();
@@ -559,7 +559,7 @@ private:
   template<bool AddBits, bool InvertMask>
   void applyMask(const uint32_t *Mask, unsigned MaskWords) {
     assert(BITWORD_SIZE % 32 == 0 && "Unsupported BitWord size.");
-    MaskWords = MISTD::min(MaskWords, (size() + 31) / 32);
+    MaskWords = std::min(MaskWords, (size() + 31) / 32);
     const unsigned Scale = BITWORD_SIZE / 32;
     unsigned i;
     for (i = 0; MaskWords >= Scale; ++i, MaskWords -= Scale) {
@@ -586,8 +586,8 @@ private:
 
 } // End llvm namespace
 
-namespace MISTD {
-  /// Implement MISTD::swap in terms of BitVector swap.
+namespace std {
+  /// Implement std::swap in terms of BitVector swap.
   inline void
   swap(llvm::BitVector &LHS, llvm::BitVector &RHS) {
     LHS.swap(RHS);

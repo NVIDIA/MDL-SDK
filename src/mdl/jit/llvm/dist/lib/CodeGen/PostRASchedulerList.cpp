@@ -59,7 +59,7 @@ static cl::opt<bool>
 EnablePostRAScheduler("post-RA-scheduler",
                        cl::desc("Enable scheduling after register allocation"),
                        cl::init(false), cl::Hidden);
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 EnableAntiDepBreaking("break-anti-dependencies",
                       cl::desc("Break post-RA scheduling anti-dependencies: "
                                "\"critical\", \"all\", or \"none\""),
@@ -110,7 +110,7 @@ namespace {
     /// been issued, but their results are not ready yet (due to the latency of
     /// the operation).  Once the operands becomes available, the instruction is
     /// added to the AvailableQueue.
-    MISTD::vector<SUnit*> PendingQueue;
+    std::vector<SUnit*> PendingQueue;
 
     /// HazardRec - The hazard recognizer to use.
     ScheduleHazardRecognizer *HazardRec;
@@ -125,7 +125,7 @@ namespace {
     BitVector LiveRegs;
 
     /// The schedule. Null SUnit*'s represent noop instructions.
-    MISTD::vector<SUnit*> Sequence;
+    std::vector<SUnit*> Sequence;
 
     /// The index in BB of RegionEnd.
     ///
@@ -659,7 +659,7 @@ void SchedulePostRATDList::ListScheduleTopDown() {
 
   // While Available queue is not empty, grab the node with the highest
   // priority. If it is not ready put it back.  Schedule the node.
-  MISTD::vector<SUnit*> NotReady;
+  std::vector<SUnit*> NotReady;
   Sequence.reserve(SUnits.size());
   while (!AvailableQueue.empty() || !PendingQueue.empty()) {
     // Check to see if any of the pending instructions are ready to issue.  If
@@ -773,9 +773,9 @@ void SchedulePostRATDList::EmitSchedule() {
   }
 
   // Reinsert any remaining debug_values.
-  for (MISTD::vector<MISTD::pair<MachineInstr *, MachineInstr *> >::iterator
+  for (std::vector<std::pair<MachineInstr *, MachineInstr *> >::iterator
          DI = DbgValues.end(), DE = DbgValues.begin(); DI != DE; --DI) {
-    MISTD::pair<MachineInstr *, MachineInstr *> P = *prior(DI);
+    std::pair<MachineInstr *, MachineInstr *> P = *prior(DI);
     MachineInstr *DbgValue = P.first;
     MachineBasicBlock::iterator OrigPrivMI = P.second;
     BB->splice(++OrigPrivMI, BB, DbgValue);

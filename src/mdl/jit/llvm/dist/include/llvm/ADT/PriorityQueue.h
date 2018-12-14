@@ -19,24 +19,24 @@
 
 namespace llvm {
 
-/// PriorityQueue - This class behaves like MISTD::priority_queue and
+/// PriorityQueue - This class behaves like std::priority_queue and
 /// provides a few additional convenience functions.
 ///
 template<class T,
-         class Sequence = MISTD::vector<T>,
-         class Compare = MISTD::less<typename Sequence::value_type> >
-class PriorityQueue : public MISTD::priority_queue<T, Sequence, Compare> {
+         class Sequence = std::vector<T>,
+         class Compare = std::less<typename Sequence::value_type> >
+class PriorityQueue : public std::priority_queue<T, Sequence, Compare> {
 public:
   explicit PriorityQueue(const Compare &compare = Compare(),
                          const Sequence &sequence = Sequence())
-    : MISTD::priority_queue<T, Sequence, Compare>(compare, sequence)
+    : std::priority_queue<T, Sequence, Compare>(compare, sequence)
   {}
 
   template<class Iterator>
   PriorityQueue(Iterator begin, Iterator end,
                 const Compare &compare = Compare(),
                 const Sequence &sequence = Sequence())
-    : MISTD::priority_queue<T, Sequence, Compare>(begin, end, compare, sequence)
+    : std::priority_queue<T, Sequence, Compare>(begin, end, compare, sequence)
   {}
 
   /// erase_one - Erase one element from the queue, regardless of its
@@ -47,7 +47,7 @@ public:
   void erase_one(const T &t) {
     // Linear-search to find the element.
     typename Sequence::size_type i =
-      MISTD::find(this->c.begin(), this->c.end(), t) - this->c.begin();
+      std::find(this->c.begin(), this->c.end(), t) - this->c.begin();
 
     // Logarithmic-time heap bubble-up.
     while (i != 0) {
@@ -69,7 +69,7 @@ public:
   /// so don't plan to use it a lot.
   ///
   void reheapify() {
-    MISTD::make_heap(this->c.begin(), this->c.end(), this->comp);
+    std::make_heap(this->c.begin(), this->c.end(), this->comp);
   }
 
   /// clear - Erase all elements from the queue.

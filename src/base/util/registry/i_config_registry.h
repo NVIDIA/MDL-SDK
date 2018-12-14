@@ -58,20 +58,20 @@ public:
     /// \param value the value
     /// \return success of registration
     virtual bool add_value(
-	const MISTD::string& name,
+	const std::string& name,
 	const STLEXT::Any& value) = 0;
     /// Registering a value into a list of values of the same type.
     /// \param name name of the value
     /// \param value the value
     /// \return success of registration
     virtual bool add_value_multiple(
-	const MISTD::string& name,
+	const std::string& name,
 	const STLEXT::Any& value) = 0;
     /// Retrieving a value.
     /// \param name name of the value
     /// \return its value or the empty type iff not registered
     virtual STLEXT::Any get_value(
-	const MISTD::string& name) const = 0;
+	const std::string& name) const = 0;
     /// Retrieving a value and checking whether it was stored as string- or float-typed value.
     /// Certain values are added as string-typed values, eg when given via
     ///   --config SOFT_shader_language=2
@@ -82,7 +82,7 @@ public:
     /// and the string-typed value and the float-typed value.
     /// Currently disabled! In addition to that, check for the name prefixed by the module.
     template <typename T> bool get_value(
-	const MISTD::string& name,
+	const std::string& name,
 	T& val) const
     {
 	if (this->get_typed_value(name, val))
@@ -91,9 +91,9 @@ public:
 	// now try to match with other "similiar" types
 	STLEXT::Any any = get_value(name);
 	if (!any.empty()) {
-	    if (any.type() == typeid(MISTD::string)) {
-		MISTD::string value = *STLEXT::any_cast<MISTD::string>(&any);
-		STLEXT::Likely<T> v = STRING::lexicographic_cast_s<T, MISTD::string>(value);
+	    if (any.type() == typeid(std::string)) {
+		std::string value = *STLEXT::any_cast<std::string>(&any);
+		STLEXT::Likely<T> v = STRING::lexicographic_cast_s<T, std::string>(value);
 		if (v.get_status()) {
 		    val = v;
 		    return true;
@@ -114,7 +114,7 @@ public:
     /// Retrieving a value. This is the typesafe version of \c get_value(). Ie it does
     /// not try to match with other types.
     template <typename T> bool get_typed_value(
-	const MISTD::string& name,
+	const std::string& name,
 	T& val) const
     {
 	STLEXT::Any any = get_value(name);
@@ -130,7 +130,7 @@ public:
     /// \name Iteration support
     /// Iteration support.
     //@{
-    typedef MISTD::map<MISTD::string, STLEXT::Any>::const_iterator Const_iter;
+    typedef std::map<std::string, STLEXT::Any>::const_iterator Const_iter;
     /// Retrieve the start of the registry.
     virtual Const_iter begin() const = 0;
     /// Retrieve the end of the registry.
@@ -141,18 +141,18 @@ public:
     /// \param name name of the value
     /// \param value the value
     virtual void overwrite_value(
-	const MISTD::string& name,
+	const std::string& name,
 	const STLEXT::Any& value) = 0;
 };
 
 /// Writing out the current values.
-MISTD::ostream& operator<<(MISTD::ostream& os, const Config_registry& configuration);
+std::ostream& operator<<(std::ostream& os, const Config_registry& configuration);
 
 
 // Member template specializations have to be defined outside of the class.
 template <>
 inline bool Config_registry::get_value(
-    const MISTD::string& name,
+    const std::string& name,
     bool& val) const
 {
     STLEXT::Any any = get_value(name);
@@ -161,9 +161,9 @@ inline bool Config_registry::get_value(
 	    val = *STLEXT::any_cast<bool>(&any);
 	    return true;
 	}
-	else if (any.type() == typeid(MISTD::string)) {
-	    MISTD::string value = *STLEXT::any_cast<MISTD::string>(&any);
-	    STLEXT::Likely<bool> v = STRING::lexicographic_cast_s<bool, MISTD::string>(value);
+	else if (any.type() == typeid(std::string)) {
+	    std::string value = *STLEXT::any_cast<std::string>(&any);
+	    STLEXT::Likely<bool> v = STRING::lexicographic_cast_s<bool, std::string>(value);
 	    if (v.get_status()) {
 		val = v;
 		return true;
@@ -184,13 +184,13 @@ inline bool Config_registry::get_value(
 
 template <>
 inline bool Config_registry::get_value(
-    const MISTD::string& name,
-    MISTD::string& val) const
+    const std::string& name,
+    std::string& val) const
 {
     STLEXT::Any any = get_value(name);
     if (!any.empty()) {
-	if (any.type() == typeid(MISTD::string)) {
-	    val = *STLEXT::any_cast<MISTD::string>(&any);
+	if (any.type() == typeid(std::string)) {
+	    val = *STLEXT::any_cast<std::string>(&any);
 	    return true;
 	}
     }
@@ -204,7 +204,7 @@ inline bool Config_registry::get_value(
 template <typename T>
 inline bool update_value(
     const CONFIG::Config_registry& registry,
-    const MISTD::string& name,
+    const std::string& name,
     T& variable)
 {
     return registry.get_value<T>(name, variable);
@@ -216,7 +216,7 @@ inline bool update_value(
 template <typename T>
 inline bool update_typed_value(
     const CONFIG::Config_registry& registry,
-    const MISTD::string& name,
+    const std::string& name,
     T& variable)
 {
     return registry.get_typed_value<T>(name, variable);
@@ -225,7 +225,7 @@ inline bool update_typed_value(
 
 /// A helper function for interpreting a string as a boolean value.
 /// "on", "true", "1", "yes" get interpreted as true.
-bool as_bool(const MISTD::string& str);
+bool as_bool(const std::string& str);
 
 }
 }

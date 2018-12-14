@@ -63,7 +63,7 @@ using namespace llvm;
 class NvRename : public llvm::ModulePass
 {
 public:
-    typedef MISTD::set<MISTD::string> String_set;
+    typedef std::set<std::string> String_set;
 
     virtual bool runOnModule(llvm::Module &M) {
         if (m_roots == NULL) {
@@ -83,7 +83,7 @@ public:
                 if (name.startswith("__nv_")) {
                     // ensure that the name is copied here, or it will be deleted BEFORE
                     // it is entered into the symbol table
-                    MISTD::string n_name = name.substr(5).str();
+                    std::string n_name = name.substr(5).str();
                     F->setName(n_name); // skip the "__nv_"
                     changed = true;
                 }
@@ -122,7 +122,7 @@ char &NvRenameID = NvRename::ID;
 class DeleteUnused : public llvm::ModulePass
 {
 public:
-    typedef MISTD::set<MISTD::string> String_set;
+    typedef std::set<std::string> String_set;
 
     virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const
     {
@@ -140,7 +140,7 @@ public:
         for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end; ++it) {
             llvm::Function *F = it;
 
-            MISTD::string const &name = F->getName().str();
+            std::string const &name = F->getName().str();
 
             if (m_roots->find(name) != m_roots->end()) {
                 // found a root, start marking
@@ -229,7 +229,7 @@ private:
     /// The names of the root functions.
     String_set const *m_roots;
 
-    typedef MISTD::set<llvm::Function const *> Marker_set;
+    typedef std::set<llvm::Function const *> Marker_set;
 
     /// The marker set.
     Marker_set m_marker;
@@ -257,7 +257,7 @@ INITIALIZE_PASS_END(DeleteUnused, "delete-unused",
 /// Load a libdevice file.
 llvm::Module *load_libdevice(char const *filename, llvm::LLVMContext &context)
 {
-    MISTD::string error;
+    std::string error;
     llvm::OwningPtr<llvm::MemoryBuffer> buf;
     llvm::error_code res = llvm::MemoryBuffer::getFile(
         filename, buf, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
@@ -277,7 +277,7 @@ llvm::Module *load_libdevice(char const *filename, llvm::LLVMContext &context)
 /// Write a libdevice file.
 void write_libdevice(llvm::Module const *libdevice, char const *filename)
 {
-    MISTD::string error;
+    std::string error;
     llvm::raw_fd_ostream Out(filename, error, llvm::sys::fs::F_Binary);
     if (!error.empty()) {
         fprintf(stderr, "Error writing file: %s\n", error.c_str());

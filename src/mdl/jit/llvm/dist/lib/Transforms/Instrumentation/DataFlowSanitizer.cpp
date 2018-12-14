@@ -84,7 +84,7 @@ static cl::opt<bool> ClPreserveAlignment(
 // will produce a warning message, as the labelling behaviour of the function is
 // unknown.  The other supported annotations are "functional" and "discard",
 // which are described below under DataFlowSanitizer::WrapperKind.
-static cl::opt<MISTD::string> ClABIListFile(
+static cl::opt<std::string> ClABIListFile(
     "dfsan-abilist",
     cl::desc("File listing native ABI functions and how the pass treats them"),
     cl::Hidden);
@@ -211,7 +211,7 @@ struct DFSanFunction {
   AllocaInst *LabelReturnAlloca;
   DenseMap<Value *, Value *> ValShadowMap;
   DenseMap<AllocaInst *, AllocaInst *> AllocaShadowMap;
-  MISTD::vector<MISTD::pair<PHINode *, PHINode *> > PHIFixups;
+  std::vector<std::pair<PHINode *, PHINode *> > PHIFixups;
   DenseSet<Instruction *> SkipInsts;
   DenseSet<Value *> NonZeroChecks;
 
@@ -280,7 +280,7 @@ DataFlowSanitizer::DataFlowSanitizer(StringRef ABIListFile,
 
 FunctionType *DataFlowSanitizer::getArgsFunctionType(FunctionType *T) {
   llvm::SmallVector<Type *, 4> ArgTypes;
-  MISTD::copy(T->param_begin(), T->param_end(), MISTD::back_inserter(ArgTypes));
+  std::copy(T->param_begin(), T->param_end(), std::back_inserter(ArgTypes));
   for (unsigned i = 0, e = T->getNumParams(); i != e; ++i)
     ArgTypes.push_back(ShadowTy);
   if (T->isVarArg())
@@ -295,7 +295,7 @@ FunctionType *DataFlowSanitizer::getTrampolineFunctionType(FunctionType *T) {
   assert(!T->isVarArg());
   llvm::SmallVector<Type *, 4> ArgTypes;
   ArgTypes.push_back(T->getPointerTo());
-  MISTD::copy(T->param_begin(), T->param_end(), MISTD::back_inserter(ArgTypes));
+  std::copy(T->param_begin(), T->param_end(), std::back_inserter(ArgTypes));
   for (unsigned i = 0, e = T->getNumParams(); i != e; ++i)
     ArgTypes.push_back(ShadowTy);
   Type *RetType = T->getReturnType();
@@ -398,7 +398,7 @@ DataFlowSanitizer::WrapperKind DataFlowSanitizer::getWrapperKind(Function *F) {
 }
 
 void DataFlowSanitizer::addGlobalNamePrefix(GlobalValue *GV) {
-  MISTD::string GVName = GV->getName(), Prefix = "dfs$";
+  std::string GVName = GV->getName(), Prefix = "dfs$";
   GV->setName(Prefix + GVName);
 
   // Try to change the name of the function in module inline asm.  We only do
@@ -406,10 +406,10 @@ void DataFlowSanitizer::addGlobalNamePrefix(GlobalValue *GV) {
   // corrupting asm which happens to contain the symbol name as a substring.
   // Note that the substitution for .symver assumes that the versioned symbol
   // also has an instrumented name.
-  MISTD::string Asm = GV->getParent()->getModuleInlineAsm();
-  MISTD::string SearchStr = ".symver " + GVName + ",";
+  std::string Asm = GV->getParent()->getModuleInlineAsm();
+  std::string SearchStr = ".symver " + GVName + ",";
   size_t Pos = Asm.find(SearchStr);
-  if (Pos != MISTD::string::npos) {
+  if (Pos != std::string::npos) {
     Asm.replace(Pos, SearchStr.size(),
                 ".symver " + Prefix + GVName + "," + Prefix);
     GV->getParent()->setModuleInlineAsm(Asm);
@@ -430,7 +430,7 @@ DataFlowSanitizer::buildWrapperFunction(Function *F, StringRef NewFName,
                                        AttributeSet::ReturnIndex));
 
   BasicBlock *BB = BasicBlock::Create(*Ctx, "entry", NewF);
-  MISTD::vector<Value *> Args;
+  std::vector<Value *> Args;
   unsigned n = FT->getNumParams();
   for (Function::arg_iterator ai = NewF->arg_begin(); n != 0; ++ai, --n)
     Args.push_back(&*ai);
@@ -451,7 +451,7 @@ Constant *DataFlowSanitizer::getOrBuildTrampolineFunction(FunctionType *FT,
   if (F && F->isDeclaration()) {
     F->setLinkage(GlobalValue::LinkOnceODRLinkage);
     BasicBlock *BB = BasicBlock::Create(*Ctx, "entry", F);
-    MISTD::vector<Value *> Args;
+    std::vector<Value *> Args;
     Function::arg_iterator AI = F->arg_begin(); ++AI;
     for (unsigned N = FT->getNumParams(); N != 0; ++AI, --N)
       Args.push_back(&*AI);
@@ -517,7 +517,7 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
   DFSanNonzeroLabelFn =
       Mod->getOrInsertFunction("__dfsan_nonzero_label", DFSanNonzeroLabelFnTy);
 
-  MISTD::vector<Function *> FnsToInstrument;
+  std::vector<Function *> FnsToInstrument;
   llvm::SmallPtrSet<Function *, 2> FnsWithNativeABI;
   for (Module::iterator i = M.begin(), e = M.end(); i != e; ++i) {
     if (!i->isIntrinsic() &&
@@ -561,7 +561,7 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
 
   // First, change the ABI of every function in the module.  ABI-listed
   // functions keep their original ABI and get a wrapper function.
-  for (MISTD::vector<Function *>::iterator i = FnsToInstrument.begin(),
+  for (std::vector<Function *>::iterator i = FnsToInstrument.begin(),
                                          e = FnsToInstrument.end();
        i != e; ++i) {
     Function &F = **i;
@@ -621,7 +621,7 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
                                 ? getArgsFunctionType(FT)
                                 : FT;
       Function *NewF = buildWrapperFunction(
-          &F, MISTD::string("dfsw$") + MISTD::string(F.getName()),
+          &F, std::string("dfsw$") + std::string(F.getName()),
           GlobalValue::LinkOnceODRLinkage, NewFT);
       if (getInstrumentedABI() == IA_TLS)
         NewF->removeAttributes(AttributeSet::FunctionIndex, ReadOnlyNoneAttrs);
@@ -651,7 +651,7 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
     }
   }
 
-  for (MISTD::vector<Function *>::iterator i = FnsToInstrument.begin(),
+  for (std::vector<Function *>::iterator i = FnsToInstrument.begin(),
                                          e = FnsToInstrument.end();
        i != e; ++i) {
     if (!*i || (*i)->isDeclaration())
@@ -664,8 +664,8 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
     // DFSanVisitor may create new basic blocks, which confuses df_iterator.
     // Build a copy of the list before iterating over it.
     llvm::SmallVector<BasicBlock *, 4> BBList;
-    MISTD::copy(df_begin(&(*i)->getEntryBlock()), df_end(&(*i)->getEntryBlock()),
-              MISTD::back_inserter(BBList));
+    std::copy(df_begin(&(*i)->getEntryBlock()), df_end(&(*i)->getEntryBlock()),
+              std::back_inserter(BBList));
 
     for (llvm::SmallVector<BasicBlock *, 4>::iterator i = BBList.begin(),
                                                       e = BBList.end();
@@ -691,7 +691,7 @@ bool DataFlowSanitizer::runOnModule(Module &M) {
     // until we have visited every block.  Therefore, the code that handles phi
     // nodes adds them to the PHIFixups list so that they can be properly
     // handled here.
-    for (MISTD::vector<MISTD::pair<PHINode *, PHINode *> >::iterator
+    for (std::vector<std::pair<PHINode *, PHINode *> >::iterator
              i = DFSF.PHIFixups.begin(),
              e = DFSF.PHIFixups.end();
          i != e; ++i) {
@@ -1223,7 +1223,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
       if (CallInst *CI = dyn_cast<CallInst>(CS.getInstruction())) {
         FunctionType *FT = F->getFunctionType();
         FunctionType *CustomFT = DFSF.DFS.getCustomFunctionType(FT);
-        MISTD::string CustomFName = "__dfsw_";
+        std::string CustomFName = "__dfsw_";
         CustomFName += F->getName();
         Constant *CustomF =
             DFSF.DFS.Mod->getOrInsertFunction(CustomFName, CustomFT);
@@ -1237,7 +1237,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
           }
         }
 
-        MISTD::vector<Value *> Args;
+        std::vector<Value *> Args;
 
         CallSite::arg_iterator i = CS.arg_begin();
         for (unsigned n = FT->getNumParams(); n != 0; ++i, --n) {
@@ -1246,7 +1246,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
           if (isa<PointerType>(T) &&
               (ParamFT = dyn_cast<FunctionType>(
                    cast<PointerType>(T)->getElementType()))) {
-            MISTD::string TName = "dfst";
+            std::string TName = "dfst";
             TName += utostr(FT->getNumParams() - n);
             TName += "$";
             TName += F->getName();
@@ -1328,7 +1328,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
     FunctionType *NewFT = DFSF.DFS.getArgsFunctionType(FT);
     Value *Func =
         IRB.CreateBitCast(CS.getCalledValue(), PointerType::getUnqual(NewFT));
-    MISTD::vector<Value *> Args;
+    std::vector<Value *> Args;
 
     CallSite::arg_iterator i = CS.arg_begin(), e = CS.arg_end();
     for (unsigned n = FT->getNumParams(); n != 0; ++i, --n)
@@ -1392,6 +1392,6 @@ void DFSanVisitor::visitPHINode(PHINode &PN) {
     ShadowPN->addIncoming(UndefShadow, *i);
   }
 
-  DFSF.PHIFixups.push_back(MISTD::make_pair(&PN, ShadowPN));
+  DFSF.PHIFixups.push_back(std::make_pair(&PN, ShadowPN));
   DFSF.setShadow(&PN, ShadowPN);
 }

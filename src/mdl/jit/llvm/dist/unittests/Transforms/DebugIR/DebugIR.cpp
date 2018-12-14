@@ -41,7 +41,7 @@
 #endif // LLVM_ON_WIN32
 
 using namespace llvm;
-using namespace MISTD;
+using namespace std;
 
 namespace {
 

@@ -76,12 +76,15 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
     mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
         mdl_factory->create_expression_factory( transaction.get()));
 
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+        mdl_factory->create_execution_context());
+
     {
         // Create a DB element for the image and the texture referencing it.
         mi::base::Handle<mi::neuraylib::IImage> image(
             transaction->create<mi::neuraylib::IImage>( "Image"));
         // Configure a resource search root relative to which we load the texture
-        check_success(mdl_compiler->add_resource_path(get_samples_mdl_root().c_str()) == 0);
+        check_success( mdl_compiler->add_resource_path( get_samples_mdl_root().c_str()) == 0);
         check_success( image->reset_file( "nvidia/sdk_examples/resources/example.png") == 0);
         transaction->store( image.get(), "nvidia_image");
         mi::base::Handle<mi::neuraylib::ITexture> texture(
@@ -94,8 +97,10 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         // The "::nvidia::sdk_examples::tutorials" module is found via the
         // configured module search path.
         check_success( mdl_compiler->load_module( transaction.get(), 
-            "::nvidia::sdk_examples::tutorials") >= 0);
-        check_success( mdl_compiler->load_module( transaction.get(), "::base") >= 0);
+            "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
+        check_success( print_messages( context.get()));
+        check_success( mdl_compiler->load_module( transaction.get(), "::base", context.get()) >= 0);
+        check_success( print_messages( context.get()));
     }
     {
         // Lookup the exact name of the DB element for the MDL function "base::file_texture".

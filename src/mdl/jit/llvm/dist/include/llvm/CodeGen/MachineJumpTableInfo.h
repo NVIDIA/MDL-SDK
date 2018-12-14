@@ -33,9 +33,9 @@ class raw_ostream;
 ///
 struct MachineJumpTableEntry {
   /// MBBs - The vector of basic blocks from which to create the jump table.
-  MISTD::vector<MachineBasicBlock*> MBBs;
+  std::vector<MachineBasicBlock*> MBBs;
 
-  explicit MachineJumpTableEntry(const MISTD::vector<MachineBasicBlock*> &M)
+  explicit MachineJumpTableEntry(const std::vector<MachineBasicBlock*> &M)
   : MBBs(M) {}
 };
 
@@ -77,7 +77,7 @@ public:
   };
 private:
   JTEntryKind EntryKind;
-  MISTD::vector<MachineJumpTableEntry> JumpTables;
+  std::vector<MachineJumpTableEntry> JumpTables;
 public:
   explicit MachineJumpTableInfo(JTEntryKind Kind): EntryKind(Kind) {}
 
@@ -90,13 +90,13 @@ public:
 
   /// createJumpTableIndex - Create a new jump table.
   ///
-  unsigned createJumpTableIndex(const MISTD::vector<MachineBasicBlock*> &DestBBs);
+  unsigned createJumpTableIndex(const std::vector<MachineBasicBlock*> &DestBBs);
 
   /// isEmpty - Return true if there are no jump tables.
   ///
   bool isEmpty() const { return JumpTables.empty(); }
 
-  const MISTD::vector<MachineJumpTableEntry> &getJumpTables() const {
+  const std::vector<MachineJumpTableEntry> &getJumpTables() const {
     return JumpTables;
   }
 

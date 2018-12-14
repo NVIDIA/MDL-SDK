@@ -117,7 +117,7 @@ public:
 
 private:
   /// ExtensionList - This is list of all of the extensions that are registered.
-  MISTD::vector<MISTD::pair<ExtensionPointTy, ExtensionFn> > Extensions;
+  std::vector<std::pair<ExtensionPointTy, ExtensionFn> > Extensions;
 
 public:
   PassManagerBuilder();

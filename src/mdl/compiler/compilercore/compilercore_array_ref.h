@@ -29,6 +29,7 @@
 #ifndef MDL_COMPILERCORE_ARRAY_REF_H
 #define MDL_COMPILERCORE_ARRAY_REF_H 1
 
+#include "compilercore_memory_arena.h"
 #include "compilercore_assert.h"
 
 namespace mi {
@@ -92,7 +93,7 @@ public:
 
     /// Construct from an vector.
     template <typename A>
-    /*implecit*/ Array_ref(MISTD::vector<T, A> const &v)
+    /*implecit*/ Array_ref(std::vector<T, A> const &v)
     : m_arr(v.empty() ? NULL : &v[0]), m_n(v.size())
     {
     }

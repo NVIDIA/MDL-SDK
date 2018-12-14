@@ -202,7 +202,7 @@ void LiveIntervals::computeRegMasks() {
   for (MachineFunction::iterator MBBI = MF->begin(), E = MF->end();
        MBBI != E; ++MBBI) {
     MachineBasicBlock *MBB = MBBI;
-    MISTD::pair<unsigned, unsigned> &RMB = RegMaskBlocks[MBB->getNumber()];
+    std::pair<unsigned, unsigned> &RMB = RegMaskBlocks[MBB->getNumber()];
     RMB.first = RegMaskSlots.size();
     for (MachineBasicBlock::iterator MI = MBB->begin(), ME = MBB->end();
          MI != ME; ++MI)
@@ -319,7 +319,7 @@ bool LiveIntervals::shrinkToUses(LiveInterval *li,
   assert(TargetRegisterInfo::isVirtualRegister(li->reg)
          && "Can only shrink virtual registers");
   // Find all the values used, including PHI kills.
-  SmallVector<MISTD::pair<SlotIndex, VNInfo*>, 16> WorkList;
+  SmallVector<std::pair<SlotIndex, VNInfo*>, 16> WorkList;
 
   // Blocks that have already been added to WorkList as live-out.
   SmallPtrSet<MachineBasicBlock*, 16> LiveOut;
@@ -346,7 +346,7 @@ bool LiveIntervals::shrinkToUses(LiveInterval *li,
     if (VNInfo *DefVNI = LRQ.valueDefined())
       Idx = DefVNI->def;
 
-    WorkList.push_back(MISTD::make_pair(Idx, VNI));
+    WorkList.push_back(std::make_pair(Idx, VNI));
   }
 
   // Create new live ranges with only minimal live segments per def.
@@ -385,7 +385,7 @@ bool LiveIntervals::shrinkToUses(LiveInterval *li,
         SlotIndex Stop = getMBBEndIdx(*PI);
         // A predecessor is not required to have a live-out value for a PHI.
         if (VNInfo *PVNI = li->getVNInfoBefore(Stop))
-          WorkList.push_back(MISTD::make_pair(Stop, PVNI));
+          WorkList.push_back(std::make_pair(Stop, PVNI));
       }
       continue;
     }
@@ -402,7 +402,7 @@ bool LiveIntervals::shrinkToUses(LiveInterval *li,
       SlotIndex Stop = getMBBEndIdx(*PI);
       assert(li->getVNInfoBefore(Stop) == VNI &&
              "Wrong value out of predecessor");
-      WorkList.push_back(MISTD::make_pair(Stop, VNI));
+      WorkList.push_back(std::make_pair(Stop, VNI));
     }
   }
 
@@ -515,7 +515,7 @@ void LiveIntervals::pruneValue(LiveInterval *LI, SlotIndex Kill,
 
 void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
   // Keep track of regunit ranges.
-  SmallVector<MISTD::pair<LiveRange*, LiveRange::iterator>, 8> RU;
+  SmallVector<std::pair<LiveRange*, LiveRange::iterator>, 8> RU;
 
   for (unsigned i = 0, e = MRI->getNumVirtRegs(); i != e; ++i) {
     unsigned Reg = TargetRegisterInfo::index2VirtReg(i);
@@ -533,7 +533,7 @@ void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
       LiveRange &RURanges = getRegUnit(*Units);
       if (RURanges.empty())
         continue;
-      RU.push_back(MISTD::make_pair(&RURanges, RURanges.find(LI->begin()->end)));
+      RU.push_back(std::make_pair(&RURanges, RURanges.find(LI->begin()->end)));
     }
 
     // Every instruction that kills Reg corresponds to a segment range end
@@ -664,7 +664,7 @@ bool LiveIntervals::checkRegMaskInterference(LiveInterval &LI,
   // We are going to enumerate all the register mask slots contained in LI.
   // Start with a binary search of RegMaskSlots to find a starting point.
   ArrayRef<SlotIndex>::iterator SlotI =
-    MISTD::lower_bound(Slots.begin(), Slots.end(), LiveI->start);
+    std::lower_bound(Slots.begin(), Slots.end(), LiveI->start);
   ArrayRef<SlotIndex>::iterator SlotE = Slots.end();
 
   // No slots in range, LI begins after the last call.
@@ -870,7 +870,7 @@ private:
     // values. The new range should be placed immediately before NewI, move any
     // intermediate ranges up.
     assert(NewI != I && "Inconsistent iterators");
-    MISTD::copy(llvm::next(I), NewI, I);
+    std::copy(llvm::next(I), NewI, I);
     *llvm::prior(NewI)
       = LiveRange::Segment(DefVNI->def, NewIdx.getDeadSlot(), DefVNI);
   }
@@ -952,13 +952,13 @@ private:
 
     // DefVNI is a dead def. It may have been moved across other values in LR,
     // so move I up to NewI. Slide [NewI;I) down one position.
-    MISTD::copy_backward(NewI, I, llvm::next(I));
+    std::copy_backward(NewI, I, llvm::next(I));
     *NewI = LiveRange::Segment(DefVNI->def, NewIdx.getDeadSlot(), DefVNI);
   }
 
   void updateRegMaskSlots() {
     SmallVectorImpl<SlotIndex>::iterator RI =
-      MISTD::lower_bound(LIS.RegMaskSlots.begin(), LIS.RegMaskSlots.end(),
+      std::lower_bound(LIS.RegMaskSlots.begin(), LIS.RegMaskSlots.end(),
                        OldIdx);
     assert(RI != LIS.RegMaskSlots.end() && *RI == OldIdx.getRegSlot() &&
            "No RegMask at OldIdx.");

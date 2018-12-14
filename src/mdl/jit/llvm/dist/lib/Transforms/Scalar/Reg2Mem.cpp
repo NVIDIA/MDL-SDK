@@ -89,7 +89,7 @@ bool RegToMem::runOnFunction(Function &F) {
 
   // Find the escaped instructions. But don't create stack slots for
   // allocas in entry block.
-  MISTD::list<Instruction*> WorkList;
+  std::list<Instruction*> WorkList;
   for (Function::iterator ibb = F.begin(), ibe = F.end();
        ibb != ibe; ++ibb)
     for (BasicBlock::iterator iib = ibb->begin(), iie = ibb->end();
@@ -102,7 +102,7 @@ bool RegToMem::runOnFunction(Function &F) {
 
   // Demote escaped instructions
   NumRegsDemoted += WorkList.size();
-  for (MISTD::list<Instruction*>::iterator ilb = WorkList.begin(),
+  for (std::list<Instruction*>::iterator ilb = WorkList.begin(),
        ile = WorkList.end(); ilb != ile; ++ilb)
     DemoteRegToStack(**ilb, false, AllocaInsertionPoint);
 
@@ -118,7 +118,7 @@ bool RegToMem::runOnFunction(Function &F) {
 
   // Demote phi nodes
   NumPhisDemoted += WorkList.size();
-  for (MISTD::list<Instruction*>::iterator ilb = WorkList.begin(),
+  for (std::list<Instruction*>::iterator ilb = WorkList.begin(),
        ile = WorkList.end(); ilb != ile; ++ilb)
     DemotePHIToStack(cast<PHINode>(*ilb), AllocaInsertionPoint);
 

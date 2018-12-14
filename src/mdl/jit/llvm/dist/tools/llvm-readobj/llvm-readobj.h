@@ -27,7 +27,7 @@ namespace llvm {
 } // namespace llvm
 
 namespace opts {
-  extern llvm::cl::list<MISTD::string> InputFilenames;
+  extern llvm::cl::list<std::string> InputFilenames;
   extern llvm::cl::opt<bool> FileHeaders;
   extern llvm::cl::opt<bool> Sections;
   extern llvm::cl::opt<bool> SectionRelocations;

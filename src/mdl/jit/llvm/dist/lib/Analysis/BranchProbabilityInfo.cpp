@@ -150,7 +150,7 @@ bool BranchProbabilityInfo::calcUnreachableHeuristics(BasicBlock *BB) {
     return false;
 
   uint32_t UnreachableWeight =
-    MISTD::max(UR_TAKEN_WEIGHT / (unsigned)UnreachableEdges.size(), MIN_WEIGHT);
+    std::max(UR_TAKEN_WEIGHT / (unsigned)UnreachableEdges.size(), MIN_WEIGHT);
   for (SmallVectorImpl<unsigned>::iterator I = UnreachableEdges.begin(),
                                            E = UnreachableEdges.end();
        I != E; ++I)
@@ -159,7 +159,7 @@ bool BranchProbabilityInfo::calcUnreachableHeuristics(BasicBlock *BB) {
   if (ReachableEdges.empty())
     return true;
   uint32_t ReachableWeight =
-    MISTD::max(UR_NONTAKEN_WEIGHT / (unsigned)ReachableEdges.size(),
+    std::max(UR_NONTAKEN_WEIGHT / (unsigned)ReachableEdges.size(),
              NORMAL_WEIGHT);
   for (SmallVectorImpl<unsigned>::iterator I = ReachableEdges.begin(),
                                            E = ReachableEdges.end();
@@ -198,7 +198,7 @@ bool BranchProbabilityInfo::calcMetadataWeights(BasicBlock *BB) {
     if (!Weight)
       return false;
     Weights.push_back(
-      MISTD::max<uint32_t>(1, Weight->getLimitedValue(WeightLimit)));
+      std::max<uint32_t>(1, Weight->getLimitedValue(WeightLimit)));
   }
   assert(Weights.size() == TI->getNumSuccessors() && "Checked above");
   for (unsigned i = 0, e = TI->getNumSuccessors(); i != e; ++i)
@@ -250,7 +250,7 @@ bool BranchProbabilityInfo::calcColdCallHeuristics(BasicBlock *BB) {
     return false;
 
   uint32_t ColdWeight =
-      MISTD::max(CC_TAKEN_WEIGHT / (unsigned) ColdEdges.size(), MIN_WEIGHT);
+      std::max(CC_TAKEN_WEIGHT / (unsigned) ColdEdges.size(), MIN_WEIGHT);
   for (SmallVectorImpl<unsigned>::iterator I = ColdEdges.begin(),
                                            E = ColdEdges.end();
        I != E; ++I)
@@ -258,7 +258,7 @@ bool BranchProbabilityInfo::calcColdCallHeuristics(BasicBlock *BB) {
 
   if (NormalEdges.empty())
     return true;
-  uint32_t NormalWeight = MISTD::max(
+  uint32_t NormalWeight = std::max(
       CC_NONTAKEN_WEIGHT / (unsigned) NormalEdges.size(), NORMAL_WEIGHT);
   for (SmallVectorImpl<unsigned>::iterator I = NormalEdges.begin(),
                                            E = NormalEdges.end();
@@ -294,7 +294,7 @@ bool BranchProbabilityInfo::calcPointerHeuristics(BasicBlock *BB) {
   unsigned TakenIdx = 0, NonTakenIdx = 1;
   bool isProb = CI->getPredicate() == ICmpInst::ICMP_NE;
   if (!isProb)
-    MISTD::swap(TakenIdx, NonTakenIdx);
+    std::swap(TakenIdx, NonTakenIdx);
 
   setEdgeWeight(BB, TakenIdx, PH_TAKEN_WEIGHT);
   setEdgeWeight(BB, NonTakenIdx, PH_NONTAKEN_WEIGHT);
@@ -423,7 +423,7 @@ bool BranchProbabilityInfo::calcZeroHeuristics(BasicBlock *BB) {
   unsigned TakenIdx = 0, NonTakenIdx = 1;
 
   if (!isProb)
-    MISTD::swap(TakenIdx, NonTakenIdx);
+    std::swap(TakenIdx, NonTakenIdx);
 
   setEdgeWeight(BB, TakenIdx, ZH_TAKEN_WEIGHT);
   setEdgeWeight(BB, NonTakenIdx, ZH_NONTAKEN_WEIGHT);
@@ -459,7 +459,7 @@ bool BranchProbabilityInfo::calcFloatingPointHeuristics(BasicBlock *BB) {
   unsigned TakenIdx = 0, NonTakenIdx = 1;
 
   if (!isProb)
-    MISTD::swap(TakenIdx, NonTakenIdx);
+    std::swap(TakenIdx, NonTakenIdx);
 
   setEdgeWeight(BB, TakenIdx, FPH_TAKEN_WEIGHT);
   setEdgeWeight(BB, NonTakenIdx, FPH_NONTAKEN_WEIGHT);
@@ -583,7 +583,7 @@ BasicBlock *BranchProbabilityInfo::getHotSucc(BasicBlock *BB) const {
 uint32_t BranchProbabilityInfo::
 getEdgeWeight(const BasicBlock *Src, unsigned IndexInSuccessors) const {
   DenseMap<Edge, uint32_t>::const_iterator I =
-      Weights.find(MISTD::make_pair(Src, IndexInSuccessors));
+      Weights.find(std::make_pair(Src, IndexInSuccessors));
 
   if (I != Weights.end())
     return I->second;
@@ -599,7 +599,7 @@ getEdgeWeight(const BasicBlock *Src, const BasicBlock *Dst) const {
   DenseMap<Edge, uint32_t>::const_iterator MapI;
   for (succ_const_iterator I = succ_begin(Src), E = succ_end(Src); I != E; ++I)
     if (*I == Dst) {
-      MapI = Weights.find(MISTD::make_pair(Src, I.getSuccessorIndex()));
+      MapI = Weights.find(std::make_pair(Src, I.getSuccessorIndex()));
       if (MapI != Weights.end())
         Weight += MapI->second;
     }
@@ -611,7 +611,7 @@ getEdgeWeight(const BasicBlock *Src, const BasicBlock *Dst) const {
 void BranchProbabilityInfo::
 setEdgeWeight(const BasicBlock *Src, unsigned IndexInSuccessors,
               uint32_t Weight) {
-  Weights[MISTD::make_pair(Src, IndexInSuccessors)] = Weight;
+  Weights[std::make_pair(Src, IndexInSuccessors)] = Weight;
   DEBUG(dbgs() << "set edge " << Src->getName() << " -> "
                << IndexInSuccessors << " successor weight to "
                << Weight << "\n");

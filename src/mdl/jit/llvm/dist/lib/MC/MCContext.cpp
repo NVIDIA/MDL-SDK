@@ -30,11 +30,11 @@
 
 using namespace llvm;
 
-typedef MISTD::pair<MISTD::string, MISTD::string> SectionGroupPair;
+typedef std::pair<std::string, std::string> SectionGroupPair;
 
 typedef StringMap<const MCSectionMachO*> MachOUniqueMapTy;
-typedef MISTD::map<SectionGroupPair, const MCSectionELF *> ELFUniqueMapTy;
-typedef MISTD::map<SectionGroupPair, const MCSectionCOFF *> COFFUniqueMapTy;
+typedef std::map<SectionGroupPair, const MCSectionELF *> ELFUniqueMapTy;
+typedef std::map<SectionGroupPair, const MCSectionCOFF *> COFFUniqueMapTy;
 
 MCContext::MCContext(const MCAsmInfo *mai, const MCRegisterInfo *mri,
                      const MCObjectFileInfo *mofi, const SourceMgr *mgr,
@@ -253,8 +253,8 @@ getELFSection(StringRef Section, unsigned Type, unsigned Flags,
   ELFUniqueMapTy &Map = *(ELFUniqueMapTy*)ELFUniquingMap;
 
   // Do the lookup, if we have a hit, return it.
-  MISTD::pair<ELFUniqueMapTy::iterator, bool> Entry = Map.insert(
-      MISTD::make_pair(SectionGroupPair(Section, Group), (MCSectionELF *)0));
+  std::pair<ELFUniqueMapTy::iterator, bool> Entry = Map.insert(
+      std::make_pair(SectionGroupPair(Section, Group), (MCSectionELF *)0));
   if (!Entry.second) return Entry.first->second;
 
   // Possibly refine the entry size first.
@@ -290,8 +290,8 @@ MCContext::getCOFFSection(StringRef Section, unsigned Characteristics,
   // Do the lookup, if we have a hit, return it.
 
   SectionGroupPair P(Section, COMDATSymName);
-  MISTD::pair<COFFUniqueMapTy::iterator, bool> Entry =
-      Map.insert(MISTD::make_pair(P, (MCSectionCOFF *)0));
+  std::pair<COFFUniqueMapTy::iterator, bool> Entry =
+      Map.insert(std::make_pair(P, (MCSectionCOFF *)0));
   COFFUniqueMapTy::iterator Iter = Entry.first;
   if (!Entry.second)
     return Iter->second;

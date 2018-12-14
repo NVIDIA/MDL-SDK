@@ -24,7 +24,7 @@ static AtomicOrdering strongerOrdering(AtomicOrdering X, AtomicOrdering Y) {
     return AcquireRelease;
   if (Y == Acquire && X == Release)
     return AcquireRelease;
-  return (AtomicOrdering)MISTD::max(X, Y);
+  return (AtomicOrdering)std::max(X, Y);
 }
 
 /// It is safe to destroy a constant iff it is only used by constants itself.

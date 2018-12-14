@@ -695,7 +695,7 @@ public:
   /// or condition code register(s) used for predication, returns true as well
   /// as the definition predicate(s) by reference.
   virtual bool DefinesPredicate(MachineInstr *MI,
-                                MISTD::vector<MachineOperand> &Pred) const {
+                                std::vector<MachineOperand> &Pred) const {
     return false;
   }
 
@@ -900,9 +900,9 @@ public:
   /// 0 is used for instructions that are not associated with any interesting
   /// execution domain.
   ///
-  virtual MISTD::pair<uint16_t, uint16_t>
+  virtual std::pair<uint16_t, uint16_t>
   getExecutionDomain(const MachineInstr *MI) const {
-    return MISTD::make_pair(0, 0);
+    return std::make_pair(0, 0);
   }
 
   /// setExecutionDomain - Change the opcode of MI to execute in Domain.

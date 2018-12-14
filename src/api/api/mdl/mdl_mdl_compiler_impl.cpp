@@ -44,6 +44,7 @@
 #include "neuray_module_impl.h"
 #include "neuray_string_impl.h"
 #include "neuray_transaction_impl.h"
+#include "neuray_mdl_execution_context_impl.h"
 
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/iexport_result.h>
@@ -165,38 +166,81 @@ const mi::IString* Mdl_compiler_impl::get_resource_path( mi::Size index) const
     return istring;
 }
 
+mi::Sint32 Mdl_compiler_impl::deprecated_load_module(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    const mi::IMap*)
+{
+    NEURAY::Mdl_execution_context_impl context;
+    return load_module(transaction, module_name, &context);
+}
+
+namespace {
+
+MDL::Execution_context* unwrap_and_clear(
+    mi::neuraylib::IMdl_execution_context* context, 
+    MDL::Execution_context& default_context) {
+
+    if (context)
+    {
+        NEURAY::Mdl_execution_context_impl* context_impl =
+            static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+        if (context_impl) {
+            MDL::Execution_context& wrapped_context = context_impl->get_context();
+            wrapped_context.clear_messages();
+            return &wrapped_context;
+        }
+    }
+    return &default_context;
+}
+};
+
 mi::Sint32 Mdl_compiler_impl::load_module(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
-    const mi::IMap* options)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    if( !transaction || !module_name)
+    if (!transaction || !module_name)
         return -1;
 
     NEURAY::Transaction_impl* transaction_impl
-        = static_cast<NEURAY::Transaction_impl*>( transaction);
+        = static_cast<NEURAY::Transaction_impl*>(transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
-    return MDL::Mdl_module::create_module( db_transaction, module_name);
+    MDL::Execution_context default_context;
+    return MDL::Mdl_module::create_module(
+        db_transaction, module_name, unwrap_and_clear(context, default_context));
+}
+
+mi::Sint32 Mdl_compiler_impl::deprecated_load_module_from_string(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    const char* module_source,
+    const mi::IMap*)
+{
+    NEURAY::Mdl_execution_context_impl context;
+    return load_module_from_string(transaction, module_name, module_source, &context);
 }
 
 mi::Sint32 Mdl_compiler_impl::load_module_from_string(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
     const char* module_source,
-    const mi::IMap* options)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    if( !transaction || !module_name || !module_source)
+    if (!transaction || !module_name || !module_source)
         return -1;
 
     NEURAY::Transaction_impl* transaction_impl
-        = static_cast<NEURAY::Transaction_impl*>( transaction);
+        = static_cast<NEURAY::Transaction_impl*>(transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<mi::neuraylib::IReader> reader(
-        NEURAY::Impexp_utilities::create_reader( module_source, strlen( module_source)));
+        NEURAY::Impexp_utilities::create_reader(module_source, strlen(module_source)));
 
-    return MDL::Mdl_module::create_module( db_transaction, module_name, reader.get());
+    MDL::Execution_context default_context;
+    return MDL::Mdl_module::create_module(db_transaction, module_name, reader.get(),
+        unwrap_and_clear(context, default_context));
 }
 
 mi::Sint32 Mdl_compiler_impl::add_builtin_module(
@@ -215,44 +259,84 @@ mi::Sint32 Mdl_compiler_impl::add_builtin_module(
     return success ? 0 : -1;
 }
 
-mi::Sint32 Mdl_compiler_impl::export_module(
+mi::Sint32 Mdl_compiler_impl::deprecated_export_module(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
     const char* filename,
     const mi::IMap* options)
 {
-    if( !transaction || !module_name || !filename)
+    NEURAY::Mdl_execution_context_impl context;
+    // get bundle_resources option
+    if (options && options->has_key(MDL_CTX_OPTION_BUNDLE_RESOURCES)) {
+        mi::base::Handle<const mi::IBoolean> option(
+            options->get_value<mi::IBoolean>(MDL_CTX_OPTION_BUNDLE_RESOURCES));
+        if (option)
+            context.set_option(MDL_CTX_OPTION_BUNDLE_RESOURCES, option->get_value<bool>());
+    }
+
+    return export_module(
+        transaction, module_name, filename, &context);
+}
+
+mi::Sint32 Mdl_compiler_impl::export_module(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    const char* filename,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    if (!transaction || !module_name || !filename)
         return -1;
 
     DISK::File_writer_impl writer;
-    if( !writer.open( filename))
+    if (!writer.open(filename))
         return -2;
-
+    
+    NEURAY::Mdl_execution_context_impl default_context;
     return export_module_common(
-        transaction, module_name, &writer, filename, options);
+        transaction, module_name, &writer, filename,
+        context ? context : &default_context);
+}
+
+mi::Sint32 Mdl_compiler_impl::deprecated_export_module_to_string(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    mi::IString* exported_module,
+    const mi::IMap* options)
+{
+    NEURAY::Mdl_execution_context_impl context;
+    // get bundle_resources option
+    if (options && options->has_key(MDL_CTX_OPTION_BUNDLE_RESOURCES)) {
+        mi::base::Handle<const mi::IBoolean> option(
+            options->get_value<mi::IBoolean>(MDL_CTX_OPTION_BUNDLE_RESOURCES));
+        if (option)
+            context.set_option(MDL_CTX_OPTION_BUNDLE_RESOURCES, option->get_value<bool>());
+    }
+
+    return export_module_to_string(transaction, module_name, exported_module, &context);
 }
 
 mi::Sint32 Mdl_compiler_impl::export_module_to_string(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
     mi::IString* exported_module,
-    const mi::IMap* options)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    if( !transaction || !module_name || !exported_module)
+    if (!transaction || !module_name || !exported_module)
         return -1;
 
     DISK::Memory_writer_impl writer;
-
+    NEURAY::Mdl_execution_context_impl default_context;
     mi::Sint32 result = export_module_common(
-        transaction, module_name, &writer, 0, options);
+        transaction, module_name, &writer, 0, context ? context : &default_context);
 
-    mi::base::Handle<mi::neuraylib::IBuffer> buffer( writer.get_buffer());
+    mi::base::Handle<mi::neuraylib::IBuffer> buffer(writer.get_buffer());
     const mi::Uint8* data = buffer->get_data();
-    if( data) {
-        std::string s( (const char*) data, buffer->get_data_size());
-        exported_module->set_c_str( s.c_str());
-    } else
-        exported_module->set_c_str( "");
+    if (data) {
+        std::string s((const char*)data, buffer->get_data_size());
+        exported_module->set_c_str(s.c_str());
+    }
+    else
+        exported_module->set_c_str("");
 
     return result;
 }
@@ -394,19 +478,19 @@ mi::Sint32 Mdl_compiler_impl::export_module_common(
     const char* module_name,
     mi::neuraylib::IWriter* writer,
     const char* filename,
-    const mi::IMap* options)
+    mi::neuraylib::IMdl_execution_context* context)
 {
     ASSERT( M_NEURAY_API, module_name);
     ASSERT( M_NEURAY_API, writer);
+    ASSERT(M_NEURAY_API, context);
+
+    NEURAY::Mdl_execution_context_impl* context_impl =
+        static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+    MDL::Execution_context& wrapped_context = context_impl->get_context();
+    wrapped_context.clear_messages();
 
     // get bundle_resources option
-    bool bundle_resources = false;
-    if( options && options->has_key( "bundle_resources")) {
-        mi::base::Handle<const mi::IBoolean> option(
-            options->get_value<mi::IBoolean>( "bundle_resources"));
-        if (option)
-            bundle_resources = option->get_value<bool>();
-    }
+    bool bundle_resources = wrapped_context.get_option<bool>(MDL_CTX_OPTION_BUNDLE_RESOURCES);
 
     // check that the bundle_resources option is not used with string-based exports
     if( !filename && bundle_resources)

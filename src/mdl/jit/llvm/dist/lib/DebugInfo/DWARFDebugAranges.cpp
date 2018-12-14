@@ -20,7 +20,7 @@ void DWARFDebugAranges::extract(DataExtractor DebugArangesData) {
   if (!DebugArangesData.isValidOffset(0))
     return;
   uint32_t Offset = 0;
-  typedef MISTD::vector<DWARFDebugArangeSet> RangeSetColl;
+  typedef std::vector<DWARFDebugArangeSet> RangeSetColl;
   RangeSetColl Sets;
   DWARFDebugArangeSet Set;
   uint32_t TotalRanges = 0;
@@ -88,11 +88,11 @@ void DWARFDebugAranges::sortAndMinimize() {
   if (orig_arange_size <= 1)
     return;
   // Sort our address range entries
-  MISTD::stable_sort(Aranges.begin(), Aranges.end());
+  std::stable_sort(Aranges.begin(), Aranges.end());
 
   // Most address ranges are contiguous from function to function
   // so our new ranges will likely be smaller. We calculate the size
-  // of the new ranges since although MISTD::vector objects can be resized,
+  // of the new ranges since although std::vector objects can be resized,
   // the will never reduce their allocated block size and free any excesss
   // memory, so we might as well start a brand new collection so it is as
   // small as possible.
@@ -138,7 +138,7 @@ uint32_t DWARFDebugAranges::findAddress(uint64_t Address) const {
     RangeCollIterator begin = Aranges.begin();
     RangeCollIterator end = Aranges.end();
     RangeCollIterator pos =
-        MISTD::lower_bound(begin, end, range);
+        std::lower_bound(begin, end, range);
 
     if (pos != end && pos->containsAddress(Address)) {
       return pos->CUOffset;

@@ -25,12 +25,12 @@ namespace {
 ///
 class PrintLoopPass : public LoopPass {
 private:
-  MISTD::string Banner;
+  std::string Banner;
   raw_ostream &Out;       // raw_ostream to print on.
 
 public:
   static char ID;
-  PrintLoopPass(const MISTD::string &B, raw_ostream &o)
+  PrintLoopPass(const std::string &B, raw_ostream &o)
       : LoopPass(ID), Banner(B), Out(o) {}
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -81,7 +81,7 @@ void LPPassManager::deleteLoopFromQueue(Loop *L) {
   if (skipThisLoop)
     return;
 
-  for (MISTD::deque<Loop *>::iterator I = LQ.begin(),
+  for (std::deque<Loop *>::iterator I = LQ.begin(),
          E = LQ.end(); I != E; ++I) {
     if (*I == L) {
       LQ.erase(I);
@@ -113,7 +113,7 @@ void LPPassManager::insertLoopIntoQueue(Loop *L) {
     LQ.push_front(L);
   else {
     // Insert L after the parent loop.
-    for (MISTD::deque<Loop *>::iterator I = LQ.begin(),
+    for (std::deque<Loop *>::iterator I = LQ.begin(),
            E = LQ.end(); I != E; ++I) {
       if (*I == L->getParentLoop()) {
         // deque does not support insert after.
@@ -160,7 +160,7 @@ void LPPassManager::deleteSimpleAnalysisValue(Value *V, Loop *L) {
 
 
 // Recurse through all subloops and all loops  into LQ.
-static void addLoopIntoQueue(Loop *L, MISTD::deque<Loop *> &LQ) {
+static void addLoopIntoQueue(Loop *L, std::deque<Loop *> &LQ) {
   LQ.push_back(L);
   for (Loop::reverse_iterator I = L->rbegin(), E = L->rend(); I != E; ++I)
     addLoopIntoQueue(*I, LQ);
@@ -199,7 +199,7 @@ bool LPPassManager::runOnFunction(Function &F) {
     return false;
 
   // Initialization
-  for (MISTD::deque<Loop *>::const_iterator I = LQ.begin(), E = LQ.end();
+  for (std::deque<Loop *>::const_iterator I = LQ.begin(), E = LQ.end();
        I != E; ++I) {
     Loop *L = *I;
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
@@ -305,7 +305,7 @@ void LPPassManager::dumpPassStructure(unsigned Offset) {
 // LoopPass
 
 Pass *LoopPass::createPrinterPass(raw_ostream &O,
-                                  const MISTD::string &Banner) const {
+                                  const std::string &Banner) const {
   return new PrintLoopPass(Banner, O);
 }
 

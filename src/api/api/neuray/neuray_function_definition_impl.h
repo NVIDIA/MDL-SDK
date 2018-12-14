@@ -108,9 +108,6 @@ public:
     mi::neuraylib::IFunction_call* create_function_call(
         const mi::neuraylib::IExpression_list* arguments,
         mi::Sint32* errors = 0) const NEURAY_FINAL;
-
-    // methods of IInterface
-
 };
 
 } // namespace NEURAY
@@ -118,4 +115,3 @@ public:
 } // namespace MI
 
 #endif // API_API_NEURAY_FUNCTION_DEFINITION_IMPL_H
-

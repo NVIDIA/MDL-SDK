@@ -546,7 +546,7 @@ Instruction *Instruction::clone() const {
 
   // Otherwise, enumerate and copy over metadata from the old instruction to the
   // new one.
-  SmallVector<MISTD::pair<unsigned, MDNode*>, 4> TheMDs;
+  SmallVector<std::pair<unsigned, MDNode*>, 4> TheMDs;
   getAllMetadataOtherThanDebugLoc(TheMDs);
   for (unsigned i = 0, e = TheMDs.size(); i != e; ++i)
     New->setMetadata(TheMDs[i].first, TheMDs[i].second);

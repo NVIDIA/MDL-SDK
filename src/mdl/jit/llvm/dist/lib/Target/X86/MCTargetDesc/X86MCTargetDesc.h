@@ -49,7 +49,7 @@ namespace N86 {
 }
 
 namespace X86_MC {
-  MISTD::string ParseX86Triple(StringRef TT);
+  std::string ParseX86Triple(StringRef TT);
 
   /// GetCpuIDAndInfo - Execute the specified cpuid and return the 4 values in
   /// the specified arguments.  If we can't run cpuid on the host, return true.

@@ -70,9 +70,9 @@ protected: // Can only create subclasses.
 
   /// TargetTriple, TargetCPU, TargetFS - Triple string, CPU name, and target
   /// feature strings the TargetMachine instance is created with.
-  MISTD::string TargetTriple;
-  MISTD::string TargetCPU;
-  MISTD::string TargetFS;
+  std::string TargetTriple;
+  std::string TargetCPU;
+  std::string TargetFS;
 
   /// CodeGenInfo - Low level target information such as relocation model.
   /// Non-const to allow resetting optimization level per-function.

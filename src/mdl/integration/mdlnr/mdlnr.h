@@ -70,10 +70,6 @@ public:
     mi::mdl::ILambda_function *deserialize_lambda_function(
         SERIAL::Deserializer *deserializer);
 
-    void set_register_mdl_type_with_api_callback(Register_mdl_type_with_api* callback);
-
-    Register_mdl_type_with_api* get_register_mdl_type_with_api_callback() const;
-
     void set_used_with_mdl_sdk(bool flag);
 
     bool get_used_with_mdl_sdk() const;
@@ -91,9 +87,6 @@ private:
 
     /// The allocator that wraps new/delete (overloaded in MI::MEM) as IAllocator.
     mi::base::Handle<mi::base::IAllocator> m_allocator;
-
-    /// The callback used to register MDL types with the API.
-    Register_mdl_type_with_api* m_callback;
 
     /// Flag returned by #get_used_with_mdl_sdk().
     bool m_used_with_mdl_sdk;

@@ -145,7 +145,7 @@ bool DWARFFormValue::extractValue(DataExtractor data, uint32_t *offset_ptr,
               : getRefAddrSize(cu->getAddressByteSize(), cu->getVersion());
       RelocAddrMap::const_iterator AI = cu->getRelocMap()->find(*offset_ptr);
       if (AI != cu->getRelocMap()->end()) {
-        const MISTD::pair<uint8_t, int64_t> &R = AI->second;
+        const std::pair<uint8_t, int64_t> &R = AI->second;
         Value.uval = data.getUnsigned(offset_ptr, AddrSize) + R.second;
       } else
         Value.uval = data.getUnsigned(offset_ptr, AddrSize);
@@ -196,7 +196,7 @@ bool DWARFFormValue::extractValue(DataExtractor data, uint32_t *offset_ptr,
       RelocAddrMap::const_iterator AI
         = cu->getRelocMap()->find(*offset_ptr);
       if (AI != cu->getRelocMap()->end()) {
-        const MISTD::pair<uint8_t, int64_t> &R = AI->second;
+        const std::pair<uint8_t, int64_t> &R = AI->second;
         Value.uval = data.getU32(offset_ptr) + R.second;
       } else
         Value.uval = data.getU32(offset_ptr);
@@ -218,7 +218,7 @@ bool DWARFFormValue::extractValue(DataExtractor data, uint32_t *offset_ptr,
       RelocAddrMap::const_iterator AI
         = cu->getRelocMap()->find(*offset_ptr);
       if (AI != cu->getRelocMap()->end()) {
-        const MISTD::pair<uint8_t, int64_t> &R = AI->second;
+        const std::pair<uint8_t, int64_t> &R = AI->second;
         Value.uval = data.getU32(offset_ptr) + R.second;
       } else
         Value.uval = data.getU32(offset_ptr);

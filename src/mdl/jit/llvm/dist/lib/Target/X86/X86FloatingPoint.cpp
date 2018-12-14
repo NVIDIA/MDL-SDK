@@ -242,12 +242,12 @@ namespace {
       unsigned RegOnTop = getStackEntry(0);
 
       // Swap the slots the regs are in.
-      MISTD::swap(RegMap[RegNo], RegMap[RegOnTop]);
+      std::swap(RegMap[RegNo], RegMap[RegOnTop]);
 
       // Swap stack slot contents.
       if (RegMap[RegOnTop] >= StackTop)
         report_fatal_error("Access past stack top!");
-      MISTD::swap(Stack[RegMap[RegOnTop]], Stack[StackTop-1]);
+      std::swap(Stack[RegMap[RegOnTop]], Stack[StackTop-1]);
 
       // Emit an fxch to update the runtime processors version of the state.
       BuildMI(*MBB, I, dl, TII->get(X86::XCH_F)).addReg(STReg);
@@ -594,7 +594,7 @@ static bool TableIsSorted(const TableEntry *Table, unsigned NumEntries) {
 #endif
 
 static int Lookup(const TableEntry *Table, unsigned N, unsigned Opcode) {
-  const TableEntry *I = MISTD::lower_bound(Table, Table+N, Opcode);
+  const TableEntry *I = std::lower_bound(Table, Table+N, Opcode);
   if (I != Table+N && I->from == Opcode)
     return I->to;
   return -1;
@@ -897,8 +897,8 @@ void FPS::adjustLiveRegs(unsigned Mask, MachineBasicBlock::iterator I) {
     unsigned KReg = countTrailingZeros(Kills);
     unsigned DReg = countTrailingZeros(Defs);
     DEBUG(dbgs() << "Renaming %FP" << KReg << " as imp %FP" << DReg << "\n");
-    MISTD::swap(Stack[getSlot(KReg)], Stack[getSlot(DReg)]);
-    MISTD::swap(RegMap[KReg], RegMap[DReg]);
+    std::swap(Stack[getSlot(KReg)], Stack[getSlot(DReg)]);
+    std::swap(RegMap[KReg], RegMap[DReg]);
     Kills &= ~(1 << KReg);
     Defs &= ~(1 << DReg);
   }
@@ -1421,7 +1421,7 @@ void FPS::handleSpecialFP(MachineBasicBlock::iterator &I) {
     // Move existing stack elements up to reflect reality.
     assert(StackTop < 8 && "Stack overflowed before FpPOP_RETVAL");
     if (StackTop) {
-      MISTD::copy_backward(Stack, Stack + StackTop, Stack + StackTop + 1);
+      std::copy_backward(Stack, Stack + StackTop, Stack + StackTop + 1);
       for (unsigned i = 0; i != NumFPRegs; ++i)
         ++RegMap[i];
     }

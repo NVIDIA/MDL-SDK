@@ -154,7 +154,7 @@ bool GenericToNVVM::runOnModule(Module &M) {
       Use &U = (UI++).getUse();
       U.set(BitCastNewGV);
     }
-    MISTD::string Name = GV->getName();
+    std::string Name = GV->getName();
     GV->removeDeadConstantUsers();
     GV->eraseFromParent();
     NewGV->setName(Name);

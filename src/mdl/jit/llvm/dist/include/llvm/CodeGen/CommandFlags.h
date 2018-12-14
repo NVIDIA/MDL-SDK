@@ -22,16 +22,16 @@
 #include <string>
 using namespace llvm;
 
-cl::opt<MISTD::string>
+cl::opt<std::string>
 MArch("march", cl::desc("Architecture to generate code for (see --version)"));
 
-cl::opt<MISTD::string>
+cl::opt<std::string>
 MCPU("mcpu",
      cl::desc("Target a specific cpu type (-mcpu=help for details)"),
      cl::value_desc("cpu-name"),
      cl::init(""));
 
-cl::list<MISTD::string>
+cl::list<std::string>
 MAttrs("mattr",
        cl::CommaSeparated,
        cl::desc("Target specific attributes (-mattr=help for details)"),
@@ -181,7 +181,7 @@ OverrideStackAlignment("stack-alignment",
                        cl::desc("Override default stack alignment"),
                        cl::init(0));
 
-cl::opt<MISTD::string>
+cl::opt<std::string>
 TrapFuncName("trap-func", cl::Hidden,
         cl::desc("Emit a call to trap function rather than a trap instruction"),
         cl::init(""));
@@ -201,11 +201,11 @@ UseInitArray("use-init-array",
              cl::desc("Use .init_array instead of .ctors."),
              cl::init(false));
 
-cl::opt<MISTD::string> StopAfter("stop-after",
+cl::opt<std::string> StopAfter("stop-after",
                             cl::desc("Stop compilation after a specific pass"),
                             cl::value_desc("pass-name"),
                                       cl::init(""));
-cl::opt<MISTD::string> StartAfter("start-after",
+cl::opt<std::string> StartAfter("start-after",
                           cl::desc("Resume compilation after a specific pass"),
                           cl::value_desc("pass-name"),
                           cl::init(""));

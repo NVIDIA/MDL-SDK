@@ -664,7 +664,7 @@ inline Attribute *Attribute::copy() const
 inline void Attribute::swap(
     Attribute		&other)		// the other attribute
 {
-    using MISTD::swap;
+    using std::swap;
     swap(m_id,		other.m_id);
     swap(m_override,	other.m_override);
     // should the Type swap be a fast swap, as well ? so far: just copy it

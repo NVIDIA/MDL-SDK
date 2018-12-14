@@ -15,8 +15,8 @@ using namespace llvm;
 
 namespace {
 
-MISTD::string repr(const Twine &Value) {
-  MISTD::string res;
+std::string repr(const Twine &Value) {
+  std::string res;
   llvm::raw_string_ostream OS(res);
   Value.printRepr(OS);
   return OS.str();
@@ -25,9 +25,9 @@ MISTD::string repr(const Twine &Value) {
 TEST(TwineTest, Construction) {
   EXPECT_EQ("", Twine().str());
   EXPECT_EQ("hi", Twine("hi").str());
-  EXPECT_EQ("hi", Twine(MISTD::string("hi")).str());
+  EXPECT_EQ("hi", Twine(std::string("hi")).str());
   EXPECT_EQ("hi", Twine(StringRef("hi")).str());
-  EXPECT_EQ("hi", Twine(StringRef(MISTD::string("hi"))).str());
+  EXPECT_EQ("hi", Twine(StringRef(std::string("hi"))).str());
   EXPECT_EQ("hi", Twine(StringRef("hithere", 2)).str());
 }
 

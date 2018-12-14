@@ -1,5 +1,5 @@
 # name of the target and the resulting library
-set(PROJECT_NAME mdl_core_shared)
+set(PROJECT_NAME examples-mdl_core-shared)
 
 # add dummy-source to create a dummy-lib
 set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
@@ -18,9 +18,11 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    NAMESPACE mdl_core_examples
+    NAMESPACE mdl_core
+    OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
 )
+add_library(mdl_core::shared ALIAS ${PROJECT_NAME})
 
 # inject the MDL_SAMPLES_ROOT path
 target_compile_definitions(${PROJECT_NAME} 
@@ -32,7 +34,7 @@ target_compile_definitions(${PROJECT_NAME}
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         mdl::mdl_core    
-    NO_RUNTIME_COPY # header only -> the consumer will also add these dependency
+    NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
     )
 
 # add include directories

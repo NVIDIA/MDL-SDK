@@ -28,10 +28,10 @@ struct MachineFunctionPrinterPass : public MachineFunctionPass {
   static char ID;
 
   raw_ostream &OS;
-  const MISTD::string Banner;
+  const std::string Banner;
 
   MachineFunctionPrinterPass() : MachineFunctionPass(ID), OS(dbgs()) { }
-  MachineFunctionPrinterPass(raw_ostream &os, const MISTD::string &banner) 
+  MachineFunctionPrinterPass(raw_ostream &os, const std::string &banner) 
       : MachineFunctionPass(ID), OS(os), Banner(banner) {}
 
   const char *getPassName() const { return "MachineFunction Printer"; }
@@ -60,7 +60,7 @@ namespace llvm {
 /// default banner is empty.
 ///
 MachineFunctionPass *createMachineFunctionPrinterPass(raw_ostream &OS,
-                                                      const MISTD::string &Banner){
+                                                      const std::string &Banner){
   return new MachineFunctionPrinterPass(OS, Banner);
 }
 

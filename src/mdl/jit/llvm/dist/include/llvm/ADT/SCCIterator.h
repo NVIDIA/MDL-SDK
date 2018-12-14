@@ -34,13 +34,13 @@ namespace llvm {
 ///
 template<class GraphT, class GT = GraphTraits<GraphT> >
 class scc_iterator
-  : public MISTD::iterator<MISTD::forward_iterator_tag,
-                         MISTD::vector<typename GT::NodeType>, ptrdiff_t> {
+  : public std::iterator<std::forward_iterator_tag,
+                         std::vector<typename GT::NodeType>, ptrdiff_t> {
   typedef typename GT::NodeType          NodeType;
   typedef typename GT::ChildIteratorType ChildItTy;
-  typedef MISTD::vector<NodeType*> SccTy;
-  typedef MISTD::iterator<MISTD::forward_iterator_tag,
-                        MISTD::vector<typename GT::NodeType>, ptrdiff_t> super;
+  typedef std::vector<NodeType*> SccTy;
+  typedef std::iterator<std::forward_iterator_tag,
+                        std::vector<typename GT::NodeType>, ptrdiff_t> super;
   typedef typename super::reference reference;
   typedef typename super::pointer pointer;
 
@@ -51,19 +51,19 @@ class scc_iterator
   DenseMap<NodeType *, unsigned> nodeVisitNumbers;
 
   // SCCNodeStack - Stack holding nodes of the SCC.
-  MISTD::vector<NodeType *> SCCNodeStack;
+  std::vector<NodeType *> SCCNodeStack;
 
   // CurrentSCC - The current SCC, retrieved using operator*().
   SccTy CurrentSCC;
 
   // VisitStack - Used to maintain the ordering.  Top = current block
   // First element is basic block pointer, second is the 'next child' to visit
-  MISTD::vector<MISTD::pair<NodeType *, ChildItTy> > VisitStack;
+  std::vector<std::pair<NodeType *, ChildItTy> > VisitStack;
 
   // MinVisitNumStack - Stack holding the "min" values for each node in the DFS.
   // This is used to track the minimum uplink values for all children of
   // the corresponding node on the VisitStack.
-  MISTD::vector<unsigned> MinVisitNumStack;
+  std::vector<unsigned> MinVisitNumStack;
 
   // A single "visit" within the non-recursive DFS traversal.
   void DFSVisitOne(NodeType *N) {
@@ -71,7 +71,7 @@ class scc_iterator
     nodeVisitNumbers[N] = visitNum;
     SCCNodeStack.push_back(N);
     MinVisitNumStack.push_back(visitNum);
-    VisitStack.push_back(MISTD::make_pair(N, GT::child_begin(N)));
+    VisitStack.push_back(std::make_pair(N, GT::child_begin(N)));
     //dbgs() << "TarjanSCC: Node " << N <<
     //      " : visitNum = " << visitNum << "\n";
   }

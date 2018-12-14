@@ -31,7 +31,7 @@ public:
   LinkingMemoryManager(MCJIT *Parent, RTDyldMemoryManager *MM)
     : ParentEngine(Parent), ClientMM(MM) {}
 
-  virtual uint64_t getSymbolAddress(const MISTD::string &Name);
+  virtual uint64_t getSymbolAddress(const std::string &Name);
 
   // Functions deferred to client memory manager
   virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
@@ -61,7 +61,7 @@ public:
     ClientMM->deregisterEHFrames(Addr, LoadAddr, Size);
   }
 
-  virtual bool finalizeMemory(MISTD::string *ErrMsg = 0) {
+  virtual bool finalizeMemory(std::string *ErrMsg = 0) {
     return ClientMM->finalizeMemory(ErrMsg);
   }
 
@@ -267,7 +267,7 @@ public:
   virtual void freeMachineCodeForFunction(Function *F);
 
   virtual GenericValue runFunction(Function *F,
-                                   const MISTD::vector<GenericValue> &ArgValues);
+                                   const std::vector<GenericValue> &ArgValues);
 
   /// getPointerToNamedFunction - This method returns the address of the
   /// specified function by using the dlsym function call.  As such it is only
@@ -277,7 +277,7 @@ public:
   /// found, this function silently returns a null pointer. Otherwise,
   /// it prints a message to stderr and aborts.
   ///
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true);
 
   /// mapSectionAddress - map a section to its target address space value.
@@ -294,8 +294,8 @@ public:
   // If successful, these function will implicitly finalize all loaded objects.
   // To get a function address within MCJIT without causing a finalize, use
   // getSymbolAddress.
-  virtual uint64_t getGlobalValueAddress(const MISTD::string &Name);
-  virtual uint64_t getFunctionAddress(const MISTD::string &Name);
+  virtual uint64_t getGlobalValueAddress(const std::string &Name);
+  virtual uint64_t getFunctionAddress(const std::string &Name);
 
   /// @}
   /// @name (Private) Registration Interfaces
@@ -306,7 +306,7 @@ public:
   }
 
   static ExecutionEngine *createJIT(Module *M,
-                                    MISTD::string *ErrorStr,
+                                    std::string *ErrorStr,
                                     RTDyldMemoryManager *MemMgr,
                                     bool GVsWithCode,
                                     TargetMachine *TM);
@@ -315,7 +315,7 @@ public:
 
   // This is not directly exposed via the ExecutionEngine API, but it is
   // used by the LinkingMemoryManager.
-  uint64_t getSymbolAddress(const MISTD::string &Name,
+  uint64_t getSymbolAddress(const std::string &Name,
                           bool CheckFunctionsOnly);
 
 protected:
@@ -329,8 +329,8 @@ protected:
   void NotifyObjectEmitted(const ObjectImage& Obj);
   void NotifyFreeingObject(const ObjectImage& Obj);
 
-  uint64_t getExistingSymbolAddress(const MISTD::string &Name);
-  Module *findModuleForSymbol(const MISTD::string &Name,
+  uint64_t getExistingSymbolAddress(const std::string &Name);
+  Module *findModuleForSymbol(const std::string &Name,
                               bool CheckFunctionsOnly);
 };
 

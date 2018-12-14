@@ -577,21 +577,21 @@ void DAGTypeLegalizer::ExpungeNode(SDNode *N) {
     RemapValue(I->second);
   }
 
-  for (DenseMap<SDValue, MISTD::pair<SDValue, SDValue> >::iterator
+  for (DenseMap<SDValue, std::pair<SDValue, SDValue> >::iterator
        I = ExpandedIntegers.begin(), E = ExpandedIntegers.end(); I != E; ++I){
     assert(I->first.getNode() != N);
     RemapValue(I->second.first);
     RemapValue(I->second.second);
   }
 
-  for (DenseMap<SDValue, MISTD::pair<SDValue, SDValue> >::iterator
+  for (DenseMap<SDValue, std::pair<SDValue, SDValue> >::iterator
        I = ExpandedFloats.begin(), E = ExpandedFloats.end(); I != E; ++I) {
     assert(I->first.getNode() != N);
     RemapValue(I->second.first);
     RemapValue(I->second.second);
   }
 
-  for (DenseMap<SDValue, MISTD::pair<SDValue, SDValue> >::iterator
+  for (DenseMap<SDValue, std::pair<SDValue, SDValue> >::iterator
        I = SplitVectors.begin(), E = SplitVectors.end(); I != E; ++I) {
     assert(I->first.getNode() != N);
     RemapValue(I->second.first);
@@ -767,7 +767,7 @@ void DAGTypeLegalizer::SetScalarizedVector(SDValue Op, SDValue Result) {
 
 void DAGTypeLegalizer::GetExpandedInteger(SDValue Op, SDValue &Lo,
                                           SDValue &Hi) {
-  MISTD::pair<SDValue, SDValue> &Entry = ExpandedIntegers[Op];
+  std::pair<SDValue, SDValue> &Entry = ExpandedIntegers[Op];
   RemapValue(Entry.first);
   RemapValue(Entry.second);
   assert(Entry.first.getNode() && "Operand isn't expanded");
@@ -786,7 +786,7 @@ void DAGTypeLegalizer::SetExpandedInteger(SDValue Op, SDValue Lo,
   AnalyzeNewValue(Hi);
 
   // Remember that this is the result of the node.
-  MISTD::pair<SDValue, SDValue> &Entry = ExpandedIntegers[Op];
+  std::pair<SDValue, SDValue> &Entry = ExpandedIntegers[Op];
   assert(Entry.first.getNode() == 0 && "Node already expanded");
   Entry.first = Lo;
   Entry.second = Hi;
@@ -794,7 +794,7 @@ void DAGTypeLegalizer::SetExpandedInteger(SDValue Op, SDValue Lo,
 
 void DAGTypeLegalizer::GetExpandedFloat(SDValue Op, SDValue &Lo,
                                         SDValue &Hi) {
-  MISTD::pair<SDValue, SDValue> &Entry = ExpandedFloats[Op];
+  std::pair<SDValue, SDValue> &Entry = ExpandedFloats[Op];
   RemapValue(Entry.first);
   RemapValue(Entry.second);
   assert(Entry.first.getNode() && "Operand isn't expanded");
@@ -813,7 +813,7 @@ void DAGTypeLegalizer::SetExpandedFloat(SDValue Op, SDValue Lo,
   AnalyzeNewValue(Hi);
 
   // Remember that this is the result of the node.
-  MISTD::pair<SDValue, SDValue> &Entry = ExpandedFloats[Op];
+  std::pair<SDValue, SDValue> &Entry = ExpandedFloats[Op];
   assert(Entry.first.getNode() == 0 && "Node already expanded");
   Entry.first = Lo;
   Entry.second = Hi;
@@ -821,7 +821,7 @@ void DAGTypeLegalizer::SetExpandedFloat(SDValue Op, SDValue Lo,
 
 void DAGTypeLegalizer::GetSplitVector(SDValue Op, SDValue &Lo,
                                       SDValue &Hi) {
-  MISTD::pair<SDValue, SDValue> &Entry = SplitVectors[Op];
+  std::pair<SDValue, SDValue> &Entry = SplitVectors[Op];
   RemapValue(Entry.first);
   RemapValue(Entry.second);
   assert(Entry.first.getNode() && "Operand isn't split");
@@ -842,7 +842,7 @@ void DAGTypeLegalizer::SetSplitVector(SDValue Op, SDValue Lo,
   AnalyzeNewValue(Hi);
 
   // Remember that this is the result of the node.
-  MISTD::pair<SDValue, SDValue> &Entry = SplitVectors[Op];
+  std::pair<SDValue, SDValue> &Entry = SplitVectors[Op];
   assert(Entry.first.getNode() == 0 && "Node already split");
   Entry.first = Lo;
   Entry.second = Hi;
@@ -1028,7 +1028,7 @@ SDValue DAGTypeLegalizer::LibCallify(RTLIB::Libcall LC, SDNode *N,
 
 // ExpandChainLibCall - Expand a node into a call to a libcall. Similar to
 // ExpandLibCall except that the first operand is the in-chain.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 DAGTypeLegalizer::ExpandChainLibCall(RTLIB::Libcall LC,
                                          SDNode *Node,
                                          bool isSigned) {
@@ -1054,7 +1054,7 @@ DAGTypeLegalizer::ExpandChainLibCall(RTLIB::Libcall LC,
                     0, TLI.getLibcallCallingConv(LC), /*isTailCall=*/false,
                     /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
                     Callee, Args, DAG, SDLoc(Node));
-  MISTD::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   return CallInfo;
 }

@@ -24,7 +24,7 @@
 using namespace llvm;
 
 /// Increase pressure for each pressure set provided by TargetRegisterInfo.
-static void increaseSetPressure(MISTD::vector<unsigned> &CurrSetPressure,
+static void increaseSetPressure(std::vector<unsigned> &CurrSetPressure,
                                 PSetIterator PSetI) {
   unsigned Weight = PSetI.getWeight();
   for (; PSetI.isValid(); ++PSetI)
@@ -32,7 +32,7 @@ static void increaseSetPressure(MISTD::vector<unsigned> &CurrSetPressure,
 }
 
 /// Decrease pressure for each pressure set provided by TargetRegisterInfo.
-static void decreaseSetPressure(MISTD::vector<unsigned> &CurrSetPressure,
+static void decreaseSetPressure(std::vector<unsigned> &CurrSetPressure,
                                 PSetIterator PSetI) {
   unsigned Weight = PSetI.getWeight();
   for (; PSetI.isValid(); ++PSetI) {
@@ -245,8 +245,8 @@ void RegPressureTracker::closeTop() {
   for (SparseSet<unsigned>::const_iterator I =
          LiveRegs.VirtRegs.begin(), E = LiveRegs.VirtRegs.end(); I != E; ++I)
     P.LiveInRegs.push_back(*I);
-  MISTD::sort(P.LiveInRegs.begin(), P.LiveInRegs.end());
-  P.LiveInRegs.erase(MISTD::unique(P.LiveInRegs.begin(), P.LiveInRegs.end()),
+  std::sort(P.LiveInRegs.begin(), P.LiveInRegs.end());
+  P.LiveInRegs.erase(std::unique(P.LiveInRegs.begin(), P.LiveInRegs.end()),
                      P.LiveInRegs.end());
 }
 
@@ -263,8 +263,8 @@ void RegPressureTracker::closeBottom() {
   for (SparseSet<unsigned>::const_iterator I =
          LiveRegs.VirtRegs.begin(), E = LiveRegs.VirtRegs.end(); I != E; ++I)
     P.LiveOutRegs.push_back(*I);
-  MISTD::sort(P.LiveOutRegs.begin(), P.LiveOutRegs.end());
-  P.LiveOutRegs.erase(MISTD::unique(P.LiveOutRegs.begin(), P.LiveOutRegs.end()),
+  std::sort(P.LiveOutRegs.begin(), P.LiveOutRegs.end());
+  P.LiveOutRegs.erase(std::unique(P.LiveOutRegs.begin(), P.LiveOutRegs.end()),
                       P.LiveOutRegs.end());
 }
 
@@ -299,9 +299,9 @@ void RegPressureTracker::initLiveThru(const RegPressureTracker &RPTracker) {
 }
 
 /// \brief Convenient wrapper for checking membership in RegisterOperands.
-/// (MISTD::count() doesn't have an early exit).
+/// (std::count() doesn't have an early exit).
 static bool containsReg(ArrayRef<unsigned> RegUnits, unsigned RegUnit) {
-  return MISTD::find(RegUnits.begin(), RegUnits.end(), RegUnit) != RegUnits.end();
+  return std::find(RegUnits.begin(), RegUnits.end(), RegUnit) != RegUnits.end();
 }
 
 /// Collect this instruction's unique uses and defs into SmallVectors for
@@ -364,8 +364,8 @@ static void collectOperands(const MachineInstr *MI,
   // Remove redundant physreg dead defs.
   
   SmallVectorImpl<unsigned>::iterator I =
-    MISTD::remove_if(RegOpers.DeadDefs.begin(), RegOpers.DeadDefs.end(),
-                   MISTD::bind1st(MISTD::ptr_fun(containsReg), RegOpers.Defs));
+    std::remove_if(RegOpers.DeadDefs.begin(), RegOpers.DeadDefs.end(),
+                   std::bind1st(std::ptr_fun(containsReg), RegOpers.Defs));
   RegOpers.DeadDefs.erase(I, RegOpers.DeadDefs.end());
 }
 
@@ -400,7 +400,7 @@ void PressureDiff::addPressureChange(unsigned RegUnit, bool IsDec,
     if (!I->isValid() || I->getPSet() != *PSetI) {
       PressureChange PTmp = PressureChange(*PSetI);
       for (PressureDiff::iterator J = I; J != E && PTmp.isValid(); ++J)
-        MISTD::swap(*J,PTmp);
+        std::swap(*J,PTmp);
     }
     // Update the units for this pressure set.
     I->setUnitInc(I->getUnitInc() + Weight);
@@ -754,8 +754,8 @@ getMaxUpwardPressureDelta(const MachineInstr *MI, PressureDiff *PDiff,
   // Snapshot Pressure.
   // FIXME: The snapshot heap space should persist. But I'm planning to
   // summarize the pressure effect so we don't need to snapshot at all.
-  MISTD::vector<unsigned> SavedPressure = CurrSetPressure;
-  MISTD::vector<unsigned> SavedMaxPressure = P.MaxSetPressure;
+  std::vector<unsigned> SavedPressure = CurrSetPressure;
+  std::vector<unsigned> SavedMaxPressure = P.MaxSetPressure;
 
   bumpUpwardPressure(MI);
 
@@ -948,8 +948,8 @@ getMaxDownwardPressureDelta(const MachineInstr *MI, RegPressureDelta &Delta,
                             ArrayRef<PressureChange> CriticalPSets,
                             ArrayRef<unsigned> MaxPressureLimit) {
   // Snapshot Pressure.
-  MISTD::vector<unsigned> SavedPressure = CurrSetPressure;
-  MISTD::vector<unsigned> SavedMaxPressure = P.MaxSetPressure;
+  std::vector<unsigned> SavedPressure = CurrSetPressure;
+  std::vector<unsigned> SavedMaxPressure = P.MaxSetPressure;
 
   bumpDownwardPressure(MI);
 
@@ -968,8 +968,8 @@ getMaxDownwardPressureDelta(const MachineInstr *MI, RegPressureDelta &Delta,
 /// Get the pressure of each PSet after traversing this instruction bottom-up.
 void RegPressureTracker::
 getUpwardPressure(const MachineInstr *MI,
-                  MISTD::vector<unsigned> &PressureResult,
-                  MISTD::vector<unsigned> &MaxPressureResult) {
+                  std::vector<unsigned> &PressureResult,
+                  std::vector<unsigned> &MaxPressureResult) {
   // Snapshot pressure.
   PressureResult = CurrSetPressure;
   MaxPressureResult = P.MaxSetPressure;
@@ -984,8 +984,8 @@ getUpwardPressure(const MachineInstr *MI,
 /// Get the pressure of each PSet after traversing this instruction top-down.
 void RegPressureTracker::
 getDownwardPressure(const MachineInstr *MI,
-                    MISTD::vector<unsigned> &PressureResult,
-                    MISTD::vector<unsigned> &MaxPressureResult) {
+                    std::vector<unsigned> &PressureResult,
+                    std::vector<unsigned> &MaxPressureResult) {
   // Snapshot pressure.
   PressureResult = CurrSetPressure;
   MaxPressureResult = P.MaxSetPressure;

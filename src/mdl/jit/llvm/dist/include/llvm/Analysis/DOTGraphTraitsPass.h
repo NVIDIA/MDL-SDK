@@ -27,8 +27,8 @@ public:
 
   virtual bool runOnFunction(Function &F) {
     Analysis *Graph = &getAnalysis<Analysis>();
-    MISTD::string GraphName = DOTGraphTraits<Analysis*>::getGraphName(Graph);
-    MISTD::string Title = GraphName + " for '" + F.getName().str() + "' function";
+    std::string GraphName = DOTGraphTraits<Analysis*>::getGraphName(Graph);
+    std::string Title = GraphName + " for '" + F.getName().str() + "' function";
 
     ViewGraph(Graph, Name, Simple, Title);
 
@@ -41,7 +41,7 @@ public:
   }
 
 private:
-  MISTD::string Name;
+  std::string Name;
 };
 
 template <class Analysis, bool Simple>
@@ -52,14 +52,14 @@ public:
 
   virtual bool runOnFunction(Function &F) {
     Analysis *Graph = &getAnalysis<Analysis>();
-    MISTD::string Filename = Name + "." + F.getName().str() + ".dot";
-    MISTD::string ErrorInfo;
+    std::string Filename = Name + "." + F.getName().str() + ".dot";
+    std::string ErrorInfo;
 
     errs() << "Writing '" << Filename << "'...";
 
     raw_fd_ostream File(Filename.c_str(), ErrorInfo);
-    MISTD::string GraphName = DOTGraphTraits<Analysis*>::getGraphName(Graph);
-    MISTD::string Title = GraphName + " for '" + F.getName().str() + "' function";
+    std::string GraphName = DOTGraphTraits<Analysis*>::getGraphName(Graph);
+    std::string Title = GraphName + " for '" + F.getName().str() + "' function";
 
     if (ErrorInfo.empty())
       WriteGraph(File, Graph, Simple, Title);
@@ -76,7 +76,7 @@ public:
   }
 
 private:
-  MISTD::string Name;
+  std::string Name;
 };
 
 template <class Analysis, bool Simple>
@@ -87,7 +87,7 @@ public:
 
   virtual bool runOnModule(Module &M) {
     Analysis *Graph = &getAnalysis<Analysis>();
-    MISTD::string Title = DOTGraphTraits<Analysis*>::getGraphName(Graph);
+    std::string Title = DOTGraphTraits<Analysis*>::getGraphName(Graph);
 
     ViewGraph(Graph, Name, Simple, Title);
 
@@ -100,7 +100,7 @@ public:
   }
 
 private:
-  MISTD::string Name;
+  std::string Name;
 };
 
 template <class Analysis, bool Simple>
@@ -111,13 +111,13 @@ public:
 
   virtual bool runOnModule(Module &M) {
     Analysis *Graph = &getAnalysis<Analysis>();
-    MISTD::string Filename = Name + ".dot";
-    MISTD::string ErrorInfo;
+    std::string Filename = Name + ".dot";
+    std::string ErrorInfo;
 
     errs() << "Writing '" << Filename << "'...";
 
     raw_fd_ostream File(Filename.c_str(), ErrorInfo);
-    MISTD::string Title = DOTGraphTraits<Analysis*>::getGraphName(Graph);
+    std::string Title = DOTGraphTraits<Analysis*>::getGraphName(Graph);
 
     if (ErrorInfo.empty())
       WriteGraph(File, Graph, Simple, Title);
@@ -134,7 +134,7 @@ public:
   }
 
 private:
-  MISTD::string Name;
+  std::string Name;
 };
 
 } // end namespace llvm

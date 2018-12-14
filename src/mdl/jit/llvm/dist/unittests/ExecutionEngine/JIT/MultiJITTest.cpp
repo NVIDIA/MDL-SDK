@@ -27,7 +27,7 @@ bool LoadAssemblyInto(Module *M, const char *assembly) {
   SMDiagnostic Error;
   bool success =
     NULL != ParseAssemblyString(assembly, M, Error, M->getContext());
-  MISTD::string errMsg;
+  std::string errMsg;
   raw_string_ostream os(errMsg);
   Error.print("", os);
   EXPECT_TRUE(success) << os.str();
@@ -86,7 +86,7 @@ TEST(MultiJitTest, EagerMode) {
   EE2->DisableLazyCompilation(true);
 
   // Call the `foo' function with no arguments:
-  MISTD::vector<GenericValue> noargs;
+  std::vector<GenericValue> noargs;
   GenericValue gv1 = EE1->runFunction(FooF1, noargs);
   GenericValue gv2 = EE2->runFunction(FooF2, noargs);
 
@@ -116,7 +116,7 @@ TEST(MultiJitTest, LazyMode) {
   EE2->DisableLazyCompilation(false);
 
   // Call the `foo' function with no arguments:
-  MISTD::vector<GenericValue> noargs;
+  std::vector<GenericValue> noargs;
   GenericValue gv1 = EE1->runFunction(FooF1, noargs);
   GenericValue gv2 = EE2->runFunction(FooF2, noargs);
 

@@ -180,7 +180,7 @@ unsigned TargetSchedModel::computeOperandLatency(
     // hook to allow subtargets to specialize latency. This hook is only
     // applicable to the InstrItins model. InstrSchedModel should model all
     // special cases without TII hooks.
-    InstrLatency = MISTD::max(InstrLatency,
+    InstrLatency = std::max(InstrLatency,
                             TII->defaultDefLatency(&SchedModel, DefMI));
     return InstrLatency;
   }
@@ -212,7 +212,7 @@ unsigned TargetSchedModel::computeOperandLatency(
   if (SCDesc->isValid() && !DefMI->getOperand(DefOperIdx).isImplicit()
       && !DefMI->getDesc().OpInfo[DefOperIdx].isOptionalDef()
       && SchedModel.isComplete()) {
-    MISTD::string Err;
+    std::string Err;
     raw_string_ostream ss(Err);
     ss << "DefIdx " << DefIdx << " exceeds machine model writes for "
        << *DefMI;
@@ -243,7 +243,7 @@ TargetSchedModel::computeInstrLatency(const MachineInstr *MI,
         // Lookup the definition's write latency in SubtargetInfo.
         const MCWriteLatencyEntry *WLEntry =
           STI->getWriteLatencyEntry(SCDesc, DefIdx);
-        Latency = MISTD::max(Latency, capLatency(WLEntry->Cycles));
+        Latency = std::max(Latency, capLatency(WLEntry->Cycles));
       }
       return Latency;
     }

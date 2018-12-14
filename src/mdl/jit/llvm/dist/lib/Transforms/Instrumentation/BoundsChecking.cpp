@@ -178,7 +178,7 @@ bool BoundsChecking::runOnFunction(Function &F) {
 
   // check HANDLE_MEMORY_INST in include/llvm/Instruction.def for memory
   // touching instructions
-  MISTD::vector<Instruction*> WorkList;
+  std::vector<Instruction*> WorkList;
   for (inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ++i) {
     Instruction *I = &*i;
     if (isa<LoadInst>(I) || isa<StoreInst>(I) || isa<AtomicCmpXchgInst>(I) ||
@@ -187,7 +187,7 @@ bool BoundsChecking::runOnFunction(Function &F) {
   }
 
   bool MadeChange = false;
-  for (MISTD::vector<Instruction*>::iterator i = WorkList.begin(),
+  for (std::vector<Instruction*>::iterator i = WorkList.begin(),
        e = WorkList.end(); i != e; ++i) {
     Inst = *i;
 

@@ -161,12 +161,12 @@ public:
 
 void
 RegUseTracker::CountRegister(const SCEV *Reg, size_t LUIdx) {
-  MISTD::pair<RegUsesTy::iterator, bool> Pair =
-    RegUsesMap.insert(MISTD::make_pair(Reg, RegSortData()));
+  std::pair<RegUsesTy::iterator, bool> Pair =
+    RegUsesMap.insert(std::make_pair(Reg, RegSortData()));
   RegSortData &RSD = Pair.first->second;
   if (Pair.second)
     RegSequence.push_back(Reg);
-  RSD.UsedByIndices.resize(MISTD::max(RSD.UsedByIndices.size(), LUIdx + 1));
+  RSD.UsedByIndices.resize(std::max(RSD.UsedByIndices.size(), LUIdx + 1));
   RSD.UsedByIndices.set(LUIdx);
 }
 
@@ -191,7 +191,7 @@ RegUseTracker::SwapAndDropUse(size_t LUIdx, size_t LastLUIdx) {
     if (LUIdx < UsedByIndices.size())
       UsedByIndices[LUIdx] =
         LastLUIdx < UsedByIndices.size() ? UsedByIndices[LastLUIdx] : 0;
-    UsedByIndices.resize(MISTD::min(UsedByIndices.size(), LastLUIdx));
+    UsedByIndices.resize(std::min(UsedByIndices.size(), LastLUIdx));
   }
 }
 
@@ -366,14 +366,14 @@ Type *Formula::getType() const {
 /// DeleteBaseReg - Delete the given base reg from the BaseRegs list.
 void Formula::DeleteBaseReg(const SCEV *&S) {
   if (&S != &BaseRegs.back())
-    MISTD::swap(S, BaseRegs.back());
+    std::swap(S, BaseRegs.back());
   BaseRegs.pop_back();
 }
 
 /// referencesReg - Test if this formula references the given register.
 bool Formula::referencesReg(const SCEV *S) const {
   return S == ScaledReg ||
-         MISTD::find(BaseRegs.begin(), BaseRegs.end(), S) != BaseRegs.end();
+         std::find(BaseRegs.begin(), BaseRegs.end(), S) != BaseRegs.end();
 }
 
 /// hasRegsUsedByUsesOtherThan - Test whether this formula uses registers
@@ -1215,7 +1215,7 @@ bool LSRUse::HasFormulaWithSameRegs(const Formula &F) const {
   SmallVector<const SCEV *, 4> Key = F.BaseRegs;
   if (F.ScaledReg) Key.push_back(F.ScaledReg);
   // Unstable sort by host order ok, because this is only used for uniquifying.
-  MISTD::sort(Key.begin(), Key.end());
+  std::sort(Key.begin(), Key.end());
   return Uniquifier.count(Key);
 }
 
@@ -1228,7 +1228,7 @@ bool LSRUse::InsertFormula(const Formula &F) {
   SmallVector<const SCEV *, 4> Key = F.BaseRegs;
   if (F.ScaledReg) Key.push_back(F.ScaledReg);
   // Unstable sort by host order ok, because this is only used for uniquifying.
-  MISTD::sort(Key.begin(), Key.end());
+  std::sort(Key.begin(), Key.end());
 
   if (!Uniquifier.insert(Key).second)
     return false;
@@ -1254,7 +1254,7 @@ bool LSRUse::InsertFormula(const Formula &F) {
 /// DeleteFormula - Remove the given formula from this use's list.
 void LSRUse::DeleteFormula(Formula &F) {
   if (&F != &Formulae.back())
-    MISTD::swap(F, Formulae.back());
+    std::swap(F, Formulae.back());
   Formulae.pop_back();
 }
 
@@ -1440,7 +1440,7 @@ static unsigned getScalingFactorCost(const TargetTransformInfo &TTI,
 
     assert(ScaleCostMinOffset >= 0 && ScaleCostMaxOffset >= 0 &&
            "Legal addressing mode has an illegal cost!");
-    return MISTD::max(ScaleCostMinOffset, ScaleCostMaxOffset);
+    return std::max(ScaleCostMinOffset, ScaleCostMaxOffset);
   }
   case LSRUse::ICmpZero:
     // ICmpZero BaseReg + -1*ScaleReg => ICmp BaseReg, ScaleReg.
@@ -1507,23 +1507,23 @@ namespace {
 /// UseMapDenseMapInfo - A DenseMapInfo implementation for holding
 /// DenseMaps and DenseSets of pairs of const SCEV* and LSRUse::Kind.
 struct UseMapDenseMapInfo {
-  static MISTD::pair<const SCEV *, LSRUse::KindType> getEmptyKey() {
-    return MISTD::make_pair(reinterpret_cast<const SCEV *>(-1), LSRUse::Basic);
+  static std::pair<const SCEV *, LSRUse::KindType> getEmptyKey() {
+    return std::make_pair(reinterpret_cast<const SCEV *>(-1), LSRUse::Basic);
   }
 
-  static MISTD::pair<const SCEV *, LSRUse::KindType> getTombstoneKey() {
-    return MISTD::make_pair(reinterpret_cast<const SCEV *>(-2), LSRUse::Basic);
+  static std::pair<const SCEV *, LSRUse::KindType> getTombstoneKey() {
+    return std::make_pair(reinterpret_cast<const SCEV *>(-2), LSRUse::Basic);
   }
 
   static unsigned
-  getHashValue(const MISTD::pair<const SCEV *, LSRUse::KindType> &V) {
+  getHashValue(const std::pair<const SCEV *, LSRUse::KindType> &V) {
     unsigned Result = DenseMapInfo<const SCEV *>::getHashValue(V.first);
     Result ^= DenseMapInfo<unsigned>::getHashValue(unsigned(V.second));
     return Result;
   }
 
-  static bool isEqual(const MISTD::pair<const SCEV *, LSRUse::KindType> &LHS,
-                      const MISTD::pair<const SCEV *, LSRUse::KindType> &RHS) {
+  static bool isEqual(const std::pair<const SCEV *, LSRUse::KindType> &LHS,
+                      const std::pair<const SCEV *, LSRUse::KindType> &RHS) {
     return LHS == RHS;
   }
 };
@@ -1656,7 +1656,7 @@ class LSRInstance {
   }
 
   // Support for sharing of LSRUses between LSRFixups.
-  typedef DenseMap<MISTD::pair<const SCEV *, LSRUse::KindType>,
+  typedef DenseMap<std::pair<const SCEV *, LSRUse::KindType>,
                    size_t,
                    UseMapDenseMapInfo> UseMapTy;
   UseMapTy UseMap;
@@ -1664,7 +1664,7 @@ class LSRInstance {
   bool reconcileNewOffset(LSRUse &LU, int64_t NewOffset, bool HasBaseReg,
                           LSRUse::KindType Kind, Type *AccessTy);
 
-  MISTD::pair<size_t, int64_t> getUse(const SCEV *&Expr,
+  std::pair<size_t, int64_t> getUse(const SCEV *&Expr,
                                     LSRUse::KindType Kind,
                                     Type *AccessTy);
 
@@ -2215,7 +2215,7 @@ LSRInstance::reconcileNewOffset(LSRUse &LU, int64_t NewOffset, bool HasBaseReg,
 /// getUse - Return an LSRUse index and an offset value for a fixup which
 /// needs the given expression, with the given kind and optional access type.
 /// Either reuse an existing use or create a new one, as needed.
-MISTD::pair<size_t, int64_t>
+std::pair<size_t, int64_t>
 LSRInstance::getUse(const SCEV *&Expr,
                     LSRUse::KindType Kind, Type *AccessTy) {
   const SCEV *Copy = Expr;
@@ -2228,15 +2228,15 @@ LSRInstance::getUse(const SCEV *&Expr,
     Offset = 0;
   }
 
-  MISTD::pair<UseMapTy::iterator, bool> P =
-    UseMap.insert(MISTD::make_pair(MISTD::make_pair(Expr, Kind), 0));
+  std::pair<UseMapTy::iterator, bool> P =
+    UseMap.insert(std::make_pair(std::make_pair(Expr, Kind), 0));
   if (!P.second) {
     // A use already existed with this base.
     size_t LUIdx = P.first->second;
     LSRUse &LU = Uses[LUIdx];
     if (reconcileNewOffset(LU, Offset, /*HasBaseReg=*/true, Kind, AccessTy))
       // Reuse this use.
-      return MISTD::make_pair(LUIdx, Offset);
+      return std::make_pair(LUIdx, Offset);
   }
 
   // Create a new use.
@@ -2252,13 +2252,13 @@ LSRInstance::getUse(const SCEV *&Expr,
 
   LU.MinOffset = Offset;
   LU.MaxOffset = Offset;
-  return MISTD::make_pair(LUIdx, Offset);
+  return std::make_pair(LUIdx, Offset);
 }
 
 /// DeleteUse - Delete the given use from the Uses list.
 void LSRInstance::DeleteUse(LSRUse &LU, size_t LUIdx) {
   if (&LU != &Uses.back())
-    MISTD::swap(LU, Uses.back());
+    std::swap(LU, Uses.back());
   Uses.pop_back();
 
   // Update RegUses.
@@ -2436,7 +2436,7 @@ static const SCEV *getExprBase(const SCEV *S) {
     // there's nothing more complex.
     // FIXME: not sure if we want to recognize negation.
     const SCEVAddExpr *Add = cast<SCEVAddExpr>(S);
-    for (MISTD::reverse_iterator<SCEVAddExpr::op_iterator> I(Add->op_end()),
+    for (std::reverse_iterator<SCEVAddExpr::op_iterator> I(Add->op_end()),
            E(Add->op_begin()); I != E; ++I) {
       const SCEV *SubExpr = *I;
       if (SubExpr->getSCEVType() == scAddExpr)
@@ -2777,7 +2777,7 @@ void LSRInstance::FinalizeChain(IVChain &Chain) {
        I != E; ++I) {
     DEBUG(dbgs() << "        Inc: " << *I->UserInst << "\n");
     User::op_iterator UseI =
-      MISTD::find(I->UserInst->op_begin(), I->UserInst->op_end(), I->IVOperand);
+      std::find(I->UserInst->op_begin(), I->UserInst->op_end(), I->IVOperand);
     assert(UseI != I->UserInst->op_end() && "cannot find IV operand");
     IVIncSet.insert(UseI);
   }
@@ -2913,7 +2913,7 @@ void LSRInstance::CollectFixupsAndInitialFormulae() {
   for (IVUsers::const_iterator UI = IU.begin(), E = IU.end(); UI != E; ++UI) {
     Instruction *UserInst = UI->getUser();
     // Skip IV users that are part of profitable IV Chains.
-    User::op_iterator UseI = MISTD::find(UserInst->op_begin(), UserInst->op_end(),
+    User::op_iterator UseI = std::find(UserInst->op_begin(), UserInst->op_end(),
                                        UI->getOperandValToReplace());
     assert(UseI != UserInst->op_end() && "cannot find IV operand");
     if (IVIncSet.count(UseI))
@@ -2972,7 +2972,7 @@ void LSRInstance::CollectFixupsAndInitialFormulae() {
       }
 
     // Set up the initial formula for this use.
-    MISTD::pair<size_t, int64_t> P = getUse(S, Kind, AccessTy);
+    std::pair<size_t, int64_t> P = getUse(S, Kind, AccessTy);
     LF.LUIdx = P.first;
     LF.Offset = P.second;
     LSRUse &LU = Uses[LF.LUIdx];
@@ -3109,7 +3109,7 @@ LSRInstance::CollectLoopInvariantFixupsAndFormulae() {
         LSRFixup &LF = getNewFixup();
         LF.UserInst = const_cast<Instruction *>(UserInst);
         LF.OperandValToReplace = UI.getUse();
-        MISTD::pair<size_t, int64_t> P = getUse(S, LSRUse::Basic, 0);
+        std::pair<size_t, int64_t> P = getUse(S, LSRUse::Basic, 0);
         LF.LUIdx = P.first;
         LF.Offset = P.second;
         LSRUse &LU = Uses[LF.LUIdx];
@@ -3342,7 +3342,7 @@ void LSRInstance::GenerateConstantOffsets(LSRUse &LU, unsigned LUIdx,
         const SCEV *NewG = SE.getAddExpr(SE.getConstant(G->getType(), *I), G);
         // If it cancelled out, drop the base register, otherwise update it.
         if (NewG->isZero()) {
-          MISTD::swap(F.BaseRegs[i], F.BaseRegs.back());
+          std::swap(F.BaseRegs[i], F.BaseRegs.back());
           F.BaseRegs.pop_back();
         } else
           F.BaseRegs[i] = NewG;
@@ -3560,7 +3560,7 @@ void WorkItem::dump() const {
 /// distance apart and try to form reuse opportunities between them.
 void LSRInstance::GenerateCrossUseConstantOffsets() {
   // Group the registers by their value without any added constant offset.
-  typedef MISTD::map<int64_t, const SCEV *> ImmMapTy;
+  typedef std::map<int64_t, const SCEV *> ImmMapTy;
   typedef DenseMap<const SCEV *, ImmMapTy> RegMapTy;
   RegMapTy Map;
   DenseMap<const SCEV *, SmallBitVector> UsedByIndicesMap;
@@ -3569,11 +3569,11 @@ void LSRInstance::GenerateCrossUseConstantOffsets() {
        I != E; ++I) {
     const SCEV *Reg = *I;
     int64_t Imm = ExtractImmediate(Reg, SE);
-    MISTD::pair<RegMapTy::iterator, bool> Pair =
-      Map.insert(MISTD::make_pair(Reg, ImmMapTy()));
+    std::pair<RegMapTy::iterator, bool> Pair =
+      Map.insert(std::make_pair(Reg, ImmMapTy()));
     if (Pair.second)
       Sequence.push_back(Reg);
-    Pair.first->second.insert(MISTD::make_pair(Imm, *I));
+    Pair.first->second.insert(std::make_pair(Imm, *I));
     UsedByIndicesMap[Reg] |= RegUses.getUsedByIndices(*I);
   }
 
@@ -3581,7 +3581,7 @@ void LSRInstance::GenerateCrossUseConstantOffsets() {
   // a list of work to do and do the work in a separate step so that we're
   // not adding formulae and register counts while we're searching.
   SmallVector<WorkItem, 32> WorkItems;
-  SmallSet<MISTD::pair<size_t, int64_t>, 32> UniqueItems;
+  SmallSet<std::pair<size_t, int64_t>, 32> UniqueItems;
   for (SmallVectorImpl<const SCEV *>::const_iterator I = Sequence.begin(),
        E = Sequence.end(); I != E; ++I) {
     const SCEV *Reg = *I;
@@ -3626,7 +3626,7 @@ void LSRInstance::GenerateCrossUseConstantOffsets() {
         for (int LUIdx = UsedByIndices.find_first(); LUIdx != -1;
              LUIdx = UsedByIndices.find_next(LUIdx))
           // Make a memo of this use, offset, and register tuple.
-          if (UniqueItems.insert(MISTD::make_pair(LUIdx, Imm)))
+          if (UniqueItems.insert(std::make_pair(LUIdx, Imm)))
             WorkItems.push_back(WorkItem(LUIdx, Imm, OrigReg));
       }
     }
@@ -3815,10 +3815,10 @@ void LSRInstance::FilterOutUndesirableDedicatedRegisters() {
           Key.push_back(F.ScaledReg);
         // Unstable sort by host order ok, because this is only used for
         // uniquifying.
-        MISTD::sort(Key.begin(), Key.end());
+        std::sort(Key.begin(), Key.end());
 
-        MISTD::pair<BestFormulaeTy::const_iterator, bool> P =
-          BestFormulae.insert(MISTD::make_pair(Key, FIdx));
+        std::pair<BestFormulaeTy::const_iterator, bool> P =
+          BestFormulae.insert(std::make_pair(Key, FIdx));
         if (P.second)
           continue;
 
@@ -3829,7 +3829,7 @@ void LSRInstance::FilterOutUndesirableDedicatedRegisters() {
         CostBest.RateFormula(TTI, Best, Regs, VisitedRegs, L, LU.Offsets, SE,
                              DT, LU);
         if (CostF < CostBest)
-          MISTD::swap(F, Best);
+          std::swap(F, Best);
         DEBUG(dbgs() << "  Filtering out formula "; F.print(dbgs());
               dbgs() << "\n"
                         "    in favor of formula "; Best.print(dbgs());
@@ -4164,7 +4164,7 @@ void LSRInstance::SolveRecurse(SmallVectorImpl<const Formula *> &Solution,
          JE = ReqRegs.end(); J != JE; ++J) {
       const SCEV *Reg = *J;
       if ((!F.ScaledReg || F.ScaledReg != Reg) &&
-          MISTD::find(F.BaseRegs.begin(), F.BaseRegs.end(), Reg) ==
+          std::find(F.BaseRegs.begin(), F.BaseRegs.end(), Reg) ==
           F.BaseRegs.end()) {
         SatisfiedReqReg = false;
         break;
@@ -4587,8 +4587,8 @@ void LSRInstance::RewriteForPHI(PHINode *PN,
         }
       }
 
-      MISTD::pair<DenseMap<BasicBlock *, Value *>::iterator, bool> Pair =
-        Inserted.insert(MISTD::make_pair(BB, static_cast<Value *>(0)));
+      std::pair<DenseMap<BasicBlock *, Value *>::iterator, bool> Pair =
+        Inserted.insert(std::make_pair(BB, static_cast<Value *>(0)));
       if (!Pair.second)
         PN->setIncomingValue(i, Pair.first->second);
       else {

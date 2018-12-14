@@ -86,14 +86,14 @@ TYPED_TEST(ValueMapTest, OperationsWork) {
   EXPECT_TRUE(CVM.find(this->AddV.get()) == CVM.end());
 
   // Insert:
-  MISTD::pair<typename ValueMap<TypeParam*, int>::iterator, bool> InsertResult1 =
-    VM.insert(MISTD::make_pair(this->AddV.get(), 3));
+  std::pair<typename ValueMap<TypeParam*, int>::iterator, bool> InsertResult1 =
+    VM.insert(std::make_pair(this->AddV.get(), 3));
   EXPECT_EQ(this->AddV.get(), InsertResult1.first->first);
   EXPECT_EQ(3, InsertResult1.first->second);
   EXPECT_TRUE(InsertResult1.second);
   EXPECT_EQ(true, VM.count(this->AddV.get()));
-  MISTD::pair<typename ValueMap<TypeParam*, int>::iterator, bool> InsertResult2 =
-    VM.insert(MISTD::make_pair(this->AddV.get(), 5));
+  std::pair<typename ValueMap<TypeParam*, int>::iterator, bool> InsertResult2 =
+    VM.insert(std::make_pair(this->AddV.get(), 5));
   EXPECT_EQ(this->AddV.get(), InsertResult2.first->first);
   EXPECT_EQ(3, InsertResult2.first->second);
   EXPECT_FALSE(InsertResult2.second);
@@ -107,9 +107,9 @@ TYPED_TEST(ValueMapTest, OperationsWork) {
   EXPECT_EQ(0U, VM.size());
 
   // Range insert:
-  SmallVector<MISTD::pair<Instruction*, int>, 2> Elems;
-  Elems.push_back(MISTD::make_pair(this->AddV.get(), 1));
-  Elems.push_back(MISTD::make_pair(this->BitcastV.get(), 2));
+  SmallVector<std::pair<Instruction*, int>, 2> Elems;
+  Elems.push_back(std::make_pair(this->AddV.get(), 1));
+  Elems.push_back(std::make_pair(this->BitcastV.get(), 2));
   VM.insert(Elems.begin(), Elems.end());
   EXPECT_EQ(1, VM.lookup(this->AddV.get()));
   EXPECT_EQ(2, VM.lookup(this->BitcastV.get()));
@@ -128,7 +128,7 @@ TYPED_TEST(ValueMapTest, Iteration) {
   for (typename ValueMap<TypeParam*, int>::iterator I = VM.begin(), E = VM.end();
        I != E; ++I) {
     ++size;
-    MISTD::pair<TypeParam*, int> value = *I; (void)value;
+    std::pair<TypeParam*, int> value = *I; (void)value;
     CompileAssertHasType<TypeParam*>(I->first);
     if (I->second == 2) {
       EXPECT_EQ(this->BitcastV.get(), I->first);
@@ -150,7 +150,7 @@ TYPED_TEST(ValueMapTest, Iteration) {
   for (typename ValueMap<TypeParam*, int>::const_iterator I = CVM.begin(),
          E = CVM.end(); I != E; ++I) {
     ++size;
-    MISTD::pair<TypeParam*, int> value = *I;  (void)value;
+    std::pair<TypeParam*, int> value = *I;  (void)value;
     CompileAssertHasType<TypeParam*>(I->first);
     if (I->second == 5) {
       EXPECT_EQ(this->BitcastV.get(), I->first);

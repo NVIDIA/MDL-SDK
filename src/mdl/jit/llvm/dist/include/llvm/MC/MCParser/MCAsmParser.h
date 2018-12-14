@@ -64,7 +64,7 @@ typedef MCAsmParserSemaCallback::InlineAsmIdentifierInfo
 class MCAsmParser {
 public:
   typedef bool (*DirectiveHandler)(MCAsmParserExtension*, StringRef, SMLoc);
-  typedef MISTD::pair<MCAsmParserExtension*, DirectiveHandler>
+  typedef std::pair<MCAsmParserExtension*, DirectiveHandler>
     ExtensionDirectiveHandler;
 
 private:
@@ -109,11 +109,11 @@ public:
   virtual bool isParsingInlineAsm() = 0;
 
   /// parseMSInlineAsm - Parse ms-style inline assembly.
-  virtual bool parseMSInlineAsm(void *AsmLoc, MISTD::string &AsmString,
+  virtual bool parseMSInlineAsm(void *AsmLoc, std::string &AsmString,
                                 unsigned &NumOutputs, unsigned &NumInputs,
-                                SmallVectorImpl<MISTD::pair<void *, bool> > &OpDecls,
-                                SmallVectorImpl<MISTD::string> &Constraints,
-                                SmallVectorImpl<MISTD::string> &Clobbers,
+                                SmallVectorImpl<std::pair<void *, bool> > &OpDecls,
+                                SmallVectorImpl<std::string> &Constraints,
+                                SmallVectorImpl<std::string> &Clobbers,
                                 const MCInstrInfo *MII,
                                 const MCInstPrinter *IP,
                                 MCAsmParserSemaCallback &SI) = 0;
@@ -152,7 +152,7 @@ public:
 
   /// parseEscapedString - Parse the current token as a string which may include
   /// escaped characters and return the string contents.
-  virtual bool parseEscapedString(MISTD::string &Data) = 0;
+  virtual bool parseEscapedString(std::string &Data) = 0;
 
   /// eatToEndOfStatement - Skip to the end of the current statement, for error
   /// recovery.

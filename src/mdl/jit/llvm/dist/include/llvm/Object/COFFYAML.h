@@ -45,7 +45,7 @@ namespace COFFYAML {
     COFF::section Header;
     unsigned Alignment;
     object::yaml::BinaryRef SectionData;
-    MISTD::vector<Relocation> Relocations;
+    std::vector<Relocation> Relocations;
     StringRef Name;
     Section();
   };
@@ -61,8 +61,8 @@ namespace COFFYAML {
 
   struct Object {
     COFF::header Header;
-    MISTD::vector<Section> Sections;
-    MISTD::vector<Symbol> Symbols;
+    std::vector<Section> Sections;
+    std::vector<Symbol> Symbols;
     Object();
   };
 }

@@ -277,8 +277,8 @@ internal::ParamGenerator<T> Range(T start, T end) {
 // This instantiates tests from test case StlStringTest
 // each with STL strings with values "a" and "b":
 //
-// ::MISTD::vector< ::MISTD::string> GetParameterStrings() {
-//   ::MISTD::vector< ::MISTD::string> v;
+// ::std::vector< ::std::string> GetParameterStrings() {
+//   ::std::vector< ::std::string> v;
 //   v.push_back("a");
 //   v.push_back("b");
 //   return v;
@@ -292,13 +292,13 @@ internal::ParamGenerator<T> Range(T start, T end) {
 // This will also instantiate tests from CharTest
 // each with parameter values 'a' and 'b':
 //
-// ::MISTD::list<char> GetParameterChars() {
-//   ::MISTD::list<char> list;
+// ::std::list<char> GetParameterChars() {
+//   ::std::list<char> list;
 //   list.push_back('a');
 //   list.push_back('b');
 //   return list;
 // }
-// ::MISTD::list<char> l = GetParameterChars();
+// ::std::list<char> l = GetParameterChars();
 // INSTANTIATE_TEST_CASE_P(CharSequence2,
 //                         CharTest,
 //                         ValuesIn(l.begin(), l.end()));

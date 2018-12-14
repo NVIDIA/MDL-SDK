@@ -247,13 +247,13 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
   // For the first iteration of the loop, we should use the precloned values for
   // PHI nodes.  Insert associations now.
   ValueToValueMapTy LastValueMap;
-  MISTD::vector<PHINode*> OrigPHINode;
+  std::vector<PHINode*> OrigPHINode;
   for (BasicBlock::iterator I = Header->begin(); isa<PHINode>(I); ++I) {
     OrigPHINode.push_back(cast<PHINode>(I));
   }
 
-  MISTD::vector<BasicBlock*> Headers;
-  MISTD::vector<BasicBlock*> Latches;
+  std::vector<BasicBlock*> Headers;
+  std::vector<BasicBlock*> Latches;
   Headers.push_back(Header);
   Latches.push_back(LatchBlock);
 
@@ -268,7 +268,7 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
   LoopBlocksDFS::RPOIterator BlockEnd = DFS.endRPO();
 
   for (unsigned It = 1; It != Count; ++It) {
-    MISTD::vector<BasicBlock*> NewBlocks;
+    std::vector<BasicBlock*> NewBlocks;
 
     for (LoopBlocksDFS::RPOIterator BB = BlockBegin; BB != BlockEnd; ++BB) {
       ValueToValueMapTy VMap;
@@ -405,7 +405,7 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
     if (Term->isUnconditional()) {
       BasicBlock *Dest = Term->getSuccessor(0);
       if (BasicBlock *Fold = FoldBlockIntoPredecessor(Dest, LI, LPM))
-        MISTD::replace(Latches.begin(), Latches.end(), Dest, Fold);
+        std::replace(Latches.begin(), Latches.end(), Dest, Fold);
     }
   }
 
@@ -432,8 +432,8 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
   // At this point, the code is well formed.  We now do a quick sweep over the
   // inserted code, doing constant propagation and dead code elimination as we
   // go.
-  const MISTD::vector<BasicBlock*> &NewLoopBlocks = L->getBlocks();
-  for (MISTD::vector<BasicBlock*>::const_iterator BB = NewLoopBlocks.begin(),
+  const std::vector<BasicBlock*> &NewLoopBlocks = L->getBlocks();
+  for (std::vector<BasicBlock*>::const_iterator BB = NewLoopBlocks.begin(),
        BBE = NewLoopBlocks.end(); BB != BBE; ++BB)
     for (BasicBlock::iterator I = (*BB)->begin(), E = (*BB)->end(); I != E; ) {
       Instruction *Inst = I++;

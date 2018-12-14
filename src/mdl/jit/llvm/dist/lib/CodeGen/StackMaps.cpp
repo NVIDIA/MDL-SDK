@@ -77,7 +77,7 @@ void StackMaps::recordStackMapOpers(const MachineInstr &MI, uint32_t ID,
   LocationVec CallsiteLocs;
 
   if (recordResult) {
-    MISTD::pair<Location, MachineInstr::const_mop_iterator> ParseResult =
+    std::pair<Location, MachineInstr::const_mop_iterator> ParseResult =
       OpParser(MI.operands_begin(), llvm::next(MI.operands_begin()), AP.TM);
 
     Location &Loc = ParseResult.first;
@@ -87,7 +87,7 @@ void StackMaps::recordStackMapOpers(const MachineInstr &MI, uint32_t ID,
   }
 
   while (MOI != MOE) {
-    MISTD::pair<Location, MachineInstr::const_mop_iterator> ParseResult =
+    std::pair<Location, MachineInstr::const_mop_iterator> ParseResult =
       OpParser(MOI, MOE, AP.TM);
 
     Location &Loc = ParseResult.first;

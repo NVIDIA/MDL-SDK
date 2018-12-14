@@ -130,7 +130,7 @@ void LLVMDumpModule(LLVMModuleRef M) {
 
 LLVMBool LLVMPrintModuleToFile(LLVMModuleRef M, const char *Filename,
                                char **ErrorMessage) {
-  MISTD::string error;
+  std::string error;
   raw_fd_ostream dest(Filename, error);
   if (!error.empty()) {
     *ErrorMessage = strdup(error.c_str());
@@ -148,7 +148,7 @@ LLVMBool LLVMPrintModuleToFile(LLVMModuleRef M, const char *Filename,
 }
 
 char *LLVMPrintModuleToString(LLVMModuleRef M) {
-  MISTD::string buf;
+  std::string buf;
   raw_string_ostream os(buf);
 
   unwrap(M)->print(os, NULL);
@@ -225,7 +225,7 @@ void LLVMDumpType(LLVMTypeRef Ty) {
 }
 
 char *LLVMPrintTypeToString(LLVMTypeRef Ty) {
-  MISTD::string buf;
+  std::string buf;
   raw_string_ostream os(buf);
 
   unwrap(Ty)->print(os);
@@ -475,7 +475,7 @@ void LLVMDumpValue(LLVMValueRef Val) {
 }
 
 char* LLVMPrintValueToString(LLVMValueRef Val) {
-  MISTD::string buf;
+  std::string buf;
   raw_string_ostream os(buf);
 
   unwrap(Val)->print(os);

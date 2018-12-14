@@ -19,7 +19,7 @@
 
 using namespace llvm;
 
-MISTD::string
+std::string
 _system_error_category::message(int ev) const {
   return _do_message::message(ev);
 }

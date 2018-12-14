@@ -124,7 +124,7 @@ class MachineFrameInfo {
 
   /// Objects - The list of stack objects allocated...
   ///
-  MISTD::vector<StackObject> Objects;
+  std::vector<StackObject> Objects;
 
   /// NumFixedObjects - This contains the number of fixed objects contained on
   /// the stack.  Because fixed objects are stored at a negative index in the
@@ -199,14 +199,14 @@ class MachineFrameInfo {
   /// callee saved register saved in the frame.  Beyond its use by the prolog/
   /// epilog code inserter, this data used for debug info and exception
   /// handling.
-  MISTD::vector<CalleeSavedInfo> CSInfo;
+  std::vector<CalleeSavedInfo> CSInfo;
 
   /// CSIValid - Has CSInfo been set yet?
   bool CSIValid;
 
   /// LocalFrameObjects - References to frame indices which are mapped
   /// into the local frame allocation block. <FrameIdx, LocalOffset>
-  SmallVector<MISTD::pair<int, int64_t>, 32> LocalFrameObjects;
+  SmallVector<std::pair<int, int64_t>, 32> LocalFrameObjects;
 
   /// LocalFrameSize - Size of the pre-allocated local frame block.
   int64_t LocalFrameSize;
@@ -293,12 +293,12 @@ public:
 
   /// mapLocalFrameObject - Map a frame index into the local object block
   void mapLocalFrameObject(int ObjectIndex, int64_t Offset) {
-    LocalFrameObjects.push_back(MISTD::pair<int, int64_t>(ObjectIndex, Offset));
+    LocalFrameObjects.push_back(std::pair<int, int64_t>(ObjectIndex, Offset));
     Objects[ObjectIndex + NumFixedObjects].PreAllocated = true;
   }
 
   /// getLocalFrameObjectMap - Get the local offset mapping for a for an object
-  MISTD::pair<int, int64_t> getLocalFrameObjectMap(int i) {
+  std::pair<int, int64_t> getLocalFrameObjectMap(int i) {
     assert (i >= 0 && (unsigned)i < LocalFrameObjects.size() &&
             "Invalid local object reference!");
     return LocalFrameObjects[i];
@@ -525,13 +525,13 @@ public:
 
   /// getCalleeSavedInfo - Returns a reference to call saved info vector for the
   /// current function.
-  const MISTD::vector<CalleeSavedInfo> &getCalleeSavedInfo() const {
+  const std::vector<CalleeSavedInfo> &getCalleeSavedInfo() const {
     return CSInfo;
   }
 
   /// setCalleeSavedInfo - Used by prolog/epilog inserter to set the function's
   /// callee saved information.
-  void setCalleeSavedInfo(const MISTD::vector<CalleeSavedInfo> &CSI) {
+  void setCalleeSavedInfo(const std::vector<CalleeSavedInfo> &CSI) {
     CSInfo = CSI;
   }
 

@@ -212,8 +212,8 @@ public:
 /// MachineSchedStrategy.
 class ReadyQueue {
   unsigned ID;
-  MISTD::string Name;
-  MISTD::vector<SUnit*> Queue;
+  std::string Name;
+  std::vector<SUnit*> Queue;
 
 public:
   ReadyQueue(unsigned id, const Twine &name): ID(id), Name(name.str()) {}
@@ -231,7 +231,7 @@ public:
 
   unsigned size() const { return Queue.size(); }
 
-  typedef MISTD::vector<SUnit*>::iterator iterator;
+  typedef std::vector<SUnit*>::iterator iterator;
 
   iterator begin() { return Queue.begin(); }
 
@@ -240,7 +240,7 @@ public:
   ArrayRef<SUnit*> elements() { return Queue; }
 
   iterator find(SUnit *SU) {
-    return MISTD::find(Queue.begin(), Queue.end(), SU);
+    return std::find(Queue.begin(), Queue.end(), SU);
   }
 
   void push(SUnit *SU) {
@@ -288,7 +288,7 @@ protected:
   ScheduleDAGTopologicalSort Topo;
 
   /// Ordered list of DAG postprocessing steps.
-  MISTD::vector<ScheduleDAGMutation*> Mutations;
+  std::vector<ScheduleDAGMutation*> Mutations;
 
   MachineBasicBlock::iterator LiveRegionEnd;
 
@@ -305,7 +305,7 @@ protected:
   /// List of pressure sets that exceed the target's pressure limit before
   /// scheduling, listed in increasing set ID order. Each pressure set is paired
   /// with its max pressure in the currently scheduled regions.
-  MISTD::vector<PressureChange> RegionCriticalPSets;
+  std::vector<PressureChange> RegionCriticalPSets;
 
   /// The top of the unscheduled zone.
   MachineBasicBlock::iterator CurrentTop;
@@ -395,7 +395,7 @@ public:
   /// Get register pressure for the entire scheduling region before scheduling.
   const IntervalPressure &getRegPressure() const { return RegPressure; }
 
-  const MISTD::vector<PressureChange> &getRegionCriticalPSets() const {
+  const std::vector<PressureChange> &getRegionCriticalPSets() const {
     return RegionCriticalPSets;
   }
 
@@ -457,7 +457,7 @@ protected:
   void updatePressureDiffs(ArrayRef<unsigned> LiveUses);
 
   void updateScheduledPressure(const SUnit *SU,
-                               const MISTD::vector<unsigned> &NewMaxPressure);
+                               const std::vector<unsigned> &NewMaxPressure);
 
   bool checkSchedLimit();
 

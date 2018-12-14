@@ -317,16 +317,16 @@ namespace {
     /// ValueCacheEntryTy - This is all of the cached block information for
     /// exactly one Value*.  The entries are sorted by the BasicBlock* of the
     /// entries, allowing us to do a lookup with a binary search.
-    typedef MISTD::map<AssertingVH<BasicBlock>, LVILatticeVal> ValueCacheEntryTy;
+    typedef std::map<AssertingVH<BasicBlock>, LVILatticeVal> ValueCacheEntryTy;
 
     /// ValueCache - This is all of the cached information for all values,
     /// mapped from Value* to key information.
-    MISTD::map<LVIValueHandle, ValueCacheEntryTy> ValueCache;
+    std::map<LVIValueHandle, ValueCacheEntryTy> ValueCache;
     
     /// OverDefinedCache - This tracks, on a per-block basis, the set of 
     /// values that are over-defined at the end of that block.  This is required
     /// for cache updating.
-    typedef MISTD::pair<AssertingVH<BasicBlock>, Value*> OverDefinedPairTy;
+    typedef std::pair<AssertingVH<BasicBlock>, Value*> OverDefinedPairTy;
     DenseSet<OverDefinedPairTy> OverDefinedCache;
 
     /// SeenBlocks - Keep track of all blocks that we have ever seen, so we
@@ -336,7 +336,7 @@ namespace {
     /// BlockValueStack - This stack holds the state of the value solver
     /// during a query.  It basically emulates the callstack of the naive
     /// recursive value lookup process.
-    MISTD::stack<MISTD::pair<BasicBlock*, Value*> > BlockValueStack;
+    std::stack<std::pair<BasicBlock*, Value*> > BlockValueStack;
     
     friend struct LVIValueHandle;
     
@@ -354,7 +354,7 @@ namespace {
       
       bool markResult(bool changed) { 
         if (changed && BBLV.isOverdefined())
-          Parent->OverDefinedCache.insert(MISTD::make_pair(BB, Val));
+          Parent->OverDefinedCache.insert(std::make_pair(BB, Val));
         return changed;
       }
     };
@@ -411,7 +411,7 @@ namespace {
 } // end anonymous namespace
 
 void LVIValueHandle::deleted() {
-  typedef MISTD::pair<AssertingVH<BasicBlock>, Value*> OverDefinedPairTy;
+  typedef std::pair<AssertingVH<BasicBlock>, Value*> OverDefinedPairTy;
   
   SmallVector<OverDefinedPairTy, 4> ToErase;
   for (DenseSet<OverDefinedPairTy>::iterator 
@@ -449,14 +449,14 @@ void LazyValueInfoCache::eraseBlock(BasicBlock *BB) {
        E = ToErase.end(); I != E; ++I)
     OverDefinedCache.erase(*I);
 
-  for (MISTD::map<LVIValueHandle, ValueCacheEntryTy>::iterator
+  for (std::map<LVIValueHandle, ValueCacheEntryTy>::iterator
        I = ValueCache.begin(), E = ValueCache.end(); I != E; ++I)
     I->second.erase(BB);
 }
 
 void LazyValueInfoCache::solve() {
   while (!BlockValueStack.empty()) {
-    MISTD::pair<BasicBlock*, Value*> &e = BlockValueStack.top();
+    std::pair<BasicBlock*, Value*> &e = BlockValueStack.top();
     if (solveBlockValue(e.second, e.first)) {
       assert(BlockValueStack.top() == e);
       BlockValueStack.pop();
@@ -470,7 +470,7 @@ bool LazyValueInfoCache::hasBlockValue(Value *Val, BasicBlock *BB) {
     return true;
 
   LVIValueHandle ValHandle(Val, this);
-  MISTD::map<LVIValueHandle, ValueCacheEntryTy>::iterator I =
+  std::map<LVIValueHandle, ValueCacheEntryTy>::iterator I =
     ValueCache.find(ValHandle);
   if (I == ValueCache.end()) return false;
   return I->second.count(BB);
@@ -698,7 +698,7 @@ bool LazyValueInfoCache::solveBlockValueConstantRange(LVILatticeVal &BBLV,
                                                       BasicBlock *BB) {
   // Figure out the range of the LHS.  If that fails, bail.
   if (!hasBlockValue(BBI->getOperand(0), BB)) {
-    BlockValueStack.push(MISTD::make_pair(BB, BBI->getOperand(0)));
+    BlockValueStack.push(std::make_pair(BB, BBI->getOperand(0)));
     return false;
   }
 
@@ -884,7 +884,7 @@ bool LazyValueInfoCache::getEdgeValue(Value *Val, BasicBlock *BBFrom,
     // LVI better supports recursive values. Even for the single value case, we
     // can intersect to detect dead code (an empty range).
     if (!hasBlockValue(Val, BBFrom)) {
-      BlockValueStack.push(MISTD::make_pair(BBFrom, Val));
+      BlockValueStack.push(std::make_pair(BBFrom, Val));
       return false;
     }
 
@@ -900,7 +900,7 @@ bool LazyValueInfoCache::getEdgeValue(Value *Val, BasicBlock *BBFrom,
   }
 
   if (!hasBlockValue(Val, BBFrom)) {
-    BlockValueStack.push(MISTD::make_pair(BBFrom, Val));
+    BlockValueStack.push(std::make_pair(BBFrom, Val));
     return false;
   }
 
@@ -913,7 +913,7 @@ LVILatticeVal LazyValueInfoCache::getValueInBlock(Value *V, BasicBlock *BB) {
   DEBUG(dbgs() << "LVI Getting block end value " << *V << " at '"
         << BB->getName() << "'\n");
   
-  BlockValueStack.push(MISTD::make_pair(BB, V));
+  BlockValueStack.push(std::make_pair(BB, V));
   solve();
   LVILatticeVal Result = getBlockValue(V, BB);
 
@@ -950,7 +950,7 @@ void LazyValueInfoCache::threadEdge(BasicBlock *PredBB, BasicBlock *OldSucc,
   // for all values that were marked overdefined in OldSucc, and for those same
   // values in any successor of OldSucc (except NewSucc) in which they were
   // also marked overdefined.
-  MISTD::vector<BasicBlock*> worklist;
+  std::vector<BasicBlock*> worklist;
   worklist.push_back(OldSucc);
   
   DenseSet<Value*> ClearSet;
@@ -976,7 +976,7 @@ void LazyValueInfoCache::threadEdge(BasicBlock *PredBB, BasicBlock *OldSucc,
          I != E; ++I) {
       // If a value was marked overdefined in OldSucc, and is here too...
       DenseSet<OverDefinedPairTy>::iterator OI =
-        OverDefinedCache.find(MISTD::make_pair(ToUpdate, *I));
+        OverDefinedCache.find(std::make_pair(ToUpdate, *I));
       if (OI == OverDefinedCache.end()) continue;
 
       // Remove it from the caches.

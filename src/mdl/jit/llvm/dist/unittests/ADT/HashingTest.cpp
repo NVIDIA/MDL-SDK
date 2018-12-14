@@ -22,7 +22,7 @@
 namespace llvm {
 
 // Helper for test code to print hash codes.
-void PrintTo(const hash_code &code, MISTD::ostream *os) {
+void PrintTo(const hash_code &code, std::ostream *os) {
   *os << static_cast<size_t>(code);
 }
 
@@ -79,39 +79,39 @@ TEST(HashingTest, HashValueBasicTest) {
 }
 
 TEST(HashingTest, HashValueStdPair) {
-  EXPECT_EQ(hash_combine(42, 43), hash_value(MISTD::make_pair(42, 43)));
-  EXPECT_NE(hash_combine(43, 42), hash_value(MISTD::make_pair(42, 43)));
-  EXPECT_NE(hash_combine(42, 43), hash_value(MISTD::make_pair(42ull, 43ull)));
-  EXPECT_NE(hash_combine(42, 43), hash_value(MISTD::make_pair(42, 43ull)));
-  EXPECT_NE(hash_combine(42, 43), hash_value(MISTD::make_pair(42ull, 43)));
+  EXPECT_EQ(hash_combine(42, 43), hash_value(std::make_pair(42, 43)));
+  EXPECT_NE(hash_combine(43, 42), hash_value(std::make_pair(42, 43)));
+  EXPECT_NE(hash_combine(42, 43), hash_value(std::make_pair(42ull, 43ull)));
+  EXPECT_NE(hash_combine(42, 43), hash_value(std::make_pair(42, 43ull)));
+  EXPECT_NE(hash_combine(42, 43), hash_value(std::make_pair(42ull, 43)));
 
   // Note that pairs are implicitly flattened to a direct sequence of data and
   // hashed efficiently as a consequence.
   EXPECT_EQ(hash_combine(42, 43, 44),
-            hash_value(MISTD::make_pair(42, MISTD::make_pair(43, 44))));
-  EXPECT_EQ(hash_value(MISTD::make_pair(42, MISTD::make_pair(43, 44))),
-            hash_value(MISTD::make_pair(MISTD::make_pair(42, 43), 44)));
+            hash_value(std::make_pair(42, std::make_pair(43, 44))));
+  EXPECT_EQ(hash_value(std::make_pair(42, std::make_pair(43, 44))),
+            hash_value(std::make_pair(std::make_pair(42, 43), 44)));
 
   // Ensure that pairs which have padding bytes *inside* them don't get treated
   // this way.
   EXPECT_EQ(hash_combine('0', hash_combine(1ull, '2')),
-            hash_value(MISTD::make_pair('0', MISTD::make_pair(1ull, '2'))));
+            hash_value(std::make_pair('0', std::make_pair(1ull, '2'))));
 
   // Ensure that non-POD pairs don't explode the traits used.
   NonPOD obj1(1, 2), obj2(3, 4), obj3(5, 6);
   EXPECT_EQ(hash_combine(obj1, hash_combine(obj2, obj3)),
-            hash_value(MISTD::make_pair(obj1, MISTD::make_pair(obj2, obj3))));
+            hash_value(std::make_pair(obj1, std::make_pair(obj2, obj3))));
 }
 
 TEST(HashingTest, HashValueStdString) {
-  MISTD::string s = "Hello World!";
+  std::string s = "Hello World!";
   EXPECT_EQ(hash_combine_range(s.c_str(), s.c_str() + s.size()), hash_value(s));
   EXPECT_EQ(hash_combine_range(s.c_str(), s.c_str() + s.size() - 1),
             hash_value(s.substr(0, s.size() - 1)));
   EXPECT_EQ(hash_combine_range(s.c_str() + 1, s.c_str() + s.size() - 1),
             hash_value(s.substr(1, s.size() - 2)));
 
-  MISTD::wstring ws = L"Hello Wide World!";
+  std::wstring ws = L"Hello Wide World!";
   EXPECT_EQ(hash_combine_range(ws.c_str(), ws.c_str() + ws.size()),
             hash_value(ws));
   EXPECT_EQ(hash_combine_range(ws.c_str(), ws.c_str() + ws.size() - 1),
@@ -139,13 +139,13 @@ TEST(HashingTest, HashCombineRangeBasicTest) {
   EXPECT_NE(dummy_hash, arr1_hash);
   EXPECT_EQ(arr1_hash, hash_combine_range(begin(arr1), end(arr1)));
 
-  const MISTD::vector<int> vec(begin(arr1), end(arr1));
+  const std::vector<int> vec(begin(arr1), end(arr1));
   EXPECT_EQ(arr1_hash, hash_combine_range(vec.begin(), vec.end()));
 
-  const MISTD::list<int> list(begin(arr1), end(arr1));
+  const std::list<int> list(begin(arr1), end(arr1));
   EXPECT_EQ(arr1_hash, hash_combine_range(list.begin(), list.end()));
 
-  const MISTD::deque<int> deque(begin(arr1), end(arr1));
+  const std::deque<int> deque(begin(arr1), end(arr1));
   EXPECT_EQ(arr1_hash, hash_combine_range(deque.begin(), deque.end()));
 
   const int arr2[] = { 3, 2, 1 };
@@ -173,36 +173,36 @@ TEST(HashingTest, HashCombineRangeBasicTest) {
 TEST(HashingTest, HashCombineRangeLengthDiff) {
   // Test that as only the length varies, we compute different hash codes for
   // sequences.
-  MISTD::map<size_t, size_t> code_to_size;
-  MISTD::vector<char> all_one_c(256, '\xff');
+  std::map<size_t, size_t> code_to_size;
+  std::vector<char> all_one_c(256, '\xff');
   for (unsigned Idx = 1, Size = all_one_c.size(); Idx < Size; ++Idx) {
     hash_code code = hash_combine_range(&all_one_c[0], &all_one_c[0] + Idx);
-    MISTD::map<size_t, size_t>::iterator
-      I = code_to_size.insert(MISTD::make_pair(code, Idx)).first;
+    std::map<size_t, size_t>::iterator
+      I = code_to_size.insert(std::make_pair(code, Idx)).first;
     EXPECT_EQ(Idx, I->second);
   }
   code_to_size.clear();
-  MISTD::vector<char> all_zero_c(256, '\0');
+  std::vector<char> all_zero_c(256, '\0');
   for (unsigned Idx = 1, Size = all_zero_c.size(); Idx < Size; ++Idx) {
     hash_code code = hash_combine_range(&all_zero_c[0], &all_zero_c[0] + Idx);
-    MISTD::map<size_t, size_t>::iterator
-      I = code_to_size.insert(MISTD::make_pair(code, Idx)).first;
+    std::map<size_t, size_t>::iterator
+      I = code_to_size.insert(std::make_pair(code, Idx)).first;
     EXPECT_EQ(Idx, I->second);
   }
   code_to_size.clear();
-  MISTD::vector<unsigned> all_one_int(512, -1);
+  std::vector<unsigned> all_one_int(512, -1);
   for (unsigned Idx = 1, Size = all_one_int.size(); Idx < Size; ++Idx) {
     hash_code code = hash_combine_range(&all_one_int[0], &all_one_int[0] + Idx);
-    MISTD::map<size_t, size_t>::iterator
-      I = code_to_size.insert(MISTD::make_pair(code, Idx)).first;
+    std::map<size_t, size_t>::iterator
+      I = code_to_size.insert(std::make_pair(code, Idx)).first;
     EXPECT_EQ(Idx, I->second);
   }
   code_to_size.clear();
-  MISTD::vector<unsigned> all_zero_int(512, 0);
+  std::vector<unsigned> all_zero_int(512, 0);
   for (unsigned Idx = 1, Size = all_zero_int.size(); Idx < Size; ++Idx) {
     hash_code code = hash_combine_range(&all_zero_int[0], &all_zero_int[0] + Idx);
-    MISTD::map<size_t, size_t>::iterator
-      I = code_to_size.insert(MISTD::make_pair(code, Idx)).first;
+    std::map<size_t, size_t>::iterator
+      I = code_to_size.insert(std::make_pair(code, Idx)).first;
     EXPECT_EQ(Idx, I->second);
   }
 }
@@ -323,7 +323,7 @@ TEST(HashingTest, HashCombineRangeGoldenTest) {
     StringRef str = golden_data[i].s;
     hash_code hash = hash_combine_range(str.begin(), str.end());
 #if 0 // Enable this to generate paste-able text for the above structure.
-    MISTD::string member_str = "\"" + str.str() + "\",";
+    std::string member_str = "\"" + str.str() + "\",";
     fprintf(stderr, " { %-35s 0x%016llxULL },\n",
             member_str.c_str(), static_cast<uint64_t>(hash));
 #endif

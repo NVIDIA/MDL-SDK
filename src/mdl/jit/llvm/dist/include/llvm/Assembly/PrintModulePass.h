@@ -30,11 +30,11 @@ namespace llvm {
   /// module to the specified raw_ostream.
   ModulePass *createPrintModulePass(raw_ostream *OS,
                                     bool DeleteStream=false,
-                                    const MISTD::string &Banner = "");
+                                    const std::string &Banner = "");
   
   /// createPrintFunctionPass - Create and return a pass that prints
   /// functions to the specified raw_ostream as they are processed.
-  FunctionPass *createPrintFunctionPass(const MISTD::string &Banner,
+  FunctionPass *createPrintFunctionPass(const std::string &Banner,
                                         raw_ostream *OS, 
                                         bool DeleteStream=false);  
 
@@ -42,7 +42,7 @@ namespace llvm {
   /// BB to the specified raw_ostream.
   BasicBlockPass *createPrintBasicBlockPass(raw_ostream *OS,
                                             bool DeleteStream=false,
-                                            const MISTD::string &Banner = "");
+                                            const std::string &Banner = "");
 } // End llvm namespace
 
 #endif

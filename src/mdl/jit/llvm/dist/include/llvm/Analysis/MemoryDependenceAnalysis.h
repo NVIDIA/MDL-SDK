@@ -260,7 +260,7 @@ namespace llvm {
     LocalDepMapType LocalDeps;
 
   public:
-    typedef MISTD::vector<NonLocalDepEntry> NonLocalDepInfo;
+    typedef std::vector<NonLocalDepEntry> NonLocalDepInfo;
   private:
     /// ValueIsLoadPair - This is a pair<Value*, bool> where the bool is true if
     /// the dependence is a read only dependence, false if read/write.
@@ -305,7 +305,7 @@ namespace llvm {
     /// PerInstNLInfo - This is the instruction we keep for each cached access
     /// that we have for an instruction.  The pointer is an owning pointer and
     /// the bool indicates whether we have any dirty bits in the set.
-    typedef MISTD::pair<NonLocalDepInfo, bool> PerInstNLInfo;
+    typedef std::pair<NonLocalDepInfo, bool> PerInstNLInfo;
 
     // A map from instructions to their non-local dependencies.
     typedef DenseMap<Instruction*, PerInstNLInfo> NonLocalDepMapType;

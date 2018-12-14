@@ -33,6 +33,53 @@ BSDF_PARAM float3 get_material_ior();
 
 #include "libbsdf_utilities.h"
 
+
+namespace
+{
+    template<typename DF_sample_data>
+    BSDF_INLINE float3 get_df_over_pdf(const DF_sample_data* data);
+    template<> BSDF_INLINE float3 get_df_over_pdf(const BSDF_sample_data* data) { 
+        return data->bsdf_over_pdf; }
+    template<> BSDF_INLINE float3 get_df_over_pdf(const EDF_sample_data* data) { 
+        return data->edf_over_pdf; }
+    template<typename DF_sample_data>
+    BSDF_INLINE void set_df_over_pdf(DF_sample_data* data, float3 df_over_pdf);
+    template<> BSDF_INLINE void set_df_over_pdf(BSDF_sample_data* data, float3 df_over_pdf) { 
+        data->bsdf_over_pdf = df_over_pdf; }
+    template<> BSDF_INLINE void set_df_over_pdf(EDF_sample_data* data, float3 df_over_pdf) {
+        data->edf_over_pdf = df_over_pdf;}
+
+    template<typename DF_evaluate_data>
+    BSDF_INLINE float get_cos(const DF_evaluate_data* data);
+    template<> BSDF_INLINE float get_cos(const BSDF_evaluate_data* data) { return 0.0f; }
+    template<> BSDF_INLINE float get_cos(const EDF_evaluate_data* data) { return data->cos; }
+    template<typename DF_evaluate_data>
+    BSDF_INLINE void set_cos(DF_evaluate_data* data, float cos);
+    template<> BSDF_INLINE void set_cos(BSDF_evaluate_data* data, float cos) { }
+    template<> BSDF_INLINE void set_cos(EDF_evaluate_data* data, float cos) { data->cos = cos; }
+    template<> BSDF_INLINE void set_cos(EDF_pdf_data* data, float cos) { }
+
+    template<typename DF_evaluate_data>
+    BSDF_INLINE float3 get_df(const DF_evaluate_data* data);
+    template<> BSDF_INLINE float3 get_df(const BSDF_evaluate_data* data) { return data->bsdf; }
+    template<> BSDF_INLINE float3 get_df(const EDF_evaluate_data* data) { return data->edf; }
+
+    template<typename DF_evaluate_data>
+    BSDF_INLINE void set_df(DF_evaluate_data* data, float3 df);
+    template<> BSDF_INLINE void set_df<BSDF_evaluate_data>(BSDF_evaluate_data* data, float3 df) {
+        data->bsdf = df; }
+    template<> BSDF_INLINE void set_df<EDF_evaluate_data>(EDF_evaluate_data* data, float3 df) {
+        data->edf = df; }
+    template<> BSDF_INLINE void set_df<EDF_pdf_data>(EDF_pdf_data* data, float3 df) { }
+
+    template<typename DF_pdf_data>
+    BSDF_INLINE void set_pdf(DF_pdf_data* data, float pdf);
+    template<> BSDF_INLINE void set_pdf(BSDF_pdf_data* data, float pdf) { data->pdf = pdf; }
+    template<> BSDF_INLINE void set_pdf(BSDF_evaluate_data* data, float pdf) { data->pdf = pdf; }
+    template<> BSDF_INLINE void set_pdf(EDF_pdf_data* data, float pdf) { data->pdf = pdf; }
+    template<> BSDF_INLINE void set_pdf(EDF_evaluate_data* data, float pdf) { data->pdf = pdf; }
+}
+
 /////////////////////////////////////////////////////////////////////
 // bsdf()
 /////////////////////////////////////////////////////////////////////
@@ -61,6 +108,74 @@ BSDF_API void black_bsdf_pdf(
     absorb(data);
 }
 
+BSDF_INLINE void diffuse_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const Geometry &g,
+    const float3 &tint,
+    const float roughness,
+    const bool transmit)
+{
+    // sample direction and transform to world coordinates
+    const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
+
+    const float sign = transmit ? -1.0f : 1.0f;
+    
+    data->k2 = math::normalize(
+        g.x_axis * cosh.x + sign * g.n.shading_normal * cosh.y + g.z_axis * cosh.z);
+
+    if (cosh.y <= 0.0f || sign * math::dot(data->k2, g.n.geometry_normal) <= 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    data->bsdf_over_pdf = tint;
+    if (roughness > 0.0f)
+        data->bsdf_over_pdf *= eval_oren_nayar(data->k2, data->k1, g.n.shading_normal, roughness);
+
+    data->pdf = cosh.y * (float)(1.0 / M_PI);
+    data->event_type = transmit ? BSDF_EVENT_DIFFUSE_TRANSMISSION : BSDF_EVENT_DIFFUSE_REFLECTION;
+}
+
+BSDF_INLINE void diffuse_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &tint,
+    const float roughness,
+    const bool transmit)
+{
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float sign = transmit ? -1.0f : 1.0f;
+    const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
+    const float pdf = nk2 * (float)(1.0f / M_PI);
+
+    data->bsdf = pdf * tint;
+    if (nk2 > 0.0f && roughness > 0.0f)
+        data->bsdf *= eval_oren_nayar(data->k2, data->k1, shading_normal, roughness);
+
+    data->pdf = pdf;
+}
+
+template <typename Data>
+BSDF_INLINE void diffuse_pdf(
+    Data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const bool transmit)
+{
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float sign = transmit ? -1.0f : 1.0f;
+    const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
+    data->pdf = nk2 * (float)(1.0f / M_PI);
+}
+
 
 /////////////////////////////////////////////////////////////////////
 // bsdf diffuse_reflection_bsdf(
@@ -76,32 +191,13 @@ BSDF_API void diffuse_reflection_bsdf_sample(
     float3 tint,
     const float roughness)
 {
-    tint = math::saturate(tint);
-
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    // sample direction and transform to world coordinates
-    const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), shading_normal)) {
-        absorb(data);
-        return;
-    }
-    data->k2 = math::normalize(x_axis * cosh.x + shading_normal * cosh.y + z_axis * cosh.z);
-
-    if (cosh.y <= 0.0f || math::dot(data->k2, geometry_normal) <= 0.0f) {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, state->texture_tangent_u(0), data->k1, state)) {
         absorb(data);
         return;
     }
 
-    if (roughness > 0.0f)
-        tint *= eval_oren_nayar(data->k2, data->k1, shading_normal, roughness);
-
-    data->pdf = cosh.y * (float)(1.0 / M_PI);
-    data->bsdf_over_pdf = tint;
-    data->event_type = BSDF_EVENT_DIFFUSE_REFLECTION;
+    diffuse_sample(data, state, g, math::saturate(tint), roughness, false);
 }
 
 BSDF_API void diffuse_reflection_bsdf_evaluate(
@@ -111,20 +207,7 @@ BSDF_API void diffuse_reflection_bsdf_evaluate(
     float3 tint,
     const float roughness)
 {
-    tint = math::saturate(tint);
-
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk2 = math::max(math::dot(data->k2, shading_normal), 0.0f);
-    const float pdf = nk2 * (float)(1.0f / M_PI);
-
-    if (nk2 > 0.0f && roughness > 0.0f)
-        tint *= eval_oren_nayar(data->k2, data->k1, shading_normal, roughness);
-
-    data->bsdf = pdf * tint;
-    data->pdf = pdf;
+    diffuse_evaluate(data, state, inherited_normal, math::saturate(tint), roughness, false);
 }
 
 BSDF_API void diffuse_reflection_bsdf_pdf(
@@ -134,12 +217,7 @@ BSDF_API void diffuse_reflection_bsdf_pdf(
     float3 tint,
     const float roughness)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk2 = math::max(math::dot(data->k2, shading_normal), 0.0f);
-    data->pdf = nk2 * (float)(1.0f / M_PI);
+    diffuse_pdf(data, state, inherited_normal, false);
 }
 
 
@@ -155,27 +233,13 @@ BSDF_API void diffuse_transmission_bsdf_sample(
     const float3 &inherited_normal,
     const float3 &tint)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    // sample direction and transform to world coordinate
-    const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), shading_normal)) {
-        absorb(data);
-        return;
-    }
-    data->k2 = math::normalize(x_axis * cosh.x - shading_normal * cosh.y + z_axis * cosh.z);
-
-    if (math::dot(data->k2, geometry_normal) > 0.0f) {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, state->texture_tangent_u(0), data->k1, state)) {
         absorb(data);
         return;
     }
 
-    data->pdf = cosh.y * (float)(1.0 / M_PI);
-    data->bsdf_over_pdf =  math::saturate(tint);
-    data->event_type = BSDF_EVENT_DIFFUSE_TRANSMISSION;
+    diffuse_sample(data, state, g, math::saturate(tint), 0.0f, true);
 }
 
 BSDF_API void diffuse_transmission_bsdf_evaluate(
@@ -184,15 +248,7 @@ BSDF_API void diffuse_transmission_bsdf_evaluate(
     const float3 &inherited_normal,
     const float3 &tint)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk2 = math::max(-math::dot(data->k2, shading_normal), 0.0f);
-    const float pdf = nk2 * (float)(1.0f / M_PI);
-
-    data->bsdf = pdf * math::saturate(tint);
-    data->pdf = pdf;
+    diffuse_evaluate(data, state, inherited_normal, math::saturate(tint), 0.0f, true);
 }
 
 BSDF_API void diffuse_transmission_bsdf_pdf(
@@ -201,13 +257,9 @@ BSDF_API void diffuse_transmission_bsdf_pdf(
     const float3 &inherited_normal,
     const float3 &tint)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk2 = math::max(-math::dot(data->k2, shading_normal), 0.0f);
-    data->pdf = nk2 * (float)(1.0f / M_PI);
+    diffuse_pdf(data, state, inherited_normal, true);
 }
+
 
 
 /////////////////////////////////////////////////////////////////////
@@ -217,24 +269,19 @@ BSDF_API void diffuse_transmission_bsdf_pdf(
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_API void specular_bsdf_sample(
+BSDF_INLINE void specular_sample(
     BSDF_sample_data *data,
-    State *state,
-    const float3 &inherited_normal,
+    const Normals &n,
     const float3 &tint,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk1 = math::dot(shading_normal, data->k1);
+    const float nk1 = math::dot(n.shading_normal, data->k1);
     if (nk1 < 0.0f) {
         absorb(data);
         return;
     }
 
-    data->bsdf_over_pdf = math::saturate(tint);
+    data->bsdf_over_pdf = tint;
     data->pdf = 0.0f;
 
     const float2 ior = process_ior(data);
@@ -244,7 +291,7 @@ BSDF_API void specular_bsdf_sample(
         ((mode == scatter_reflect_transmit) &&
          data->xi.x < ior_fresnel(ior.y / ior.x,  nk1)))
     {
-        data->k2 = (nk1 + nk1) * shading_normal - data->k1;
+        data->k2 = (nk1 + nk1) * n.shading_normal - data->k1;
 
         data->event_type = BSDF_EVENT_SPECULAR_REFLECTION;
     }
@@ -257,18 +304,33 @@ BSDF_API void specular_bsdf_sample(
         if (thin_walled) // single-sided -> propagate old direction
             data->k2 = -data->k1;
         else
-            data->k2 = refract(data->k1, shading_normal, ior.x / ior.y, nk1, tir);
+            data->k2 = refract(data->k1, n.shading_normal, ior.x / ior.y, nk1, tir);
 
         data->event_type = tir ? BSDF_EVENT_SPECULAR_REFLECTION : BSDF_EVENT_SPECULAR_TRANSMISSION;
     }
 
     // check if the resulting direction is on the correct side of the actual geometry
-    const float gnk2 = math::dot(data->k2, geometry_normal) * (
+    const float gnk2 = math::dot(data->k2, n.geometry_normal) * (
         data->event_type == BSDF_EVENT_SPECULAR_REFLECTION ? 1.0f : -1.0f);
     if (gnk2 <= 0.0f) {
         absorb(data);
         return;
     }
+}
+    
+
+BSDF_API void specular_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &tint,
+    const scatter_mode mode)
+{
+    Normals n;
+    get_oriented_normals(
+        n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    specular_sample(data, n, math::saturate(tint), mode);
 }
 
 BSDF_API void specular_bsdf_evaluate(
@@ -309,33 +371,22 @@ BSDF_INLINE void microfacet_sample(
     const Distribution &ph,
     BSDF_sample_data *data,
     State *state,
-    const float3 &normal,
-    const float3 &tangent_u,
+    const Geometry &g,
     const float3 &tint,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
-        absorb(data);
-        return;
-    }
-
-    const float nk1 = math::abs(math::dot(data->k1, shading_normal));
+    const float nk1 = math::abs(math::dot(data->k1, g.n.shading_normal));
 
     const float3 k10 = make_float3(
-        math::dot(data->k1, x_axis),
+        math::dot(data->k1, g.x_axis),
         nk1,
-        math::dot(data->k1, z_axis));
+        math::dot(data->k1, g.z_axis));
 
     // sample half vector / microfacet normal
     const float3 h0 = ph.sample(data->xi, k10);
 
     // transform to world
-    const float3 h = shading_normal * h0.y + x_axis * h0.x + z_axis * h0.z;
+    const float3 h = g.n.shading_normal * h0.y + g.x_axis * h0.x + g.z_axis * h0.z;
     const float kh = math::dot(data->k1, h);
 
     if (kh <= 0.0f) {
@@ -372,7 +423,7 @@ BSDF_INLINE void microfacet_sample(
             // pseudo-BTDF: flip a reflected reflection direction to the back side
             data->k2 = (2.0f * kh) * h - data->k1;
             data->k2 = math::normalize(
-                data->k2 - 2.0f * shading_normal * math::dot(data->k2, shading_normal));
+                data->k2 - 2.0f * g.n.shading_normal * math::dot(data->k2, g.n.shading_normal));
         }
         else
             // BTDF: refract
@@ -386,7 +437,7 @@ BSDF_INLINE void microfacet_sample(
     }
 
     // check if the resulting direction is on the correct side of the actual geometry
-    const float gnk2 = math::dot(data->k2, geometry_normal) * (
+    const float gnk2 = math::dot(data->k2, g.n.geometry_normal) * (
         data->event_type == BSDF_EVENT_GLOSSY_REFLECTION ? 1.0f : -1.0f);
     if (gnk2 <= 0.0f) {
         absorb(data);
@@ -396,16 +447,18 @@ BSDF_INLINE void microfacet_sample(
     const bool refraction = !thin_walled && (data->event_type == BSDF_EVENT_GLOSSY_TRANSMISSION);
 
     // compute weight
-    data->bsdf_over_pdf = math::saturate(tint);
+    data->bsdf_over_pdf = tint;
 
-    const float nk2 = math::abs(math::dot(data->k2, shading_normal));
+    const float nk2 = math::abs(math::dot(data->k2, g.n.shading_normal));
     const float k2h = math::abs(math::dot(data->k2, h));
 
-    const float G1 = ph.mask(k10, kh, h0.y);
-    const float G2 = ph.mask(
-        make_float3(math::dot(data->k2, x_axis), nk2, math::dot(data->k1, z_axis)), k2h, h0.y);
-
-    const float G12 = ph.shadow_mask(G1, G2, refraction);
+    float G1, G2;
+    const float G12 = ph.shadow_mask(
+        G1, G2, h0.y,
+        k10, kh,
+        make_float3(math::dot(data->k2, g.x_axis), nk2, math::dot(data->k1, g.z_axis)), k2h,
+        refraction);
+    
     if (G12 <= 0.0f) {
         absorb(data);
         return;
@@ -426,52 +479,61 @@ BSDF_INLINE void microfacet_sample(
 }
 
 
-
-template <typename Distribution, typename Data>
-BSDF_INLINE float3 microfacet_evaluate(
+template <typename Distribution>
+BSDF_INLINE void microfacet_sample(
     const Distribution &ph,
-    Data *data,
+    BSDF_sample_data *data,
     State *state,
     const float3 &normal,
     const float3 &tangent_u,
     const float3 &tint,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
+    Geometry g;
+    if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
         absorb(data);
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return;
     }
 
+    microfacet_sample(ph, data, state, g, tint, mode);
+}
+
+
+
+template <typename Distribution, typename Data>
+BSDF_INLINE float microfacet_evaluate(
+    const Distribution &ph,
+    Data *data,
+    State *state,
+    const Geometry &g,
+    const scatter_mode mode)
+{
     // BTDF or BRDF eval?
-    const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+    const bool backside_eval = math::dot(data->k2, g.n.geometry_normal) < 0.0f;
 
     // nothing to evaluate for given directions?
     if (( backside_eval && (mode == scatter_reflect )) ||
         (!backside_eval && (mode == scatter_transmit)) ) {
         absorb(data);
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return 0.0f;
     }
 
-    const float nk1 = math::abs(math::dot(shading_normal, data->k1));
-    const float nk2 = math::abs(math::dot(shading_normal, data->k2));
+    const float nk1 = math::abs(math::dot(g.n.shading_normal, data->k1));
+    const float nk2 = math::abs(math::dot(g.n.shading_normal, data->k2));
     const bool thin_walled = get_material_thin_walled();
 
     const float2 ior = process_ior(data);
     const float3 h = compute_half_vector(
-        data->k1, data->k2, shading_normal, ior, nk1, nk2,
+        data->k1, data->k2, g.n.shading_normal, ior, nk1, nk2,
         backside_eval, thin_walled);
 
     // invalid for reflection / refraction?
-    const float nh = math::dot(shading_normal, h);
+    const float nh = math::dot(g.n.shading_normal, h);
     const float k1h = math::dot(data->k1, h);
-    if (nh < 0.0f || k1h < 0.0f) {
+    const float k2h = math::dot(data->k2, h) * (backside_eval ? -1.0f : 1.0f);
+    if (nh < 0.0f || k1h < 0.0f || k2h < 0.0f) {
         absorb(data);
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return 0.0f;
     }
 
     // compute BSDF and pdf
@@ -480,15 +542,17 @@ BSDF_INLINE float3 microfacet_evaluate(
                          (backside_eval ? (1.0f - fresnel_refl) : fresnel_refl) :
                          1.0f;
 
-    data->pdf = ph.eval(make_float3(math::dot(x_axis, h), nh, math::dot(z_axis, h)));
+    data->pdf = ph.eval(make_float3(math::dot(g.x_axis, h), nh, math::dot(g.z_axis, h)));
 
-    const float G1 = ph.mask(
-        make_float3(math::dot(x_axis, data->k1), nk1, math::dot(z_axis, data->k1)), k1h, nh);
-    const float k2h = math::abs(math::dot(data->k2, h));
-    const float G2 = ph.mask(
-        make_float3(math::dot(x_axis, data->k2), nk2, math::dot(z_axis, data->k2)), k2h, nh);
-
+    float G1, G2;
+    //const float k2h = math::abs(math::dot(data->k2, h));
     const bool refraction = !thin_walled && backside_eval;
+    const float G12 = ph.shadow_mask(
+        G1, G2, nh,
+        make_float3(math::dot(g.x_axis, data->k1), nk1, math::dot(g.z_axis, data->k1)), k1h,
+        make_float3(math::dot(g.x_axis, data->k2), nk2, math::dot(g.z_axis, data->k2)), k2h,
+        refraction);
+
     if (refraction) {
         // refraction pdf and BTDF
         const float tmp = k1h * ior.x - k2h * ior.y;
@@ -499,10 +563,26 @@ BSDF_INLINE float3 microfacet_evaluate(
         data->pdf *= 0.25f / (nk1 * nh);
     }
 
-    const float3 bsdf = math::saturate(tint) *
-        (data->pdf * weight * ph.shadow_mask(G1, G2, refraction));
+    const float bsdf = data->pdf * weight * G12;
     data->pdf *= G1;
     return bsdf;
+}
+
+template <typename Distribution, typename Data>
+BSDF_INLINE float microfacet_evaluate(
+    const Distribution &ph,
+    Data *data,
+    State *state,
+    const float3 &normal,
+    const float3 &tangent_u,
+    const scatter_mode mode)
+{
+    Geometry g;
+    if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
+        absorb(data);
+        return 0.0f;
+    }
+    return microfacet_evaluate(ph, data, state, g, mode);
 }
 
 
@@ -523,7 +603,7 @@ BSDF_INLINE float3 microfacet_evaluate(
 // Distribution of Visible Normals")
 class Vcavities_masking {
 public:
-    float3 flip(const float3 &h, const float3 &k, const float xi) const {
+    BSDF_INLINE float3 flip(const float3 &h, const float3 &k, const float xi) const {
         const float a = h.y * k.y;
         const float b = h.x * k.x + h.z * k.z;
         const float kh   = math::max(a + b, 0.0f);
@@ -536,10 +616,14 @@ public:
             return h;
     }
 
-    float mask(const float3 &k, const float kh, const float nh) const {
-        return microfacet_mask_v_cavities(nh, kh, k.y);
-    }
-    float shadow_mask(const float G1, const float G2, const bool refraction) const {
+    BSDF_INLINE float shadow_mask(
+        float &G1, float &G2,
+        const float nh,
+        const float3 &k1, const float k1h,
+        const float3 &k2, const float k2h,
+        const bool refraction) const {
+        G1 = microfacet_mask_v_cavities(nh, k1h, k1.y);
+        G2 = microfacet_mask_v_cavities(nh, k2h, k2.y);
         return refraction ?  math::max(G1 + G2 - 1.0f, 0.0f) : math::min(G1, G2);
     }
 };
@@ -547,16 +631,16 @@ public:
 // simple_glossy_bsdf uses a v-cavities-masked Phong distribution
 class Distribution_phong_vcavities : public Vcavities_masking {
 public:
-    Distribution_phong_vcavities(const float roughness_u, const float roughness_v) {
+    BSDF_INLINE Distribution_phong_vcavities(const float roughness_u, const float roughness_v) {
         m_exponent = roughness_to_exponent(
             clamp_roughness(roughness_u), clamp_roughness(roughness_v));
     }
 
-    float3 sample(const float3 &xi, const float3 &k) const {
+    BSDF_INLINE float3 sample(const float3 &xi, const float3 &k) const {
         return flip(hvd_phong_sample(make_float2(xi.x, xi.y), m_exponent), k, xi.z);
     }
 
-    float eval(const float3 &h) const {
+    BSDF_INLINE float eval(const float3 &h) const {
         return hvd_phong_eval(m_exponent, h.y, h.x, h.z);
     }
 
@@ -575,7 +659,7 @@ BSDF_API void simple_glossy_bsdf_sample(
     const scatter_mode mode)
 {
     const Distribution_phong_vcavities ph(roughness_u, roughness_v);
-    microfacet_sample(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_sample(ph, data, state, inherited_normal, tangent_u, math::saturate(tint), mode);
 }
 
 BSDF_API void simple_glossy_bsdf_evaluate(
@@ -589,7 +673,8 @@ BSDF_API void simple_glossy_bsdf_evaluate(
     const scatter_mode mode)
 {
     const Distribution_phong_vcavities ph(roughness_u, roughness_v);
-    data->bsdf = microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    data->bsdf = math::saturate(tint) *
+        microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -604,7 +689,7 @@ BSDF_API void simple_glossy_bsdf_pdf(
     const scatter_mode mode)
 {
     const Distribution_phong_vcavities ph(roughness_u, roughness_v);
-    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -626,6 +711,61 @@ BSDF_API void simple_glossy_bsdf_pdf(
 // - further, for the normalization term symmetry is obtained by replacing a division by nk2
 //   with a division by max(nk1, nk2)
 
+BSDF_INLINE void backscattering_glossy_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const Geometry &g,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint)
+{
+    const float2 exponent = roughness_to_exponent(
+        clamp_roughness(roughness_u), clamp_roughness(roughness_v));
+
+    // sample half vector
+    const float2 u = sample_disk_distribution(make_float2(data->xi.x, data->xi.y), exponent);
+
+    const float xk1 = math::dot(g.x_axis, data->k1);
+    const float zk1 = math::dot(g.z_axis, data->k1);
+    const float2 u1 = u + make_float2(xk1, zk1);
+
+    const float nk1 = math::dot(data->k1, g.n.shading_normal);
+    const float3 h = math::normalize(g.n.shading_normal * nk1 + g.x_axis * u1.x + g.z_axis * u1.y);
+
+    // compute reflection direction
+    const float kh = math::dot(data->k1, h);
+    data->k2 = h * (kh + kh) - data->k1;
+
+    // check if the resulting direction is on the correct side of the actual geometry
+    const float nk2 = math::abs(math::dot(data->k2, g.n.shading_normal));
+    if (nk2 <= 0.0f || math::dot(data->k2, g.n.geometry_normal) <= 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    // compute weight and pdf
+    const float nh = math::dot(g.n.shading_normal, h);
+    const float inv_nh = 1.0f / nh;
+    const float nk1_nh = nk1 * inv_nh;
+    const float ph1 = eval_disk_distribution(u.x, u.y, exponent) * nk1_nh * nk1_nh * inv_nh;
+
+    const float nk2_nh = nk2 * inv_nh;
+    const float xh = math::dot(g.x_axis, h);
+    const float zh = math::dot(g.z_axis, h);
+    const float x2 = nk2_nh * xh;
+    const float y2 = nk2_nh * zh;
+    const float xk2 = math::dot(g.x_axis, data->k2);
+    const float zk2 = math::dot(g.z_axis, data->k2);
+    const float ph2 = eval_disk_distribution(
+        x2 - xk2, y2 - zk2, exponent) * nk2_nh * nk2_nh * inv_nh;
+
+    data->bsdf_over_pdf = tint *
+        nk2 * math::min(ph1, ph2) / (ph1 * math::max(nk1, nk2));
+    data->pdf = ph1 * 0.25f * nk2 / kh;
+
+    data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
+}
+
 BSDF_API void backscattering_glossy_reflection_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
@@ -635,84 +775,24 @@ BSDF_API void backscattering_glossy_reflection_bsdf_sample(
     const float3 &tint,
     const float3 &tangent_u)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
         absorb(data);
         return;
     }
-
-    const float2 exponent = roughness_to_exponent(
-        clamp_roughness(roughness_u), clamp_roughness(roughness_v));
-
-    // sample half vector
-    const float2 u = sample_disk_distribution(make_float2(data->xi.x, data->xi.y), exponent);
-
-    const float xk1 = math::dot(x_axis, data->k1);
-    const float zk1 = math::dot(z_axis, data->k1);
-    const float2 u1 = u + make_float2(xk1, zk1);
-
-    const float nk1 = math::dot(data->k1, shading_normal);
-    const float3 h = math::normalize(shading_normal * nk1 + x_axis * u1.x + z_axis * u1.y);
-
-    // compute reflection direction
-    const float kh = math::dot(data->k1, h);
-    data->k2 = h * (kh + kh) - data->k1;
-
-    // check if the resulting direction is on the correct side of the actual geometry
-    const float nk2 = math::abs(math::dot(data->k2, shading_normal));
-    if (nk2 <= 0.0f || math::dot(data->k2, geometry_normal) <= 0.0f) {
-        absorb(data);
-        return;
-    }
-
-    // compute weight and pdf
-    const float nh = math::dot(shading_normal, h);
-    const float inv_nh = 1.0f / nh;
-    const float nk1_nh = nk1 * inv_nh;
-    const float ph1 = eval_disk_distribution(u.x, u.y, exponent) * nk1_nh * nk1_nh * inv_nh;
-
-    const float nk2_nh = nk2 * inv_nh;
-    const float xh = math::dot(x_axis, h);
-    const float zh = math::dot(z_axis, h);
-    const float x2 = nk2_nh * xh;
-    const float y2 = nk2_nh * zh;
-    const float xk2 = math::dot(x_axis, data->k2);
-    const float zk2 = math::dot(z_axis, data->k2);
-    const float ph2 = eval_disk_distribution(
-        x2 - xk2, y2 - zk2, exponent) * nk2_nh * nk2_nh * inv_nh;
-
-    data->bsdf_over_pdf = math::saturate(tint) *
-        nk2 * math::min(ph1, ph2) / (ph1 * math::max(nk1, nk2));
-    data->pdf = ph1 * 0.25f * nk2 / kh;
-
-    data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
+    backscattering_glossy_sample(data, state, g, roughness_u, roughness_v, math::saturate(tint));
 }
 
-BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
+BSDF_INLINE void backscattering_glossy_evaluate(
     BSDF_evaluate_data *data,
     State *state,
-    const float3 &inherited_normal,
+    const Geometry &g,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &tangent_u)
+    const float3 &tint)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
-        absorb(data);
-        return;
-    }
-
-    const float nk1 = math::dot(data->k1, shading_normal);
-    const float nk2 = math::dot(data->k2, shading_normal);
+    const float nk1 = math::dot(data->k1, g.n.shading_normal);
+    const float nk2 = math::dot(data->k2, g.n.shading_normal);
     if (nk2 <= 0.0f) {
         absorb(data);
         return;
@@ -723,9 +803,9 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
 
     const float3 h = math::normalize(data->k1 + data->k2);
 
-    const float nh = math::dot(shading_normal, h);
-    const float xh = math::dot(x_axis, h);
-    const float zh = math::dot(z_axis, h);
+    const float nh = math::dot(g.n.shading_normal, h);
+    const float xh = math::dot(g.x_axis, h);
+    const float zh = math::dot(g.z_axis, h);
 
     const float inv_nh = 1.0f / nh;
     const float nk1_nh = nk1 * inv_nh;
@@ -735,20 +815,75 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
     const float x2 = nk2_nh * xh;
     const float y2 = nk2_nh * zh;
 
-    const float xk1 = math::dot(data->k1, x_axis);
-    const float zk1 = math::dot(data->k1, z_axis);
+    const float xk1 = math::dot(data->k1, g.x_axis);
+    const float zk1 = math::dot(data->k1, g.z_axis);
     const float ph1 = eval_disk_distribution(
         x1 - xk1, y1 - zk1, exponent) * nk1_nh * nk1_nh * inv_nh;
 
-    const float xk2 = math::dot(data->k2, x_axis);
-    const float zk2 = math::dot(data->k2, z_axis);
+    const float xk2 = math::dot(data->k2, g.x_axis);
+    const float zk2 = math::dot(data->k2, g.z_axis);
     const float ph2 = eval_disk_distribution(
         x2 - xk2, y2 - zk2, exponent) * nk2_nh * nk2_nh * inv_nh;
 
     const float kh = math::dot(data->k1, h);
     const float f = (0.25f / kh) * nk2;
     data->pdf = f * ph1;
-    data->bsdf = math::saturate(tint) * (f * math::min(ph1, ph2) / math::max(nk2, nk1));
+    data->bsdf = tint * (f * math::min(ph1, ph2) / math::max(nk2, nk1));
+}
+
+
+BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &tangent_u)
+{
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
+        absorb(data);
+        return;
+    }
+    backscattering_glossy_evaluate(data, state, g, roughness_u, roughness_v, math::saturate(tint));
+}
+
+template <typename Data>
+BSDF_INLINE void backscattering_glossy_pdf(
+    Data *data,
+    State *state,
+    const Geometry &g,
+    const float roughness_u,
+    const float roughness_v)
+{
+    const float nk1 = math::dot(data->k1, g.n.shading_normal);
+    const float nk2 = math::dot(data->k2, g.n.shading_normal);
+    if (nk2 <= 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    const float3 h = math::normalize(data->k1 + data->k2);
+
+    const float nh = math::dot(g.n.shading_normal, h);
+    const float xh = math::dot(g.x_axis, h);
+    const float zh = math::dot(g.z_axis, h);
+
+    const float inv_nh = 1.0f / nh;
+    const float nk1_nh = nk1 * inv_nh;
+    const float x1 = nk1_nh * xh;
+    const float y1 = nk1_nh * zh;
+
+    const float xk1 = math::dot(data->k1, g.x_axis);
+    const float zk1 = math::dot(data->k1, g.z_axis);
+    const float2 exponent = roughness_to_exponent(
+        clamp_roughness(roughness_u), clamp_roughness(roughness_v));
+    const float ph1 = eval_disk_distribution(
+        x1 - xk1, y1 - zk1, exponent) * nk1_nh * nk1_nh * inv_nh;
+
+    const float kh = math::dot(data->k1, h);
+    data->pdf = (0.25f / kh) * nk2 * ph1;
 }
 
 BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
@@ -760,43 +895,12 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
     const float3 &tint,
     const float3 &tangent_u)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
         absorb(data);
         return;
     }
-
-    const float nk1 = math::dot(data->k1, shading_normal);
-    const float nk2 = math::dot(data->k2, shading_normal);
-    if (nk2 <= 0.0f) {
-        absorb(data);
-        return;
-    }
-
-    const float3 h = math::normalize(data->k1 + data->k2);
-
-    const float nh = math::dot(shading_normal, h);
-    const float xh = math::dot(x_axis, h);
-    const float zh = math::dot(z_axis, h);
-
-    const float inv_nh = 1.0f / nh;
-    const float nk1_nh = nk1 * inv_nh;
-    const float x1 = nk1_nh * xh;
-    const float y1 = nk1_nh * zh;
-
-    const float xk1 = math::dot(data->k1, x_axis);
-    const float zk1 = math::dot(data->k1, z_axis);
-    const float2 exponent = roughness_to_exponent(
-        clamp_roughness(roughness_u), clamp_roughness(roughness_v));
-    const float ph1 = eval_disk_distribution(
-        x1 - xk1, y1 - zk1, exponent) * nk1_nh * nk1_nh * inv_nh;
-
-    const float kh = math::dot(data->k1, h);
-    data->pdf = (0.25f / kh) * nk2 * ph1;
+    backscattering_glossy_pdf(data, state, g, roughness_u, roughness_v);
 }
 
 
@@ -812,16 +916,16 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
 
 class Distribution_beckmann_vcavities : public Vcavities_masking {
 public:
-    Distribution_beckmann_vcavities(const float roughness_u, const float roughness_v) {
+    BSDF_INLINE Distribution_beckmann_vcavities(const float roughness_u, const float roughness_v) {
         m_inv_roughness = make_float2(
-            1.0f / clamp_roughness(roughness_u), 1.0 / clamp_roughness(roughness_v));
+            1.0f / clamp_roughness(roughness_u), 1.0f / clamp_roughness(roughness_v));
     }
 
-    float3 sample(const float3 &xi, const float3 &k) const {
+    BSDF_INLINE float3 sample(const float3 &xi, const float3 &k) const {
         return flip(hvd_beckmann_sample(make_float2(xi.x, xi.y), m_inv_roughness), k, xi.z);
     }
 
-    float eval(const float3 &h) const {
+    BSDF_INLINE float eval(const float3 &h) const {
         return hvd_beckmann_eval(m_inv_roughness, h.y, h.x, h.z);
     }
 
@@ -841,7 +945,8 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
     const scatter_mode mode)
 {
     const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
-    microfacet_sample(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_sample(
+        ph, data, state, inherited_normal, tangent_u, math::saturate(tint), mode);
 }
 
 BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
@@ -855,7 +960,8 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
     const scatter_mode mode)
 {
     const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
-    data->bsdf = microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    data->bsdf = math::saturate(tint) *
+        microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -870,7 +976,7 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
     const scatter_mode mode)
 {
     const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
-    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -886,16 +992,16 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
 
 class Distribution_ggx_vcavities : public Vcavities_masking {
 public:
-    Distribution_ggx_vcavities(const float roughness_u, const float roughness_v) {
+    BSDF_INLINE Distribution_ggx_vcavities(const float roughness_u, const float roughness_v) {
         m_inv_roughness = make_float2(
-            1.0f / clamp_roughness(roughness_u), 1.0 / clamp_roughness(roughness_v));
+            1.0f / clamp_roughness(roughness_u), 1.0f / clamp_roughness(roughness_v));
     }
 
-    float3 sample(const float3 &xi, const float3 &k) const {
+    BSDF_INLINE float3 sample(const float3 &xi, const float3 &k) const {
         return flip(hvd_ggx_sample(make_float2(xi.x, xi.y), m_inv_roughness), k, xi.z);
     }
 
-    float eval(const float3 &h) const {
+    BSDF_INLINE float eval(const float3 &h) const {
         return hvd_ggx_eval(m_inv_roughness, h.y, h.x, h.z);
     }
 
@@ -914,7 +1020,8 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
     const scatter_mode mode)
 {
     const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
-    microfacet_sample(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_sample(
+        ph, data, state, inherited_normal, tangent_u, math::saturate(tint), mode);
 }
 
 BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
@@ -928,7 +1035,8 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
     const scatter_mode mode)
 {
     const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
-    data->bsdf = microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    data->bsdf = math::saturate(tint) *
+        microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -943,7 +1051,7 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
     const scatter_mode mode)
 {
     const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
-    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -960,22 +1068,27 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
 
 class Distribution_beckmann_smith {
 public:
-    Distribution_beckmann_smith(const float roughness_u, const float roughness_v) {
+    BSDF_INLINE Distribution_beckmann_smith(const float roughness_u, const float roughness_v) {
         m_roughness = make_float2(clamp_roughness(roughness_u), clamp_roughness(roughness_v));
     }
 
-    float3 sample(const float3 &xi, const float3 &k) const {
+    BSDF_INLINE float3 sample(const float3 &xi, const float3 &k) const {
         return hvd_beckmann_sample_vndf(k, m_roughness, make_float2(xi.x, xi.y));
     }
 
-    float mask(const float3 &k, const float, const float) const {
-        return microfacet_mask_smith_beckmann(m_roughness.x, m_roughness.y, k);
-    }
-    float shadow_mask(const float G1, const float G2, const bool refraction) const {
+    BSDF_INLINE float shadow_mask(
+        float &G1, float &G2,
+        const float nh,
+        const float3 &k1, const float k1h,
+        const float3 &k2, const float k2h,
+        const bool refraction) const {
+        G1 = microfacet_mask_smith_beckmann(m_roughness.x, m_roughness.y, k1);
+        G2 = microfacet_mask_smith_beckmann(m_roughness.x, m_roughness.y, k2);
         return G1 * G2;
     }
 
-    float eval(const float3 &h) const {
+
+    BSDF_INLINE float eval(const float3 &h) const {
         return hvd_beckmann_eval(
             make_float2(1.0f / m_roughness.x, 1.0f / m_roughness.y), h.y, h.x, h.z);
     }
@@ -995,7 +1108,8 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
     const scatter_mode mode)
 {
     const Distribution_beckmann_smith ph(roughness_u, roughness_v);
-    microfacet_sample(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_sample(
+        ph, data, state, inherited_normal, tangent_u, math::saturate(tint), mode);
 }
 
 BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
@@ -1009,7 +1123,8 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
     const scatter_mode mode)
 {
     const Distribution_beckmann_smith ph(roughness_u, roughness_v);
-    data->bsdf = microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    data->bsdf = math::saturate(tint) *
+        microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -1024,7 +1139,7 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
     const scatter_mode mode)
 {
     const Distribution_beckmann_smith ph(roughness_u, roughness_v);
-    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -1040,22 +1155,26 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
 
 class Distribution_ggx_smith {
 public:
-    Distribution_ggx_smith(const float roughness_u, const float roughness_v) {
+    BSDF_INLINE Distribution_ggx_smith(const float roughness_u, const float roughness_v) {
         m_roughness = make_float2(clamp_roughness(roughness_u), clamp_roughness(roughness_v));
     }
 
-    float3 sample(const float3 &xi, const float3 &k) const {
+    BSDF_INLINE float3 sample(const float3 &xi, const float3 &k) const {
         return hvd_ggx_sample_vndf(k, m_roughness, make_float2(xi.x, xi.y));
     }
 
-    float mask(const float3 &k, const float, const float) const {
-        return microfacet_mask_smith_ggx(m_roughness.x, m_roughness.y, k);
-    }
-    float shadow_mask(const float G1, const float G2, const bool refraction) const {
+    BSDF_INLINE float shadow_mask(
+        float &G1, float &G2,
+        const float nh,
+        const float3 &k1, const float k1h,
+        const float3 &k2, const float k2h,
+        const bool refraction) const {
+        G1 = microfacet_mask_smith_ggx(m_roughness.x, m_roughness.y, k1);
+        G2 = microfacet_mask_smith_ggx(m_roughness.x, m_roughness.y, k2);
         return G1 * G2;
     }
 
-    float eval(const float3 &h) const {
+    BSDF_INLINE float eval(const float3 &h) const {
         return hvd_ggx_eval(make_float2(1.0f / m_roughness.x, 1.0f / m_roughness.y), h.y, h.x, h.z);
     }
 
@@ -1076,7 +1195,8 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
     const scatter_mode mode)
 {
     const Distribution_ggx_smith ph(roughness_u, roughness_v);
-    microfacet_sample(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_sample(
+        ph, data, state, inherited_normal, tangent_u, math::saturate(tint), mode);
 }
 
 BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
@@ -1090,7 +1210,8 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
     const scatter_mode mode)
 {
     const Distribution_ggx_smith ph(roughness_u, roughness_v);
-    data->bsdf = microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    data->bsdf = math::saturate(tint) * microfacet_evaluate(
+        ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -1105,7 +1226,7 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
     const scatter_mode mode)
 {
     const Distribution_ggx_smith ph(roughness_u, roughness_v);
-    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, tint, mode);
+    microfacet_evaluate(ph, data, state, inherited_normal, tangent_u, mode);
 }
 
 
@@ -1120,25 +1241,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
 
 // "A New Ward BRDF Model with Bounded Albedo" by David Geisler-Moroder and Arne Duer
 
-BSDF_API void ward_geisler_moroder_bsdf_sample(
+BSDF_INLINE void ward_geisler_moroder_sample(
     BSDF_sample_data *data,
     State *state,
-    const float3 &inherited_normal,
+    const Geometry &g,
     const float roughness_u,
     const float roughness_v,
-    const float3 &tint,
-    const float3 &tangent_u)
+    const float3 &tint)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
-        absorb(data);
-        return;
-    }
-
     const float2 inv_roughness = make_float2(
         1.0f / clamp_roughness(roughness_u), 1.0f / clamp_roughness(roughness_v));
 
@@ -1161,9 +1271,9 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
     // sample half vector
     float3 h0 = hvd_beckmann_sample(make_float2(data->xi.x, data->xi.y), inv_roughness);
 
-    const float nk1 = math::abs(math::dot(data->k1, shading_normal));
-    const float xk1 = math::dot(data->k1, x_axis);
-    const float zk1 = math::dot(data->k1, z_axis);
+    const float nk1 = math::abs(math::dot(data->k1, g.n.shading_normal));
+    const float xk1 = math::dot(data->k1, g.x_axis);
+    const float zk1 = math::dot(data->k1, g.z_axis);
 
     // compute weight for flipped and non-flipped variant
     const float a = nk1 * h0.y;
@@ -1191,26 +1301,24 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
         prob_total = q + (1.0f - q_f);
 
 
-    const float3 h = x_axis * h0.x + shading_normal * h0.y + z_axis * h0.z;
+    const float3 h = g.x_axis * h0.x + g.n.shading_normal * h0.y + g.z_axis * h0.z;
     data->k2 = h * (kh + kh) - data->k1;
 
-    const float nk2 = math::dot(data->k2, shading_normal);
-    if (nk2 <= 0.0f || math::dot(data->k2, geometry_normal) <= 0.0f) {
+    const float nk2 = math::dot(data->k2, g.n.shading_normal);
+    if (nk2 <= 0.0f || math::dot(data->k2, g.n.geometry_normal) <= 0.0f) {
         absorb(data);
         return;
     }
 
     // compute final weight and pdf
-    data->bsdf_over_pdf = math::saturate(tint) * w / prob_total;
+    data->bsdf_over_pdf = tint * w / prob_total;
     data->pdf = hvd_beckmann_eval(inv_roughness, h0.y, h0.x, h0.z) * 0.25f * nk2 / kh * prob_total;
 
     data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
 }
 
-
-template <typename Data>
-BSDF_INLINE float3 ward_geisler_moroder_shared_eval(
-    Data *data,
+BSDF_API void ward_geisler_moroder_bsdf_sample(
+    BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
     const float roughness_u,
@@ -1218,21 +1326,28 @@ BSDF_INLINE float3 ward_geisler_moroder_shared_eval(
     const float3 &tint,
     const float3 &tangent_u)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, tangent_u, shading_normal)) {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
         absorb(data);
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return;
     }
+    ward_geisler_moroder_sample(data, state, g, roughness_u, roughness_v, math::saturate(tint));
+}
 
-    const float nk1 = math::dot(data->k1, shading_normal);
-    const float nk2 = math::dot(data->k2, shading_normal);
+
+template <typename Data>
+BSDF_INLINE float ward_geisler_moroder_shared_eval(
+    Data *data,
+    State *state,
+    const Geometry &g,
+    const float roughness_u,
+    const float roughness_v)
+{
+    const float nk1 = math::dot(data->k1, g.n.shading_normal);
+    const float nk2 = math::dot(data->k2, g.n.shading_normal);
     if (nk2 <= 0.0f) {
         absorb(data);
-        return make_float3(0.0f, 0.0f, 0.0f);
+        return 0.0f;
     }
 
     const float2 inv_roughness = make_float2(
@@ -1240,14 +1355,14 @@ BSDF_INLINE float3 ward_geisler_moroder_shared_eval(
 
     const float3 h = math::normalize(data->k1 + data->k2);
     const float3 h0 = make_float3(
-        math::dot(x_axis, h),
-        math::dot(shading_normal, h),
-        math::dot(z_axis, h));
+        math::dot(g.x_axis, h),
+        math::dot(g.n.shading_normal, h),
+        math::dot(g.z_axis, h));
 
 
     // compute flipping probabilities for pdf
-    const float xk1 = math::dot(x_axis, data->k1);
-    const float zk1 = math::dot(z_axis, data->k1);
+    const float xk1 = math::dot(g.x_axis, data->k1);
+    const float zk1 = math::dot(g.z_axis, data->k1);
     const float kh   = h0.y * nk1 + h0.x * xk1 + h0.z * zk1;
     const float kh_f = h0.y * nk1 - h0.x * xk1 - h0.z * zk1;
     const float q   = math::saturate((2.0f - nk1) / (h0.y * kh));
@@ -1257,7 +1372,7 @@ BSDF_INLINE float3 ward_geisler_moroder_shared_eval(
     const float ph = hvd_beckmann_eval(inv_roughness, h0.y, h0.x, h0.z) * 0.25f * nk2 / kh;
     data->pdf = ph * (q + (1.0f - q_f));
 
-    return math::saturate(tint) * ph / (kh * h0.y * h0.y);
+    return  ph / (kh * h0.y * h0.y);
 }
 
 BSDF_API void ward_geisler_moroder_bsdf_evaluate(
@@ -1269,8 +1384,14 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
     const float3 &tint,
     const float3 &tangent_u)
 {
-    data->bsdf = ward_geisler_moroder_shared_eval(
-        data, state, inherited_normal, roughness_u, roughness_v, tint, tangent_u);
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
+        absorb(data);
+        return;
+    }
+
+    data->bsdf = math::saturate(tint) * ward_geisler_moroder_shared_eval(
+        data, state, g, roughness_u, roughness_v);
 }
 
 BSDF_API void ward_geisler_moroder_bsdf_pdf(
@@ -1282,8 +1403,14 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
     const float3 &tint,
     const float3 &tangent_u)
 {
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, tangent_u, data->k1, state)){
+        absorb(data);
+        return;
+    }
+
     ward_geisler_moroder_shared_eval(
-        data, state, inherited_normal, roughness_u, roughness_v, tint, tangent_u);
+        data, state, g, roughness_u, roughness_v);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -1294,72 +1421,325 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
 // )
 /////////////////////////////////////////////////////////////////////
 
-//!! TODO: measured bsdf is just a diffuse grey dummy for now
+BSDF_INLINE void measured_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const Geometry &g,
+    const unsigned measurement_id,
+    const float multiplier,
+    const scatter_mode mode)
+{
+    // world to local (assuming an orthonormal base)
+    const float3 outgoing = math::normalize(make_float3(
+        math::dot(data->k1, g.x_axis),
+        math::dot(data->k1, g.n.shading_normal),
+        math::dot(data->k1, g.z_axis)));
+
+    // local Cartesian to polar
+    const float2 outgoing_polar = make_float2(
+        math::acos(outgoing.y),
+        math::atan2(outgoing.z, outgoing.x));
+
+
+    float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
+    if (mode == scatter_mode::scatter_reflect) max_albedos.z = 0.0f;
+    if (mode == scatter_mode::scatter_transmit) max_albedos.x = 0.0f;
+
+    const float2 inv_max_albedo = make_float2(1.0f / max_albedos.y, 1.0f / max_albedos.w);
+    float scale = math::max(0.0f, multiplier);
+
+    if (mode == scatter_mode::scatter_reflect || mode == scatter_mode::scatter_reflect_transmit)
+        scale = math::min(scale, inv_max_albedo.x);
+    if (mode == scatter_mode::scatter_transmit || mode == scatter_mode::scatter_reflect_transmit)
+        scale = math::min(scale, inv_max_albedo.y);
+
+    const float sum = max_albedos.x + max_albedos.z;
+    if (sum == 0.0f || scale == 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    Mbsdf_part selected_part;
+    float prob = max_albedos.x / sum;
+    if (data->xi.z < prob)
+    {
+        data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
+        selected_part = Mbsdf_part::mbsdf_data_reflection;
+        data->xi.z /= prob;
+    }
+    else
+    {
+        data->event_type = BSDF_EVENT_GLOSSY_TRANSMISSION;
+        selected_part = Mbsdf_part::mbsdf_data_transmission;
+        data->xi.z = (data->xi.z - prob) / (1.0f - prob);
+        prob = (1.0f - prob);
+    }
+
+    // sample incoming direction
+    const float3 incoming_polar_pdf = state->bsdf_measurement_sample(
+        measurement_id,
+        outgoing_polar,
+        data->xi,
+        selected_part);
+
+    const float sign = ((data->event_type == BSDF_EVENT_GLOSSY_TRANSMISSION) ? -1.0f : 1.0f);
+
+    // transform to world
+    float2 incoming_polar_sin, incoming_polar_cos;
+    math::sincos(make<float2>(incoming_polar_pdf.x, incoming_polar_pdf.y), 
+                 &incoming_polar_sin, 
+                 &incoming_polar_cos);
+    data->k2 = math::normalize(
+        g.x_axis            * incoming_polar_sin.x * incoming_polar_cos.y   +
+        sign * g.n.shading_normal  * incoming_polar_cos.x                   +
+        g.z_axis            * incoming_polar_sin.x * incoming_polar_sin.y);
+
+    // check for valid a result and sampling beneath the surface
+    if (incoming_polar_pdf.x < 0.0f || 
+        incoming_polar_cos.x <= 0.0f || math::dot(data->k2, g.n.geometry_normal) * sign <= 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    data->pdf = incoming_polar_pdf.z * prob;
+    data->bsdf_over_pdf = state->bsdf_measurement_evaluate(
+        measurement_id,
+        make<float2>(incoming_polar_pdf.x, incoming_polar_pdf.y),
+        outgoing_polar,
+        selected_part) * (scale * incoming_polar_cos.x / data->pdf);
+}
 
 BSDF_API void measured_bsdf_sample(
     BSDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const void *measurement,
+    const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+    Geometry g;
+    if (!get_geometry(g, inherited_normal, state->texture_tangent_u(0), data->k1, state)){
+        absorb(data);
+        return;
+    }
+    measured_sample(data, state, g, measurement_id, multiplier, mode);
+}
 
-    // sample direction and transform to world coordinates
-    const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
+
+BSDF_INLINE void measured_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const Normals &n,
+    const unsigned measurement_id,
+    const float multiplier,
+    const scatter_mode mode)
+{
+    // local (tangent) space
     float3 x_axis, z_axis;
-    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), shading_normal)) {
-        absorb(data);
-        return;
-    }
-    data->k2 = math::normalize(x_axis * cosh.x + shading_normal * cosh.y + z_axis * cosh.z);
-
-    if (cosh.y <= 0.0f || math::dot(data->k2, geometry_normal) <= 0.0f) {
+    float3 y_axis = n.shading_normal;
+    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis))
+    {
         absorb(data);
         return;
     }
 
-    data->pdf = cosh.y * (float)(1.0 / M_PI);
-    data->bsdf_over_pdf = make_float3(0.5f, 0.5f, 0.5f);
-    data->event_type = BSDF_EVENT_DIFFUSE_REFLECTION;
+    // BTDF or BRDF eval?
+    const bool backside_eval = math::dot(data->k2, n.geometry_normal) < 0.0f;
+
+    // nothing to evaluate for given directions?
+    if ((backside_eval && (mode == scatter_reflect)) ||
+        (!backside_eval && (mode == scatter_transmit)))
+    {
+        absorb(data);
+        return;
+    }
+
+    // world to local (assuming an orthonormal base)
+    const float3 incoming = math::normalize(
+        make_float3(
+            math::dot(data->k2, x_axis),
+            math::abs(math::dot(data->k2, y_axis)),
+            math::dot(data->k2, z_axis)));
+
+    const float3 outgoing = math::normalize(
+        make_float3(
+            math::dot(data->k1, x_axis),
+            math::dot(data->k1, y_axis),
+            math::dot(data->k1, z_axis)));
+
+    // local Cartesian to polar
+    const float2 incoming_polar = make_float2(
+            math::acos(incoming.y),
+            math::atan2(incoming.z, incoming.x));
+
+    const float2 outgoing_polar = make_float2(
+        math::acos(outgoing.y),
+        math::atan2(outgoing.z, outgoing.x));
+
+    // filter rays below the surface
+    if (incoming.y < 0.0f || outgoing.y < 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    const float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
+    const float sum = max_albedos.x + max_albedos.z;
+    Mbsdf_part selected_part;
+    float prob = max_albedos.x / sum;
+    if (backside_eval)
+    {
+        selected_part = Mbsdf_part::mbsdf_data_transmission;
+        prob = (1.0f - prob);
+    }
+    else
+    {
+        selected_part = Mbsdf_part::mbsdf_data_reflection;
+    }
+
+    if (prob == 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    float2 inv_max_albedo = make_float2(1.0f / max_albedos.y, 1.0f / max_albedos.w);
+    float scale = math::max(0.0f, multiplier);
+
+    if (mode == scatter_mode::scatter_reflect || mode == scatter_mode::scatter_reflect_transmit)
+        scale = math::min(scale, inv_max_albedo.x);
+    if (mode == scatter_mode::scatter_transmit || mode == scatter_mode::scatter_reflect_transmit)
+        scale = math::min(scale, inv_max_albedo.y);
+
+    data->pdf = prob * state->bsdf_measurement_pdf(
+        measurement_id,
+        incoming_polar,
+        outgoing_polar,
+        selected_part);
+
+    data->bsdf = (scale * incoming.y) * state->bsdf_measurement_evaluate(
+        measurement_id, 
+        incoming_polar,
+        outgoing_polar,
+        selected_part);
 }
 
 BSDF_API void measured_bsdf_evaluate(
     BSDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const void *measurement,
+    const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
+    Normals n;
     get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+        n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
-    const float nk2 = math::max(math::dot(data->k2, shading_normal), 0.0f);
-    const float pdf = nk2 * (float)(1.0f / M_PI);
-
-    data->bsdf = pdf * make_float3(0.5f, 0.5f, 0.5f);
-    data->pdf = pdf;
+    measured_evaluate(data, state, n, measurement_id, multiplier, mode);
 }
+
+template <typename Data>
+BSDF_INLINE void measured_pdf(
+    Data *data,
+    State *state,
+    const Normals &n,
+    const unsigned measurement_id,
+    const scatter_mode mode)
+{
+    // local (tangent) space
+    float3 x_axis, z_axis;
+    float3 y_axis = n.shading_normal;
+    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis))
+    {
+        absorb(data);
+        return;
+    }
+
+    // BTDF or BRDF eval?
+    const bool backside_eval = math::dot(data->k2, n.geometry_normal) < 0.0f;
+
+    // nothing to evaluate for given directions?
+    if ((backside_eval && (mode == scatter_reflect)) ||
+        (!backside_eval && (mode == scatter_transmit)))
+    {
+        absorb(data);
+        return;
+    }
+
+
+    // world to local (assuming an orthonormal base)
+    const float3 incoming = math::normalize(
+        make_float3(
+            math::dot(data->k2, x_axis),
+            math::abs(math::dot(data->k2, y_axis)),
+            math::dot(data->k2, z_axis)));
+
+    const float3 outgoing = math::normalize(
+        make_float3(
+            math::dot(data->k1, x_axis),
+            math::dot(data->k1, y_axis),
+            math::dot(data->k1, z_axis)));
+
+    // local Cartesian to polar
+    const float2 incoming_polar = make_float2(
+        math::acos(incoming.y),
+        math::atan2(incoming.z, incoming.x));
+
+    const float2 outgoing_polar = make_float2(
+        math::acos(outgoing.y),
+        math::atan2(outgoing.z, outgoing.x));
+
+    // filter rays below the surface
+    if (incoming.y < 0.0f || outgoing.y < 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    const float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
+    const float sum = max_albedos.x + max_albedos.z;
+    Mbsdf_part selected_part;
+    float prob = max_albedos.x / sum;
+    if (backside_eval)
+    {
+        selected_part = Mbsdf_part::mbsdf_data_transmission;
+        prob = (1.0f - prob);
+    }
+    else
+    {
+        selected_part = Mbsdf_part::mbsdf_data_reflection;
+    }
+
+    if (prob == 0.0f)
+    {
+        absorb(data);
+        return;
+    }
+
+    data->pdf = prob * state->bsdf_measurement_pdf(
+        measurement_id,
+        incoming_polar,
+        outgoing_polar,
+        selected_part);
+}
+
 
 BSDF_API void measured_bsdf_pdf(
     BSDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const void *measurement,
+    const unsigned measurement_id,
     const float multiplier,
     const scatter_mode mode)
 {
-    float3 shading_normal, geometry_normal;
+    Normals n;
     get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+        n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
-    const float nk2 = math::max(math::dot(data->k2, shading_normal), 0.0f);
-    data->pdf = nk2 * (float)(1.0f / M_PI);
+    measured_pdf(data, state, n, measurement_id, mode);
 }
 
 
@@ -1745,8 +2125,7 @@ BSDF_API void weighted_layer_sample(
             return;
 
         if (weight < 1.0f) {
-            BSDF_pdf_data pdf_data;
-            copy_data(&pdf_data, data);
+            BSDF_pdf_data pdf_data = to_pdf_data(data);
             base.pdf(&pdf_data, state, inherited_normal);
             data->pdf = pdf_data.pdf * (1.0f - weight) + data->pdf * weight;
         }
@@ -1760,8 +2139,7 @@ BSDF_API void weighted_layer_sample(
             return;
 
         if (weight > 0.0f) {
-            BSDF_pdf_data pdf_data;
-            copy_data(&pdf_data, data);
+            BSDF_pdf_data pdf_data = to_pdf_data(data);
             layer.pdf(&pdf_data, state, normal);
             data->pdf = pdf_data.pdf * weight + data->pdf * (1.0f - weight);
         }
@@ -1852,8 +2230,7 @@ BSDF_API void color_weighted_layer_sample(
         data->bsdf_over_pdf *= weight * p_inv;
 
         if (p < 1.0f) {
-            BSDF_pdf_data pdf_data;
-            copy_data(&pdf_data, data);
+            BSDF_pdf_data pdf_data = to_pdf_data(data);
             base.pdf(&pdf_data, state, inherited_normal);
             data->pdf = pdf_data.pdf * (1.0f - p) + data->pdf * p;
         }
@@ -1870,8 +2247,7 @@ BSDF_API void color_weighted_layer_sample(
         data->bsdf_over_pdf *= weight * p_inv;
 
         if (p > 0.0f) {
-            BSDF_pdf_data pdf_data;
-            copy_data(&pdf_data, data);
+            BSDF_pdf_data pdf_data = to_pdf_data(data);
             layer.pdf(&pdf_data, state, normal);
             data->pdf = pdf_data.pdf * p + data->pdf * (1.0f - p);
         }
@@ -1978,8 +2354,7 @@ BSDF_INLINE void curve_layer_sample(
         data->k1, data->k2, layer_normal, ior, nk1, nk2,
         (data->event_type & BSDF_EVENT_TRANSMISSION) != 0, get_material_thin_walled());
 
-    BSDF_pdf_data pdf_data;
-    copy_data(&pdf_data, data);
+    BSDF_pdf_data pdf_data = to_pdf_data(data);
     if (sample_layer) {
         const float kh = math::abs(math::dot(data->k1, h));
         const float3 curve_factor = c.eval(kh);
@@ -2624,21 +2999,23 @@ BSDF_API void color_measured_curve_layer_pdf(
         c, data, state, 1.0f, layer, base, shading_normal, inherited_normal, geometry_normal);
 }
 
+
 /////////////////////////////////////////////////////////////////////
-// bsdf normalized_mix(
-//     bsdf_component[<N>] components
+// df normalized_mix(
+//     df_component[<N>] components
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_API void normalized_mix_sample(
-    BSDF_sample_data *data,
+template<typename TDF_sample_data, typename TDF_component>
+BSDF_INLINE void normalized_mix_df_sample(
+    TDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2647,7 +3024,7 @@ BSDF_API void normalized_mix_sample(
         w_sum += math::saturate(components[i].weight);
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2667,15 +3044,14 @@ BSDF_API void normalized_mix_sample(
     }
 
     components[sampled_idx].component.sample(data, state, inherited_normal);
-    if (data->event_type == BSDF_EVENT_ABSORB)
+    if (data->event_type == 0) // BSDF_EVENT_ABSORB or EDF_NO_EMISSION or ...
         return;
 
     if (w_sum < 1.0f)
-        data->bsdf_over_pdf *= w_sum;
+        set_df_over_pdf(data, get_df_over_pdf(data) * w_sum);
 
     data->pdf *= p;
-    BSDF_pdf_data pdf_data;
-    copy_data(&pdf_data, data);
+    auto pdf_data = to_pdf_data(data);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (i == sampled_idx)
             continue;
@@ -2687,15 +3063,16 @@ BSDF_API void normalized_mix_sample(
     }
 }
 
-BSDF_API void normalized_mix_evaluate(
-    BSDF_evaluate_data *data,
+template<typename TDF_evaluate_data, typename TDF_component>
+BSDF_INLINE void normalized_mix_df_evaluate(
+    TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2704,35 +3081,37 @@ BSDF_API void normalized_mix_evaluate(
         w_sum += math::saturate(components[i].weight);
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
     const float inv_w_sum = 1.0f / w_sum;
     const float normalize = w_sum > 1.0f ? inv_w_sum : 1.0f;
 
-    float3 bsdf = make_float3(0.0f, 0.0f, 0.0f);
+    float3 df = make_float3(0.0f, 0.0f, 0.0f);
     float pdf = 0.0f;
     for (unsigned int i = 0; i < num_components; ++i) {
         components[i].component.evaluate(data, state, inherited_normal);
         const float w = math::saturate(components[i].weight);
-        bsdf += data->bsdf * (w * normalize);
+        df += get_df(data) * (w * normalize);
         pdf += data->pdf * (w * inv_w_sum);
     }
 
-    data->bsdf = bsdf;
+    set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
+    set_df(data, df);
     data->pdf = pdf;
 }
 
-BSDF_API void normalized_mix_pdf(
-    BSDF_pdf_data *data,
+template<typename TDF_pdf_data, typename TDF_component>
+BSDF_INLINE void normalized_mix_df_pdf(
+    TDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2741,7 +3120,7 @@ BSDF_API void normalized_mix_pdf(
         w_sum += math::saturate(components[i].weight);
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2754,22 +3133,22 @@ BSDF_API void normalized_mix_pdf(
     data->pdf = pdf;
 }
 
-
 /////////////////////////////////////////////////////////////////////
-// bsdf clamped_mix(
-//     bsdf_component[<N>] components
+// df clamped_mix(
+//     df_component[<N>] components
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_API void clamped_mix_sample(
-    BSDF_sample_data *data,
+template<typename TDF_sample_data, typename TDF_component>
+BSDF_INLINE void clamped_mix_df_sample(
+    TDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2789,7 +3168,7 @@ BSDF_API void clamped_mix_sample(
     }
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2810,14 +3189,13 @@ BSDF_API void clamped_mix_sample(
     }
 
     components[sampled_idx].component.sample(data, state, inherited_normal);
-    if (data->event_type == BSDF_EVENT_ABSORB)
+    if (data->event_type == 0) // BSDF_EVENT_ABSORB or EDF_NO_EMISSION or ...
         return;
 
-    data->bsdf_over_pdf *= w_sum;
+    set_df_over_pdf(data, get_df_over_pdf(data) * w_sum);
 
     data->pdf *= p;
-    BSDF_pdf_data pdf_data;
-    copy_data(&pdf_data, data);
+    auto pdf_data = to_pdf_data(data);
     for (unsigned int i = 0; i < num_active; ++i) {
         if (i == sampled_idx)
             continue;
@@ -2830,15 +3208,16 @@ BSDF_API void clamped_mix_sample(
     }
 }
 
-BSDF_API void clamped_mix_evaluate(
-    BSDF_evaluate_data *data,
+template<typename TDF_evaluate_data, typename TDF_component>
+BSDF_INLINE void clamped_mix_df_evaluate(
+    TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2858,33 +3237,36 @@ BSDF_API void clamped_mix_evaluate(
     }
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
     const float inv_w_sum = 1.0f / w_sum;
 
-    float3 bsdf = make_float3(0.0f, 0.0f, 0.0f);
+    float3 df = make_float3(0.0f, 0.0f, 0.0f);
     float pdf = 0.0f;
     for (unsigned int i = 0; i < num_active; ++i) {
         components[i].component.evaluate(data, state, inherited_normal);
         float weight = i == num_active - 1 ? final_weight : math::saturate(components[i].weight);
-        bsdf += data->bsdf * weight;
+        df += get_df(data) * weight;
         pdf += data->pdf * weight * inv_w_sum;
     }
-    data->bsdf = bsdf;
+
+    set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
+    set_df(data, df);
     data->pdf = pdf;
 }
 
-BSDF_API void clamped_mix_pdf(
-    BSDF_pdf_data *data,
+template<typename TDF_pdf_data, typename TDF_component>
+BSDF_INLINE void clamped_mix_df_pdf(
+    TDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2904,7 +3286,7 @@ BSDF_API void clamped_mix_pdf(
     }
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2918,21 +3300,24 @@ BSDF_API void clamped_mix_pdf(
     data->pdf = pdf;
 }
 
+
+
 /////////////////////////////////////////////////////////////////////
-// bsdf color_normalized_mix(
-//     color_bsdf_component[<N>] components
+// df color_normalized_mix(
+//     color_df_component[<N>] components
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_API void color_normalized_mix_sample(
-    BSDF_sample_data *data,
+template<typename TDF_sample_data, typename TDF_component>
+BSDF_INLINE void color_normalized_mix_df_sample(
+    TDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2941,7 +3326,7 @@ BSDF_API void color_normalized_mix_sample(
         w_sum += math::saturate(components[i].weight);
 
     if (w_sum.x <= 0.0f && w_sum.y <= 0.0f && w_sum.z <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -2953,8 +3338,7 @@ BSDF_API void color_normalized_mix_sample(
     for (sampled_idx = 0; ; ++sampled_idx) {
         p = math::luminance(math::saturate(components[sampled_idx].weight)) * inv_w_sum;
         const float cdf = prev_cdf + p;
-        if (data->xi.z < cdf || sampled_idx == num_components - 1)
-        {
+        if (data->xi.z < cdf || sampled_idx == num_components - 1) {
             data->xi.z = (data->xi.z - prev_cdf) / (cdf - prev_cdf);
             break;
         }
@@ -2962,15 +3346,15 @@ BSDF_API void color_normalized_mix_sample(
     }
 
     components[sampled_idx].component.sample(data, state, inherited_normal);
-    if (data->event_type == BSDF_EVENT_ABSORB)
+    if (data->event_type == 0) // BSDF_EVENT_ABSORB or EDF_NO_EMISSION or ...
         return;
 
-    data->bsdf_over_pdf *= math::saturate(components[sampled_idx].weight) /
-        (math::max(w_sum, make_float3(1.0f, 1.0f, 1.0f)) * p);
+    set_df_over_pdf(data, get_df_over_pdf<TDF_sample_data>(data) * 
+                    math::saturate(components[sampled_idx].weight) /
+                    (math::max(w_sum, make_float3(1.0f, 1.0f, 1.0f)) * p));
 
     data->pdf *= p;
-    BSDF_pdf_data pdf_data;
-    copy_data(&pdf_data, data);
+    auto pdf_data = to_pdf_data(data);
     for (unsigned int i = 0; i < num_components; ++i) {
         if (i == sampled_idx)
             continue;
@@ -2982,15 +3366,16 @@ BSDF_API void color_normalized_mix_sample(
     }
 }
 
-BSDF_API void color_normalized_mix_evaluate(
-    BSDF_evaluate_data *data,
+template<typename TDF_evaluate_data, typename TDF_component>
+BSDF_INLINE void color_normalized_mix_df_evaluate(
+    TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3001,7 +3386,7 @@ BSDF_API void color_normalized_mix_evaluate(
     w_sum = math::max(make_float3(0.0f, 0.0f, 0.0f), w_sum);
 
     if (w_sum.x <= 0.0f && w_sum.y <= 0.0f && w_sum.z <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3011,28 +3396,30 @@ BSDF_API void color_normalized_mix_evaluate(
         w_sum.y > 1.0f ? 1.0f / w_sum.y : 1.0f,
         w_sum.z > 1.0f ? 1.0f / w_sum.z : 1.0f);
 
-    float3 bsdf = make_float3(0.0f, 0.0f, 0.0f);
+    float3 df = make_float3(0.0f, 0.0f, 0.0f);
     float pdf = 0.0f;
     for (unsigned int i = 0; i < num_components; ++i) {
         const float3 w = math::saturate(components[i].weight);
         components[i].component.evaluate(data, state, inherited_normal);
-        bsdf += data->bsdf * w * normalize;
+        df += get_df(data) * w * normalize;
         pdf += data->pdf * math::luminance(w) * inv_w_sum;
     }
 
-    data->bsdf = bsdf;
+    set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
+    set_df(data, df);
     data->pdf = pdf;
 }
 
-BSDF_API void color_normalized_mix_pdf(
-    BSDF_pdf_data *data,
+template<typename TDF_pdf_data, typename TDF_component>
+BSDF_INLINE void color_normalized_mix_df_pdf(
+    TDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3041,7 +3428,7 @@ BSDF_API void color_normalized_mix_pdf(
         w_sum += math::luminance(math::saturate(components[i].weight));
 
     if (w_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3055,20 +3442,21 @@ BSDF_API void color_normalized_mix_pdf(
 }
 
 /////////////////////////////////////////////////////////////////////
-// bsdf color_clamped_mix(
-//     color_bsdf_component[<N>] components
+// df color_clamped_mix(
+//     color_df_component[<N>] components
 // )
 /////////////////////////////////////////////////////////////////////
 
-BSDF_API void color_clamped_mix_sample(
-    BSDF_sample_data *data,
+template<typename TDF_sample_data, typename TDF_component>
+BSDF_INLINE void color_clamped_mix_df_sample(
+    TDF_sample_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3108,7 +3496,7 @@ BSDF_API void color_clamped_mix_sample(
     }
 
     if (lw_sum <= 0.0f) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3160,17 +3548,16 @@ BSDF_API void color_clamped_mix_sample(
     }
 
     components[sampled_idx].component.sample(data, state, inherited_normal);
-    if (data->event_type == BSDF_EVENT_ABSORB)
+    if (data->event_type == 0) // BSDF_EVENT_ABSORB or DF_NO_EMISSION or ...
         return;
 
-    data->bsdf_over_pdf *= w / p;
+    set_df_over_pdf(data, get_df_over_pdf(data) * w / p);
 
     data->pdf *= p;
     mix_sum = make_float3(0.0f, 0.0f, 0.0f);
     clamp_mask = 0;
-    BSDF_pdf_data pdf_data;
-    copy_data(&pdf_data, data);
-    for (unsigned int i = 0; i < num_active && clamp_mask != 7; ++i)  {
+    auto pdf_data = to_pdf_data(data);
+    for (unsigned int i = 0; i < num_active && clamp_mask != 7; ++i) {
 
         w = math::saturate(components[i].weight);
         if (clamp_mask & 1)
@@ -3206,19 +3593,20 @@ BSDF_API void color_clamped_mix_sample(
     }
 }
 
-BSDF_API void color_clamped_mix_evaluate(
-    BSDF_evaluate_data *data,
+template<typename TDF_evaluate_data, typename TDF_component>
+BSDF_INLINE void color_clamped_mix_df_evaluate(
+    TDF_evaluate_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
-    float3 bsdf = make_float3(0.0f, 0.0f, 0.0f);
+    float3 df = make_float3(0.0f, 0.0f, 0.0f);
     float pdf = 0.0f;
 
     float3 mix_sum = make_float3(0.0f, 0.0f, 0.0f);
@@ -3252,27 +3640,29 @@ BSDF_API void color_clamped_mix_evaluate(
         }
 
         components[i].component.evaluate(data, state, inherited_normal);
-        bsdf += data->bsdf * w;
+        df += get_df(data) * w;
 
         const float lw = math::luminance(w);
         lw_sum += lw;
         pdf += data->pdf * lw;
     }
 
-    data->bsdf = bsdf;
+    set_cos(data, num_components == 0 ? 0.0f : get_cos(data));
+    set_df(data, df);
     if (lw_sum > 0.0f)
         data->pdf = pdf / lw_sum;
 }
 
-BSDF_API void color_clamped_mix_pdf(
-    BSDF_pdf_data *data,
+template<typename TDF_pdf_data, typename TDF_component>
+BSDF_INLINE void color_clamped_mix_df_pdf(
+    TDF_pdf_data *data,
     State *state,
     const float3 &inherited_normal,
-    const color_BSDF_component *components,
+    const TDF_component *components,
     const unsigned int num_components)
 {
     if (num_components == 0) {
-        absorb(data);
+        no_contribution(data);
         return;
     }
 
@@ -3320,6 +3710,132 @@ BSDF_API void color_clamped_mix_pdf(
     data->pdf = pdf;
 }
 
+//-------------------------------------------------------------------
+// mixing BSDFs
+//-------------------------------------------------------------------
+
+BSDF_API void normalized_mix_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void normalized_mix_bsdf_evaluate (
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void normalized_mix_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+
+BSDF_API void color_normalized_mix_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_normalized_mix_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_normalized_mix_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const BSDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_BSDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+
 
 /////////////////////////////////////////////////////////////////////
 // edf()
@@ -3330,9 +3846,7 @@ BSDF_API void black_edf_sample(
     State *state,
     const float3 &inherited_normal)
 {
-    data->pdf = 0.0f;
-    data->edf_over_pdf = make_float3(0.0f, 0.0f, 0.0f);
-    data->event_type = EDF_EVENT_NONE;
+    no_emission(data);
 }
 
 BSDF_API void black_edf_evaluate(
@@ -3340,8 +3854,7 @@ BSDF_API void black_edf_evaluate(
     State *state,
     const float3 &inherited_normal)
 {
-    data->edf = make_float3(0.0f, 0.0f, 0.0f);
-    data->pdf = 0.0f;
+    no_emission(data);
 }
 
 BSDF_API void black_edf_pdf(
@@ -3349,7 +3862,88 @@ BSDF_API void black_edf_pdf(
     State *state,
     const float3 &inherited_normal)
 {
-    data->pdf = 0.0f;
+    no_emission(data);
+}
+
+
+/////////////////////////////////////////////////////////////////////
+// EDF Utilities
+/////////////////////////////////////////////////////////////////////
+namespace 
+{
+    // compute cosine between outgoing direction and main direction (normal)
+    // returns true if the cosine is between 0.0 and 1.0
+    BSDF_INLINE bool edf_compute_cos(
+        const float3&   outgoing_dir,
+        const State*    state,
+        const float3&   inherited_normal,
+        float&          out_cos)
+    {
+        float3 shading_normal, geometry_normal;
+        get_oriented_normals(
+            shading_normal, geometry_normal,
+            inherited_normal, state->geometry_normal(),
+            outgoing_dir);
+
+        out_cos = math::dot(outgoing_dir, shading_normal);
+        bool valid = out_cos > 0.0f &&  out_cos <= 1.0f;
+        out_cos = math::max(out_cos, 0.0f);
+        return valid;
+    }
+
+    // compute cosine between outgoing direction and main direction (y-axis of the global frame)
+    // returns true if the cosine is between 0.0 and 1.0
+    BSDF_INLINE bool edf_compute_cos(
+        const float3&   outgoing_dir,
+        const float3x3& global_frame,
+        float&          out_cos)
+    {
+        out_cos = math::dot(outgoing_dir, global_frame.col1);
+        bool valid = out_cos > 0.0f &&  out_cos <= 1.0f;
+        out_cos = math::max(out_cos, 0.0f);
+        return valid;
+    }
+
+    // compute the outgoing direction in the world space from theta, phi in tangent space.
+    BSDF_INLINE bool edf_compute_outgoing_direction(
+        EDF_sample_data    *data,
+        const State*        state,
+        const float3&       inherited_normal,
+        const float         sin_theta, const float cos_theta,
+        const float         sin_phi, const float cos_phi,
+        float3&             out_world_dir)
+    {
+        // to indicate which normals are used. get_oriented_normals not possible without given k1
+        float3 shading_normal = inherited_normal;
+        float3 geometry_normal = state->geometry_normal();
+
+        // get world coordinate basis
+        float3 x_axis, z_axis;
+        if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), shading_normal))
+            return false;
+
+        // transform to world
+        out_world_dir = math::normalize(
+            x_axis * sin_theta * cos_phi +
+            shading_normal * cos_theta + 
+            z_axis * sin_theta * sin_phi);
+        return true;
+    }
+
+    // compute the outgoing direction in the world space from theta, phi in global frame space.
+    BSDF_INLINE bool edf_compute_outgoing_direction(
+        const float3x3&     global_frame,
+        const float         sin_theta, const float cos_theta,
+        const float         sin_phi, const float cos_phi,
+        float3&             out_world_dir)
+    {
+        // transform to world
+        out_world_dir = math::normalize(
+            global_frame.col0 * sin_theta * cos_phi +
+            global_frame.col1 * cos_theta +
+            global_frame.col2 * sin_theta * sin_phi);
+        return true;
+    }
 }
 
 
@@ -3371,23 +3965,19 @@ BSDF_API void diffuse_edf_sample(
     float3 x_axis, z_axis;
     if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), shading_normal))
     {
-        data->edf_over_pdf = make_float3(0.0f, 0.0f, 0.0f);
-        data->pdf = 0.0f;
-        data->event_type = EDF_EVENT_NONE;
+        no_emission(data);
         return;
     }
     data->k1 = math::normalize(x_axis * cosh.x + shading_normal * cosh.y + z_axis * cosh.z);
 
     if (cosh.y <= 0.0f || math::dot(data->k1, geometry_normal) <= 0.0f)
     {
-        data->edf_over_pdf = make_float3(0.0f, 0.0f, 0.0f);
-        data->pdf = 0.0f;
-        data->event_type = EDF_EVENT_NONE;
+        no_emission(data);
         return;
     }
 
-    data->pdf = cosh.y * (float) (1.0 / M_PI);
-    data->edf_over_pdf = make_float3(1.0f, 1.0f, 1.0f);
+    data->pdf = cosh.y * float(M_ONE_OVER_PI);
+    data->edf_over_pdf = make<float3>(1.0f);
     data->event_type = EDF_EVENT_EMISSION;
 }
 
@@ -3396,15 +3986,12 @@ BSDF_API void diffuse_edf_evaluate(
     State *state,
     const float3 &inherited_normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+    float cos;
+    edf_compute_cos(data->k1, state, inherited_normal, cos);
 
-    const float nk1 = math::max(math::dot(data->k1, shading_normal), 0.0f);
-
-    data->cos = nk1;
-    data->pdf = nk1 * (float) (M_ONE_OVER_PI);
-    data->edf = make_float3(M_ONE_OVER_PI, M_ONE_OVER_PI, M_ONE_OVER_PI);
+    data->cos = cos;
+    data->pdf = cos * float(M_ONE_OVER_PI);
+    data->edf = make<float3>(M_ONE_OVER_PI);
 }
 
 BSDF_API void diffuse_edf_pdf(
@@ -3412,10 +3999,476 @@ BSDF_API void diffuse_edf_pdf(
     State *state,
     const float3 &inherited_normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float nk1 = math::max(math::dot(data->k1, shading_normal), 0.0f);
-    data->pdf = nk1 * (float) (1.0f / M_PI);
+    float cos;
+    edf_compute_cos(data->k1, state, inherited_normal, cos);
+    data->pdf = cos * float(M_ONE_OVER_PI);
 }
+
+
+/////////////////////////////////////////////////////////////////////
+// edf spot_edf()
+/////////////////////////////////////////////////////////////////////
+
+namespace
+{
+    inline float spot_edf_prepare_exponent(float exponent)
+    {
+        return math::max(0.0f, exponent); // limit exponent to meaningful range
+    }
+
+    inline float spot_edf_prepare_spread(float spread)
+    {
+        // limit spread to meaningful range
+        spread = math::clamp(spread, 0.0f, float(2.0 * M_PI)); 
+
+        // spread - Angle of the cone to which the cosine distribution is restricted.
+        //          The hemispherical domain for the distribution is rescaled to this cone.
+        //          default is math::PI
+        return math::cos(spread * 0.5f); // to compare against the cosine at the normal
+    }
+
+    BSDF_INLINE float spot_edf_pdf(float s, float k, float cos_theta)
+    {
+        return (k + 1.0f) * math::pow(cos_theta - s, k)
+            / (math::pow(1.0f - s, k + 1.0f) * (float) (2.0 * M_PI));
+    }
+}
+
+
+BSDF_API void spot_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    float exponent,
+    float spread,
+    bool global_distribution,
+    const float3x3 &global_frame)
+{
+    // limit and convert input parameters
+    float s = spot_edf_prepare_spread(spread);
+    float k = spot_edf_prepare_exponent(exponent);
+
+    // sample direction
+    const float phi = (float) (2.0 * M_PI) * data->xi.x;
+    const float cos_theta = s + (1.0f - s) * math::pow(1.0f - data->xi.y, 1.0f / (k + 1.0f));
+    const float sin_theta = math::sin(math::acos(cos_theta));
+    if ((cos_theta - s) < 0.0f)
+    {
+        no_emission(data);
+        return;
+    }
+
+    if (global_distribution)
+    {
+        no_emission(data);
+        return;
+    }
+    else
+    {
+        // transform to world  coordinates
+        if (!edf_compute_outgoing_direction(data, state, inherited_normal,
+            sin_theta, cos_theta, math::sin(phi), math::cos(phi), data->k1))
+        {
+            no_emission(data);
+            return;
+        }
+
+        // check for lower hemisphere sample
+        if (math::dot(data->k1, state->geometry_normal()) <= 0.0f)
+        {
+            no_emission(data);
+            return;
+        }
+
+        // edf * cos_theta / pdf
+        data->edf_over_pdf = make<float3>((k * k + 3.0f * k + 2.0f) * cos_theta
+                                          / (k * k + k * (2.0f + s) + s + 1.0f));
+    }
+
+    data->pdf = spot_edf_pdf(s, k, cos_theta);
+    data->event_type = EDF_EVENT_EMISSION;
+}
+
+BSDF_API void spot_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    float exponent,
+    float spread,
+    bool global_distribution,
+    const float3x3 &global_frame)
+{
+    // limit and convert input parameters
+    float s = spot_edf_prepare_spread(spread);
+    float k = spot_edf_prepare_exponent(exponent);
+
+    // get angle to the main emission direction
+    float cos_theta;
+    if (global_distribution)
+    {    
+        no_emission(data);
+        return;
+    }
+    else
+        edf_compute_cos(data->k1, state, inherited_normal, cos_theta);
+
+    // lobe cut off because of the spread
+    if ((cos_theta - s) < 0.0f)
+    {
+        no_emission(data);
+        return;
+    }
+
+    // un-normalized edf
+    float edf = math::pow((cos_theta - s) / (1.0f - s), k);
+
+    // normalization term
+    float normalization;
+    if (global_distribution)
+    {
+    }
+    else
+    {
+        //edf *= cos_theta; // projection 
+        normalization = (k*k + 3.0f*k + 2.0f) / (2.0f * (float) M_PI * (k + 1 - k * s - s * s));
+    }
+
+    data->cos = cos_theta;
+    data->pdf = spot_edf_pdf(s, k, cos_theta);
+    data->edf = make<float3>(edf * normalization);  // normalized edf (not cosine corrected)
+}
+
+BSDF_API void spot_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    float exponent,
+    float spread,
+    bool global_distribution,
+    const float3x3 &global_frame)
+{
+    // limit and convert input parameters
+    float s = spot_edf_prepare_spread(spread);
+    float k = spot_edf_prepare_exponent(exponent);
+
+    // get angle to the main emission direction
+    float cos_theta;
+    if (global_distribution)
+    {
+        no_emission(data);
+        return;
+    }
+    else
+        edf_compute_cos(data->k1, state, inherited_normal, cos_theta);
+
+    data->pdf = spot_edf_pdf(s, k, cos_theta);
+}
+
+
+/////////////////////////////////////////////////////////////////////
+// edf measured_edf()
+/////////////////////////////////////////////////////////////////////
+
+BSDF_INLINE void lightprofile_sample(
+    EDF_sample_data *data,
+    State *state,
+    const Geometry &g,
+    const unsigned light_profile_id,
+    const float multiplier,
+    bool global_distribution,
+    const float3x3 &global_frame)
+{
+    // sample and check for valid a result
+    float3 polar_pdf = state->light_profile_sample(light_profile_id, data->xi);
+    if (polar_pdf.x < 0.0f) 
+    {
+        no_emission(data);
+        return;
+    }
+
+    // transform to world
+    float2 sin_theta_phi, cos_theta_phi;
+    math::sincos(make<float2>(polar_pdf.x, polar_pdf.y), &sin_theta_phi, &cos_theta_phi);
+
+    // local to world space
+    float scale;
+    if (global_distribution)
+    {
+        no_emission(data);
+        return;
+    }
+    else
+    {
+        data->k1 = math::normalize(
+            g.x_axis            * sin_theta_phi.x * cos_theta_phi.y +
+            g.n.shading_normal  * cos_theta_phi.x +
+            g.z_axis            * sin_theta_phi.x * sin_theta_phi.y);
+
+        // check for lower hemisphere sample
+        scale = math::dot(data->k1, state->geometry_normal());
+        if (scale <= 0.0f)
+        {
+            no_emission(data);
+            return;
+        }
+    }
+
+    // evaluate the light profile for the sampled direction
+    float edf = math::max(0.0f, multiplier)
+              * state->light_profile_evaluate(light_profile_id,
+                                              make<float2>(polar_pdf.x, polar_pdf.y));
+
+    data->pdf = polar_pdf.z;
+    data->edf_over_pdf = make<float3>(edf * scale / polar_pdf.z);
+    data->event_type = EDF_EVENT_EMISSION;
+}
+
+
+
+BSDF_API void measured_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    //
+    const unsigned light_profile_id,
+    float multiplier,
+    bool global_distribution,
+    const float3x3 &global_frame,
+    float3 tangent_u)
+{
+
+    Geometry g;
+    g.n.shading_normal = inherited_normal;
+    g.n.geometry_normal = math::dot(state->geometry_normal(), inherited_normal) > 0 ?
+        state->geometry_normal() : -state->geometry_normal();
+    
+    get_bumped_basis(g.x_axis, g.z_axis, tangent_u, inherited_normal);
+
+    lightprofile_sample(data, state, g, light_profile_id, multiplier,
+                        global_distribution, global_frame);
+}
+
+
+template<typename TEDF_data>
+BSDF_INLINE void lightprofile_eval_and_pdf(
+    TEDF_data *data,
+    State *state,
+    const Geometry &g,
+    const unsigned light_profile_id,
+    const float multiplier,
+    bool global_distribution,
+    const float3x3 &global_frame)
+{
+    float2 outgoing_polar;
+    float cos;
+    if (global_distribution)
+    {
+        no_emission(data);
+        return;
+    }
+    else
+    {
+        // internal to local (assuming an orthonormal base)
+        const float3 outgoing = math::normalize(make_float3(
+            math::dot(data->k1, g.x_axis),
+            math::dot(data->k1, g.n.shading_normal),
+            math::dot(data->k1, g.z_axis)));
+
+        // local to polar coords
+        outgoing_polar.x = math::acos(outgoing.y);
+        outgoing_polar.y = math::atan2(outgoing.z, outgoing.x);
+
+        cos = math::dot(data->k1, g.n.shading_normal);
+    }
+
+    float intensity = math::max(0.0f, multiplier)
+                    * state->light_profile_evaluate(light_profile_id, outgoing_polar);
+
+    set_df<TEDF_data>(data, make<float3>(intensity));
+    set_cos(data, cos);
+    set_pdf(data, state->light_profile_pdf(light_profile_id, outgoing_polar));
+}
+
+BSDF_API void measured_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    //
+    const unsigned light_profile_id,
+    float multiplier,
+    bool global_distribution,
+    const float3x3 &global_frame,
+    float3 tangent_u)
+{
+
+    Geometry g;
+    g.n.shading_normal = inherited_normal;
+    g.n.geometry_normal = state->geometry_normal() * 
+        (math::dot(state->geometry_normal(), inherited_normal) > 0.0f ? 1.0f : -1.0f);
+
+    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f)
+    {
+        no_emission(data);
+        return;
+    }
+
+    get_bumped_basis(g.x_axis, g.z_axis, tangent_u, g.n.shading_normal);
+
+    lightprofile_eval_and_pdf<EDF_evaluate_data>(data, state, g, light_profile_id, multiplier,
+                                                 global_distribution, global_frame);
+}
+
+BSDF_API void measured_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    //
+    const unsigned light_profile_id,
+    float multiplier,
+    bool global_distribution,
+    const float3x3 &global_frame,
+    float3 tangent_u)
+{
+    Geometry g;
+    g.n.shading_normal = inherited_normal;
+    g.n.geometry_normal = state->geometry_normal() *
+        (math::dot(state->geometry_normal(), inherited_normal) > 0.0f ? 1.0f : -1.0f);
+
+    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f)
+    {
+        no_emission(data);
+        return;
+    }
+
+    get_bumped_basis(g.x_axis, g.z_axis, tangent_u, g.n.shading_normal);
+
+    lightprofile_eval_and_pdf<EDF_pdf_data>(data, state, g, light_profile_id, multiplier,
+                                            global_distribution, global_frame);
+}
+
+/////////////////////////////////////////////////////////////////////
+// mixing EDFs
+/////////////////////////////////////////////////////////////////////
+
+
+BSDF_API void normalized_mix_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void normalized_mix_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void normalized_mix_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    normalized_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_normalized_mix_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_normalized_mix_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_normalized_mix_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_normalized_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void clamped_mix_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const EDF_component *components,
+    const unsigned int num_components)
+{
+    clamped_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_edf_sample(
+    EDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_sample(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_edf_evaluate(
+    EDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_evaluate(data, state, inherited_normal, components, num_components);
+}
+
+BSDF_API void color_clamped_mix_edf_pdf(
+    EDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const color_EDF_component *components,
+    const unsigned int num_components)
+{
+    color_clamped_mix_df_pdf(data, state, inherited_normal, components, num_components);
+}
+
+

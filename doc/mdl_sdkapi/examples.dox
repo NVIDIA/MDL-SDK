@@ -64,6 +64,9 @@ Section for a description of how the example programs can be compiled.
 - \subpage mi_neuray_example_df_cuda <br>
   Uses compiled material distribution functions in a CUDA based renderer.
 
+- \subpage mi_neuray_example_derivatives <br>
+  Enable automatic derivatives for texture filtering.
+
 - \subpage mi_neuray_example_user_state_module <br>
   Adapts the access to the renderer state in the generated code to your renderer.
 

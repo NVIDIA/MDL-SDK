@@ -51,8 +51,8 @@ void StreamWriter::printBinaryImpl(StringRef Label, StringRef Str,
       }
       // Print ascii.
       OS << "  |";
-      for (MISTD::size_t i = 0; i < 16 && addr + i < end; ++i) {
-        if (MISTD::isprint(Data[addr + i] & 0xFF))
+      for (std::size_t i = 0; i < 16 && addr + i < end; ++i) {
+        if (std::isprint(Data[addr + i] & 0xFF))
           OS << Data[addr + i];
         else
           OS << ".";

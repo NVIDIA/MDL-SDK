@@ -55,11 +55,11 @@ private:
   };
 
   /// Buffers - This is all of the buffers that we are reading from.
-  MISTD::vector<SrcBuffer> Buffers;
+  std::vector<SrcBuffer> Buffers;
 
   // IncludeDirectories - This is the list of directories we should search for
   // include files in.
-  MISTD::vector<MISTD::string> IncludeDirectories;
+  std::vector<std::string> IncludeDirectories;
 
   /// LineNoCache - This is a cache for line number queries, its implementation
   /// is really private to SourceMgr.cpp.
@@ -74,7 +74,7 @@ public:
   SourceMgr() : LineNoCache(0), DiagHandler(0), DiagContext(0) {}
   ~SourceMgr();
 
-  void setIncludeDirs(const MISTD::vector<MISTD::string> &Dirs) {
+  void setIncludeDirs(const std::vector<std::string> &Dirs) {
     IncludeDirectories = Dirs;
   }
 
@@ -121,8 +121,8 @@ public:
   /// directory or in one of the IncludeDirs.  If no file is found, this returns
   /// ~0, otherwise it returns the buffer ID of the stacked file.
   /// The full path to the included file can be found in IncludedFile.
-  size_t AddIncludeFile(const MISTD::string &Filename, SMLoc IncludeLoc,
-                        MISTD::string &IncludedFile);
+  size_t AddIncludeFile(const std::string &Filename, SMLoc IncludeLoc,
+                        std::string &IncludedFile);
 
   /// FindBufferContainingLoc - Return the ID of the buffer containing the
   /// specified location, returning -1 if not found.
@@ -136,7 +136,7 @@ public:
 
   /// getLineAndColumn - Find the line and column number for the specified
   /// location in the specified file.  This is not a fast method.
-  MISTD::pair<unsigned, unsigned>
+  std::pair<unsigned, unsigned>
     getLineAndColumn(SMLoc Loc, int BufferID = -1) const;
 
   /// PrintMessage - Emit a message about the specified location with the
@@ -179,7 +179,7 @@ public:
 class SMFixIt {
   SMRange Range;
 
-  MISTD::string Text;
+  std::string Text;
 
 public:
   // FIXME: Twine.str() is not very efficient.
@@ -212,11 +212,11 @@ public:
 class SMDiagnostic {
   const SourceMgr *SM;
   SMLoc Loc;
-  MISTD::string Filename;
+  std::string Filename;
   int LineNo, ColumnNo;
   SourceMgr::DiagKind Kind;
-  MISTD::string Message, LineContents;
-  MISTD::vector<MISTD::pair<unsigned, unsigned> > Ranges;
+  std::string Message, LineContents;
+  std::vector<std::pair<unsigned, unsigned> > Ranges;
   SmallVector<SMFixIt, 4> FixIts;
 
 public:
@@ -232,7 +232,7 @@ public:
   SMDiagnostic(const SourceMgr &sm, SMLoc L, StringRef FN,
                int Line, int Col, SourceMgr::DiagKind Kind,
                StringRef Msg, StringRef LineStr,
-               ArrayRef<MISTD::pair<unsigned,unsigned> > Ranges,
+               ArrayRef<std::pair<unsigned,unsigned> > Ranges,
                ArrayRef<SMFixIt> FixIts = None);
 
   const SourceMgr *getSourceMgr() const { return SM; }
@@ -243,7 +243,7 @@ public:
   SourceMgr::DiagKind getKind() const { return Kind; }
   StringRef getMessage() const { return Message; }
   StringRef getLineContents() const { return LineContents; }
-  ArrayRef<MISTD::pair<unsigned, unsigned> > getRanges() const {
+  ArrayRef<std::pair<unsigned, unsigned> > getRanges() const {
     return Ranges;
   }
 

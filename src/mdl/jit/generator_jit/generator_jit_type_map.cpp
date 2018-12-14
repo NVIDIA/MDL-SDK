@@ -164,6 +164,8 @@ Type_mapper::Type_mapper(
 , m_type_optix_type_info(NULL)
 
 , m_type_struct_cache(0, Type_struct_map::hasher(), Type_struct_map::key_equal(), alloc)
+, m_deriv_type_cache(0, Deriv_type_map::hasher(), Deriv_type_map::key_equal(), alloc)
+, m_deriv_type_set(0, Deriv_type_set::hasher(), Deriv_type_set::key_equal(), alloc)
 , m_type_arr_cache(0, Type_array_map::hasher(), Type_array_map::key_equal(), alloc)
 {
     switch (tm_mode & TM_VECTOR_MASK) {
@@ -281,6 +283,28 @@ Type_mapper::Type_mapper(
     // for now, a color is a RGB float
     m_type_color = m_type_float3;
 
+    llvm::Type *deriv_arr_float2_types[3] = {
+        m_type_arr_float_2, m_type_arr_float_2, m_type_arr_float_2 };
+    m_type_deriv_arr_float_2 = llvm::StructType::get(
+        context, deriv_arr_float2_types, /*isPacked=*/ false);
+    m_deriv_type_set.insert(m_type_deriv_arr_float_2);
+
+    llvm::Type *deriv_float2_types[3] = {
+        m_type_float2, m_type_float2, m_type_float2 };
+    m_type_deriv_float2 = llvm::StructType::get(context, deriv_float2_types, /*isPacked=*/ false);
+    m_deriv_type_set.insert(m_type_deriv_float2);
+
+    llvm::Type *deriv_arr_float3_types[3] = {
+        m_type_arr_float_3, m_type_arr_float_3, m_type_arr_float_3 };
+    m_type_deriv_arr_float_3 = llvm::StructType::get(
+        context, deriv_arr_float3_types, /*isPacked=*/ false);
+    m_deriv_type_set.insert(m_type_deriv_arr_float_3);
+
+    llvm::Type *deriv_float3_types[3] = {
+        m_type_float3, m_type_float3, m_type_float3 };
+    m_type_deriv_float3 = llvm::StructType::get(context, deriv_float3_types, /*isPacked=*/ false);
+    m_deriv_type_set.insert(m_type_deriv_float3);
+
     // built state types
     m_type_state_environemnt     = construct_state_environment_type(
         context, target_data,
@@ -290,6 +314,7 @@ Type_mapper::Type_mapper(
     m_type_state_core            = construct_state_core_type(
         context, target_data,
         m_type_int, m_type_arr_float_3, m_type_arr_float_4, m_type_float, m_type_cstring,
+        m_type_deriv_arr_float_3,
         m_state_mapping);
     m_type_state_core_ptr        = get_ptr(m_type_state_core);
 
@@ -530,6 +555,13 @@ llvm::Type *Type_mapper::lookup_type(
             mdl::IType_struct const *s_type = cast<mdl::IType_struct>(type);
             char const              *s_name = s_type->get_symbol()->get_name();
 
+            // the MDL type is a derivative type?
+            if (s_name[0] == '#') {
+                // retrieve original type and call derivative type lookup function
+                type = s_type->get_compound_type(0);
+                return lookup_deriv_type(type, arr_size);
+            }
+
             // lookup in the struct cache
             Type_struct_map::const_iterator it = m_type_struct_cache.find(s_name);
             if (it != m_type_struct_cache.end())
@@ -569,6 +601,116 @@ llvm::Type *Type_mapper::lookup_type(
     MDL_ASSERT(!"Unsupported type");
     return NULL;
 }
+
+// Get an LLVM type for an MDL type with derivatives.
+llvm::Type *Type_mapper::lookup_deriv_type(
+    mdl::IType const *type,
+    int arr_size) const
+{
+    // the MDL type already is a derivative type?
+    if (IType_struct const *struct_type = as<IType_struct>(type)) {
+        if (struct_type->get_symbol()->get_name()[0] == '#') {
+            // retrieve original type
+            type = struct_type->get_compound_type(0);
+        }
+    }
+
+    llvm::Type *llvm_type = lookup_type(m_context, type, arr_size);
+
+    Deriv_type_map::const_iterator it(m_deriv_type_cache.find(llvm_type));
+    if (it != m_deriv_type_cache.end()) return it->second;
+
+    llvm::Type *member_types[3] = { llvm_type, llvm_type, llvm_type };
+    llvm::Type *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
+    m_deriv_type_cache[llvm_type] = res;
+    m_deriv_type_set.insert(res);
+
+    return res;
+}
+
+// Get an LLVM type with derivatives for an LLVM type.
+llvm::Type *Type_mapper::lookup_deriv_type(llvm::Type *type) const
+{
+    Deriv_type_map::const_iterator it(m_deriv_type_cache.find(type));
+    if (it != m_deriv_type_cache.end()) return it->second;
+
+    llvm::Type *member_types[3] = { type, type, type };
+    llvm::Type *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
+    m_deriv_type_cache[type] = res;
+    m_deriv_type_set.insert(res);
+
+    return res;
+}
+
+// Checks if the given LLVM type is a derivative type.
+bool Type_mapper::is_deriv_type(llvm::Type *type) const
+{
+    Deriv_type_set::const_iterator it(m_deriv_type_set.find(type));
+    return it != m_deriv_type_set.end();
+}
+
+// Checks if the given MDL type is a derivative type.
+bool Type_mapper::is_deriv_type(mi::mdl::IType const *type) const
+{
+    if (IType_struct const *struct_type = as<IType_struct>(type)) {
+        return struct_type->get_symbol()->get_name()[0] == '#';
+    }
+    return false;
+}
+
+// Check whether the given type is based on a floating point type.
+bool Type_mapper::is_floating_point_based_type(IType const *type) const
+{
+    type = type->skip_type_alias();
+    switch (type->get_kind()) {
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_COLOR:
+    case IType::TK_MATRIX:  // there are only float and double matrix types
+        return true;
+
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *vec_type = as<IType_vector>(type);
+            IType_atomic const *elem_type = vec_type->get_element_type();
+            IType::Kind elem_kind = elem_type->get_kind();
+            return elem_kind == IType::TK_FLOAT || elem_kind == IType::TK_DOUBLE;
+        }
+
+    case IType::TK_ARRAY:
+        {
+            IType_array const *array_type = as<IType_array>(type);
+            IType const *elem_type = array_type->get_element_type();
+            return is_floating_point_based_type(elem_type);
+        }
+
+    default:
+        return false;
+    }
+}
+
+// Get the base value type of a derivative type.
+mi::mdl::IType const *Type_mapper::get_deriv_base_type(mi::mdl::IType const *type) const
+{
+    if (!is_deriv_type(type)) return NULL;
+    return cast<mi::mdl::IType_struct>(type)->get_compound_type(0);
+}
+
+// Get the base value LLVM type of a derivative LLVM type.
+llvm::Type *Type_mapper::get_deriv_base_type(llvm::Type *type) const
+{
+    if (!is_deriv_type(type)) return NULL;
+    return type->getStructElementType(0);
+}
+
+// Skip to the base value type of a derivative type or just return the type itself for
+// non-derivative types.
+mi::mdl::IType const *Type_mapper::skip_deriv_type(mi::mdl::IType const *type) const
+{
+    if (!is_deriv_type(type)) return type;
+    return cast<mi::mdl::IType_struct>(type)->get_compound_type(0);
+}
+
 
 // Checks if a given type needs reference return calling convention.
 bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
@@ -810,7 +952,7 @@ llvm::DIType Type_mapper::get_debug_info_type(
         {
             mi::mdl::IType_enum const *e_type = cast<mi::mdl::IType_enum>(type);
 
-            MISTD::vector<llvm::Value *> enumeratorDescriptors;
+            std::vector<llvm::Value *> enumeratorDescriptors;
             for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
                 mi::mdl::ISymbol const *sym;
                 int                    code;
@@ -940,7 +1082,7 @@ llvm::DIType Type_mapper::get_debug_info_type(
             }
 
             llvm::Value *sub = diBuilder->getOrCreateSubrange(lowerBound, upperBound);
-            MISTD::vector<llvm::Value *> subs;
+            std::vector<llvm::Value *> subs;
             subs.push_back(sub);
             llvm::DIArray subArray = diBuilder->getOrCreateArray(subs);
 
@@ -976,7 +1118,7 @@ llvm::DIType Type_mapper::get_debug_info_type(
         {
             mi::mdl::IType_struct const *s_tp = cast<mi::mdl::IType_struct>(type);
 
-            MISTD::vector<llvm::Value *> field_types;
+            std::vector<llvm::Value *> field_types;
             uint64_t currentSize = 0, align = 0;
 
             for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
@@ -992,7 +1134,7 @@ llvm::DIType Type_mapper::get_debug_info_type(
 
                 // The alignment for the entire structure is the maximum of the
                 // required alignments of its elements
-                align = MISTD::max(align, eltAlign);
+                align = std::max(align, eltAlign);
 
                 // Move the current size forward if needed so that the current
                 // element starts at an offset that's the correct alignment.
@@ -1070,7 +1212,7 @@ llvm::DICompositeType Type_mapper::get_debug_info_type(
     llvm::DIFile                  scope,
     mi::mdl::IType_function const *func_tp) const
 {
-    MISTD::vector<llvm::Value *> signature_types;
+    std::vector<llvm::Value *> signature_types;
 
     signature_types.push_back(
         get_debug_info_type(diBuilder, scope, func_tp->get_return_type()));
@@ -1127,6 +1269,7 @@ llvm::StructType *Type_mapper::construct_state_core_type(
     llvm::Type             *float4_type,
     llvm::Type             *float_type,
     llvm::Type             *byte_ptr_type,
+    llvm::Type             *deriv_float3_type,
     unsigned               state_mapping)
 {
     llvm::StructType *res = NULL;
@@ -1155,7 +1298,9 @@ llvm::StructType *Type_mapper::construct_state_core_type(
             float3_type,          // geom_normal
             float3_type,          // position
             float_type,           // animation time
-            get_ptr(float3_type), // texture_coordinate(index)
+            (state_mapping & SM_USE_DERIVATIVES) != 0     // texture_coordinate(index)
+                ? get_ptr(deriv_float3_type)
+                : get_ptr(float3_type),
             get_ptr(float3_type), // tangent_u(index)
             get_ptr(float3_type), // tangent_v(index)
             get_ptr(float4_type), // texture_results
@@ -1353,15 +1498,17 @@ llvm::StructType *Type_mapper::construct_exec_ctx_type(
 llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::LLVMContext &context)
 {
-    llvm::StructType *self_type      = llvm::StructType::create(context, "Core_tex_handler");
-    llvm::Type *self_ptr_type        = get_ptr(self_type);
-    llvm::Type *void_type            = get_void_type();
-    llvm::Type *arr_float_2_ptr_type = get_arr_float_2_ptr_type();
-    llvm::Type *arr_float_4_ptr_type = get_arr_float_4_ptr_type();
-    llvm::Type *arr_float_3_ptr_type = get_arr_float_3_ptr_type();
-    llvm::Type *arr_int_2_ptr_type   = get_arr_int_2_ptr_type();
-    llvm::Type *arr_int_3_ptr_type   = get_arr_int_3_ptr_type();
-    llvm::Type *int_type             = get_int_type();
+    llvm::StructType *self_type            = llvm::StructType::create(context, "Core_tex_handler");
+    llvm::Type *self_ptr_type              = get_ptr(self_type);
+    llvm::Type *void_type                  = get_void_type();
+    llvm::Type *arr_float_2_ptr_type       = get_arr_float_2_ptr_type();
+    llvm::Type *arr_float_4_ptr_type       = get_arr_float_4_ptr_type();
+    llvm::Type *arr_float_3_ptr_type       = get_arr_float_3_ptr_type();
+    llvm::Type *arr_deriv_float_2_ptr_type = get_ptr(get_deriv_arr_float_2_type());
+    llvm::Type *arr_int_2_ptr_type         = get_arr_int_2_ptr_type();
+    llvm::Type *arr_int_3_ptr_type         = get_arr_int_3_ptr_type();
+    llvm::Type *float_type                 = get_float_type();
+    llvm::Type *int_type                   = get_int_type();
 
     llvm::FunctionType *tex_lookup_float4_2d_type   = NULL;
     llvm::FunctionType *tex_lookup_float3_2d_type   = NULL;
@@ -1372,6 +1519,15 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *tex_lookup_float4_cube_type = NULL;
     llvm::FunctionType *tex_lookup_float3_cube_type = NULL;
     llvm::FunctionType *tex_resolution_2d_type      = NULL;
+
+    llvm::FunctionType *df_bsdf_measurement_resolution_type = NULL;
+    llvm::FunctionType *df_bsdf_measurement_evaluate_type = NULL;
+    llvm::FunctionType *df_bsdf_measurement_sample_type = NULL;
+    llvm::FunctionType *df_bsdf_measurement_pdf_type = NULL;
+    llvm::FunctionType *df_bsdf_measurement_albedos_type = NULL;
+    llvm::FunctionType *df_light_profile_evaluate_type = NULL;
+    llvm::FunctionType *df_light_profile_sample_type = NULL;
+    llvm::FunctionType *df_light_profile_pdf_type = NULL;
 
     {
         // virtual void tex_lookup_<T>_2d(
@@ -1388,7 +1544,9 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             NULL,                   // T
             self_ptr_type,
             int_type,
-            arr_float_2_ptr_type,
+            use_derivatives()
+                ? arr_deriv_float_2_ptr_type
+                : arr_float_2_ptr_type,
             int_type,
             int_type,
             arr_float_2_ptr_type,
@@ -1521,6 +1679,157 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         tex_resolution_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
     }
 
+
+    {
+        // virtual void df_bsdf_measurement_resolution(
+        //      int                  result[3],
+        //      Core_tex_handler     *self,
+        //      unsigned             resource_idx,
+        //      Mbsdf_part           part);
+
+        llvm::Type *args[] = {
+            arr_int_3_ptr_type,
+            self_ptr_type,
+            int_type,
+            int_type
+        };
+
+        df_bsdf_measurement_resolution_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void df_bsdf_measurement_evaluate(
+        //      float                      result[3],
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi_in[2],
+        //      const float                theta_phi_out[2],
+        //      Mbsdf_part                 part);
+
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type,
+            arr_float_2_ptr_type,
+            int_type
+        };
+
+        df_bsdf_measurement_evaluate_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void df_bsdf_measurement_sample(
+        //      float                      result[3],
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi_out[2],
+        //      const float                xi[3],
+        //      Mbsdf_part                 part);
+
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type,
+            arr_float_3_ptr_type,
+            int_type
+        };
+
+        df_bsdf_measurement_sample_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual float df_bsdf_measurement_pdf(
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi_in[2],
+        //      const float                theta_phi_out[2],
+        //      Mbsdf_part                 part);
+
+        llvm::Type *args[] = {
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type,
+            arr_float_2_ptr_type,
+            int_type
+        };
+
+        df_bsdf_measurement_pdf_type =
+            llvm::FunctionType::get(float_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void df_bsdf_measurement_albedos(
+        //      float                      result[4],
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi[2]);
+
+        llvm::Type *args[] = {
+            arr_float_4_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type
+        };
+
+        df_bsdf_measurement_albedos_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual float df_light_profile_evaluate(
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi[2]);
+
+        llvm::Type *args[] = {
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type
+        };
+
+        df_light_profile_evaluate_type =
+            llvm::FunctionType::get(float_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual float df_light_profile_sample(
+        //      float                      result[3],
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                xi[3]);
+
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            int_type,
+            arr_float_3_ptr_type
+        };
+
+        df_light_profile_sample_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual float df_light_profile_pdf(
+        //      Texture_handler_base const *self,
+        //      unsigned                   resource_idx,
+        //      const float                theta_phi[2]);
+
+        llvm::Type *args[] = {
+            self_ptr_type,
+            int_type,
+            arr_float_2_ptr_type
+        };
+
+        df_light_profile_pdf_type =
+            llvm::FunctionType::get(float_type, args, /*isVarArg=*/false);
+    }
+
     // currently we support only these
     llvm::Type *vtable_members[] = {
         get_ptr(tex_lookup_float4_2d_type),
@@ -1531,7 +1840,15 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(tex_texel_float4_3d_type),
         get_ptr(tex_lookup_float4_cube_type),
         get_ptr(tex_lookup_float3_cube_type),
-        get_ptr(tex_resolution_2d_type)
+        get_ptr(tex_resolution_2d_type),
+        get_ptr(df_bsdf_measurement_resolution_type),
+        get_ptr(df_bsdf_measurement_evaluate_type),
+        get_ptr(df_bsdf_measurement_sample_type),
+        get_ptr(df_bsdf_measurement_pdf_type),
+        get_ptr(df_bsdf_measurement_albedos_type),
+        get_ptr(df_light_profile_evaluate_type),
+        get_ptr(df_light_profile_sample_type),
+        get_ptr(df_light_profile_pdf_type)
     };
 
     llvm::StructType *vtable_type =

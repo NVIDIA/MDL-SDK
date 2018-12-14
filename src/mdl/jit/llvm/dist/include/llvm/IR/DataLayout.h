@@ -202,7 +202,7 @@ public:
   /// getStringRepresentation - Return the string representation of the
   /// DataLayout.  This representation is in the same format accepted by the
   /// string constructor above.
-  MISTD::string getStringRepresentation() const;
+  std::string getStringRepresentation() const;
 
   /// isLegalInteger - This function returns true if the specified type is
   /// known to be a native integer type supported by the CPU.  For example,

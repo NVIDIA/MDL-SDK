@@ -257,7 +257,7 @@ static const Value *getNoopInput(const Value *V,
         NoopInput = Op;
     } else if (isa<TruncInst>(I) &&
                TLI.allowTruncateForTailCall(Op->getType(), I->getType())) {
-      DataBits = MISTD::min(DataBits, I->getType()->getPrimitiveSizeInBits());
+      DataBits = std::min(DataBits, I->getType()->getPrimitiveSizeInBits());
       NoopInput = Op;
     } else if (isa<CallInst>(I)) {
       // Look through call (skipping callee)
@@ -284,7 +284,7 @@ static const Value *getNoopInput(const Value *V,
     } else if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(V)) {
       // Value may come from either the aggregate or the scalar
       ArrayRef<unsigned> InsertLoc = IVI->getIndices();
-      if (MISTD::equal(InsertLoc.rbegin(), InsertLoc.rend(),
+      if (std::equal(InsertLoc.rbegin(), InsertLoc.rend(),
                      ValLoc.rbegin())) {
         // The type being inserted is a nested sub-type of the aggregate; we
         // have to remove those initial indices to get the location we're
@@ -301,8 +301,8 @@ static const Value *getNoopInput(const Value *V,
       // previous aggregate. Combine the two paths to obtain the true address of
       // our element.
       ArrayRef<unsigned> ExtractLoc = EVI->getIndices();
-      MISTD::copy(ExtractLoc.rbegin(), ExtractLoc.rend(),
-                MISTD::back_inserter(ValLoc));
+      std::copy(ExtractLoc.rbegin(), ExtractLoc.rend(),
+                std::back_inserter(ValLoc));
       NoopInput = Op;
     }
     // Terminate if we couldn't find anything to look through.
@@ -591,10 +591,10 @@ bool llvm::returnTypeIsEligibleForTailCall(const Function *F,
     // The manipulations performed when we're looking through an insertvalue or
     // an extractvalue would happen at the front of the RetPath list, so since
     // we have to copy it anyway it's more efficient to create a reversed copy.
-    using MISTD::copy;
+    using std::copy;
     SmallVector<unsigned, 4> TmpRetPath, TmpCallPath;
-    MISTD::copy(RetPath.rbegin(), RetPath.rend(), MISTD::back_inserter(TmpRetPath));
-    MISTD::copy(CallPath.rbegin(), CallPath.rend(), MISTD::back_inserter(TmpCallPath));
+    std::copy(RetPath.rbegin(), RetPath.rend(), std::back_inserter(TmpRetPath));
+    std::copy(CallPath.rbegin(), CallPath.rend(), std::back_inserter(TmpCallPath));
 
     // Finally, we can check whether the value produced by the tail call at this
     // index is compatible with the value we return.

@@ -32,11 +32,11 @@ namespace llvm {
   struct SubMultiClassReference;
 
   struct LetRecord {
-    MISTD::string Name;
-    MISTD::vector<unsigned> Bits;
+    std::string Name;
+    std::vector<unsigned> Bits;
     Init *Value;
     SMLoc Loc;
-    LetRecord(const MISTD::string &N, const MISTD::vector<unsigned> &B, Init *V,
+    LetRecord(const std::string &N, const std::vector<unsigned> &B, Init *V,
               SMLoc L)
       : Name(N), Bits(B), Value(V), Loc(L) {
     }
@@ -54,12 +54,12 @@ namespace llvm {
 
 class TGParser {
   TGLexer Lex;
-  MISTD::vector<MISTD::vector<LetRecord> > LetStack;
-  MISTD::map<MISTD::string, MultiClass*> MultiClasses;
+  std::vector<std::vector<LetRecord> > LetStack;
+  std::map<std::string, MultiClass*> MultiClasses;
 
   /// Loops - Keep track of any foreach loops we are within.
   ///
-  typedef MISTD::vector<ForeachLoop> LoopVector;
+  typedef std::vector<ForeachLoop> LoopVector;
   LoopVector Loops;
 
   /// CurMultiClass - If we are parsing a 'multiclass' definition, this is the
@@ -103,9 +103,9 @@ public:
 private:  // Semantic analysis methods.
   bool AddValue(Record *TheRec, SMLoc Loc, const RecordVal &RV);
   bool SetValue(Record *TheRec, SMLoc Loc, Init *ValName,
-                const MISTD::vector<unsigned> &BitList, Init *V);
-  bool SetValue(Record *TheRec, SMLoc Loc, const MISTD::string &ValName,
-                const MISTD::vector<unsigned> &BitList, Init *V) {
+                const std::vector<unsigned> &BitList, Init *V);
+  bool SetValue(Record *TheRec, SMLoc Loc, const std::string &ValName,
+                const std::vector<unsigned> &BitList, Init *V) {
     return SetValue(TheRec, Loc, StringInit::get(ValName), BitList, V);
   }
   bool AddSubClass(Record *Rec, SubClassReference &SubClass);
@@ -121,7 +121,7 @@ private:  // Semantic analysis methods.
 
   // IterSet: The set of all iterator values at some point in the
   // iteration space.
-  typedef MISTD::vector<IterRecord> IterSet;
+  typedef std::vector<IterRecord> IterSet;
 
   bool ProcessForeachDefs(Record *CurRec, SMLoc Loc);
   bool ProcessForeachDefs(Record *CurRec, SMLoc Loc, IterSet &IterVals);
@@ -139,8 +139,8 @@ private:  // Parser methods.
                                 Record *DefProto,
                                 SMLoc DefmPrefixLoc,
                                 SMLoc SubClassLoc,
-                                const MISTD::vector<Init *> &TArgs,
-                                MISTD::vector<Init *> &TemplateVals,
+                                const std::vector<Init *> &TArgs,
+                                std::vector<Init *> &TemplateVals,
                                 bool DeleteArgs);
   bool ResolveMulticlassDef(MultiClass &MC,
                             Record *CurRec,
@@ -150,7 +150,7 @@ private:  // Parser methods.
   bool ParseDef(MultiClass *CurMultiClass);
   bool ParseForeach(MultiClass *CurMultiClass);
   bool ParseTopLevelLet(MultiClass *CurMultiClass);
-  MISTD::vector<LetRecord> ParseLetList();
+  std::vector<LetRecord> ParseLetList();
 
   bool ParseObjectBody(Record *CurRec);
   bool ParseBody(Record *CurRec);
@@ -164,19 +164,19 @@ private:  // Parser methods.
   SubMultiClassReference ParseSubMultiClassReference(MultiClass *CurMC);
 
   Init *ParseIDValue(Record *CurRec, IDParseMode Mode = ParseValueMode);
-  Init *ParseIDValue(Record *CurRec, const MISTD::string &Name, SMLoc NameLoc,
+  Init *ParseIDValue(Record *CurRec, const std::string &Name, SMLoc NameLoc,
                      IDParseMode Mode = ParseValueMode);
   Init *ParseSimpleValue(Record *CurRec, RecTy *ItemType = 0,
                          IDParseMode Mode = ParseValueMode);
   Init *ParseValue(Record *CurRec, RecTy *ItemType = 0,
                    IDParseMode Mode = ParseValueMode);
-  MISTD::vector<Init*> ParseValueList(Record *CurRec, Record *ArgsRec = 0,
+  std::vector<Init*> ParseValueList(Record *CurRec, Record *ArgsRec = 0,
                                     RecTy *EltTy = 0);
-  MISTD::vector<MISTD::pair<llvm::Init*, MISTD::string> > ParseDagArgList(Record *);
-  bool ParseOptionalRangeList(MISTD::vector<unsigned> &Ranges);
-  bool ParseOptionalBitList(MISTD::vector<unsigned> &Ranges);
-  MISTD::vector<unsigned> ParseRangeList();
-  bool ParseRangePiece(MISTD::vector<unsigned> &Ranges);
+  std::vector<std::pair<llvm::Init*, std::string> > ParseDagArgList(Record *);
+  bool ParseOptionalRangeList(std::vector<unsigned> &Ranges);
+  bool ParseOptionalBitList(std::vector<unsigned> &Ranges);
+  std::vector<unsigned> ParseRangeList();
+  bool ParseRangePiece(std::vector<unsigned> &Ranges);
   RecTy *ParseType();
   Init *ParseOperation(Record *CurRec);
   RecTy *ParseOperatorType();

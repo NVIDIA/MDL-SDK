@@ -118,22 +118,22 @@
 #define MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION(T) \
     inline bool has_dynamic_memory_consumption(const T&) { return true; }
 
-// Variant for templates with one argument (e.g., MISTD::vector and MISTD::set)
+// Variant for templates with one argument (e.g., std::vector and std::set)
 #define MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE(T,TARG) \
     template <class TARG> \
     inline bool has_dynamic_memory_consumption(const T&) { return true; }
 
-// Variant for templates with two arguments (e.g., MISTD::map, or MISTD::set with comparison funct.)
+// Variant for templates with two arguments (e.g., std::map, or std::set with comparison funct.)
 #define MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE2(T1,T2,TARG1,TARG2) \
     template <class TARG1, class TARG2> \
     inline bool has_dynamic_memory_consumption(const T1,T2&) { return true; }
 
-// Variant for templates with three arguments (e.g., MISTD::map with comparison functor)
+// Variant for templates with three arguments (e.g., std::map with comparison functor)
 #define MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE3(T1,T2,T3,TARG1,TARG2,TARG3) \
     template <class TARG1, class TARG2, class TARG3> \
     inline bool has_dynamic_memory_consumption(const T1,T2,T3&) { return true; }
 
-// Variant for templates with five arguments (e.g., MISTD::hash_map)
+// Variant for templates with five arguments (e.g., std::hash_map)
 #define MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE5( \
     T1,T2,T3,T4,T5,TARG1,TARG2,TARG3,TARG4,TARG5) \
     template <class TARG1, class TARG2, class TARG3, class TARG4, class TARG5> \
@@ -150,12 +150,12 @@
 //
 // Note that these definitions are in namespaces MISTD *and* boost::unordered because ADL does not
 // work for built-in types (the set of "associated namespaces" and "associated classes" is empty,
-// and not the global namespace). In namespace MISTD they are needed for STL containers (see below),
+// and not the global namespace). In namespace std they are needed for STL containers (see below),
 // in namespace boost::unordered they are needed for the boost unordered containers (also see
 // below). In theory, one could also duplicate the definitions in the MI namespace, but no-one seems
 // to need them there.
 
-namespace MISTD {
+namespace std {
 
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(int)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(unsigned int)
@@ -260,10 +260,10 @@ inline size_t dynamic_memory_consumption(const Matrix<T,ROW,COL>&) { return 0; }
 
 // Memory consumption for a few STL types: string, pair, vector, map, multimap, set.
 
-namespace MISTD {
+namespace std {
 
 
-// MISTD::string
+// std::string
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION(string)
 
@@ -277,7 +277,7 @@ inline size_t dynamic_memory_consumption (const string& s)
 }
 
 
-// MISTD::pair
+// std::pair
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE2(pair<T1,T2>,T1,T2)
 
@@ -290,7 +290,7 @@ inline size_t dynamic_memory_consumption (const pair<T1,T2>& the_pair)
 }
 
 
-// MISTD::vector
+// std::vector
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE(vector<T>,T)
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE2(vector<T,A>,T,A)
@@ -329,7 +329,7 @@ inline size_t dynamic_memory_consumption (const vector<bool>& the_vector)
 #endif
 #endif // MI_PLATFORM_MACOSX
 
-// MISTD::map
+// std::map
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE2(map<T1,T2>,T1,T2)
 
@@ -340,9 +340,9 @@ inline size_t dynamic_memory_consumption (const map<T1, T2>& the_map)
 
     // static size of the map elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::_Rb_tree_node<MISTD::pair<const T1,T2> >);
+    size_t total = the_map.size() * sizeof(std::_Rb_tree_node<std::pair<const T1,T2> >);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::__tree_node<MISTD::pair<const T1,T2>, void*>);
+    size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_map.size() * sizeof(Map_type::_Node);
 #else
@@ -375,9 +375,9 @@ inline size_t dynamic_memory_consumption (const map<T1, T2, A>& the_map)
 
     // static size of the map elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::_Rb_tree_node<MISTD::pair<const T1,T2> >);
+    size_t total = the_map.size() * sizeof(std::_Rb_tree_node<std::pair<const T1,T2> >);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::__tree_node<MISTD::pair<const T1,T2>, void*>);
+    size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_map.size() * sizeof(Map_type::_Node);
 #endif
@@ -400,7 +400,7 @@ inline size_t dynamic_memory_consumption (const map<T1, T2, A>& the_map)
 }
 
 
-// MISTD::multimap
+// std::multimap
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE2(multimap<T1,T2>,T1,T2)
 
@@ -411,9 +411,9 @@ inline size_t dynamic_memory_consumption (const multimap<T1, T2>& the_map)
 
     // static size of the multimap elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::_Rb_tree_node<MISTD::pair<const T1,T2> >);
+    size_t total = the_map.size() * sizeof(std::_Rb_tree_node<std::pair<const T1,T2> >);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::__tree_node<MISTD::pair<const T1,T2>, void*>);
+    size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_map.size() * sizeof(Map_type::_Node);
 #endif
@@ -444,9 +444,9 @@ inline size_t dynamic_memory_consumption (const multimap<T1, T2, A>& the_map)
 
     // static size of the multimap elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::_Rb_tree_node<MISTD::pair<const T1,T2> >);
+    size_t total = the_map.size() * sizeof(std::_Rb_tree_node<std::pair<const T1,T2> >);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_map.size() * sizeof(MISTD::__tree_node<MISTD::pair<const T1,T2>, void*>);
+    size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_map.size() * sizeof(Map_type::_Node);
 #endif
@@ -469,7 +469,7 @@ inline size_t dynamic_memory_consumption (const multimap<T1, T2, A>& the_map)
 }
 
 
-// MISTD::set
+// std::set
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE(set<T>,T)
 
@@ -480,9 +480,9 @@ inline size_t dynamic_memory_consumption (const set<T>& the_set)
 
     // static size of the set elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_set.size() * sizeof(MISTD::_Rb_tree_node<T>);
+    size_t total = the_set.size() * sizeof(std::_Rb_tree_node<T>);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_set.size() * sizeof(MISTD::__tree_node<T, void*>);
+    size_t total = the_set.size() * sizeof(std::__tree_node<T, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_set.size() * sizeof(Set_type::_Node);
 #endif
@@ -507,9 +507,9 @@ inline size_t dynamic_memory_consumption (const set<T1, A>& the_set)
 
     // static size of the set elements
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX_USING_RB_TREE_NODE)
-    size_t total = the_set.size() * sizeof(MISTD::_Rb_tree_node<T1>);
+    size_t total = the_set.size() * sizeof(std::_Rb_tree_node<T1>);
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
-    size_t total = the_set.size() * sizeof(MISTD::__tree_node<T1, void*>);
+    size_t total = the_set.size() * sizeof(std::__tree_node<T1, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
     size_t total = the_set.size() * sizeof(Set_type::_Node);
 #endif

@@ -70,7 +70,7 @@ private:
     explicit MDL_search_path(mi::mdl::IAllocator *alloc);
 
 private:
-    mutable MISTD::string tmp;
+    mutable std::string tmp;
 };
 
 }  // MDLC

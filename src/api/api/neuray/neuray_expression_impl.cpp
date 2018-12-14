@@ -401,9 +401,16 @@ mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* na
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
     mi::base::Handle<const MDL::IType> type_int;
     if( class_id == MDL::Mdl_function_call::id) {
+
         DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+        if( call->is_immutable())
+            return 0; // prevent user-calls to default functions
         type_int = call->get_return_type();
     } else if( class_id == MDL::Mdl_material_instance::id) {
+
+        DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
+        if( m->is_immutable())
+            return 0; // prevent user-calls to default materials
         mi::base::Handle<MDL::IValue_factory> vf( m_ef->get_value_factory());
         mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
         type_int = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
@@ -506,7 +513,9 @@ mi::neuraylib::IAnnotation_list* Expression_factory::create_annotation_list() co
 mi::neuraylib::IExpression* Expression_factory::clone( const mi::neuraylib::IExpression* expr) const
 {
     mi::base::Handle<const MDL::IExpression> expr_int( get_internal_expression( expr));
-    mi::base::Handle<MDL::IExpression> result_int( m_ef->clone( expr_int.get()));
+    DB::Transaction* db_transaction = get_db_transaction();
+    mi::base::Handle<MDL::IExpression> result_int( m_ef->clone(
+        expr_int.get(), db_transaction, true));
     return create( result_int.get(), /*owner*/ 0);
 }
 
@@ -515,7 +524,9 @@ mi::neuraylib::IExpression_list* Expression_factory::clone(
 {
     mi::base::Handle<const MDL::IExpression_list> expr_list_int(
        get_internal_expression_list( expr_list));
-    mi::base::Handle<MDL::IExpression_list> result_int( m_ef->clone( expr_list_int.get()));
+    DB::Transaction* db_transaction = get_db_transaction();
+    mi::base::Handle<MDL::IExpression_list> result_int( m_ef->clone(
+        expr_list_int.get(), db_transaction, true));
     return create_expression_list( result_int.get(), /*owner*/ 0);
 }
 

@@ -246,8 +246,8 @@ void Type_value_iterator::progress()
     size_t align = 1;
     size_t sub_align = get_type()->align_all();
     if (get_type()->get_arraysize() != 1 || get_type()->get_typecode() == TYPE_ARRAY)
-        sub_align = MISTD::max((size_t)1, Type::sizeof_one(get_type()->get_typecode()));
-    align = MISTD::max(align, sub_align);
+        sub_align = std::max((size_t)1, Type::sizeof_one(get_type()->get_typecode()));
+    align = std::max(align, sub_align);
 
     size_t offset = (get_offset() + sub_align-1) & (~sub_align+1);
     if (get_type()->get_typecode() != TYPE_STRUCT) {
@@ -280,7 +280,7 @@ void Type_value_iterator::progress()
         set_type(type->get_next());
 
         // add alignment of new type to the offset
-        align = MISTD::max<size_t>(get_type()? get_type()->align_all() : 1, 1);
+        align = std::max<size_t>(get_type()? get_type()->align_all() : 1, 1);
         offset = (get_offset() + align-1) & (~align+1);
         set_offset(offset);
     }
@@ -425,7 +425,7 @@ void Type_value_iterator::set_type(
         // the new type will be at the next aligned address - this will be done permanentely
         // in process() (at the very bottom), but for accessing get_count() we require already
         // the correct offset. Needs refactoring.
-        size_t align = MISTD::max<size_t>(typ->align_all(), 1);
+        size_t align = std::max<size_t>(typ->align_all(), 1);
         size_t offset = (get_offset() + align-1) & (~align+1);
         // at the end of a struct - which is the case when called with in_struct == true - set
         // the offset such that it points to the next element's value
@@ -436,7 +436,7 @@ void Type_value_iterator::set_type(
         size_t count = get_count(typ, get_value_ptr()+offset);
         if (count)
             count -= 1;
-        m_types_stack.push(MISTD::make_pair(typ, count));
+        m_types_stack.push(std::make_pair(typ, count));
         // first array, then struct!! Thatswhy the next if () is not in an else branch - if we have
         // an array of structs, we iterate from array_start to struct_start.
         if (typ->get_arraysize() != 1 || typ->get_typecode() == TYPE_ARRAY) {
@@ -676,13 +676,13 @@ Type_named_value_iterator::Type_named_value_iterator(
     Type_value_iterator(type, values)
 {
     const char* name = type ? get_type()->get_name() : "";
-    m_name_stack.push(MISTD::string(name ? name : ""));
+    m_name_stack.push(std::string(name ? name : ""));
 }
 
 
-MISTD::string Type_named_value_iterator::get_qualified_name() const
+std::string Type_named_value_iterator::get_qualified_name() const
 {
-    MISTD::string qualified;
+    std::string qualified;
     if (!m_array_sizes.empty()) {
         if (m_array_sizes.top() != -1) {
             // in array

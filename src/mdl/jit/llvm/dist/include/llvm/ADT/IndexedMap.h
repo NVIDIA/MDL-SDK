@@ -30,7 +30,7 @@ namespace llvm {
 template <typename T, typename ToIndexT = llvm::identity<unsigned> >
   class IndexedMap {
     typedef typename ToIndexT::argument_type IndexT;
-    typedef MISTD::vector<T> StorageT;
+    typedef std::vector<T> StorageT;
     StorageT storage_;
     T nullVal_;
     ToIndexT toIndex_;

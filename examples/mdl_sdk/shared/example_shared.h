@@ -35,10 +35,14 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #include <mi/mdl_sdk.h>
 
 #ifdef MI_PLATFORM_WINDOWS
+#include <direct.h>
+#include <Shlobj.h>
+#include <Knownfolders.h>
 #include <mi/base/miwindows.h>
 #else
 #include <dlfcn.h>
@@ -68,7 +72,7 @@ std::string get_environment(const char* env_var)
 #ifdef MI_PLATFORM_WINDOWS
     char* buf = nullptr;
     size_t sz = 0;
-    if (_dupenv_s(&buf, &sz, env_var) == 0 && buf != NULL) {
+    if (_dupenv_s(&buf, &sz, env_var) == 0 && buf != nullptr) {
         value = buf;
         free(buf);
     }
@@ -78,6 +82,19 @@ std::string get_environment(const char* env_var)
         value = v;
 #endif
     return value;
+}
+
+// Sets the value of the given environment variable.
+//
+// \param env_var   environment variable name
+// \param value     the new value to set.
+bool set_environment(const char* env_var, const char* value)
+{
+#ifdef MI_PLATFORM_WINDOWS
+    return 0 == _putenv_s(env_var, value);
+#else
+    return 0 == setenv(env_var, value, 1);
+#endif
 }
 
 // Checks if the given directory exists.
@@ -91,7 +108,7 @@ bool dir_exists(const char* path)
     return (attrib != INVALID_FILE_ATTRIBUTES) && (attrib & FILE_ATTRIBUTE_DIRECTORY);
 #else
     DIR* dir = opendir(path);
-    if (dir == NULL)
+    if (dir == nullptr)
         return false;
 
     closedir(dir);
@@ -169,6 +186,67 @@ void configure(mi::neuraylib::INeuray* neuray)
     check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
 }
 
+// Returns a string-representation of the given message severity
+const char* message_severity_to_string(mi::base::Message_severity severity)
+{
+    switch (severity) {
+
+    case mi::base::MESSAGE_SEVERITY_ERROR:
+        return "error";
+    case mi::base::MESSAGE_SEVERITY_WARNING:
+        return "warning";
+    case mi::base::MESSAGE_SEVERITY_INFO:
+        return "info";
+    case mi::base::MESSAGE_SEVERITY_VERBOSE:
+        return "verbose";
+    case mi::base::MESSAGE_SEVERITY_DEBUG:
+        return "debug";
+    default:
+        break;
+    }
+    return "";
+}
+
+
+// Returns a string-representation of the given message category
+const char* message_kind_to_string(mi::neuraylib::IMessage::Kind message_kind)
+{
+    switch (message_kind) {
+
+    case mi::neuraylib::IMessage::MSG_INTEGRATION:
+        return "MDL SDK";
+    case mi::neuraylib::IMessage::MSG_IMP_EXP:
+        return "Importer/Exporter";
+    case mi::neuraylib::IMessage::MSG_COMILER_BACKEND:
+        return "Compiler Backend";
+    case mi::neuraylib::IMessage::MSG_COMILER_CORE:
+        return "Compiler Core";
+    case mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL:
+        return "Compiler Archive Tool";
+    case mi::neuraylib::IMessage::MSG_COMPILER_DAG:
+        return "Compiler DAG generator";
+    default:
+        break;
+    }
+    return "";
+}
+
+
+// Prints the messages of the given context.
+// Returns true, if the context does not contain any error messages, false otherwise.
+bool print_messages(mi::neuraylib::IMdl_execution_context* context)
+{
+    for (mi::Size i = 0; i < context->get_messages_count(); ++i) {
+
+        mi::base::Handle<const mi::neuraylib::IMessage> message(context->get_message(i));
+        fprintf(stderr, "%s %s: %s\n", 
+            message_kind_to_string(message->get_kind()),
+            message_severity_to_string(message->get_severity()),
+            message->get_string());
+    }
+    return context->get_error_messages_count() == 0;
+}
+
 // printf() format specifier for arguments of type LPTSTR (Windows only).
 #ifdef MI_PLATFORM_WINDOWS
 #ifdef UNICODE
@@ -184,7 +262,7 @@ void configure(mi::neuraylib::INeuray* neuray)
 // function. It returns an instance of the main #mi::neuraylib::INeuray interface.
 // The function may be called only once.
 //
-// \param filename    The file name of the DSO. It is feasible to pass \c NULL, which uses a
+// \param filename    The file name of the DSO. It is feasible to pass \c nullptr, which uses a
 //                    built-in default value.
 // \return            A pointer to an instance of the main #mi::neuraylib::INeuray interface
 mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
@@ -293,12 +371,24 @@ void sleep_seconds( mi::Float32 seconds)
 #define snprintf _snprintf
 #endif
 
+
+std::string get_working_directory()
+{
+    char current_path[FILENAME_MAX];
+    #ifdef MI_PLATFORM_WINDOWS
+        _getcwd(current_path, FILENAME_MAX);
+    #else
+        getcwd(current_path, FILENAME_MAX); // TODO
+    #endif
+    return current_path;
+}
+
 // Returns the folder path of the current executable.
 std::string get_executable_folder()
 {
 #ifdef MI_PLATFORM_WINDOWS
     char path[MAX_PATH];
-    if (!GetModuleFileNameA(NULL, path, MAX_PATH))
+    if (!GetModuleFileNameA(nullptr, path, MAX_PATH))
         return "";
 
     const char sep = '\\';
@@ -327,8 +417,105 @@ std::string get_executable_folder()
 #endif // MI_PLATFORM_WINDOWS
 
     char *last_sep = strrchr(path, sep);
-    if (last_sep == NULL) return "";
+    if (last_sep == nullptr) return "";
     return std::string(path, last_sep + 1);
+}
+
+
+namespace
+{
+    #ifdef MI_PLATFORM_WINDOWS
+    //-----------------------------------------------------------------------------
+    // helper function to create standard mdl path inside the known folder. WINDOWS only
+    //
+    std::string get_known_folder(const KNOWNFOLDERID& id, const std::string& postfix)
+    {
+        // Fetch the 'knownFolder' path.
+        HRESULT hr = -1;
+        wchar_t* knownFolderPath = nullptr;
+        std::string result;
+        #if(_WIN32_WINNT >= 0x0600)
+        hr = SHGetKnownFolderPath(id, 0, nullptr, &knownFolderPath);
+        #endif
+        if (SUCCEEDED(hr))
+        {
+            // convert from wstring to string and append the postfix
+            std::wstring s(knownFolderPath);
+            int len;
+            int slength = (int) s.length();
+            len = WideCharToMultiByte(CP_ACP, 0, s.c_str(), slength, 0, 0, 0, 0);
+            result = std::string(len, '\0');
+            WideCharToMultiByte(CP_ACP, 0, s.c_str(), slength, &result[0], len, 0, 0);
+
+            result.append(postfix);
+            CoTaskMemFree(static_cast<void*>(knownFolderPath));
+        }
+        return result;
+    }
+    #endif // MI_PLATFORM_WINDOWS
+
+    std::vector<std::string> string_split(const std::string& input, char sep)
+    {
+        std::vector<std::string> chunks;
+
+        size_t offset(0);
+        size_t pos(0);
+        while (pos != std::string::npos)
+        {
+            pos = input.find(sep, offset);
+
+            if (pos == std::string::npos)
+            {
+                chunks.push_back(input.substr(offset));
+                break;
+            }
+
+            chunks.push_back(input.substr(offset, pos - offset));
+            offset = pos + 1;
+        }
+        return chunks;
+    }
+}
+
+std::vector<std::string> get_mdl_admin_space_search_paths()
+{
+    std::string paths = get_environment("MDL_SYSTEM_PATH");
+    if (!paths.empty())
+    {
+        std::vector<std::string> result = string_split(paths, ';');
+        return result;
+    }
+
+    // default paths on the different platforms
+    std::vector<std::string> result;
+    #if defined(MI_PLATFORM_WINDOWS)
+        result.emplace_back(get_known_folder(FOLDERID_ProgramData, "/NVIDIA Corporation/mdl"));
+    #elif defined(MI_PLATFORM_UNIX)
+        result.emplace_back("/opt/nvidia/mdl");
+    #elif defined(MI_PLATFORM_MACOSX)
+        result.emplace_back("/Library/Application Support/NVIDIA Corporation/mdl");
+    #endif
+    return result;
+}
+
+std::vector<std::string> get_mdl_user_space_search_paths()
+{
+    std::string paths = get_environment("MDL_USER_PATH");
+    if (!paths.empty())
+    {
+        std::vector<std::string> result = string_split(paths, ';');
+        return result;
+    }
+
+    // default paths on the different platforms
+    std::vector<std::string> result;
+    #if defined(MI_PLATFORM_WINDOWS)
+        result.emplace_back(get_known_folder(FOLDERID_Documents, "/mdl"));
+    #else 
+        const std::string home = getenv("HOME");
+        result.emplace_back(home + "/Documents/mdl");
+    #endif
+    return result;
 }
 
 #endif // MI_EXAMPLE_SHARED_H

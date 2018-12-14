@@ -49,13 +49,13 @@ using namespace llvm;
 static ManagedStatic<sys::Mutex> FunctionsLock;
 
 typedef GenericValue (*ExFunc)(FunctionType *,
-                               const MISTD::vector<GenericValue> &);
-static ManagedStatic<MISTD::map<const Function *, ExFunc> > ExportedFunctions;
-static MISTD::map<MISTD::string, ExFunc> FuncNames;
+                               const std::vector<GenericValue> &);
+static ManagedStatic<std::map<const Function *, ExFunc> > ExportedFunctions;
+static std::map<std::string, ExFunc> FuncNames;
 
 #ifdef USE_LIBFFI
 typedef void (*RawFunc)();
-static ManagedStatic<MISTD::map<const Function *, RawFunc> > RawFunctions;
+static ManagedStatic<std::map<const Function *, RawFunc> > RawFunctions;
 #endif
 
 static Interpreter *TheInterpreter;
@@ -90,7 +90,7 @@ static char getTypeID(Type *Ty) {
 static ExFunc lookupFunction(const Function *F) {
   // Function not found, look it up... start by figuring out what the
   // composite function name should be.
-  MISTD::string ExtName = "lle_";
+  std::string ExtName = "lle_";
   FunctionType *FT = F->getFunctionType();
   for (unsigned i = 0, e = FT->getNumContainedTypes(); i != e; ++i)
     ExtName += getTypeID(FT->getContainedType(i));
@@ -105,7 +105,7 @@ static ExFunc lookupFunction(const Function *F) {
       sys::DynamicLibrary::SearchForAddressOfSymbol("lle_X_" +
                                                     F->getName().str());
   if (FnPtr != 0)
-    ExportedFunctions->insert(MISTD::make_pair(F, FnPtr));  // Cache for later
+    ExportedFunctions->insert(std::make_pair(F, FnPtr));  // Cache for later
   return FnPtr;
 }
 
@@ -179,7 +179,7 @@ static void *ffiValueFor(Type *Ty, const GenericValue &AV,
 }
 
 static bool ffiInvoke(RawFunc Fn, Function *F,
-                      const MISTD::vector<GenericValue> &ArgVals,
+                      const std::vector<GenericValue> &ArgVals,
                       const DataLayout *TD, GenericValue &Result) {
   ffi_cif cif;
   FunctionType *FTy = F->getFunctionType();
@@ -194,7 +194,7 @@ static bool ffiInvoke(RawFunc Fn, Function *F,
 
   unsigned ArgBytes = 0;
 
-  MISTD::vector<ffi_type*> args(NumArgs);
+  std::vector<ffi_type*> args(NumArgs);
   for (Function::const_arg_iterator A = F->arg_begin(), E = F->arg_end();
        A != E; ++A) {
     const unsigned ArgNo = A->getArgNo();
@@ -245,14 +245,14 @@ static bool ffiInvoke(RawFunc Fn, Function *F,
 #endif // USE_LIBFFI
 
 GenericValue Interpreter::callExternalFunction(Function *F,
-                                     const MISTD::vector<GenericValue> &ArgVals) {
+                                     const std::vector<GenericValue> &ArgVals) {
   TheInterpreter = this;
 
   FunctionsLock->acquire();
 
   // Do a lookup to see if the function is in our cache... this should just be a
   // deferred annotation!
-  MISTD::map<const Function *, ExFunc>::iterator FI = ExportedFunctions->find(F);
+  std::map<const Function *, ExFunc>::iterator FI = ExportedFunctions->find(F);
   if (ExFunc Fn = (FI == ExportedFunctions->end()) ? lookupFunction(F)
                                                    : FI->second) {
     FunctionsLock->release();
@@ -260,7 +260,7 @@ GenericValue Interpreter::callExternalFunction(Function *F,
   }
 
 #ifdef USE_LIBFFI
-  MISTD::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
+  std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
   RawFunc RawFn;
   if (RF == RawFunctions->end()) {
     RawFn = (RawFunc)(intptr_t)
@@ -268,7 +268,7 @@ GenericValue Interpreter::callExternalFunction(Function *F,
     if (!RawFn)
       RawFn = (RawFunc)(intptr_t)getPointerToGlobalIfAvailable(F);
     if (RawFn != 0)
-      RawFunctions->insert(MISTD::make_pair(F, RawFn));  // Cache for later
+      RawFunctions->insert(std::make_pair(F, RawFn));  // Cache for later
   } else {
     RawFn = RF->second;
   }
@@ -300,7 +300,7 @@ GenericValue Interpreter::callExternalFunction(Function *F,
 // void atexit(Function*)
 static
 GenericValue lle_X_atexit(FunctionType *FT,
-                          const MISTD::vector<GenericValue> &Args) {
+                          const std::vector<GenericValue> &Args) {
   assert(Args.size() == 1);
   TheInterpreter->addAtExitHandler((Function*)GVTOP(Args[0]));
   GenericValue GV;
@@ -311,7 +311,7 @@ GenericValue lle_X_atexit(FunctionType *FT,
 // void exit(int)
 static
 GenericValue lle_X_exit(FunctionType *FT,
-                        const MISTD::vector<GenericValue> &Args) {
+                        const std::vector<GenericValue> &Args) {
   TheInterpreter->exitCalled(Args[0]);
   return GenericValue();
 }
@@ -319,7 +319,7 @@ GenericValue lle_X_exit(FunctionType *FT,
 // void abort(void)
 static
 GenericValue lle_X_abort(FunctionType *FT,
-                         const MISTD::vector<GenericValue> &Args) {
+                         const std::vector<GenericValue> &Args) {
   //FIXME: should we report or raise here?
   //report_fatal_error("Interpreted program raised SIGABRT");
   raise (SIGABRT);
@@ -330,7 +330,7 @@ GenericValue lle_X_abort(FunctionType *FT,
 // output useful.
 static
 GenericValue lle_X_sprintf(FunctionType *FT,
-                           const MISTD::vector<GenericValue> &Args) {
+                           const std::vector<GenericValue> &Args) {
   char *OutputBuffer = (char *)GVTOP(Args[0]);
   const char *FmtStr = (const char *)GVTOP(Args[1]);
   unsigned ArgNo = 2;
@@ -413,9 +413,9 @@ GenericValue lle_X_sprintf(FunctionType *FT,
 // useful.
 static
 GenericValue lle_X_printf(FunctionType *FT,
-                          const MISTD::vector<GenericValue> &Args) {
+                          const std::vector<GenericValue> &Args) {
   char Buffer[10000];
-  MISTD::vector<GenericValue> NewArgs;
+  std::vector<GenericValue> NewArgs;
   NewArgs.push_back(PTOGV((void*)&Buffer[0]));
   NewArgs.insert(NewArgs.end(), Args.begin(), Args.end());
   GenericValue GV = lle_X_sprintf(FT, NewArgs);
@@ -426,7 +426,7 @@ GenericValue lle_X_printf(FunctionType *FT,
 // int sscanf(const char *format, ...);
 static
 GenericValue lle_X_sscanf(FunctionType *FT,
-                          const MISTD::vector<GenericValue> &args) {
+                          const std::vector<GenericValue> &args) {
   assert(args.size() < 10 && "Only handle up to 10 args to sscanf right now!");
 
   char *Args[10];
@@ -442,7 +442,7 @@ GenericValue lle_X_sscanf(FunctionType *FT,
 // int scanf(const char *format, ...);
 static
 GenericValue lle_X_scanf(FunctionType *FT,
-                         const MISTD::vector<GenericValue> &args) {
+                         const std::vector<GenericValue> &args) {
   assert(args.size() < 10 && "Only handle up to 10 args to scanf right now!");
 
   char *Args[10];
@@ -459,10 +459,10 @@ GenericValue lle_X_scanf(FunctionType *FT,
 // output useful.
 static
 GenericValue lle_X_fprintf(FunctionType *FT,
-                           const MISTD::vector<GenericValue> &Args) {
+                           const std::vector<GenericValue> &Args) {
   assert(Args.size() >= 2);
   char Buffer[10000];
-  MISTD::vector<GenericValue> NewArgs;
+  std::vector<GenericValue> NewArgs;
   NewArgs.push_back(PTOGV(Buffer));
   NewArgs.insert(NewArgs.end(), Args.begin()+1, Args.end());
   GenericValue GV = lle_X_sprintf(FT, NewArgs);
@@ -472,7 +472,7 @@ GenericValue lle_X_fprintf(FunctionType *FT,
 }
 
 static GenericValue lle_X_memset(FunctionType *FT,
-                                 const MISTD::vector<GenericValue> &Args) {
+                                 const std::vector<GenericValue> &Args) {
   int val = (int)Args[1].IntVal.getSExtValue();
   size_t len = (size_t)Args[2].IntVal.getZExtValue();
   memset((void *)GVTOP(Args[0]), val, len);
@@ -484,7 +484,7 @@ static GenericValue lle_X_memset(FunctionType *FT,
 }
 
 static GenericValue lle_X_memcpy(FunctionType *FT,
-                                 const MISTD::vector<GenericValue> &Args) {
+                                 const std::vector<GenericValue> &Args) {
   memcpy(GVTOP(Args[0]), GVTOP(Args[1]),
          (size_t)(Args[2].IntVal.getLimitedValue()));
 

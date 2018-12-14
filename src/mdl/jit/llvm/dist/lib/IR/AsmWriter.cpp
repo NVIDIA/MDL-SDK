@@ -170,7 +170,7 @@ void TypePrinting::incorporateTypes(const Module &M) {
   // the unnamed ones out to a numbering and remove the anonymous structs.
   unsigned NextNumber = 0;
 
-  MISTD::vector<StructType*>::iterator NextToUse = NamedTypes.begin(), I, E;
+  std::vector<StructType*>::iterator NextToUse = NamedTypes.begin(), I, E;
   for (I = NamedTypes.begin(), E = NamedTypes.end(); I != E; ++I) {
     StructType *STy = *I;
 
@@ -507,7 +507,7 @@ void SlotTracker::processFunction() {
 
   ST_DEBUG("Inserting Instructions:\n");
 
-  SmallVector<MISTD::pair<unsigned, MDNode*>, 4> MDForInst;
+  SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
 
   // Add all of the basic blocks and instructions with no names.
   for (Function::const_iterator BB = TheFunction->begin(),
@@ -1279,7 +1279,7 @@ void AssemblyWriter::printModule(const Module *M) {
   if (!M->getModuleIdentifier().empty() &&
       // Don't print the ID if it will start a new line (which would
       // require a comment char before it).
-      M->getModuleIdentifier().find('\n') == MISTD::string::npos)
+      M->getModuleIdentifier().find('\n') == std::string::npos)
     Out << "; ModuleID = '" << M->getModuleIdentifier() << "'\n";
 
   if (!M->getDataLayout().empty())
@@ -1289,21 +1289,21 @@ void AssemblyWriter::printModule(const Module *M) {
 
   if (!M->getModuleInlineAsm().empty()) {
     // Split the string into lines, to make it easier to read the .ll file.
-    MISTD::string Asm = M->getModuleInlineAsm();
+    std::string Asm = M->getModuleInlineAsm();
     size_t CurPos = 0;
     size_t NewLine = Asm.find_first_of('\n', CurPos);
     Out << '\n';
-    while (NewLine != MISTD::string::npos) {
+    while (NewLine != std::string::npos) {
       // We found a newline, print the portion of the asm string from the
       // last newline up to this newline.
       Out << "module asm \"";
-      PrintEscapedString(MISTD::string(Asm.begin()+CurPos, Asm.begin()+NewLine),
+      PrintEscapedString(std::string(Asm.begin()+CurPos, Asm.begin()+NewLine),
                          Out);
       Out << "\"\n";
       CurPos = NewLine+1;
       NewLine = Asm.find_first_of('\n', CurPos);
     }
-    MISTD::string rest(Asm.begin()+CurPos, Asm.end());
+    std::string rest(Asm.begin()+CurPos, Asm.end());
     if (!rest.empty()) {
       Out << "module asm \"";
       PrintEscapedString(rest, Out);
@@ -1515,7 +1515,7 @@ void AssemblyWriter::printTypeIdentities() {
 
   // We know all the numbers that each type is used and we know that it is a
   // dense assignment.  Convert the map to an index table.
-  MISTD::vector<StructType*> NumberedTypes(TypePrinter.NumberedTypes.size());
+  std::vector<StructType*> NumberedTypes(TypePrinter.NumberedTypes.size());
   for (DenseMap<StructType*, unsigned>::iterator I =
        TypePrinter.NumberedTypes.begin(), E = TypePrinter.NumberedTypes.end();
        I != E; ++I) {
@@ -1558,7 +1558,7 @@ void AssemblyWriter::printFunction(const Function *F) {
   const AttributeSet &Attrs = F->getAttributes();
   if (Attrs.hasAttributes(AttributeSet::FunctionIndex)) {
     AttributeSet AS = Attrs.getFnAttributes();
-    MISTD::string AttrStr;
+    std::string AttrStr;
 
     unsigned Idx = 0;
     for (unsigned E = AS.getNumSlots(); Idx != E; ++Idx)
@@ -2043,7 +2043,7 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   }
 
   // Print Metadata info.
-  SmallVector<MISTD::pair<unsigned, MDNode*>, 4> InstMD;
+  SmallVector<std::pair<unsigned, MDNode*>, 4> InstMD;
   I.getAllMetadata(InstMD);
   if (!InstMD.empty()) {
     SmallVector<StringRef, 8> MDNames;
@@ -2110,14 +2110,14 @@ void AssemblyWriter::printMDNodeBody(const MDNode *Node) {
 }
 
 void AssemblyWriter::writeAllAttributeGroups() {
-  MISTD::vector<MISTD::pair<AttributeSet, unsigned> > asVec;
+  std::vector<std::pair<AttributeSet, unsigned> > asVec;
   asVec.resize(Machine.as_size());
 
   for (SlotTracker::as_iterator I = Machine.as_begin(), E = Machine.as_end();
        I != E; ++I)
     asVec[I->second] = *I;
 
-  for (MISTD::vector<MISTD::pair<AttributeSet, unsigned> >::iterator
+  for (std::vector<std::pair<AttributeSet, unsigned> >::iterator
          I = asVec.begin(), E = asVec.end(); I != E; ++I)
     Out << "attributes #" << I->second << " = { "
         << I->first.getAsString(AttributeSet::FunctionIndex, true) << " }\n";

@@ -212,12 +212,12 @@ class Region : public RegionNode {
   // (The entry BasicBlock is part of RegionNode)
   BasicBlock *exit;
 
-  typedef MISTD::vector<Region*> RegionSet;
+  typedef std::vector<Region*> RegionSet;
 
   // The subregions of this region.
   RegionSet children;
 
-  typedef MISTD::map<BasicBlock*, RegionNode*> BBNodeMapT;
+  typedef std::map<BasicBlock*, RegionNode*> BBNodeMapT;
 
   // Save the BasicBlock RegionNodes that are element of this Region.
   mutable BBNodeMapT BBNodeMap;
@@ -229,7 +229,7 @@ class Region : public RegionNode {
   /// verifyWalk - Walk over all the BBs of the region starting from BB and
   /// verify that all reachable basic blocks are elements of the region.
   /// (EXPENSIVE!)
-  void verifyWalk(BasicBlock* BB, MISTD::set<BasicBlock*>* visitedBB) const;
+  void verifyWalk(BasicBlock* BB, std::set<BasicBlock*>* visitedBB) const;
 
   /// verifyRegionNest - Verify if the region and its children are valid
   /// regions (EXPENSIVE!)
@@ -343,7 +343,7 @@ public:
 
   /// @brief Returns the name of the Region.
   /// @return The Name of the Region.
-  MISTD::string getNameStr() const;
+  std::string getNameStr() const;
 
   /// @brief Return the RegionInfo object, that belongs to this Region.
   RegionInfo *getRegionInfo() const {

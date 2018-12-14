@@ -172,7 +172,7 @@ unsigned X86TTI::getArithmeticInstrCost(unsigned Opcode, Type *Ty,
                                         OperandValueKind Op1Info,
                                         OperandValueKind Op2Info) const {
   // Legalize the type.
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Ty);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Ty);
 
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
   assert(ISD && "Invalid opcode");
@@ -345,7 +345,7 @@ unsigned X86TTI::getShuffleCost(ShuffleKind Kind, Type *Tp, int Index,
   if (Kind != SK_Reverse)
     return TargetTransformInfo::getShuffleCost(Kind, Tp, Index, SubTp);
 
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Tp);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Tp);
   unsigned Cost = 1;
   if (LT.second.getSizeInBits() > 128)
     Cost = 3; // Extract + insert + copy.
@@ -358,8 +358,8 @@ unsigned X86TTI::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) const {
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
   assert(ISD && "Invalid opcode");
 
-  MISTD::pair<unsigned, MVT> LTSrc = TLI->getTypeLegalizationCost(Src);
-  MISTD::pair<unsigned, MVT> LTDest = TLI->getTypeLegalizationCost(Dst);
+  std::pair<unsigned, MVT> LTSrc = TLI->getTypeLegalizationCost(Src);
+  std::pair<unsigned, MVT> LTDest = TLI->getTypeLegalizationCost(Dst);
 
   static const TypeConversionCostTblEntry<MVT::SimpleValueType>
   SSE2ConvTbl[] = {
@@ -460,7 +460,7 @@ unsigned X86TTI::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) const {
 unsigned X86TTI::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
                                     Type *CondTy) const {
   // Legalize the type.
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
 
   MVT MTy = LT.second;
 
@@ -520,7 +520,7 @@ unsigned X86TTI::getVectorInstrCost(unsigned Opcode, Type *Val,
 
   if (Index != -1U) {
     // Legalize the type.
-    MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Val);
+    std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Val);
 
     // This type is legalized to a scalar type.
     if (!LT.second.isVector())
@@ -584,7 +584,7 @@ unsigned X86TTI::getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
   }
 
   // Legalize the type.
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Src);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Src);
   assert((Opcode == Instruction::Load || Opcode == Instruction::Store) &&
          "Invalid Opcode");
 
@@ -615,7 +615,7 @@ unsigned X86TTI::getAddressComputationCost(Type *Ty, bool IsComplex) const {
 unsigned X86TTI::getReductionCost(unsigned Opcode, Type *ValTy,
                                   bool IsPairwise) const {
   
-  MISTD::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
+  std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(ValTy);
   
   MVT MTy = LT.second;
   

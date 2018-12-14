@@ -30,6 +30,7 @@ set(PROJECT_HEADERS
     "compilercore_call_graph.h"
     "compilercore_cc_conf.h"
     "compilercore_checker.h"
+	"compilercore_comparator.h"
     "compilercore_cstring_hash.h"
     "compilercore_debug_tools.h"
     "compilercore_def_table.h"
@@ -79,6 +80,7 @@ set(PROJECT_SOURCES
     "compilercore_builder.cpp"
     "compilercore_call_graph.cpp"
     "compilercore_checker.cpp"
+	"compilercore_comparator.cpp"
     "compilercore_debug_tools.cpp"
     "compilercore_declarations.cpp"
     "compilercore_def_table.cpp"
@@ -168,7 +170,6 @@ set(_STANDARD_MDL
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/df.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/builtins.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/debug.mdl
-    ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/nvidia_df.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../shaders/mdl/base/base.mdl
     )
 

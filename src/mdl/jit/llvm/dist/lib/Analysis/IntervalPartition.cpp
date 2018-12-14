@@ -47,7 +47,7 @@ void IntervalPartition::addIntervalToPartition(Interval *I) {
   // Add mappings for all of the basic blocks in I to the IntervalPartition
   for (Interval::node_iterator It = I->Nodes.begin(), End = I->Nodes.end();
        It != End; ++It)
-    IntervalMap.insert(MISTD::make_pair(*It, I));
+    IntervalMap.insert(std::make_pair(*It, I));
 }
 
 // updatePredecessors - Interval generation only sets the successor fields of

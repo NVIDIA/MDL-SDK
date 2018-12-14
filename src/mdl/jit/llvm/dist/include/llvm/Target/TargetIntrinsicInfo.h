@@ -40,7 +40,7 @@ public:
   /// intrinsic, Tys should point to an array of numTys pointers to Type,
   /// and must provide exactly one type for each overloaded type in the
   /// intrinsic.
-  virtual MISTD::string getName(unsigned IID, Type **Tys = 0,
+  virtual std::string getName(unsigned IID, Type **Tys = 0,
                               unsigned numTys = 0) const = 0;
 
   /// Look up target intrinsic by name. Return intrinsic ID or 0 for unknown

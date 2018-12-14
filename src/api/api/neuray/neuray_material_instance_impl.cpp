@@ -42,10 +42,10 @@
 #include <io/scene/scene/i_scene_journal_types.h>
 
 #include "neuray_compiled_material_impl.h"
+#include "neuray_mdl_execution_context_impl.h"
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
-
 
 namespace MI {
 
@@ -176,30 +176,49 @@ mi::Sint32 Material_instance_impl::set_argument(
     return result;
 }
 
-mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_material(
+mi::neuraylib::ICompiled_material* Material_instance_impl::deprecated_create_compiled_material(
     mi::Uint32 flags,
     mi::Float32 mdl_meters_per_scene_unit,
     mi::Float32 mdl_wavelength_min,
     mi::Float32 mdl_wavelength_max,
     mi::Sint32* errors) const
 {
+    Mdl_execution_context_impl context;
+    context.set_option(MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, mdl_meters_per_scene_unit);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MIN, mdl_wavelength_min);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MAX, mdl_wavelength_max);
+    
+    mi::neuraylib::ICompiled_material* cm = create_compiled_material(flags, &context);
+    if (errors)
+        *errors = context.get_context().get_result();
+
+    return cm;
+}
+
+mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_material(
+    mi::Uint32 flags,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    NEURAY::Mdl_execution_context_impl* context_impl =
+        static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+
     bool class_compilation = flags & CLASS_COMPILATION;
     boost::shared_ptr<MDL::Mdl_compiled_material> db_instance(
         get_db_element()->create_compiled_material(
-            get_db_transaction(), class_compilation, mdl_meters_per_scene_unit,
-            mdl_wavelength_min, mdl_wavelength_max, errors));
-    if( !db_instance)
+            get_db_transaction(), class_compilation,
+            context_impl ? &context_impl->get_context() : &default_context));
+
+    if (!db_instance)
         return 0;
     mi::neuraylib::ICompiled_material* api_instance
         = get_transaction()->create<mi::neuraylib::ICompiled_material>(
             "__Compiled_material");
-    static_cast<Compiled_material_impl* >( api_instance)->get_db_element()->swap(
+    static_cast<Compiled_material_impl*>(api_instance)->get_db_element()->swap(
         *db_instance.get());
     return api_instance;
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

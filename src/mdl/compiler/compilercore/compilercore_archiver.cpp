@@ -2445,6 +2445,8 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
             ver = IMDL::MDL_VERSION_1_3;
         else if (v == "1.4")
             ver = IMDL::MDL_VERSION_1_4;
+        else if (v == "1.5")
+            ver = IMDL::MDL_VERSION_1_5;
         else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }
@@ -2915,7 +2917,7 @@ void Archive_tool::extract_archive(
 }
 
 // Get the MANIFEST from an archive to the file system.
-IArchive_manifest const *Archive_tool::get_manifest(
+Manifest const *Archive_tool::get_manifest(
     char const *archive_path)
 {
     mi::base::Handle<IInput_stream> is(get_manifest_content(archive_path));

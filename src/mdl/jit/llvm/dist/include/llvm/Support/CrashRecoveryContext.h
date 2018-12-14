@@ -94,7 +94,7 @@ public:
   ///
   /// This function is only valid when a crash has been detected (i.e.,
   /// RunSafely() has returned false.
-  const MISTD::string &getBacktrace() const;
+  const std::string &getBacktrace() const;
 };
 
 class CrashRecoveryContextCleanup {

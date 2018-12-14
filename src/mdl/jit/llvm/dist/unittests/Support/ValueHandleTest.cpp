@@ -22,7 +22,7 @@ namespace {
 class ValueHandle : public testing::Test {
 protected:
   Constant *ConstantV;
-  MISTD::auto_ptr<BitCastInst> BitcastV;
+  std::auto_ptr<BitCastInst> BitcastV;
 
   ValueHandle() :
     ConstantV(ConstantInt::get(Type::getInt32Ty(getGlobalContext()), 0)),
@@ -315,7 +315,7 @@ TEST_F(ValueHandle, CallbackVH_DeletionCanRAUW) {
   // a CallbackVH to remove the uses before the check for no uses.
   RecoveringVH RVH;
   RVH = BitcastV.get();
-  MISTD::auto_ptr<BinaryOperator> BitcastUser(
+  std::auto_ptr<BinaryOperator> BitcastUser(
     BinaryOperator::CreateAdd(RVH, 
                               Constant::getNullValue(Type::getInt32Ty(getGlobalContext()))));
   EXPECT_EQ(BitcastV.get(), BitcastUser->getOperand(0));

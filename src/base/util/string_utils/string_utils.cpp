@@ -42,8 +42,8 @@
 namespace MI {
 namespace STRING {
 
-using MISTD::string;
-using MISTD::wstring;
+using std::string;
+using std::wstring;
 
 //==================================================================================================
 
@@ -55,12 +55,12 @@ namespace {
 struct Is_not_whitespace
 {
     // Constructor. This sets the used locale to the default C locale.
-    Is_not_whitespace() : m_locale(MISTD::locale::classic()) {}
+    Is_not_whitespace() : m_locale(std::locale::classic()) {}
     // Return whether the given character \p one is a whitespace or not.
     // \return true when one is not a whitespace, false else
-    bool operator()(char one) const { return !MISTD::isspace(one, m_locale); }
+    bool operator()(char one) const { return !std::isspace(one, m_locale); }
   private:
-    const MISTD::locale& m_locale;	// the locale in use
+    const std::locale& m_locale;	// the locale in use
 };
 
 
@@ -69,12 +69,12 @@ string lstrip_ws(
     const string& str)		// input
 {
     string::const_iterator it =
-        MISTD::find_if(str.begin(), str.end(), Is_not_whitespace());
+        std::find_if(str.begin(), str.end(), Is_not_whitespace());
     string::size_type pos =
         (it != str.end())? it - str.begin() : string::npos;
     // the smart string::substr() will throw when pos is out of range,
     // hence due proper clamping here
-    pos = MISTD::min(pos, str.size());
+    pos = std::min(pos, str.size());
 
     return str.substr(pos);
 }
@@ -84,7 +84,7 @@ string rstrip_ws(
     const string& str)		// input
 {
     string::const_reverse_iterator it =
-        MISTD::find_if(str.rbegin(), str.rend(), Is_not_whitespace());
+        std::find_if(str.rbegin(), str.rend(), Is_not_whitespace());
     string::size_type pos =
         (it != str.rbegin())? it.base() - str.begin() : string::npos;
     return str.substr(0, pos);
@@ -117,7 +117,7 @@ string lstrip(
         string::size_type pos = str.find_first_not_of(sep);
         // the smart string::substr() would throw when pos is out of range,
         // hence do proper clamping here
-        pos = MISTD::min(pos, str.size());
+        pos = std::min(pos, str.size());
 
         return str.substr(pos, string::npos);
     }
@@ -152,7 +152,7 @@ void to_lower(
     string& input)
 {
     // using the global ::tolower() as the STLport implementation is breaking on MAC OSX.
-    MISTD::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
 }
 
 // Convert the given string \p input to a string where all characters are uppercase.
@@ -160,14 +160,14 @@ void to_upper(
     string& input)
 {
     // using the global ::toupper() as the STLport implementation is breaking on MAC OSX.
-    MISTD::transform(input.begin(), input.end(), input.begin(), ::toupper);
+    std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 }
 
 // Convert the given string \p input to a string where all characters are lowercase.
 string to_lower(
     const string& input)
 {
-    MISTD::string result(input);
+    std::string result(input);
     to_lower(static_cast<string&>(result));
     return result;
 }
@@ -176,7 +176,7 @@ string to_lower(
 string to_upper(
     const string& input)
 {
-    MISTD::string result(input);
+    std::string result(input);
     to_upper(static_cast<string&>(result));
     return result;
 }
@@ -324,9 +324,9 @@ string wchar_to_utf8(const wchar_t *src)
 
 // Parse and split a string to get a token list.
 void split(
-    const MISTD::string& source_str,
-    const MISTD::string& separators,
-    MISTD::vector<MISTD::string>& token_list)
+    const std::string& source_str,
+    const std::string& separators,
+    std::vector<std::string>& token_list)
 {
     using namespace boost::algorithm;
 

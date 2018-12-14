@@ -120,7 +120,7 @@ public:
 
   /// Convenience iterator for directly iterating over the Values in the
   /// OperandList
-  class value_op_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+  class value_op_iterator : public std::iterator<std::forward_iterator_tag,
                                                  Value*> {
     op_iterator OI;
   public:

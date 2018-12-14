@@ -45,7 +45,7 @@
 namespace MI {
 namespace ATTR {
 
-using namespace MISTD;
+using namespace std;
 using namespace CONT;
 using namespace LOG;
 
@@ -461,30 +461,30 @@ void eval_typecode(
 
 
 // Generate n tabs.
-static MISTD::string tabs(int n)
+static std::string tabs(int n)
 {
-    MISTD::string result;
+    std::string result;
     for(int i = 0; i < n; i++)
         result += "\t";
     return result;
 }
 
 template<typename T>
-static MISTD::string to_string(T value)
+static std::string to_string(T value)
 {
-    return MISTD::to_string(value);
+    return std::to_string(value);
 }
 
 template<>
-MISTD::string to_string(bool value)
+std::string to_string(bool value)
 {
-    return MISTD::string(value ? "true" : "false");
+    return std::string(value ? "true" : "false");
 }
 
 template<Size n>
-MISTD::string to_string(Vector<bool,n> value)
+std::string to_string(Vector<bool,n> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
@@ -495,48 +495,48 @@ MISTD::string to_string(Vector<bool,n> value)
 }
 
 template<Size n>
-MISTD::string to_string(Vector<Sint32,n> value)
+std::string to_string(Vector<Sint32,n> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
-        result += MISTD::to_string(value[i]);
+        result += std::to_string(value[i]);
     }
     result += ")";
     return result;
 }
 
 template<Size n>
-MISTD::string to_string(Vector<Float32,n> value)
+std::string to_string(Vector<Float32,n> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
-        result += MISTD::to_string(value[i]);
+        result += std::to_string(value[i]);
     }
     result += ")";
     return result;
 }
 
 template<Size n>
-MISTD::string to_string(Vector<Float64,n> value)
+std::string to_string(Vector<Float64,n> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
-        result += MISTD::to_string(value[i]);
+        result += std::to_string(value[i]);
     }
     result += ")";
     return result;
 }
 
 template<Size n,Size m>
-MISTD::string to_string(Matrix<Float32,n,m> value)
+std::string to_string(Matrix<Float32,n,m> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
@@ -547,9 +547,9 @@ MISTD::string to_string(Matrix<Float32,n,m> value)
 }
 
 template<Size n,Size m>
-MISTD::string to_string(Matrix<Float64,n,m> value)
+std::string to_string(Matrix<Float64,n,m> value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(Size i = 0; i < n; i++) {
         if(i) result += ",";
@@ -560,40 +560,40 @@ MISTD::string to_string(Matrix<Float64,n,m> value)
 }
 
 template<>
-MISTD::string to_string(Color value)
+std::string to_string(Color value)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
-    result += MISTD::to_string(value.r);
+    result += std::to_string(value.r);
     result += ",";
-    result += MISTD::to_string(value.g);
+    result += std::to_string(value.g);
     result += ",";
-    result += MISTD::to_string(value.b);
+    result += std::to_string(value.b);
     result += ",";
-    result += MISTD::to_string(value.a);
+    result += std::to_string(value.a);
     result += ")";
     return result;
 }
 
-MISTD::string to_string(Uint8 *value,int n)
+std::string to_string(Uint8 *value,int n)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(int i = 0; i < n; i++) {
         if(i) result += ",";
-        result += MISTD::to_string(value[i]);
+        result += std::to_string(value[i]);
     }
     result += ")";
     return result;
 }
 
-MISTD::string to_string(Uint16 *value,int n)
+std::string to_string(Uint16 *value,int n)
 {
-    MISTD::string result;
+    std::string result;
     result += "(";
     for(int i = 0; i < n; i++) {
         if(i) result += ",";
-        result += MISTD::to_string(value[i]);
+        result += std::to_string(value[i]);
     }
     result += ")";
     return result;
@@ -767,7 +767,7 @@ void dump_attr_values(
                 tabs(depth).c_str(),code_name,type.get_type_name().c_str(),name);
             int field_index = 0;
             for (const Type* c=type.get_child(); c; c=c->get_next()) {
-                MISTD::string element_address = name;
+                std::string element_address = name;
                 const char* field_name = c->get_name();
                 if (field_name) {
                     element_address += ".";
@@ -786,7 +786,7 @@ void dump_attr_values(
                 tabs(depth).c_str(),code_name,type.get_type_name().c_str(),name);
             int field_index = 0;
             for (const Type* c=type.get_child(); c; c=c->get_next()) {
-                MISTD::string element_address = name;
+                std::string element_address = name;
                 element_address += ".";
                 if (const char* field_name = c->get_name()) {
                     element_address += field_name;
@@ -811,7 +811,7 @@ void dump_attr_values(
 
         int field_index = 0;
         for (const Type *c = type.get_child(); c; c = c->get_next()) {
-            MISTD::string element_address = name;
+            std::string element_address = name;
             element_address += ".";
             if (const char* field_name = c->get_name()) {
                 element_address += field_name;
@@ -832,9 +832,9 @@ void dump_attr_values(
             tabs(depth).c_str(),code_name,name);
         int size = type.get_arraysize();
         for (int i=0; i < size; ++i) {
-            MISTD::string element_address = name;
+            std::string element_address = name;
             element_address += "[";
-            element_address += MISTD::to_string(i);
+            element_address += std::to_string(i);
             element_address += "]";
             char* ret_address;
             type.lookup(element_address.c_str(),const_cast<char*>(data),&ret_address);
@@ -1144,7 +1144,7 @@ void get_dump_attr_values_string(
                 << ' ' << output_name << endl;
             int field_index = 0;
             for (const Type* c=type.get_child(); c; c=c->get_next()) {
-                MISTD::string element_address = name;
+                std::string element_address = name;
                 element_address += ".";
                 const char* field_name = c->get_name();
                 if (field_name) {
@@ -1164,7 +1164,7 @@ void get_dump_attr_values_string(
                 << ' ' << output_name << endl;
             int field_index = 0;
             for (const Type* c=type.get_child(); c; c=c->get_next()) {
-                MISTD::string element_address = name;
+                std::string element_address = name;
                 element_address += ".";
                 if (const char* field_name = c->get_name()) {
                     element_address += field_name;
@@ -1189,7 +1189,7 @@ void get_dump_attr_values_string(
 
         int field_index = 0;
         for (const Type *c = type.get_child(); c; c = c->get_next()) {
-            MISTD::string element_address = name;
+            std::string element_address = name;
             element_address += ".";
             if (const char* field_name = c->get_name()) {
                 element_address += field_name;
@@ -1208,9 +1208,9 @@ void get_dump_attr_values_string(
         os << tabs(depth).c_str() << code_name << ' ' << output_name << endl;
         int size = type.get_arraysize();
         for (int i=0; i < size; ++i) {
-            MISTD::string element_address = name;
+            std::string element_address = name;
             element_address += "[";
-            element_address += MISTD::to_string(i);
+            element_address += std::to_string(i);
             element_address += "]";
             char* ret_address;
             type.lookup(element_address.c_str(),const_cast<char*>(data),&ret_address);

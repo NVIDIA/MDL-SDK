@@ -127,7 +127,7 @@ public:
     return Tmp;
   }
 
-  T &operator[](MISTD::ptrdiff_t i) const {
+  T &operator[](std::ptrdiff_t i) const {
     assert(Ptr && "Cannot dereference null pointer");
     return Ptr[i];
   }

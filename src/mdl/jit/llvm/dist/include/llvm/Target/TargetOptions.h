@@ -161,7 +161,7 @@ namespace llvm {
     /// getTrapFunctionName - If this returns a non-empty string, this means
     /// isel should lower Intrinsic::trap to a call to the specified function
     /// name instead of an ISD::TRAP node.
-    MISTD::string TrapFuncName;
+    std::string TrapFuncName;
     StringRef getTrapFunctionName() const;
 
     /// FloatABIType - This setting is set by -float-abi=xxx option is specfied

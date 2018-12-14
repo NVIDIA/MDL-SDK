@@ -387,6 +387,124 @@ void Dag_hasher::visit(int index, DAG_node *init)
 {
 }
 
+// Hash a parameter.
+void Dag_hasher::hash_parameter(char const *name, IType const *type)
+{
+    m_hasher.update(name);
+    hash(type);
+}
+
+// Hash a type.
+void Dag_hasher::hash(IType const *tp) {
+    IType::Kind kind = tp->get_kind();
+    m_hasher.update(kind);
+
+    switch (kind) {
+    case IType::TK_ALIAS:
+        {
+            IType_alias const *a_tp = cast<IType_alias>(tp);
+            m_hasher.update(a_tp->get_type_modifiers());
+            if (ISymbol const *sym = a_tp->get_symbol())
+                m_hasher.update(sym->get_name());
+            hash(a_tp->get_aliased_type());
+        }
+        break;
+    case IType::TK_BOOL:
+    case IType::TK_INT:
+        break;
+    case IType::TK_ENUM:
+        {
+            IType_enum const *et = cast<IType_enum>(tp);
+
+            m_hasher.update(et->get_symbol()->get_name());
+        }
+        break;
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_STRING:
+    case IType::TK_LIGHT_PROFILE:
+    case IType::TK_BSDF:
+    case IType::TK_EDF:
+    case IType::TK_VDF:
+        break;
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *vt = cast<IType_vector>(tp);
+
+            m_hasher.update(vt->get_size());
+            hash(vt->get_element_type());
+        }
+        break;
+    case IType::TK_MATRIX:
+        {
+            IType_matrix const *mt = cast<IType_matrix>(tp);
+
+            m_hasher.update(mt->get_columns());
+            hash(mt->get_element_type());
+        }
+        break;
+    case IType::TK_ARRAY:
+        {
+            IType_array const *at = cast<IType_array>(tp);
+
+            if (at->is_immediate_sized()) {
+                m_hasher.update(at->get_size());
+            } else {
+                IType_array_size const *sz = at->get_deferred_size();
+
+                m_hasher.update(sz->get_name()->get_name());
+            }
+            hash(at->get_element_type());
+        }
+        break;
+    case IType::TK_COLOR:
+        break;
+    case IType::TK_FUNCTION:
+        {
+            IType_function const *ft = cast<IType_function>(tp);
+
+            if (IType const *ret_type = ft->get_return_type()) {
+                m_hasher.update('R');
+                hash(ret_type);
+            } else {
+                m_hasher.update('N');
+            }
+
+            int n_params = ft->get_parameter_count();
+            m_hasher.update(n_params);
+
+            for (int i = 0; i < n_params; ++i) {
+                IType const *p_tp;
+                ISymbol const *p_sym;
+
+                ft->get_parameter(i, p_tp, p_sym);
+
+                m_hasher.update(p_sym->get_name());
+                hash(p_tp);
+            }
+        }
+        break;
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *st = cast<IType_struct>(tp);
+
+            m_hasher.update(st->get_symbol()->get_name());
+        }
+        break;
+    case IType::TK_TEXTURE:
+        {
+            IType_texture const *tt = cast<IType_texture>(tp);
+
+            m_hasher.update(tt->get_shape());
+        }
+        break;
+    case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_INCOMPLETE:
+    case IType::TK_ERROR:
+        break;
+    }
+}
+
 // Hash a value.
 void Dag_hasher::hash(IValue const *v) {
     IValue::Kind kind = v->get_kind();

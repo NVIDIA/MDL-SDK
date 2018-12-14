@@ -236,7 +236,7 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
         // Replace this zero-sized alloca with the one at the start of the entry
         // block after ensuring that the address will be aligned enough for both
         // types.
-        unsigned MaxAlign = MISTD::max(EntryAI->getAlignment(),
+        unsigned MaxAlign = std::max(EntryAI->getAlignment(),
                                      AI.getAlignment());
         EntryAI->setAlignment(MaxAlign);
         if (AI.getType() != EntryAI->getType())

@@ -20,7 +20,7 @@ using namespace llvm;
 /// string pairs that is not shared across the whole set of strings.  All
 /// strings are assumed to have the same length.
 static unsigned 
-FindFirstNonCommonLetter(const MISTD::vector<const
+FindFirstNonCommonLetter(const std::vector<const
                               StringMatcher::StringPair*> &Matches) {
   assert(!Matches.empty());
   for (unsigned i = 0, e = Matches[0]->first.size(); i != e; ++i) {
@@ -41,10 +41,10 @@ FindFirstNonCommonLetter(const MISTD::vector<const
 ///
 /// \return - True if control can leave the emitted code fragment.
 bool StringMatcher::
-EmitStringMatcherForChar(const MISTD::vector<const StringPair*> &Matches,
+EmitStringMatcherForChar(const std::vector<const StringPair*> &Matches,
                          unsigned CharNo, unsigned IndentCount) const {
   assert(!Matches.empty() && "Must have at least one string to match!");
-  MISTD::string Indent(IndentCount*2+4, ' ');
+  std::string Indent(IndentCount*2+4, ' ');
   
   // If we have verified that the entire string matches, we're done: output the
   // matching code.
@@ -54,7 +54,7 @@ EmitStringMatcherForChar(const MISTD::vector<const StringPair*> &Matches,
     // If the to-execute code has \n's in it, indent each subsequent line.
     StringRef Code = Matches[0]->second;
     
-    MISTD::pair<StringRef, StringRef> Split = Code.split('\n');
+    std::pair<StringRef, StringRef> Split = Code.split('\n');
     OS << Indent << Split.first << "\t // \"" << Matches[0]->first << "\"\n";
 
     Code = Split.second;
@@ -67,7 +67,7 @@ EmitStringMatcherForChar(const MISTD::vector<const StringPair*> &Matches,
   }
   
   // Bucket the matches by the character we are comparing.
-  MISTD::map<char, MISTD::vector<const StringPair*> > MatchesByLetter;
+  std::map<char, std::vector<const StringPair*> > MatchesByLetter;
   
   for (unsigned i = 0, e = Matches.size(); i != e; ++i)
     MatchesByLetter[Matches[i]->first[CharNo]].push_back(Matches[i]);
@@ -103,7 +103,7 @@ EmitStringMatcherForChar(const MISTD::vector<const StringPair*> &Matches,
   OS << Indent << "switch (" << StrVariableName << "[" << CharNo << "]) {\n";
   OS << Indent << "default: break;\n";
   
-  for (MISTD::map<char, MISTD::vector<const StringPair*> >::iterator LI = 
+  for (std::map<char, std::vector<const StringPair*> >::iterator LI = 
        MatchesByLetter.begin(), E = MatchesByLetter.end(); LI != E; ++LI) {
     // TODO: escape hard stuff (like \n) if we ever care about it.
     OS << Indent << "case '" << LI->first << "':\t // "
@@ -126,7 +126,7 @@ void StringMatcher::Emit(unsigned Indent) const {
   if (Matches.empty()) return;
   
   // First level categorization: group strings by length.
-  MISTD::map<unsigned, MISTD::vector<const StringPair*> > MatchesByLength;
+  std::map<unsigned, std::vector<const StringPair*> > MatchesByLength;
   
   for (unsigned i = 0, e = Matches.size(); i != e; ++i)
     MatchesByLength[Matches[i].first.size()].push_back(&Matches[i]);
@@ -136,7 +136,7 @@ void StringMatcher::Emit(unsigned Indent) const {
   OS.indent(Indent*2+2) << "switch (" << StrVariableName << ".size()) {\n";
   OS.indent(Indent*2+2) << "default: break;\n";
   
-  for (MISTD::map<unsigned, MISTD::vector<const StringPair*> >::iterator LI =
+  for (std::map<unsigned, std::vector<const StringPair*> >::iterator LI =
        MatchesByLength.begin(), E = MatchesByLength.end(); LI != E; ++LI) {
     OS.indent(Indent*2+2) << "case " << LI->first << ":\t // "
        << LI->second.size()

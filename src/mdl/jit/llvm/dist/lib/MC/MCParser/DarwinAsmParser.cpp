@@ -28,7 +28,7 @@ namespace {
 class DarwinAsmParser : public MCAsmParserExtension {
   template<bool (DarwinAsmParser::*HandlerMethod)(StringRef, SMLoc)>
   void addDirectiveHandler(StringRef Directive) {
-    MCAsmParser::ExtensionDirectiveHandler Handler = MISTD::make_pair(
+    MCAsmParser::ExtensionDirectiveHandler Handler = std::make_pair(
         this, HandleDirective<DarwinAsmParser, HandlerMethod>);
     getParser().addDirectiveHandler(Directive, Handler);
   }
@@ -482,12 +482,12 @@ bool DarwinAsmParser::ParseDirectiveDumpOrLoad(StringRef Directive,
 /// ParseDirectiveLinkerOption
 ///  ::= .linker_option "string" ( , "string" )*
 bool DarwinAsmParser::ParseDirectiveLinkerOption(StringRef IDVal, SMLoc) {
-  SmallVector<MISTD::string, 4> Args;
+  SmallVector<std::string, 4> Args;
   for (;;) {
     if (getLexer().isNot(AsmToken::String))
       return TokError("expected string in '" + Twine(IDVal) + "' directive");
 
-    MISTD::string Data;
+    std::string Data;
     if (getParser().parseEscapedString(Data))
       return true;
 
@@ -549,7 +549,7 @@ bool DarwinAsmParser::ParseDirectiveSection(StringRef, SMLoc) {
   if (!getLexer().is(AsmToken::Comma))
     return TokError("unexpected token in '.section' directive");
 
-  MISTD::string SectionSpec = SectionName;
+  std::string SectionSpec = SectionName;
   SectionSpec += ",";
 
   // Add all the tokens until the end of the line, ParseSectionSpecifier will
@@ -567,7 +567,7 @@ bool DarwinAsmParser::ParseDirectiveSection(StringRef, SMLoc) {
   unsigned StubSize;
   unsigned TAA;
   bool TAAParsed;
-  MISTD::string ErrorStr =
+  std::string ErrorStr =
     MCSectionMachO::ParseSectionSpecifier(SectionSpec, Segment, Section,
                                           TAA, TAAParsed, StubSize);
 
@@ -633,7 +633,7 @@ bool DarwinAsmParser::ParseDirectiveSecureLogUnique(StringRef, SMLoc IDLoc) {
   // Open the secure log file if we haven't already.
   raw_ostream *OS = getContext().getSecureLog();
   if (OS == NULL) {
-    MISTD::string Err;
+    std::string Err;
     OS = new raw_fd_ostream(SecureLogFile, Err, sys::fs::F_Append);
     if (!Err.empty()) {
        delete OS;

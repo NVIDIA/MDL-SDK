@@ -333,7 +333,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
     if ((LoadAlignment != 0) != (LI->getAlignment() != 0))
       return 0;
 
-    LoadAlignment = MISTD::min(LoadAlignment, LI->getAlignment());
+    LoadAlignment = std::min(LoadAlignment, LI->getAlignment());
 
     // If the PHI is of volatile loads and the load block has multiple
     // successors, sinking it would remove a load of the volatile value from
@@ -761,7 +761,7 @@ Instruction *InstCombiner::SliceUpIllegalIntegerPHI(PHINode &FirstPhi) {
         // needed piece.
         if (PHINode *OldInVal = dyn_cast<PHINode>(PN->getIncomingValue(i)))
           if (PHIsInspected.count(OldInVal)) {
-            unsigned RefPHIId = MISTD::find(PHIsToSlice.begin(),PHIsToSlice.end(),
+            unsigned RefPHIId = std::find(PHIsToSlice.begin(),PHIsToSlice.end(),
                                           OldInVal)-PHIsToSlice.begin();
             PHIUsers.push_back(PHIUsageRecord(RefPHIId, Offset,
                                               cast<Instruction>(Res)));

@@ -81,7 +81,7 @@ bool LTOModule::isBitcodeFileForTarget(const char *path,
 /// isTargetMatch - Returns 'true' if the memory buffer is for the specified
 /// target triple.
 bool LTOModule::isTargetMatch(MemoryBuffer *buffer, const char *triplePrefix) {
-  MISTD::string Triple = getBitcodeTargetTriple(buffer, getGlobalContext());
+  std::string Triple = getBitcodeTargetTriple(buffer, getGlobalContext());
   delete buffer;
   return strncmp(Triple.c_str(), triplePrefix, strlen(triplePrefix)) == 0;
 }
@@ -89,7 +89,7 @@ bool LTOModule::isTargetMatch(MemoryBuffer *buffer, const char *triplePrefix) {
 /// makeLTOModule - Create an LTOModule. N.B. These methods take ownership of
 /// the buffer.
 LTOModule *LTOModule::makeLTOModule(const char *path, TargetOptions options,
-                                    MISTD::string &errMsg) {
+                                    std::string &errMsg) {
   OwningPtr<MemoryBuffer> buffer;
   if (error_code ec = MemoryBuffer::getFile(path, buffer)) {
     errMsg = ec.message();
@@ -100,7 +100,7 @@ LTOModule *LTOModule::makeLTOModule(const char *path, TargetOptions options,
 
 LTOModule *LTOModule::makeLTOModule(int fd, const char *path,
                                     size_t size, TargetOptions options,
-                                    MISTD::string &errMsg) {
+                                    std::string &errMsg) {
   return makeLTOModule(fd, path, size, 0, options, errMsg);
 }
 
@@ -108,7 +108,7 @@ LTOModule *LTOModule::makeLTOModule(int fd, const char *path,
                                     size_t map_size,
                                     off_t offset,
                                     TargetOptions options,
-                                    MISTD::string &errMsg) {
+                                    std::string &errMsg) {
   OwningPtr<MemoryBuffer> buffer;
   if (error_code ec =
           MemoryBuffer::getOpenFileSlice(fd, path, buffer, map_size, offset)) {
@@ -120,7 +120,7 @@ LTOModule *LTOModule::makeLTOModule(int fd, const char *path,
 
 LTOModule *LTOModule::makeLTOModule(const void *mem, size_t length,
                                     TargetOptions options,
-                                    MISTD::string &errMsg) {
+                                    std::string &errMsg) {
   OwningPtr<MemoryBuffer> buffer(makeBuffer(mem, length));
   if (!buffer)
     return NULL;
@@ -129,7 +129,7 @@ LTOModule *LTOModule::makeLTOModule(const void *mem, size_t length,
 
 LTOModule *LTOModule::makeLTOModule(MemoryBuffer *buffer,
                                     TargetOptions options,
-                                    MISTD::string &errMsg) {
+                                    std::string &errMsg) {
   // parse bitcode buffer
   OwningPtr<Module> m(getLazyBitcodeModule(buffer, getGlobalContext(),
                                            &errMsg));
@@ -138,7 +138,7 @@ LTOModule *LTOModule::makeLTOModule(MemoryBuffer *buffer,
     return NULL;
   }
 
-  MISTD::string TripleStr = m->getTargetTriple();
+  std::string TripleStr = m->getTargetTriple();
   if (TripleStr.empty())
     TripleStr = sys::getDefaultTargetTriple();
   llvm::Triple Triple(TripleStr);
@@ -151,9 +151,9 @@ LTOModule *LTOModule::makeLTOModule(MemoryBuffer *buffer,
   // construct LTOModule, hand over ownership of module and target
   SubtargetFeatures Features;
   Features.getDefaultSubtargetFeatures(Triple);
-  MISTD::string FeatureStr = Features.getString();
+  std::string FeatureStr = Features.getString();
   // Set a default CPU for Darwin triples.
-  MISTD::string CPU;
+  std::string CPU;
   if (Triple.isOSDarwin()) {
     if (Triple.getArch() == llvm::Triple::x86_64)
       CPU = "core2";
@@ -182,7 +182,7 @@ MemoryBuffer *LTOModule::makeBuffer(const void *mem, size_t length) {
 
 /// objcClassNameFromExpression - Get string that the data pointer points to.
 bool
-LTOModule::objcClassNameFromExpression(const Constant *c, MISTD::string &name) {
+LTOModule::objcClassNameFromExpression(const Constant *c, std::string &name) {
   if (const ConstantExpr *ce = dyn_cast<ConstantExpr>(c)) {
     Constant *op = ce->getOperand(0);
     if (GlobalVariable *gvn = dyn_cast<GlobalVariable>(op)) {
@@ -204,7 +204,7 @@ void LTOModule::addObjCClass(const GlobalVariable *clgv) {
   if (!c) return;
 
   // second slot in __OBJC,__class is pointer to superclass name
-  MISTD::string superclassName;
+  std::string superclassName;
   if (objcClassNameFromExpression(c->getOperand(1), superclassName)) {
     NameAndAttributes info;
     StringMap<NameAndAttributes>::value_type &entry =
@@ -220,7 +220,7 @@ void LTOModule::addObjCClass(const GlobalVariable *clgv) {
   }
 
   // third slot in __OBJC,__class is pointer to class name
-  MISTD::string className;
+  std::string className;
   if (objcClassNameFromExpression(c->getOperand(2), className)) {
     StringSet::value_type &entry = _defines.GetOrCreateValue(className);
     entry.setValue(1);
@@ -241,7 +241,7 @@ void LTOModule::addObjCCategory(const GlobalVariable *clgv) {
   if (!c) return;
 
   // second slot in __OBJC,__category is pointer to target class name
-  MISTD::string targetclassName;
+  std::string targetclassName;
   if (!objcClassNameFromExpression(c->getOperand(1), targetclassName))
     return;
 
@@ -262,7 +262,7 @@ void LTOModule::addObjCCategory(const GlobalVariable *clgv) {
 
 /// addObjCClassRef - Parse i386/ppc ObjC class list data structure.
 void LTOModule::addObjCClassRef(const GlobalVariable *clgv) {
-  MISTD::string targetclassName;
+  std::string targetclassName;
   if (!objcClassNameFromExpression(clgv->getInitializer(), targetclassName))
     return;
 
@@ -690,8 +690,8 @@ namespace {
 
 /// addAsmGlobalSymbols - Add global symbols from module-level ASM to the
 /// defined or undefined lists.
-bool LTOModule::addAsmGlobalSymbols(MISTD::string &errMsg) {
-  const MISTD::string &inlineAsm = _module->getModuleInlineAsm();
+bool LTOModule::addAsmGlobalSymbols(std::string &errMsg) {
+  const std::string &inlineAsm = _module->getModuleInlineAsm();
   if (inlineAsm.empty())
     return false;
 
@@ -710,7 +710,7 @@ bool LTOModule::addAsmGlobalSymbols(MISTD::string &errMsg) {
                                 _target->getTargetFeatureString()));
   OwningPtr<MCTargetAsmParser> TAP(T.createMCAsmParser(*STI, *Parser.get(), *MCII));
   if (!TAP) {
-    errMsg = "target " + MISTD::string(T.getName()) +
+    errMsg = "target " + std::string(T.getName()) +
       " does not define AsmParser.";
     return true;
   }
@@ -748,7 +748,7 @@ static bool isDeclaration(const GlobalValue &V) {
 
 /// parseSymbols - Parse the symbols from the module and model-level ASM and add
 /// them to either the defined or undefined lists.
-bool LTOModule::parseSymbols(MISTD::string &errMsg) {
+bool LTOModule::parseSymbols(std::string &errMsg) {
   // add functions
   for (Module::iterator f = _module->begin(), e = _module->end(); f != e; ++f) {
     if (isDeclaration(*f))

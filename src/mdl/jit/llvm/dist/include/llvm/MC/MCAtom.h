@@ -70,7 +70,7 @@ public:
 
 protected:
   const AtomKind Kind;
-  MISTD::string Name;
+  std::string Name;
   MCModule *Parent;
   uint64_t Begin, End;
 
@@ -122,7 +122,7 @@ public:
 /// \brief An atom consisting of disassembled instructions.
 class MCTextAtom : public MCAtom {
 private:
-  typedef MISTD::vector<MCDecodedInst> InstListTy;
+  typedef std::vector<MCDecodedInst> InstListTy;
   InstListTy Insts;
 
   /// \brief The address of the next appended instruction, i.e., the
@@ -168,7 +168,7 @@ typedef uint8_t MCData;
 
 /// \brief An atom consising of a sequence of bytes.
 class MCDataAtom : public MCAtom {
-  MISTD::vector<MCData> Data;
+  std::vector<MCData> Data;
 
 public:
   /// Append a data entry, expanding the atom if necessary.

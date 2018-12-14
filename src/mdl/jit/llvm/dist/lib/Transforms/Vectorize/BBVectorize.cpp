@@ -205,11 +205,11 @@ namespace {
       TTI = IgnoreTargetInfo ? 0 : &P->getAnalysis<TargetTransformInfo>();
     }
 
-    typedef MISTD::pair<Value *, Value *> ValuePair;
-    typedef MISTD::pair<ValuePair, int> ValuePairWithCost;
-    typedef MISTD::pair<ValuePair, size_t> ValuePairWithDepth;
-    typedef MISTD::pair<ValuePair, ValuePair> VPPair; // A ValuePair pair
-    typedef MISTD::pair<VPPair, unsigned> VPPairWithType;
+    typedef std::pair<Value *, Value *> ValuePair;
+    typedef std::pair<ValuePair, int> ValuePairWithCost;
+    typedef std::pair<ValuePair, size_t> ValuePairWithDepth;
+    typedef std::pair<ValuePair, ValuePair> VPPair; // A ValuePair pair
+    typedef std::pair<VPPair, unsigned> VPPairWithType;
 
     AliasAnalysis *AA;
     DominatorTree *DT;
@@ -223,10 +223,10 @@ namespace {
 
     bool getCandidatePairs(BasicBlock &BB,
                        BasicBlock::iterator &Start,
-                       DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                       DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                        DenseSet<ValuePair> &FixedOrderPairs,
                        DenseMap<ValuePair, int> &CandidatePairCostSavings,
-                       MISTD::vector<Value *> &PairableInsts, bool NonPow2Len);
+                       std::vector<Value *> &PairableInsts, bool NonPow2Len);
 
     // FIXME: The current implementation does not account for pairs that
     // are connected in multiple ways. For example:
@@ -238,35 +238,35 @@ namespace {
     };
 
     void computeConnectedPairs(
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
              DenseSet<ValuePair> &CandidatePairsSet,
-             MISTD::vector<Value *> &PairableInsts,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+             std::vector<Value *> &PairableInsts,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes);
 
     void buildDepMap(BasicBlock &BB,
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
-             MISTD::vector<Value *> &PairableInsts,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
+             std::vector<Value *> &PairableInsts,
              DenseSet<ValuePair> &PairableInstUsers);
 
-    void choosePairs(DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+    void choosePairs(DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
              DenseSet<ValuePair> &CandidatePairsSet,
              DenseMap<ValuePair, int> &CandidatePairCostSavings,
-             MISTD::vector<Value *> &PairableInsts,
+             std::vector<Value *> &PairableInsts,
              DenseSet<ValuePair> &FixedOrderPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps,
              DenseSet<ValuePair> &PairableInstUsers,
              DenseMap<Value *, Value *>& ChosenPairs);
 
     void fuseChosenPairs(BasicBlock &BB,
-             MISTD::vector<Value *> &PairableInsts,
+             std::vector<Value *> &PairableInsts,
              DenseMap<Value *, Value *>& ChosenPairs,
              DenseSet<ValuePair> &FixedOrderPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps);
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps);
 
 
     bool isInstVectorizable(Instruction *I, bool &IsSimpleLoadStore);
@@ -281,29 +281,29 @@ namespace {
                       DenseSet<ValuePair> *LoadMoveSetPairs = 0);
 
   void computePairsConnectedTo(
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
              DenseSet<ValuePair> &CandidatePairsSet,
-             MISTD::vector<Value *> &PairableInsts,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+             std::vector<Value *> &PairableInsts,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes,
              ValuePair P);
 
     bool pairsConflict(ValuePair P, ValuePair Q,
              DenseSet<ValuePair> &PairableInstUsers,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> >
+             DenseMap<ValuePair, std::vector<ValuePair> >
                *PairableInstUserMap = 0,
              DenseSet<VPPair> *PairableInstUserPairSet = 0);
 
     bool pairWillFormCycle(ValuePair P,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUsers,
+             DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUsers,
              DenseSet<ValuePair> &CurrentPairs);
 
     void pruneDAGFor(
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
-             MISTD::vector<Value *> &PairableInsts,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
+             std::vector<Value *> &PairableInsts,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
              DenseSet<ValuePair> &PairableInstUsers,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUserMap,
+             DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUserMap,
              DenseSet<VPPair> &PairableInstUserPairSet,
              DenseMap<Value *, Value *> &ChosenPairs,
              DenseMap<ValuePair, size_t> &DAG,
@@ -311,29 +311,29 @@ namespace {
              bool UseCycleCheck);
 
     void buildInitialDAGFor(
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
              DenseSet<ValuePair> &CandidatePairsSet,
-             MISTD::vector<Value *> &PairableInsts,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+             std::vector<Value *> &PairableInsts,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
              DenseSet<ValuePair> &PairableInstUsers,
              DenseMap<Value *, Value *> &ChosenPairs,
              DenseMap<ValuePair, size_t> &DAG, ValuePair J);
 
     void findBestDAGFor(
-             DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+             DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
              DenseSet<ValuePair> &CandidatePairsSet,
              DenseMap<ValuePair, int> &CandidatePairCostSavings,
-             MISTD::vector<Value *> &PairableInsts,
+             std::vector<Value *> &PairableInsts,
              DenseSet<ValuePair> &FixedOrderPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps,
              DenseSet<ValuePair> &PairableInstUsers,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUserMap,
+             DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUserMap,
              DenseSet<VPPair> &PairableInstUserPairSet,
              DenseMap<Value *, Value *> &ChosenPairs,
              DenseSet<ValuePair> &BestDAG, size_t &BestMaxDepth,
-             int &BestEffSize, Value *II, MISTD::vector<Value *>&JJ,
+             int &BestEffSize, Value *II, std::vector<Value *>&JJ,
              bool UseCycleCheck);
 
     Value *getReplacementPointerInput(LLVMContext& Context, Instruction *I,
@@ -342,7 +342,7 @@ namespace {
     void fillNewShuffleMask(LLVMContext& Context, Instruction *J,
                      unsigned MaskOffset, unsigned NumInElem,
                      unsigned NumInElem1, unsigned IdxOffset,
-                     MISTD::vector<Constant*> &Mask);
+                     std::vector<Constant*> &Mask);
 
     Value *getReplacementShuffleMask(LLVMContext& Context, Instruction *I,
                      Instruction *J);
@@ -366,14 +366,14 @@ namespace {
 
     void collectPairLoadMoveSet(BasicBlock &BB,
                      DenseMap<Value *, Value *> &ChosenPairs,
-                     DenseMap<Value *, MISTD::vector<Value *> > &LoadMoveSet,
+                     DenseMap<Value *, std::vector<Value *> > &LoadMoveSet,
                      DenseSet<ValuePair> &LoadMoveSetPairs,
                      Instruction *I);
 
     void collectLoadMoveSet(BasicBlock &BB,
-                     MISTD::vector<Value *> &PairableInsts,
+                     std::vector<Value *> &PairableInsts,
                      DenseMap<Value *, Value *> &ChosenPairs,
-                     DenseMap<Value *, MISTD::vector<Value *> > &LoadMoveSet,
+                     DenseMap<Value *, std::vector<Value *> > &LoadMoveSet,
                      DenseSet<ValuePair> &LoadMoveSetPairs);
 
     bool canMoveUsesOfIAfterJ(BasicBlock &BB,
@@ -691,16 +691,16 @@ namespace {
     bool ShouldContinue;
     BasicBlock::iterator Start = BB.getFirstInsertionPt();
 
-    MISTD::vector<Value *> AllPairableInsts;
+    std::vector<Value *> AllPairableInsts;
     DenseMap<Value *, Value *> AllChosenPairs;
     DenseSet<ValuePair> AllFixedOrderPairs;
     DenseMap<VPPair, unsigned> AllPairConnectionTypes;
-    DenseMap<ValuePair, MISTD::vector<ValuePair> > AllConnectedPairs,
+    DenseMap<ValuePair, std::vector<ValuePair> > AllConnectedPairs,
                                                  AllConnectedPairDeps;
 
     do {
-      MISTD::vector<Value *> PairableInsts;
-      DenseMap<Value *, MISTD::vector<Value *> > CandidatePairs;
+      std::vector<Value *> PairableInsts;
+      DenseMap<Value *, std::vector<Value *> > CandidatePairs;
       DenseSet<ValuePair> FixedOrderPairs;
       DenseMap<ValuePair, int> CandidatePairCostSavings;
       ShouldContinue = getCandidatePairs(BB, Start, CandidatePairs,
@@ -711,9 +711,9 @@ namespace {
 
       // Build the candidate pair set for faster lookups.
       DenseSet<ValuePair> CandidatePairsSet;
-      for (DenseMap<Value *, MISTD::vector<Value *> >::iterator I =
+      for (DenseMap<Value *, std::vector<Value *> >::iterator I =
            CandidatePairs.begin(), E = CandidatePairs.end(); I != E; ++I)
-        for (MISTD::vector<Value *>::iterator J = I->second.begin(),
+        for (std::vector<Value *>::iterator J = I->second.begin(),
              JE = I->second.end(); J != JE; ++J)
           CandidatePairsSet.insert(ValuePair(I->first, *J));
 
@@ -726,17 +726,17 @@ namespace {
       // Note that it only matters that both members of the second pair use some
       // element of the first pair (to allow for splatting).
 
-      DenseMap<ValuePair, MISTD::vector<ValuePair> > ConnectedPairs,
+      DenseMap<ValuePair, std::vector<ValuePair> > ConnectedPairs,
                                                    ConnectedPairDeps;
       DenseMap<VPPair, unsigned> PairConnectionTypes;
       computeConnectedPairs(CandidatePairs, CandidatePairsSet,
                             PairableInsts, ConnectedPairs, PairConnectionTypes);
       if (ConnectedPairs.empty()) continue;
 
-      for (DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator
+      for (DenseMap<ValuePair, std::vector<ValuePair> >::iterator
            I = ConnectedPairs.begin(), IE = ConnectedPairs.end();
            I != IE; ++I)
-        for (MISTD::vector<ValuePair>::iterator J = I->second.begin(),
+        for (std::vector<ValuePair>::iterator J = I->second.begin(),
              JE = I->second.end(); J != JE; ++J)
           ConnectedPairDeps[*J].push_back(I->first);
 
@@ -786,10 +786,10 @@ namespace {
         }
       }
 
-      for (DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator
+      for (DenseMap<ValuePair, std::vector<ValuePair> >::iterator
            I = ConnectedPairs.begin(), IE = ConnectedPairs.end();
            I != IE; ++I)
-        for (MISTD::vector<ValuePair>::iterator J = I->second.begin(),
+        for (std::vector<ValuePair>::iterator J = I->second.begin(),
           JE = I->second.end(); J != JE; ++J)
           if (AllPairConnectionTypes.count(VPPair(I->first, *J))) {
             AllConnectedPairs[I->first].push_back(*J);
@@ -939,7 +939,7 @@ namespace {
     Type *IT1, *IT2, *JT1, *JT2;
     getInstructionTypes(I, IT1, IT2);
     getInstructionTypes(J, JT1, JT2);
-    unsigned MaxTypeBits = MISTD::max(
+    unsigned MaxTypeBits = std::max(
       IT1->getPrimitiveSizeInBits() + JT1->getPrimitiveSizeInBits(),
       IT2->getPrimitiveSizeInBits() + JT2->getPrimitiveSizeInBits());
     if (!TTI && MaxTypeBits > Config.VectorBits)
@@ -1164,10 +1164,10 @@ namespace {
   // basic block and collects all candidate pairs for vectorization.
   bool BBVectorize::getCandidatePairs(BasicBlock &BB,
                        BasicBlock::iterator &Start,
-                       DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                       DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                        DenseSet<ValuePair> &FixedOrderPairs,
                        DenseMap<ValuePair, int> &CandidatePairCostSavings,
-                       MISTD::vector<Value *> &PairableInsts, bool NonPow2Len) {
+                       std::vector<Value *> &PairableInsts, bool NonPow2Len) {
     size_t TotalPairs = 0;
     BasicBlock::iterator E = BB.end();
     if (Start == E) return false;
@@ -1262,10 +1262,10 @@ namespace {
   // it looks for pairs such that both members have an input which is an
   // output of PI or PJ.
   void BBVectorize::computePairsConnectedTo(
-                  DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                  DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                   DenseSet<ValuePair> &CandidatePairsSet,
-                  MISTD::vector<Value *> &PairableInsts,
-                  DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+                  std::vector<Value *> &PairableInsts,
+                  DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
                   DenseMap<VPPair, unsigned> &PairConnectionTypes,
                   ValuePair P) {
     StoreInst *SI, *SJ;
@@ -1353,19 +1353,19 @@ namespace {
   // connected if some output of the first pair forms an input to both members
   // of the second pair.
   void BBVectorize::computeConnectedPairs(
-                  DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                  DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                   DenseSet<ValuePair> &CandidatePairsSet,
-                  MISTD::vector<Value *> &PairableInsts,
-                  DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+                  std::vector<Value *> &PairableInsts,
+                  DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
                   DenseMap<VPPair, unsigned> &PairConnectionTypes) {
-    for (MISTD::vector<Value *>::iterator PI = PairableInsts.begin(),
+    for (std::vector<Value *>::iterator PI = PairableInsts.begin(),
          PE = PairableInsts.end(); PI != PE; ++PI) {
-      DenseMap<Value *, MISTD::vector<Value *> >::iterator PP =
+      DenseMap<Value *, std::vector<Value *> >::iterator PP =
         CandidatePairs.find(*PI);
       if (PP == CandidatePairs.end())
         continue;
 
-      for (MISTD::vector<Value *>::iterator P = PP->second.begin(),
+      for (std::vector<Value *>::iterator P = PP->second.begin(),
            E = PP->second.end(); P != E; ++P)
         computePairsConnectedTo(CandidatePairs, CandidatePairsSet,
                                 PairableInsts, ConnectedPairs,
@@ -1373,7 +1373,7 @@ namespace {
     }
 
     DEBUG(size_t TotalPairs = 0;
-          for (DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator I =
+          for (DenseMap<ValuePair, std::vector<ValuePair> >::iterator I =
                ConnectedPairs.begin(), IE = ConnectedPairs.end(); I != IE; ++I)
             TotalPairs += I->second.size();
           dbgs() << "BBV: found " << TotalPairs
@@ -1385,11 +1385,11 @@ namespace {
   // depends on the output of A.
   void BBVectorize::buildDepMap(
                       BasicBlock &BB,
-                      DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
-                      MISTD::vector<Value *> &PairableInsts,
+                      DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
+                      std::vector<Value *> &PairableInsts,
                       DenseSet<ValuePair> &PairableInstUsers) {
     DenseSet<Value *> IsInPair;
-    for (DenseMap<Value *, MISTD::vector<Value *> >::iterator C =
+    for (DenseMap<Value *, std::vector<Value *> >::iterator C =
          CandidatePairs.begin(), E = CandidatePairs.end(); C != E; ++C) {
       IsInPair.insert(C->first);
       IsInPair.insert(C->second.begin(), C->second.end());
@@ -1430,7 +1430,7 @@ namespace {
   // two pairs cannot be simultaneously fused.
   bool BBVectorize::pairsConflict(ValuePair P, ValuePair Q,
              DenseSet<ValuePair> &PairableInstUsers,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > *PairableInstUserMap,
+             DenseMap<ValuePair, std::vector<ValuePair> > *PairableInstUserMap,
              DenseSet<VPPair> *PairableInstUserPairSet) {
     // Two pairs are in conflict if they are mutual Users of eachother.
     bool QUsesP = PairableInstUsers.count(ValuePair(P.first,  Q.first))  ||
@@ -1461,7 +1461,7 @@ namespace {
   // This function walks the use graph of current pairs to see if, starting
   // from P, the walk returns to P.
   bool BBVectorize::pairWillFormCycle(ValuePair P,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUserMap,
+             DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUserMap,
              DenseSet<ValuePair> &CurrentPairs) {
     DEBUG(if (DebugCycleCheck)
             dbgs() << "BBV: starting cycle check for : " << *P.first << " <-> "
@@ -1479,12 +1479,12 @@ namespace {
       DEBUG(if (DebugCycleCheck)
               dbgs() << "BBV: cycle check visiting: " << *QTop.first << " <-> "
                      << *QTop.second << "\n");
-      DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator QQ =
+      DenseMap<ValuePair, std::vector<ValuePair> >::iterator QQ =
         PairableInstUserMap.find(QTop);
       if (QQ == PairableInstUserMap.end())
         continue;
 
-      for (MISTD::vector<ValuePair>::iterator C = QQ->second.begin(),
+      for (std::vector<ValuePair>::iterator C = QQ->second.begin(),
            CE = QQ->second.end(); C != CE; ++C) {
         if (*C == P) {
           DEBUG(dbgs()
@@ -1504,10 +1504,10 @@ namespace {
   // This function builds the initial dag of connected pairs with the
   // pair J at the root.
   void BBVectorize::buildInitialDAGFor(
-                  DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                  DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                   DenseSet<ValuePair> &CandidatePairsSet,
-                  MISTD::vector<Value *> &PairableInsts,
-                  DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+                  std::vector<Value *> &PairableInsts,
+                  DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
                   DenseSet<ValuePair> &PairableInstUsers,
                   DenseMap<Value *, Value *> &ChosenPairs,
                   DenseMap<ValuePair, size_t> &DAG, ValuePair J) {
@@ -1523,10 +1523,10 @@ namespace {
       // Push each child onto the queue:
       bool MoreChildren = false;
       size_t MaxChildDepth = QTop.second;
-      DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator QQ =
+      DenseMap<ValuePair, std::vector<ValuePair> >::iterator QQ =
         ConnectedPairs.find(QTop.first);
       if (QQ != ConnectedPairs.end())
-        for (MISTD::vector<ValuePair>::iterator k = QQ->second.begin(),
+        for (std::vector<ValuePair>::iterator k = QQ->second.begin(),
              ke = QQ->second.end(); k != ke; ++k) {
           // Make sure that this child pair is still a candidate:
           if (CandidatePairsSet.count(*k)) {
@@ -1536,7 +1536,7 @@ namespace {
               Q.push_back(ValuePairWithDepth(*k, QTop.second+d));
               MoreChildren = true;
             } else {
-              MaxChildDepth = MISTD::max(MaxChildDepth, C->second);
+              MaxChildDepth = std::max(MaxChildDepth, C->second);
             }
           }
         }
@@ -1552,11 +1552,11 @@ namespace {
   // Given some initial dag, prune it by removing conflicting pairs (pairs
   // that cannot be simultaneously chosen for vectorization).
   void BBVectorize::pruneDAGFor(
-              DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
-              MISTD::vector<Value *> &PairableInsts,
-              DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
+              DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
+              std::vector<Value *> &PairableInsts,
+              DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
               DenseSet<ValuePair> &PairableInstUsers,
-              DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUserMap,
+              DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUserMap,
               DenseSet<VPPair> &PairableInstUserPairSet,
               DenseMap<Value *, Value *> &ChosenPairs,
               DenseMap<ValuePair, size_t> &DAG,
@@ -1571,12 +1571,12 @@ namespace {
 
       // Visit each child, pruning as necessary...
       SmallVector<ValuePairWithDepth, 8> BestChildren;
-      DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator QQ =
+      DenseMap<ValuePair, std::vector<ValuePair> >::iterator QQ =
         ConnectedPairs.find(QTop.first);
       if (QQ == ConnectedPairs.end())
         continue;
 
-      for (MISTD::vector<ValuePair>::iterator K = QQ->second.begin(),
+      for (std::vector<ValuePair>::iterator K = QQ->second.begin(),
            KE = QQ->second.end(); K != KE; ++K) {
         DenseMap<ValuePair, size_t>::iterator C = DAG.find(*K);
         if (C == DAG.end()) continue;
@@ -1722,22 +1722,22 @@ namespace {
   // This function finds the best dag of mututally-compatible connected
   // pairs, given the choice of root pairs as an iterator range.
   void BBVectorize::findBestDAGFor(
-              DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+              DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
               DenseSet<ValuePair> &CandidatePairsSet,
               DenseMap<ValuePair, int> &CandidatePairCostSavings,
-              MISTD::vector<Value *> &PairableInsts,
+              std::vector<Value *> &PairableInsts,
               DenseSet<ValuePair> &FixedOrderPairs,
               DenseMap<VPPair, unsigned> &PairConnectionTypes,
-              DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-              DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps,
+              DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+              DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps,
               DenseSet<ValuePair> &PairableInstUsers,
-              DenseMap<ValuePair, MISTD::vector<ValuePair> > &PairableInstUserMap,
+              DenseMap<ValuePair, std::vector<ValuePair> > &PairableInstUserMap,
               DenseSet<VPPair> &PairableInstUserPairSet,
               DenseMap<Value *, Value *> &ChosenPairs,
               DenseSet<ValuePair> &BestDAG, size_t &BestMaxDepth,
-              int &BestEffSize, Value *II, MISTD::vector<Value *>&JJ,
+              int &BestEffSize, Value *II, std::vector<Value *>&JJ,
               bool UseCycleCheck) {
-    for (MISTD::vector<Value *>::iterator J = JJ.begin(), JE = JJ.end();
+    for (std::vector<Value *>::iterator J = JJ.begin(), JE = JJ.end();
          J != JE; ++J) {
       ValuePair IJ(II, *J);
       if (!CandidatePairsSet.count(IJ))
@@ -1829,11 +1829,11 @@ namespace {
 
           // The edge weights contribute in a negative sense: they represent
           // the cost of shuffles.
-          DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator SS =
+          DenseMap<ValuePair, std::vector<ValuePair> >::iterator SS =
             ConnectedPairDeps.find(*S);
           if (SS != ConnectedPairDeps.end()) {
             unsigned NumDepsDirect = 0, NumDepsSwap = 0;
-            for (MISTD::vector<ValuePair>::iterator T = SS->second.begin(),
+            for (std::vector<ValuePair>::iterator T = SS->second.begin(),
                  TE = SS->second.end(); T != TE; ++T) {
               VPPair Q(*S, *T);
               if (!PrunedDAG.count(Q.second))
@@ -1855,7 +1855,7 @@ namespace {
               ((NumDepsSwap > NumDepsDirect) ||
                 FixedOrderPairs.count(ValuePair(S->second, S->first)));
 
-            for (MISTD::vector<ValuePair>::iterator T = SS->second.begin(),
+            for (std::vector<ValuePair>::iterator T = SS->second.begin(),
                  TE = SS->second.end(); T != TE; ++T) {
               VPPair Q(*S, *T);
               if (!PrunedDAG.count(Q.second))
@@ -1875,10 +1875,10 @@ namespace {
 
                 if (VTy->getVectorNumElements() == 2) {
                   if (R->second == PairConnectionSplat)
-                    ESContrib = MISTD::min(ESContrib, (int) TTI->getShuffleCost(
+                    ESContrib = std::min(ESContrib, (int) TTI->getShuffleCost(
                       TargetTransformInfo::SK_Broadcast, VTy));
                   else
-                    ESContrib = MISTD::min(ESContrib, (int) TTI->getShuffleCost(
+                    ESContrib = std::min(ESContrib, (int) TTI->getShuffleCost(
                       TargetTransformInfo::SK_Reverse, VTy));
                 }
 
@@ -1921,7 +1921,7 @@ namespace {
               if (Ty1->isVectorTy()) {
                 ESContrib = (int) getInstrCost(Instruction::ShuffleVector,
                                                Ty1, VTy);
-                ESContrib = MISTD::min(ESContrib, (int) TTI->getShuffleCost(
+                ESContrib = std::min(ESContrib, (int) TTI->getShuffleCost(
                   TargetTransformInfo::SK_ExtractSubvector, VTy, 0, Ty1));
               } else
                 ESContrib = (int) TTI->getVectorInstrCost(
@@ -1953,7 +1953,7 @@ namespace {
               if (Ty2->isVectorTy()) {
                 ESContrib = (int) getInstrCost(Instruction::ShuffleVector,
                                                Ty2, VTy);
-                ESContrib = MISTD::min(ESContrib, (int) TTI->getShuffleCost(
+                ESContrib = std::min(ESContrib, (int) TTI->getShuffleCost(
                   TargetTransformInfo::SK_ExtractSubvector, VTy,
                   Ty1->isVectorTy() ? Ty1->getVectorNumElements() : 1, Ty2));
               } else
@@ -1978,7 +1978,7 @@ namespace {
                 continue;
 
               if (FlipOrder)
-                MISTD::swap(O1, O2);
+                std::swap(O1, O2);
 
               ValuePair VP  = ValuePair(O1, O2);
               ValuePair VPR = ValuePair(O2, O1);
@@ -2034,7 +2034,7 @@ namespace {
                                                VTy, VTy);
 
                 if (VTy->getVectorNumElements() == 2)
-                  ESContrib = MISTD::min(ESContrib, (int) TTI->getShuffleCost(
+                  ESContrib = std::min(ESContrib, (int) TTI->getShuffleCost(
                     TargetTransformInfo::SK_Reverse, VTy));
               } else if (!Ty1->isVectorTy() && !Ty2->isVectorTy()) {
                 ESContrib = (int) TTI->getVectorInstrCost(
@@ -2058,7 +2058,7 @@ namespace {
               } else {
                 Type *TyBig = Ty1, *TySmall = Ty2;
                 if (Ty2->getVectorNumElements() > Ty1->getVectorNumElements())
-                  MISTD::swap(TyBig, TySmall);
+                  std::swap(TyBig, TySmall);
 
                 ESContrib = (int) getInstrCost(Instruction::ShuffleVector,
                                                VTy, TyBig);
@@ -2106,36 +2106,36 @@ namespace {
   // Given the list of candidate pairs, this function selects those
   // that will be fused into vector instructions.
   void BBVectorize::choosePairs(
-                DenseMap<Value *, MISTD::vector<Value *> > &CandidatePairs,
+                DenseMap<Value *, std::vector<Value *> > &CandidatePairs,
                 DenseSet<ValuePair> &CandidatePairsSet,
                 DenseMap<ValuePair, int> &CandidatePairCostSavings,
-                MISTD::vector<Value *> &PairableInsts,
+                std::vector<Value *> &PairableInsts,
                 DenseSet<ValuePair> &FixedOrderPairs,
                 DenseMap<VPPair, unsigned> &PairConnectionTypes,
-                DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-                DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps,
+                DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+                DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps,
                 DenseSet<ValuePair> &PairableInstUsers,
                 DenseMap<Value *, Value *>& ChosenPairs) {
     bool UseCycleCheck =
      CandidatePairsSet.size() <= Config.MaxCandPairsForCycleCheck;
 
-    DenseMap<Value *, MISTD::vector<Value *> > CandidatePairs2;
+    DenseMap<Value *, std::vector<Value *> > CandidatePairs2;
     for (DenseSet<ValuePair>::iterator I = CandidatePairsSet.begin(),
          E = CandidatePairsSet.end(); I != E; ++I) {
-      MISTD::vector<Value *> &JJ = CandidatePairs2[I->second];
+      std::vector<Value *> &JJ = CandidatePairs2[I->second];
       if (JJ.empty()) JJ.reserve(32);
       JJ.push_back(I->first);
     }
 
-    DenseMap<ValuePair, MISTD::vector<ValuePair> > PairableInstUserMap;
+    DenseMap<ValuePair, std::vector<ValuePair> > PairableInstUserMap;
     DenseSet<VPPair> PairableInstUserPairSet;
-    for (MISTD::vector<Value *>::iterator I = PairableInsts.begin(),
+    for (std::vector<Value *>::iterator I = PairableInsts.begin(),
          E = PairableInsts.end(); I != E; ++I) {
       // The number of possible pairings for this variable:
       size_t NumChoices = CandidatePairs.lookup(*I).size();
       if (!NumChoices) continue;
 
-      MISTD::vector<Value *> &JJ = CandidatePairs[*I];
+      std::vector<Value *> &JJ = CandidatePairs[*I];
 
       // The best pair to choose and its dag:
       size_t BestMaxDepth = 0;
@@ -2168,8 +2168,8 @@ namespace {
                *S->second << "\n");
 
         // Remove all candidate pairs that have values in the chosen dag.
-        MISTD::vector<Value *> &KK = CandidatePairs[S->first];
-        for (MISTD::vector<Value *>::iterator K = KK.begin(), KE = KK.end();
+        std::vector<Value *> &KK = CandidatePairs[S->first];
+        for (std::vector<Value *>::iterator K = KK.begin(), KE = KK.end();
              K != KE; ++K) {
           if (*K == S->second)
             continue;
@@ -2177,8 +2177,8 @@ namespace {
           CandidatePairsSet.erase(ValuePair(S->first, *K));
         }
 
-        MISTD::vector<Value *> &LL = CandidatePairs2[S->second];
-        for (MISTD::vector<Value *>::iterator L = LL.begin(), LE = LL.end();
+        std::vector<Value *> &LL = CandidatePairs2[S->second];
+        for (std::vector<Value *>::iterator L = LL.begin(), LE = LL.end();
              L != LE; ++L) {
           if (*L == S->first)
             continue;
@@ -2186,15 +2186,15 @@ namespace {
           CandidatePairsSet.erase(ValuePair(*L, S->second));
         }
 
-        MISTD::vector<Value *> &MM = CandidatePairs[S->second];
-        for (MISTD::vector<Value *>::iterator M = MM.begin(), ME = MM.end();
+        std::vector<Value *> &MM = CandidatePairs[S->second];
+        for (std::vector<Value *>::iterator M = MM.begin(), ME = MM.end();
              M != ME; ++M) {
           assert(*M != S->first && "Flipped pair in candidate list?");
           CandidatePairsSet.erase(ValuePair(S->second, *M));
         }
 
-        MISTD::vector<Value *> &NN = CandidatePairs2[S->first];
-        for (MISTD::vector<Value *>::iterator N = NN.begin(), NE = NN.end();
+        std::vector<Value *> &NN = CandidatePairs2[S->first];
+        for (std::vector<Value *>::iterator N = NN.begin(), NE = NN.end();
              N != NE; ++N) {
           assert(*N != S->second && "Flipped pair in candidate list?");
           CandidatePairsSet.erase(ValuePair(*N, S->first));
@@ -2205,7 +2205,7 @@ namespace {
     DEBUG(dbgs() << "BBV: selected " << ChosenPairs.size() << " pairs.\n");
   }
 
-  MISTD::string getReplacementName(Instruction *I, bool IsInput, unsigned o,
+  std::string getReplacementName(Instruction *I, bool IsInput, unsigned o,
                      unsigned n = 0) {
     if (!I->hasName())
       return "";
@@ -2244,7 +2244,7 @@ namespace {
   void BBVectorize::fillNewShuffleMask(LLVMContext& Context, Instruction *J,
                      unsigned MaskOffset, unsigned NumInElem,
                      unsigned NumInElem1, unsigned IdxOffset,
-                     MISTD::vector<Constant*> &Mask) {
+                     std::vector<Constant*> &Mask) {
     unsigned NumElem1 = J->getType()->getVectorNumElements();
     for (unsigned v = 0; v < NumElem1; ++v) {
       int m = cast<ShuffleVectorInst>(J)->getMaskValue(v);
@@ -2278,7 +2278,7 @@ namespace {
     // By definition, this must equal the number of elements in
     // the final mask.
     unsigned NumElem = VArgType->getVectorNumElements();
-    MISTD::vector<Constant*> Mask(NumElem);
+    std::vector<Constant*> Mask(NumElem);
 
     Type *OpTypeI = I->getOperand(0)->getType();
     unsigned NumInElemI = OpTypeI->getVectorNumElements();
@@ -2437,7 +2437,7 @@ namespace {
 
         // We have one or two input vectors. We need to map each index of the
         // operands to the index of the original vector.
-        SmallVector<MISTD::pair<int, int>, 8>  II(numElem);
+        SmallVector<std::pair<int, int>, 8>  II(numElem);
         for (unsigned i = 0; i < numElemL; ++i) {
           int Idx, INum;
           if (LEE) {
@@ -2454,7 +2454,7 @@ namespace {
             }
           }
 
-          II[i] = MISTD::pair<int, int>(Idx, INum);
+          II[i] = std::pair<int, int>(Idx, INum);
         }
         for (unsigned i = 0; i < numElemH; ++i) {
           int Idx, INum;
@@ -2472,7 +2472,7 @@ namespace {
             }
           }
 
-          II[i + numElemL] = MISTD::pair<int, int>(Idx, INum);
+          II[i + numElemL] = std::pair<int, int>(Idx, INum);
         }
 
         // We now have an array which tells us from which index of which
@@ -2497,7 +2497,7 @@ namespace {
           }
 
           // A shuffle is needed.
-          MISTD::vector<Constant *> Mask(numElem);
+          std::vector<Constant *> Mask(numElem);
           for (unsigned i = 0; i < numElem; ++i) {
             int Idx = II[i].first;
             if (Idx == -1)
@@ -2522,7 +2522,7 @@ namespace {
         // make sure that both vectors are the same length. If not, the
         // smaller one will need to grow before they can be shuffled together.
         if (I1Elem < I2Elem) {
-          MISTD::vector<Constant *> Mask(I2Elem);
+          std::vector<Constant *> Mask(I2Elem);
           unsigned v = 0;
           for (; v < I1Elem; ++v)
             Mask[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
@@ -2539,7 +2539,7 @@ namespace {
           I1T = I2T;
           I1Elem = I2Elem;
         } else if (I1Elem > I2Elem) {
-          MISTD::vector<Constant *> Mask(I1Elem);
+          std::vector<Constant *> Mask(I1Elem);
           unsigned v = 0;
           for (; v < I2Elem; ++v)
             Mask[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
@@ -2559,7 +2559,7 @@ namespace {
 
         // Now that both I1 and I2 are the same length we can shuffle them
         // together (and use the result).
-        MISTD::vector<Constant *> Mask(numElem);
+        std::vector<Constant *> Mask(numElem);
         for (unsigned v = 0; v < numElem; ++v) {
           if (II[v].first == -1) {
             Mask[v] = UndefValue::get(Type::getInt32Ty(Context));
@@ -2596,7 +2596,7 @@ namespace {
         Instruction *NLOp;
         if (numElemL > 1) {
   
-          MISTD::vector<Constant *> Mask(numElemH);
+          std::vector<Constant *> Mask(numElemH);
           unsigned v = 0;
           for (; v < numElemL; ++v)
             Mask[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
@@ -2633,7 +2633,7 @@ namespace {
                                 ArgTypeL, IBeforeJ)) {
         Instruction *NHOp;
         if (numElemH > 1) {
-          MISTD::vector<Constant *> Mask(numElemL);
+          std::vector<Constant *> Mask(numElemL);
           unsigned v = 0;
           for (; v < numElemH; ++v)
             Mask[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
@@ -2657,7 +2657,7 @@ namespace {
 
     if (ArgType->isVectorTy()) {
       unsigned numElem = VArgType->getVectorNumElements();
-      MISTD::vector<Constant*> Mask(numElem);
+      std::vector<Constant*> Mask(numElem);
       for (unsigned v = 0; v < numElem; ++v) {
         unsigned Idx = v;
         // If the low vector was expanded, we need to skip the extra
@@ -2753,7 +2753,7 @@ namespace {
       unsigned numElemJ = getNumScalarElements(JType);
 
       if (IType->isVectorTy()) {
-        MISTD::vector<Constant*> Mask1(numElemI), Mask2(numElemI);
+        std::vector<Constant*> Mask1(numElemI), Mask2(numElemI);
         for (unsigned v = 0; v < numElemI; ++v) {
           Mask1[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
           Mask2[v] = ConstantInt::get(Type::getInt32Ty(Context), numElemJ+v);
@@ -2769,7 +2769,7 @@ namespace {
       }
 
       if (JType->isVectorTy()) {
-        MISTD::vector<Constant*> Mask1(numElemJ), Mask2(numElemJ);
+        std::vector<Constant*> Mask1(numElemJ), Mask2(numElemJ);
         for (unsigned v = 0; v < numElemJ; ++v) {
           Mask1[v] = ConstantInt::get(Type::getInt32Ty(Context), v);
           Mask2[v] = ConstantInt::get(Type::getInt32Ty(Context), numElemI+v);
@@ -2844,7 +2844,7 @@ namespace {
   // to be moved after J (the second instruction) when the pair is fused.
   void BBVectorize::collectPairLoadMoveSet(BasicBlock &BB,
                      DenseMap<Value *, Value *> &ChosenPairs,
-                     DenseMap<Value *, MISTD::vector<Value *> > &LoadMoveSet,
+                     DenseMap<Value *, std::vector<Value *> > &LoadMoveSet,
                      DenseSet<ValuePair> &LoadMoveSetPairs,
                      Instruction *I) {
     // Skip to the first instruction past I.
@@ -2875,11 +2875,11 @@ namespace {
   // need to precompute the necessary aliasing information here and then
   // manually update it during the fusion process.
   void BBVectorize::collectLoadMoveSet(BasicBlock &BB,
-                     MISTD::vector<Value *> &PairableInsts,
+                     std::vector<Value *> &PairableInsts,
                      DenseMap<Value *, Value *> &ChosenPairs,
-                     DenseMap<Value *, MISTD::vector<Value *> > &LoadMoveSet,
+                     DenseMap<Value *, std::vector<Value *> > &LoadMoveSet,
                      DenseSet<ValuePair> &LoadMoveSetPairs) {
-    for (MISTD::vector<Value *>::iterator PI = PairableInsts.begin(),
+    for (std::vector<Value *>::iterator PI = PairableInsts.begin(),
          PIE = PairableInsts.end(); PI != PIE; ++PI) {
       DenseMap<Value *, Value *>::iterator P = ChosenPairs.find(*PI);
       if (P == ChosenPairs.end()) continue;
@@ -2894,7 +2894,7 @@ namespace {
   // parent's metadata. This metadata must be combined with that of the other
   // instruction in a safe way.
   void BBVectorize::combineMetadata(Instruction *K, const Instruction *J) {
-    SmallVector<MISTD::pair<unsigned, MDNode*>, 4> Metadata;
+    SmallVector<std::pair<unsigned, MDNode*>, 4> Metadata;
     K->getAllMetadataOtherThanDebugLoc(Metadata);
     for (unsigned i = 0, n = Metadata.size(); i < n; ++i) {
       unsigned Kind = Metadata[i].first;
@@ -2922,12 +2922,12 @@ namespace {
   // because the vector instruction is inserted in the location of the pair's
   // second member).
   void BBVectorize::fuseChosenPairs(BasicBlock &BB,
-             MISTD::vector<Value *> &PairableInsts,
+             std::vector<Value *> &PairableInsts,
              DenseMap<Value *, Value *> &ChosenPairs,
              DenseSet<ValuePair> &FixedOrderPairs,
              DenseMap<VPPair, unsigned> &PairConnectionTypes,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairs,
-             DenseMap<ValuePair, MISTD::vector<ValuePair> > &ConnectedPairDeps) {
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairs,
+             DenseMap<ValuePair, std::vector<ValuePair> > &ConnectedPairDeps) {
     LLVMContext& Context = BB.getContext();
 
     // During the vectorization process, the order of the pairs to be fused
@@ -2941,7 +2941,7 @@ namespace {
          E = FlippedPairs.end(); P != E; ++P)
       ChosenPairs.insert(*P);
 
-    DenseMap<Value *, MISTD::vector<Value *> > LoadMoveSet;
+    DenseMap<Value *, std::vector<Value *> > LoadMoveSet;
     DenseSet<ValuePair> LoadMoveSetPairs;
     collectLoadMoveSet(BB, PairableInsts, ChosenPairs,
                        LoadMoveSet, LoadMoveSetPairs);
@@ -2993,7 +2993,7 @@ namespace {
         // of dependencies connected via swaps, and those directly connected,
         // and flip the order if the number of swaps is greater.
         bool OrigOrder = true;
-        DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator IJ =
+        DenseMap<ValuePair, std::vector<ValuePair> >::iterator IJ =
           ConnectedPairDeps.find(ValuePair(I, J));
         if (IJ == ConnectedPairDeps.end()) {
           IJ = ConnectedPairDeps.find(ValuePair(J, I));
@@ -3002,7 +3002,7 @@ namespace {
 
         if (IJ != ConnectedPairDeps.end()) {
           unsigned NumDepsDirect = 0, NumDepsSwap = 0;
-          for (MISTD::vector<ValuePair>::iterator T = IJ->second.begin(),
+          for (std::vector<ValuePair>::iterator T = IJ->second.begin(),
                TE = IJ->second.end(); T != TE; ++T) {
             VPPair Q(IJ->first, *T);
             DenseMap<VPPair, unsigned>::iterator R =
@@ -3016,7 +3016,7 @@ namespace {
           }
 
           if (!OrigOrder)
-            MISTD::swap(NumDepsDirect, NumDepsSwap);
+            std::swap(NumDepsDirect, NumDepsSwap);
 
           if (NumDepsSwap > NumDepsDirect) {
             FlipPairOrder = true;
@@ -3028,14 +3028,14 @@ namespace {
 
       Instruction *L = I, *H = J;
       if (FlipPairOrder)
-        MISTD::swap(H, L);
+        std::swap(H, L);
 
       // If the pair being fused uses the opposite order from that in the pair
       // connection map, then we need to flip the types.
-      DenseMap<ValuePair, MISTD::vector<ValuePair> >::iterator HL =
+      DenseMap<ValuePair, std::vector<ValuePair> >::iterator HL =
         ConnectedPairs.find(ValuePair(H, L));
       if (HL != ConnectedPairs.end())
-        for (MISTD::vector<ValuePair>::iterator T = HL->second.begin(),
+        for (std::vector<ValuePair>::iterator T = HL->second.begin(),
              TE = HL->second.end(); T != TE; ++T) {
           VPPair Q(HL->first, *T);
           DenseMap<VPPair, unsigned>::iterator R = PairConnectionTypes.find(Q);
@@ -3098,20 +3098,20 @@ namespace {
       // pair in case those instructions were in the move set of some other
       // yet-to-be-fused pair. The loads in question are the keys of the map.
       if (I->mayReadFromMemory()) {
-        MISTD::vector<ValuePair> NewSetMembers;
-        DenseMap<Value *, MISTD::vector<Value *> >::iterator II =
+        std::vector<ValuePair> NewSetMembers;
+        DenseMap<Value *, std::vector<Value *> >::iterator II =
           LoadMoveSet.find(I);
         if (II != LoadMoveSet.end())
-          for (MISTD::vector<Value *>::iterator N = II->second.begin(),
+          for (std::vector<Value *>::iterator N = II->second.begin(),
                NE = II->second.end(); N != NE; ++N)
             NewSetMembers.push_back(ValuePair(K, *N));
-        DenseMap<Value *, MISTD::vector<Value *> >::iterator JJ =
+        DenseMap<Value *, std::vector<Value *> >::iterator JJ =
           LoadMoveSet.find(J);
         if (JJ != LoadMoveSet.end())
-          for (MISTD::vector<Value *>::iterator N = JJ->second.begin(),
+          for (std::vector<Value *>::iterator N = JJ->second.begin(),
                NE = JJ->second.end(); N != NE; ++N)
             NewSetMembers.push_back(ValuePair(K, *N));
-        for (MISTD::vector<ValuePair>::iterator A = NewSetMembers.begin(),
+        for (std::vector<ValuePair>::iterator A = NewSetMembers.begin(),
              AE = NewSetMembers.end(); A != AE; ++A) {
           LoadMoveSet[A->first].push_back(A->second);
           LoadMoveSetPairs.insert(*A);

@@ -23,7 +23,7 @@ protected:
   static const uint32_t testValue;
   static const char* testKeyFirst;
   static size_t testKeyLength;
-  static const MISTD::string testKeyStr;
+  static const std::string testKeyStr;
 
   void assertEmptyMap() {
     // Size tests
@@ -71,7 +71,7 @@ const char StringMapTest::testKey[] = "key";
 const uint32_t StringMapTest::testValue = 1u;
 const char* StringMapTest::testKeyFirst = testKey;
 size_t StringMapTest::testKeyLength = sizeof(testKey) - 1;
-const MISTD::string StringMapTest::testKeyStr(testKey);
+const std::string StringMapTest::testKeyStr(testKey);
 
 // Empty map tests.
 TEST_F(StringMapTest, EmptyMapTest) {
@@ -162,7 +162,7 @@ TEST_F(StringMapTest, IterationTest) {
 
   // Insert 100 numbers into the map
   for (int i = 0; i < 100; ++i) {
-    MISTD::stringstream ss;
+    std::stringstream ss;
     ss << "key_" << i;
     testMap[ss.str()] = i;
     visited[i] = false;
@@ -171,7 +171,7 @@ TEST_F(StringMapTest, IterationTest) {
   // Iterate over all numbers and mark each one found.
   for (StringMap<uint32_t>::iterator it = testMap.begin();
       it != testMap.end(); ++it) {
-    MISTD::stringstream ss;
+    std::stringstream ss;
     ss << "key_" << it->second;
     ASSERT_STREQ(ss.str().c_str(), it->first().data());
     visited[it->second] = true;

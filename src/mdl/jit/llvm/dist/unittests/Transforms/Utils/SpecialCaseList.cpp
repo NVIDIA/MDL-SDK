@@ -39,13 +39,13 @@ protected:
                            Name, Aliasee, Aliasee->getParent());
   }
 
-  SpecialCaseList *makeSpecialCaseList(StringRef List, MISTD::string &Error) {
+  SpecialCaseList *makeSpecialCaseList(StringRef List, std::string &Error) {
     OwningPtr<MemoryBuffer> MB(MemoryBuffer::getMemBuffer(List));
     return SpecialCaseList::create(MB.get(), Error);
   }
 
   SpecialCaseList *makeSpecialCaseList(StringRef List) {
-    MISTD::string Error;
+    std::string Error;
     SpecialCaseList *SCL = makeSpecialCaseList(List, Error);
     assert(SCL);
     assert(Error == "");
@@ -208,7 +208,7 @@ TEST_F(SpecialCaseListTest, Substring) {
 }
 
 TEST_F(SpecialCaseListTest, InvalidSpecialCaseList) {
-  MISTD::string Error;
+  std::string Error;
   EXPECT_EQ(0, makeSpecialCaseList("badline", Error));
   EXPECT_EQ("Malformed line 1: 'badline'", Error);
   EXPECT_EQ(0, makeSpecialCaseList("src:bad[a-", Error));

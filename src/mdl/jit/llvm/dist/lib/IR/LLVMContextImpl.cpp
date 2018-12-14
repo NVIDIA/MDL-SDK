@@ -66,18 +66,18 @@ LLVMContextImpl::~LLVMContextImpl() {
   // duplicate it into a temporary vector, because the destructor of Module
   // will try to remove itself from OwnedModules set.  This would cause
   // iterator invalidation if we iterated on the set directly.
-  MISTD::vector<Module*> Modules(OwnedModules.begin(), OwnedModules.end());
+  std::vector<Module*> Modules(OwnedModules.begin(), OwnedModules.end());
   DeleteContainerPointers(Modules);
   
   // Free the constants.  This is important to do here to ensure that they are
   // freed before the LeakDetector is torn down.
-  MISTD::for_each(ExprConstants.map_begin(), ExprConstants.map_end(),
+  std::for_each(ExprConstants.map_begin(), ExprConstants.map_end(),
                 DropReferences());
-  MISTD::for_each(ArrayConstants.map_begin(), ArrayConstants.map_end(),
+  std::for_each(ArrayConstants.map_begin(), ArrayConstants.map_end(),
                 DropFirst());
-  MISTD::for_each(StructConstants.map_begin(), StructConstants.map_end(),
+  std::for_each(StructConstants.map_begin(), StructConstants.map_end(),
                 DropFirst());
-  MISTD::for_each(VectorConstants.map_begin(), VectorConstants.map_end(),
+  std::for_each(VectorConstants.map_begin(), VectorConstants.map_end(),
                 DropFirst());
   ExprConstants.freeConstants();
   ArrayConstants.freeConstants();

@@ -22,14 +22,14 @@ using namespace llvm;
 namespace {
 
   class PrintModulePass : public ModulePass {
-    MISTD::string Banner;
+    std::string Banner;
     raw_ostream *Out;       // raw_ostream to print on
     bool DeleteStream;      // Delete the ostream in our dtor?
   public:
     static char ID;
     PrintModulePass() : ModulePass(ID), Out(&dbgs()), 
       DeleteStream(false) {}
-    PrintModulePass(const MISTD::string &B, raw_ostream *o, bool DS)
+    PrintModulePass(const std::string &B, raw_ostream *o, bool DS)
         : ModulePass(ID), Banner(B), Out(o), DeleteStream(DS) {}
     
     ~PrintModulePass() {
@@ -47,14 +47,14 @@ namespace {
   };
   
   class PrintFunctionPass : public FunctionPass {
-    MISTD::string Banner;     // String to print before each function
+    std::string Banner;     // String to print before each function
     raw_ostream *Out;       // raw_ostream to print on
     bool DeleteStream;      // Delete the ostream in our dtor?
   public:
     static char ID;
     PrintFunctionPass() : FunctionPass(ID), Banner(""), Out(&dbgs()), 
                           DeleteStream(false) {}
-    PrintFunctionPass(const MISTD::string &B, raw_ostream *o, bool DS)
+    PrintFunctionPass(const std::string &B, raw_ostream *o, bool DS)
       : FunctionPass(ID), Banner(B), Out(o), DeleteStream(DS) {}
     
     ~PrintFunctionPass() {
@@ -75,14 +75,14 @@ namespace {
   };
   
   class PrintBasicBlockPass : public BasicBlockPass {
-    MISTD::string Banner;
+    std::string Banner;
     raw_ostream *Out;       // raw_ostream to print on
     bool DeleteStream;      // Delete the ostream in our dtor?
   public:
     static char ID;
     PrintBasicBlockPass() : BasicBlockPass(ID), Out(&dbgs()), 
       DeleteStream(false) {}
-    PrintBasicBlockPass(const MISTD::string &B, raw_ostream *o, bool DS)
+    PrintBasicBlockPass(const std::string &B, raw_ostream *o, bool DS)
         : BasicBlockPass(ID), Banner(B), Out(o), DeleteStream(DS) {}
     
     ~PrintBasicBlockPass() {
@@ -114,13 +114,13 @@ INITIALIZE_PASS(PrintBasicBlockPass, "print-bb",
 /// module to the specified raw_ostream.
 ModulePass *llvm::createPrintModulePass(llvm::raw_ostream *OS, 
                                         bool DeleteStream,
-                                        const MISTD::string &Banner) {
+                                        const std::string &Banner) {
   return new PrintModulePass(Banner, OS, DeleteStream);
 }
 
 /// createPrintFunctionPass - Create and return a pass that prints
 /// functions to the specified raw_ostream as they are processed.
-FunctionPass *llvm::createPrintFunctionPass(const MISTD::string &Banner,
+FunctionPass *llvm::createPrintFunctionPass(const std::string &Banner,
                                             llvm::raw_ostream *OS, 
                                             bool DeleteStream) {
   return new PrintFunctionPass(Banner, OS, DeleteStream);
@@ -130,7 +130,7 @@ FunctionPass *llvm::createPrintFunctionPass(const MISTD::string &Banner,
 /// BB to the specified raw_ostream.
 BasicBlockPass *llvm::createPrintBasicBlockPass(llvm::raw_ostream *OS,
                                         bool DeleteStream,
-                                        const MISTD::string &Banner) {
+                                        const std::string &Banner) {
   return new PrintBasicBlockPass(Banner, OS, DeleteStream);
 }
 

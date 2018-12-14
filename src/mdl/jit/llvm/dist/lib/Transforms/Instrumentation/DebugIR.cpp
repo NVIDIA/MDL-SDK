@@ -55,7 +55,7 @@ class ValueToLineMap : public AssemblyAnnotationWriter {
 
   void addEntry(const Value *V, formatted_raw_ostream &Out) {
     Out.flush();
-    Lines.insert(MISTD::make_pair(V, Out.getLine() + 1));
+    Lines.insert(std::make_pair(V, Out.getLine() + 1));
   }
 
 public:
@@ -224,7 +224,7 @@ public:
     DEBUG(dbgs() << "create subprogram mdnode " << *Sub << ": "
                  << "\n");
 
-    SubprogramDescriptors.insert(MISTD::make_pair(&F, Sub));
+    SubprogramDescriptors.insert(std::make_pair(&F, Sub));
   }
 
   void visitInstruction(Instruction &I) {
@@ -271,7 +271,7 @@ public:
 private:
 
   void createCompileUnit(MDNode *CUToReplace) {
-    MISTD::string Flags;
+    std::string Flags;
     bool IsOptimized = false;
     StringRef Producer;
     unsigned RuntimeVersion(0);
@@ -355,8 +355,8 @@ private:
     return false;
   }
 
-  MISTD::string getTypeName(Type *T) {
-    MISTD::string TypeName;
+  std::string getTypeName(Type *T) {
+    std::string TypeName;
     raw_string_ostream TypeStream(TypeName);
     T->print(TypeStream);
     TypeStream.flush();
@@ -454,9 +454,9 @@ private:
 
 /// Sets Filename/Directory from the Module identifier and returns true, or
 /// false if source information is not present.
-bool getSourceInfoFromModule(const Module &M, MISTD::string &Directory,
-                             MISTD::string &Filename) {
-  MISTD::string PathStr(M.getModuleIdentifier());
+bool getSourceInfoFromModule(const Module &M, std::string &Directory,
+                             std::string &Filename) {
+  std::string PathStr(M.getModuleIdentifier());
   if (PathStr.length() == 0 || PathStr == "<stdin>")
     return false;
 
@@ -469,8 +469,8 @@ bool getSourceInfoFromModule(const Module &M, MISTD::string &Directory,
 
 // Sets Filename/Directory from debug information in M and returns true, or
 // false if no debug information available, or cannot be parsed.
-bool getSourceInfoFromDI(const Module &M, MISTD::string &Directory,
-                         MISTD::string &Filename) {
+bool getSourceInfoFromDI(const Module &M, std::string &Directory,
+                         std::string &Filename) {
   NamedMDNode *CUNode = M.getNamedMetadata("llvm.dbg.cu");
   if (!CUNode || CUNode->getNumOperands() == 0)
     return false;
@@ -496,7 +496,7 @@ bool DebugIR::getSourceInfo(const Module &M) {
 
 bool DebugIR::updateExtension(StringRef NewExtension) {
   size_t dot = Filename.find_last_of(".");
-  if (dot == MISTD::string::npos)
+  if (dot == std::string::npos)
     return false;
 
   Filename.erase(dot);
@@ -516,20 +516,20 @@ void DebugIR::generateFilename(OwningPtr<int> &fd) {
   GeneratedPath = true;
 }
 
-MISTD::string DebugIR::getPath() {
+std::string DebugIR::getPath() {
   SmallVector<char, 16> Path;
   sys::path::append(Path, Directory, Filename);
   Path.resize(Filename.size() + Directory.size() + 2);
   Path[Filename.size() + Directory.size() + 1] = '\0';
-  return MISTD::string(Path.data());
+  return std::string(Path.data());
 }
 
 void DebugIR::writeDebugBitcode(const Module *M, int *fd) {
   OwningPtr<raw_fd_ostream> Out;
-  MISTD::string error;
+  std::string error;
 
   if (!fd) {
-    MISTD::string Path = getPath();
+    std::string Path = getPath();
     Out.reset(new raw_fd_ostream(Path.c_str(), error));
     DEBUG(dbgs() << "WRITING debug bitcode from Module " << M << " to file "
                  << Path << "\n");
@@ -597,7 +597,7 @@ bool DebugIR::runOnModule(Module &M) {
   return true;
 }
 
-bool DebugIR::runOnModule(Module &M, MISTD::string &Path) {
+bool DebugIR::runOnModule(Module &M, std::string &Path) {
   bool result = runOnModule(M);
   Path = getPath();
   return result;

@@ -58,7 +58,7 @@ static Type *reduceToSingleValueType(Type *T) {
 Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
   unsigned DstAlign = getKnownAlignment(MI->getArgOperand(0), TD);
   unsigned SrcAlign = getKnownAlignment(MI->getArgOperand(1), TD);
-  unsigned MinAlign = MISTD::min(DstAlign, SrcAlign);
+  unsigned MinAlign = std::min(DstAlign, SrcAlign);
   unsigned CopyAlign = MI->getAlignment();
 
   if (CopyAlign < MinAlign) {
@@ -132,8 +132,8 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
 
   // If the memcpy/memmove provides better alignment info than we can
   // infer, use it.
-  SrcAlign = MISTD::max(SrcAlign, CopyAlign);
-  DstAlign = MISTD::max(DstAlign, CopyAlign);
+  SrcAlign = std::max(SrcAlign, CopyAlign);
+  DstAlign = std::max(DstAlign, CopyAlign);
 
   Value *Src = Builder->CreateBitCast(MI->getArgOperand(1), NewSrcPtrTy);
   Value *Dest = Builder->CreateBitCast(MI->getArgOperand(0), NewDstPtrTy);
@@ -685,7 +685,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       }
 
       // Couldn't simplify - cannonicalize constant to the RHS.
-      MISTD::swap(Arg0, Arg1);
+      std::swap(Arg0, Arg1);
     }
 
     // Handle mul by one:
@@ -1033,7 +1033,7 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
   }
 
   unsigned NumActualArgs = CS.arg_size();
-  unsigned NumCommonArgs = MISTD::min(FT->getNumParams(), NumActualArgs);
+  unsigned NumCommonArgs = std::min(FT->getNumParams(), NumActualArgs);
 
   CallSite::arg_iterator AI = CS.arg_begin();
   for (unsigned i = 0, e = NumCommonArgs; i != e; ++i, ++AI) {
@@ -1105,7 +1105,7 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
 
   // Okay, we decided that this is a safe thing to do: go ahead and start
   // inserting cast instructions as necessary.
-  MISTD::vector<Value*> Args;
+  std::vector<Value*> Args;
   Args.reserve(NumActualArgs);
   SmallVector<AttributeSet, 8> attrVec;
   attrVec.reserve(NumCommonArgs);
@@ -1270,7 +1270,7 @@ InstCombiner::transformCallThroughTrampoline(CallSite CS,
 
     if (NestTy) {
       Instruction *Caller = CS.getInstruction();
-      MISTD::vector<Value*> NewArgs;
+      std::vector<Value*> NewArgs;
       NewArgs.reserve(CS.arg_size() + 1);
 
       SmallVector<AttributeSet, 8> NewAttrs;
@@ -1323,7 +1323,7 @@ InstCombiner::transformCallThroughTrampoline(CallSite CS,
       // Handle this by synthesizing a new function type, equal to FTy
       // with the chain parameter inserted.
 
-      MISTD::vector<Type*> NewTypes;
+      std::vector<Type*> NewTypes;
       NewTypes.reserve(FTy->getNumParams()+1);
 
       // Insert the chain's type into the list of parameter types, which may

@@ -36,6 +36,7 @@
 #include <mi/neuraylib/typedefs.h>
 #include <mi/neuraylib/ivalue.h>
 #include <mi/neuraylib/target_code_types.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -53,6 +54,7 @@ class ILightprofile;
 class IFunction_call;
 class ILink_unit;
 class IMdl_backend;
+class IMdl_execution_context;
 class ITarget_code;
 class ITarget_argument_block;
 class ITransaction;
@@ -260,8 +262,73 @@ public:
     ///                            an MDL module, or the DB name for a definition in this module is
     ///                            already in use.
     ///                      - -4: Initialization of an imported module failed.
+    virtual Sint32 deprecated_load_module(
+        ITransaction* transaction, const char* module_name, const IMap* options) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Loads an MDL module from disk (or a builtin module) into the database.
+    ///
+    /// The module is located on disk according to the module search paths (see #add_module_path()),
+    /// loaded, and compiled. If successful, the method creates DB elements for the module and all
+    /// its imported modules, as well as for all material and function definitions contained in
+    /// these modules.
+    ///
+    /// The method can also be for builtin modules for which the first step, locating the module on
+    /// disk, is skipped.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::").
+    /// \param options       Options to control the behavior of the importer, or \c NULL.
+    /// \return
+    ///                      -  1: Success (module exists already, loading from file was skipped).
+    ///                      -  0: Success (module was actually loaded from file or is a builtin
+    ///                            module).
+    ///                      - -1: The module name \p module_name is invalid or a \c NULL pointer.
+    ///                      - -2: Failed to find or to compile the module \p module_name.
+    ///                      - -3: The DB name for an imported module is already in use but is not
+    ///                            an MDL module, or the DB name for a definition in this module is
+    ///                            already in use.
+    ///                      - -4: Initialization of an imported module failed.
+    Sint32 load_module(
+        ITransaction* transaction, const char* module_name, const IMap* options)
+    {
+        return deprecated_load_module(transaction, module_name, options);
+    }
+#endif
+
+    /// Loads an MDL module from disk (or a builtin module) into the database.
+    ///
+    /// The module is located on disk according to the module search paths (see #add_module_path()),
+    /// loaded, and compiled. If successful, the method creates DB elements for the module and all
+    /// its imported modules, as well as for all material and function definitions contained in
+    /// these modules.
+    ///
+    /// The method can also be for builtin modules for which the first step, locating the module on
+    /// disk, is skipped.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::").
+    /// \param context       The execution context can be used to pass options to control the
+    ///                      behavior of the MDL compiler. The following options are supported
+    ///                      by this operation:
+    ///                      - string "internal_space" = "coordinate_object"|"coordinate_world"
+    ///                        (default = "coordinate_world")
+    ///                      During module loading, compiler messages
+    ///                      like errors or warnings are stored in the context. Can be \c NULL.
+    /// \return
+    ///                      -  1: Success (module exists already, loading from file was skipped).
+    ///                      -  0: Success (module was actually loaded from file or is a builtin
+    ///                            module).
+    ///                      - -1: The module name \p module_name is invalid or a \c NULL pointer.
+    ///                      - -2: Failed to find or to compile the module \p module_name.
+    ///                      - -3: The DB name for an imported module is already in use but is not
+    ///                            an MDL module, or the DB name for a definition in this module is
+    ///                            already in use.
+    ///                      - -4: Initialization of an imported module failed.
     virtual Sint32 load_module(
-        ITransaction* transaction, const char* module_name, const IMap* options = 0) = 0;
+        ITransaction* transaction, const char* module_name, IMdl_execution_context* context = 0) = 0;
 
     /// Loads an MDL module from memory into the database.
     ///
@@ -286,11 +353,84 @@ public:
     ///                            an MDL module, or the DB name for a definition in this module is
     ///                            already in use.
     ///                      - -4: Initialization of an imported module failed.
+    virtual Sint32 deprecated_load_module_from_string(
+        ITransaction* transaction,
+        const char* module_name,
+        const char* module_source,
+        const IMap* options) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Loads an MDL module from memory into the database.
+    ///
+    /// The provided module source is compiled. If successful, the method creates DB elements for
+    /// the module and all its imported modules, as well as for all material and function
+    /// definitions contained in these modules.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::").
+    /// \param module_source The MDL source code of the module.
+    /// \param options       Options to control the behavior of the importer, or \c NULL.
+    /// \return
+    ///                      -  1: Success (module exists already, creating from \p module_source
+    ///                            was skipped).
+    ///                      -  0: Success (module was actually created from \p module_source).
+    ///                      - -1: The module name \p module_name is invalid, or \p module_name or
+    ///                            \p module_source is a \c NULL pointer.
+    ///                      - -2: Shadows a file-based module or failed to compile the module \p
+    ///                            module_name.
+    ///                      - -3: The DB name for an imported module is already in use but is not
+    ///                            an MDL module, or the DB name for a definition in this module is
+    ///                            already in use.
+    ///                      - -4: Initialization of an imported module failed.
+    Sint32 load_module_from_string(
+        ITransaction* transaction,
+        const char* module_name,
+        const char* module_source,
+        const IMap* options)
+    {
+        return deprecated_load_module_from_string(
+            transaction,
+            module_name,
+            module_source,
+            options);
+    }
+#endif
+
+    /// Loads an MDL module from memory into the database.
+    ///
+    /// The provided module source is compiled. If successful, the method creates DB elements for
+    /// the module and all its imported modules, as well as for all material and function
+    /// definitions contained in these modules.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::").
+    /// \param module_source The MDL source code of the module.
+    /// \param context       The execution context can be used to pass options to control the  
+    ///                      behavior of the MDL compiler. The following options are supported
+    ///                      by this operation:
+    ///                      - string "internal_space" = "coordinate_object"|"coordinate_world"
+    ///                        (default = "coordinate_world")
+    ///                      During module loading, compiler messages
+    ///                      like errors or warnings are stored in the context. Can be \c NULL.
+    /// \return
+    ///                      -  1: Success (module exists already, creating from \p module_source
+    ///                            was skipped).
+    ///                      -  0: Success (module was actually created from \p module_source).
+    ///                      - -1: The module name \p module_name is invalid, or \p module_name or
+    ///                            \p module_source is a \c NULL pointer.
+    ///                      - -2: Shadows a file-based module or failed to compile the module \p
+    ///                            module_name.
+    ///                      - -3: The DB name for an imported module is already in use but is not
+    ///                            an MDL module, or the DB name for a definition in this module is
+    ///                            already in use.
+    ///                      - -4: Initialization of an imported module failed.
     virtual Sint32 load_module_from_string(
         ITransaction* transaction,
         const char* module_name,
         const char* module_source,
-        const IMap* options = 0) = 0;
+        IMdl_execution_context* context = 0) = 0;
 
     /// Adds a builtin MDL module.
     ///
@@ -335,11 +475,85 @@ public:
     ///                          - -6013: The export of a file-based resource failed.
     ///                          - -6014: The export of a memory-based resource failed.
     ///                          - -6016: The export of an archive-based resource failed.
+    virtual Sint32 deprecated_export_module(
+        ITransaction* transaction,
+        const char* module_name,
+        const char* filename,
+        const IMap* options) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Exports an MDL module from the database to disk.
+    ///
+    /// The following options are supported:
+    /// - \c "bundle_resources" of type #mi::IBoolean: If \c true, referenced resources are exported
+    ///   into the same directory as the module, even if they can be found via the module search
+    ///   path.
+    ///
+    /// \param transaction       The transaction to be used.
+    /// \param module_name       The DB name of the MDL module to export.
+    /// \param filename          The name of the file to be used for the export.
+    /// \param options           Options to control the behavior of the exporter, or \c NULL.
+    /// \return
+    ///                          -     0: Success.
+    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -2: Failed to open \p filename for write operations.
+    ///                          - -6002: There is no MDL module in the database of the given name.
+    ///                          - -6003: The export failed for unknown reasons.
+    ///                          - -6004: The MDL module can not be exported since it is a builtin
+    ///                                   module.
+    ///                          - -6005: The MDL module can not be exported since \p filename does
+    ///                                   not result in a valid MDL identifier.
+    ///                          - -6010: Incorrect type for a referenced resource.
+    ///                          - -6013: The export of a file-based resource failed.
+    ///                          - -6014: The export of a memory-based resource failed.
+    ///                          - -6016: The export of an archive-based resource failed.
+    Sint32 export_module(
+        ITransaction* transaction,
+        const char* module_name,
+        const char* filename,
+        const IMap* options)
+    {
+        return deprecated_export_module(
+            transaction,
+            module_name,
+            filename,
+            options);
+    }
+#endif
+
+    /// Exports an MDL module from the database to disk.
+    ///
+    /// The following options are supported:
+    /// - \c "bundle_resources" of type #mi::IBoolean: If \c true, referenced resources are exported
+    ///   into the same directory as the module, even if they can be found via the module search
+    ///   path.
+    ///
+    /// \param transaction       The transaction to be used.
+    /// \param module_name       The DB name of the MDL module to export.
+    /// \param filename          The name of the file to be used for the export.
+    /// \param context           The execution context can be used to pass options to control the
+    ///                          behavior of the MDL compiler. During module loading, compiler 
+    ///                          messages like errors or warnings are stored in the context. 
+    ///                          Can be \c NULL.
+    /// \return
+    ///                          -     0: Success.
+    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -2: Failed to open \p filename for write operations.
+    ///                          - -6002: There is no MDL module in the database of the given name.
+    ///                          - -6003: The export failed for unknown reasons.
+    ///                          - -6004: The MDL module can not be exported since it is a builtin
+    ///                                   module.
+    ///                          - -6005: The MDL module can not be exported since \p filename does
+    ///                                   not result in a valid MDL identifier.
+    ///                          - -6010: Incorrect type for a referenced resource.
+    ///                          - -6013: The export of a file-based resource failed.
+    ///                          - -6014: The export of a memory-based resource failed.
+    ///                          - -6016: The export of an archive-based resource failed.
     virtual Sint32 export_module(
         ITransaction* transaction,
         const char* module_name,
         const char* filename,
-        const IMap* options = 0) = 0;
+        IMdl_execution_context* context = 0) = 0;
 
     /// Exports an MDL module from the database to string.
     ///
@@ -366,11 +580,85 @@ public:
     ///                          - -6015: The export of archive-based resources is not supported for
     ///                                   string-based exports.
     ///                          - -6016: The export of an archive-based resource failed.
+    virtual Sint32 deprecated_export_module_to_string(
+        ITransaction* transaction,
+        const char* module_name,
+        IString* exported_module,
+        const IMap* options) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Exports an MDL module from the database to string.
+    ///
+    /// \param transaction       The transaction to be used.
+    /// \param module_name       The DB name of the MDL module to export.
+    /// \param exported_module   The exported module source code is written to this string.
+    /// \param options           Options to control the behavior of the exporter, or \c NULL.
+    /// \return
+    ///                          -     0: Success.
+    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          - -6002: There is no MDL module in the database of the given name.
+    ///                          - -6003: The export failed for unknown reasons.
+    ///                          - -6004: The MDL module can not be exported since it is a builtin
+    ///                                   module.
+    ///                          - -6006: The option \c bundle_resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6010: Incorrect type for a referenced resource.
+    ///                          - -6011: The export of file-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6012: The export of memory-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6013: The export of a file-based resource failed.
+    ///                          - -6014: The export of a memory-based resource failed.
+    ///                          - -6015: The export of archive-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6016: The export of an archive-based resource failed.
+    Sint32 export_module_to_string(
+        ITransaction* transaction,
+        const char* module_name,
+        IString* exported_module,
+        const IMap* options)
+    {
+        return deprecated_export_module_to_string(
+            transaction,
+            module_name,
+            exported_module,
+            options);
+    }
+#endif
+
+    /// Exports an MDL module from the database to string.
+    ///
+    /// \param transaction       The transaction to be used.
+    /// \param module_name       The DB name of the MDL module to export.
+    /// \param exported_module   The exported module source code is written to this string.
+    /// \param context           The execution context can be used to pass options to control the
+    ///                          behavior of the MDL compiler. During module loading, compiler 
+    ///                          messages like errors or warnings are stored in the context. 
+    ///                          Can be \c NULL.
+    /// \return
+    ///                          -     0: Success.
+    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          - -6002: There is no MDL module in the database of the given name.
+    ///                          - -6003: The export failed for unknown reasons.
+    ///                          - -6004: The MDL module can not be exported since it is a builtin
+    ///                                   module.
+    ///                          - -6006: The option \c bundle_resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6010: Incorrect type for a referenced resource.
+    ///                          - -6011: The export of file-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6012: The export of memory-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6013: The export of a file-based resource failed.
+    ///                          - -6014: The export of a memory-based resource failed.
+    ///                          - -6015: The export of archive-based resources is not supported for
+    ///                                   string-based exports.
+    ///                          - -6016: The export of an archive-based resource failed.
     virtual Sint32 export_module_to_string(
         ITransaction* transaction,
         const char* module_name,
         IString* exported_module,
-        const IMap* options = 0) = 0;
+        IMdl_execution_context* context = 0) = 0;
 
     /// Exports a canvas to a file on disk.
     ///
@@ -501,24 +789,17 @@ public:
     ///   * \c "2": full optimizations, including inlining (default)
     /// - \c "num_texture_spaces": Set the number of supported texture spaces.
     ///   Default: \c "32".
-    /// - \c "internal_space": Set the internal space of the backend.
-    ///   Possible values: \c "world", \c "object". Default: \c "world".
     ///
     /// The following options are supported by the NATIVE backend only:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
     ///   Possible values: \c "on", \c "off". Default: \c "on".
     ///
-    /// The following options are supported by the LLVM-IR backend only:
-    /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
-    ///   \c "on", \c "off". Default: \c "on".
+    /// The following options are supported by the PTX, LLVM-IR and native backend:
     /// - \c "enable_exceptions": Enables/disables support for exceptions through runtime function
-    ///   calls. Possible values:
+    ///   calls. For PTX, this options is always treated as disabled. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
     /// - \c "enable_ro_segment": Enables/disables the creation of the read-only data segment
     ///   calls. Possible values:
-    ///   \c "on", \c "off". Default: \c "off".
-    /// - \c "write_bitcode": Enables/disables the creation of the LLVM bitcode instead of LLVM IR.
-    ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     /// - \c "num_texture_results": Set the size of the text_results array in the MDL SDK
     ///   state in number of float4 elements. The array has to be provided by the renderer and
@@ -526,6 +807,16 @@ public:
     ///   in the init function created for a material and used by the sample, evaluate and pdf
     ///   functions, if the size is non-zero.
     ///   Default: "0".
+    /// - \c "texture_runtime_with_derivs": Enables/disables derivative support for texture lookup
+    ///   functions. If enabled, the user-provided texture runtime has to provide functions with
+    ///   derivative parameters for the texture coordinates.
+    ///
+    /// The following options are supported by the LLVM-IR backend only:
+    /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
+    ///   \c "on", \c "off". Default: \c "on".
+    /// - \c "write_bitcode": Enables/disables the creation of the LLVM bitcode instead of LLVM IR.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the PTX backend only:
     /// - \c "sm_version": Specifies the SM target version. Possible values:
@@ -613,7 +904,7 @@ public:
     ///                                    - -3: The backend failed to generate target code for the
     ///                                          function.
     /// \return                            The generated target code, or \c NULL in case of failure.
-    virtual const ITarget_code* translate_environment(
+    virtual const ITarget_code* deprecated_translate_environment(
         ITransaction* transaction,
         const IFunction_call* call,
         Float32 mdl_meters_per_scene_unit,
@@ -621,6 +912,98 @@ public:
         Float32 mdl_wavelength_max,
         const char* fname,
         Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms an MDL environment function call into target code.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     void FNAME(
+    ///         void                                            *result,
+    ///         mi::neuraylib::Shading_state_environment const  *state,
+    ///         void const                                      *res_data,
+    ///         void const                                      *exception_state);
+    /// \endcode
+    ///
+    /// The \c result buffer must be big enough for the expression result.
+    ///
+    /// \param transaction                 The transaction to be used.
+    /// \param call                        The MDL function call for the environment.
+    /// \param mdl_meters_per_scene_unit   The conversion ratio between meters and scene units for
+    ///                                    this environment function.
+    /// \param mdl_wavelength_min          The smallest supported wavelength. Typical value: 380.
+    /// \param mdl_wavelength_max          The largest supported wavelength. Typical value: 780.
+    /// \param fname                       The name of the generated function. If \c NULL is passed,
+    ///                                    \c "lambda" will be used.
+    /// \param errors                      An optional pointer to an #mi::Sint32 to which an error
+    ///                                    code will be written. The error codes have the following
+    ///                                    meaning:
+    ///                                    -  0: Success.
+    ///                                    - -1: Invalid parameters (\c NULL pointer).
+    ///                                    - -2: Invalid expression.
+    ///                                    - -3: The backend failed to generate target code for the
+    ///                                          function.
+    /// \return                            The generated target code, or \c NULL in case of failure.
+    const ITarget_code* translate_environment(
+        ITransaction* transaction,
+        const IFunction_call* call,
+        Float32 mdl_meters_per_scene_unit,
+        Float32 mdl_wavelength_min,
+        Float32 mdl_wavelength_max,
+        const char* fname,
+        Sint32* errors)
+    {
+        return deprecated_translate_environment(
+            transaction,
+            call,
+            mdl_meters_per_scene_unit,
+            mdl_wavelength_min,
+            mdl_wavelength_max,
+            fname,
+            errors);
+    }
+#endif
+
+    /// Transforms an MDL environment function call into target code.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     void FNAME(
+    ///         void                                            *result,
+    ///         mi::neuraylib::Shading_state_environment const  *state,
+    ///         void const                                      *res_data,
+    ///         void const                                      *exception_state);
+    /// \endcode
+    ///
+    /// The \c result buffer must be big enough for the expression result.
+    ///
+    /// \param transaction                 The transaction to be used.
+    /// \param call                        The MDL function call for the environment.
+    /// \param fname                       The name of the generated function. If \c NULL is passed,
+    ///                                    \c "lambda" will be used.
+    /// \param[inout] context              A pointer to an
+    ///                                    #mi::neuraylib::IMdl_execution_context which can be used
+    ///                                    to pass compilation options to the MDL compiler. The
+    ///                                    following options are supported by this operation:
+    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                      ratio between meters and scene units for this
+    ///                                      material. Default: 1.0f;
+    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                      supported wavelength. Default: 380.0f.
+    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                      wavelength. Default: 780.0f.
+    ///                                    During material translation, messages like errors and
+    ///                                    warnings will be passed to the context for
+    ///                                    later evaluation by the caller. Can be \c NULL.
+    ///
+    /// \return                            The generated target code, or \c NULL in case of failure.
+    virtual const ITarget_code* translate_environment(
+        ITransaction* transaction,
+        const IFunction_call* call,
+        const char* fname,
+        IMdl_execution_context* context) = 0;
 
     /// Transforms an expression that is part of an MDL material instance to target code.
     ///
@@ -636,8 +1019,6 @@ public:
     /// \endcode
     ///
     /// The \c result buffer must be big enough for the expression result.
-    ///
-    /// \see #translate_material_expression_uniform_state()
     ///
     /// \param transaction   The transaction to be used.
     /// \param material      The compiled MDL material.
@@ -657,12 +1038,99 @@ public:
     ///                      - -6: The backend does not support compiled MDL materials obtained from
     ///                            class compilation mode.
     /// \return              The generated target code, or \c NULL in case of failure.
-    virtual const ITarget_code* translate_material_expression(
+    virtual const ITarget_code* deprecated_translate_material_expression(
         ITransaction* transaction,
         const ICompiled_material* material,
         const char* path,
         const char* fname,
         Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms an expression that is part of an MDL material instance to target code.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     void FNAME(
+    ///         void                                         *result,
+    ///         mi::neuraylib::Shading_state_material const  *state,
+    ///         void const                                   *res_data,
+    ///         void const                                   *exception_state,
+    ///         char const                                   *arg_block_data);
+    /// \endcode
+    ///
+    /// The \c result buffer must be big enough for the expression result.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param material      The compiled MDL material.
+    /// \param path          The path from the material root to the expression that should be
+    ///                      translated, e.g., \c "geometry.displacement".
+    /// \param fname         The name of the generated function. If \c NULL is passed, \c "lambda"
+    ///                      will be used.
+    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                      written. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -2: Invalid path (non-existing).
+    ///                      - -3: The backend failed to generate target code for the expression.
+    ///                      - -4: The requested expression is a constant.
+    ///                      - -5: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
+    ///                            handled.
+    ///                      - -6: The backend does not support compiled MDL materials obtained from
+    ///                            class compilation mode.
+    /// \return              The generated target code, or \c NULL in case of failure.
+    const ITarget_code* translate_material_expression(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* path,
+        const char* fname,
+        Sint32* errors)
+    {
+        return deprecated_translate_material_expression(
+            transaction,
+            material,
+            path,
+            fname,
+            errors);
+    }
+#endif
+
+    /// Transforms an expression that is part of an MDL material instance to target code.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     void FNAME(
+    ///         void                                         *result,
+    ///         mi::neuraylib::Shading_state_material const  *state,
+    ///         void const                                   *res_data,
+    ///         void const                                   *exception_state,
+    ///         char const                                   *arg_block_data);
+    /// \endcode
+    ///
+    /// The \c result buffer must be big enough for the expression result.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param material      The compiled MDL material.
+    /// \param path          The path from the material root to the expression that should be
+    ///                      translated, e.g., \c "geometry.displacement".
+    /// \param fname         The name of the generated function. If \c NULL is passed, \c "lambda"
+    ///                      will be used.
+    /// \param[inout] context  A pointer to an
+    ///                        #mi::neuraylib::IMdl_execution_context which can be used
+    ///                        to pass compilation options to the MDL compiler. Currently, no
+    ///                        options are supported by this operation.
+    ///                        During material translation, messages like errors and
+    ///                        warnings will be passed to the context for
+    ///                        later evaluation by the caller. Can be \c NULL.
+    ///                      
+    /// \return              The generated target code, or \c NULL in case of failure.
+    virtual const ITarget_code* translate_material_expression(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* path,
+        const char* fname,
+        IMdl_execution_context* context) = 0;
 
     /// Transforms an expression that is part of an MDL material instance to target code and
     /// sets the uniform state.
@@ -705,7 +1173,7 @@ public:
     /// \return              The generated target code, or \c NULL in case of failure.
     ///
     /// \note Currently the uniform state will be compiled into the target code.
-    virtual const ITarget_code* translate_material_expression_uniform_state(
+    virtual const ITarget_code* deprecated_translate_material_expression_uniform_state(
         ITransaction* transaction,
         const ICompiled_material* material,
         const char* path,
@@ -714,6 +1182,70 @@ public:
         const Float32_4_4_struct& obj_to_world,
         Sint32 object_id,
         Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms an expression that is part of an MDL material instance to target code and
+    /// sets the uniform state.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     void FNAME(
+    ///         void                                         *result,
+    ///         mi::neuraylib::Shading_state_material const  *state,
+    ///         void const                                   *res_data,
+    ///         void const                                   *exception_state,
+    ///         char const                                   *arg_block_data);
+    /// \endcode
+    ///
+    /// The \c result buffer must be big enough for the expression result.
+    ///
+    /// \see #translate_material_expression()
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param material      The compiled MDL material.
+    /// \param path          The path from the material root to the expression that should be
+    ///                      translated, e.g., \c "geometry.displacement".
+    /// \param fname         The name of the generated function. If \c NULL is passed, \c "lambda"
+    ///                      will be used.
+    /// \param world_to_obj  The 4x4 world-to-object space transformation matrix.
+    /// \param obj_to_world  The 4x4 object-to-world space transformation matrix.
+    /// \param object_id     The result of the state::object_id() function.
+    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                      written. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -2: Invalid path (non-existing).
+    ///                      - -3: The backend failed to generate target code for the expression.
+    ///                      - -4: The requested expression is a constant.
+    ///                      - -5: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
+    ///                            handled.
+    ///                      - -6: The backend does not support compiled MDL materials obtained from
+    ///                            class compilation mode.
+    /// \return              The generated target code, or \c NULL in case of failure.
+    ///
+    /// \note Currently the uniform state will be compiled into the target code.
+    const ITarget_code* translate_material_expression_uniform_state(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* path,
+        const char* fname,
+        const Float32_4_4_struct& world_to_obj,
+        const Float32_4_4_struct& obj_to_world,
+        Sint32 object_id,
+        Sint32* errors)
+    {
+        return deprecated_translate_material_expression_uniform_state(
+            transaction,
+            material,
+            path,
+            fname,
+            world_to_obj,
+            obj_to_world,
+            object_id,
+            errors);
+    }
+#endif
 
     /// Transforms several expressions that are part of one MDL material instance to target code.
     ///
@@ -753,13 +1285,70 @@ public:
     ///                            class compilation mode.
     ///                      - -7: Mixing displacement and non-displacement expression not possible.
     /// \return              The generated target code, or \c NULL in case of failure.
-    virtual const ITarget_code* translate_material_expressions(
+    virtual const ITarget_code* deprecated_translate_material_expressions(
         ITransaction* transaction,
         const ICompiled_material* material,
         const char* const paths[],
         Uint32 path_cnt,
         const char* fname,
         Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms several expressions that are part of one MDL material instance to target code.
+    ///
+    /// The prototype of the resulting function will roughly look like this:
+    ///
+    /// \code
+    ///     bool FNAME(
+    ///         mi::neuraylib::Shading_state_material const  *state,
+    ///         void const                                   *res_data_pair,
+    ///         void const                                   *exception_state,
+    ///         char const                                   *arg_block_data,
+    ///         void                                         *result,
+    ///         Uint32                                        expression_index);
+    /// \endcode
+    ///
+    /// The expression to be evaluated will be chosen via \c expression_index.
+    /// The \c result buffer must be big enough for the according expression result.
+    /// The generated function will return true, iff \c expression_index was valid.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param material      The compiled MDL material.
+    /// \param paths         The paths from the material root to the expression that should be
+    ///                      translated, e.g., \c "geometry.displacement".
+    /// \param path_cnt      The number of material paths.
+    /// \param fname         The name of the generated function. If \c NULL is passed, \c "lambda"
+    ///                      will be used.
+    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                      written. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -2: Invalid path (non-existing).
+    ///                      - -3: The backend failed to generate target code for the expression.
+    ///                      - -4: The requested expression is a constant.
+    ///                      - -5: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
+    ///                            handled.
+    ///                      - -6: The backend does not support compiled MDL materials obtained from
+    ///                            class compilation mode.
+    ///                      - -7: Mixing displacement and non-displacement expression not possible.
+    /// \return              The generated target code, or \c NULL in case of failure.
+    const ITarget_code* translate_material_expressions(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* const paths[],
+        Uint32 path_cnt,
+        const char* fname,
+        Sint32* errors)
+    {
+        return deprecated_translate_material_expressions(
+            transaction,
+            material,
+            paths,
+            path_cnt,
+            fname,
+            errors);
+    }
+#endif
 
     /// Transforms an MDL distribution function to target code.
     /// Note that currently this is only supported for BSDFs.
@@ -789,7 +1378,7 @@ public:
     ///                      - -9: VDFs are not supported.
     ///                      - -10: The requested BSDF is not supported, yet.
     /// \return              The generated target code, or \c NULL in case of failure.
-    virtual const ITarget_code* translate_material_df(
+    virtual const ITarget_code* deprecated_translate_material_df(
         ITransaction* transaction,
         const ICompiled_material* material,
         const char* path,
@@ -797,12 +1386,90 @@ public:
         bool include_geometry_normal,
         Sint32* errors) = 0;
 
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms an MDL distribution function to target code.
+    /// Note that currently this is only supported for BSDFs.
+    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate" and \c "_pdf".
+    ///
+    /// \param transaction              The transaction to be used.
+    /// \param material                 The compiled MDL material.
+    /// \param path                     The path from the material root to the expression that
+    ///                                 should be translated, e.g., \c "surface.scattering".
+    /// \param base_fname               The base name of the generated functions.
+    ///                                 If \c NULL is passed, \c "lambda" will be used.
+    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
+    ///                                 to the MDL state prior to evaluation of the given DF.
+    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                      written. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -2: Invalid path (non-existing).
+    ///                      - -3: The backend failed to generate target code for the material.
+    ///                      - -4: The requested expression is a constant.
+    ///                      - -5: Only distribution functions are allowed.
+    ///                      - -6: The backend does not support compiled MDL materials obtained
+    ///                            from class compilation mode.
+    ///                      - -7: The backend does not implement this function, yet.
+    ///                      - -8: EDFs are not supported.
+    ///                      - -9: VDFs are not supported.
+    ///                      - -10: The requested BSDF is not supported, yet.
+    /// \return              The generated target code, or \c NULL in case of failure.
+    const ITarget_code* translate_material_df(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* path,
+        const char* base_fname,
+        bool include_geometry_normal,
+        Sint32* errors)
+    {
+        return deprecated_translate_material_df(
+            transaction,
+            material,
+            path,
+            base_fname,
+            include_geometry_normal,
+            errors);
+    }
+#endif
+
+    /// Transforms an MDL distribution function to target code.
+    /// Note that currently this is only supported for BSDFs.
+    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate" and \c "_pdf".
+    ///
+    /// \param transaction    The transaction to be used.
+    /// \param material       The compiled MDL material.
+    /// \param path           The path from the material root to the expression that
+    ///                       should be translated, e.g., \c "surface.scattering".
+    /// \param base_fname     The base name of the generated functions.
+    ///                       If \c NULL is passed, \c "lambda" will be used.
+    /// \param[inout] context A pointer to an 
+    ///                       #mi::neuraylib::IMdl_execution_context which can be used
+    ///                       to pass compilation options to the MDL compiler. The
+    ///                       following options are supported by this operation:
+    ///                       - bool "include_geometry_normal". If true, the \c
+    ///                       "geometry.normal" field will be applied to the MDL state prior
+    ///                       to evaluation of the given DF (default: true).
+    ///                       During material translation, messages like errors and
+    ///                       warnings will be passed to the context for
+    ///                       later evaluation by the caller. Can be \c NULL.
+    ///                       
+    /// \return               The generated target code, or \c NULL in case of failure.
+    virtual const ITarget_code* translate_material_df(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        const char* path,
+        const char* base_fname,
+        IMdl_execution_context* context) = 0;
+
+
     /// Transforms (multiple) distribution functions and expressions of a material to target code.
-    /// For each distribution function this results in four functions, suffixed with \c "_init", 
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
     /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
     /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
     /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application, 
+    /// the list will contain information for later usage in the application,
     /// e.g., the \c argument_block_index and the \c function_index.
     ///
     /// \param transaction              The transaction to be used.
@@ -814,12 +1481,78 @@ public:
     ///
     /// \return              The generated target code, or \c NULL in case of failure.
     ///                      In the latter case, check the return codes in descriptions.
-    virtual const ITarget_code* translate_material(
+    virtual const ITarget_code* deprecated_translate_material(
         ITransaction* transaction,
         const ICompiled_material* material,
         Target_function_description* function_descriptions,
         Size description_count,
         bool include_geometry_normal) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms (multiple) distribution functions and expressions of a material to target code.
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application,
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param transaction              The transaction to be used.
+    /// \param material                 The compiled MDL material.
+    /// \param function_descriptions    The list of descriptions of function to translate.
+    /// \param description_count        The size of the list of descriptions.
+    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
+    ///                                 to the MDL state prior to evaluation of the given DF.
+    ///
+    /// \return              The generated target code, or \c NULL in case of failure.
+    ///                      In the latter case, check the return codes in descriptions.
+    const ITarget_code* translate_material(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        Target_function_description* function_descriptions,
+        Size description_count,
+        bool include_geometry_normal)
+    {
+        return deprecated_translate_material(
+            transaction,
+            material,
+            function_descriptions,
+            description_count,
+            include_geometry_normal);
+    }
+#endif
+
+    /// Transforms (multiple) distribution functions and expressions of a material to target code.
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application,
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param transaction              The transaction to be used.
+    /// \param material                 The compiled MDL material.
+    /// \param function_descriptions    The list of descriptions of function to translate.
+    /// \param description_count        The size of the list of descriptions.
+    /// \param[inout] context           A pointer to an
+    ///                                 #mi::neuraylib::IMdl_execution_context which can be used
+    ///                                 to pass compilation options to the MDL compiler. The
+    ///                                 following options are supported for this operation:
+    ///                                 - bool "include_geometry_normal". If true, the \c
+    ///                                   "geometry.normal" field will be applied to the MDL
+    ///                                   state prior to evaluation of the given DF (default true).
+    ///                                 During material compilation messages like errors and
+    ///                                 warnings will be passed to the context for
+    ///                                 later evaluation by the caller. Can be \c NULL.
+    /// \return              The generated target code, or \c NULL in case of failure.
+    ///                      In the latter case, the return code in the failing description is
+    ///                      set to -1 and the context, if provided, contains an error message.
+    virtual const ITarget_code* translate_material(
+        ITransaction* transaction,
+        const ICompiled_material* material,
+        Target_function_description* function_descriptions,
+        Size description_count,
+        IMdl_execution_context* context) = 0;
 
     /// Creates a new link unit.
     ///
@@ -829,9 +1562,43 @@ public:
     ///                     -  0: Success.
     ///                     - -1: The JIT backend is not available.
     /// \return             The generated link unit, or \c NULL in case of failure.
-    virtual ILink_unit* create_link_unit(
+    virtual ILink_unit* deprecated_create_link_unit(
         ITransaction* transaction,
         Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Creates a new link unit.
+    ///
+    /// \param transaction  The transaction to be used.
+    /// \param errors       An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                     written. The error codes have the following meaning:
+    ///                     -  0: Success.
+    ///                     - -1: The JIT backend is not available.
+    /// \return             The generated link unit, or \c NULL in case of failure.
+    ILink_unit* create_link_unit(
+        ITransaction* transaction,
+        Sint32* errors)
+    {
+        return deprecated_create_link_unit(transaction, errors);
+    }
+#endif
+
+    /// Creates a new link unit.
+    ///
+    /// \param transaction  The transaction to be used.
+    /// \param[inout] context A pointer to an
+    ///                       #mi::neuraylib::IMdl_execution_context which can be used
+    ///                       to pass compilation options to the MDL compiler.
+    ///                       During material translation, messages like errors and
+    ///                       warnings will be passed to the context for
+    ///                       later evaluation by the caller.
+    ///                       There are currently no options
+    ///                       supported by this operation. Can be \c NULL.
+    /// \return               The generated link unit, or \c NULL in case of failure.
+    /// \return               The generated link unit, or \c NULL in case of failure.
+    virtual ILink_unit* create_link_unit(
+        ITransaction* transaction,
+        IMdl_execution_context* context) = 0;
 
     /// Transforms a link unit to target code.
     ///
@@ -842,8 +1609,40 @@ public:
     ///                   - -1: Invalid link unit.
     ///                   - -2: The JIT backend failed to compile the unit.
     /// \return           The generated link unit, or \c NULL in case of failure.
-    virtual const ITarget_code* translate_link_unit(
+    virtual const ITarget_code* deprecated_translate_link_unit(
         const ILink_unit* lu, Sint32* errors) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Transforms a link unit to target code.
+    ///
+    /// \param lu         The link unit to translate.
+    /// \param errors     An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                   written. The error codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: Invalid link unit.
+    ///                   - -2: The JIT backend failed to compile the unit.
+    /// \return           The generated link unit, or \c NULL in case of failure.
+    const ITarget_code* translate_link_unit(
+        const ILink_unit* lu, Sint32* errors)
+    {
+        return deprecated_translate_link_unit(lu, errors);
+    }
+#endif
+
+    /// Transforms a link unit to target code.
+    ///
+    /// \param lu             The link unit to translate.
+    /// \param[inout] context A pointer to an
+    ///                       #mi::neuraylib::IMdl_execution_context which can be used
+    ///                       to pass compilation options to the MDL compiler.
+    ///                       During material translation, messages like errors and
+    ///                       warnings will be passed to the context for
+    ///                       later evaluation by the caller.
+    ///                       There are currently no options
+    ///                       supported by this operation. Can be \c NULL.
+    /// \return               The generated link unit, or \c NULL in case of failure.
+    virtual const ITarget_code* translate_link_unit(
+        const ILink_unit* lu, IMdl_execution_context* context) = 0;
 
 };
 
@@ -1521,18 +2320,76 @@ public:
     /// \param mdl_wavelength_max         The largest supported wavelength, typical value: 780.
     ///
     /// \return           A return code.  The return codes have the following meaning:
-    ///                   -  0: Success.
-    ///                   - -1: The JIT backend is not available.
-    ///                   - -2: Invalid expression.
-    ///                   - -3: invalid function name.
-    ///                   - -3: The JIT backend failed to compile the function.
-    /// \return           The generated target code, or \c NULL in case of failure.
-    virtual Sint32 add_environment(
+    ///                                    -  0: Success.
+    ///                                    - -1: Invalid parameters (\c NULL pointer).
+    ///                                    - -2: Invalid expression.
+    ///                                    - -3: The backend failed to compile the function.
+    virtual Sint32 deprecated_add_environment(
         const IFunction_call *call,
         const char           *fname,
         Float32              mdl_meters_per_scene_unit,
         Float32              mdl_wavelength_min,
         Float32              mdl_wavelength_max) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Add an MDL environment function call as a function to this link unit.
+    ///
+    /// \param call                       The MDL function call for the environment.
+    /// \param fname                      The name of the function that is created.
+    /// \param mdl_meters_per_scene_unit  The conversion ratio between meters and scene units
+    ///                                   for this environment function.
+    /// \param mdl_wavelength_min         The smallest supported wavelength, typical value: 380.
+    /// \param mdl_wavelength_max         The largest supported wavelength, typical value: 780.
+    ///
+    /// \return           A return code.  The return codes have the following meaning:
+    ///                                    -  0: Success.
+    ///                                    - -1: Invalid parameters (\c NULL pointer).
+    ///                                    - -2: Invalid expression.
+    ///                                    - -3: The backend failed to compile the function.
+    Sint32 add_environment(
+        const IFunction_call *call,
+        const char           *fname,
+        Float32              mdl_meters_per_scene_unit,
+        Float32              mdl_wavelength_min,
+        Float32              mdl_wavelength_max)
+    {
+        return deprecated_add_environment(
+            call,
+            fname,
+            mdl_meters_per_scene_unit,
+            mdl_wavelength_min,
+            mdl_wavelength_max);
+    }
+#endif
+
+    /// Add an MDL environment function call as a function to this link unit.
+    ///
+    /// \param call                       The MDL function call for the environment.
+    /// \param fname                      The name of the function that is created.
+    /// \param[inout] context             A pointer to an 
+    ///                                   #mi::neuraylib::IMdl_execution_context which can be used
+    ///                                   to pass compilation options to the MDL compiler. The 
+    ///                                   following options are supported for this operation:
+    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                      ratio between meters and scene units for this
+    ///                                      material. Default: 1.0f;
+    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                      supported wavelength. Default: 380.0f.
+    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                      wavelength. Default: 780.0f.
+    ///                                   During material compilation messages like errors and 
+    ///                                   warnings will be passed to the context for
+    ///                                   later evaluation by the caller. Can be \c NULL.
+    ///
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: An error occurred. Please check the
+    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                         if it has been provided.
+    virtual Sint32 add_environment(
+        const IFunction_call    *call,
+        const char              *fname,
+        IMdl_execution_context  *context = 0) = 0;
 
     /// Add an expression that is part of an MDL material instance as a function to this
     /// link unit.
@@ -1551,8 +2408,58 @@ public:
     ///                   - -6: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
     ///                         compiled.
     /// \return           The generated target code, or \c NULL in case of failure.
-    virtual Sint32 add_material_expression(
+    virtual Sint32 deprecated_add_material_expression(
         const ICompiled_material* inst, const char* path, const char* fname) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Add an expression that is part of an MDL material instance as a function to this
+    /// link unit.
+    ///
+    /// \param inst       The compiled MDL material instance.
+    /// \param path       The path from the material root to the expression that should be
+    ///                   translated, e.g., \c "geometry.displacement".
+    /// \param fname      The name of the function that is created.
+    /// \return           A return code.  The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: The JIT backend is not available.
+    ///                   - -2: Invalid field name (non-existing).
+    ///                   - -3: invalid function name.
+    ///                   - -4: The JIT backend failed to compile the function.
+    ///                   - -5: The requested expression is a constant.
+    ///                   - -6: Neither BSDFs, EDFs, VDFs, nor resource type expressions can be
+    ///                         compiled.
+    /// \return           The generated target code, or \c NULL in case of failure.
+    Sint32 add_material_expression(
+        const ICompiled_material* inst, const char* path, const char* fname)
+    {
+        return deprecated_add_material_expression(inst, path, fname);
+    }
+#endif
+
+    /// Add an expression that is part of an MDL material instance as a function to this
+    /// link unit.
+    ///
+    /// \param inst       The compiled MDL material instance.
+    /// \param path       The path from the material root to the expression that should be
+    ///                   translated, e.g., \c "geometry.displacement".
+    /// \param fname      The name of the function that is created.
+    /// \param[inout] context  A pointer to an 
+    ///                        #mi::neuraylib::IMdl_execution_context which can be used
+    ///                        to pass compilation options to the MDL compiler.
+    ///                        Currently, no options are supported by this operation.
+    ///                        During material compilation messages like errors and
+    ///                        warnings will be passed to the context for
+    ///                        later evaluation by the caller. Can be \c NULL.
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: An error occurred. Please check the
+    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                         if it has been provided.
+    virtual Sint32 add_material_expression(
+        const ICompiled_material* inst,
+        const char* path,
+        const char* fname,
+        IMdl_execution_context* context) = 0;
 
     /// Add an MDL distribution function to this link unit.
     /// Note that currently this is only supported for BSDFs.
@@ -1579,20 +2486,90 @@ public:
     ///                      - -8: EDFs are not supported. (deprecated, will not occur anymore)
     ///                      - -9: VDFs are not supported.
     ///                      - -10: The requested DF is not supported, yet.
-    virtual Sint32 add_material_df(
+    virtual Sint32 deprecated_add_material_df(
         const ICompiled_material* material,
         const char* path,
         const char* base_fname,
         bool include_geometry_normal) = 0;
 
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Add an MDL distribution function to this link unit.
+    /// Note that currently this is only supported for BSDFs.
+    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate" and \c "_pdf".
+    ///
+    /// \param material                 The compiled MDL material.
+    /// \param path                     The path from the material root to the expression that
+    ///                                 should be translated, e.g., \c "surface.scattering".
+    /// \param base_fname               The base name of the generated functions.
+    ///                                 If \c NULL is passed, \c "lambda" will be used.
+    /// \param include_geometry_normal  If true, the \c "geometry.normal" field will be applied
+    ///                                 to the MDL state prior to evaluation of the given DF.
+    /// \returns             A return code. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -2: Invalid path (non-existing).
+    ///                      - -3: The backend failed to generate target code for the material.
+    ///                      - -4: The requested expression is a constant.
+    ///                      - -5: Only distribution functions are allowed.
+    ///                      - -6: The backend does not support compiled MDL materials obtained
+    ///                            from class compilation mode.
+    ///                      - -7: The backend does not implement this function, yet.
+    ///                      - -8: EDFs are not supported. (deprecated, will not occur anymore)
+    ///                      - -9: VDFs are not supported.
+    ///                      - -10: The requested DF is not supported, yet.
+    Sint32 add_material_df(
+        const ICompiled_material* material,
+        const char* path,
+        const char* base_fname,
+        bool include_geometry_normal)
+    {
+        return deprecated_add_material_df(
+            material,
+            path,
+            base_fname,
+            include_geometry_normal);
+    }
+#endif
 
+    /// Add an MDL distribution function to this link unit.
+    /// Note that currently this is only supported for BSDFs.
+    /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
+    /// \c "_evaluate" and \c "_pdf".
+    ///
+    /// \param material         The compiled MDL material.
+    /// \param path             The path from the material root to the expression that
+    ///                         should be translated, e.g., \c "surface.scattering".
+    /// \param base_fname       The base name of the generated functions.
+    ///                         If \c NULL is passed, \c "lambda" will be used.
+    /// \param[inout] context   A pointer to an 
+    ///                         #mi::neuraylib::IMdl_execution_context which can be used
+    ///                         to pass compilation options to the MDL compiler. The
+    ///                         following options are supported for this operation:
+    ///                         - bool "include_geometry_normal". If true, the \c
+    ///                           "geometry.normal" field will be applied to the MDL 
+    ///                           state prior to evaluation of the given DF (default true).
+    ///                         During material compilation messages like errors and
+    ///                         warnings will be passed to the context for
+    ///                         later evaluation by the caller. Can be \c NULL.
+    ///
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: An error occurred. Please check the
+    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                         if it has been provided.
+    virtual Sint32 add_material_df(
+        const ICompiled_material* material,
+        const char* path,
+        const char* base_fname,
+        IMdl_execution_context* context) = 0;
 
     /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
-    /// For each distribution function this results in four functions, suffixed with \c "_init", 
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
     /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
     /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
     /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application, 
+    /// the list will contain information for later usage in the application,
     /// e.g., the \c argument_block_index and the \c function_index.
     ///
     /// \param material                     The compiled MDL material.
@@ -1604,15 +2581,84 @@ public:
     ///                      -  0: Success.
     ///                      - -1: An error occurred while processing the entries in the list.
     ///                            For more detailed error information, each list entry contains
-    ///                            the error code of the corresponding function type 
-    ///                            (see the return codes of \c add_material_expression and 
+    ///                            the error code of the corresponding function type
+    ///                            (see the return codes of \c add_material_expression and
     ///                            \c add_material_df). In case of an error, rely only on the first
     ///                            return code different from 0.
-    virtual Sint32 add_material(
+    virtual Sint32 deprecated_add_material(
         const ICompiled_material*       material,
         Target_function_description*    function_descriptions,
         Size                            description_count,
         bool                            include_geometry_normal) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application,
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param material                     The compiled MDL material.
+    /// \param function_descriptions        The list of descriptions of function to translate.
+    /// \param description_count            The size of the list of descriptions.
+    /// \param include_geometry_normal      If true, the \c "geometry.normal" field will be applied
+    ///                                     to the MDL state prior to evaluation of the given DF.
+    /// \returns             A return code. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: An error occurred while processing the entries in the list.
+    ///                            For more detailed error information, each list entry contains
+    ///                            the error code of the corresponding function type
+    ///                            (see the return codes of \c add_material_expression and
+    ///                            \c add_material_df). In case of an error, rely only on the first
+    ///                            return code different from 0.
+    Sint32 add_material(
+        const ICompiled_material*       material,
+        Target_function_description*    function_descriptions,
+        Size                            description_count,
+        bool                            include_geometry_normal)
+    {
+        return deprecated_add_material(
+            material,
+            function_descriptions,
+            description_count,
+            include_geometry_normal);
+    }
+#endif
+
+    /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
+    /// For each distribution function this results in four functions, suffixed with \c "_init",
+    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
+    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
+    /// of the expression that should be translated. After calling this function, each element of
+    /// the list will contain information for later usage in the application,
+    /// e.g., the \c argument_block_index and the \c function_index.
+    ///
+    /// \param material                 The compiled MDL material.
+    /// \param function_descriptions    The list of descriptions of function to translate.
+    /// \param description_count        The size of the list of descriptions.
+    /// \param[inout] context           A pointer to an
+    ///                                 #mi::neuraylib::IMdl_execution_context which can be used
+    ///                                 to pass compilation options to the MDL compiler. The
+    ///                                 following options are supported for this operation:
+    ///                                 - bool "include_geometry_normal". If true, the \c
+    ///                                   "geometry.normal" field will be applied to the MDL
+    ///                                   state prior to evaluation of the given DF (default true).
+    ///                                 During material compilation messages like errors and
+    ///                                 warnings will be passed to the context for
+    ///                                 later evaluation by the caller. Can be \c NULL.
+    /// \returns             A return code. The error codes have the following meaning:
+    ///                      -  0: Success.
+    ///                      - -1: An error occurred while processing the entries in the list.
+    ///                            Please check the
+    ///                            #mi::neuraylib::IMdl_execution_context for details
+    ///                            if it has been provided.
+    virtual Sint32 add_material(
+        const ICompiled_material*       material,
+        Target_function_description*    function_descriptions,
+        Size                            description_count,
+        IMdl_execution_context*         context) = 0;
 };
 
 struct Target_function_description

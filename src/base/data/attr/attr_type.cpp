@@ -60,7 +60,7 @@ namespace MI {
 namespace ATTR {
 
 using namespace LOG;
-using namespace MISTD;
+using namespace std;
 
 //==================================================================================================
 
@@ -285,7 +285,7 @@ void Type::set_child(
             if (m_child->get_next()) {
                 // the TYPE_ARRAY's current m_next value would be lost!
                 ASSERT(M_ATTR, m_next == 0);
-                MISTD::swap(m_next, m_child->m_next);
+                std::swap(m_next, m_child->m_next);
             }
         }
     }
@@ -670,7 +670,7 @@ SERIAL::Serializable *Type::deserialize(
                 deser->read(&i_val);
                 string s_val;
                 deser->read(&s_val);
-                m_enum->push_back(MISTD::make_pair(i_val, s_val));
+                m_enum->push_back(std::make_pair(i_val, s_val));
             }
         }
         else
@@ -709,7 +709,7 @@ void Type::dump() const
 
 
 void Type::set_type_name(
-    const MISTD::string& str)
+    const std::string& str)
 {
     m_type_name = str;
 }
@@ -718,16 +718,16 @@ void Type::set_type_name(
 //
 // return a string that describes the type including subtypes.
 //
-MISTD::string Type::print() const
+std::string Type::print() const
 {
-    MISTD::string result;
+    std::string result;
     if (m_const)
         result += "const ";
     result += type_name(Type_code(m_typecode));
     if (m_arraysize != 1) {
         result += "[";
         if (m_arraysize)
-            result += MISTD::to_string(m_arraysize);
+            result += std::to_string(m_arraysize);
         result += "]";
     }
     if (!m_type_name.empty()) {

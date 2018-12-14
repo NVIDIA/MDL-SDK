@@ -52,9 +52,9 @@ SourceMgr::~SourceMgr() {
 /// AddIncludeFile - Search for a file with the specified name in the current
 /// directory or in one of the IncludeDirs.  If no file is found, this returns
 /// ~0, otherwise it returns the buffer ID of the stacked file.
-size_t SourceMgr::AddIncludeFile(const MISTD::string &Filename,
+size_t SourceMgr::AddIncludeFile(const std::string &Filename,
                                  SMLoc IncludeLoc,
-                                 MISTD::string &IncludedFile) {
+                                 std::string &IncludedFile) {
   OwningPtr<MemoryBuffer> NewBuf;
   IncludedFile = Filename;
   MemoryBuffer::getFile(IncludedFile.c_str(), NewBuf);
@@ -85,7 +85,7 @@ int SourceMgr::FindBufferContainingLoc(SMLoc Loc) const {
 
 /// getLineAndColumn - Find the line and column number for the specified
 /// location in the specified file.  This is not a fast method.
-MISTD::pair<unsigned, unsigned>
+std::pair<unsigned, unsigned>
 SourceMgr::getLineAndColumn(SMLoc Loc, int BufferID) const {
   if (BufferID == -1) BufferID = FindBufferContainingLoc(Loc);
   assert(BufferID != -1 && "Invalid Location!");
@@ -126,7 +126,7 @@ SourceMgr::getLineAndColumn(SMLoc Loc, int BufferID) const {
   
   size_t NewlineOffs = StringRef(BufStart, Ptr-BufStart).find_last_of("\n\r");
   if (NewlineOffs == StringRef::npos) NewlineOffs = ~(size_t)0;
-  return MISTD::make_pair(LineNo, Ptr-BufStart-NewlineOffs);
+  return std::make_pair(LineNo, Ptr-BufStart-NewlineOffs);
 }
 
 void SourceMgr::PrintIncludeStack(SMLoc IncludeLoc, raw_ostream &OS) const {
@@ -155,10 +155,10 @@ SMDiagnostic SourceMgr::GetMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
 
   // First thing to do: find the current buffer containing the specified
   // location to pull out the source line.
-  SmallVector<MISTD::pair<unsigned, unsigned>, 4> ColRanges;
-  MISTD::pair<unsigned, unsigned> LineAndCol;
+  SmallVector<std::pair<unsigned, unsigned>, 4> ColRanges;
+  std::pair<unsigned, unsigned> LineAndCol;
   const char *BufferID = "<unknown>";
-  MISTD::string LineStr;
+  std::string LineStr;
   
   if (Loc.isValid()) {
     int CurBuf = FindBufferContainingLoc(Loc);
@@ -179,7 +179,7 @@ SMDiagnostic SourceMgr::GetMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
     const char *BufEnd = CurMB->getBufferEnd();
     while (LineEnd != BufEnd && LineEnd[0] != '\n' && LineEnd[0] != '\r')
       ++LineEnd;
-    LineStr = MISTD::string(LineStart, LineEnd);
+    LineStr = std::string(LineStart, LineEnd);
 
     // Convert any ranges to column ranges that only intersect the line of the
     // location.
@@ -199,7 +199,7 @@ SMDiagnostic SourceMgr::GetMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
       
       // Translate from SMLoc ranges to column ranges.
       // FIXME: Handle multibyte characters.
-      ColRanges.push_back(MISTD::make_pair(R.Start.getPointer()-LineStart,
+      ColRanges.push_back(std::make_pair(R.Start.getPointer()-LineStart,
                                          R.End.getPointer()-LineStart));
     }
 
@@ -245,15 +245,15 @@ void SourceMgr::PrintMessage(SMLoc Loc, SourceMgr::DiagKind Kind,
 SMDiagnostic::SMDiagnostic(const SourceMgr &sm, SMLoc L, StringRef FN,
                            int Line, int Col, SourceMgr::DiagKind Kind,
                            StringRef Msg, StringRef LineStr,
-                           ArrayRef<MISTD::pair<unsigned,unsigned> > Ranges,
+                           ArrayRef<std::pair<unsigned,unsigned> > Ranges,
                            ArrayRef<SMFixIt> Hints)
   : SM(&sm), Loc(L), Filename(FN), LineNo(Line), ColumnNo(Col), Kind(Kind),
     Message(Msg), LineContents(LineStr), Ranges(Ranges.vec()),
     FixIts(Hints.begin(), Hints.end()) {
-  MISTD::sort(FixIts.begin(), FixIts.end());
+  std::sort(FixIts.begin(), FixIts.end());
 }
 
-static void buildFixItLine(MISTD::string &CaretLine, MISTD::string &FixItLine,
+static void buildFixItLine(std::string &CaretLine, std::string &FixItLine,
                            ArrayRef<SMFixIt> FixIts, ArrayRef<char> SourceLine){
   if (FixIts.empty())
     return;
@@ -306,7 +306,7 @@ static void buildFixItLine(MISTD::string &CaretLine, MISTD::string &FixItLine,
     if (LastColumnModified > FixItLine.size())
       FixItLine.resize(LastColumnModified, ' ');
 
-    MISTD::copy(I->getText().begin(), I->getText().end(),
+    std::copy(I->getText().begin(), I->getText().end(),
               FixItLine.begin() + HintCol);
 
     PrevHintEndCol = LastColumnModified;
@@ -319,7 +319,7 @@ static void buildFixItLine(MISTD::string &CaretLine, MISTD::string &FixItLine,
     else
       LastCol = R.End.getPointer() - LineStart;
 
-    MISTD::fill(&CaretLine[FirstCol], &CaretLine[LastCol], '~');
+    std::fill(&CaretLine[FirstCol], &CaretLine[LastCol], '~');
   }
 }
 
@@ -406,7 +406,7 @@ void SMDiagnostic::print(const char *ProgName, raw_ostream &S,
   // map like Clang's TextDiagnostic. For now, we'll just handle tabs by
   // expanding them later, and bail out rather than show incorrect ranges and
   // misaligned fixits for any other odd characters.
-  if (MISTD::find_if(LineContents.begin(), LineContents.end(), isNonASCII) !=
+  if (std::find_if(LineContents.begin(), LineContents.end(), isNonASCII) !=
       LineContents.end()) {
     printSourceLine(S, LineContents);
     return;
@@ -414,19 +414,19 @@ void SMDiagnostic::print(const char *ProgName, raw_ostream &S,
   size_t NumColumns = LineContents.size();
 
   // Build the line with the caret and ranges.
-  MISTD::string CaretLine(NumColumns+1, ' ');
+  std::string CaretLine(NumColumns+1, ' ');
   
   // Expand any ranges.
   for (unsigned r = 0, e = Ranges.size(); r != e; ++r) {
-    MISTD::pair<unsigned, unsigned> R = Ranges[r];
-    MISTD::fill(&CaretLine[R.first],
-              &CaretLine[MISTD::min((size_t)R.second, CaretLine.size())],
+    std::pair<unsigned, unsigned> R = Ranges[r];
+    std::fill(&CaretLine[R.first],
+              &CaretLine[std::min((size_t)R.second, CaretLine.size())],
               '~');
   }
 
   // Add any fix-its.
   // FIXME: Find the beginning of the line properly for multibyte characters.
-  MISTD::string FixItInsertionLine;
+  std::string FixItInsertionLine;
   buildFixItLine(CaretLine, FixItInsertionLine, FixIts,
                  makeArrayRef(Loc.getPointer() - ColumnNo,
                               LineContents.size()));

@@ -29,7 +29,7 @@ static void EnsureFunctionExists(Module &M, const char *Name,
                                  ArgIt ArgBegin, ArgIt ArgEnd,
                                  Type *RetTy) {
   // Insert a correctly-typed definition now.
-  MISTD::vector<Type *> ParamTys;
+  std::vector<Type *> ParamTys;
   for (ArgIt I = ArgBegin; I != ArgEnd; ++I)
     ParamTys.push_back(I->getType());
   M.getOrInsertFunction(Name, FunctionType::get(RetTy, ParamTys, false));
@@ -69,7 +69,7 @@ static CallInst *ReplaceCallWith(const char *NewFn, CallInst *CI,
   // program already contains a function with this name.
   Module *M = CI->getParent()->getParent()->getParent();
   // Get or insert the definition now.
-  MISTD::vector<Type *> ParamTys;
+  std::vector<Type *> ParamTys;
   for (ArgIt I = ArgBegin; I != ArgEnd; ++I)
     ParamTys.push_back((*I)->getType());
   Constant* FCache = M->getOrInsertFunction(NewFn,

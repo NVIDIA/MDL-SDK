@@ -74,7 +74,7 @@ MachineFunction::MachineFunction(const Function *F, const TargetMachine &TM,
   // FIXME: Shouldn't use pref alignment if explicit alignment is set on Fn.
   if (!Fn->getAttributes().hasAttribute(AttributeSet::FunctionIndex,
                                         Attribute::OptimizeForSize))
-    Alignment = MISTD::max(Alignment,
+    Alignment = std::max(Alignment,
                          TM.getTargetLowering()->getPrefFunctionAlignment());
 
   FunctionNumber = FunctionNum;
@@ -85,7 +85,7 @@ MachineFunction::~MachineFunction() {
   // Don't call destructors on MachineInstr and MachineOperand. All of their
   // memory comes from the BumpPtrAllocator which is about to be purged.
   //
-  // Do call MachineBasicBlock destructors, it contains MISTD::vectors.
+  // Do call MachineBasicBlock destructors, it contains std::vectors.
   for (iterator I = begin(), E = end(); I != E; I = BasicBlocks.erase(I))
     I->Insts.clearAndLeakNodesUnsafely();
 
@@ -244,7 +244,7 @@ MachineFunction::allocateMemRefsArray(unsigned long Num) {
   return Allocator.Allocate<MachineMemOperand *>(Num);
 }
 
-MISTD::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator>
+std::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator>
 MachineFunction::extractLoadMemRefs(MachineInstr::mmo_iterator Begin,
                                     MachineInstr::mmo_iterator End) {
   // Count the number of load mem refs.
@@ -273,10 +273,10 @@ MachineFunction::extractLoadMemRefs(MachineInstr::mmo_iterator Begin,
       ++Index;
     }
   }
-  return MISTD::make_pair(Result, Result + Num);
+  return std::make_pair(Result, Result + Num);
 }
 
-MISTD::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator>
+std::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator>
 MachineFunction::extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
                                      MachineInstr::mmo_iterator End) {
   // Count the number of load mem refs.
@@ -305,7 +305,7 @@ MachineFunction::extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
       ++Index;
     }
   }
-  return MISTD::make_pair(Result, Result + Num);
+  return std::make_pair(Result, Result + Num);
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -367,13 +367,13 @@ namespace llvm {
 
   DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
-    static MISTD::string getGraphName(const MachineFunction *F) {
+    static std::string getGraphName(const MachineFunction *F) {
       return "CFG for '" + F->getName().str() + "' function";
     }
 
-    MISTD::string getNodeLabel(const MachineBasicBlock *Node,
+    std::string getNodeLabel(const MachineBasicBlock *Node,
                              const MachineFunction *Graph) {
-      MISTD::string OutStr;
+      std::string OutStr;
       {
         raw_string_ostream OSS(OutStr);
 
@@ -584,8 +584,8 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
     return BV;
 
   // On other MBBs the saved CSRs are not pristine.
-  const MISTD::vector<CalleeSavedInfo> &CSI = getCalleeSavedInfo();
-  for (MISTD::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
+  const std::vector<CalleeSavedInfo> &CSI = getCalleeSavedInfo();
+  for (std::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
          E = CSI.end(); I != E; ++I)
     BV.reset(I->getReg());
 
@@ -614,7 +614,7 @@ unsigned MachineFrameInfo::estimateStackSize(const MachineFunction &MF) const {
     // Adjust to alignment boundary
     Offset = (Offset+Align-1)/Align*Align;
 
-    MaxAlign = MISTD::max(Align, MaxAlign);
+    MaxAlign = std::max(Align, MaxAlign);
   }
 
   if (adjustsStack() && TFI->hasReservedCallFrame(MF))
@@ -634,7 +634,7 @@ unsigned MachineFrameInfo::estimateStackSize(const MachineFunction &MF) const {
 
   // If the frame pointer is eliminated, all frame offsets will be relative to
   // SP not FP. Align to MaxAlign so this works.
-  StackAlign = MISTD::max(StackAlign, MaxAlign);
+  StackAlign = std::max(StackAlign, MaxAlign);
   unsigned AlignMask = StackAlign - 1;
   Offset = (Offset + AlignMask) & ~uint64_t(AlignMask);
 
@@ -729,7 +729,7 @@ unsigned MachineJumpTableInfo::getEntryAlignment(const DataLayout &TD) const {
 /// createJumpTableIndex - Create a new jump table entry in the jump table info.
 ///
 unsigned MachineJumpTableInfo::createJumpTableIndex(
-                               const MISTD::vector<MachineBasicBlock*> &DestBBs) {
+                               const std::vector<MachineBasicBlock*> &DestBBs) {
   assert(!DestBBs.empty() && "Cannot create an empty jump table!");
   JumpTables.push_back(MachineJumpTableEntry(DestBBs));
   return JumpTables.size()-1;

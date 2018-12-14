@@ -170,16 +170,6 @@ configured search paths.
         the one that can be loaded by the SDK, and the search paths of all modules that are shadows and thereby unavailable.
     </dd>
 
-    <dt><b>Building the example</b></dt>
-    <dd><br>
-        To compile the source code, you need the Qt Toolkit 5.10 or above available at <a href="https://www.qt.io/download">https://www.qt.io/download</a>.
-        During the installation of Qt select the 64-bit toolkit for Visual Studio 2015 and/or 2017 (MSVC 2015 64-bit and/or MSVC 2017 64-bit).
-
-        The application was tested to build and run with Qt toolkit version 5.10.1.
-        If you use a different Qt version or you didn't install it in the default path <em>C:\\Qt</em>, you will have to adapt the \c "QtVersion" and \c "QT_INSTALL_PATH" properties in \c examples/mdl_browser/config.props before building.
-        After changing this file, you may have to reopen the project solution to make the changes effective.
-    </dd>
-
     <dt><b>Running the example from the command line</b></dt>
     <dd><br>
         The MDL Browser can be started with the command line options:
@@ -192,13 +182,22 @@ configured search paths.
         - -k | \--keep_open<br>        
           Reopens the browser after closing the window or selecting a material until the console is closed.
 
-        - -p | \--mdl_path<br>
+        - -p | \--mdl_path \<value\><br>
           By default, the MDL Browser uses the two default search paths for the system. 
           On the Windows platform this is the admin-space search path, 
           e.g., <em>C:\\ProgramData\\NVIDIA Corporation\\mdl</em> and the 
           user-space search path <em>\%USERPROFILE%\\Documents\\mdl</em>. 
           By passing the command line option -p \<value\>, this default behavior can be changed. 
           The option can appear multiple times.
+
+        - -l | --locale \<value\><br>
+          Enable localization of the material descriptions and other display names.
+          The localization code (see ISO 639-1 standard) has to be provided as \<value\>.
+          If the option is not set, the system locale is used by default.
+
+        - \--no_qt_mode<br>
+          Setting this flag illustrates the standalone use-case. For applications that are not based on Qt, a windows in form of
+          a dialog is created. Without the flag, the plugin is used as QML module that provided new MDL controls.
     </dd>
 
     <dt><b>Restrictions</b></dt>

@@ -106,7 +106,7 @@ namespace {
     DataLayout *TD;
     TargetLibraryInfo *TLI;
 
-    MISTD::string Messages;
+    std::string Messages;
     raw_string_ostream MessagesStr;
 
     static char ID; // Pass identification, replacement for typeid

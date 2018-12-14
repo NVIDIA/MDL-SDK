@@ -227,7 +227,7 @@ TrimAllocationToSize(FreeRangeHeader *FreeList, uint64_t NewSize) {
          "Cannot deallocate part of an allocated block!");
 
   // Don't allow blocks to be trimmed below minimum required size
-  NewSize = MISTD::max<uint64_t>(FreeRangeHeader::getMinBlockSize(), NewSize);
+  NewSize = std::max<uint64_t>(FreeRangeHeader::getMinBlockSize(), NewSize);
 
   // Round up size for alignment of header.
   unsigned HeaderAlign = __alignof(FreeRangeHeader);
@@ -298,7 +298,7 @@ namespace {
 
     // Memory slabs allocated by the JIT.  We refer to them as slabs so we don't
     // confuse them with the blocks of memory described above.
-    MISTD::vector<sys::MemoryBlock> CodeSlabs;
+    std::vector<sys::MemoryBlock> CodeSlabs;
     JITSlabAllocator BumpSlabAllocator;
     BumpPtrAllocator StubAllocator;
     BumpPtrAllocator DataAllocator;
@@ -332,13 +332,13 @@ namespace {
 
     /// getPointerToNamedFunction - This method returns the address of the
     /// specified function by using the dlsym function call.
-    virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+    virtual void *getPointerToNamedFunction(const std::string &Name,
                                             bool AbortOnFailure = true);
 
     void AllocateGOT();
 
     // Testing methods.
-    virtual bool CheckInvariants(MISTD::string &ErrorStr);
+    virtual bool CheckInvariants(std::string &ErrorStr);
     size_t GetDefaultCodeSlabSize() { return DefaultCodeSlabSize; }
     size_t GetDefaultDataSlabSize() { return DefaultSlabSize; }
     size_t GetDefaultStubSlabSize() { return DefaultSlabSize; }
@@ -392,7 +392,7 @@ namespace {
       // two MemoryRangeHeaders: the one in the user's block, and the one at the
       // end of the slab.
       size_t PaddedMin = MinSize + 2 * sizeof(MemoryRangeHeader);
-      size_t SlabSize = MISTD::max(DefaultCodeSlabSize, PaddedMin);
+      size_t SlabSize = std::max(DefaultCodeSlabSize, PaddedMin);
       sys::MemoryBlock B = allocateNewSlab(SlabSize);
       CodeSlabs.push_back(B);
       char *MemBase = (char*)(B.base());
@@ -515,7 +515,7 @@ namespace {
       return (uint8_t*)DataAllocator.Allocate(Size, Alignment);
     }
 
-    bool finalizeMemory(MISTD::string *ErrMsg) {
+    bool finalizeMemory(std::string *ErrMsg) {
       return false;
     }
 
@@ -660,7 +660,7 @@ DefaultJITMemoryManager::~DefaultJITMemoryManager() {
 
 sys::MemoryBlock DefaultJITMemoryManager::allocateNewSlab(size_t size) {
   // Allocate a new block close to the last one.
-  MISTD::string ErrMsg;
+  std::string ErrMsg;
   sys::MemoryBlock *LastSlabPtr = LastSlab.base() ? &LastSlab : 0;
   sys::MemoryBlock B = sys::Memory::AllocateRWX(size, LastSlabPtr, &ErrMsg);
   if (B.base() == 0) {
@@ -684,7 +684,7 @@ sys::MemoryBlock DefaultJITMemoryManager::allocateNewSlab(size_t size) {
 /// accessing bad memory.  This function is defined here instead of in
 /// JITMemoryManagerTest.cpp so that we don't have to expose all of the
 /// implementation details of DefaultJITMemoryManager.
-bool DefaultJITMemoryManager::CheckInvariants(MISTD::string &ErrorStr) {
+bool DefaultJITMemoryManager::CheckInvariants(std::string &ErrorStr) {
   raw_string_ostream Err(ErrorStr);
 
   // Construct a the set of FreeRangeHeader pointers so we can query it
@@ -696,7 +696,7 @@ bool DefaultJITMemoryManager::CheckInvariants(MISTD::string &ErrorStr) {
   do {
     // Check that the free range pointer is in the blocks we've allocated.
     bool Found = false;
-    for (MISTD::vector<sys::MemoryBlock>::iterator I = CodeSlabs.begin(),
+    for (std::vector<sys::MemoryBlock>::iterator I = CodeSlabs.begin(),
          E = CodeSlabs.end(); I != E && !Found; ++I) {
       char *Start = (char*)I->base();
       char *End = Start + I->size();
@@ -718,7 +718,7 @@ bool DefaultJITMemoryManager::CheckInvariants(MISTD::string &ErrorStr) {
   } while (FreeRange != FreeHead);
 
   // Go over each block, and look at each MemoryRangeHeader.
-  for (MISTD::vector<sys::MemoryBlock>::iterator I = CodeSlabs.begin(),
+  for (std::vector<sys::MemoryBlock>::iterator I = CodeSlabs.begin(),
        E = CodeSlabs.end(); I != E; ++I) {
     char *Start = (char*)I->base();
     char *End = Start + I->size();
@@ -771,7 +771,7 @@ bool DefaultJITMemoryManager::CheckInvariants(MISTD::string &ErrorStr) {
 
 // AtExitHandlers - List of functions to call when the program exits,
 // registered with the atexit() library function.
-static MISTD::vector<void (*)()> AtExitHandlers;
+static std::vector<void (*)()> AtExitHandlers;
 
 /// runAtExitHandlers - Run any functions registered by the program's
 /// calls to atexit(3), which we intercept and store in
@@ -842,7 +842,7 @@ static int jit_noop() {
 /// function by using the dynamic loader interface.  As such it is only useful
 /// for resolving library symbols, not code generated symbols.
 ///
-void *DefaultJITMemoryManager::getPointerToNamedFunction(const MISTD::string &Name,
+void *DefaultJITMemoryManager::getPointerToNamedFunction(const std::string &Name,
                                                          bool AbortOnFailure) {
   // Check to see if this is one of the functions we want to intercept.  Note,
   // we cast to intptr_t here to silence a -pedantic warning that complains
@@ -881,7 +881,7 @@ void *DefaultJITMemoryManager::getPointerToNamedFunction(const MISTD::string &Na
       memcmp(&Name[Name.size()-8], "LDBLStub", 8) == 0) {
     // First try turning $LDBLStub into $LDBL128. If that fails, strip it off.
     // This mirrors logic in libSystemStubs.a.
-    MISTD::string Prefix = MISTD::string(Name.begin(), Name.end()-9);
+    std::string Prefix = std::string(Name.begin(), Name.end()-9);
     if (void *Ptr = getPointerToNamedFunction(Prefix+"$LDBL128", false))
       return Ptr;
     if (void *Ptr = getPointerToNamedFunction(Prefix, false))

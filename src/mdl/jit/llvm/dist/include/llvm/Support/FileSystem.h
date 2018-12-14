@@ -780,7 +780,7 @@ error_code unmap_file_pages(void *base, size_t size);
 /// Return the path to the main executable, given the value of argv[0] from
 /// program startup and the address of main itself. In extremis, this function
 /// may fail and return an empty path.
-MISTD::string getMainExecutable(const char *argv0, void *MainExecAddr);
+std::string getMainExecutable(const char *argv0, void *MainExecAddr);
 
 /// @}
 /// @name Iterators
@@ -790,7 +790,7 @@ MISTD::string getMainExecutable(const char *argv0, void *MainExecAddr);
 /// from the result of the iteration syscall, or the first time status is
 /// called.
 class directory_entry {
-  MISTD::string Path;
+  std::string Path;
   mutable file_status Status;
 
 public:
@@ -807,7 +807,7 @@ public:
 
   void replace_filename(const Twine &filename, file_status st = file_status());
 
-  const MISTD::string &path() const { return Path; }
+  const std::string &path() const { return Path; }
   error_code status(file_status &result) const;
 
   bool operator==(const directory_entry& rhs) const { return Path == rhs.Path; }
@@ -896,7 +896,7 @@ namespace detail {
       : Level(0)
       , HasNoPushRequest(false) {}
 
-    MISTD::stack<directory_iterator, MISTD::vector<directory_iterator> > Stack;
+    std::stack<directory_iterator, std::vector<directory_iterator> > Stack;
     uint16_t Level;
     bool HasNoPushRequest;
   };

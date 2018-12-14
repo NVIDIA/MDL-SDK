@@ -61,9 +61,11 @@ class Debug_configuration_impl;
 class Factory_impl;
 class Image_api_impl;
 class Mdl_archive_api_impl;
+class Mdl_compatibility_api_impl;
 class Mdl_discovery_api_impl;
 class Mdl_evaluator_api_impl;
 class Mdl_factory_impl;
+class Mdl_i18n_configuration_impl;
 
 }
 
@@ -141,9 +143,11 @@ private:
     NEURAY::Image_api_impl* m_image_api_impl;
     Mdl_compiler_impl* m_mdl_compiler_impl;
     NEURAY::Mdl_archive_api_impl* m_mdl_archive_api_impl;
+    NEURAY::Mdl_compatibility_api_impl* m_mdl_compatibility_api_impl;
     NEURAY::Mdl_discovery_api_impl* m_mdl_discovery_api_impl;
     NEURAY::Mdl_evaluator_api_impl* m_mdl_evaluator_api_impl;
     NEURAY::Mdl_factory_impl* m_mdl_factory_impl;
+    NEURAY::Mdl_i18n_configuration_impl* m_mdl_i18n_configuration_impl;
 
     /// Status of the instance, see #get_status().
     Status m_status;

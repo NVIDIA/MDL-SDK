@@ -78,7 +78,7 @@ bool PEI::isReturnBlock(MachineBasicBlock* MBB) {
 /// Compute the set of return blocks
 void PEI::calculateSets(MachineFunction &Fn) {
   // Sets used to compute spill, restore placement sets.
-  const MISTD::vector<CalleeSavedInfo> &CSI =
+  const std::vector<CalleeSavedInfo> &CSI =
     Fn.getFrameInfo()->getCalleeSavedInfo();
 
   // If no CSRs used, we are done.
@@ -190,7 +190,7 @@ void PEI::calculateCallsInformation(MachineFunction &Fn) {
   if (FrameSetupOpcode == -1 && FrameDestroyOpcode == -1)
     return;
 
-  MISTD::vector<MachineBasicBlock::iterator> FrameSDOps;
+  std::vector<MachineBasicBlock::iterator> FrameSDOps;
   for (MachineFunction::iterator BB = Fn.begin(), E = Fn.end(); BB != E; ++BB)
     for (MachineBasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
       if (I->getOpcode() == FrameSetupOpcode ||
@@ -211,7 +211,7 @@ void PEI::calculateCallsInformation(MachineFunction &Fn) {
   MFI->setAdjustsStack(AdjustsStack);
   MFI->setMaxCallFrameSize(MaxCallFrameSize);
 
-  for (MISTD::vector<MachineBasicBlock::iterator>::iterator
+  for (std::vector<MachineBasicBlock::iterator>::iterator
          i = FrameSDOps.begin(), e = FrameSDOps.end(); i != e; ++i) {
     MachineBasicBlock::iterator I = *i;
 
@@ -247,7 +247,7 @@ void PEI::calculateCalleeSavedRegisters(MachineFunction &F) {
   if (F.getFunction()->hasFnAttribute(Attribute::Naked))
     return;
 
-  MISTD::vector<CalleeSavedInfo> CSI;
+  std::vector<CalleeSavedInfo> CSI;
   for (unsigned i = 0; CSRegs[i]; ++i) {
     unsigned Reg = CSRegs[i];
     // Functions which call __builtin_unwind_init get all their registers saved.
@@ -266,7 +266,7 @@ void PEI::calculateCalleeSavedRegisters(MachineFunction &F) {
 
   // Now that we know which registers need to be saved and restored, allocate
   // stack slots for them.
-  for (MISTD::vector<CalleeSavedInfo>::iterator
+  for (std::vector<CalleeSavedInfo>::iterator
          I = CSI.begin(), E = CSI.end(); I != E; ++I) {
     unsigned Reg = I->getReg();
     const TargetRegisterClass *RC = RegInfo->getMinimalPhysRegClass(Reg);
@@ -292,7 +292,7 @@ void PEI::calculateCalleeSavedRegisters(MachineFunction &F) {
       // We may not be able to satisfy the desired alignment specification of
       // the TargetRegisterClass if the stack alignment is smaller. Use the
       // min.
-      Align = MISTD::min(Align, StackAlign);
+      Align = std::min(Align, StackAlign);
       FrameIdx = MFI->CreateStackObject(RC->getSize(), Align, true);
       if ((unsigned)FrameIdx < MinCSFrameIndex) MinCSFrameIndex = FrameIdx;
       if ((unsigned)FrameIdx > MaxCSFrameIndex) MaxCSFrameIndex = FrameIdx;
@@ -313,7 +313,7 @@ void PEI::calculateCalleeSavedRegisters(MachineFunction &F) {
 void PEI::insertCSRSpillsAndRestores(MachineFunction &Fn) {
   // Get callee saved register information.
   MachineFrameInfo *MFI = Fn.getFrameInfo();
-  const MISTD::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
 
   MFI->setCalleeSavedInfoValid(true);
 
@@ -394,7 +394,7 @@ AdjustStackOffset(MachineFrameInfo *MFI, int FrameIdx,
 
   // If the alignment of this object is greater than that of the stack, then
   // increase the stack alignment to match.
-  MaxAlign = MISTD::max(MaxAlign, Align);
+  MaxAlign = std::max(MaxAlign, Align);
 
   // Adjust to alignment boundary.
   Offset = (Offset + Align - 1) / Align * Align;
@@ -509,7 +509,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
     // Resolve offsets for objects in the local block.
     for (unsigned i = 0, e = MFI->getLocalFrameObjectCount(); i != e; ++i) {
-      MISTD::pair<int, int64_t> Entry = MFI->getLocalFrameObjectMap(i);
+      std::pair<int, int64_t> Entry = MFI->getLocalFrameObjectMap(i);
       int64_t FIOffset = (StackGrowsDown ? -Offset : Offset) + Entry.second;
       DEBUG(dbgs() << "alloc FI(" << Entry.first << ") at SP[" <<
             FIOffset << "]\n");
@@ -518,7 +518,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
     // Allocate the local block
     Offset += MFI->getLocalFrameSize();
 
-    MaxAlign = MISTD::max(Align, MaxAlign);
+    MaxAlign = std::max(Align, MaxAlign);
   }
 
   // Make sure that the stack protector comes before the local variables on the
@@ -600,7 +600,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
     // If the frame pointer is eliminated, all frame offsets will be relative to
     // SP not FP. Align to MaxAlign so this works.
-    StackAlign = MISTD::max(StackAlign, MaxAlign);
+    StackAlign = std::max(StackAlign, MaxAlign);
     unsigned AlignMask = StackAlign - 1;
     Offset = (Offset + AlignMask) & ~uint64_t(AlignMask);
   }

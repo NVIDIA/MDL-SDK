@@ -36,7 +36,7 @@ namespace llvm {
     // Information about the current token.
     const char *TokStart;
     lltok::Kind CurKind;
-    MISTD::string StrVal;
+    std::string StrVal;
     unsigned UIntVal;
     Type *TyVal;
     APFloat APFloatVal;
@@ -54,7 +54,7 @@ namespace llvm {
     typedef SMLoc LocTy;
     LocTy getLoc() const { return SMLoc::getFromPointer(TokStart); }
     lltok::Kind getKind() const { return CurKind; }
-    const MISTD::string &getStrVal() const { return StrVal; }
+    const std::string &getStrVal() const { return StrVal; }
     Type *getTyVal() const { return TyVal; }
     unsigned getUIntVal() const { return UIntVal; }
     const APSInt &getAPSIntVal() const { return APSIntVal; }
@@ -63,7 +63,7 @@ namespace llvm {
 
     bool Error(LocTy L, const Twine &Msg) const;
     bool Error(const Twine &Msg) const { return Error(getLoc(), Msg); }
-    MISTD::string getFilename() const;
+    std::string getFilename() const;
 
   private:
     lltok::Kind LexToken();

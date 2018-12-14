@@ -55,7 +55,7 @@ TEST_F(MDStringTest, PrintingSimple) {
   strncpy(str, "aaaaaaaaaaaaa", 13);
   delete[] str;
 
-  MISTD::string Str;
+  std::string Str;
   raw_string_ostream oss(Str);
   s->print(oss);
   EXPECT_STREQ("metadata !\"testing 1 2 3\"", oss.str().c_str());
@@ -65,7 +65,7 @@ TEST_F(MDStringTest, PrintingSimple) {
 TEST_F(MDStringTest, PrintingComplex) {
   char str[5] = {0, '\n', '"', '\\', (char)-1};
   MDString *s = MDString::get(Context, StringRef(str+0, 5));
-  MISTD::string Str;
+  std::string Str;
   raw_string_ostream oss(Str);
   s->print(oss);
   EXPECT_STREQ("metadata !\"\\00\\0A\\22\\5C\\FF\"", oss.str().c_str());
@@ -82,7 +82,7 @@ TEST_F(MDNodeTest, Simple) {
   MDString *s2 = MDString::get(Context, StringRef(&y[0], 3));
   ConstantInt *CI = ConstantInt::get(getGlobalContext(), APInt(8, 0));
 
-  MISTD::vector<Value *> V;
+  std::vector<Value *> V;
   V.push_back(s1);
   V.push_back(CI);
   V.push_back(s2);
@@ -143,7 +143,7 @@ TEST(NamedMDNodeTest, Search) {
   NMD->addOperand(n);
   NMD->addOperand(n2);
 
-  MISTD::string Str;
+  std::string Str;
   raw_string_ostream oss(Str);
   NMD->print(oss);
   EXPECT_STREQ("!llvm.NMD1 = !{!0, !1}\n",

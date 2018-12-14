@@ -39,8 +39,8 @@ public:
   virtual bool isBaseAddressKnownZero() const { return true; }
   virtual bool UseCodeAlign() const { return false; }
   virtual bool isVirtualSection() const { return false; }
-  virtual MISTD::string getLabelBeginName() const { return ""; }
-  virtual MISTD::string getLabelEndName() const { return ""; }
+  virtual std::string getLabelBeginName() const { return ""; }
+  virtual std::string getLabelEndName() const { return ""; }
 };
 
 } // end namespace llvm

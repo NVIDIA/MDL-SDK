@@ -36,9 +36,9 @@
 
 #include "texture_support_cuda.h"
 
- // To reuse this sample code for the MDL SDK and MDL Core the corresponding namespaces are used.
+// To reuse this sample code for the MDL SDK and MDL Core the corresponding namespaces are used.
 
- // when this CUDA code is used in the context of an SDK sample.
+// when this CUDA code is used in the context of an SDK sample.
 #if defined(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR)
     #define BSDF_USE_MATERIAL_IOR MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR
     using namespace mi::neuraylib;
@@ -47,6 +47,19 @@
     #define BSDF_USE_MATERIAL_IOR MDL_CORE_BSDF_USE_MATERIAL_IOR
     using namespace mi::mdl;
 #endif
+
+#ifdef ENABLE_DERIVATIVES
+typedef Material_expr_function_with_derivs Mat_expr_func;
+typedef Shading_state_material_with_derivs Mdl_state;
+typedef Texture_handler_deriv Tex_handler;
+#define TEX_VTABLE tex_deriv_vtable
+#else
+typedef Material_expr_function Mat_expr_func;
+typedef Shading_state_material Mdl_state;
+typedef Texture_handler Tex_handler;
+#define TEX_VTABLE tex_vtable
+#endif
+
 
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
@@ -67,7 +80,7 @@ extern __constant__ unsigned int     mdl_arg_block_indices[];
 // The function pointers of the generated MDL sub-expression functions.
 // In this example it is assumed that only expressions are added to the link unit.
 // For a more complex use case, see also example df_cuda.
-extern __constant__ Material_expr_function *mdl_functions[];
+extern __constant__ Mat_expr_func    *mdl_functions[];
 
 // The target code indices for the generated MDL sub-expression functions.
 // In contrast to the df_cuda sample, this example simply iterates over all generated expressions.
@@ -76,11 +89,11 @@ extern __constant__ Material_expr_function *mdl_functions[];
 extern __constant__ unsigned int     mdl_target_code_indices[];
 
 // Identity matrix.
-__constant__ const float4 identity[4] = {
+// The last row is always implied to be (0, 0, 0, 1).
+__constant__ const tct_float4 identity[3] = {
     {1.0f, 0.0f, 0.0f, 0.0f},
     {0.0f, 1.0f, 0.0f, 0.0f},
-    {0.0f, 0.0f, 1.0f, 0.0f},
-    {0.0f, 0.0f, 0.0f, 1.0f}
+    {0.0f, 0.0f, 1.0f, 0.0f}
 };
 
 
@@ -127,11 +140,16 @@ extern "C" __global__ void evaluate_mat_expr(
     char const *arg_block = arg_block_list[mdl_arg_block_indices[material_index]];
 
     // Setup MDL material state (with only one texture space)
-    float3 texture_coords[1]    = { { tex_x, tex_y, 0.0f } };
-    float3 texture_tangent_u[1] = { { 1.0f, 0.0f, 0.0f } };
-    float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
+#ifdef ENABLE_DERIVATIVES
+    tct_deriv_float3 texture_coords[1] = {
+        { { tex_x, tex_y, 0.0f }, { step_x, 0.0f, 0.0f }, { 0.0f, step_y, 0.0f } } };
+#else
+    tct_float3 texture_coords[1]    = { { tex_x, tex_y, 0.0f } };
+#endif
+    tct_float3 texture_tangent_u[1] = { { 1.0f, 0.0f, 0.0f } };
+    tct_float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
-    Shading_state_material mdl_state = {
+    Mdl_state mdl_state = {
         /*normal=*/           { 0.0f, 0.0f, 1.0f },
         /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
         /*position=*/         { pos_x, pos_y, 0.0f },
@@ -146,12 +164,13 @@ extern "C" __global__ void evaluate_mat_expr(
         /*object_id=*/        0
     };
     
-    Texture_handler tex_handler;
-    tex_handler.vtable       = &tex_vtable;   // only required in 'vtable' mode, otherwise NULL
+    Tex_handler tex_handler;
+    tex_handler.vtable       = &TEX_VTABLE;   // only required in 'vtable' mode, otherwise NULL
     tex_handler.num_textures = tc_data_list[tc_idx].num_textures;
     tex_handler.textures     = tc_data_list[tc_idx].textures;
 
-    Resource_data res_data_pair = { NULL, &tex_handler };
+    Resource_data res_data_pair = {
+        NULL, reinterpret_cast<Texture_handler_base *>(&tex_handler) };
 
     // Super-sample the current texel with the given number of samples
     float3 res = make_float3(0, 0, 0);
@@ -163,8 +182,13 @@ extern "C" __global__ void evaluate_mat_expr(
         // Update the position and the texture coordinate
         mdl_state.position.x = pos_x + 2 * offs_x;
         mdl_state.position.y = pos_y + 2 * offs_y;
+#ifdef ENABLE_DERIVATIVES
+        texture_coords[0].val.x = tex_x + offs_x;
+        texture_coords[0].val.y = tex_y + offs_y;
+#else
         texture_coords[0].x = tex_x + offs_x;
         texture_coords[0].y = tex_y + offs_y;
+#endif
 
         // Add result for current sample
         float3 cur_res;

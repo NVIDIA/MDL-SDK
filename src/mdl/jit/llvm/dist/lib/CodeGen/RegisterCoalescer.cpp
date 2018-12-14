@@ -264,8 +264,8 @@ bool CoalescerPair::setRegisters(const MachineInstr *MI) {
   if (TargetRegisterInfo::isPhysicalRegister(Src)) {
     if (TargetRegisterInfo::isPhysicalRegister(Dst))
       return false;
-    MISTD::swap(Src, Dst);
-    MISTD::swap(SrcSub, DstSub);
+    std::swap(Src, Dst);
+    std::swap(SrcSub, DstSub);
     Flipped = true;
   }
 
@@ -322,8 +322,8 @@ bool CoalescerPair::setRegisters(const MachineInstr *MI) {
     // Prefer SrcReg to be a sub-register of DstReg.
     // FIXME: Coalescer should support subregs symmetrically.
     if (DstIdx && !SrcIdx) {
-      MISTD::swap(Src, Dst);
-      MISTD::swap(SrcIdx, DstIdx);
+      std::swap(Src, Dst);
+      std::swap(SrcIdx, DstIdx);
       Flipped = !Flipped;
     }
 
@@ -341,8 +341,8 @@ bool CoalescerPair::setRegisters(const MachineInstr *MI) {
 bool CoalescerPair::flip() {
   if (TargetRegisterInfo::isPhysicalRegister(DstReg))
     return false;
-  MISTD::swap(SrcReg, DstReg);
-  MISTD::swap(SrcIdx, DstIdx);
+  std::swap(SrcReg, DstReg);
+  std::swap(SrcIdx, DstIdx);
   Flipped = !Flipped;
   return true;
 }
@@ -356,8 +356,8 @@ bool CoalescerPair::isCoalescable(const MachineInstr *MI) const {
 
   // Find the virtual register that is SrcReg.
   if (Dst == SrcReg) {
-    MISTD::swap(Src, Dst);
-    MISTD::swap(SrcSub, DstSub);
+    std::swap(Src, Dst);
+    std::swap(SrcSub, DstSub);
   } else if (Src != SrcReg) {
     return false;
   }
@@ -528,7 +528,7 @@ bool RegisterCoalescer::hasOtherReachingDefs(LiveInterval &IntA,
        AI != AE; ++AI) {
     if (AI->valno != AValNo) continue;
     LiveInterval::iterator BI =
-      MISTD::upper_bound(IntB.begin(), IntB.end(), AI->start);
+      std::upper_bound(IntB.begin(), IntB.end(), AI->start);
     if (BI != IntB.begin())
       --BI;
     for (; BI != IntB.end() && AI->end >= BI->start; ++BI) {
@@ -1376,7 +1376,7 @@ class JoinVals {
   ConflictResolution analyzeValue(unsigned ValNo, JoinVals &Other);
   void computeAssignment(unsigned ValNo, JoinVals &Other);
   bool taintExtent(unsigned, unsigned, JoinVals&,
-                   SmallVectorImpl<MISTD::pair<SlotIndex, unsigned> >&);
+                   SmallVectorImpl<std::pair<SlotIndex, unsigned> >&);
   bool usesLanes(MachineInstr *MI, unsigned, unsigned, unsigned);
   bool isPrunedValue(unsigned ValNo, JoinVals &Other);
 
@@ -1726,7 +1726,7 @@ bool JoinVals::mapValues(JoinVals &Other) {
 /// Returns false if the tainted lanes extend beyond the basic block.
 bool JoinVals::
 taintExtent(unsigned ValNo, unsigned TaintedLanes, JoinVals &Other,
-            SmallVectorImpl<MISTD::pair<SlotIndex, unsigned> > &TaintExtent) {
+            SmallVectorImpl<std::pair<SlotIndex, unsigned> > &TaintExtent) {
   VNInfo *VNI = LI.getValNumInfo(ValNo);
   MachineBasicBlock *MBB = Indexes->getMBBFromIndex(VNI->def);
   SlotIndex MBBEnd = Indexes->getMBBEndIdx(MBB);
@@ -1749,7 +1749,7 @@ taintExtent(unsigned ValNo, unsigned TaintedLanes, JoinVals &Other,
     // A dead def is not a problem.
     if (End.isDead())
       break;
-    TaintExtent.push_back(MISTD::make_pair(End, TaintedLanes));
+    TaintExtent.push_back(std::make_pair(End, TaintedLanes));
 
     // Check for another def in the MBB.
     if (++OtherI == Other.LI.end() || OtherI->start >= MBBEnd)
@@ -1799,7 +1799,7 @@ bool JoinVals::resolveConflicts(JoinVals &Other) {
     // join, those lanes will be tainted with a wrong value. Get the extent of
     // the tainted lanes.
     unsigned TaintedLanes = V.WriteLanes & OtherV.ValidLanes;
-    SmallVector<MISTD::pair<SlotIndex, unsigned>, 8> TaintExtent;
+    SmallVector<std::pair<SlotIndex, unsigned>, 8> TaintExtent;
     if (!taintExtent(i, TaintedLanes, Other, TaintExtent))
       // Tainted lanes would extend beyond the basic block.
       return false;
@@ -2138,7 +2138,7 @@ RegisterCoalescer::copyCoalesceInMBB(MachineBasicBlock *MBB) {
   MutableArrayRef<MachineInstr*>
     CurrList(WorkList.begin() + PrevSize, WorkList.end());
   if (copyCoalesceWorkList(CurrList))
-    WorkList.erase(MISTD::remove(WorkList.begin() + PrevSize, WorkList.end(),
+    WorkList.erase(std::remove(WorkList.begin() + PrevSize, WorkList.end(),
                                (MachineInstr*)0), WorkList.end());
 }
 
@@ -2155,7 +2155,7 @@ void RegisterCoalescer::joinAllIntervals() {
   DEBUG(dbgs() << "********** JOINING INTERVALS ***********\n");
   assert(WorkList.empty() && LocalWorkList.empty() && "Old data still around.");
 
-  MISTD::vector<MBBPriorityInfo> MBBs;
+  std::vector<MBBPriorityInfo> MBBs;
   MBBs.reserve(MF->size());
   for (MachineFunction::iterator I = MF->begin(), E = MF->end();I != E;++I){
     MachineBasicBlock *MBB = I;
@@ -2226,7 +2226,7 @@ bool RegisterCoalescer::runOnMachineFunction(MachineFunction &fn) {
   // Removing sub-register operands may allow GR32_ABCD -> GR32 and DPR_VFP2 ->
   // DPR inflation.
   array_pod_sort(InflateRegs.begin(), InflateRegs.end());
-  InflateRegs.erase(MISTD::unique(InflateRegs.begin(), InflateRegs.end()),
+  InflateRegs.erase(std::unique(InflateRegs.begin(), InflateRegs.end()),
                     InflateRegs.end());
   DEBUG(dbgs() << "Trying to inflate " << InflateRegs.size() << " regs.\n");
   for (unsigned i = 0, e = InflateRegs.size(); i != e; ++i) {

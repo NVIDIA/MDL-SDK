@@ -94,7 +94,7 @@ public:
 
   // Typedef a function pointer for functions that parse sequences of operands
   // and return a Location, plus a new "next" operand iterator.
-  typedef MISTD::pair<Location, MachineInstr::const_mop_iterator>
+  typedef std::pair<Location, MachineInstr::const_mop_iterator>
     (*OperandParser)(MachineInstr::const_mop_iterator,
                      MachineInstr::const_mop_iterator, const TargetMachine&);
 
@@ -132,12 +132,12 @@ private:
       : CSOffsetExpr(CSOffsetExpr), ID(ID), Locations(Locations) {}
   };
 
-  typedef MISTD::vector<CallsiteInfo> CallsiteInfoList;
+  typedef std::vector<CallsiteInfo> CallsiteInfoList;
 
   struct ConstantPool {
   private:
-    typedef MISTD::map<int64_t, size_t> ConstantsMap;
-    MISTD::vector<int64_t> ConstantsList;
+    typedef std::map<int64_t, size_t> ConstantsMap;
+    std::vector<int64_t> ConstantsList;
     ConstantsMap ConstantIndexes;
 
   public:
@@ -147,7 +147,7 @@ private:
       size_t NextIdx = ConstantsList.size();
       ConstantsMap::const_iterator I =
         ConstantIndexes.insert(ConstantIndexes.end(),
-                               MISTD::make_pair(ConstVal, NextIdx));
+                               std::make_pair(ConstVal, NextIdx));
       if (I->second == NextIdx)
         ConstantsList.push_back(ConstVal);
       return I->second;

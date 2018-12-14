@@ -270,9 +270,9 @@ namespace sys {
     }
 
     /// Provides conversion of the TimeValue into a readable time & date.
-    /// @returns MISTD::string containing the readable time value
+    /// @returns std::string containing the readable time value
     /// @brief Convert time to a string.
-    MISTD::string str() const;
+    std::string str() const;
 
   /// @}
   /// @name Mutators

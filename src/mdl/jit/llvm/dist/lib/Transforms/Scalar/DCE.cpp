@@ -92,7 +92,7 @@ bool DCE::runOnFunction(Function &F) {
   TargetLibraryInfo *TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
 
   // Start out with all of the instructions in the worklist...
-  MISTD::vector<Instruction*> WorkList;
+  std::vector<Instruction*> WorkList;
   for (inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ++i)
     WorkList.push_back(&*i);
 
@@ -118,7 +118,7 @@ bool DCE::runOnFunction(Function &F) {
       I->eraseFromParent();
 
       // Remove the instruction from the worklist if it still exists in it.
-      WorkList.erase(MISTD::remove(WorkList.begin(), WorkList.end(), I),
+      WorkList.erase(std::remove(WorkList.begin(), WorkList.end(), I),
                      WorkList.end());
 
       MadeChange = true;

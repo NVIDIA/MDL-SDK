@@ -163,7 +163,7 @@ LexicalScope *LexicalScopes::getOrCreateRegularScope(MDNode *Scope) {
   if (D.isLexicalBlock())
     Parent = getOrCreateLexicalScope(DebugLoc::getFromDILexicalBlock(Scope));
   WScope = new LexicalScope(Parent, DIDescriptor(Scope), NULL, false);
-  LexicalScopeMap.insert(MISTD::make_pair(Scope, WScope));
+  LexicalScopeMap.insert(std::make_pair(Scope, WScope));
   if (!Parent && DIDescriptor(Scope).isSubprogram()
       && DISubprogram(Scope).describes(MF->getFunction()))
     CurrentFnLexicalScope = WScope;
@@ -323,10 +323,10 @@ void LexicalScope::dump(unsigned Indent) const {
   err.indent(Indent);
   N->dump();
   if (AbstractScope)
-    err << MISTD::string(Indent, ' ') << "Abstract Scope\n";
+    err << std::string(Indent, ' ') << "Abstract Scope\n";
 
   if (!Children.empty())
-    err << MISTD::string(Indent + 2, ' ') << "Children ...\n";
+    err << std::string(Indent + 2, ' ') << "Children ...\n";
   for (unsigned i = 0, e = Children.size(); i != e; ++i)
     if (Children[i] != this)
       Children[i]->dump(Indent + 2);

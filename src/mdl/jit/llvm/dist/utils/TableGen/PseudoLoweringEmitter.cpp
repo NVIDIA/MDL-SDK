@@ -272,8 +272,8 @@ void PseudoLoweringEmitter::run(raw_ostream &o) {
   assert(ExpansionClass && "PseudoInstExpansion class definition missing!");
   assert(InstructionClass && "Instruction class definition missing!");
 
-  MISTD::vector<Record*> Insts;
-  for (MISTD::map<MISTD::string, Record*>::const_iterator I =
+  std::vector<Record*> Insts;
+  for (std::map<std::string, Record*>::const_iterator I =
          Records.getDefs().begin(), E = Records.getDefs().end(); I != E; ++I) {
     if (I->second->isSubClassOf(ExpansionClass) &&
         I->second->isSubClassOf(InstructionClass))

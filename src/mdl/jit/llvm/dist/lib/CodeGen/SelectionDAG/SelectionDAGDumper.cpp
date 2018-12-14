@@ -30,7 +30,7 @@
 #include "llvm/Target/TargetRegisterInfo.h"
 using namespace llvm;
 
-MISTD::string SDNode::getOperationName(const SelectionDAG *G) const {
+std::string SDNode::getOperationName(const SelectionDAG *G) const {
   switch (getOpcode()) {
   default:
     if (getOpcode() < ISD::BUILTIN_OP_END)
@@ -524,7 +524,7 @@ static void DumpNodes(const SDNode *N, unsigned indent, const SelectionDAG *G) {
     if (N->getOperand(i).getNode()->hasOneUse())
       DumpNodes(N->getOperand(i).getNode(), indent+2, G);
     else
-      dbgs() << "\n" << MISTD::string(indent+2, ' ')
+      dbgs() << "\n" << std::string(indent+2, ' ')
              << (void*)N->getOperand(i).getNode() << ": <multiple use>";
 
   dbgs() << '\n';

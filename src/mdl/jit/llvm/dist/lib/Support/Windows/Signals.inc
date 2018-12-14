@@ -160,8 +160,8 @@ static BOOL WINAPI LLVMConsoleCtrlHandler(DWORD dwCtrlType);
 // InterruptFunction - The function to call if ctrl-c is pressed.
 static void (*InterruptFunction)() = 0;
 
-static MISTD::vector<MISTD::string> *FilesToRemove = NULL;
-static MISTD::vector<MISTD::pair<void(*)(void*), void*> > *CallBacksToRun = 0;
+static std::vector<std::string> *FilesToRemove = NULL;
+static std::vector<std::pair<void(*)(void*), void*> > *CallBacksToRun = 0;
 static bool RegisteredUnhandledExceptionFilter = false;
 static bool CleanupExecuted = false;
 static bool ExitOnUnhandledExceptions = false;
@@ -243,7 +243,7 @@ static void RegisterHandler() {
 }
 
 // RemoveFileOnSignal - The public API
-bool sys::RemoveFileOnSignal(StringRef Filename, MISTD::string* ErrMsg) {
+bool sys::RemoveFileOnSignal(StringRef Filename, std::string* ErrMsg) {
   RegisterHandler();
 
   if (CleanupExecuted) {
@@ -253,7 +253,7 @@ bool sys::RemoveFileOnSignal(StringRef Filename, MISTD::string* ErrMsg) {
   }
 
   if (FilesToRemove == NULL)
-    FilesToRemove = new MISTD::vector<MISTD::string>;
+    FilesToRemove = new std::vector<std::string>;
 
   FilesToRemove->push_back(Filename);
 
@@ -269,8 +269,8 @@ void sys::DontRemoveFileOnSignal(StringRef Filename) {
   RegisterHandler();
 
   FilesToRemove->push_back(Filename);
-  MISTD::vector<MISTD::string>::reverse_iterator I =
-  MISTD::find(FilesToRemove->rbegin(), FilesToRemove->rend(), Filename);
+  std::vector<std::string>::reverse_iterator I =
+  std::find(FilesToRemove->rbegin(), FilesToRemove->rend(), Filename);
   if (I != FilesToRemove->rend())
     FilesToRemove->erase(I.base()-1);
 
@@ -301,8 +301,8 @@ void sys::SetInterruptFunction(void (*IF)()) {
 /// what instance of the handler it is.
 void sys::AddSignalHandler(void (*FnPtr)(void *), void *Cookie) {
   if (CallBacksToRun == 0)
-    CallBacksToRun = new MISTD::vector<MISTD::pair<void(*)(void*), void*> >();
-  CallBacksToRun->push_back(MISTD::make_pair(FnPtr, Cookie));
+    CallBacksToRun = new std::vector<std::pair<void(*)(void*), void*> >();
+  CallBacksToRun->push_back(std::make_pair(FnPtr, Cookie));
   RegisterHandler();
   LeaveCriticalSection(&CriticalSection);
 }

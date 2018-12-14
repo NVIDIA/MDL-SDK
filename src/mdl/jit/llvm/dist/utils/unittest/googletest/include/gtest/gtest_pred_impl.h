@@ -61,7 +61,7 @@
 //
 // where pred is an n-ary function or functor that returns bool,
 // and the values v1, v2, ..., must support the << operator for
-// streaming to MISTD::ostream.
+// streaming to std::ostream.
 //
 // We also define the EXPECT_* variations.
 //

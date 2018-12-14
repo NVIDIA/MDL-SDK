@@ -54,7 +54,7 @@ private:
   ///
   /// Each element in this list contains the register class of the vreg and the
   /// start of the use/def list for the register.
-  IndexedMap<MISTD::pair<const TargetRegisterClass*, MachineOperand*>,
+  IndexedMap<std::pair<const TargetRegisterClass*, MachineOperand*>,
              VirtReg2IndexFunctor> VRegInfo;
 
   /// RegAllocHints - This vector records register allocation hints for virtual
@@ -64,7 +64,7 @@ private:
   /// register for allocation. For example, if the hint is <0, 1024>, it means
   /// the allocator should prefer the physical register allocated to the virtual
   /// register of the hint.
-  IndexedMap<MISTD::pair<unsigned, unsigned>, VirtReg2IndexFunctor> RegAllocHints;
+  IndexedMap<std::pair<unsigned, unsigned>, VirtReg2IndexFunctor> RegAllocHints;
 
   /// PhysRegUseDefLists - This is an array of the head of the use/def list for
   /// physical registers.
@@ -116,7 +116,7 @@ private:
   /// Live in values are typically arguments in registers.  LiveIn values are
   /// allowed to have virtual registers associated with them, stored in the
   /// second element.
-  MISTD::vector<MISTD::pair<unsigned, unsigned> > LiveIns;
+  std::vector<std::pair<unsigned, unsigned> > LiveIns;
 
   MachineRegisterInfo(const MachineRegisterInfo&) LLVM_DELETED_FUNCTION;
   void operator=(const MachineRegisterInfo&) LLVM_DELETED_FUNCTION;
@@ -389,7 +389,7 @@ public:
 
   /// getRegAllocationHint - Return the register allocation hint for the
   /// specified virtual register.
-  MISTD::pair<unsigned, unsigned>
+  std::pair<unsigned, unsigned>
   getRegAllocationHint(unsigned Reg) const {
     return RegAllocHints[Reg];
   }
@@ -397,7 +397,7 @@ public:
   /// getSimpleHint - Return the preferred register allocation hint, or 0 if a
   /// standard simple hint (Type == 0) is not set.
   unsigned getSimpleHint(unsigned Reg) const {
-    MISTD::pair<unsigned, unsigned> Hint = getRegAllocationHint(Reg);
+    std::pair<unsigned, unsigned> Hint = getRegAllocationHint(Reg);
     return Hint.first ? 0 : Hint.second;
   }
 
@@ -519,12 +519,12 @@ public:
   /// addLiveIn - Add the specified register as a live-in.  Note that it
   /// is an error to add the same register to the same set more than once.
   void addLiveIn(unsigned Reg, unsigned vreg = 0) {
-    LiveIns.push_back(MISTD::make_pair(Reg, vreg));
+    LiveIns.push_back(std::make_pair(Reg, vreg));
   }
 
   // Iteration support for the live-ins set.  It's kept in sorted order
   // by register number.
-  typedef MISTD::vector<MISTD::pair<unsigned,unsigned> >::const_iterator
+  typedef std::vector<std::pair<unsigned,unsigned> >::const_iterator
   livein_iterator;
   livein_iterator livein_begin() const { return LiveIns.begin(); }
   livein_iterator livein_end()   const { return LiveIns.end(); }
@@ -554,7 +554,7 @@ public:
   /// when incrementing.
   template<bool ReturnUses, bool ReturnDefs, bool SkipDebug>
   class defusechain_iterator
-    : public MISTD::iterator<MISTD::forward_iterator_tag, MachineInstr, ptrdiff_t> {
+    : public std::iterator<std::forward_iterator_tag, MachineInstr, ptrdiff_t> {
     MachineOperand *Op;
     explicit defusechain_iterator(MachineOperand *op) : Op(op) {
       // If the first node isn't one we're interested in, advance to one that
@@ -568,9 +568,9 @@ public:
     }
     friend class MachineRegisterInfo;
   public:
-    typedef MISTD::iterator<MISTD::forward_iterator_tag,
+    typedef std::iterator<std::forward_iterator_tag,
                           MachineInstr, ptrdiff_t>::reference reference;
-    typedef MISTD::iterator<MISTD::forward_iterator_tag,
+    typedef std::iterator<std::forward_iterator_tag,
                           MachineInstr, ptrdiff_t>::pointer pointer;
 
     defusechain_iterator(const defusechain_iterator &I) : Op(I.Op) {}

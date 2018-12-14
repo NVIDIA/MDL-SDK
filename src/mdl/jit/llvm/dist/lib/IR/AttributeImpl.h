@@ -125,8 +125,8 @@ public:
 
 class StringAttributeImpl : public AttributeImpl {
   virtual void anchor();
-  MISTD::string Kind;
-  MISTD::string Val;
+  std::string Kind;
+  std::string Val;
 
 public:
   StringAttributeImpl(StringRef Kind, StringRef Val = StringRef())
@@ -145,7 +145,7 @@ class AttributeSetNode : public FoldingSetNode {
 
   AttributeSetNode(ArrayRef<Attribute> Attrs) : NumAttrs(Attrs.size()) {
     // There's memory after the node where we can store the entries in.
-    MISTD::copy(Attrs.begin(), Attrs.end(),
+    std::copy(Attrs.begin(), Attrs.end(),
               reinterpret_cast<Attribute *>(this + 1));
   }
 
@@ -164,7 +164,7 @@ public:
 
   unsigned getAlignment() const;
   unsigned getStackAlignment() const;
-  MISTD::string getAsString(bool InAttrGrp) const;
+  std::string getAsString(bool InAttrGrp) const;
 
   typedef const Attribute *iterator;
   iterator begin() const { return reinterpret_cast<iterator>(this + 1); }
@@ -188,7 +188,7 @@ class AttributeSetImpl : public FoldingSetNode {
 
   LLVMContext &Context;
 
-  typedef MISTD::pair<unsigned, AttributeSetNode*> IndexAttrPair;
+  typedef std::pair<unsigned, AttributeSetNode*> IndexAttrPair;
   unsigned NumAttrs; ///< Number of entries in this set.
 
   /// \brief Return a pointer to the IndexAttrPair for the specified slot.
@@ -201,11 +201,11 @@ class AttributeSetImpl : public FoldingSetNode {
   AttributeSetImpl(const AttributeSetImpl &) LLVM_DELETED_FUNCTION;
 public:
   AttributeSetImpl(LLVMContext &C,
-                   ArrayRef<MISTD::pair<unsigned, AttributeSetNode *> > Attrs)
+                   ArrayRef<std::pair<unsigned, AttributeSetNode *> > Attrs)
       : Context(C), NumAttrs(Attrs.size()) {
 #ifndef NDEBUG
     if (Attrs.size() >= 2) {
-      for (const MISTD::pair<unsigned, AttributeSetNode *> *i = Attrs.begin() + 1,
+      for (const std::pair<unsigned, AttributeSetNode *> *i = Attrs.begin() + 1,
                                                          *e = Attrs.end();
            i != e; ++i) {
         assert((i-1)->first <= i->first && "Attribute set not ordered!");
@@ -213,7 +213,7 @@ public:
     }
 #endif
     // There's memory after the node where we can store the entries in.
-    MISTD::copy(Attrs.begin(), Attrs.end(),
+    std::copy(Attrs.begin(), Attrs.end(),
               reinterpret_cast<IndexAttrPair *>(this + 1));
   }
 
@@ -252,7 +252,7 @@ public:
     Profile(ID, makeArrayRef(getNode(0), getNumAttributes()));
   }
   static void Profile(FoldingSetNodeID &ID,
-                      ArrayRef<MISTD::pair<unsigned, AttributeSetNode*> > Nodes) {
+                      ArrayRef<std::pair<unsigned, AttributeSetNode*> > Nodes) {
     for (unsigned i = 0, e = Nodes.size(); i != e; ++i) {
       ID.AddInteger(Nodes[i].first);
       ID.AddPointer(Nodes[i].second);

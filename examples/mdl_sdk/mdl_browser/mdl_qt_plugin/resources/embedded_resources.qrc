@@ -1,0 +1,41 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/mdlqtplugin">
+    <file>dummydata/nav_breadcrumbs_mockup.qml</file>
+    <file>dummydata/nav_node_mockup.qml</file>
+    <file>dummydata/nav_stack_level_mockup.qml</file>
+    <file>dummydata/nav_stack_mockup.qml</file>
+    <file>dummydata/sel_element_mockup.qml</file>
+    <file>dummydata/sel_mockup.qml</file>
+    <file>graphics/clear_icon.svg</file>
+    <file>graphics/default_thumbnail_material.svg</file>
+    <file>graphics/grid_icon.svg</file>
+    <file>graphics/home_icon.svg</file>
+    <file>graphics/info_icon.svg</file>
+    <file>graphics/list_icon.svg</file>
+    <file>graphics/mdl_icon.svg</file>
+    <file>graphics/module_icon.svg</file>
+    <file>graphics/package_icon.svg</file>
+    <file>navigation/NavBreadcrumbs.qml</file>
+    <file>navigation/NavPackage.qml</file>
+    <file>navigation/NavStack.qml</file>
+    <file>navigation/NavStackLevelSeperator.qml</file>
+    <file>search/SearchBar.qml</file>
+    <file>search/SelectionViewOption.qml</file>
+    <file>search/SortingCriterion.qml</file>
+    <file>search/StatusBar.qml</file>
+    <file>selection/SelGrid.qml</file>
+    <file>selection/SelGridItem.qml</file>
+    <file>selection/SelItemBase.qml</file>
+    <file>selection/SelList.qml</file>
+    <file>selection/SelListItem.qml</file>
+    <file>side_panels/SidePanel.qml</file>
+    <file>side_panels/SidePanelTab.qml</file>
+    <file>side_panels/SidePanelTabDelegate.qml</file>
+    <file>side_panels/SidePanelView.qml</file>
+    <file>utils/Icon.qml</file>
+    <file>utils/ToolTipExtended.qml</file>
+    <file>BrowserApp.qml</file>
+    <file>BrowserDialog.qml</file>
+    <file>BrowserMain.qml</file>
+</qresource>
+</RCC>

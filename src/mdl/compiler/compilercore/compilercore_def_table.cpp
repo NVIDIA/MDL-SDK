@@ -236,6 +236,8 @@ bool Definition::get_property(Property prop) const
         return has_flag(Definition::DEF_IS_NATIVE);
     case DP_IS_CONST_EXPR:
         return has_flag(Definition::DEF_IS_CONST_EXPR);
+    case DP_USES_DERIVATIVES:
+        return has_flag(Definition::DEF_USES_DERIVATIVES);
     }
     return false;
 }
@@ -244,6 +246,12 @@ bool Definition::get_property(Property prop) const
 Position const *Definition::get_position() const
 {
     return m_pos;
+}
+
+// Return the mask specifying which parameters of a function are derivable.
+unsigned Definition::get_parameter_derivable_mask() const
+{
+    return m_parameter_deriv_mask;
 }
 
 // Change the type of the definition.
@@ -347,6 +355,7 @@ Definition::Definition(
 , m_value(NULL)
 , m_version_flags(0)
 , m_flags()
+, m_parameter_deriv_mask(0)
 {
     m_u.code = 0;
 }
@@ -384,6 +393,7 @@ Definition::Definition(
 , m_value(NULL)
 , m_version_flags(other.m_version_flags)
 , m_flags(other.m_flags)
+, m_parameter_deriv_mask(other.m_parameter_deriv_mask)
 {
     m_u.code = 0;
 
@@ -734,6 +744,9 @@ static void print_def(Printer *printer, Definition const *def)
     if (def->has_flag(Definition::DEF_IS_WRITTEN)) {
         printer->print(" (written)");
     }
+    if (def->has_flag(Definition::DEF_USES_DERIVATIVES)) {
+        printer->print(" (derivatives)");
+    }
 }
 
 // Serialize this scope.
@@ -994,7 +1007,7 @@ Definition_table::Definition_table(Module &owner)
 , m_type_scopes(0, Type_scope_map::hasher(), Type_scope_map::key_equal(), owner.get_allocator())
 , m_definitions(owner.get_allocator())
 {
-    MISTD::fill_n(
+    std::fill_n(
         &m_operator_definitions[0], dimension_of(m_operator_definitions), (Definition *)0);
 
     // create initial scopes
@@ -1194,6 +1207,11 @@ void Definition_table::serialize_def(
     // serialize version flags
     serializer.write_unsigned(def->m_version_flags);
 
+    // serialize parameter derivative mask for functions
+    if (def->m_kind == Definition::DK_FUNCTION) {
+        serializer.write_unsigned(def->m_parameter_deriv_mask);
+    }
+
     DEC_SCOPE();
     DOUT(("Def }\n"));
 }
@@ -1364,6 +1382,11 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
 
     // deserialize version flags
     new_def->m_version_flags = deserializer.read_unsigned();
+
+    // deserialize parameter derivative mask for functions
+    if (new_def->m_kind == Definition::DK_FUNCTION) {
+        new_def->m_parameter_deriv_mask = deserializer.read_unsigned();
+    }
 
     DEC_SCOPE();
     DOUT(("Def }\n"));
@@ -1727,7 +1750,7 @@ void Definition_table::clear()
     m_type_scopes.clear();
     m_definitions.clear();
 
-    MISTD::fill_n(
+    std::fill_n(
         &m_operator_definitions[0], dimension_of(m_operator_definitions), (Definition *)0);
 
     // create initial scopes

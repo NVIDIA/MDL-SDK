@@ -246,6 +246,7 @@ enum Attr_resv_id {
     OPT_SECTION_PLANES,         ///< struct[]    section planes
     OPT_MDL_METERS_PER_SCENE_UNIT, ///< scalar   conversion config
     OPT_MDL_DISTILLING_TARGET,  /// < uint
+    OPT_FORCE_BUILTIN_BUMP_LINEAR_GAMMA, /// < bool force linear gamma for builtin bumps
                                 //------------------ obsolete options ---------
     OPT_SAMPLES_MIN,		///< scalar      raytracer: min # samples/pixel
     OPT_AO_SAMPLES_MIN,		///< scalar      unused

@@ -174,7 +174,7 @@ bool FoldingSetNodeID::operator<(FoldingSetNodeIDRef RHS) const {
 FoldingSetNodeIDRef
 FoldingSetNodeID::Intern(BumpPtrAllocator &Allocator) const {
   unsigned *New = Allocator.Allocate<unsigned>(Bits.size());
-  MISTD::uninitialized_copy(Bits.begin(), Bits.end(), New);
+  std::uninitialized_copy(Bits.begin(), Bits.end(), New);
   return FoldingSetNodeIDRef(New, Bits.size());
 }
 

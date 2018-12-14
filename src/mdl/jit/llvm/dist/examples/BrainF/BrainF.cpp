@@ -37,7 +37,7 @@ const char *BrainF::headreg = "head";
 const char *BrainF::label   = "brainf";
 const char *BrainF::testreg = "test";
 
-Module *BrainF::parse(MISTD::istream *in1, int mem, CompileFlags cf,
+Module *BrainF::parse(std::istream *in1, int mem, CompileFlags cf,
                       LLVMContext& Context) {
   in       = in1;
   memtotal = mem;
@@ -303,7 +303,7 @@ void BrainF::readloop(PHINode *phi, BasicBlock *oldbb, BasicBlock *testbb,
         break;
 
       default:
-        MISTD::cerr << "Error: Unknown symbol.\n";
+        std::cerr << "Error: Unknown symbol.\n";
         abort();
         break;
     }
@@ -416,7 +416,7 @@ void BrainF::readloop(PHINode *phi, BasicBlock *oldbb, BasicBlock *testbb,
 
   if (cursym == SYM_ENDLOOP) {
     if (!phi) {
-      MISTD::cerr << "Error: Extra ']'\n";
+      std::cerr << "Error: Extra ']'\n";
       abort();
     }
 
@@ -461,7 +461,7 @@ void BrainF::readloop(PHINode *phi, BasicBlock *oldbb, BasicBlock *testbb,
   builder->CreateBr(endbb);
 
   if (phi) {
-    MISTD::cerr << "Error: Missing ']'\n";
+    std::cerr << "Error: Missing ']'\n";
     abort();
   }
 }

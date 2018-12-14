@@ -41,8 +41,8 @@
 namespace llvm {
 
 template<typename T>
-inline void RemoveFromVector(MISTD::vector<T*> &V, T *N) {
-  typename MISTD::vector<T*>::iterator I = MISTD::find(V.begin(), V.end(), N);
+inline void RemoveFromVector(std::vector<T*> &V, T *N) {
+  typename std::vector<T*>::iterator I = std::find(V.begin(), V.end(), N);
   assert(I != V.end() && "N is not in this list!");
   V.erase(I);
 }
@@ -64,10 +64,10 @@ template<class BlockT, class LoopT>
 class LoopBase {
   LoopT *ParentLoop;
   // SubLoops - Loops contained entirely within this one.
-  MISTD::vector<LoopT *> SubLoops;
+  std::vector<LoopT *> SubLoops;
 
   // Blocks - The list of blocks in this loop.  First entry is the header node.
-  MISTD::vector<BlockT*> Blocks;
+  std::vector<BlockT*> Blocks;
 
   SmallPtrSet<const BlockT*, 8> DenseBlockSet;
 
@@ -122,10 +122,10 @@ public:
 
   /// iterator/begin/end - Return the loops contained entirely within this loop.
   ///
-  const MISTD::vector<LoopT *> &getSubLoops() const { return SubLoops; }
-  MISTD::vector<LoopT *> &getSubLoopsVector() { return SubLoops; }
-  typedef typename MISTD::vector<LoopT *>::const_iterator iterator;
-  typedef typename MISTD::vector<LoopT *>::const_reverse_iterator
+  const std::vector<LoopT *> &getSubLoops() const { return SubLoops; }
+  std::vector<LoopT *> &getSubLoopsVector() { return SubLoops; }
+  typedef typename std::vector<LoopT *>::const_iterator iterator;
+  typedef typename std::vector<LoopT *>::const_reverse_iterator
     reverse_iterator;
   iterator begin() const { return SubLoops.begin(); }
   iterator end() const { return SubLoops.end(); }
@@ -135,8 +135,8 @@ public:
 
   /// getBlocks - Get a list of the basic blocks which make up this loop.
   ///
-  const MISTD::vector<BlockT*> &getBlocks() const { return Blocks; }
-  typedef typename MISTD::vector<BlockT*>::const_iterator block_iterator;
+  const std::vector<BlockT*> &getBlocks() const { return Blocks; }
+  typedef typename std::vector<BlockT*>::const_iterator block_iterator;
   block_iterator block_begin() const { return Blocks.begin(); }
   block_iterator block_end() const { return Blocks.end(); }
 
@@ -203,7 +203,7 @@ public:
   BlockT *getExitBlock() const;
 
   /// Edge type.
-  typedef MISTD::pair<const BlockT*, const BlockT*> Edge;
+  typedef std::pair<const BlockT*, const BlockT*> Edge;
 
   /// getExitEdges - Return all pairs of (_inside_block_,_outside_block_).
   void getExitEdges(SmallVectorImpl<Edge> &ExitEdges) const;
@@ -277,7 +277,7 @@ public:
 
   /// reverseBlocks - interface to reverse Blocks[from, end of loop] in this loop
   void reverseBlock(unsigned from) {
-    MISTD::reverse(Blocks.begin() + from, Blocks.end());
+    std::reverse(Blocks.begin() + from, Blocks.end());
   }
 
   /// reserveBlocks- interface to do reserve() for Blocks
@@ -452,7 +452,7 @@ template<class BlockT, class LoopT>
 class LoopInfoBase {
   // BBMap - Mapping of basic blocks to the inner most loop they occur in
   DenseMap<BlockT *, LoopT *> BBMap;
-  MISTD::vector<LoopT *> TopLevelLoops;
+  std::vector<LoopT *> TopLevelLoops;
   friend class LoopBase<BlockT, LoopT>;
   friend class LoopInfo;
 
@@ -463,7 +463,7 @@ public:
   ~LoopInfoBase() { releaseMemory(); }
 
   void releaseMemory() {
-    for (typename MISTD::vector<LoopT *>::iterator I =
+    for (typename std::vector<LoopT *>::iterator I =
          TopLevelLoops.begin(), E = TopLevelLoops.end(); I != E; ++I)
       delete *I;   // Delete all of the loops...
 
@@ -474,8 +474,8 @@ public:
   /// iterator/begin/end - The interface to the top-level loops in the current
   /// function.
   ///
-  typedef typename MISTD::vector<LoopT *>::const_iterator iterator;
-  typedef typename MISTD::vector<LoopT *>::const_reverse_iterator
+  typedef typename std::vector<LoopT *>::const_iterator iterator;
+  typedef typename std::vector<LoopT *>::const_reverse_iterator
     reverse_iterator;
   iterator begin() const { return TopLevelLoops.begin(); }
   iterator end() const { return TopLevelLoops.end(); }
@@ -536,8 +536,8 @@ public:
   /// list with the indicated loop.
   void changeTopLevelLoop(LoopT *OldLoop,
                           LoopT *NewLoop) {
-    typename MISTD::vector<LoopT *>::iterator I =
-                 MISTD::find(TopLevelLoops.begin(), TopLevelLoops.end(), OldLoop);
+    typename std::vector<LoopT *>::iterator I =
+                 std::find(TopLevelLoops.begin(), TopLevelLoops.end(), OldLoop);
     assert(I != TopLevelLoops.end() && "Old loop not at top level!");
     *I = NewLoop;
     assert(NewLoop->ParentLoop == 0 && OldLoop->ParentLoop == 0 &&

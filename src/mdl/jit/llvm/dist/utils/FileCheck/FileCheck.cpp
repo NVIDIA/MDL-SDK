@@ -36,14 +36,14 @@
 #include <vector>
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 CheckFilename(cl::Positional, cl::desc("<check-file>"), cl::Required);
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename("input-file", cl::desc("File to check (defaults to stdin)"),
               cl::init("-"), cl::value_desc("filename"));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 CheckPrefixes("check-prefix",
               cl::desc("Prefix to use from check file (defaults to 'CHECK')"));
 
@@ -51,7 +51,7 @@ static cl::opt<bool>
 NoCanonicalizeWhiteSpace("strict-whitespace",
               cl::desc("Do not treat all horizontal whitespace as equivalent"));
 
-typedef cl::list<MISTD::string>::const_iterator prefix_iterator;
+typedef cl::list<std::string>::const_iterator prefix_iterator;
 
 //===----------------------------------------------------------------------===//
 // Pattern Handling Code.
@@ -82,7 +82,7 @@ class Pattern {
   StringRef FixedStr;
 
   /// RegEx - If non-empty, this is a regex pattern.
-  MISTD::string RegExStr;
+  std::string RegExStr;
 
   /// \brief Contains the number of line this pattern is in.
   unsigned LineNumber;
@@ -91,12 +91,12 @@ class Pattern {
   /// pattern, e.g. "foo[[bar]]baz".  In this case, the RegExStr will contain
   /// "foobaz" and we'll get an entry in this vector that tells us to insert the
   /// value of bar at offset 3.
-  MISTD::vector<MISTD::pair<StringRef, unsigned> > VariableUses;
+  std::vector<std::pair<StringRef, unsigned> > VariableUses;
 
   /// VariableDefs - Maps definitions of variables to their parenthesized
   /// capture numbers.
   /// E.g. for the pattern "foo[[bar:.*]]baz", VariableDefs will map "bar" to 1.
-  MISTD::map<StringRef, unsigned> VariableDefs;
+  std::map<StringRef, unsigned> VariableDefs;
 
 public:
 
@@ -136,7 +136,7 @@ public:
   Check::CheckType getCheckTy() const { return CheckTy; }
 
 private:
-  static void AddFixedStringToRegEx(StringRef FixedStr, MISTD::string &TheStr);
+  static void AddFixedStringToRegEx(StringRef FixedStr, std::string &TheStr);
   bool AddRegExToRegEx(StringRef RS, unsigned &CurParen, SourceMgr &SM);
   void AddBackrefToRegEx(unsigned BackrefNum);
 
@@ -148,7 +148,7 @@ private:
 
   /// \brief Evaluates expression and stores the result to \p Value.
   /// \return true on success. false when the expression has invalid syntax.
-  bool EvaluateExpression(StringRef Expr, MISTD::string &Value) const;
+  bool EvaluateExpression(StringRef Expr, std::string &Value) const;
 
   /// \brief Finds the closing sequence of a regex variable usage or
   /// definition. Str has to point in the beginning of the definition
@@ -294,7 +294,7 @@ bool Pattern::ParsePattern(StringRef PatternStr,
           }
           AddBackrefToRegEx(VarParenNum);
         } else {
-          VariableUses.push_back(MISTD::make_pair(Name, RegExStr.size()));
+          VariableUses.push_back(std::make_pair(Name, RegExStr.size()));
         }
         continue;
       }
@@ -313,7 +313,7 @@ bool Pattern::ParsePattern(StringRef PatternStr,
     // Handle fixed string matches.
     // Find the end, which is the start of the next regex.
     size_t FixedMatchEnd = PatternStr.find("{{");
-    FixedMatchEnd = MISTD::min(FixedMatchEnd, PatternStr.find("[["));
+    FixedMatchEnd = std::min(FixedMatchEnd, PatternStr.find("[["));
     AddFixedStringToRegEx(PatternStr.substr(0, FixedMatchEnd), RegExStr);
     PatternStr = PatternStr.substr(FixedMatchEnd);
   }
@@ -321,7 +321,7 @@ bool Pattern::ParsePattern(StringRef PatternStr,
   return false;
 }
 
-void Pattern::AddFixedStringToRegEx(StringRef FixedStr, MISTD::string &TheStr) {
+void Pattern::AddFixedStringToRegEx(StringRef FixedStr, std::string &TheStr) {
   // Add the characters from FixedStr to the regex, escaping as needed.  This
   // avoids "leaning toothpicks" in common patterns.
   for (unsigned i = 0, e = FixedStr.size(); i != e; ++i) {
@@ -351,7 +351,7 @@ void Pattern::AddFixedStringToRegEx(StringRef FixedStr, MISTD::string &TheStr) {
 bool Pattern::AddRegExToRegEx(StringRef RS, unsigned &CurParen,
                               SourceMgr &SM) {
   Regex R(RS);
-  MISTD::string Error;
+  std::string Error;
   if (!R.isValid(Error)) {
     SM.PrintMessage(SMLoc::getFromPointer(RS.data()), SourceMgr::DK_Error,
                     "invalid regex: " + Error);
@@ -365,12 +365,12 @@ bool Pattern::AddRegExToRegEx(StringRef RS, unsigned &CurParen,
 
 void Pattern::AddBackrefToRegEx(unsigned BackrefNum) {
   assert(BackrefNum >= 1 && BackrefNum <= 9 && "Invalid backref number");
-  MISTD::string Backref = MISTD::string("\\") +
-                        MISTD::string(1, '0' + BackrefNum);
+  std::string Backref = std::string("\\") +
+                        std::string(1, '0' + BackrefNum);
   RegExStr += Backref;
 }
 
-bool Pattern::EvaluateExpression(StringRef Expr, MISTD::string &Value) const {
+bool Pattern::EvaluateExpression(StringRef Expr, std::string &Value) const {
   // The only supported expression is @LINE([\+-]\d+)?
   if (!Expr.startswith("@LINE"))
     return false;
@@ -410,13 +410,13 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen,
   // If there are variable uses, we need to create a temporary string with the
   // actual value.
   StringRef RegExToMatch = RegExStr;
-  MISTD::string TmpStr;
+  std::string TmpStr;
   if (!VariableUses.empty()) {
     TmpStr = RegExStr;
 
     unsigned InsertOffset = 0;
     for (unsigned i = 0, e = VariableUses.size(); i != e; ++i) {
-      MISTD::string Value;
+      std::string Value;
 
       if (VariableUses[i].first[0] == '@') {
         if (!EvaluateExpression(VariableUses[i].first, Value))
@@ -452,7 +452,7 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen,
   StringRef FullMatch = MatchInfo[0];
 
   // If this defines any variables, remember their values.
-  for (MISTD::map<StringRef, unsigned>::const_iterator I = VariableDefs.begin(),
+  for (std::map<StringRef, unsigned>::const_iterator I = VariableDefs.begin(),
                                                      E = VariableDefs.end();
        I != E; ++I) {
     assert(I->second < MatchInfo.size() && "Internal paren error");
@@ -491,7 +491,7 @@ void Pattern::PrintFailureInfo(const SourceMgr &SM, StringRef Buffer,
       raw_svector_ostream OS(Msg);
       StringRef Var = VariableUses[i].first;
       if (Var[0] == '@') {
-        MISTD::string Value;
+        std::string Value;
         if (EvaluateExpression(Var, Value)) {
           OS << "with expression \"";
           OS.write_escaped(Var) << "\" equal to \"";
@@ -528,7 +528,7 @@ void Pattern::PrintFailureInfo(const SourceMgr &SM, StringRef Buffer,
   double BestQuality = 0;
 
   // Use an arbitrary 4k limit on how far we will search.
-  for (size_t i = 0, e = MISTD::min(size_t(4096), Buffer.size()); i != e; ++i) {
+  for (size_t i = 0, e = std::min(size_t(4096), Buffer.size()); i != e; ++i) {
     if (Buffer[i] == '\n')
       ++NumLinesForward;
 
@@ -616,7 +616,7 @@ struct CheckString {
   /// DagNotStrings - These are all of the strings that are disallowed from
   /// occurring between this match string and the previous one (or start of
   /// file).
-  MISTD::vector<Pattern> DagNotStrings;
+  std::vector<Pattern> DagNotStrings;
 
 
   CheckString(const Pattern &P,
@@ -634,12 +634,12 @@ struct CheckString {
 
   /// CheckNot - Verify there's no "not strings" in the given buffer.
   bool CheckNot(const SourceMgr &SM, StringRef Buffer,
-                const MISTD::vector<const Pattern *> &NotStrings,
+                const std::vector<const Pattern *> &NotStrings,
                 StringMap<StringRef> &VariableTable) const;
 
   /// CheckDag - Match "dag strings" and their mixed "not strings".
   size_t CheckDag(const SourceMgr &SM, StringRef Buffer,
-                  MISTD::vector<const Pattern *> &NotStrings,
+                  std::vector<const Pattern *> &NotStrings,
                   StringMap<StringRef> &VariableTable) const;
 };
 
@@ -842,7 +842,7 @@ static StringRef FindFirstMatchingPrefix(StringRef &Buffer,
 /// expected strings.  The strings are added to the CheckStrings vector.
 /// Returns true in case of an error, false otherwise.
 static bool ReadCheckFile(SourceMgr &SM,
-                          MISTD::vector<CheckString> &CheckStrings) {
+                          std::vector<CheckString> &CheckStrings) {
   OwningPtr<MemoryBuffer> File;
   if (error_code ec =
         MemoryBuffer::getFileOrSTDIN(CheckFilename, File)) {
@@ -860,7 +860,7 @@ static bool ReadCheckFile(SourceMgr &SM,
 
   // Find all instances of CheckPrefix followed by : in the file.
   StringRef Buffer = F->getBuffer();
-  MISTD::vector<Pattern> DagNotMatches;
+  std::vector<Pattern> DagNotMatches;
 
   // LineNumber keeps track of the line on which CheckPrefix instances are
   // found.
@@ -932,7 +932,7 @@ static bool ReadCheckFile(SourceMgr &SM,
                                        UsedPrefix,
                                        PatternLoc,
                                        CheckTy));
-    MISTD::swap(DagNotMatches, CheckStrings.back().DagNotStrings);
+    std::swap(DagNotMatches, CheckStrings.back().DagNotStrings);
   }
 
   // Add an EOF pattern for any trailing CHECK-DAG/-NOTs, and use the first
@@ -942,7 +942,7 @@ static bool ReadCheckFile(SourceMgr &SM,
                                        CheckPrefixes[0],
                                        SMLoc::getFromPointer(Buffer.data()),
                                        Check::CheckEOF));
-    MISTD::swap(DagNotMatches, CheckStrings.back().DagNotStrings);
+    std::swap(DagNotMatches, CheckStrings.back().DagNotStrings);
   }
 
   if (CheckStrings.empty()) {
@@ -1010,7 +1010,7 @@ size_t CheckString::Check(const SourceMgr &SM, StringRef Buffer,
                           bool IsLabelScanMode, size_t &MatchLen,
                           StringMap<StringRef> &VariableTable) const {
   size_t LastPos = 0;
-  MISTD::vector<const Pattern *> NotStrings;
+  std::vector<const Pattern *> NotStrings;
 
   // IsLabelScanMode is true when we are scanning forward to find CHECK-LABEL
   // bounds; we have not processed variable definitions within the bounded block
@@ -1088,7 +1088,7 @@ bool CheckString::CheckNext(const SourceMgr &SM, StringRef Buffer) const {
 }
 
 bool CheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
-                           const MISTD::vector<const Pattern *> &NotStrings,
+                           const std::vector<const Pattern *> &NotStrings,
                            StringMap<StringRef> &VariableTable) const {
   for (unsigned ChunkNo = 0, e = NotStrings.size();
        ChunkNo != e; ++ChunkNo) {
@@ -1112,7 +1112,7 @@ bool CheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
 }
 
 size_t CheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
-                             MISTD::vector<const Pattern *> &NotStrings,
+                             std::vector<const Pattern *> &NotStrings,
                              StringMap<StringRef> &VariableTable) const {
   if (DagNotStrings.empty())
     return 0;
@@ -1182,7 +1182,7 @@ size_t CheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
     }
 
     // Update the last position with CHECK-DAG matches.
-    LastPos = MISTD::max(MatchPos + MatchLen, LastPos);
+    LastPos = std::max(MatchPos + MatchLen, LastPos);
   }
 
   return LastPos;
@@ -1235,7 +1235,7 @@ int main(int argc, char **argv) {
   SourceMgr SM;
 
   // Read the expected strings from the check file.
-  MISTD::vector<CheckString> CheckStrings;
+  std::vector<CheckString> CheckStrings;
   if (ReadCheckFile(SM, CheckStrings))
     return 2;
 

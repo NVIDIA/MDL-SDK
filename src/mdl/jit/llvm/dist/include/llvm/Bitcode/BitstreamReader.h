@@ -38,15 +38,15 @@ public:
   /// These describe abbreviations that all blocks of the specified ID inherit.
   struct BlockInfo {
     unsigned BlockID;
-    MISTD::vector<BitCodeAbbrev*> Abbrevs;
-    MISTD::string Name;
+    std::vector<BitCodeAbbrev*> Abbrevs;
+    std::string Name;
 
-    MISTD::vector<MISTD::pair<unsigned, MISTD::string> > RecordNames;
+    std::vector<std::pair<unsigned, std::string> > RecordNames;
   };
 private:
   OwningPtr<StreamableMemoryObject> BitcodeBytes;
 
-  MISTD::vector<BlockInfo> BlockInfoRecords;
+  std::vector<BlockInfo> BlockInfoRecords;
 
   /// IgnoreBlockInfoNames - This is set to true if we don't care about the
   /// block/record name information in the BlockInfo block. Only llvm-bcanalyzer
@@ -188,11 +188,11 @@ class BitstreamCursor {
   unsigned CurCodeSize;
 
   /// CurAbbrevs - Abbrevs installed at in this block.
-  MISTD::vector<BitCodeAbbrev*> CurAbbrevs;
+  std::vector<BitCodeAbbrev*> CurAbbrevs;
 
   struct Block {
     unsigned PrevCodeSize;
-    MISTD::vector<BitCodeAbbrev*> PrevAbbrevs;
+    std::vector<BitCodeAbbrev*> PrevAbbrevs;
     explicit Block(unsigned PCS) : PrevCodeSize(PCS) {}
   };
 

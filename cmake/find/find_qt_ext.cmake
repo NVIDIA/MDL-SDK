@@ -44,3 +44,133 @@ function(FIND_QT_EXT)
     endif()
 
 endfunction()
+
+
+# -------------------------------------------------------------------------------------------------
+# create moc files manually using the moc tool
+#
+function(QT_GEN_MOC)
+    set(options)
+    set(oneValueArgs DESTINATION)
+    set(multiValueArgs INPUT OUTPUT)
+    cmake_parse_arguments(QT_GEN_MOC "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    # no-op if automoc is used
+    if(CMAKE_AUTOMOC)
+        return()
+    endif()
+
+    # find the qt moc tool
+    find_program(qtmoc_PATH 
+    NAMES
+        moc
+        moc-qt5
+    HINTS
+        ${Qt5_BASE_DIR}/bin
+    )
+    if(NOT EXISTS ${qtmoc_PATH})
+        message(FATAL_ERROR "The Qt moc-tool required for at lease one target could not be resolved.")
+    endif()
+
+    # prepare files
+    set(_GENERATED_MOC_FILES "")
+    foreach(_SOURCE_FILE ${QT_GEN_MOC_INPUT})
+        get_filename_component(_FILE_NAME ${_SOURCE_FILE} NAME_WE)
+        set(_MOC_FILE ${QT_GEN_MOC_DESTINATION}/moc_${_FILE_NAME}.cpp)
+        list(APPEND _MOC_COMMANDS COMMAND ${qtmoc_PATH} -o ${_MOC_FILE} ${CMAKE_CURRENT_SOURCE_DIR}/${_SOURCE_FILE})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- generate moc:   moc_${_FILE_NAME}.cpp")
+        endif()
+        list(APPEND _GENERATED_MOC_FILES ${_MOC_FILE})
+    endforeach()
+
+    # absolute path to dependencies
+    foreach(_DEP ${QT_GEN_MOC_INPUT})
+        list(APPEND _DEPS ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP})
+    endforeach()
+
+    # create target dir if not existing
+    if(QT_GEN_EMBEDDED_RESOURCES_DESTINATION AND NOT EXISTS ${QT_GEN_EMBEDDED_RESOURCES_DESTINATION})
+        file(MAKE_DIRECTORY ${QT_GEN_EMBEDDED_RESOURCES_DESTINATION})
+    endif()
+ 
+    # create a custom command to run the tool
+    add_custom_command(
+        OUTPUT ${_GENERATED_MOC_FILES}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}
+        ${_MOC_COMMANDS}
+        DEPENDS ${_DEPS}
+        VERBATIM
+        )
+
+    # mark files as generated to disable the check for existence
+    set_source_files_properties(${_GENERATED_MOC_FILES} PROPERTIES GENERATED TRUE)
+    source_group("generated" FILES ${_GENERATED_MOC_FILES})
+
+    # pass to output variable
+    set(${QT_GEN_MOC_OUTPUT} ${_GENERATED_MOC_FILES} PARENT_SCOPE) 
+
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# function that takes a qt qrc file and creates a cpp file that can be compiled and added to a project.
+#
+function(QT_GEN_EMBEDDED_RESOURCES)
+    set(options)
+    set(oneValueArgs INPUT OUTPUT DESTINATION)
+    set(multiValueArgs DEPENDS)
+    cmake_parse_arguments(QT_GEN_EMBEDDED_RESOURCES "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    # no-op if autorcc is used
+    if(CMAKE_AUTORCC)
+        return()
+    endif()
+
+    # find the qt rcc tool
+    find_program(qtrcc_PATH 
+        NAMES
+            rcc
+            rcc-qt5
+        HINTS
+            ${Qt5_BASE_DIR}/bin
+        )
+    if(NOT EXISTS ${qtrcc_PATH})
+        message(FATAL_ERROR "The Qt rcc-tool required for at lease one target could not be resolved.")
+    endif()
+
+    # create target dir if not existing
+    if(QT_GEN_EMBEDDED_RESOURCES_DESTINATION AND NOT EXISTS ${QT_GEN_EMBEDDED_RESOURCES_DESTINATION})
+        file(MAKE_DIRECTORY ${QT_GEN_EMBEDDED_RESOURCES_DESTINATION})
+    endif()
+
+    # create a custom command to run the tool
+    get_filename_component(_FILE_NAME ${QT_GEN_EMBEDDED_RESOURCES_INPUT} NAME_WE)
+    set(_OUTPUT_FILE ${QT_GEN_EMBEDDED_RESOURCES_DESTINATION}/${_FILE_NAME}.cpp)
+
+    # absolute path to dependencies
+    list(APPEND _DEPS ${CMAKE_CURRENT_SOURCE_DIR}/${QT_GEN_EMBEDDED_RESOURCES_INPUT})
+    foreach(_DEP ${QT_GEN_EMBEDDED_RESOURCES_DEPENDS})
+        list(APPEND _DEPS ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP})
+        message(STATUS "- depends:        ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP}")
+    endforeach()
+
+    add_custom_command(
+        OUTPUT ${_OUTPUT_FILE}
+        COMMAND ${qtrcc_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/${QT_GEN_EMBEDDED_RESOURCES_INPUT} -o ${_OUTPUT_FILE}
+        DEPENDS ${_DEPS}
+        VERBATIM
+        )
+
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "- embedding:      ${QT_GEN_EMBEDDED_RESOURCES_INPUT}")
+    endif()
+
+    # mark files as generated to disable the check for existence
+    set_source_files_properties(${_OUTPUT_FILE} PROPERTIES GENERATED TRUE)
+    source_group("generated" FILES ${_OUTPUT_FILE})
+
+    # pass filename out
+    set(${QT_GEN_EMBEDDED_RESOURCES_OUTPUT} ${_OUTPUT_FILE} PARENT_SCOPE) 
+
+endfunction()
+

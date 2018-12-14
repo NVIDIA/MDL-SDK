@@ -121,7 +121,7 @@ int main() {
   outs().flush();
 
   // Call the `foo' function with no arguments:
-  MISTD::vector<GenericValue> noargs;
+  std::vector<GenericValue> noargs;
   GenericValue gv = EE->runFunction(FooF, noargs);
 
   // Import result of execution:

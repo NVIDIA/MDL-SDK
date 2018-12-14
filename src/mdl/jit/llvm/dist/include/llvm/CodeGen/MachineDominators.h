@@ -54,7 +54,7 @@ public:
   /// multiple blocks if we are computing post dominators.  For forward
   /// dominators, this will always be a single block (the entry node).
   ///
-  inline const MISTD::vector<MachineBasicBlock*> &getRoots() const {
+  inline const std::vector<MachineBasicBlock*> &getRoots() const {
     return DT->getRoots();
   }
 

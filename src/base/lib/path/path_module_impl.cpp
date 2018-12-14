@@ -180,7 +180,7 @@ mi::Sint32 Path_module_impl::remove_path( Kind kind, const Path& path)
     Search_path& search_path = m_search_paths[kind];
     size_t n = search_path.size();
 
-    const MISTD::string normalized_path = normalize( path);
+    const std::string normalized_path = normalize( path);
     for( size_t i = 0; i < n; ++i)
         if( search_path[i] == normalized_path) {
             search_path.erase( search_path.begin() + i);
@@ -190,10 +190,10 @@ mi::Sint32 Path_module_impl::remove_path( Kind kind, const Path& path)
     return -2;
 }
 
-MISTD::string Path_module_impl::search(
-    Kind kind, const MISTD::string& file_name) const
+std::string Path_module_impl::search(
+    Kind kind, const std::string& file_name) const
 {
-    const MISTD::string& normalized_file_name = normalize( file_name);
+    const std::string& normalized_file_name = normalize( file_name);
 
     if( DISK::is_path_absolute( normalized_file_name))
         return DISK::access( normalized_file_name.c_str()) ? normalized_file_name : s_empty_string;
@@ -204,7 +204,7 @@ MISTD::string Path_module_impl::search(
     size_t n = search_path.size();
 
     for( size_t i = 0; i < n; ++i) {
-        const MISTD::string& joined_file_name
+        const std::string& joined_file_name
             = HAL::Ospath::join( search_path[i], normalized_file_name);
         if( DISK::access( joined_file_name.c_str()))
             return joined_file_name;
@@ -213,7 +213,7 @@ MISTD::string Path_module_impl::search(
     return s_empty_string;
 }
 
-MISTD::string Path_module_impl::normalize( const MISTD::string& s)
+std::string Path_module_impl::normalize( const std::string& s)
 {
 #ifdef MI_PLATFORM_WINDOWS
     return boost::replace_all_copy( s, "/", "\\");

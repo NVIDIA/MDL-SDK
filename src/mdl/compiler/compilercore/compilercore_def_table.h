@@ -109,6 +109,8 @@ public:
         DEF_USES_NORMAL,            ///< This function uses calls to state::normal().
         DEF_IS_NATIVE,              ///< This function is declared native.
         DEF_IS_CONST_EXPR,          ///< This function is declared const_expr.
+        DEF_USES_DERIVATIVES,       ///< This function uses derivatives.
+        DEF_IS_DERIVABLE,           ///< This parameter or return type is derivable.
         DEF_LAST
     };
 
@@ -170,6 +172,12 @@ public:
 
     /// Return the position of this definition if any.
     Position const *get_position() const MDL_FINAL;
+
+    /// Return the mask specifying which parameters of a function are derivable.
+    ///
+    /// For example, if bit 0 is set, a backend supporting derivatives may provide derivative
+    /// values as the first parameter of the function.
+    virtual unsigned get_parameter_derivable_mask() const MDL_FINAL;
 
     // Non interface member
 
@@ -258,6 +266,11 @@ public:
     /// \param flags  the version flags
     void set_version_flags(unsigned flags) { m_version_flags = flags;}
 
+    /// Set the mask specifying which parameters are derivable.
+    ///
+    /// \param mask  the bit mask
+    void set_parameter_derivable_mask(unsigned mask) { m_parameter_deriv_mask = mask; }
+
     /// Return the definite definition for this definition (which represents a
     /// declaration in the semantic sense).
     Definition *get_definite_definition() {
@@ -317,7 +330,7 @@ public:
     /// \param sema  the semantic
     void set_semantic(Semantics sema);
 
-    /// Set the parameter index of a member field.
+    /// Set the parameter index of a parameter.
     ///
     /// \param index  the index of this parameter
     void set_parameter_index(int index);
@@ -417,6 +430,9 @@ private:
 
     /// Flags of this definition.
     Raw_bitset<DEF_LAST> m_flags;
+
+    /// Mask specifying which parameters of a function may expect derivable values.
+    unsigned m_parameter_deriv_mask;
 };
 
 /// An interface for visiting definitions

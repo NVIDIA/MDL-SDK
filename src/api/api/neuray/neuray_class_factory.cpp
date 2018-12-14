@@ -452,7 +452,6 @@ mi::base::IInterface* Class_factory::create_type_instance(
          || ( type_name_string.substr( 0, 14) == "Const_pointer<"))
         return create_pointer_instance( transaction, type_name, argc, argv);
 
-
     // handle structures
     mi::base::Handle<const mi::IStructure_decl> structure_decl( get_structure_decl( type_name));
     if( structure_decl.is_valid_interface())
@@ -682,7 +681,6 @@ mi::base::IInterface* Class_factory::create_pointer_instance(
         transaction, is_const ? "__Const_pointer" : "__Pointer", 1, new_argv);
 }
 
-
 mi::base::IInterface* Class_factory::create_structure_instance(
     Transaction_impl* transaction,
     const char* type_name,
@@ -850,11 +848,6 @@ bool Class_factory::contains_blacklisted_type_names(
     const std::string& array_element = Type_utilities::strip_array( type_name, length);
     if( !array_element.empty())
         return contains_blacklisted_type_names( array_element, blacklist);
-
-    // descend into attachables
-    const std::string& attachable_value = Type_utilities::strip_attachable( type_name);
-    if( !attachable_value.empty())
-        return contains_blacklisted_type_names( attachable_value, blacklist);
 
     // descend into maps
     const std::string& map_value = Type_utilities::strip_map( type_name);

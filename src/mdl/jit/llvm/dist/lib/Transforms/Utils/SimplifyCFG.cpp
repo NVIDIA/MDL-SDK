@@ -93,7 +93,7 @@ class SimplifyCFGOpt {
   const DataLayout *const TD;
   Value *isValueEqualityComparison(TerminatorInst *TI);
   BasicBlock *GetValueEqualityComparisonCases(TerminatorInst *TI,
-                               MISTD::vector<ValueEqualityComparisonCase> &Cases);
+                               std::vector<ValueEqualityComparisonCase> &Cases);
   bool SimplifyEqualityComparisonWithOnlyPredecessor(TerminatorInst *TI,
                                                      BasicBlock *Pred,
                                                      IRBuilder<> &Builder);
@@ -339,7 +339,7 @@ static ConstantInt *GetConstantInt(Value *V, const DataLayout *TD) {
 /// constant, return the value being compared, and stick the constant into the
 /// Values vector.
 static Value *
-GatherConstantCompares(Value *V, MISTD::vector<ConstantInt*> &Vals, Value *&Extra,
+GatherConstantCompares(Value *V, std::vector<ConstantInt*> &Vals, Value *&Extra,
                        const DataLayout *TD, bool isEQ, unsigned &UsedICmps) {
   Instruction *I = dyn_cast<Instruction>(V);
   if (I == 0) return 0;
@@ -466,7 +466,7 @@ Value *SimplifyCFGOpt::isValueEqualityComparison(TerminatorInst *TI) {
   if (SwitchInst *SI = dyn_cast<SwitchInst>(TI)) {
     // Do not permit merging of large switch instructions into their
     // predecessors unless there is only one predecessor.
-    if (SI->getNumSuccessors()*MISTD::distance(pred_begin(SI->getParent()),
+    if (SI->getNumSuccessors()*std::distance(pred_begin(SI->getParent()),
                                              pred_end(SI->getParent())) <= 128)
       CV = SI->getCondition();
   } else if (BranchInst *BI = dyn_cast<BranchInst>(TI))
@@ -490,7 +490,7 @@ Value *SimplifyCFGOpt::isValueEqualityComparison(TerminatorInst *TI) {
 /// decode all of the 'cases' that it represents and return the 'default' block.
 BasicBlock *SimplifyCFGOpt::
 GetValueEqualityComparisonCases(TerminatorInst *TI,
-                                MISTD::vector<ValueEqualityComparisonCase>
+                                std::vector<ValueEqualityComparisonCase>
                                                                        &Cases) {
   if (SwitchInst *SI = dyn_cast<SwitchInst>(TI)) {
     Cases.reserve(SI->getNumCases());
@@ -513,20 +513,20 @@ GetValueEqualityComparisonCases(TerminatorInst *TI,
 /// EliminateBlockCases - Given a vector of bb/value pairs, remove any entries
 /// in the list that match the specified block.
 static void EliminateBlockCases(BasicBlock *BB,
-                              MISTD::vector<ValueEqualityComparisonCase> &Cases) {
-  Cases.erase(MISTD::remove(Cases.begin(), Cases.end(), BB), Cases.end());
+                              std::vector<ValueEqualityComparisonCase> &Cases) {
+  Cases.erase(std::remove(Cases.begin(), Cases.end(), BB), Cases.end());
 }
 
 /// ValuesOverlap - Return true if there are any keys in C1 that exist in C2 as
 /// well.
 static bool
-ValuesOverlap(MISTD::vector<ValueEqualityComparisonCase> &C1,
-              MISTD::vector<ValueEqualityComparisonCase > &C2) {
-  MISTD::vector<ValueEqualityComparisonCase> *V1 = &C1, *V2 = &C2;
+ValuesOverlap(std::vector<ValueEqualityComparisonCase> &C1,
+              std::vector<ValueEqualityComparisonCase > &C2) {
+  std::vector<ValueEqualityComparisonCase> *V1 = &C1, *V2 = &C2;
 
   // Make V1 be smaller than V2.
   if (V1->size() > V2->size())
-    MISTD::swap(V1, V2);
+    std::swap(V1, V2);
 
   if (V1->size() == 0) return false;
   if (V1->size() == 1) {
@@ -573,13 +573,13 @@ SimplifyEqualityComparisonWithOnlyPredecessor(TerminatorInst *TI,
   // FoldValueComparisonIntoPredecessors preserves it.
 
   // Find out information about when control will move from Pred to TI's block.
-  MISTD::vector<ValueEqualityComparisonCase> PredCases;
+  std::vector<ValueEqualityComparisonCase> PredCases;
   BasicBlock *PredDef = GetValueEqualityComparisonCases(Pred->getTerminator(),
                                                         PredCases);
   EliminateBlockCases(PredDef, PredCases);  // Remove default from cases.
 
   // Find information about how control leaves this block.
-  MISTD::vector<ValueEqualityComparisonCase> ThisCases;
+  std::vector<ValueEqualityComparisonCase> ThisCases;
   BasicBlock *ThisDef = GetValueEqualityComparisonCases(TI, ThisCases);
   EliminateBlockCases(ThisDef, ThisCases);  // Remove default from cases.
 
@@ -634,7 +634,7 @@ SimplifyEqualityComparisonWithOnlyPredecessor(TerminatorInst *TI,
       --i;
       if (DeadCases.count(i.getCaseValue())) {
         if (HasWeight) {
-          MISTD::swap(Weights[i.getCaseIndex()+1], Weights.back());
+          std::swap(Weights[i.getCaseIndex()+1], Weights.back());
           Weights.pop_back();
         }
         i.getCaseSuccessor()->removePredecessor(TI->getParent());
@@ -744,7 +744,7 @@ static void GetBranchWeights(TerminatorInst *TI,
     assert(Weights.size() == 2);
     ICmpInst *ICI = cast<ICmpInst>(BI->getCondition());
     if (ICI->getPredicate() == ICmpInst::ICMP_EQ)
-      MISTD::swap(Weights.front(), Weights.back());
+      std::swap(Weights.front(), Weights.back());
   }
 }
 
@@ -786,10 +786,10 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
 
     if (PCV == CV && SafeToMergeTerminators(TI, PTI)) {
       // Figure out which 'cases' to copy from SI to PSI.
-      MISTD::vector<ValueEqualityComparisonCase> BBCases;
+      std::vector<ValueEqualityComparisonCase> BBCases;
       BasicBlock *BBDefault = GetValueEqualityComparisonCases(TI, BBCases);
 
-      MISTD::vector<ValueEqualityComparisonCase> PredCases;
+      std::vector<ValueEqualityComparisonCase> PredCases;
       BasicBlock *PredDefault = GetValueEqualityComparisonCases(PTI, PredCases);
 
       // Based on whether the default edge from PTI goes to BB or not, fill in
@@ -825,18 +825,18 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
       if (PredDefault == BB) {
         // If this is the default destination from PTI, only the edges in TI
         // that don't occur in PTI, or that branch to BB will be activated.
-        MISTD::set<ConstantInt*, ConstantIntOrdering> PTIHandled;
+        std::set<ConstantInt*, ConstantIntOrdering> PTIHandled;
         for (unsigned i = 0, e = PredCases.size(); i != e; ++i)
           if (PredCases[i].Dest != BB)
             PTIHandled.insert(PredCases[i].Value);
           else {
             // The default destination is BB, we don't need explicit targets.
-            MISTD::swap(PredCases[i], PredCases.back());
+            std::swap(PredCases[i], PredCases.back());
 
             if (PredHasWeights || SuccHasWeights) {
               // Increase weight for the default case.
               Weights[0] += Weights[i+1];
-              MISTD::swap(Weights[i+1], Weights.back());
+              std::swap(Weights[i+1], Weights.back());
               Weights.pop_back();
             }
 
@@ -879,19 +879,19 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
         // If this is not the default destination from PSI, only the edges
         // in SI that occur in PSI with a destination of BB will be
         // activated.
-        MISTD::set<ConstantInt*, ConstantIntOrdering> PTIHandled;
-        MISTD::map<ConstantInt*, uint64_t> WeightsForHandled;
+        std::set<ConstantInt*, ConstantIntOrdering> PTIHandled;
+        std::map<ConstantInt*, uint64_t> WeightsForHandled;
         for (unsigned i = 0, e = PredCases.size(); i != e; ++i)
           if (PredCases[i].Dest == BB) {
             PTIHandled.insert(PredCases[i].Value);
 
             if (PredHasWeights || SuccHasWeights) {
               WeightsForHandled[PredCases[i].Value] = Weights[i+1];
-              MISTD::swap(Weights[i+1], Weights.back());
+              std::swap(Weights[i+1], Weights.back());
               Weights.pop_back();
             }
 
-            MISTD::swap(PredCases[i], PredCases.back());
+            std::swap(PredCases[i], PredCases.back());
             PredCases.pop_back();
             --i; --e;
           }
@@ -910,7 +910,7 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
 
         // If there are any constants vectored to BB that TI doesn't handle,
         // they must go to the default destination of TI.
-        for (MISTD::set<ConstantInt*, ConstantIntOrdering>::iterator I =
+        for (std::set<ConstantInt*, ConstantIntOrdering>::iterator I =
                                     PTIHandled.begin(),
                E = PTIHandled.end(); I != E; ++I) {
           if (PredHasWeights || SuccHasWeights)
@@ -1094,7 +1094,7 @@ HoistTerminator:
   // Unfortunately, the successors of the if/else blocks may have PHI nodes in
   // them.  If they do, all PHI entries for BB1/BB2 must agree for all PHI
   // nodes, so we insert select instruction to compute the final result.
-  MISTD::map<MISTD::pair<Value*,Value*>, SelectInst*> InsertedSelects;
+  std::map<std::pair<Value*,Value*>, SelectInst*> InsertedSelects;
   for (succ_iterator SI = succ_begin(BB1), E = succ_end(BB1); SI != E; ++SI) {
     PHINode *PN;
     for (BasicBlock::iterator BBI = SI->begin();
@@ -1105,7 +1105,7 @@ HoistTerminator:
 
       // These values do not agree.  Insert a select instruction before NT
       // that determines the right value.
-      SelectInst *&SI = InsertedSelects[MISTD::make_pair(BB1V, BB2V)];
+      SelectInst *&SI = InsertedSelects[std::make_pair(BB1V, BB2V)];
       if (SI == 0)
         SI = cast<SelectInst>
           (Builder.CreateSelect(BI->getCondition(), BB1V, BB2V,
@@ -1150,14 +1150,14 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
     return false;
 
   // Gather the PHI nodes in BBEnd.
-  MISTD::map<Value*, MISTD::pair<Value*, PHINode*> > MapValueFromBB1ToBB2;
+  std::map<Value*, std::pair<Value*, PHINode*> > MapValueFromBB1ToBB2;
   Instruction *FirstNonPhiInBBEnd = 0;
   for (BasicBlock::iterator I = BBEnd->begin(), E = BBEnd->end();
        I != E; ++I) {
     if (PHINode *PN = dyn_cast<PHINode>(I)) {
       Value *BB1V = PN->getIncomingValueForBlock(BB1);
       Value *BB2V = PN->getIncomingValueForBlock(BB2);
-      MapValueFromBB1ToBB2[BB1V] = MISTD::make_pair(BB2V, PN);
+      MapValueFromBB1ToBB2[BB1V] = std::make_pair(BB2V, PN);
     } else {
       FirstNonPhiInBBEnd = &*I;
       break;
@@ -1258,7 +1258,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
       PHINode *NewPN = PHINode::Create(DifferentOp1->getType(), 2,
                                        DifferentOp1->getName() + ".sink",
                                        BBEnd->begin());
-      MapValueFromBB1ToBB2[DifferentOp1] = MISTD::make_pair(DifferentOp2, NewPN);
+      MapValueFromBB1ToBB2[DifferentOp1] = std::make_pair(DifferentOp2, NewPN);
       // I1 should use NewPN instead of DifferentOp1.
       I1->setOperand(Op1Idx, NewPN);
       NewPN->addIncoming(DifferentOp1, BB1);
@@ -1523,7 +1523,7 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB) {
     Value *TrueV = SpeculatedStore->getValueOperand();
     Value *FalseV = SpeculatedStoreValue;
     if (Invert)
-      MISTD::swap(TrueV, FalseV);
+      std::swap(TrueV, FalseV);
     Value *S = Builder.CreateSelect(BrCond, TrueV, FalseV, TrueV->getName() +
                                     "." + FalseV->getName());
     SpeculatedStore->setOperand(0, S);
@@ -1551,7 +1551,7 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB) {
     // destinations were inverted.
     Value *TrueV = ThenV, *FalseV = OrigV;
     if (Invert)
-      MISTD::swap(TrueV, FalseV);
+      std::swap(TrueV, FalseV);
     Value *V = Builder.CreateSelect(BrCond, TrueV, FalseV,
                                     TrueV->getName() + "." + FalseV->getName());
     PN->setIncomingValue(OrigI, V);
@@ -2106,14 +2106,14 @@ bool llvm::FoldBranchToCommonDest(BranchInst *BI) {
           UsedValues.insert(V);
       }
 
-      SmallVector<MISTD::pair<Value*, unsigned>, 4> Worklist;
-      Worklist.push_back(MISTD::make_pair(PBI->getOperand(0), 0));
+      SmallVector<std::pair<Value*, unsigned>, 4> Worklist;
+      Worklist.push_back(std::make_pair(PBI->getOperand(0), 0));
 
       // Walk up to four levels back up the use-def chain of the predecessor's
       // terminator to see if all those values were used.  The choice of four
       // levels is arbitrary, to provide a compile-time-cost bound.
       while (!Worklist.empty()) {
-        MISTD::pair<Value*, unsigned> Pair = Worklist.back();
+        std::pair<Value*, unsigned> Pair = Worklist.back();
         Worklist.pop_back();
 
         if (Pair.second >= 4) continue;
@@ -2123,7 +2123,7 @@ bool llvm::FoldBranchToCommonDest(BranchInst *BI) {
         if (Instruction *I = dyn_cast<Instruction>(Pair.first)) {
           for (Instruction::op_iterator OI = I->op_begin(), OE = I->op_end();
                OI != OE; ++OI)
-            Worklist.push_back(MISTD::make_pair(OI->get(), Pair.second+1));
+            Worklist.push_back(std::make_pair(OI->get(), Pair.second+1));
         }
       }
 
@@ -2312,7 +2312,7 @@ static bool SimplifyCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI) {
     if (BlockIsSimpleEnoughToThreadThrough(BB)) {
       pred_iterator PB = pred_begin(BB), PE = pred_end(BB);
       PHINode *NewPN = PHINode::Create(Type::getInt1Ty(BB->getContext()),
-                                       MISTD::distance(PB, PE),
+                                       std::distance(PB, PE),
                                        BI->getCondition()->getName() + ".pr",
                                        BB->begin());
       // Okay, we're going to insert the PHI node.  Since PBI is not the only
@@ -2691,7 +2691,7 @@ static bool TryToSimplifyUncondBranchWithICmpInIt(
   Constant *NewCst     = ConstantInt::getFalse(BB->getContext());
 
   if (ICI->getPredicate() == ICmpInst::ICMP_EQ)
-    MISTD::swap(DefaultCst, NewCst);
+    std::swap(DefaultCst, NewCst);
 
   // Replace ICI (which is used by the PHI for the default value) with true or
   // false depending on if it is EQ or NE.
@@ -2740,7 +2740,7 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, const DataLayout *TD,
   // If this is a bunch of seteq's or'd together, or if it's a bunch of
   // 'setne's and'ed together, collect them.
   Value *CompVal = 0;
-  MISTD::vector<ConstantInt*> Values;
+  std::vector<ConstantInt*> Values;
   bool TrueWhenEqual = true;
   Value *ExtraCase = 0;
   unsigned UsedICmps = 0;
@@ -2764,7 +2764,7 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, const DataLayout *TD,
   // There might be duplicate constants in the list, which the switch
   // instruction can't handle, remove them now.
   array_pod_sort(Values.begin(), Values.end(), ConstantIntSortPredicate);
-  Values.erase(MISTD::unique(Values.begin(), Values.end()), Values.end());
+  Values.erase(std::unique(Values.begin(), Values.end()), Values.end());
 
   // If Extra was used, we require at least two switch values to do the
   // transformation.  A switch with one value is just an cond branch.
@@ -2776,7 +2776,7 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, const DataLayout *TD,
   // Figure out which block is which destination.
   BasicBlock *DefaultBB = BI->getSuccessor(1);
   BasicBlock *EdgeBB    = BI->getSuccessor(0);
-  if (!TrueWhenEqual) MISTD::swap(DefaultBB, EdgeBB);
+  if (!TrueWhenEqual) std::swap(DefaultBB, EdgeBB);
 
   BasicBlock *BB = BI->getParent();
 
@@ -3034,10 +3034,10 @@ bool SimplifyCFGOpt::SimplifyUnreachable(UnreachableInst *UI) {
       // If the default value is unreachable, figure out the most popular
       // destination and make it the default.
       if (SI->getDefaultDest() == BB) {
-        MISTD::map<BasicBlock*, MISTD::pair<unsigned, unsigned> > Popularity;
+        std::map<BasicBlock*, std::pair<unsigned, unsigned> > Popularity;
         for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end();
              i != e; ++i) {
-          MISTD::pair<unsigned, unsigned> &entry =
+          std::pair<unsigned, unsigned> &entry =
               Popularity[i.getCaseSuccessor()];
           if (entry.first == 0) {
             entry.first = 1;
@@ -3051,7 +3051,7 @@ bool SimplifyCFGOpt::SimplifyUnreachable(UnreachableInst *UI) {
         unsigned MaxPop = 0;
         unsigned MaxIndex = 0;
         BasicBlock *MaxBlock = 0;
-        for (MISTD::map<BasicBlock*, MISTD::pair<unsigned, unsigned> >::iterator
+        for (std::map<BasicBlock*, std::pair<unsigned, unsigned> >::iterator
              I = Popularity.begin(), E = Popularity.end(); I != E; ++I) {
           if (I->second.first > MaxPop ||
               (I->second.first == MaxPop && MaxIndex > I->second.second)) {
@@ -3214,7 +3214,7 @@ static bool EliminateDeadSwitchCases(SwitchInst *SI) {
     assert(Case != SI->case_default() &&
            "Case was not found. Probably mistake in DeadCases forming.");
     if (HasWeight) {
-      MISTD::swap(Weights[Case.getCaseIndex()+1], Weights.back());
+      std::swap(Weights[Case.getCaseIndex()+1], Weights.back());
       Weights.pop_back();
     }
 
@@ -3368,7 +3368,7 @@ GetCaseResults(SwitchInst *SI,
                ConstantInt *CaseVal,
                BasicBlock *CaseDest,
                BasicBlock **CommonDest,
-               SmallVectorImpl<MISTD::pair<PHINode *, Constant *> > &Res,
+               SmallVectorImpl<std::pair<PHINode *, Constant *> > &Res,
                const DataLayout *DL) {
   // The block from which we enter the common destination.
   BasicBlock *Pred = SI->getParent();
@@ -3376,7 +3376,7 @@ GetCaseResults(SwitchInst *SI,
   // If CaseDest is empty except for some side-effect free instructions through
   // which we can constant-propagate the CaseVal, continue to its successor.
   SmallDenseMap<Value*, Constant*> ConstantPool;
-  ConstantPool.insert(MISTD::make_pair(SI->getCondition(), CaseVal));
+  ConstantPool.insert(std::make_pair(SI->getCondition(), CaseVal));
   for (BasicBlock::iterator I = CaseDest->begin(), E = CaseDest->end(); I != E;
        ++I) {
     if (TerminatorInst *T = dyn_cast<TerminatorInst>(I)) {
@@ -3390,7 +3390,7 @@ GetCaseResults(SwitchInst *SI,
       continue;
     } else if (Constant *C = ConstantFold(I, ConstantPool, DL)) {
       // Instruction is side-effect free and constant.
-      ConstantPool.insert(MISTD::make_pair(I, C));
+      ConstantPool.insert(std::make_pair(I, C));
     } else {
       break;
     }
@@ -3425,7 +3425,7 @@ GetCaseResults(SwitchInst *SI,
     if (!ValidLookupTableConstant(ConstVal))
       return false;
 
-    Res.push_back(MISTD::make_pair(PHI, ConstVal));
+    Res.push_back(std::make_pair(PHI, ConstVal));
   }
 
   return true;
@@ -3442,7 +3442,7 @@ namespace {
     SwitchLookupTable(Module &M,
                       uint64_t TableSize,
                       ConstantInt *Offset,
-             const SmallVectorImpl<MISTD::pair<ConstantInt*, Constant*> >& Values,
+             const SmallVectorImpl<std::pair<ConstantInt*, Constant*> >& Values,
                       Constant *DefaultValue,
                       const DataLayout *TD);
 
@@ -3489,7 +3489,7 @@ namespace {
 SwitchLookupTable::SwitchLookupTable(Module &M,
                                      uint64_t TableSize,
                                      ConstantInt *Offset,
-             const SmallVectorImpl<MISTD::pair<ConstantInt*, Constant*> >& Values,
+             const SmallVectorImpl<std::pair<ConstantInt*, Constant*> >& Values,
                                      Constant *DefaultValue,
                                      const DataLayout *TD)
     : SingleValue(0), BitMap(0), BitMapElementTy(0), Array(0) {
@@ -3695,7 +3695,7 @@ static bool SwitchToLookupTable(SwitchInst *SI,
   ConstantInt *MaxCaseVal = CI.getCaseValue();
 
   BasicBlock *CommonDest = 0;
-  typedef SmallVector<MISTD::pair<ConstantInt*, Constant*>, 4> ResultListTy;
+  typedef SmallVector<std::pair<ConstantInt*, Constant*>, 4> ResultListTy;
   SmallDenseMap<PHINode*, ResultListTy> ResultLists;
   SmallDenseMap<PHINode*, Constant*> DefaultResults;
   SmallDenseMap<PHINode*, Type*> ResultTypes;
@@ -3709,7 +3709,7 @@ static bool SwitchToLookupTable(SwitchInst *SI,
       MaxCaseVal = CaseVal;
 
     // Resulting value at phi nodes for this case value.
-    typedef SmallVector<MISTD::pair<PHINode*, Constant*>, 4> ResultsTy;
+    typedef SmallVector<std::pair<PHINode*, Constant*>, 4> ResultsTy;
     ResultsTy Results;
     if (!GetCaseResults(SI, CaseVal, CI.getCaseSuccessor(), &CommonDest,
                         Results, TD))
@@ -3719,12 +3719,12 @@ static bool SwitchToLookupTable(SwitchInst *SI,
     for (ResultsTy::iterator I = Results.begin(), E = Results.end(); I!=E; ++I) {
       if (!ResultLists.count(I->first))
         PHIs.push_back(I->first);
-      ResultLists[I->first].push_back(MISTD::make_pair(CaseVal, I->second));
+      ResultLists[I->first].push_back(std::make_pair(CaseVal, I->second));
     }
   }
 
   // Get the resulting values for the default case.
-  SmallVector<MISTD::pair<PHINode*, Constant*>, 4> DefaultResultsList;
+  SmallVector<std::pair<PHINode*, Constant*>, 4> DefaultResultsList;
   if (!GetCaseResults(SI, 0, SI->getDefaultDest(), &CommonDest,
                       DefaultResultsList, TD))
     return false;

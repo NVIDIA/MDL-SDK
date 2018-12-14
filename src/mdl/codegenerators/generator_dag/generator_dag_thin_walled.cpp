@@ -270,8 +270,6 @@ private:
             return !get_scatter_mode_transmit(bsdf, /*assume_bad=*/true);
 
         case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY:
             return !get_scatter_mode_transmit(bsdf, /*assume_bad=*/true);
 
         case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
@@ -313,18 +311,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
             // no transmission at all
             return true;
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF:
-            // no transmission at all
-            return true;
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF:
 
         default:
             // for now, too complex; assume transmission
@@ -831,8 +817,6 @@ private:
             }
 
         case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
@@ -918,73 +902,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
             // no transmission at all
             return true;
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF:
-            // no transmission at all
-            return true;
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF:
-            {
-                bool l_transmit = get_scatter_mode_transmit(lbsdf, /*assume_bad=*/true);
-                bool r_transmit = get_scatter_mode_transmit(rbsdf, /*assume_bad=*/true);
-
-                if (l_transmit != r_transmit) {
-                    // different
-                    return false;
-                }
-                if (!l_transmit) {
-                    // both do NOT transmit, ok
-                    return true;
-                }
-                // check roughness_u parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "alpha_u"))
-                    return false;
-                // check roughness_v parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "alpha_v"))
-                    return false;
-                // check tint parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "tint"))
-                    return false;
-                // check tangent_u parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "tangent_u"))
-                    return false;
-                // ok
-                return true;
-            }
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF:
-            {
-                bool l_transmit = get_scatter_mode_transmit(lbsdf, /*assume_bad=*/true);
-                bool r_transmit = get_scatter_mode_transmit(rbsdf, /*assume_bad=*/true);
-
-                if (l_transmit != r_transmit) {
-                    // different
-                    return false;
-                }
-                if (!l_transmit) {
-                    // both do NOT transmit, ok
-                    return true;
-                }
-                // check roughness_u parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "n_u"))
-                    return false;
-                // check roughness_v parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "n_v"))
-                    return false;
-                // check tint parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "tint"))
-                    return false;
-                // check tangent_u parameter
-                if (!check_same_parameter(lbsdf, rbsdf, "tangent_u"))
-                    return false;
-                // ok
-                return true;
-            }
 
         default:
             // for now, too complex; assume different transmission
@@ -1077,3 +994,4 @@ bool Generated_code_dag::Material_instance::check_thin_walled_material()
 
 }  // mdl
 }  // mi
+

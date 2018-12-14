@@ -252,7 +252,7 @@ void LowerInvoke::rewriteExpensiveInvoke(InvokeInst *II, unsigned InvokeNo,
 
 /// MarkBlocksLiveIn - Insert BB and all of its predescessors into LiveBBs until
 /// we reach blocks we've already seen.
-static void MarkBlocksLiveIn(BasicBlock *BB, MISTD::set<BasicBlock*> &LiveBBs) {
+static void MarkBlocksLiveIn(BasicBlock *BB, std::set<BasicBlock*> &LiveBBs) {
   if (!LiveBBs.insert(BB).second) return; // already been here.
 
   for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI)
@@ -348,7 +348,7 @@ splitLiveRangesLiveAcrossInvokes(SmallVectorImpl<InvokeInst*> &Invokes) {
       // and spill the value.
 
       // Find all of the blocks that this value is live in.
-      MISTD::set<BasicBlock*> LiveBBs;
+      std::set<BasicBlock*> LiveBBs;
       LiveBBs.insert(Inst->getParent());
       while (!Users.empty()) {
         Instruction *U = Users.back();

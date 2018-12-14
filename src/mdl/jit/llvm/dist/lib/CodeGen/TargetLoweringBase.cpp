@@ -896,12 +896,12 @@ bool TargetLoweringBase::isLegalRC(const TargetRegisterClass *RC) const {
 
 /// findRepresentativeClass - Return the largest legal super-reg register class
 /// of the register class for the specified type and its associated "cost".
-MISTD::pair<const TargetRegisterClass*, uint8_t>
+std::pair<const TargetRegisterClass*, uint8_t>
 TargetLoweringBase::findRepresentativeClass(MVT VT) const {
   const TargetRegisterInfo *TRI = getTargetMachine().getRegisterInfo();
   const TargetRegisterClass *RC = RegClassForVT[VT.SimpleTy];
   if (!RC)
-    return MISTD::make_pair(RC, 0);
+    return std::make_pair(RC, 0);
 
   // Compute the set of all super-register classes.
   BitVector SuperRegRC(TRI->getNumRegClasses());
@@ -919,7 +919,7 @@ TargetLoweringBase::findRepresentativeClass(MVT VT) const {
       continue;
     BestRC = SuperRC;
   }
-  return MISTD::make_pair(BestRC, 1);
+  return std::make_pair(BestRC, 1);
 }
 
 /// computeRegisterProperties - Once all of the register classes are added,
@@ -1308,7 +1308,7 @@ int TargetLoweringBase::InstructionOpcodeToISD(unsigned Opcode) const {
   llvm_unreachable("Unknown instruction type encountered!");
 }
 
-MISTD::pair<unsigned, MVT>
+std::pair<unsigned, MVT>
 TargetLoweringBase::getTypeLegalizationCost(Type *Ty) const {
   LLVMContext &C = Ty->getContext();
   EVT MTy = getValueType(Ty);
@@ -1321,7 +1321,7 @@ TargetLoweringBase::getTypeLegalizationCost(Type *Ty) const {
     LegalizeKind LK = getTypeConversion(C, MTy);
 
     if (LK.first == TypeLegal)
-      return MISTD::make_pair(Cost, MTy.getSimpleVT());
+      return std::make_pair(Cost, MTy.getSimpleVT());
 
     if (LK.first == TypeSplitVector || LK.first == TypeExpandInteger)
       Cost *= 2;

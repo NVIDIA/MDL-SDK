@@ -933,7 +933,7 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF){
   if (!isa<PHINode>(SF.CurInst)) return;  // Nothing fancy to do
 
   // Loop over all of the PHI nodes in the current block, reading their inputs.
-  MISTD::vector<GenericValue> ResultValues;
+  std::vector<GenericValue> ResultValues;
 
   for (; PHINode *PN = dyn_cast<PHINode>(SF.CurInst); ++SF.CurInst) {
     // Search for the value corresponding to this previous bb...
@@ -969,7 +969,7 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   unsigned TypeSize = (size_t)TD.getTypeAllocSize(Ty);
 
   // Avoid malloc-ing zero bytes, use max()...
-  unsigned MemToAlloc = MISTD::max(1U, NumElements * TypeSize);
+  unsigned MemToAlloc = std::max(1U, NumElements * TypeSize);
 
   // Allocate enough memory to hold the type...
   void *Memory = malloc(MemToAlloc);
@@ -1104,7 +1104,7 @@ void Interpreter::visitCallSite(CallSite CS) {
 
 
   SF.Caller = CS;
-  MISTD::vector<GenericValue> ArgVals;
+  std::vector<GenericValue> ArgVals;
   const unsigned NumArgs = SF.Caller.arg_size();
   ArgVals.reserve(NumArgs);
   uint16_t pNum = 1;
@@ -2072,7 +2072,7 @@ GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
 // callFunction - Execute the specified function...
 //
 void Interpreter::callFunction(Function *F,
-                               const MISTD::vector<GenericValue> &ArgVals) {
+                               const std::vector<GenericValue> &ArgVals) {
   assert((ECStack.empty() || ECStack.back().Caller.getInstruction() == 0 ||
           ECStack.back().Caller.arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");

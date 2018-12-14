@@ -232,16 +232,16 @@ private:
 class RecordMatcher : public Matcher {
   /// WhatFor - This is a string indicating why we're recording this.  This
   /// should only be used for comment generation not anything semantic.
-  MISTD::string WhatFor;
+  std::string WhatFor;
 
   /// ResultNo - The slot number in the RecordedNodes vector that this will be,
   /// just printed as a comment.
   unsigned ResultNo;
 public:
-  RecordMatcher(const MISTD::string &whatfor, unsigned resultNo)
+  RecordMatcher(const std::string &whatfor, unsigned resultNo)
     : Matcher(RecordNode), WhatFor(whatfor), ResultNo(resultNo) {}
 
-  const MISTD::string &getWhatFor() const { return WhatFor; }
+  const std::string &getWhatFor() const { return WhatFor; }
   unsigned getResultNo() const { return ResultNo; }
 
   static inline bool classof(const Matcher *N) {
@@ -263,19 +263,19 @@ class RecordChildMatcher : public Matcher {
 
   /// WhatFor - This is a string indicating why we're recording this.  This
   /// should only be used for comment generation not anything semantic.
-  MISTD::string WhatFor;
+  std::string WhatFor;
 
   /// ResultNo - The slot number in the RecordedNodes vector that this will be,
   /// just printed as a comment.
   unsigned ResultNo;
 public:
-  RecordChildMatcher(unsigned childno, const MISTD::string &whatfor,
+  RecordChildMatcher(unsigned childno, const std::string &whatfor,
                      unsigned resultNo)
   : Matcher(RecordChild), ChildNo(childno), WhatFor(whatfor),
     ResultNo(resultNo) {}
 
   unsigned getChildNo() const { return ChildNo; }
-  const MISTD::string &getWhatFor() const { return WhatFor; }
+  const std::string &getWhatFor() const { return WhatFor; }
   unsigned getResultNo() const { return ResultNo; }
 
   static inline bool classof(const Matcher *N) {
@@ -426,7 +426,7 @@ private:
 /// to see if the entire pattern is capable of matching.  This predicate does
 /// not take a node as input.  This is used for subtarget feature checks etc.
 class CheckPatternPredicateMatcher : public Matcher {
-  MISTD::string Predicate;
+  std::string Predicate;
 public:
   CheckPatternPredicateMatcher(StringRef predicate)
     : Matcher(CheckPatternPredicate), Predicate(predicate) {}
@@ -500,9 +500,9 @@ private:
 /// then the match fails.  This is semantically equivalent to a Scope node where
 /// every child does a CheckOpcode, but is much faster.
 class SwitchOpcodeMatcher : public Matcher {
-  SmallVector<MISTD::pair<const SDNodeInfo*, Matcher*>, 8> Cases;
+  SmallVector<std::pair<const SDNodeInfo*, Matcher*>, 8> Cases;
 public:
-  SwitchOpcodeMatcher(const MISTD::pair<const SDNodeInfo*, Matcher*> *cases,
+  SwitchOpcodeMatcher(const std::pair<const SDNodeInfo*, Matcher*> *cases,
                       unsigned numcases)
     : Matcher(SwitchOpcode), Cases(cases, cases+numcases) {}
 
@@ -554,9 +554,9 @@ private:
 /// then the match fails.  This is semantically equivalent to a Scope node where
 /// every child does a CheckType, but is much faster.
 class SwitchTypeMatcher : public Matcher {
-  SmallVector<MISTD::pair<MVT::SimpleValueType, Matcher*>, 8> Cases;
+  SmallVector<std::pair<MVT::SimpleValueType, Matcher*>, 8> Cases;
 public:
-  SwitchTypeMatcher(const MISTD::pair<MVT::SimpleValueType, Matcher*> *cases,
+  SwitchTypeMatcher(const std::pair<MVT::SimpleValueType, Matcher*> *cases,
                     unsigned numcases)
   : Matcher(SwitchType), Cases(cases, cases+numcases) {}
 
@@ -692,21 +692,21 @@ class CheckComplexPatMatcher : public Matcher {
   unsigned MatchNumber;
 
   /// Name - The name of the node we're matching, for comment emission.
-  MISTD::string Name;
+  std::string Name;
 
   /// FirstResult - This is the first slot in the RecordedNodes list that the
   /// result of the match populates.
   unsigned FirstResult;
 public:
   CheckComplexPatMatcher(const ComplexPattern &pattern, unsigned matchnumber,
-                         const MISTD::string &name, unsigned firstresult)
+                         const std::string &name, unsigned firstresult)
     : Matcher(CheckComplexPat), Pattern(pattern), MatchNumber(matchnumber),
       Name(name), FirstResult(firstresult) {}
 
   const ComplexPattern &getPattern() const { return Pattern; }
   unsigned getMatchNumber() const { return MatchNumber; }
 
-  const MISTD::string getName() const { return Name; }
+  const std::string getName() const { return Name; }
   unsigned getFirstResult() const { return FirstResult; }
 
   static inline bool classof(const Matcher *N) {
@@ -821,13 +821,13 @@ private:
 /// EmitStringIntegerMatcher - A target constant whose value is represented
 /// by a string.
 class EmitStringIntegerMatcher : public Matcher {
-  MISTD::string Val;
+  std::string Val;
   MVT::SimpleValueType VT;
 public:
-  EmitStringIntegerMatcher(const MISTD::string &val, MVT::SimpleValueType vt)
+  EmitStringIntegerMatcher(const std::string &val, MVT::SimpleValueType vt)
     : Matcher(EmitStringInteger), Val(val), VT(vt) {}
 
-  const MISTD::string &getValue() const { return Val; }
+  const std::string &getValue() const { return Val; }
   MVT::SimpleValueType getVT() const { return VT; }
 
   static inline bool classof(const Matcher *N) {
@@ -983,7 +983,7 @@ private:
 /// EmitNodeMatcherCommon - Common class shared between EmitNode and
 /// MorphNodeTo.
 class EmitNodeMatcherCommon : public Matcher {
-  MISTD::string OpcodeName;
+  std::string OpcodeName;
   const SmallVector<MVT::SimpleValueType, 3> VTs;
   const SmallVector<unsigned, 6> Operands;
   bool HasChain, HasInGlue, HasOutGlue, HasMemRefs;
@@ -993,7 +993,7 @@ class EmitNodeMatcherCommon : public Matcher {
   /// operands in the root of the pattern.  The rest are appended to this node.
   int NumFixedArityOperands;
 public:
-  EmitNodeMatcherCommon(const MISTD::string &opcodeName,
+  EmitNodeMatcherCommon(const std::string &opcodeName,
                         const MVT::SimpleValueType *vts, unsigned numvts,
                         const unsigned *operands, unsigned numops,
                         bool hasChain, bool hasInGlue, bool hasOutGlue,
@@ -1004,7 +1004,7 @@ public:
       HasChain(hasChain), HasInGlue(hasInGlue), HasOutGlue(hasOutGlue),
       HasMemRefs(hasmemrefs), NumFixedArityOperands(numfixedarityoperands) {}
 
-  const MISTD::string &getOpcodeName() const { return OpcodeName; }
+  const std::string &getOpcodeName() const { return OpcodeName; }
 
   unsigned getNumVTs() const { return VTs.size(); }
   MVT::SimpleValueType getVT(unsigned i) const {
@@ -1043,7 +1043,7 @@ class EmitNodeMatcher : public EmitNodeMatcherCommon {
   virtual void anchor();
   unsigned FirstResultSlot;
 public:
-  EmitNodeMatcher(const MISTD::string &opcodeName,
+  EmitNodeMatcher(const std::string &opcodeName,
                   const MVT::SimpleValueType *vts, unsigned numvts,
                   const unsigned *operands, unsigned numops,
                   bool hasChain, bool hasInFlag, bool hasOutFlag,
@@ -1066,7 +1066,7 @@ class MorphNodeToMatcher : public EmitNodeMatcherCommon {
   virtual void anchor();
   const PatternToMatch &Pattern;
 public:
-  MorphNodeToMatcher(const MISTD::string &opcodeName,
+  MorphNodeToMatcher(const std::string &opcodeName,
                      const MVT::SimpleValueType *vts, unsigned numvts,
                      const unsigned *operands, unsigned numops,
                      bool hasChain, bool hasInFlag, bool hasOutFlag,

@@ -100,7 +100,7 @@ protected:
 private:
 
     /// Caches the error message.
-    mutable MISTD::string m_error_message;
+    mutable std::string m_error_message;
 };
 
 /// This implementation of mi::neuraylib::IReader basically wraps DISK::File.

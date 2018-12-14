@@ -24,11 +24,11 @@ using namespace sys;
 
 static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
                     const char **env, const StringRef **Redirects,
-                    unsigned memoryLimit, MISTD::string *ErrMsg);
+                    unsigned memoryLimit, std::string *ErrMsg);
 
 int sys::ExecuteAndWait(StringRef Program, const char **args, const char **envp,
                         const StringRef **redirects, unsigned secondsToWait,
-                        unsigned memoryLimit, MISTD::string *ErrMsg,
+                        unsigned memoryLimit, std::string *ErrMsg,
                         bool *ExecutionFailed) {
   ProcessInfo PI;
   if (Execute(PI, Program, args, envp, redirects, memoryLimit, ErrMsg)) {
@@ -46,7 +46,7 @@ int sys::ExecuteAndWait(StringRef Program, const char **args, const char **envp,
 
 ProcessInfo sys::ExecuteNoWait(StringRef Program, const char **args,
                                const char **envp, const StringRef **redirects,
-                               unsigned memoryLimit, MISTD::string *ErrMsg,
+                               unsigned memoryLimit, std::string *ErrMsg,
                                bool *ExecutionFailed) {
   ProcessInfo PI;
   if (ExecutionFailed)

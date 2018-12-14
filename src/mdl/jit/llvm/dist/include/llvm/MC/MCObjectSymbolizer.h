@@ -68,7 +68,7 @@ public:
 
 private:
   typedef DenseMap<uint64_t, object::RelocationRef> AddrToRelocMap;
-  typedef MISTD::vector<object::SectionRef> SortedSectionList;
+  typedef std::vector<object::SectionRef> SortedSectionList;
   SortedSectionList SortedSections;
   AddrToRelocMap AddrToReloc;
 

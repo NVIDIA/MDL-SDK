@@ -76,7 +76,7 @@ namespace mdl {
 
 // hash functor for simple_string
 template<typename String>
-struct string_hash : public MISTD::hash<String> {
+struct string_hash : public std::hash<String> {
 };
 #endif
 
@@ -566,7 +566,7 @@ public:
     }
 
     /// Returns the interface ID of the most derived interface.
-    mi::base::Uuid get_iid() const
+    mi::base::Uuid get_iid() const MDL_OVERRIDE
     {
         return typename I::IID();
     }
@@ -657,7 +657,7 @@ public:
     size_type max_size() const { return 0xffffffff; }
 
     /// Memory is allocated for \c count objects of type \c T but objects are not constructed.
-    pointer allocate( size_type count, MISTD::allocator<void>::const_pointer /*hint*/ = 0 ) const
+    pointer allocate( size_type count, std::allocator<void>::const_pointer /*hint*/ = 0 ) const
     {
 #ifdef DEBUG
         if (count == 1) {
@@ -693,7 +693,7 @@ public:
     template <typename U, typename... Args>
     void construct(U *p, Args&&... args) 
     {
-        ::new((void *)p) U(MISTD::forward<Args>(args)...);
+        ::new((void *)p) U(std::forward<Args>(args)...);
     }
 #endif
 
@@ -794,6 +794,9 @@ public:
     /// Return the size of the VLA.
     size_t size() const { return m_size; }
 
+    /// Get the allocator.
+    A *get_allocator() const { return m_alloc; }
+
 private:
     A * const    m_alloc;
     T * const    m_data;
@@ -849,6 +852,9 @@ public:
     /// Return the size of the VLA.
     size_t size() const { return m_size; }
 
+    /// Get the allocator.
+    A *get_allocator() { return m_alloc; }
+
 private:
     A            *m_alloc;
     T            *m_data;
@@ -861,7 +867,7 @@ template<typename T, typename A>
 inline size_t dimension_of(VLA<T,A> const &vla) { return vla.size(); }
 
 template<typename T, typename A>
-inline size_t dimension_of(MISTD::vector<T,A> const &vec) { return vec.size(); }
+inline size_t dimension_of(std::vector<T,A> const &vec) { return vec.size(); }
 
 #ifdef USE_OWN_STRING
 /// A string using a IAllocator.
@@ -884,21 +890,21 @@ typedef simple_string<
 
 #else
 /// A string using a IAllocator.
-typedef MISTD::basic_string<
+typedef std::basic_string<
     char,
-    MISTD::char_traits<char>,
+    std::char_traits<char>,
     Mi_allocator<char> > string;
 
 /// A wide string using a IAllocator.
-typedef MISTD::basic_string<
+typedef std::basic_string<
     wchar_t,
-    MISTD::char_traits<wchar_t>,
+    std::char_traits<wchar_t>,
     Mi_allocator<wchar_t> > wstring;
 
 /// A u32 string using a IAllocator.
-typedef MISTD::basic_string<
+typedef std::basic_string<
     unsigned,
-    MISTD::char_traits<unsigned>,
+    std::char_traits<unsigned>,
     Mi_allocator<unsigned> > u32string;
 
 #endif
@@ -926,7 +932,7 @@ inline size_t dynamic_memory_consumption (const string& s)
 template<typename T>
 struct vector
 {
-    typedef MISTD::vector<T, Mi_allocator<T> > Type;
+    typedef std::vector<T, Mi_allocator<T> > Type;
 };
 
 /// A hashmap from Key * to Tp, using a IAllocator.
@@ -938,9 +944,9 @@ template <
     typename EqualKey = Equal_ptr<Key>
 >
 struct ptr_hash_map {
-    typedef MISTD::unordered_map<
+    typedef std::unordered_map<
         Key *, Tp, HashFcn, EqualKey,
-        Mi_allocator<typename MISTD::unordered_map<Key *, Tp, HashFcn, EqualKey>::value_type>
+        Mi_allocator<typename std::unordered_map<Key *, Tp, HashFcn, EqualKey>::value_type>
     > Type;
 };
 #else
@@ -963,13 +969,13 @@ struct ptr_hash_map {
 template <
     typename Key,
     typename Tp,
-    typename HashFcn = MISTD::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename HashFcn = std::hash<Key>,
+    typename EqualKey = std::equal_to<Key>
 >
 struct hash_map {
-    typedef MISTD::unordered_map<
+    typedef std::unordered_map<
         Key, Tp, HashFcn, EqualKey,
-        Mi_allocator<typename MISTD::unordered_map<Key, Tp, HashFcn, EqualKey>::value_type>
+        Mi_allocator<typename std::unordered_map<Key, Tp, HashFcn, EqualKey>::value_type>
     > Type;
 };
 #else
@@ -977,7 +983,7 @@ template <
     typename Key,
     typename Tp,
     typename HashFcn = boost::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename EqualKey = std::equal_to<Key>
 >
 struct hash_map {
     typedef boost::unordered_map<
@@ -991,18 +997,18 @@ struct hash_map {
 #if MDL_STD_HAS_UNORDERED
 template <
     typename Key,
-    typename HashFcn = MISTD::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename HashFcn = std::hash<Key>,
+    typename EqualKey = std::equal_to<Key>
 >
 struct hash_set {
-    typedef MISTD::unordered_set<
+    typedef std::unordered_set<
         Key, HashFcn, EqualKey, Mi_allocator<Key> > Type;
 };
 #else
 template <
     typename Key,
     typename HashFcn = boost::hash<Key>,
-    typename EqualKey = MISTD::equal_to<Key>
+    typename EqualKey = std::equal_to<Key>
 >
 struct hash_set {
     typedef boost::unordered_set<
@@ -1018,7 +1024,7 @@ template <
     typename EqualKey = Equal_ptr<Key>
 >
 struct ptr_hash_set {
-    typedef MISTD::unordered_set<
+    typedef std::unordered_set<
         Key *, HashFcn, EqualKey, Mi_allocator<Key *> > Type;
 };
 #else
@@ -1036,51 +1042,51 @@ struct ptr_hash_set {
 /// A set using a IAllocator.
 template <
     typename Key,
-    typename Compare = MISTD::less<Key>
+    typename Compare = std::less<Key>
 >
 struct set {
-    typedef MISTD::set<Key, Compare, Mi_allocator<Key> > Type;
+    typedef std::set<Key, Compare, Mi_allocator<Key> > Type;
 };
 
 /// A list using a IAllocator.
 template <typename Tp>
 struct list {
-    typedef MISTD::list<Tp, Mi_allocator<Tp> > Type;
+    typedef std::list<Tp, Mi_allocator<Tp> > Type;
 };
 
 /// A deque using a IAllocator.
 template <typename Tp>
 struct deque {
-    typedef MISTD::deque<Tp, Mi_allocator<Tp> > Type;
+    typedef std::deque<Tp, Mi_allocator<Tp> > Type;
 };
 
 /// A queue using a IAllocator.
 template <
     typename Tp,
-    typename Sequence = MISTD::deque<Tp, Mi_allocator<Tp> >
+    typename Sequence = std::deque<Tp, Mi_allocator<Tp> >
 >
 struct queue {
-    typedef MISTD::queue<Tp, Sequence> Type;
+    typedef std::queue<Tp, Sequence> Type;
 };
 
 /// A stack using a IAllocator.
 template <
     typename Tp,
-    typename Sequence = MISTD::deque<Tp, Mi_allocator<Tp> >
+    typename Sequence = std::deque<Tp, Mi_allocator<Tp> >
 >
 struct stack {
-    typedef MISTD::stack<Tp, Sequence> Type;
+    typedef std::stack<Tp, Sequence> Type;
 };
 
 /// A map using a IAllocator.
 template<
     typename Key,
     typename Tp,
-    typename Compare = MISTD::less<Key>
+    typename Compare = std::less<Key>
 >
 struct map {
-    typedef MISTD::map<
-        Key, Tp, Compare, Mi_allocator<MISTD::pair<const Key, Tp> > > Type;
+    typedef std::map<
+        Key, Tp, Compare, Mi_allocator<std::pair<const Key, Tp> > > Type;
 };
 
 }  // mdl

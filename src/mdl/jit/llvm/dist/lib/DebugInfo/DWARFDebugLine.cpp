@@ -87,7 +87,7 @@ void DWARFDebugLine::LineTable::dump(raw_ostream &OS) const {
   if (!Rows.empty()) {
     OS << "Address            Line   Column File   ISA Flags\n"
        << "------------------ ------ ------ ------ --- -------------\n";
-    for (MISTD::vector<Row>::const_iterator pos = Rows.begin(),
+    for (std::vector<Row>::const_iterator pos = Rows.begin(),
          end = Rows.end(); pos != end; ++pos)
       pos->dump(OS);
   }
@@ -123,7 +123,7 @@ void DWARFDebugLine::State::finalize() {
   }
   // Sort all sequences so that address lookup will work faster.
   if (!Sequences.empty()) {
-    MISTD::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
+    std::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
     // Note: actually, instruction address ranges of sequences should not
     // overlap (in shared objects and executables). If they do, the address
     // lookup would still work, though, but result would be ambiguous.
@@ -150,7 +150,7 @@ DWARFDebugLine::getLineTable(uint32_t offset) const {
 const DWARFDebugLine::LineTable *
 DWARFDebugLine::getOrParseLineTable(DataExtractor debug_line_data,
                                     uint32_t offset) {
-  MISTD::pair<LineTableIter, bool> pos =
+  std::pair<LineTableIter, bool> pos =
     LineTableMap.insert(LineTableMapTy::value_type(offset, LineTable()));
   if (pos.second) {
     // Parse and cache the line table for at this offset.
@@ -273,7 +273,7 @@ DWARFDebugLine::parseStatementTable(DataExtractor debug_line_data,
           // If this address is in our relocation map, apply the relocation.
           RelocAddrMap::const_iterator AI = RMap->find(*offset_ptr);
           if (AI != RMap->end()) {
-             const MISTD::pair<uint8_t, int64_t> &R = AI->second;
+             const std::pair<uint8_t, int64_t> &R = AI->second;
              state.Address = debug_line_data.getAddress(offset_ptr) + R.second;
           } else
             state.Address = debug_line_data.getAddress(offset_ptr);
@@ -488,7 +488,7 @@ DWARFDebugLine::LineTable::lookupAddress(uint64_t address) const {
   sequence.LowPC = address;
   SequenceIter first_seq = Sequences.begin();
   SequenceIter last_seq = Sequences.end();
-  SequenceIter seq_pos = MISTD::lower_bound(first_seq, last_seq, sequence,
+  SequenceIter seq_pos = std::lower_bound(first_seq, last_seq, sequence,
       DWARFDebugLine::Sequence::orderByLowPC);
   DWARFDebugLine::Sequence found_seq;
   if (seq_pos == last_seq) {
@@ -509,7 +509,7 @@ DWARFDebugLine::LineTable::lookupAddress(uint64_t address) const {
   row.Address = address;
   RowIter first_row = Rows.begin() + found_seq.FirstRowIndex;
   RowIter last_row = Rows.begin() + found_seq.LastRowIndex;
-  RowIter row_pos = MISTD::lower_bound(first_row, last_row, row,
+  RowIter row_pos = std::lower_bound(first_row, last_row, row,
       DWARFDebugLine::Row::orderByAddress);
   if (row_pos == last_row) {
     return found_seq.LastRowIndex - 1;
@@ -527,7 +527,7 @@ DWARFDebugLine::LineTable::lookupAddress(uint64_t address) const {
 bool
 DWARFDebugLine::LineTable::lookupAddressRange(uint64_t address,
                                        uint64_t size, 
-                                       MISTD::vector<uint32_t>& result) const {
+                                       std::vector<uint32_t>& result) const {
   if (Sequences.empty())
     return false;
   uint64_t end_addr = address + size;
@@ -536,7 +536,7 @@ DWARFDebugLine::LineTable::lookupAddressRange(uint64_t address,
   sequence.LowPC = address;
   SequenceIter first_seq = Sequences.begin();
   SequenceIter last_seq = Sequences.end();
-  SequenceIter seq_pos = MISTD::lower_bound(first_seq, last_seq, sequence,
+  SequenceIter seq_pos = std::lower_bound(first_seq, last_seq, sequence,
       DWARFDebugLine::Sequence::orderByLowPC);
   if (seq_pos == last_seq || seq_pos->LowPC != address) {
     if (seq_pos == first_seq)
@@ -563,7 +563,7 @@ DWARFDebugLine::LineTable::lookupAddressRange(uint64_t address,
       row.Address = address;
       RowIter first_row = Rows.begin() + cur_seq.FirstRowIndex;
       RowIter last_row = Rows.begin() + cur_seq.LastRowIndex;
-      RowIter row_pos = MISTD::upper_bound(first_row, last_row, row,
+      RowIter row_pos = std::upper_bound(first_row, last_row, row,
                                          DWARFDebugLine::Row::orderByAddress);
       // The 'row_pos' iterator references the first row that is greater than
       // our start address. Unless that's the first row, we want to start at
@@ -581,7 +581,7 @@ DWARFDebugLine::LineTable::lookupAddressRange(uint64_t address,
       row.Address = end_addr;
       RowIter first_row = Rows.begin() + cur_seq.FirstRowIndex;
       RowIter last_row = Rows.begin() + cur_seq.LastRowIndex;
-      RowIter row_pos = MISTD::upper_bound(first_row, last_row, row,
+      RowIter row_pos = std::upper_bound(first_row, last_row, row,
                                          DWARFDebugLine::Row::orderByAddress);
       // The 'row_pos' iterator references the first row that is greater than
       // our end address.  The row before that is the last row we want.
@@ -604,7 +604,7 @@ DWARFDebugLine::LineTable::lookupAddressRange(uint64_t address,
 bool
 DWARFDebugLine::LineTable::getFileNameByIndex(uint64_t FileIndex,
                                               bool NeedsAbsoluteFilePath,
-                                              MISTD::string &Result) const {
+                                              std::string &Result) const {
   if (FileIndex == 0 || FileIndex > Prologue.FileNames.size())
     return false;
   const FileNameEntry &Entry = Prologue.FileNames[FileIndex - 1];

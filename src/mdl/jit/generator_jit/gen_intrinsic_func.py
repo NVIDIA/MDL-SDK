@@ -125,6 +125,7 @@ class SignatureParser:
 			"double2[2]" : "D2A2",
 			"double3[2]" : "D3A2",
 			"double4[2]" : "D4A2",
+			"int[3]"     : "IA3",
 
 			"float[<N>]" : "FAN",
 			"float[N]"   : "FAn",
@@ -149,6 +150,7 @@ class SignatureParser:
 			"float[WAVELENGTH_BASE_MAX]" : "FAW",
 			"coordinate_space"           : "ECS",
 			"wrap_mode"                  : "EWM",
+			"mbsdf_part"                 : "EMP",
 			"Res_data_pair *"            : "PT",
 
 			# unsupported types
@@ -294,6 +296,7 @@ class SignatureParser:
 			"D2A2" : "D2",
 			"D3A2" : "D3",
 			"D4A2" : "D4",
+			"IA3"  : "II",
 		}
 		return cases.get(type_code, None)
 
@@ -650,10 +653,6 @@ class SignatureParser:
 				# support dot with 2 arguments
 				self.intrinsic_modes[name + signature] = "math::dot"
 				return True
-			elif name == "min" or name == "max":
-				# support min/max with 2 arguments
-				self.intrinsic_modes[name + signature] = "math::min|max"
-				return True
 			elif name == "step":
 				# support step with 2 arguments
 				self.intrinsic_modes[name + signature] = "math::step"
@@ -665,6 +664,10 @@ class SignatureParser:
 			elif name == "emission_color":
 				# unsupported emission_color(float[<N>], float[N]), emission_color(color)
 				self.unsupported_intrinsics[name] = "unsupported"
+				return True
+			elif name == "eval_at_wavelength":
+				# support eval_at_wavelength(color,float)
+				self.intrinsic_modes[name + signature] = "math::eval_at_wavelength"
 				return True
 		elif len(params) == 1:
 			if name == "any" or name == "all":
@@ -689,6 +692,10 @@ class SignatureParser:
 				# support min_value/max_value with 1 argument
 				self.intrinsic_modes[name + signature] = "math::min_value|max_value"
 				return True
+			elif name == "min_value_wavelength" or name == "max_value_wavelength":
+				# support min_value_wavelength/max_value_wavelength with 1 argument
+				self.intrinsic_modes[name + signature] = "math::min_value_wavelength|max_value_wavelength"
+				return True
 			elif name == "isnan" or name == "isfinite":
 				if self.get_vector_type_and_size(params[0]) or self.is_atomic_type(params[0]):
 					# support all isnan/isfinite with one argument
@@ -705,6 +712,10 @@ class SignatureParser:
 			elif name == "normalize":
 				# support normalize(floatX)
 				self.intrinsic_modes[name + signature] = "math::normalize"
+				return True
+			elif name == "DX" or name == "DY":
+				# support DX(floatX), DY(floatX)
+				self.intrinsic_modes[name + signature] = "math::DX|DY"
 				return True
 
 		if all_atomic and self.is_atomic_type(ret_type):
@@ -947,7 +958,8 @@ class SignatureParser:
 		mode = self.intrinsic_modes.get(intrinsic + signature)
 		func_index = self.get_function_index((intrinsic, signature))
 
-		self.write(f, "if (llvm::Function *func = m_intrinsics[%d])\n" % func_index)
+		self.write(f, "if (llvm::Function *func = m_intrinsics[%d * 2 + return_derivs])\n" %
+			func_index)
 		self.indent += 1
 		self.write(f, "return func;\n")
 		self.indent -= 1
@@ -971,8 +983,8 @@ class SignatureParser:
 
 			self.write(f, "if (func != NULL) {\n")
 			self.indent += 1
-			self.write(f, "m_code_gen.create_context_data(func_def, func);\n")
-			self.write(f, "return m_intrinsics[%d] = func;\n" % func_index)
+			self.write(f, "m_code_gen.create_context_data(func_def, return_derivs, func);\n")
+			self.write(f, "return m_intrinsics[%d * 2 + return_derivs] = func;\n" % func_index)
 			self.indent -= 1
 			self.write(f, "}\n")
 
@@ -983,7 +995,8 @@ class SignatureParser:
 		if suffix[-1] == '_':
 			# no parameters
 			suffix = suffix[:-1]
-		self.write(f, "return m_intrinsics[%d] = create_%s_%s_%s(func_def);\n" % (func_index, mod_name, intrinsic, suffix))
+		self.write(f, "return m_intrinsics[%d * 2 + return_derivs] = create_%s_%s_%s(func_def, return_derivs);\n" %
+			(func_index, mod_name, intrinsic, suffix))
 
 	def create_ir_constructor(self, f, intrinsic, signature):
 		"""Create the evaluation call for a given intrinsic, signature pair."""
@@ -999,7 +1012,7 @@ class SignatureParser:
 			suffix = suffix[:-1]
 
 		self.write(f, "/// Generate LLVM IR for %s::%s_%s()\n" % (mod_name, intrinsic, suffix))
-		self.write(f, "llvm::Function *create_%s_%s_%s(mi::mdl::IDefinition const *func_def)\n" % (mod_name, intrinsic, suffix))
+		self.write(f, "llvm::Function *create_%s_%s_%s(mi::mdl::IDefinition const *func_def, bool return_derivs)\n" % (mod_name, intrinsic, suffix))
 		self.write(f, "{\n")
 		self.indent += 1
 		self.create_ir_constructor_body(f, intrinsic, signature)
@@ -1023,7 +1036,7 @@ class SignatureParser:
 		if mode == None:
 			print "error: ", intrinsic + signature
 
-		self.write(f, 'Function_instance inst(m_code_gen.get_allocator(), func_def);\n')
+		self.write(f, 'Function_instance inst(m_code_gen.get_allocator(), func_def, return_derivs);\n')
 		self.write(f, 'LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::%s");\n' % self.m_intrinsic_mods[intrinsic])
 		self.write(f, "llvm::Function    *func     = ctx_data->get_function();\n")
 
@@ -1056,19 +1069,451 @@ class SignatureParser:
 			f.write(');\n\n')
 
 		if mode == "math::all_atomic":
-			self.write(f, "// atomic\n")
-			self.write(f, "llvm::Value *call_args[%d] = {\n" % len(params))
-			self.indent += 1
-			idx = 0
-			for param in params:
-				self.write(f, "%s,\n" % chr(ord('a') + idx))
-				idx += 1
-			self.indent -= 1
-			self.write(f, "};\n")
 			suffix = self.get_type_suffix(params[0])
+			suffix_upper = suffix.upper()
 			enum_value = self.get_runtime_enum(intrinsic + suffix)
-			self.write(f, "llvm::Function *callee = get_runtime_func(%s);\n" % enum_value)
-			self.write(f, "res = ctx->CreateCall(callee, call_args);\n")
+			type = self.m_inv_types[params[0]]
+
+			self.format_code(f,
+			"""// atomic
+			llvm::Function *callee = get_runtime_func(%s);
+			llvm::Value *call_args[%d];
+			if (inst.get_return_derivs()) {
+			""" % (enum_value, len(params)))
+
+			for idx, param in enumerate(params):
+				self.write(f, "call_args[%d] = ctx.get_dual_val(%s);\n"
+					% (idx, chr(ord('a') + idx)))
+
+			self.write(f, "llvm::Value *val = ctx->CreateCall(callee, call_args);\n")
+
+			# Calculate derivatives for specific functions
+			if enum_value == "RT_ABS" + suffix_upper:
+				self.format_code(f, """
+				// abs'(a) = a < 0 ? -a' : a'
+				llvm::Value *is_neg = ctx->CreateFCmpOLT(ctx.get_dual_val(a), ctx.get_constant(%(type)s(0)));
+				llvm::Value *a_dx = ctx.get_dual_dx(a);
+				llvm::Value *a_dy = ctx.get_dual_dy(a);
+				llvm::Value *neg_a_dx = ctx->CreateFNeg(a_dx);
+				llvm::Value *neg_a_dy = ctx->CreateFNeg(a_dy);
+
+				llvm::Value *dx = ctx->CreateSelect(is_neg, neg_a_dx, a_dx);
+				llvm::Value *dy = ctx->CreateSelect(is_neg, neg_a_dy, a_dy);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_ACOS" + suffix_upper or enum_value == "RT_ASIN" + suffix_upper:
+				self.format_code(f, """
+				// acos'(a) = -a' / sqrt(1 - a^2)  for x in (-1, 1), 0 otherwise
+				// asin'(a) =  a' / sqrt(1 - a^2)  for x in (-1, 1), 0 otherwise
+				llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *a_square = ctx->CreateFMul(a_val, a_val);
+				llvm::Value *sqrt_args[1] = { ctx->CreateFSub(ctx.get_constant(%(type)s(1)), a_square) };
+				llvm::Value *sqrt_res = ctx->CreateCall(sqrt_func, sqrt_args);
+
+				llvm::Value *dx_res = ctx->CreateFDiv(ctx.get_dual_dx(a), sqrt_res);
+				llvm::Value *dy_res = ctx->CreateFDiv(ctx.get_dual_dy(a), sqrt_res);
+				""" % { "sqrt_name": "RT_SQRT" + suffix_upper, "type": type })
+
+				if enum_value == "RT_ACOS" + suffix_upper:
+					self.format_code(f, """
+					dx_res = ctx->CreateFNeg(dx_res);
+					dy_res = ctx->CreateFNeg(dy_res);
+					""")
+
+				self.format_code(f, """
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, ctx.get_constant(%(type)s(-1)));
+				llvm::Value *too_big = ctx->CreateFCmpOGE(a_val, ctx.get_constant(%(type)s(1)));
+				llvm::Value *is_undef = ctx->CreateOr(too_small, too_big);
+
+				llvm::Value *dx = ctx->CreateSelect(is_undef, ctx.get_constant(%(type)s(0)), dx_res);
+				llvm::Value *dy = ctx->CreateSelect(is_undef, ctx.get_constant(%(type)s(0)), dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % {"type": type })
+
+			elif enum_value == "RT_ATAN" + suffix_upper:
+				self.format_code(f, """
+				// atan'(a) = a' / (a^2 + 1)
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *a_square = ctx->CreateFMul(a_val, a_val);
+				llvm::Value *divisor = ctx->CreateFAdd(a_square, ctx.get_constant(%(type)s(1)));
+
+				llvm::Value *dx = ctx->CreateFDiv(ctx.get_dual_dx(a), divisor);
+				llvm::Value *dy = ctx->CreateFDiv(ctx.get_dual_dy(a), divisor);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_ATAN2" + suffix_upper:
+				self.format_code(f, """
+				// atan2'(a, b) = (b(x) * a'(x) - a(x) * b'(x)) / (a(x)^2 + b(x)^2)
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *b_val = ctx.get_dual_val(b);
+				llvm::Value *a_square = ctx->CreateFMul(a_val, a_val);
+				llvm::Value *b_square = ctx->CreateFMul(b_val, b_val);
+				llvm::Value *divisor = ctx->CreateFAdd(a_square, b_square);
+
+				llvm::Value *dividend_dx = ctx->CreateFSub(
+					ctx->CreateFMul(b_val, ctx.get_dual_dx(a)),
+					ctx->CreateFMul(a_val, ctx.get_dual_dx(b)));
+				llvm::Value *dividend_dy = ctx->CreateFSub(
+					ctx->CreateFMul(b_val, ctx.get_dual_dy(a)),
+					ctx->CreateFMul(a_val, ctx.get_dual_dy(b)));
+
+				llvm::Value *dx = ctx->CreateFDiv(dividend_dx, divisor);
+				llvm::Value *dy = ctx->CreateFDiv(dividend_dy, divisor);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_MDL_CLAMP" + suffix_upper:
+				self.format_code(f, """
+				// clamp'(a, b, c) = a' for x in (b, c), b' for x <= b, c' for x >= c
+
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *is_too_small = ctx->CreateFCmpOLE(a_val, ctx.get_dual_val(b));
+				llvm::Value *is_too_big = ctx->CreateFCmpOGE(a_val, ctx.get_dual_val(c));
+				llvm::Value *is_out_of_interval = ctx->CreateOr(is_too_small, is_too_big);
+
+				llvm::Value *out_of_interval_dx = ctx->CreateSelect(
+					is_too_small, ctx.get_dual_dx(b), ctx.get_dual_dx(c));
+				llvm::Value *out_of_interval_dy = ctx->CreateSelect(
+					is_too_small, ctx.get_dual_dy(b), ctx.get_dual_dy(c));
+
+				llvm::Value *dx = ctx->CreateSelect(is_out_of_interval, out_of_interval_dx, ctx.get_dual_dx(a));
+				llvm::Value *dy = ctx->CreateSelect(is_out_of_interval, out_of_interval_dy, ctx.get_dual_dy(a));
+				res = ctx.get_dual(val, dx, dy);
+				""" % {"type": type })
+
+			elif enum_value == "RT_COS" + suffix_upper:
+				self.format_code(f, """
+				// cos'(a) = a' * (-sin(a))
+				llvm::Function *sin_func = get_runtime_func(%(sin_name)s);
+				llvm::Value *sin_val = ctx->CreateCall(sin_func, call_args);
+				llvm::Value *neg_sin_val = ctx->CreateFNeg(sin_val);
+
+				llvm::Value *dx = ctx->CreateFMul(ctx.get_dual_dx(a), neg_sin_val);
+				llvm::Value *dy = ctx->CreateFMul(ctx.get_dual_dy(a), neg_sin_val);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "sin_name": "RT_SIN" + suffix_upper })
+
+			elif enum_value == "RT_EXP" + suffix_upper:
+				self.format_code(f, """
+				// exp'(a) = a' * exp(a)
+				llvm::Value *dx = ctx->CreateFMul(ctx.get_dual_dx(a), val);
+				llvm::Value *dy = ctx->CreateFMul(ctx.get_dual_dy(a), val);
+				res = ctx.get_dual(val, dx, dy);
+				""")
+
+			elif enum_value == "RT_MDL_EXP2" + suffix_upper:
+				self.format_code(f, """
+				// exp2'(a) = log(2) * a' * exp2(a)
+				llvm::Value *log_2 = ctx.get_constant(%(type)s(0.69314718055994530941723212145818));
+				llvm::Value *val_log_2 = ctx->CreateFMul(log_2, val);
+				llvm::Value *dx = ctx->CreateFMul(ctx.get_dual_dx(a), val_log_2);
+				llvm::Value *dy = ctx->CreateFMul(ctx.get_dual_dy(a), val_log_2);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type } )
+
+			elif enum_value == "RT_FMOD" + suffix_upper:
+				self.format_code(f, """
+				// fmod(a, b) = a - b * int(a / b)
+				// fmod'(a, b) = a' - (b * int'(a / b) + b' * int(a / b)) = a' - b' * int(a / b)
+				// Note: FPToSI rounds towards zero
+				llvm::Value *int_a_over_b = ctx->CreateFPToSI(
+					ctx->CreateFDiv(ctx.get_dual_val(a), ctx.get_dual_val(b)),
+					m_code_gen.m_type_mapper.get_int_type());
+				llvm::Value *trimmed_a_over_b = ctx->CreateSIToFP(
+					int_a_over_b, m_code_gen.m_type_mapper.get_float_type());
+
+				llvm::Value *dx = ctx->CreateFSub(
+					ctx.get_dual_dx(a),
+					ctx->CreateFMul(ctx.get_dual_dx(b), trimmed_a_over_b));
+
+				llvm::Value *dy = ctx->CreateFSub(
+					ctx.get_dual_dy(a),
+					ctx->CreateFMul(ctx.get_dual_dy(b), trimmed_a_over_b));
+
+				res = ctx.get_dual(val, dx, dy);
+				""")
+
+			elif enum_value == "RT_MDL_FRAC" + suffix_upper:
+				self.format_code(f, """
+				// frac'(a) = a'
+				llvm::Value *dx = ctx.get_dual_dx(a);
+				llvm::Value *dy = ctx.get_dual_dy(a);
+				res = ctx.get_dual(val, dx, dy);
+				""")
+
+			elif enum_value == "RT_LOG" + suffix_upper:
+				self.format_code(f, """
+				// log'(a) = a' * 1/a   for a > 0, 0 otherwise
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *r_a_val = ctx->CreateFDiv(ctx.get_constant(%(type)s(1)), a_val);
+				llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), r_a_val);
+				llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), r_a_val);
+
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+
+				llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_MDL_LOG2" + suffix_upper:
+				self.format_code(f, """
+				// log2'(a) = a' * 1/a * 1/log(2)   for a > 0, 0 otherwise
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *r_a_log_2 = ctx->CreateFDiv(
+					ctx.get_constant(%(type)s(1.4426950408889634073599246810019)), a_val);
+
+				llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), r_a_log_2);
+				llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), r_a_log_2);
+
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+
+				llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_LOG10" + suffix_upper:
+				self.format_code(f, """
+				// log10'(a) = a' * 1/a * 1/log(10)   for a > 0, 0 otherwise
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *r_a_log_10 = ctx->CreateFDiv(
+					ctx.get_constant(%(type)s(0.43429448190325182765112891891661)), a_val);
+
+				llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), r_a_log_10);
+				llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), r_a_log_10);
+
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+
+				llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_MDL_MAX" + suffix_upper:
+				self.format_code(f, """
+				// max'(a, b) = a > b ? a' : b'
+				llvm::Value *cmp = ctx->CreateFCmpOGT(ctx.get_dual_val(a), ctx.get_dual_val(b));
+
+				llvm::Value *dx = ctx->CreateSelect(cmp, ctx.get_dual_dx(a), ctx.get_dual_dx(b));
+				llvm::Value *dy = ctx->CreateSelect(cmp, ctx.get_dual_dy(a), ctx.get_dual_dy(b));
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_MDL_MIN" + suffix_upper:
+				self.format_code(f, """
+				// min'(a, b) = a < b ? a' : b'
+				llvm::Value *cmp = ctx->CreateFCmpOLT(ctx.get_dual_val(a), ctx.get_dual_val(b));
+
+				llvm::Value *dx = ctx->CreateSelect(cmp, ctx.get_dual_dx(a), ctx.get_dual_dx(b));
+				llvm::Value *dy = ctx->CreateSelect(cmp, ctx.get_dual_dy(a), ctx.get_dual_dy(b));
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_POW" + suffix_upper:
+				self.format_code(f, """
+				// pow'(a, b) = a ^ (b - 1) * (a' * b + a * log(a) * b')
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *b_val = ctx.get_dual_val(b);
+				llvm::Value *a_pow_b_minus_1 = ctx->CreateFDiv(val, a_val);
+				llvm::Function *log_func = get_runtime_func(%(log_name)s);
+				llvm::Value *log_a = ctx->CreateCall(log_func, a_val);
+				llvm::Value *a_log_a = ctx->CreateFMul(a_val, log_a);
+
+				llvm::Value *dx = ctx->CreateFMul(
+					a_pow_b_minus_1,
+					ctx->CreateFAdd(
+						ctx->CreateFMul(ctx.get_dual_dx(a), b_val),
+						ctx->CreateFMul(a_log_a, ctx.get_dual_dx(b))));
+				llvm::Value *dy = ctx->CreateFMul(
+					a_pow_b_minus_1,
+					ctx->CreateFAdd(
+						ctx->CreateFMul(ctx.get_dual_dy(a), b_val),
+						ctx->CreateFMul(a_log_a, ctx.get_dual_dy(b))));
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "log_name": "RT_LOG" + suffix_upper })
+
+			elif enum_value == "RT_MDL_RSQRT" + suffix_upper:
+				self.format_code(f, """
+				// rsqrt'(a) = a' * -0.5 * rsqrt(a) / a   for a > 0, 0 otherwise
+
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *one_half = ctx.get_constant(%(type)s(-0.5));
+				llvm::Value *factor = ctx->CreateFDiv(
+					ctx->CreateFMul(one_half, val),
+					a_val);
+
+				llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), factor);
+				llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), factor);
+
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+
+				llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_MDL_SATURATE" + suffix_upper:
+				self.format_code(f, """
+				// saturate'(a) = a' for x in (0, 1), 0 otherwise
+
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *one = ctx.get_constant(%(type)s(1));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+				llvm::Value *too_big = ctx->CreateFCmpOGE(a_val, one);
+				llvm::Value *is_zero = ctx->CreateOr(too_small, too_big);
+
+				llvm::Value *dx = ctx->CreateSelect(is_zero, zero, ctx.get_dual_dx(a));
+				llvm::Value *dy = ctx->CreateSelect(is_zero, zero, ctx.get_dual_dy(a));
+				res = ctx.get_dual(val, dx, dy);
+				""" % {"type": type })
+
+			elif enum_value == "RT_SIN" + suffix_upper:
+				self.format_code(f, """
+				// sin'(a) = a' * cos(a)
+				llvm::Function *cos_func = get_runtime_func(%(cos_name)s);
+				llvm::Value *cos_val = ctx->CreateCall(cos_func, call_args);
+
+				llvm::Value *dx = ctx->CreateFMul(ctx.get_dual_dx(a), cos_val);
+				llvm::Value *dy = ctx->CreateFMul(ctx.get_dual_dy(a), cos_val);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "cos_name": "RT_COS" + suffix_upper })
+
+			elif enum_value == "RT_MDL_SMOOTHSTEP" + suffix_upper:
+				self.format_code(f, """
+				// smoothstep(a, b, c) ==>
+				//   c = clamp(c, a, b)
+				//   c = (c-a)/(b-a)
+				//   return c*c * (3.0 - (c+c))
+
+				// smoothstep'(a, b, c) =
+				//   -6 * (c - a) * (b - c) * (c * (b' - a') + b * (a' - c') + a * (c' - b')) / (a - b) ^ 4
+				//   for c in [a, b], 0 otherwise
+
+				llvm::Value *a_val = ctx.get_dual_val(a);
+				llvm::Value *b_val = ctx.get_dual_val(b);
+				llvm::Value *c_val = ctx.get_dual_val(c);
+				llvm::Value *too_small = ctx->CreateFCmpOLE(c_val, a_val);
+				llvm::Value *too_big = ctx->CreateFCmpOGE(c_val, b_val);
+				llvm::Value *is_zero = ctx->CreateOr(too_small, too_big);
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+
+				llvm::Value *c_minus_a = ctx->CreateFSub(c_val, a_val);
+				llvm::Value *b_minus_c = ctx->CreateFSub(b_val, c_val);
+				llvm::Value *a_minus_b = ctx->CreateFSub(a_val, b_val);
+				llvm::Value *a_minus_b_pow_2 = ctx->CreateFMul(a_minus_b, a_minus_b);
+				llvm::Value *a_minus_b_pow_4 = ctx->CreateFMul(a_minus_b_pow_2, a_minus_b_pow_2);
+
+				llvm::Value *factor = ctx->CreateFDiv(
+					ctx->CreateFMul(
+						ctx->CreateFMul(
+							ctx.get_constant(%(type)s(-6)),
+							c_minus_a),
+						b_minus_c),
+					a_minus_b_pow_4);
+
+				llvm::Value *dx_res = ctx->CreateFMul(
+					factor,
+					ctx->CreateFAdd(
+						ctx->CreateFAdd(
+							ctx->CreateFMul(
+								c_val,
+								ctx->CreateFSub(
+									ctx.get_dual_dx(b),
+									ctx.get_dual_dx(a))),
+							ctx->CreateFMul(
+								b_val,
+								ctx->CreateFSub(
+									ctx.get_dual_dx(a),
+									ctx.get_dual_dx(c)))),
+						ctx->CreateFMul(
+							a_val,
+							ctx->CreateFSub(
+								ctx.get_dual_dx(c),
+								ctx.get_dual_dx(b)))));
+
+				llvm::Value *dy_res = ctx->CreateFMul(
+					factor,
+					ctx->CreateFAdd(
+						ctx->CreateFAdd(
+							ctx->CreateFMul(
+								c_val,
+								ctx->CreateFSub(
+									ctx.get_dual_dy(b),
+									ctx.get_dual_dy(a))),
+							ctx->CreateFMul(
+								b_val,
+								ctx->CreateFSub(
+									ctx.get_dual_dy(a),
+									ctx.get_dual_dy(c)))),
+						ctx->CreateFMul(
+							a_val,
+							ctx->CreateFSub(
+								ctx.get_dual_dy(c),
+								ctx.get_dual_dy(b)))));
+
+
+				llvm::Value *dx = ctx->CreateSelect(is_zero, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(is_zero, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % {"type": type })
+
+			elif enum_value == "RT_SQRT" + suffix_upper:
+				self.format_code(f, """
+				// sqrt'(a) = a' * 0.5 / sqrt(a)   for a > 0, 0 otherwise
+
+				llvm::Value *one_half = ctx.get_constant(%(type)s(0.5));
+				llvm::Value *one_half_over_sqrt = ctx->CreateFDiv(one_half, val);
+
+				llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), one_half_over_sqrt);
+				llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), one_half_over_sqrt);
+
+				llvm::Value *zero = ctx.get_constant(%(type)s(0));
+				llvm::Value *too_small = ctx->CreateFCmpOLE(ctx.get_dual_val(a), zero);
+
+				llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+				llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "type": type })
+
+			elif enum_value == "RT_TAN" + suffix_upper:
+				self.format_code(f, """
+				// tan'(a) = a' / cos(a)^2
+				llvm::Function *cos_func = get_runtime_func(%(cos_name)s);
+				llvm::Value *cos_val = ctx->CreateCall(cos_func, call_args);
+				llvm::Value *cos_2_val = ctx->CreateFMul(cos_val, cos_val);
+				llvm::Value *r_cos_2_val = ctx->CreateFDiv(ctx.get_constant(%(type)s(1)), cos_2_val);
+
+				llvm::Value *dx = ctx->CreateFMul(ctx.get_dual_dx(a), r_cos_2_val);
+				llvm::Value *dy = ctx->CreateFMul(ctx.get_dual_dy(a), r_cos_2_val);
+				res = ctx.get_dual(val, dx, dy);
+				""" % { "cos_name": "RT_COS" + suffix_upper, "type": type })
+
+			else:
+				# Unsupported function, set derivatives to zero.
+				# Also for ceil, floor, round, sign, step
+				self.format_code(f, """
+				llvm::Value *zero = llvm::Constant::getNullValue(val->getType());
+				res = ctx.get_dual(val, zero, zero);
+				""")
+
+			self.format_code(f, "} else {\n")
+
+			for idx, param in enumerate(params):
+				self.write(f, "call_args[%d] = %s;\n" % (idx, chr(ord('a') + idx)))
+
+			self.format_code(f,
+			"""res = ctx->CreateCall(callee, call_args);
+			}
+			""")
 
 		elif mode == "math::any|all":
 			vt = self.get_vector_type_and_size(params[0])
@@ -1113,8 +1558,6 @@ class SignatureParser:
 			self.format_code(f, code)
 
 		elif mode == "math::average":
-			vt = self.get_vector_type_and_size(params[0])
-
 			a_is_vec = self.get_vector_type_and_size(params[0])
 			if a_is_vec:
 				code_params = {
@@ -1123,29 +1566,27 @@ class SignatureParser:
 				}
 
 				code = """
-				llvm::Type *arg_tp = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1];
-
-					idxes[0] = 0u;
-					res = ctx->CreateExtractValue(a, idxes);
+				llvm::Value *c = ctx.get_constant(%(type)s(1)/%(type)s(%(size)d));
+				if (inst.get_return_derivs()) {
+					llvm::Value *res_comps[3];
+					for (unsigned comp = 0; comp < 3; ++comp) {
+						llvm::Value *comp_val = ctx.get_dual_comp(a, comp);
+						res_comps[comp] = ctx.create_extract(comp_val, 0);
+						for (unsigned i = 1; i < %(size)d; ++i) {
+							llvm::Value *a_elem = ctx.create_extract(comp_val, i);
+							res_comps[comp] = ctx->CreateFAdd(res_comps[comp], a_elem);
+						}
+						res_comps[comp] = ctx->CreateFMul(res_comps[comp], c);
+					}
+					res = ctx.get_dual(res_comps[0], res_comps[1], res_comps[2]);
+				} else {
+					res = ctx.create_extract(a, 0);
 					for (unsigned i = 1; i < %(size)d; ++i) {
-						idxes[0] = i;
-
-						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+						llvm::Value *a_elem = ctx.create_extract(a, i);
 						res = ctx->CreateFAdd(res, a_elem);
 					}
-				} else {
-						llvm::Value *idx = ctx.get_constant(0);
-						res = ctx->CreateExtractElement(a, idx);
-						for (int i = 1; i < %(size)d; ++i) {
-							llvm::Value *idx    = ctx.get_constant(i);
-							llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
-							res = ctx->CreateFAdd(res, a_elem);
-						}
+					res = ctx->CreateFMul(res, c);
 				}
-				llvm::Value *c = ctx.get_constant(%(type)s(1)/%(type)s(%(size)d));
-				res = ctx->CreateFMul(res, c);
 				""" % code_params
 			else:
 				# average on atomics is a no-op
@@ -1157,42 +1598,56 @@ class SignatureParser:
 		elif mode == "math::lerp":
 			# lerp(a, b, c) = a * (1-c) + b * c;
 			code = """
-			llvm::Type *arg_tp = a->getType();
-			if (arg_tp->isArrayTy()) {
-				llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(arg_tp);
-				llvm::Type      *e_tp = a_tp->getElementType();
+			if (inst.get_return_derivs()) {
+				llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+				llvm::Type *elem_type = base_type;
+				if (elem_type->isVectorTy() || elem_type->isArrayTy())
+					elem_type = base_type->getSequentialElementType();
 
-				llvm::Value *one = ctx.get_constant(e_tp, 1);
-				res              = llvm::ConstantAggregateZero::get(a_tp);
+				llvm::Value *one = ctx.get_dual(ctx.get_constant(elem_type, 1));
+				llvm::Value *one_minus_c = ctx.create_deriv_sub(base_type, one, c);
 
-				unsigned idxes[1];
-				bool c_is_arr = c->getType() == arg_tp;
-				for (size_t i = 0, n = a_tp->getNumElements(); i < n; ++i) {
-					idxes[0] = unsigned(i);
-
-					llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-					llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
-					llvm::Value *c_elem = c_is_arr ? ctx->CreateExtractValue(c, idxes) : c;
-
-					llvm::Value *s  = ctx->CreateFSub(one, c_elem);
-					llvm::Value *t1 = ctx->CreateFMul(a_elem, s);
-					llvm::Value *t2 = ctx->CreateFMul(b_elem, c_elem);
-					llvm::Value *e  = ctx->CreateFAdd(t1, t2);
-
-					res = ctx->CreateInsertValue(res, e, idxes);
-				}
+				res = ctx.create_deriv_add(base_type,
+					ctx.create_deriv_mul(base_type, a, one_minus_c),
+					ctx.create_deriv_mul(base_type, b, c));
 			} else {
-				if (arg_tp->isVectorTy()) {
-					llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(arg_tp);
+				llvm::Type *arg_tp = a->getType();
+				if (arg_tp->isArrayTy()) {
+					llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(arg_tp);
+					llvm::Type      *e_tp = a_tp->getElementType();
 
-					if (c->getType() != arg_tp)
-						c = ctx.create_vector_splat(v_tp, c);
+					llvm::Value *one = ctx.get_constant(e_tp, 1);
+					res              = llvm::ConstantAggregateZero::get(a_tp);
+
+					unsigned idxes[1];
+					bool c_is_arr = c->getType() == arg_tp;
+					for (size_t i = 0, n = a_tp->getNumElements(); i < n; ++i) {
+						idxes[0] = unsigned(i);
+
+						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+						llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
+						llvm::Value *c_elem = c_is_arr ? ctx->CreateExtractValue(c, idxes) : c;
+
+						llvm::Value *s  = ctx->CreateFSub(one, c_elem);
+						llvm::Value *t1 = ctx->CreateFMul(a_elem, s);
+						llvm::Value *t2 = ctx->CreateFMul(b_elem, c_elem);
+						llvm::Value *e  = ctx->CreateFAdd(t1, t2);
+
+						res = ctx->CreateInsertValue(res, e, idxes);
+					}
+				} else {
+					if (arg_tp->isVectorTy()) {
+						llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(arg_tp);
+
+						if (c->getType() != arg_tp)
+							c = ctx.create_vector_splat(v_tp, c);
+					}
+					llvm::Value *one = ctx.get_constant(arg_tp, 1);
+					llvm::Value *s   = ctx->CreateFSub(one, c);
+					llvm::Value *t1  = ctx->CreateFMul(a, s);
+					llvm::Value *t2  = ctx->CreateFMul(b, c);
+					res = ctx->CreateFAdd(t1, t2);
 				}
-				llvm::Value *one = ctx.get_constant(arg_tp, 1);
-				llvm::Value *s   = ctx->CreateFSub(one, c);
-				llvm::Value *t1  = ctx->CreateFMul(a, s);
-				llvm::Value *t2  = ctx->CreateFMul(b, c);
-				res = ctx->CreateFAdd(t1, t2);
 			}
 			"""
 			self.format_code(f, code)
@@ -1200,72 +1655,73 @@ class SignatureParser:
 		elif mode == "math::const_mul":
 			# degrees(a) = a * 180.0/PI
 			# radians(a) = a * PI/180.0
+
 			code = """
-			llvm::Type *arg_tp = a->getType();
+			llvm::Value *a_val = ctx.get_dual_val(a);
+			llvm::Type *arg_tp = a_val->getType();
+
+			llvm::Value *cnst;
 			if (arg_tp->isArrayTy()) {
 				llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(arg_tp);
 				llvm::Type      *e_tp = a_tp->getElementType();
-
-				llvm::Value *cnst = ctx.get_constant(e_tp, %s);
-				res               = llvm::ConstantAggregateZero::get(a_tp);
-
-				unsigned idxes[1];
-				for (size_t i = 0, n = a_tp->getNumElements(); i < n; ++i) {
-					idxes[0] = unsigned(i);
-
-					llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-					llvm::Value *e      = ctx->CreateFMul(a_elem, cnst);
-
-					res = ctx->CreateInsertValue(res, e, idxes);
-				}
+				cnst = ctx.get_constant(e_tp, %(cnst_mul)s);
 			} else {
-				llvm::Value *cnst = ctx.get_constant(arg_tp, %s);
-				res = ctx->CreateFMul(a, cnst);
+				cnst = ctx.get_constant(arg_tp, %(cnst_mul)s);
 			}
-			""" % (self.cnst_mul[intrinsic], self.cnst_mul[intrinsic])
 
-			first_param = signature.split('_')[1]
-			atomic_chk = self.get_atomic_type_kind(first_param)
-			if atomic_chk:
-				code = """
-				llvm::Type *arg_tp = a->getType();
-				llvm::Value *cnst = ctx.get_constant(arg_tp, %s);
-				res = ctx->CreateFMul(a, cnst);
-				""" % self.cnst_mul[intrinsic]
+			res = ctx.create_mul(arg_tp, a_val, cnst);
+			if (inst.get_return_derivs()) {
+				llvm::Value *dx = ctx.create_mul(arg_tp, ctx.get_dual_dx(a), cnst);
+				llvm::Value *dy = ctx.create_mul(arg_tp, ctx.get_dual_dy(a), cnst);
+				res = ctx.get_dual(res, dx, dy);
+			}
 
+			""" % { "cnst_mul": self.cnst_mul[intrinsic] }
 			self.format_code(f, code)
 
 		elif mode == "math::dot":
 			# dot product
 			code = """
-			llvm::Type *arg_tp = a->getType();
-			if (arg_tp->isArrayTy()) {
-				llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(arg_tp);
-				llvm::Type      *e_tp = a_tp->getElementType();
+			if (inst.get_return_derivs()) {
+				llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+				llvm::Value *t = ctx.create_deriv_mul(base_type, a, b);
+				res = ctx.create_extract_allow_deriv(t, 0);
+				llvm::Type *elem_type = ctx.get_deriv_base_type(res->getType());
+				for (unsigned i = 1, n = ctx.get_num_elements(ctx.get_dual_val(t)); i < n; ++i) {
+					llvm::Value *e = ctx.create_extract_allow_deriv(t, i);
 
-				res = ctx.get_constant(e_tp, 0);
-
-				unsigned idxes[1];
-				for (size_t i = 0, n = a_tp->getNumElements(); i < n; ++i) {
-					idxes[0] = unsigned(i);
-
-					llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-					llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
-					llvm::Value *t      = ctx->CreateFMul(a_elem, b_elem);
-
-					res = ctx->CreateFAdd(res, t);
+					res = ctx.create_deriv_add(elem_type, res, e);
 				}
 			} else {
-				llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(arg_tp);
-				llvm::Type       *e_tp = v_tp->getElementType();
+				llvm::Type *arg_tp = a->getType();
+				if (arg_tp->isArrayTy()) {
+					llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(arg_tp);
+					llvm::Type      *e_tp = a_tp->getElementType();
 
-				llvm::Value *t = ctx->CreateFMul(a, b);
-				res = ctx.get_constant(e_tp, 0);
-				for (size_t i = 0, n = v_tp->getNumElements(); i < n; ++i) {
-					llvm::Value *idx = ctx.get_constant(int(i));
-					llvm::Value *e   = ctx->CreateExtractElement(t, idx);
+					res = ctx.get_constant(e_tp, 0);
 
-					res = ctx->CreateFAdd(res, e);
+					unsigned idxes[1];
+					for (size_t i = 0, n = a_tp->getNumElements(); i < n; ++i) {
+						idxes[0] = unsigned(i);
+
+						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+						llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
+						llvm::Value *t      = ctx->CreateFMul(a_elem, b_elem);
+
+						res = ctx->CreateFAdd(res, t);
+					}
+				} else {
+					llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(arg_tp);
+					llvm::Type       *e_tp = v_tp->getElementType();
+
+					llvm::Value *t = ctx->CreateFMul(a, b);
+					res = ctx.get_constant(e_tp, 0);
+					for (size_t i = 0, n = v_tp->getNumElements(); i < n; ++i) {
+						llvm::Value *idx = ctx.get_constant(int(i));
+						llvm::Value *e   = ctx->CreateExtractElement(t, idx);
+
+						res = ctx->CreateFAdd(res, e);
+					}
 				}
 			}
 			"""
@@ -1273,98 +1729,14 @@ class SignatureParser:
 			first_param = signature.split('_')[1]
 			atomic_chk = self.get_atomic_type_kind(first_param)
 			if atomic_chk:
-				code = "res = ctx->CreateFMul(a, b);\n"
-			self.format_code(f, code)
-
-		elif mode == "math::min|max":
-			# min/max
-			cmp = "LT"
-			if intrinsic == "max":
-				cmp = "GT"
-
-			ret_is_vec = self.get_vector_type_and_size(ret_type)
-
-			is_integer = False
-			ext = "?"
-			if ret_is_vec:
-				base_tp = ret_is_vec[0]
-				is_integer = base_tp == "int"
-			else:
-				ret_is_atomic = self.get_atomic_type_kind(ret_type)
-				is_integer = ret_is_atomic == "mi::mdl::IType::TK_INT"
-				if is_integer:
-					ext = "I"
-				elif ret_is_atomic == "mi::mdl::IType::TK_FLOAT":
-					ext = "F"
-				elif ret_is_atomic == "mi::mdl::IType::TK_DOUBLE":
-					ext = ""
-
-			cmp_instr = "ctx->CreateFCmp(llvm::ICmpInst::FCMP_O%s" % cmp
-			if is_integer:
-				cmp_instr = "ctx->CreateICmp(llvm::ICmpInst::ICMP_S%s" % cmp
-
-			a_is_vec = self.get_vector_type_and_size(params[0])
-			get_a    = "ctx->CreateExtractValue(a, idxes);"
-			splat_a  = ""
-			if not a_is_vec:
-				get_a   = "a;"
-				if ret_is_vec:
-					splat_a = "a = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(ret_tp), a);"
-
-			b_is_vec = self.get_vector_type_and_size(params[1])
-			get_b    = "ctx->CreateExtractValue(b, idxes);"
-			splat_b  = ""
-			if not b_is_vec:
-				get_b = "b;"
-				if ret_is_vec:
-					splat_b = "b = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(ret_tp), b);"
-
-			code_params = { 
-				  "get_a"     : get_a,
-				  "get_b"     : get_b,
-				  "splat_a"   : splat_a,
-				  "splat_b"   : splat_b,
-				  "cmp_instr" : cmp_instr
-			}
-
-			if ret_is_vec:
-				code_params["size"] = ret_is_vec[1]
-
 				code = """
-				llvm::Type *ret_tp = ctx_data->get_return_type();
-				if (ret_tp->isArrayTy()) {
-					unsigned idxes[1];
-
-					res = llvm::ConstantAggregateZero::get(ret_tp);
-					for (int i = 0; i < %(size)d; ++i) {
-						idxes[0] = unsigned(i);
-
-						llvm::Value *a_elem = %(get_a)s
-						llvm::Value *b_elem = %(get_b)s
-						llvm::Value *cmp    = %(cmp_instr)s, a_elem, b_elem);
-
-						llvm::Value *tmp = ctx->CreateSelect(cmp, a_elem, b_elem);
-						res = ctx->CreateInsertValue(res, tmp, idxes);
-					}
+				if (inst.get_return_derivs()) {
+					llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+					res = ctx.create_deriv_mul(base_type, a, b);
 				} else {
-						%(splat_a)s
-						%(splat_b)s
-						llvm::Value *cmp = %(cmp_instr)s, a, b);
-						res = ctx->CreateSelect(cmp, a, b);
+					res = ctx->CreateFMul(a, b);
 				}
-				""" % code_params
-			else:
-				# scalar operation
-				if ext != "?":
-					code = """
-					llvm::Function *m_func = get_runtime_func(RT_MDL_%s%s);
-					res = ctx->CreateCall2(m_func, a, b);
-					""" % (intrinsic.upper(), ext)
-				else:
-					code = """
-					llvm::Value *cmp = %(cmp_instr)s, a, b);
-					res = ctx->CreateSelect(cmp, a, b);
-					""" % code_params
+				"""
 			self.format_code(f, code)
 
 		elif mode == "math::step":
@@ -1404,7 +1776,7 @@ class SignatureParser:
 				code_params["size"] = ret_is_vec[1]
 
 				code = """
-				llvm::Type     *ret_tp = ctx_data->get_return_type();
+				llvm::Type     *ret_tp = ctx.get_non_deriv_return_type();
 				llvm::Constant *one    = ctx.get_constant(%(one)s);
 				llvm::Constant *zero   = ctx.get_constant(%(zero)s);
 				if (ret_tp->isArrayTy()) {
@@ -1438,6 +1810,12 @@ class SignatureParser:
 				""" % code_params
 			self.format_code(f, code)
 
+			self.format_code(f, """
+			// expand to dual, derivative is zero unless undefined for which we also set zero
+			if (inst.get_return_derivs())
+				res = ctx.get_dual(res);
+			""")
+
 		elif mode == "math::min_value|max_value":
 			# min_value/max_value
 			cmp = "LT"
@@ -1450,28 +1828,14 @@ class SignatureParser:
 				code_params["size"] = a_is_vec[1]
 
 				code = """
-				llvm::Type *arg_tp = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1];
-
-					idxes[0] = 0u;
-					res = ctx->CreateExtractValue(a, idxes);
-					for (int i = 1; i < %(size)d; ++i) {
-						idxes[0] = unsigned(i);
-
-						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-						llvm::Value *cmp    = ctx->CreateFCmp(llvm::ICmpInst::FCMP_O%(cmp)s, res, a_elem);
-						res = ctx->CreateSelect(cmp, res, a_elem);
-					}
-				} else {
-						llvm::Value *idx = ctx.get_constant(0);
-						res = ctx->CreateExtractElement(a, idx);
-						for (int i = 1; i < %(size)d; ++i) {
-							llvm::Value *idx    = ctx.get_constant(i);
-							llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
-							llvm::Value *cmp    = ctx->CreateFCmp(llvm::ICmpInst::FCMP_O%(cmp)s, res, a_elem);
-							res = ctx->CreateSelect(cmp, res, a_elem);
-						}
+				res = ctx.create_extract_allow_deriv(a, 0);
+				for (int i = 1; i < %(size)d; ++i) {
+					llvm::Value *a_elem = ctx.create_extract_allow_deriv(a, i);
+					llvm::Value *cmp = ctx->CreateFCmp(
+						llvm::ICmpInst::FCMP_O%(cmp)s,
+						ctx.get_dual_val(res),
+					    ctx.get_dual_val(a_elem));
+					res = ctx->CreateSelect(cmp, res, a_elem);
 				}
 				""" % code_params
 			else:
@@ -1481,25 +1845,37 @@ class SignatureParser:
 				"""
 			self.format_code(f, code)
 
+		elif mode == "math::min_value_wavelength|max_value_wavelength":
+			# FIXME: NYI
+			idx = 0
+			for param in params:
+				self.write(f, "(void)%s;\n" % chr(ord('a') + idx))
+				idx += 1
+			self.write(f, "res = llvm::Constant::getNullValue(ctx_data->get_return_type());\n")
+
 		elif mode == "math::cross":
 			# cross product
 			code = """
-			llvm::Type *res_tp = ctx_data->get_return_type();
+			llvm::Type *res_tp = ctx.get_non_deriv_return_type();
 			res = llvm::ConstantAggregateZero::get(res_tp);
+
+			llvm::Value *a_val = ctx.get_dual_val(a);
+			llvm::Value *b_val = ctx.get_dual_val(b);
+
 			if (res_tp->isArrayTy()) {
 				unsigned idxes[1];
 
 				idxes[0] = 0u;
-				llvm::Value *a_x = ctx->CreateExtractValue(a, idxes);
-				llvm::Value *b_x = ctx->CreateExtractValue(b, idxes);
+				llvm::Value *a_x = ctx->CreateExtractValue(a_val, idxes);
+				llvm::Value *b_x = ctx->CreateExtractValue(b_val, idxes);
 
 				idxes[0] = 1u;
-				llvm::Value *a_y = ctx->CreateExtractValue(a, idxes);
-				llvm::Value *b_y = ctx->CreateExtractValue(b, idxes);
+				llvm::Value *a_y = ctx->CreateExtractValue(a_val, idxes);
+				llvm::Value *b_y = ctx->CreateExtractValue(b_val, idxes);
 
 				idxes[0] = 2u;
-				llvm::Value *a_z = ctx->CreateExtractValue(a, idxes);
-				llvm::Value *b_z = ctx->CreateExtractValue(b, idxes);
+				llvm::Value *a_z = ctx->CreateExtractValue(a_val, idxes);
+				llvm::Value *b_z = ctx->CreateExtractValue(b_val, idxes);
 
 				llvm::Value *res_x = ctx->CreateFSub(
 					ctx->CreateFMul(a_y, b_z),
@@ -1521,30 +1897,37 @@ class SignatureParser:
 
 				idxes[0] = 2u;
 				res = ctx->CreateInsertValue(res, res_z, idxes);
+
+				// TODO: Add derivative support
+				if (inst.get_return_derivs())  // expand to dual
+					res = ctx.get_dual(res);
 			} else {
-				static int const yzx[] = { 1, 2, 0 };
-				llvm::Value *shuffle_yzx = ctx.get_shuffle(yzx);
+				res = ctx.create_cross(a_val, b_val);
+				if (inst.get_return_derivs()) {
+					llvm::Value *a_dx = ctx.get_dual_dx(a);
+					llvm::Value *a_dy = ctx.get_dual_dy(a);
+					llvm::Value *b_dx = ctx.get_dual_dx(b);
+					llvm::Value *b_dy = ctx.get_dual_dy(b);
 
-				static int zxy[] = { 2, 0, 1 };
-				llvm::Value *shuffle_zxy = ctx.get_shuffle(zxy);
+					// (a cross b)' = a' cross b + a cross b'
 
-				llvm::Value *a_yzx = ctx->CreateShuffleVector(a, a, shuffle_yzx);
-				llvm::Value *b_zxy = ctx->CreateShuffleVector(b, b, shuffle_zxy);
+					llvm::Value *dx = ctx->CreateFAdd(
+						ctx.create_cross(a_dx, b_val),
+						ctx.create_cross(a_val, b_dx));
 
-				llvm::Value *tmp1 = ctx->CreateFMul(a_yzx, b_zxy);
+					llvm::Value *dy = ctx->CreateFAdd(
+						ctx.create_cross(a_dy, b_val),
+						ctx.create_cross(a_val, b_dy));
 
-				llvm::Value *a_zxy = ctx->CreateShuffleVector(a, a, shuffle_zxy);
-				llvm::Value *b_yzx = ctx->CreateShuffleVector(b, b, shuffle_yzx);
-
-				llvm::Value *tmp2 = ctx->CreateFMul(a_zxy, b_yzx);
-
-				res = ctx->CreateFSub(tmp1, tmp2);
+					res = ctx.get_dual(res, dx, dy);
+				}
 			}
 			"""
 			self.format_code(f, code)
 
 		elif mode == "math::isnan|isfinite":
 			# NanN or finite check
+			# Should not be called with inst.get_return_derivs(), as the results are boolean
 			cmp = "ORD"
 			if intrinsic == "isnan":
 				cmp = "UNO"
@@ -1599,7 +1982,7 @@ class SignatureParser:
 			cols = int(type_code[-2])
 
 
-			self.write(f, "llvm::Type *ret_tp = ctx_data->get_return_type();\n")
+			self.write(f, "llvm::Type *ret_tp = ctx.get_non_deriv_return_type();\n")
 			self.write(f, "if (ret_tp->isArrayTy()) {\n")
 			self.indent += 1
 			self.write(f, "llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(ret_tp);\n")
@@ -1644,13 +2027,19 @@ class SignatureParser:
 			self.indent -= 1
 			self.write(f, "}\n")
 
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual (actually should not happen)
+				res = ctx.get_dual(res);
+			""")
+
 		elif mode == "math::sincos":
-			# we known that the return type is an array, so get the element type here
+			# we know that the return type is an array, so get the element type here
 			code = """
 				unsigned    idxes[1];
 				llvm::Value *res_0, *res_1;
+				llvm::Value *a_val = ctx.get_dual_val(a);
 
-				llvm::ArrayType *ret_tp = llvm::cast<llvm::ArrayType>(ctx_data->get_return_type());
+				llvm::ArrayType *ret_tp = llvm::cast<llvm::ArrayType>(ctx.get_non_deriv_return_type());
 				res = llvm::ConstantAggregateZero::get(ret_tp);
 			"""
 			self.format_code(f, code)
@@ -1694,7 +2083,7 @@ class SignatureParser:
 				for i in range(n_elems):
 					code += """
 						idxes[0] = %du;
-						tmp   = ctx->CreateExtractValue(a, idxes);
+						tmp   = ctx->CreateExtractValue(a_val, idxes);
 					""" % i
 
 					if is_float:
@@ -1710,7 +2099,7 @@ class SignatureParser:
 									ctx.get_constant(int(%d))
 								};
 								llvm::Value *cosp = ctx->CreateInBoundsGEP(res, access1);
-								ctx->CreateCall3(sincos_func, a, sinp, cosp);
+								ctx->CreateCall3(sincos_func, a_val, sinp, cosp);
 							} else {
 						""" % (i, i)
 
@@ -1742,7 +2131,7 @@ class SignatureParser:
 						code += """
 								idx = ctx.get_constant(%d);
 
-								tmp   = ctx->CreateExtractElement(a, idx);
+								tmp   = ctx->CreateExtractElement(a_val, idx);
 								ctx->CreateCall3(sincos_func, tmp, s_tmp, c_tmp);
 								res_0 = ctx->CreateInsertElement(res_0, ctx->CreateLoad(s_tmp), idx);
 								res_1 = ctx->CreateInsertElement(res_1, ctx->CreateLoad(c_tmp), idx);
@@ -1756,7 +2145,7 @@ class SignatureParser:
 					code += """
 							idx = ctx.get_constant(%d);
 
-							tmp   = ctx->CreateExtractElement(a, idx);
+							tmp   = ctx->CreateExtractElement(a_val, idx);
 							res_0 = ctx->CreateInsertElement(res_0, ctx->CreateCall(sin_func, tmp), idx);
 							res_1 = ctx->CreateInsertElement(res_1, ctx->CreateCall(cos_func, tmp), idx);
 					""" % i
@@ -1776,7 +2165,7 @@ class SignatureParser:
 				"""
 				self.format_code(f, code)
 			else:
-				# scala code
+				# scalar code
 				atom_code = elem_type
 
 				code_params = {
@@ -1792,13 +2181,13 @@ class SignatureParser:
 								res, ctx.get_constant(int(0)));
 							llvm::Value *cosp = ctx.create_simple_gep_in_bounds(
 								res, ctx.get_constant(int(1)));
-							ctx->CreateCall3(sincos_func, a, sinp, cosp);
+							ctx->CreateCall3(sincos_func, a_val, sinp, cosp);
 							res = ctx->CreateLoad(res);
 						} else {
 							llvm::Function *sin_func = get_runtime_func(RT_SINF);
 							llvm::Function *cos_func = get_runtime_func(RT_COSF);
-							res_0 = ctx->CreateCall(sin_func, a);
-							res_1 = ctx->CreateCall(cos_func, a);
+							res_0 = ctx->CreateCall(sin_func, a_val);
+							res_1 = ctx->CreateCall(cos_func, a_val);
 
 							idxes[0] = 0;
 							res = ctx->CreateInsertValue(res, res_0, idxes);
@@ -1812,8 +2201,8 @@ class SignatureParser:
 					code = """
 						llvm::Function *sin_func = get_runtime_func(%(sin_name)s);
 						llvm::Function *cos_func = get_runtime_func(%(cos_name)s);
-						res_0 = ctx->CreateCall(sin_func, a);
-						res_1 = ctx->CreateCall(cos_func, a);
+						res_0 = ctx->CreateCall(sin_func, a_val);
+						res_1 = ctx->CreateCall(cos_func, a_val);
 
 						idxes[0] = 0;
 						res = ctx->CreateInsertValue(res, res_0, idxes);
@@ -1822,13 +2211,56 @@ class SignatureParser:
 					""" % code_params
 					self.format_code(f, code)
 
-		elif mode == "math::modf":
-			# we known thet the return type is an array, so get the element type here
-			self.write(f, "unsigned    idxes[1];\n")
-			self.write(f, "llvm::Value *res_0, *res_1;\n")
+			self.format_code(f, """
+			if (inst.get_return_derivs()) {
+				// [sin_a, cos_a] = sincos(a)
+				// sincos'(a) = [a' * cos_a, -a' * sin_a]
 
-			self.write(f, "llvm::ArrayType *ret_tp = llvm::cast<llvm::ArrayType>(ctx_data->get_return_type());\n")
-			self.write(f, "res = llvm::ConstantAggregateZero::get(ret_tp);\n")
+				llvm::Value *neg_sin_a = ctx->CreateFNeg(ctx.create_extract(res, 0));
+				llvm::Value *cos_a = ctx.create_extract(res, 1);
+				llvm::Type *base_type = a_val->getType();
+
+				llvm::Value *res_dx_0 = ctx.create_mul(
+					base_type,
+					ctx.get_dual_dx(a),
+					cos_a);
+				llvm::Value *res_dx_1 = ctx.create_mul(
+					base_type,
+					ctx.get_dual_dx(a),
+					neg_sin_a);
+				llvm::Value *res_dx = llvm::ConstantAggregateZero::get(ret_tp);
+				res_dx = ctx.create_insert(res_dx, res_dx_0, 0);
+				res_dx = ctx.create_insert(res_dx, res_dx_1, 1);
+
+				llvm::Value *res_dy_0 = ctx.create_mul(
+					base_type,
+					ctx.get_dual_dy(a),
+					cos_a);
+				llvm::Value *res_dy_1 = ctx.create_mul(
+					base_type,
+					ctx.get_dual_dy(a),
+					neg_sin_a);
+				llvm::Value *res_dy = llvm::ConstantAggregateZero::get(ret_tp);
+				res_dy = ctx.create_insert(res_dy, res_dy_0, 0);
+				res_dy = ctx.create_insert(res_dy, res_dy_1, 1);
+
+				res = ctx.get_dual(res, res_dx, res_dy);
+			}
+			""")
+
+		elif mode == "math::modf":
+			#   modf(x) = (floor(x), x - floor(x))
+			#   floor'(x) = 0  unless undefined
+			#   modf'(x) = (0, x')
+
+			# we know that the return type is an array, so get the element type here
+			self.format_code(f, """
+			llvm::Value     *a_val = ctx.get_dual_val(a);
+			llvm::Value     *res_0, *res_1;
+			llvm::ArrayType *ret_tp = llvm::cast<llvm::ArrayType>(ctx.get_non_deriv_return_type());
+			llvm::Type      *elm_tp = ret_tp->getElementType();
+			res = llvm::ConstantAggregateZero::get(ret_tp);
+			""")
 
 			elem_type = self.get_array_element_type(ret_type)
 			vt = self.get_vector_type_and_size(elem_type)
@@ -1837,62 +2269,49 @@ class SignatureParser:
 				n_elems   = vt[1]
 				f_name    = "RT_MODF" + self.get_type_suffix(atom_code).upper()
 
-				self.write(f, "llvm::Function *modf   = get_runtime_func(%s);\n" % f_name)
-				self.write(f, "llvm::Type     *elm_tp = ret_tp->getElementType();\n")
+				self.format_code(f, """
+				llvm::Function *modf   = get_runtime_func(%s);
 
-				self.write(f, "res_0 = llvm::ConstantAggregateZero::get(elm_tp);\n")
-				self.write(f, "res_1 = llvm::ConstantAggregateZero::get(elm_tp);\n")
+				res_0 = llvm::ConstantAggregateZero::get(elm_tp);
+				res_1 = llvm::ConstantAggregateZero::get(elm_tp);
 
-				self.write(f, "if (elm_tp->isArrayTy()) {\n")
-				self.indent += 1
-
-				self.write(f, "llvm::Type  *t_type = llvm::cast<llvm::ArrayType>(elm_tp)->getElementType();\n")
-				self.write(f, "llvm::Value *intptr = ctx.create_local(t_type, \"tmp\");\n")
-				self.write(f, "llvm::Value *tmp;\n")
+				llvm::Type  *t_type = llvm::cast<llvm::SequentialType>(elm_tp)->getElementType();
+				llvm::Value *intptr = ctx.create_local(t_type, "tmp");
+				llvm::Value *tmp;
+				""" % f_name)
 
 				for i in range(n_elems):
-					self.write(f, "idxes[0] = %du;\n" % i)
-
-					self.write(f, "tmp = ctx->CreateExtractValue(a, idxes);\n")
-					self.write(f, "tmp = ctx->CreateCall2(modf, tmp, intptr);\n")
-					self.write(f, "res_0 = ctx->CreateInsertValue(res_0, tmp, idxes);\n")
-					self.write(f, "res_1 = ctx->CreateInsertValue(res_1, ctx->CreateLoad(intptr), idxes);\n")
-
-				self.indent -= 1
-				self.write(f, "} else {\n")
-				self.indent += 1
-
-				self.write(f, "llvm::Type  *t_type = llvm::cast<llvm::VectorType>(elm_tp)->getElementType();\n")
-				self.write(f, "llvm::Value *intptr = ctx.create_local(t_type, \"tmp\");\n")
-				self.write(f, "llvm::Value *tmp, *idx;\n")
-
-				for i in range(n_elems):
-					self.write(f, "idx = ctx.get_constant(%d);\n" % i)
-
-					self.write(f, "tmp = ctx->CreateExtractElement(a, idx);\n")
-					self.write(f, "tmp = ctx->CreateCall2(modf, tmp, intptr);\n")
-					self.write(f, "res_0 = ctx->CreateInsertElement(res_0, tmp, idx);\n")
-					self.write(f, "res_1 = ctx->CreateInsertElement(res_1, ctx->CreateLoad(intptr), idx);\n")
-
-				self.indent -= 1
-				self.write(f, "}\n")
+					self.format_code(f, """
+					tmp = ctx.create_extract(a_val, %(idx)u);
+					tmp = ctx->CreateCall2(modf, tmp, intptr);
+					res_0 = ctx.create_insert(res_0, tmp, %(idx)u);
+					res_1 = ctx.create_insert(res_1, ctx->CreateLoad(intptr), %(idx)u);
+				    """ % { "idx": i })
 			else:
 				atom_code = elem_type
 				f_name    = "RT_MODF" + self.get_type_suffix(atom_code).upper()
 
-				self.write(f, "llvm::Function *modf = get_runtime_func(%s);\n" % f_name)
-				self.write(f, "llvm::Type  *elm_tp = ret_tp->getElementType();\n")
-				self.write(f, "llvm::Value *intptr = ctx.create_local(elm_tp, \"tmp\");\n")
-				self.write(f, "res_0 = ctx->CreateCall2(modf, a, intptr);\n")
-				self.write(f, "res_1 = ctx->CreateLoad(intptr);\n")
+				self.format_code(f, """
+				llvm::Function *modf = get_runtime_func(%s);
+				llvm::Value *intptr = ctx.create_local(elm_tp, \"tmp\");
+				res_0 = ctx->CreateCall2(modf, a_val, intptr);
+				res_1 = ctx->CreateLoad(intptr);
+				""" % f_name)
 
-			self.write(f, "idxes[0] = 0;\n")
-			self.write(f, "res = ctx->CreateInsertValue(res, res_0, idxes);\n");
-			self.write(f, "idxes[0] = 1;\n")
-			self.write(f, "res = ctx->CreateInsertValue(res, res_1, idxes);\n");
+			self.format_code(f, """
+			res = ctx.create_insert(res, res_0, 0);
+			res = ctx.create_insert(res, res_1, 1);
+
+			if (inst.get_return_derivs()) {
+				llvm::Value *res_dx = llvm::ConstantAggregateZero::get(ret_tp);
+				llvm::Value *res_dy = llvm::ConstantAggregateZero::get(ret_tp);
+				res_dx = ctx.create_insert(res_dx, ctx.get_dual_dx(a), 1);
+				res_dy = ctx.create_insert(res_dy, ctx.get_dual_dy(a), 1);
+				res = ctx.get_dual(res, res_dx, res_dy);
+			}
+			""")
 
 		elif mode == "math::luminance":
-			vt = self.get_vector_type_and_size(params[0])
 			if params[0] == "F3" or params[0] == "CC":
 				# this is the code for F3, which is sRGB, the spec does not
 				# specify a color space for color, so we share the code
@@ -1901,70 +2320,30 @@ class SignatureParser:
 				llvm::Constant *c_g = ctx.get_constant(0.715160f);
 				llvm::Constant *c_b = ctx.get_constant(0.072169f);
 
-				llvm::Type *arg_tp = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1];
-					idxes[0] = 0;
-					llvm::Value *r = ctx->CreateExtractValue(a, idxes);
-					res = ctx->CreateFMul(r, c_r);
-					idxes[0] = 1;
-					llvm::Value *g = ctx->CreateExtractValue(a, idxes);
-					res = ctx->CreateFAdd(res, ctx->CreateFMul(g, c_g));
-					idxes[0] = 2;
-					llvm::Value *b = ctx->CreateExtractValue(a, idxes);
-					res = ctx->CreateFAdd(res, ctx->CreateFMul(b, c_b));
+				// res = c_r * a.x + c_g * a.y + c_b * a.z;
+
+				if (inst.get_return_derivs()) {
+					llvm::Value *r = ctx.create_extract_allow_deriv(a, 0);
+					llvm::Type *base_type = ctx.get_deriv_base_type(r->getType());
+					res = ctx.create_deriv_mul(base_type, r, c_r);
+
+					llvm::Value *g = ctx.create_extract_allow_deriv(a, 1);
+					res = ctx.create_deriv_add(base_type, res, ctx.create_deriv_mul(base_type, g, c_g));
+
+					llvm::Value *b = ctx.create_extract_allow_deriv(a, 2);
+					res = ctx.create_deriv_add(base_type, res, ctx.create_deriv_mul(base_type, b, c_b));
 				} else {
-					llvm::Value *idx = ctx.get_constant(0);
-					llvm::Value *r = ctx->CreateExtractElement(a, idx);
+					llvm::Value *r = ctx.create_extract(a, 0);
 					res = ctx->CreateFMul(r, c_r);
-					idx = ctx.get_constant(1);
-					llvm::Value *g = ctx->CreateExtractElement(a, idx);
+
+					llvm::Value *g = ctx.create_extract(a, 1);
 					res = ctx->CreateFAdd(res, ctx->CreateFMul(g, c_g));
-					idx = ctx.get_constant(2);
-					llvm::Value *b = ctx->CreateExtractElement(a, idx);
+
+					llvm::Value *b = ctx.create_extract(a, 2);
 					res = ctx->CreateFAdd(res, ctx->CreateFMul(b, c_b));
 				}
 				"""
 				self.format_code(f, code)
-
-		elif mode == "math::dot":
-			vt = self.get_vector_type_and_size(params[0])
-			if vt:
-				n_elems = vt[1]
-				code_params = {
-				   "n_elems" : n_elems
-				}
-				code = """
-				llvm::Type *arg_tp = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1] = { 0 };
-					llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-					llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
-					res = ctx->CreateFMul(a_elem, b_elem);
-					for (unsigned i = 1; i < %(n_elems)d; ++i) {
-						idxes[0] = i;
-						a_elem = ctx->CreateExtractValue(a, idxes);
-						b_elem = ctx->CreateExtractValue(b, idxes);
-						res    = ctx->CreateFAdd(res, ctx->CreateFMul(a_elem, b_elem));
-					}
-				} else {
-					llvm::Value *idx = ctx.get_constant(0);
-					llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
-					llvm::Value *b_elem = ctx->CreateExtractElement(b, idx);
-					res = ctx->CreateFMul(a_elem, b_elem);
-					for (int i = 1; i < %(n_elems)d; ++i) {
-						idx = ctx.get_constant(i);
-						a_elem = ctx->CreateExtractElement(a, idx);
-						b_elem = ctx->CreateExtractElement(b, idx);
-						res = ctx->CreateFAdd(res, ctx->CreateFMul(a_elem, b_elem));
-					}
-				}
-				""" % code_params
-			else:
-				code = """
-				res = res = ctx->CreateFMul(a, b);
-				"""
-			self.format_code(f, code)
 
 		elif mode == "math::length":
 			vt = self.get_vector_type_and_size(params[0])
@@ -1974,37 +2353,60 @@ class SignatureParser:
 				f_name = "RT_SQRT" + self.get_type_suffix(atom_code).upper()
 				code_params = {
 				   "sqrt_name" : f_name,
-				   "n_elems"   : n_elems
+				   "n_elems"   : n_elems,
+				   "type"      : vt[0]
 				}
 				code = """
-				llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
-				llvm::Type     *arg_tp    = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1] = { 0 };
-					llvm::Value *tmp = ctx->CreateExtractValue(a, idxes);
-					tmp = ctx->CreateFMul(tmp, tmp);
+				if (inst.get_return_derivs()) {
+					mi::mdl::IDefinition const *sqrt_def = m_code_gen.find_stdlib_signature(
+						"::math", "sqrt(%(type)s)");
+					llvm::Function *sqrt_deriv_func = get_intrinsic_function(sqrt_def, /*return_derivs=*/ true);
+
+					llvm::Value *tmp = ctx.create_extract_allow_deriv(a, 0);
+					llvm::Type *base_type = ctx.get_deriv_base_type(tmp->getType());
+					tmp = ctx.create_deriv_mul(base_type, tmp, tmp);
+
 					for (unsigned i = 1; i < %(n_elems)d; ++i) {
-						idxes[0] = i;
-						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-						tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
+						llvm::Value *a_elem = ctx.create_extract_allow_deriv(a, i);
+						tmp = ctx.create_deriv_add(base_type, tmp, ctx.create_deriv_mul(base_type, a_elem, a_elem));
 					}
-					res = ctx->CreateCall(sqrt_func, tmp);
+					llvm::Value *tmp_var = ctx.create_local(tmp->getType(), "tmp");
+					ctx->CreateStore(tmp, tmp_var);
+					res = ctx->CreateCall(sqrt_deriv_func, tmp_var);
 				} else {
-					llvm::Value *idx = ctx.get_constant(0);
-					llvm::Value *tmp = ctx->CreateExtractElement(a, idx);
+					llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
+
+					llvm::Value *tmp = ctx.create_extract(a, 0);
 					tmp = ctx->CreateFMul(tmp, tmp);
-					for (int i = 1; i < %(n_elems)d; ++i) {
-						idx = ctx.get_constant(i);
-						llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
+
+					for (unsigned i = 1; i < %(n_elems)d; ++i) {
+						llvm::Value *a_elem = ctx.create_extract(a, i);
 						tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
 					}
 					res = ctx->CreateCall(sqrt_func, tmp);
 				}
 				""" % code_params
 			else:
+				# for atomic types, length() is abs()
+				atom_code = params[0]
+				f_name = "RT_ABS" + self.get_type_suffix(atom_code).upper()
 				code = """
-				res = a;
-				"""
+				if (inst.get_return_derivs()) {
+					mi::mdl::IDefinition const *abs_def = m_code_gen.find_stdlib_signature(
+						"::math", "abs(%(type)s)");
+					llvm::Function *abs_deriv_func = get_intrinsic_function(abs_def, /*return_derivs=*/ true);
+
+					llvm::Value *tmp_var = ctx.create_local(a->getType(), "tmp");
+					ctx->CreateStore(a, tmp_var);
+					res = ctx->CreateCall(abs_deriv_func, tmp_var);
+				} else {
+					llvm::Function *abs_func = get_runtime_func(%(abs_name)s);
+					res = ctx->CreateCall(abs_func, a);
+				}
+				""" % {
+					"abs_name"  : f_name,
+					"type"      : self.m_inv_types[params[0]]
+				}
 			self.format_code(f, code)
 
 		elif mode == "math::normalize":
@@ -2015,52 +2417,65 @@ class SignatureParser:
 				f_name = "RT_SQRT" + self.get_type_suffix(atom_code).upper()
 				code_params = {
 				   "sqrt_name" : f_name,
-				   "n_elems"   : n_elems
+				   "n_elems"   : n_elems,
+				   "vtype"     : self.m_inv_types[params[0]]
 				}
 				code = """
-				llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
-				llvm::Type     *arg_tp    = a->getType();
+				if (inst.get_return_derivs()) {
+					mi::mdl::IDefinition const *length_def = m_code_gen.find_stdlib_signature(
+						"::math", "length(%(vtype)s)");
+					llvm::Function *length_deriv_func = get_intrinsic_function(length_def, /*return_derivs=*/ true);
 
-				res = llvm::ConstantAggregateZero::get(arg_tp);
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1] = { 0 };
-					llvm::Value *tmp = ctx->CreateExtractValue(a, idxes);
-					tmp = ctx->CreateFMul(tmp, tmp);
-					for (unsigned i = 1; i < %(n_elems)d; ++i) {
-						idxes[0] = i;
-						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-						tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
-					}
-					llvm::Value *l = ctx->CreateCall(sqrt_func, tmp);
-					for (unsigned i = 0; i < %(n_elems)d; ++i) {
-						idxes[0] = i;
-						llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-						tmp = ctx->CreateFDiv(a_elem, l);
-						res = ctx->CreateInsertValue(res, tmp, idxes);
-					}
+					llvm::Value *a_ptr = ctx.get_first_parameter();
+					llvm::Value *len = ctx->CreateCall(length_deriv_func, a_ptr);
+
+					llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+					res = ctx.create_deriv_fdiv(base_type, a, len);
 				} else {
-					llvm::Value *idx = ctx.get_constant(0);
-					llvm::Value *tmp = ctx->CreateExtractElement(a, idx);
-					tmp = ctx->CreateFMul(tmp, tmp);
-					for (int i = 1; i < %(n_elems)d; ++i) {
-						idx = ctx.get_constant(i);
-						llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
-						tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
+					llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
+					llvm::Type     *arg_tp    = a->getType();
+
+					res = llvm::ConstantAggregateZero::get(arg_tp);
+					if (arg_tp->isArrayTy()) {
+						unsigned idxes[1] = { 0 };
+						llvm::Value *tmp = ctx->CreateExtractValue(a, idxes);
+						tmp = ctx->CreateFMul(tmp, tmp);
+						for (unsigned i = 1; i < %(n_elems)d; ++i) {
+							idxes[0] = i;
+							llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+							tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
+						}
+						llvm::Value *l = ctx->CreateCall(sqrt_func, tmp);
+						for (unsigned i = 0; i < %(n_elems)d; ++i) {
+							idxes[0] = i;
+							llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+							tmp = ctx->CreateFDiv(a_elem, l);
+							res = ctx->CreateInsertValue(res, tmp, idxes);
+						}
+					} else {
+						llvm::Value *idx = ctx.get_constant(0);
+						llvm::Value *tmp = ctx->CreateExtractElement(a, idx);
+						tmp = ctx->CreateFMul(tmp, tmp);
+						for (int i = 1; i < %(n_elems)d; ++i) {
+							idx = ctx.get_constant(i);
+							llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
+							tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a_elem, a_elem));
+						}
+						llvm::Value *l = ctx->CreateCall(sqrt_func, tmp);
+						l = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(arg_tp), l);
+						res = ctx->CreateFDiv(a, l);
 					}
-					llvm::Value *l = ctx->CreateCall(sqrt_func, tmp);
-					l = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(arg_tp), l);
-					res = ctx->CreateFDiv(a, l);
 				}
 				""" % code_params
 			else:
 				# for atomic types, this normalize() is just sign()
 				f_name = self.get_runtime_enum("sign" + self.get_type_suffix(params[0]))
 				code = """
-				llvm::Value *call_args[1] = {
-					a,
-				};
 				llvm::Function *callee = get_runtime_func(%s);
-				res = ctx->CreateCall(callee, call_args);
+				res = ctx->CreateCall(callee, ctx.get_dual_val(a));
+
+				if (inst.get_return_derivs())  // expand to dual, derivatives are zero
+					res = ctx.get_dual(res);
 				""" % f_name
 			self.format_code(f, code)
 
@@ -2072,35 +2487,31 @@ class SignatureParser:
 				f_name = "RT_SQRT" + self.get_type_suffix(atom_code).upper()
 				code_params = {
 				   "sqrt_name" : f_name,
-				   "n_elems"   : n_elems
+				   "n_elems"   : n_elems,
+				   "type"      : self.m_inv_types[params[0]]
 				}
 				code = """
-				llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
-				llvm::Type     *arg_tp    = a->getType();
-				if (arg_tp->isArrayTy()) {
-					unsigned idxes[1] = { 0 };
-					llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
-					llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
+				if (inst.get_return_derivs()) {
+					llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+					llvm::Value *diff = ctx.create_deriv_sub(base_type, a, b);
+
+					mi::mdl::IDefinition const *length_def = m_code_gen.find_stdlib_signature(
+						"::math", "length(%(type)s)");
+					llvm::Function *length_deriv_func = get_intrinsic_function(length_def, /*return_derivs=*/ true);
+
+					llvm::Value *tmp_var = ctx.create_local(diff->getType(), "tmp");
+					ctx->CreateStore(diff, tmp_var);
+					res = ctx->CreateCall(length_deriv_func, tmp_var);
+				} else {
+					llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
+
+					llvm::Value *a_elem = ctx.create_extract(a, 0);
+					llvm::Value *b_elem = ctx.create_extract(b, 0);
 					llvm::Value *tmp    = ctx->CreateFSub(a_elem, b_elem);
 					res = ctx->CreateFMul(tmp, tmp);
 					for (unsigned i = 1; i < %(n_elems)d; ++i) {
-						idxes[0] = i;
-						a_elem = ctx->CreateExtractValue(a, idxes);
-						b_elem = ctx->CreateExtractValue(b, idxes);
-						tmp    = ctx->CreateFSub(a_elem, b_elem);
-						res    = ctx->CreateFAdd(res, ctx->CreateFMul(tmp, tmp));
-					}
-					res = ctx->CreateCall(sqrt_func, res);
-				} else {
-					llvm::Value *idx    = ctx.get_constant(0);
-					llvm::Value *a_elem = ctx->CreateExtractElement(a, idx);
-					llvm::Value *b_elem = ctx->CreateExtractElement(b, idx);
-					llvm::Value *tmp    = ctx->CreateFSub(a_elem, b_elem);
-					res = ctx->CreateFMul(tmp, tmp);
-					for (int i = 1; i < %(n_elems)d; ++i) {
-						idx = ctx.get_constant(i);
-						a_elem = ctx->CreateExtractElement(a, idx);
-						b_elem = ctx->CreateExtractElement(b, idx);
+						a_elem = ctx.create_extract(a, i);
+						b_elem = ctx.create_extract(b, i);
 						tmp    = ctx->CreateFSub(a_elem, b_elem);
 						res    = ctx->CreateFAdd(res, ctx->CreateFMul(tmp, tmp));
 					}
@@ -2111,10 +2522,40 @@ class SignatureParser:
 				atom_code = params[0]
 				f_name = "RT_ABS" + self.get_type_suffix(atom_code).upper()
 				code = """
-				llvm::Function *abs_func = get_runtime_func(%s);
-				res = ctx->CreateFSub(a, b);
-				res = ctx->CreateCall(abs_func, res);
-				""" % f_name
+				if (inst.get_return_derivs()) {
+					llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
+					llvm::Value *diff = ctx.create_deriv_sub(base_type, a, b);
+
+					mi::mdl::IDefinition const *abs_def = m_code_gen.find_stdlib_signature(
+						"::math", "abs(%(type)s)");
+					llvm::Function *abs_deriv_func = get_intrinsic_function(abs_def, /*return_derivs=*/ true);
+
+					llvm::Value *tmp_var = ctx.create_local(diff->getType(), "tmp");
+					ctx->CreateStore(diff, tmp_var);
+					res = ctx->CreateCall(abs_deriv_func, tmp_var);
+				} else {
+					llvm::Function *abs_func = get_runtime_func(%(abs_name)s);
+					res = ctx->CreateFSub(a, b);
+					res = ctx->CreateCall(abs_func, res);
+				}
+				""" % {
+					"abs_name"  : f_name,
+					"type"      : self.m_inv_types[params[0]]
+				}
+			self.format_code(f, code)
+
+		elif mode == "math::DX|DY":
+			code = """
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
+			if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
+				res = ctx.get_dual_%(comp)s(a);
+			} else {
+				// for non-derivative types, always return null
+				res = llvm::Constant::getNullValue(ret_tp);
+			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""" % { "comp": intrinsic.lower() }
 			self.format_code(f, code)
 
 		elif mode == "math::component_wise":
@@ -2130,64 +2571,126 @@ class SignatureParser:
 			atom_code = self.do_get_type_code(vt[0])
 			f_name = self.get_runtime_enum(intrinsic + self.get_type_suffix(atom_code))
 
-			self.write(f, "llvm::Value *args[%d];\n" % len(params));
-			self.write(f, "llvm::Value *tmp;\n\n")
-			self.write(f, "llvm::Function *elem_func = get_runtime_func(%s);\n" % f_name)
-			self.write(f, "llvm::Type *ret_tp = ctx_data->get_return_type();\n")
-			self.write(f, "res = llvm::ConstantAggregateZero::get(ret_tp);\n")
-			self.write(f, "if (ret_tp->isArrayTy()) {\n")
-			self.indent += 1
+			# For derivatives:
+			#  per component:
+			#    get dual for component
+			#    call atomic function on the dual
+			#    add to result aggregate
 
-			self.write(f, "unsigned idxes[1];\n")
+			self.format_code(f, """
+			if (inst.get_return_derivs()) {
+				// get atomic function (with derivatives)
+				mi::mdl::IDefinition const *a_def = m_code_gen.find_stdlib_signature(
+					"::math", "%(intrinsic)s(%(param_types)s)");
+				llvm::Function *a_func = get_intrinsic_function(a_def, /*return_derivs=*/ true);
+				llvm::Value *a_args[%(len_params)d];
+				llvm::Value *a_arg_vars[%(len_params)d];
+				llvm::Value *a_res[%(n_elems)d];
+				llvm::Value *tmp;
+			""" % {
+				"intrinsic": intrinsic,
+				"param_types": ",".join(map(
+					lambda t: (self.get_vector_type_and_size(t) or (self.m_inv_types[t],))[0],
+					params)),
+				"len_params": len(params),
+				"n_elems": n_elems
+				})
+
+			# TODO: Expensive copying around
 
 			for i in range(n_elems):
-				self.write(f, "idxes[0] = %du;\n" % i)
+				self.write(f, "arg_it = ctx.get_first_parameter();\n")
 
-				idx = 0
-				for param in params:
+				for idx, param in enumerate(params):
+					p_name = chr(ord('a') + idx)
+					if self.is_atomic_type(param):
+						self.write(f, "a_args[%d] = arg_it;\n" % idx)
+					else:
+						self.format_code(f, """
+						tmp = ctx.extract_dual(%(p_name)s, %(elem)d);
+						""" % {
+							"p_name": p_name,
+							"elem": i
+						})
+
+						if i == 0:
+							self.format_code(f,
+							"""a_arg_vars[%(idx)d] = ctx.create_local(tmp->getType(), "%(p_name)s");
+							a_args[%(idx)d] = a_arg_vars[%(idx)d];
+							""" % {
+								"p_name": p_name,
+								"idx": idx
+							})
+
+						self.format_code(f,
+						"""ctx->CreateStore(tmp, a_arg_vars[%(idx)d]);
+						""" % {
+							"p_name": p_name,
+							"elem": i,
+							"idx": idx
+						})
+					self.write(f, "++arg_it;\n")
+
+				self.write(f, "a_res[%d] = ctx->CreateCall(a_func, a_args);\n" % i)
+
+			self.format_code(f, """
+			llvm::Type *ret_tp_elem = ctx.get_non_deriv_return_type();
+			llvm::Value *val = llvm::ConstantAggregateZero::get(ret_tp_elem);
+			llvm::Value *dx  = llvm::ConstantAggregateZero::get(ret_tp_elem);
+			llvm::Value *dy  = llvm::ConstantAggregateZero::get(ret_tp_elem);
+			""")
+
+			for i in range(n_elems):
+				self.format_code(f, """
+				val = ctx.create_insert(val, ctx.get_dual_val(a_res[%(idx)d]), %(idx)d);
+				dx  = ctx.create_insert(dx,  ctx.get_dual_dx(a_res[%(idx)d]),  %(idx)d);
+				dy  = ctx.create_insert(dy,  ctx.get_dual_dy(a_res[%(idx)d]),  %(idx)d);
+				""" % { "idx": i })
+
+			self.format_code(f, """
+				res = ctx.get_dual(val, dx, dy);
+			} else {
+				llvm::Value *args[%(len_params)d];
+				llvm::Value *tmp;
+				llvm::Function *elem_func = get_runtime_func(%(func_name)s);
+				res = llvm::ConstantAggregateZero::get(ctx_data->get_return_type());
+			""" % { "len_params": len(params), "func_name": f_name } )
+
+			for i in range(n_elems):
+				for idx, param in enumerate(params):
 					p_name = chr(ord('a') + idx)
 					if self.is_atomic_type(param):
 						self.write(f, "args[%d] = %s;\n" % (idx, p_name))
 					else:
-						self.write(f, "args[%d] = ctx->CreateExtractValue(%s, idxes);\n" % (idx, p_name))
-					idx += 1
+						self.write(f, "args[%d] = ctx.create_extract(%s, %d);\n" % (idx, p_name, i))
 
 				self.write(f, "tmp = ctx->CreateCall(elem_func, args);\n")
-				self.write(f, "res = ctx->CreateInsertValue(res, tmp, idxes);\n")
+				self.write(f, "res = ctx.create_insert(res, tmp, %s);\n" % i)
 
-			self.indent -= 1
-			self.write(f, "} else {\n")
-			self.indent += 1
+			self.format_code(f, "}\n")
 
-			self.write(f, "llvm::Value *idx;\n")
-
-			for i in range(n_elems):
-				self.write(f, "idx = ctx.get_constant(%d);\n" % i)
-
-				idx = 0
-				for param in params:
-					p_name = chr(ord('a') + idx)
-					if self.is_atomic_type(param):
-						self.write(f, "args[%d] = %s;\n" % (idx, p_name))
-					else:
-						self.write(f, "args[%d] = ctx->CreateExtractElement(%s, idx);\n" % (idx, p_name))
-					idx += 1
-
-				self.write(f, "tmp = ctx->CreateCall(elem_func, args);\n")
-				self.write(f, "res = ctx->CreateInsertElement(res, tmp, idx);\n")
-
-			self.indent -= 1
-			self.write(f, "}\n")
+		elif mode == "math::eval_at_wavelength":
+			code = ""
+			idx = 0
+			for param in params:
+				code += """
+					(void)%s;""" % chr(ord('a') + idx)
+				idx = idx + 1
+			code += """
+			// FIXME: unsupported yet
+			res = llvm::Constant::getNullValue(ctx_data->get_return_type());
+			"""
+			self.format_code(f, code)
 
 		elif mode == "math::blackbody":
 			code = """
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_has_res_handler) {
 				llvm::Function  *bb_func = get_runtime_func(RT_MDL_BLACKBODY);
 				llvm::ArrayType *arr_tp  = m_code_gen.m_type_mapper.get_arr_float_3_type();
 				llvm::Value     *tmp     = ctx.create_local(arr_tp, "tmp");
-				ctx->CreateCall2(bb_func, tmp, a);
+				ctx->CreateCall2(bb_func, tmp, ctx.get_dual_val(a));
 
-				llvm::Type *ret_tp = ctx_data->get_return_type();
 				if (ret_tp->isArrayTy()) {
 					res = ctx->CreateLoad(tmp);
 				} else {
@@ -2201,14 +2704,16 @@ class SignatureParser:
 					}
 				}
 			} else {
-				res = llvm::Constant::getNullValue(ctx_data->get_return_type());
+				res = llvm::Constant::getNullValue(ret_tp);
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::core_set":
 			code = """
-			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				llvm::Value *state = ctx.get_state_parameter();
 				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
@@ -2218,6 +2723,8 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code % intrinsic.upper())
 
@@ -2230,7 +2737,7 @@ class SignatureParser:
 					(void)%s;""" % chr(ord('a') + idx)
 				idx = idx + 1
 			code += """
-			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				llvm::Value *state = ctx.get_state_parameter();
 				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
@@ -2240,6 +2747,8 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code)
 
@@ -2252,6 +2761,10 @@ class SignatureParser:
 					state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_%s)));
 				llvm::Value *tc    = ctx->CreateLoad(adr);
 				adr = ctx->CreateInBoundsGEP(tc, a);
+				// no derivatives requested? -> get pointer to value component
+				if (!inst.get_return_derivs() && m_code_gen.m_type_mapper.use_derivatives()) {
+					adr = ctx.create_simple_gep_in_bounds(adr, 0u);
+				}
 				res = ctx.load_and_convert(ret_tp, adr);
 			} else {
 				// zero in all other contexts
@@ -2269,7 +2782,7 @@ class SignatureParser:
 
 		elif mode == "state::texture_tangent_v":
 			code = """
-			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				if (m_code_gen.m_type_mapper.is_bitangents_used()) {
 					// encoded as bitangent
@@ -2283,7 +2796,7 @@ class SignatureParser:
 					res = ctx.load_and_convert(ret_tp, adr);
 
 					mi::mdl::IDefinition const *nz_def = m_code_gen.find_stdlib_signature("::math", "normalize(float3)");
-					llvm::Function *nz_fkt = get_intrinsic_function(nz_def);
+					llvm::Function *nz_fkt = get_intrinsic_function(nz_def, /*return_derivs=*/ false);
 					llvm::Value *nz_args[] = { res };
 					res = call_rt_func(ctx, nz_fkt, nz_args);
 				} else {
@@ -2300,12 +2813,14 @@ class SignatureParser:
 				(void)a;
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::texture_tangent_u":
 			code = """
-			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				if (m_code_gen.m_type_mapper.is_bitangents_used()) {
 					// encoded as bitangent
@@ -2314,22 +2829,22 @@ class SignatureParser:
 					llvm::Value *exc   = ctx.get_exc_state_parameter();
 
 					mi::mdl::IDefinition const *n_def = m_code_gen.find_stdlib_signature("::state", "normal()");
-					llvm::Function *n_fkt = get_intrinsic_function(n_def);
+					llvm::Function *n_fkt = get_intrinsic_function(n_def, /*return_derivs=*/ false);
 					llvm::Value *n_args[] = { state };
 					llvm::Value *normal = call_rt_func(ctx, n_fkt, n_args);
 
 					mi::mdl::IDefinition const *t_def = m_code_gen.find_stdlib_signature("::state", "texture_tangent_v(int)");
-					llvm::Function *t_fkt = get_intrinsic_function(t_def);
+					llvm::Function *t_fkt = get_intrinsic_function(t_def, /*return_derivs=*/ false);
 					llvm::Value *t_args[] = { state, exc, a };
 					llvm::Value *tangent = call_rt_func(ctx, t_fkt, t_args);
 
 					mi::mdl::IDefinition const *c_def = m_code_gen.find_stdlib_signature("::math", "cross(float3,float3)");
-					llvm::Function *c_fkt = get_intrinsic_function(c_def);
+					llvm::Function *c_fkt = get_intrinsic_function(c_def, /*return_derivs=*/ false);
 					llvm::Value *c_args[] = { normal, tangent };
 					llvm::Value *cross = call_rt_func(ctx, c_fkt, c_args);
 
 					mi::mdl::IDefinition const *nz_def = m_code_gen.find_stdlib_signature("::math", "normalize(float3)");
-					llvm::Function *nz_fkt = get_intrinsic_function(nz_def);
+					llvm::Function *nz_fkt = get_intrinsic_function(nz_def, /*return_derivs=*/ false);
 					llvm::Value *nz_args[] = { cross };
 					llvm::Value *n_cross = call_rt_func(ctx, nz_fkt, nz_args);
 
@@ -2356,6 +2871,8 @@ class SignatureParser:
 				(void)a;
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code)
 
@@ -2377,7 +2894,7 @@ class SignatureParser:
 
 		elif mode == "state::transform":
 			code = """
-			llvm::Type  *ret_tp = ctx_data->get_return_type();
+			llvm::Type  *ret_tp = ctx.get_non_deriv_return_type();
 			llvm::Value *from   = a;
 			llvm::Value *to     = b;
 
@@ -2597,12 +3114,14 @@ class SignatureParser:
 				// zero in all other contexts
 			}
 			res = ctx->CreateLoad(result);
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::transform_point":
 			code = """
-			llvm::Type  *ret_tp = ctx_data->get_return_type();
+			llvm::Type  *ret_tp = ctx.get_return_type();
 			llvm::Value *from   = a;
 			llvm::Value *to     = b;
 			llvm::Value *point  = c;
@@ -2616,235 +3135,59 @@ class SignatureParser:
 			llvm::Value *t_cond = ctx->CreateICmpEQ(to, internal);
 			to = ctx->CreateSelect(t_cond, encoding, to);
 
-			res = llvm::Constant::getNullValue(ret_tp);
+			llvm::Value *cond = ctx->CreateICmpEQ(from, to);
 
-			llvm::Value *result = ctx.create_local(ret_tp, "result");
-			ctx->CreateStore(res, result);
+			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+				llvm::BasicBlock *pre_if_bb = ctx->GetInsertBlock();
+				llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
+				llvm::BasicBlock *end_bb    = ctx.create_bb("end");
 
-			llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
-			llvm::BasicBlock *id_bb     = ctx.create_bb("id");
-			llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
-			llvm::BasicBlock *end_bb    = ctx.create_bb("end");
+				llvm::Value *non_id_res;
 
-			ctx->CreateCondBr(cond, id_bb, non_id_bb);
-			{
-				// the matrix is the identity, return the point
-				ctx->SetInsertPoint(id_bb);
+				ctx->CreateCondBr(cond, end_bb, non_id_bb);
 
-				ctx->CreateStore(point, result);
-				ctx->CreateBr(end_bb);
-			}
-			{
-				ctx->SetInsertPoint(non_id_bb);
+				{
+					// "from" and "to" are unequal
+					ctx->SetInsertPoint(non_id_bb);
 
-				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 					llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
-					llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
+					llvm::Value *cond_is_w2o = ctx->CreateICmpEQ(from, worldToObject);
 
-					llvm::BasicBlock *w2o_bb = ctx.create_bb("w2o");
-					llvm::BasicBlock *o2w_bb = ctx.create_bb("o2w");
+					llvm::Value *matrix = ctx->CreateSelect(
+						cond_is_w2o,
+						ctx.get_w2o_transform_value(),
+						ctx.get_o2w_transform_value());
 
-					if (ret_tp->isVectorTy()) {
-						// vector mode
-						llvm::VectorType *vec_tp = llvm::cast<llvm::VectorType>(ret_tp);
-
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// point.x * w2o[0].x + point.y * w2o[0].y + point.z * w2o[0].z + w2o[0].w,
-							// point.x * w2o[1].x + point.y * w2o[1].y + point.z * w2o[1].z + w2o[1].w,
-							// point.x * w2o[2].x + point.y * w2o[2].y + point.z * w2o[2].z + w2o[2].w
-
-							llvm::Value *idx, *ptr, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-
-							llvm::Value *row[3];
-							unsigned w[] = { 3 };
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-								v      = ctx->CreateExtractValue(row[i], w);
-								res    = ctx->CreateInsertElement(res, v, idx);
-							}
-
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-								llvm::Value *t = llvm::Constant::getNullValue(vec_tp);
-
-								v   = ctx->CreateExtractValue(row[0], idxes);
-								idx = ctx.get_constant(0);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[1], idxes);
-								idx = ctx.get_constant(1);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[2], idxes);
-								idx = ctx.get_constant(2);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								idx = ctx.get_constant(i);
-								v   = ctx->CreateExtractElement(point, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, t);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// point.x * o2w[0].x + point.y * o2w[0].y + point.z * o2w[0].z + o2w[0].w,
-							// point.x * o2w[1].x + point.y * o2w[1].y + point.z * o2w[1].z + o2w[1].w,
-							// point.x * o2w[2].x + point.y * o2w[2].y + point.z * o2w[2].z + o2w[2].w
-
-							llvm::Value *idx, *ptr, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-
-							llvm::Value *row[3];
-							unsigned w[] = { 3 };
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-								v      = ctx->CreateExtractValue(row[i], w);
-								res    = ctx->CreateInsertElement(res, v, idx);
-							}
-
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-								llvm::Value *t = llvm::Constant::getNullValue(vec_tp);
-
-								v   = ctx->CreateExtractValue(row[0], idxes);
-								idx = ctx.get_constant(0);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[1], idxes);
-								idx = ctx.get_constant(1);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[2], idxes);
-								idx = ctx.get_constant(2);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								idx = ctx.get_constant(i);
-								v   = ctx->CreateExtractElement(point, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, t);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+					if (inst.get_return_derivs()) {
+						non_id_res = ctx.create_deriv_mul_state_V3xM(
+							ret_tp, point, matrix, /*ignore_translation=*/ false, /*transposed=*/ false);
 					} else {
-						// scalar mode
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// point.x * w2o[0].x + point.y * w2o[0].y + point.z * w2o[0].z + w2o[0].w,
-							// point.x * w2o[1].x + point.y * w2o[1].y + point.z * w2o[1].z + w2o[1].w,
-							// point.x * w2o[2].x + point.y * w2o[2].y + point.z * w2o[2].z + w2o[2].w
-
-							res = llvm::Constant::getNullValue(ret_tp);
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							unsigned w[] = { 3 };
-							for (int i = 0; i < 3; ++i) {
-								unsigned idxes[] = { unsigned(i) };
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-								v      = ctx->CreateExtractValue(row[i], w);
-								res    = ctx->CreateInsertValue(res, v, idxes);
-							}
-
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								v = ctx->CreateExtractValue(point, idxes);
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row[j], idxes);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// point.x * o2w[0].x + point.y * o2w[0].y + point.z * o2w[0].z + o2w[0].w,
-							// point.x * o2w[1].x + point.y * o2w[1].y + point.z * o2w[1].z + o2w[1].w,
-							// point.x * o2w[2].x + point.y * o2w[2].y + point.z * o2w[2].z + o2w[2].w
-
-							res = llvm::Constant::getNullValue(ret_tp);
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							unsigned w[] = { 3 };
-							for (int i = 0; i < 3; ++i) {
-								unsigned idxes[] = { unsigned(i) };
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-								v      = ctx->CreateExtractValue(row[i], w);
-								res    = ctx->CreateInsertValue(res, v, idxes);
-							}
-
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								v = ctx->CreateExtractValue(point, idxes);
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row[j], idxes);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+						non_id_res = ctx.create_mul_state_V3xM(
+							ret_tp, point, matrix, /*ignore_translation=*/ false, /*transposed=*/ false);
 					}
-				} else {
-					// zero in all other contexts
+
 					ctx->CreateBr(end_bb);
 				}
+
+				ctx->SetInsertPoint(end_bb);
+
+				llvm::PHINode *phi = ctx->CreatePHI(ret_tp, 2);
+				phi->addIncoming(point, pre_if_bb);  // the matrix is the identity, return the point
+				phi->addIncoming(non_id_res, non_id_bb);
+				res = phi;
+			} else {
+				// either identity or zero in all other contexts
+				res = ctx->CreateSelect(cond, point, llvm::Constant::getNullValue(ret_tp));
 			}
-			ctx->SetInsertPoint(end_bb);
-			res = ctx->CreateLoad(result);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::transform_vector":
 			code = """
-			llvm::Type  *ret_tp = ctx_data->get_return_type();
+			llvm::Type  *ret_tp = ctx.get_return_type();
 			llvm::Value *from   = a;
 			llvm::Value *to     = b;
-			llvm::Value *vector = c;
+			llvm::Value *vector  = c;
 
 			llvm::Value *internal = ctx.get_constant(LLVM_code_generator::coordinate_internal);
 			llvm::Value *encoding = ctx.get_constant(m_internal_space);
@@ -2855,217 +3198,59 @@ class SignatureParser:
 			llvm::Value *t_cond = ctx->CreateICmpEQ(to, internal);
 			to = ctx->CreateSelect(t_cond, encoding, to);
 
-			res = llvm::Constant::getNullValue(ret_tp);
+			llvm::Value *cond = ctx->CreateICmpEQ(from, to);
 
-			llvm::Value *result = ctx.create_local(ret_tp, "result");
-			ctx->CreateStore(res, result);
+			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+				llvm::BasicBlock *pre_if_bb = ctx->GetInsertBlock();
+				llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
+				llvm::BasicBlock *end_bb    = ctx.create_bb("end");
 
-			llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
-			llvm::BasicBlock *id_bb     = ctx.create_bb("id");
-			llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
-			llvm::BasicBlock *end_bb    = ctx.create_bb("end");
+				llvm::Value *non_id_res;
 
-			ctx->CreateCondBr(cond, id_bb, non_id_bb);
-			{
-				// the matrix is the identity, return the vector
-				ctx->SetInsertPoint(id_bb);
+				ctx->CreateCondBr(cond, end_bb, non_id_bb);
 
-				ctx->CreateStore(vector, result);
-				ctx->CreateBr(end_bb);
-			}
-			{
-				ctx->SetInsertPoint(non_id_bb);
+				{
+					// "from" and "to" are unequal
+					ctx->SetInsertPoint(non_id_bb);
 
-				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 					llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
-					llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
+					llvm::Value *cond_is_w2o = ctx->CreateICmpEQ(from, worldToObject);
 
-					llvm::BasicBlock *w2o_bb = ctx.create_bb("w2o");
-					llvm::BasicBlock *o2w_bb = ctx.create_bb("o2w");
+					llvm::Value *matrix = ctx->CreateSelect(
+						cond_is_w2o,
+						ctx.get_w2o_transform_value(),
+						ctx.get_o2w_transform_value());
 
-					if (ret_tp->isVectorTy()) {
-						// vector mode
-						llvm::VectorType *vec_tp = llvm::cast<llvm::VectorType>(ret_tp);
-
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// vector.x * w2o[0].x + vector.y * w2o[0].y + vector.z * w2o[0].z
-							// vector.x * w2o[1].x + vector.y * w2o[1].y + vector.z * w2o[1].z
-							// vector.x * w2o[2].x + vector.y * w2o[2].y + vector.z * w2o[2].z
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-							}
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-								llvm::Value *t = llvm::Constant::getNullValue(vec_tp);
-
-								v   = ctx->CreateExtractValue(row[0], idxes);
-								idx = ctx.get_constant(0);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[1], idxes);
-								idx = ctx.get_constant(1);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[2], idxes);
-								idx = ctx.get_constant(2);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								idx = ctx.get_constant(i);
-								v   = ctx->CreateExtractElement(vector, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, t);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// vector.x * o2w[0].x + vector.y * o2w[0].y + vector.z * o2w[0].z
-							// vector.x * o2w[1].x + vector.y * o2w[1].y + vector.z * o2w[1].z
-							// vector.x * o2w[2].x + vector.y * o2w[2].y + vector.z * o2w[2].z
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-							}
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-								llvm::Value *t = llvm::Constant::getNullValue(vec_tp);
-
-								v   = ctx->CreateExtractValue(row[0], idxes);
-								idx = ctx.get_constant(0);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[1], idxes);
-								idx = ctx.get_constant(1);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								v   = ctx->CreateExtractValue(row[2], idxes);
-								idx = ctx.get_constant(2);
-								t   = ctx->CreateInsertElement(t, v, idx);
-
-								idx = ctx.get_constant(i);
-								v   = ctx->CreateExtractElement(vector, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, t);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+					if (inst.get_return_derivs()) {
+						non_id_res = ctx.create_deriv_mul_state_V3xM(
+							ret_tp, vector, matrix, /*ignore_translation=*/ true, /*transposed=*/ false);
 					} else {
-						// scalar mode
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// vector.x * w2o[0].x + vector.y * w2o[0].y + vector.z * w2o[0].z
-							// vector.x * w2o[1].x + vector.y * w2o[1].y + vector.z * w2o[1].z
-							// vector.x * w2o[2].x + vector.y * w2o[2].y + vector.z * w2o[2].z
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-							}
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								v = ctx->CreateExtractValue(vector, idxes);
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row[j], idxes);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// vector.x * o2w[0].x + vector.y * o2w[0].y + vector.z * o2w[0].z
-							// vector.x * o2w[1].x + vector.y * o2w[1].y + vector.z * o2w[1].z
-							// vector.x * o2w[2].x + vector.y * o2w[2].y + vector.z * o2w[2].z
-
-							llvm::Value *idx, *ptr, *v;
-
-							llvm::Value *row[3];
-							for (int i = 0; i < 3; ++i) {
-								idx    = ctx.get_constant(i);
-								ptr    = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row[i] = ctx->CreateLoad(ptr);
-							}
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								v = ctx->CreateExtractValue(vector, idxes);
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row[j], idxes);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+						non_id_res = ctx.create_mul_state_V3xM(
+							ret_tp, vector, matrix, /*ignore_translation=*/ true, /*transposed=*/ false);
 					}
-				} else {
-					// zero in all other contexts
+
 					ctx->CreateBr(end_bb);
 				}
+
+				ctx->SetInsertPoint(end_bb);
+
+				llvm::PHINode *phi = ctx->CreatePHI(ret_tp, 2);
+				phi->addIncoming(vector, pre_if_bb);  // the matrix is the identity, return the vector
+				phi->addIncoming(non_id_res, non_id_bb);
+				res = phi;
+			} else {
+				// either identity or zero in all other contexts
+				res = ctx->CreateSelect(cond, vector, llvm::Constant::getNullValue(ret_tp));
 			}
-			ctx->SetInsertPoint(end_bb);
-			res = ctx->CreateLoad(result);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::transform_normal":
 			code = """
-			llvm::Type  *ret_tp = ctx_data->get_return_type();
+			llvm::Type  *ret_tp = ctx.get_return_type();
 			llvm::Value *from   = a;
 			llvm::Value *to     = b;
-			llvm::Value *normal = c;
+			llvm::Value *normal  = c;
 
 			llvm::Value *internal = ctx.get_constant(LLVM_code_generator::coordinate_internal);
 			llvm::Value *encoding = ctx.get_constant(m_internal_space);
@@ -3076,170 +3261,57 @@ class SignatureParser:
 			llvm::Value *t_cond = ctx->CreateICmpEQ(to, internal);
 			to = ctx->CreateSelect(t_cond, encoding, to);
 
-			res = llvm::Constant::getNullValue(ret_tp);
+			llvm::Value *cond = ctx->CreateICmpEQ(from, to);
 
-			llvm::Value *result = ctx.create_local(ret_tp, "result");
-			ctx->CreateStore(res, result);
+			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+				llvm::BasicBlock *pre_if_bb = ctx->GetInsertBlock();
+				llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
+				llvm::BasicBlock *end_bb    = ctx.create_bb("end");
 
-			llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
-			llvm::BasicBlock *id_bb     = ctx.create_bb("id");
-			llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
-			llvm::BasicBlock *end_bb    = ctx.create_bb("end");
+				llvm::Value *non_id_res;
 
-			ctx->CreateCondBr(cond, id_bb, non_id_bb);
-			{
-				// the matrix is the identity, return the normal
-				ctx->SetInsertPoint(id_bb);
+				ctx->CreateCondBr(cond, end_bb, non_id_bb);
 
-				ctx->CreateStore(normal, result);
-				ctx->CreateBr(end_bb);
-			}
-			{
-				ctx->SetInsertPoint(non_id_bb);
+				{
+					// "from" and "to" are unequal
+					ctx->SetInsertPoint(non_id_bb);
 
-				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 					llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
-					llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
+					llvm::Value *cond_is_w2o = ctx->CreateICmpEQ(from, worldToObject);
 
-					llvm::BasicBlock *w2o_bb = ctx.create_bb("w2o");
-					llvm::BasicBlock *o2w_bb = ctx.create_bb("o2w");
+					// for normals, we multiply by the transpose of the inverse matrix
+					llvm::Value *matrix = ctx->CreateSelect(
+						cond_is_w2o,
+						ctx.get_o2w_transform_value(),
+						ctx.get_w2o_transform_value());
 
-					if (ret_tp->isVectorTy()) {
-						// vector mode
-						llvm::VectorType *vec_tp = llvm::cast<llvm::VectorType>(ret_tp);
-
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// normal.x * o2w[0].x + normal.y * o2w[1].x + normal.z * o2w[2].x
-							// normal.x * o2w[0].y + normal.y * o2w[1].y + normal.z * o2w[2].y
-							// normal.x * o2w[0].z + normal.y * o2w[1].z + normal.z * o2w[2].z
-
-							llvm::Value *idx, *ptr, *row, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								idx = ctx.get_constant(i);
-								ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row = ctx.load_and_convert(vec_tp, ptr);
-								v   = ctx->CreateExtractElement(normal, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, row);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// normal.x * w2o[0].x + normal.y * w2o[1].x + normal.z * w2o[2].x
-							// normal.x * w2o[0].y + normal.y * w2o[1].y + normal.z * w2o[2].y
-							// normal.x * w2o[0].z + normal.y * w2o[1].z + normal.z * w2o[2].z
-
-							llvm::Value *idx, *ptr, *row, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								idx = ctx.get_constant(i);
-								ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row = ctx.load_and_convert(vec_tp, ptr);
-								v   = ctx->CreateExtractElement(normal, idx);
-								v   = ctx.create_vector_splat(vec_tp, v);
-								v   = ctx->CreateFMul(v, row);
-								res = ctx->CreateFAdd(res, v);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+					if (inst.get_return_derivs()) {
+						non_id_res = ctx.create_deriv_mul_state_V3xM(
+							ret_tp, normal, matrix, /*ignore_translation=*/ true, /*transposed=*/ true);
 					} else {
-						// scalar mode
-						llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(ret_tp);
-
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							ctx->SetInsertPoint(w2o_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							// normal.x * o2w[0].x + normal.y * o2w[1].x + normal.z * o2w[2].x
-							// normal.x * o2w[0].y + normal.y * o2w[1].y + normal.z * o2w[2].y
-							// normal.x * o2w[0].z + normal.y * o2w[1].z + normal.z * o2w[2].z
-
-							llvm::Value *idx, *ptr, *row, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								idx = ctx.get_constant(i);
-								ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row = ctx.load_and_convert(arr_tp, ptr);
-								v   = ctx->CreateExtractValue(normal, idxes);
-
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row, comp);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							// normal.x * w2o[0].x + normal.y * w2o[1].x + normal.z * w2o[2].x
-							// normal.x * w2o[0].y + normal.y * w2o[1].y + normal.z * w2o[2].y
-							// normal.x * w2o[0].z + normal.y * w2o[1].z + normal.z * w2o[2].z
-
-							llvm::Value *idx, *ptr, *row, *v;
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 2; i >= 0; --i) {
-								unsigned idxes[] = { unsigned(i) };
-
-								idx = ctx.get_constant(i);
-								ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								row = ctx.load_and_convert(arr_tp, ptr);
-								v   = ctx->CreateExtractValue(normal, idxes);
-
-								for (unsigned j = 0; j < 3; ++j) {
-									unsigned comp[] = { j };
-									llvm::Value *c = ctx->CreateExtractValue(row, comp);
-									llvm::Value *t = ctx->CreateFMul(v, c);
-									c = ctx->CreateExtractValue(res, comp);
-									t = ctx->CreateFAdd(t, c);
-									res = ctx->CreateInsertValue(res, t, comp);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
+						non_id_res = ctx.create_mul_state_V3xM(
+							ret_tp, normal, matrix, /*ignore_translation=*/ true, /*transposed=*/ true);
 					}
-				} else {
-					// zero in all other contexts
+
 					ctx->CreateBr(end_bb);
 				}
+
+				ctx->SetInsertPoint(end_bb);
+
+				llvm::PHINode *phi = ctx->CreatePHI(ret_tp, 2);
+				phi->addIncoming(normal, pre_if_bb);  // the matrix is the identity, return the normal
+				phi->addIncoming(non_id_res, non_id_bb);
+				res = phi;
+			} else {
+				// either identity or zero in all other contexts
+				res = ctx->CreateSelect(cond, normal, llvm::Constant::getNullValue(ret_tp));
 			}
-			ctx->SetInsertPoint(end_bb);
-			res = ctx->CreateLoad(result);
 			"""
 			self.format_code(f, code)
 
 		elif mode == "state::transform_scale":
 			code = """
-			llvm::Type  *ret_tp = ctx_data->get_return_type();
+			llvm::Type  *ret_tp = ctx.get_return_type();
 			llvm::Value *from   = a;
 			llvm::Value *to     = b;
 			llvm::Value *scale  = c;
@@ -3253,28 +3325,21 @@ class SignatureParser:
 			llvm::Value *t_cond = ctx->CreateICmpEQ(to, internal);
 			to = ctx->CreateSelect(t_cond, encoding, to);
 
-			res = llvm::Constant::getNullValue(ret_tp);
+			llvm::Value *cond = ctx->CreateICmpEQ(from, to);
 
-			llvm::Value *result = ctx.create_local(ret_tp, "result");
-			ctx->CreateStore(res, result);
+			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+				llvm::BasicBlock *pre_if_bb = ctx->GetInsertBlock();
+				llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
+				llvm::BasicBlock *end_bb    = ctx.create_bb("end");
 
-			llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
-			llvm::BasicBlock *id_bb     = ctx.create_bb("id");
-			llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
-			llvm::BasicBlock *end_bb    = ctx.create_bb("end");
+				llvm::Value *non_id_res;
 
-			ctx->CreateCondBr(cond, id_bb, non_id_bb);
-			{
-				// the matrix is the identity, return the scale
-				ctx->SetInsertPoint(id_bb);
+				ctx->CreateCondBr(cond, end_bb, non_id_bb);
 
-				ctx->CreateStore(scale, result);
-				ctx->CreateBr(end_bb);
-			}
-			{
-				ctx->SetInsertPoint(non_id_bb);
+				{
+					// "from" and "to" are unequal
+					ctx->SetInsertPoint(non_id_bb);
 
-				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 					llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
 					llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
 
@@ -3284,7 +3349,7 @@ class SignatureParser:
 
 					mi::mdl::IDefinition const *t_def = m_code_gen.find_stdlib_signature("::math", "length(float3)");
 
-					llvm::Function *t_fkt = get_intrinsic_function(t_def);
+					llvm::Function *t_fkt = get_intrinsic_function(t_def, /*return_derivs=*/ false);
 					llvm::Type *float3_tp = m_code_gen.get_type_mapper().get_float3_type();
 					llvm::Value *idx, *ptr;
 					llvm::Value *t_args[1];
@@ -3308,20 +3373,30 @@ class SignatureParser:
 					llvm::Value *v_z = call_rt_func(ctx, t_fkt, t_args);
 
 					// calc average
-					res = ctx->CreateFAdd(v_x, v_y);
-					res = ctx->CreateFAdd(res, v_z);
-					res = ctx->CreateFMul(res, ctx.get_constant(1.0f/3.0f));
-					res = ctx->CreateFMul(res, scale);
+					llvm::Value *factor = ctx->CreateFAdd(v_x, v_y);
+					factor = ctx->CreateFAdd(factor, v_z);
+					factor = ctx->CreateFMul(factor, ctx.get_constant(1.0f/3.0f));
+					non_id_res = ctx->CreateFMul(factor, ctx.get_dual_val(scale));
 
-					ctx->CreateStore(res, result);
-					ctx->CreateBr(end_bb);
-				} else {
-					// zero in all other contexts
+					if (inst.get_return_derivs()) {
+						llvm::Value *dx = ctx->CreateFMul(factor, ctx.get_dual_dx(scale));
+						llvm::Value *dy = ctx->CreateFMul(factor, ctx.get_dual_dy(scale));
+						non_id_res = ctx.get_dual(non_id_res, dx, dy);
+					}
+
 					ctx->CreateBr(end_bb);
 				}
+
+				ctx->SetInsertPoint(end_bb);
+
+				llvm::PHINode *phi = ctx->CreatePHI(ret_tp, 2);
+				phi->addIncoming(scale, pre_if_bb);  // the matrix is the identity, return the scale
+				phi->addIncoming(non_id_res, non_id_bb);
+				res = phi;
+			} else {
+				// either identity or zero in all other contexts
+				res = ctx->CreateSelect(cond, scale, llvm::Constant::getNullValue(ret_tp));
 			}
-			ctx->SetInsertPoint(end_bb);
-			res = ctx->CreateLoad(result);
 			"""
 			self.format_code(f, code)
 
@@ -3402,7 +3477,7 @@ class SignatureParser:
 					llvm::Function *glue_func = get_runtime_func(RT_MDL_TEX_%(name)s);
 					res = ctx->CreateCall2(glue_func, res_data, a);
 				} else {
-					llvm::Type  *res_type = ctx_data->get_return_type();
+					llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 
 					llvm::Value *lut      = m_code_gen.get_attribute_table(
 						ctx, LLVM_code_generator::RTK_TEXTURE);
@@ -3451,16 +3526,30 @@ class SignatureParser:
 				""" % code_params
 			self.format_code(f, code)
 
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""")
+
 		elif mode == "tex::lookup_float":
 			# texture lookup for texture
 			texture_param = params[0]
 			if texture_param == "T2":
 				code = """
 				if (m_has_res_handler) {
-					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_2D);
+					llvm::Function *lookup_func;
+					llvm::Type     *coord_type;
+
+					if (m_code_gen.is_texruntime_with_derivs()) {
+						lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_DERIV_FLOAT_2D);
+						coord_type = m_code_gen.m_type_mapper.get_deriv_arr_float_2_type();
+					} else {
+						lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_2D);
+						coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					}
 
 					llvm::Type  *f2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Value *coord   = ctx.create_local(f2_type, "coord");
+					llvm::Value *coord   = ctx.create_local(coord_type, "coord");
 					llvm::Value *crop_u  = ctx.create_local(f2_type, "crop_u");
 					llvm::Value *crop_v  = ctx.create_local(f2_type, "crop_v");
 
@@ -3479,13 +3568,19 @@ class SignatureParser:
 					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float3_2d);
 
-					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_3_type();
-					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
-					llvm::Value *crop_u     = ctx.create_local(crop_type,  "crop_u");
-					llvm::Value *crop_v     = ctx.create_local(crop_type,  "crop_v");
+					llvm::Type *coord_type;
+					if (m_code_gen.is_texruntime_with_derivs()) {
+						coord_type = m_code_gen.m_type_mapper.get_deriv_arr_float_2_type();
+					} else {
+						coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					}
+
+					llvm::Type  *res_type  = m_code_gen.m_type_mapper.get_arr_float_3_type();
+					llvm::Type  *crop_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					llvm::Value *tmp       = ctx.create_local(res_type, "tmp");
+					llvm::Value *coord     = ctx.create_local(coord_type, "coord");
+					llvm::Value *crop_u    = ctx.create_local(crop_type,  "crop_u");
+					llvm::Value *crop_v    = ctx.create_local(crop_type,  "crop_v");
 
 					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
@@ -3596,7 +3691,7 @@ class SignatureParser:
 					llvm::Value *args[] = { res_data, a, b };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
-					res = llvm::Constant::getNullValue(ctx_data->get_return_type());
+					res = llvm::Constant::getNullValue(ctx.get_non_deriv_return_type());
 				}
 				"""
 			else:
@@ -3604,24 +3699,33 @@ class SignatureParser:
 				code = ""
 			self.format_code(f, code)
 
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""")
+
 		elif mode == "tex::lookup_floatX":
 			# texture lookup_floatX()
 			code_params = {"core_th" : "false", "vt_size" : "0" }
 			if intrinsic == "lookup_float2":
 				code_params["size"] = "2"
 				code_params["func"] = "LOOKUP_FLOAT2"
+				code_params["deriv_func"] = "LOOKUP_DERIV_FLOAT2"
 				code_params["vt_size"]  = "3"
 			elif intrinsic == "lookup_float3":
 				code_params["size"] = "3"
 				code_params["func"] = "LOOKUP_FLOAT3"
+				code_params["deriv_func"] = "LOOKUP_DERIV_FLOAT3"
 				code_params["vt_size"]  = "3"
 			elif intrinsic == "lookup_float4":
 				code_params["size"] = "4"
 				code_params["func"] = "LOOKUP_FLOAT4"
+				code_params["deriv_func"] = "LOOKUP_DERIV_FLOAT4"
 				code_params["vt_size"]  = "4"
 			elif intrinsic == "lookup_color":
 				code_params["size"] = "3"
 				code_params["func"] = "LOOKUP_COLOR"
+				code_params["deriv_func"] = "LOOKUP_DERIV_COLOR"
 				code_params["vt_size"]  = "3"
 			else:
 				error("Unsupported tex lookup function '%s'" % intrinsic)
@@ -3630,10 +3734,18 @@ class SignatureParser:
 			if texture_param == "T2":
 				code = """
 				if (m_has_res_handler) {
-					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_2D);
+					llvm::Function *lookup_func;
+					llvm::Type     *coord_type;
+
+					if (m_code_gen.is_texruntime_with_derivs()) {
+						lookup_func = get_runtime_func(RT_MDL_TEX_%(deriv_func)s_2D);
+						coord_type = m_code_gen.m_type_mapper.get_deriv_arr_float_2_type();
+					} else {
+						lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_2D);
+						coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					}
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(size)s_type();
-					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
@@ -3646,7 +3758,7 @@ class SignatureParser:
 					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, crop_u, crop_v };
 					ctx->CreateCall(lookup_func, args);
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
 						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -3657,13 +3769,19 @@ class SignatureParser:
 					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float%(vt_size)s_2d);
 
-					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
-					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
-					llvm::Value *crop_u     = ctx.create_local(crop_type,  "crop_u");
-					llvm::Value *crop_v     = ctx.create_local(crop_type,  "crop_v");
+					llvm::Type *coord_type;
+					if (m_code_gen.is_texruntime_with_derivs()) {
+						coord_type = m_code_gen.m_type_mapper.get_deriv_arr_float_2_type();
+					} else {
+						coord_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					}
+
+					llvm::Type  *res_type  = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
+					llvm::Type  *crop_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
+					llvm::Value *tmp       = ctx.create_local(res_type, "tmp");
+					llvm::Value *coord     = ctx.create_local(coord_type, "coord");
+					llvm::Value *crop_u    = ctx.create_local(crop_type,  "crop_u");
+					llvm::Value *crop_v    = ctx.create_local(crop_type,  "crop_v");
 
 					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
@@ -3672,7 +3790,7 @@ class SignatureParser:
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				}
 				"""
 			elif texture_param == "T3":
@@ -3696,7 +3814,7 @@ class SignatureParser:
 					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, e, crop_u, crop_v, crop_w };
 					ctx->CreateCall(lookup_func, args);
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
 						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -3724,7 +3842,7 @@ class SignatureParser:
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				}
 				"""
 			elif texture_param == "TC":
@@ -3741,7 +3859,7 @@ class SignatureParser:
 					llvm::Value *args[] = { tmp, res_data, a, coord };
 					ctx->CreateCall(lookup_func, args);
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
 						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -3762,7 +3880,7 @@ class SignatureParser:
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				}
 				"""
 			elif texture_param == "TP":
@@ -3776,15 +3894,20 @@ class SignatureParser:
 					llvm::Value *args[] = { tmp, res_data, a, b };
 					ctx->CreateCall(lookup_func, args);
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
-					res = llvm::Constant::getNullValue(ctx_data->get_return_type());
+					res = llvm::Constant::getNullValue(ctx.get_non_deriv_return_type());
 				}
 				"""
 			else:
 				error("Unsupported texture type")
 				code = ""
 			self.format_code(f, code % code_params)
+
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""")
 
 		elif mode == "tex::texel_float" or mode == "tex::texel_float_uvtile":
 			# texture lookup_float()
@@ -3878,6 +4001,11 @@ class SignatureParser:
 				return
 			self.format_code(f, code % code_params)
 
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""")
+
 		elif mode == "tex::texel_floatX" or mode == "tex::texel_floatX_uvtile":
 			# texture lookup_floatX()
 			code_params = {}
@@ -3917,7 +4045,7 @@ class SignatureParser:
 					%(get_uv_tile)s
 					llvm::Value *args[] = { tmp, res_data, a, coord, uv_tile };
 					ctx->CreateCall(lookup_func, args);
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
 						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -3940,7 +4068,7 @@ class SignatureParser:
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				}
 				"""
 			elif texture_param == "T3":
@@ -3956,7 +4084,7 @@ class SignatureParser:
 					ctx.convert_and_store(b, coord);
 					llvm::Value *args[] = { tmp, res_data, a, coord };
 					ctx->CreateCall(lookup_func, args);
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
 						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -3977,7 +4105,7 @@ class SignatureParser:
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
-					res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				}
 				"""
 			else:
@@ -3985,6 +4113,11 @@ class SignatureParser:
 				return
 
 			self.format_code(f, code % code_params)
+
+			self.format_code(f, """
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
+			""")
 
 		elif mode == "debug::breakpoint":
 			code = """
@@ -4368,7 +4501,7 @@ class SignatureParser:
 				llvm::Function *glue_func = get_runtime_func(RT_MDL_DF_%(TYPE)s_%(name)s);
 				res = ctx->CreateCall2(glue_func, res_data, a);
 			} else {
-				llvm::Type  *res_type = ctx_data->get_return_type();
+				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 				llvm::Value *lut      = m_code_gen.get_attribute_table(
 					ctx, LLVM_code_generator::RTK_%(TYPE)s);
 				llvm::Value *lut_size =  m_code_gen.get_attribute_table_size(
@@ -4413,6 +4546,8 @@ class SignatureParser:
 					res = llvm::Constant::getNullValue(res_type);
 				}
 			}
+			if (inst.get_return_derivs())  // expand to dual
+				res = ctx.get_dual(res);
 			""" % code_params
 			self.format_code(f, code)
 
@@ -4901,30 +5036,35 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_tex_depth",         "II_PTII")
 		self.register_mdl_runtime_func("mdl_tex_valid",         "BB_PTII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_2d",    "FF_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_3d",    "FF_PTIIFA3EWMEWMEWMFA2FA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_cube",  "FF_PTIIFA3")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_ptex",  "FF_PTIIII")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_2d",       "FF_PTIIFA2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float_2d", "FF_PTIIFD2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_3d",       "FF_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_cube",     "FF_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_ptex",     "FF_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_2d",   "FA2_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_3d",   "FA2_PTIIFA3EWMEWMEWMFA2FA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_cube", "FA2_PTIIFA3")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_ptex", "FA2_PTIIII")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_2d",       "FA2_PTIIFA2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float2_2d", "FA2_PTIIFD2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_3d",       "FA2_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_cube",     "FA2_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_ptex",     "FA2_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_2d",   "FA3_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_3d",   "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_cube", "FA3_PTIIFA3")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_ptex", "FA3_PTIIII")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_2d",       "FA3_PTIIFA2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float3_2d", "FA3_PTIIFD2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_cube",     "FA3_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_ptex",     "FA3_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_2d",   "FA4_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_3d",   "FA4_PTIIFA3EWMEWMEWMFA2FA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_cube", "FA4_PTIIFA3")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_ptex", "FA4_PTIIII")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_2d",       "FA4_PTIIFA2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float4_2d", "FA4_PTIIFD2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_3d",       "FA4_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_cube",     "FA4_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_ptex",     "FA4_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_2d",    "FA3_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_3d",    "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_cube",  "FA3_PTIIFA3")
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_ptex",  "FA3_PTIIII")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_2d",       "FA3_PTIIFA2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_color_2d", "FA3_PTIIFD2EWMEWMFA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_cube",     "FA3_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_ptex",     "FA3_PTIIII")
 
 		self.register_mdl_runtime_func("mdl_tex_texel_float_2d",        "FF_PTIIIA2IA2")
 		self.register_mdl_runtime_func("mdl_tex_texel_float2_2d",       "FA2_PTIIIA2IA2")
@@ -4939,10 +5079,18 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_tex_texel_color_3d",        "FA3_PTIIIA3")
 
 		# df functions
-		self.register_mdl_runtime_func("mdl_df_light_profile_power",    "FF_PTII")
-		self.register_mdl_runtime_func("mdl_df_light_profile_maximum",  "FF_PTII")
-		self.register_mdl_runtime_func("mdl_df_light_profile_valid",    "BB_PTII")
-		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_valid", "BB_PTII")
+		self.register_mdl_runtime_func("mdl_df_light_profile_power",            "FF_PTII")
+		self.register_mdl_runtime_func("mdl_df_light_profile_maximum",          "FF_PTII")
+		self.register_mdl_runtime_func("mdl_df_light_profile_valid",            "BB_PTII")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_valid",         "BB_PTII")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_resolution",    "IA3_PTIIEMP")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_evaluate",      "FA3_PTIIFA2FA2EMP")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_sample",        "FA3_PTIIFA2FA3EMP")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_pdf",           "FF_PTIIFA2FA2EMP")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_albedos",       "FA4_PTIIFA2")
+		self.register_mdl_runtime_func("mdl_df_light_profile_evaluate",         "FF_PTIIFA2")
+		self.register_mdl_runtime_func("mdl_df_light_profile_sample",           "FA3_PTIIFA3")
+		self.register_mdl_runtime_func("mdl_df_light_profile_pdf",              "FF_PTIIFA2")
 
 		# exception handling
 		self.register_mdl_runtime_func("mdl_out_of_bounds",          "VV_xsIIZZCSII")
@@ -5326,7 +5474,7 @@ class SignatureParser:
 		self.add_class_member("bool",                  "m_use_user_state_module",      "True if user-defined state module functions should be used.", False)
 		self.add_class_member("int",                   "m_internal_space",             "The internal_space encoding.", True)
 		self.add_class_member("llvm::Function *",      "m_runtime_funcs[RT_LAST + 1]", "Runtime functions.",           False)
-		self.add_class_member("llvm::Function *",      "m_intrinsics[%d]" % self.m_next_func_index, "Cache for intrinsic functions.", False)
+		self.add_class_member("llvm::Function *",      "m_intrinsics[%d * 2]" % self.m_next_func_index, "Cache for intrinsic functions, with and without derivative returns.", False)
 		self.add_class_member("llvm::Function *",      "m_internal_funcs[Internal_function::KI_NUM_INTERNAL_FUNCTIONS]", "Cache for internal functions.", False)
 
 		# start class
@@ -5348,10 +5496,28 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_set_normal(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::get_texture_results()\n")
 		self.write(f, "llvm::Function *create_state_get_texture_results(Internal_function const *int_func);\n\n")
+		self.write(f, "/// Generate LLVM IR for state::get_arg_block()\n")
+		self.write(f, "llvm::Function *create_state_get_arg_block(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::get_ro_data_segment()\n")
 		self.write(f, "llvm::Function *create_state_get_ro_data_segment(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::object_id()\n")
 		self.write(f, "llvm::Function *create_state_object_id(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_resolution()\n")
+		self.write(f, "llvm::Function *create_df_bsdf_measurement_resolution(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_evaluate()\n")
+		self.write(f, "llvm::Function *create_df_bsdf_measurement_evaluate(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_sample()\n")
+		self.write(f, "llvm::Function *create_df_bsdf_measurement_sample(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_pdf()\n")
+		self.write(f, "llvm::Function *create_df_bsdf_measurement_pdf(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_albedos()\n")
+		self.write(f, "llvm::Function *create_df_bsdf_measurement_albedos(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::light_profile_evaluate()\n")
+		self.write(f, "llvm::Function *create_df_light_profile_evaluate(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::light_profile_sample()\n")
+		self.write(f, "llvm::Function *create_df_light_profile_sample(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for df::light_profile_pdf()\n")
+		self.write(f, "llvm::Function *create_df_light_profile_pdf(Internal_function const *int_func);\n")
 		self.write(f, "\n")
 
 		# generate the public functions
@@ -5371,13 +5537,15 @@ class SignatureParser:
 
 		self.write(f, "/// Generate LLVM IR for an intrinsic function.\n")
 		self.write(f, "///\n")
-		self.write(f, "/// \\param func_def  The definition of the intrinsic function\n")
+		self.write(f, "/// \\param func_def       The definition of the intrinsic function\n")
+		self.write(f, "/// \\param return_derivs  If true, the funcion will return derivatives\n")
 		self.write(f, "///\n")
 		self.write(f, "/// \\return The LLVM Function object or NULL if the function could\n")
 		self.write(f, "///         not be generated\n")
 		self.write(f, "llvm::Function *get_intrinsic_function(\n")
 		self.indent += 1
-		self.write(f, "mi::mdl::IDefinition const *func_def)\n")
+		self.write(f, "mi::mdl::IDefinition const *func_def,\n")
+		self.write(f, "bool                        return_derivs)\n")
 		self.indent -= 1
 		self.write(f, "{\n")
 

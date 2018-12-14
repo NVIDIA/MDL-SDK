@@ -165,9 +165,9 @@ bool ProvenanceAnalysis::related(const Value *A,
   // Begin by inserting a conservative value into the map. If the insertion
   // fails, we have the answer already. If it succeeds, leave it there until we
   // compute the real answer to guard against recursive queries.
-  if (A > B) MISTD::swap(A, B);
-  MISTD::pair<CachedResultsTy::iterator, bool> Pair =
-    CachedResults.insert(MISTD::make_pair(ValuePairTy(A, B), true));
+  if (A > B) std::swap(A, B);
+  std::pair<CachedResultsTy::iterator, bool> Pair =
+    CachedResults.insert(std::make_pair(ValuePairTy(A, B), true));
   if (!Pair.second)
     return Pair.first->second;
 

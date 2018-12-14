@@ -456,7 +456,7 @@ class Transaction : private STLEXT::Non_copyable
     ///					capacity of the database and would have been incomplete.
     ///					In this case the caller has to assume that everything may
     ///					have changed.
-    virtual MISTD::vector<MISTD::pair<Tag, Journal_type> >* get_journal(
+    virtual std::vector<std::pair<Tag, Journal_type> >* get_journal(
 	Transaction_id last_transaction_id,
 	Uint32 last_transaction_change_version,
 	Journal_type journal_type,

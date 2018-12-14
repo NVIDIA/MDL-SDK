@@ -226,7 +226,7 @@ class DwarfUnits {
   FoldingSet<DIEAbbrev> *AbbreviationsSet;
 
   // A list of all the unique abbreviations in use.
-  MISTD::vector<DIEAbbrev *> &Abbreviations;
+  std::vector<DIEAbbrev *> &Abbreviations;
 
   // A pointer to all units in the section.
   SmallVector<CompileUnit *, 1> CUs;
@@ -234,11 +234,11 @@ class DwarfUnits {
   // Collection of strings for this unit and assorted symbols.
   // A String->Symbol mapping of strings used by indirect
   // references.
-  typedef StringMap<MISTD::pair<MCSymbol*, unsigned>,
+  typedef StringMap<std::pair<MCSymbol*, unsigned>,
                     BumpPtrAllocator&> StrPool;
   StrPool StringPool;
   unsigned NextStringPoolNumber;
-  MISTD::string StringPref;
+  std::string StringPref;
 
   // Collection of addresses for this unit and assorted labels.
   // A Symbol->unsigned mapping of addresses used by indirect
@@ -249,7 +249,7 @@ class DwarfUnits {
 
 public:
   DwarfUnits(AsmPrinter *AP, FoldingSet<DIEAbbrev> *AS,
-             MISTD::vector<DIEAbbrev *> &A, const char *Pref,
+             std::vector<DIEAbbrev *> &A, const char *Pref,
              BumpPtrAllocator &DA)
       : Asm(AP), AbbreviationsSet(AS), Abbreviations(A), StringPool(DA),
         NextStringPoolNumber(0), StringPref(Pref), AddressPool(),
@@ -341,7 +341,7 @@ class DwarfDebug {
   FoldingSet<DIEAbbrev> AbbreviationsSet;
 
   // A list of all the unique abbreviations in use.
-  MISTD::vector<DIEAbbrev *> Abbreviations;
+  std::vector<DIEAbbrev *> Abbreviations;
 
   // Stores the current file ID for a given compile unit.
   DenseMap <unsigned, unsigned> FileIDCUMap;
@@ -350,7 +350,7 @@ class DwarfDebug {
   StringMap<unsigned, BumpPtrAllocator&> SourceIdMap;
 
   // List of all labels used in aranges generation.
-  MISTD::vector<SymbolCU> ArangeLabels;
+  std::vector<SymbolCU> ArangeLabels;
 
   // Size of each symbol emitted (for those symbols that have a specific size).
   DenseMap <const MCSymbol *, uint64_t> SymSize;
@@ -438,12 +438,12 @@ class DwarfDebug {
   // have exposed. See accessor functions below for description.
 
   // Holder for imported entities.
-  typedef SmallVector<MISTD::pair<const MDNode *, const MDNode *>, 32>
+  typedef SmallVector<std::pair<const MDNode *, const MDNode *>, 32>
     ImportedEntityMap;
   ImportedEntityMap ScopesWithImportedEntities;
 
   // Holder for types that are going to be extracted out into a type unit.
-  MISTD::vector<DIE *> TypeUnits;
+  std::vector<DIE *> TypeUnits;
 
   // Whether to emit the pubnames/pubtypes sections.
   bool HasDwarfPubSections;
@@ -467,7 +467,7 @@ class DwarfDebug {
   FoldingSet<DIEAbbrev> SkeletonAbbrevSet;
 
   // A list of all the unique abbreviations in use.
-  MISTD::vector<DIEAbbrev *> SkeletonAbbrevs;
+  std::vector<DIEAbbrev *> SkeletonAbbrevs;
 
   // Holder for the skeleton information.
   DwarfUnits SkeletonHolder;
@@ -529,7 +529,7 @@ private:
   void endSections();
 
   /// \brief Emit a set of abbreviations to the specific section.
-  void emitAbbrevs(const MCSection *, MISTD::vector<DIEAbbrev*> *);
+  void emitAbbrevs(const MCSection *, std::vector<DIEAbbrev*> *);
 
   /// \brief Emit the debug info section.
   void emitDebugInfo();
@@ -647,7 +647,7 @@ private:
 
   /// \brief Ensure that a label will be emitted before MI.
   void requestLabelBeforeInsn(const MachineInstr *MI) {
-    LabelsBeforeInsn.insert(MISTD::make_pair(MI, (MCSymbol*)0));
+    LabelsBeforeInsn.insert(std::make_pair(MI, (MCSymbol*)0));
   }
 
   /// \brief Return Label preceding the instruction.
@@ -655,7 +655,7 @@ private:
 
   /// \brief Ensure that a label will be emitted after MI.
   void requestLabelAfterInsn(const MachineInstr *MI) {
-    LabelsAfterInsn.insert(MISTD::make_pair(MI, (MCSymbol*)0));
+    LabelsAfterInsn.insert(std::make_pair(MI, (MCSymbol*)0));
   }
 
   /// \brief Return Label immediately following the instruction.
@@ -668,7 +668,7 @@ public:
   DwarfDebug(AsmPrinter *A, Module *M);
 
   void insertDIE(const MDNode *TypeMD, DIE *Die) {
-    MDTypeNodeToDieMap.insert(MISTD::make_pair(TypeMD, Die));
+    MDTypeNodeToDieMap.insert(std::make_pair(TypeMD, Die));
   }
   DIE *getDIE(const MDNode *TypeMD) {
     return MDTypeNodeToDieMap.lookup(TypeMD);

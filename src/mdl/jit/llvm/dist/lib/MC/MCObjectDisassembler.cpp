@@ -174,12 +174,12 @@ namespace {
 }
 
 static void RemoveDupsFromAddressVector(MCObjectDisassembler::AddressSetTy &V) {
-  MISTD::sort(V.begin(), V.end());
-  V.erase(MISTD::unique(V.begin(), V.end()), V.end());
+  std::sort(V.begin(), V.end());
+  V.erase(std::unique(V.begin(), V.end()), V.end());
 }
 
 void MCObjectDisassembler::buildCFG(MCModule *Module) {
-  typedef MISTD::map<uint64_t, BBInfo> BBInfoByAddrTy;
+  typedef std::map<uint64_t, BBInfo> BBInfoByAddrTy;
   BBInfoByAddrTy BBInfos;
   AddressSetTy Splits;
   AddressSetTy Calls;
@@ -323,7 +323,7 @@ MCBasicBlock *MCObjectDisassembler::getBBAt(MCModule *Module, MCFunction *MCFN,
                                             uint64_t BBBeginAddr,
                                             AddressSetTy &CallTargets,
                                             AddressSetTy &TailCallTargets) {
-  typedef MISTD::map<uint64_t, BBInfo> BBInfoByAddrTy;
+  typedef std::map<uint64_t, BBInfo> BBInfoByAddrTy;
   typedef SmallSetVector<uint64_t, 16> AddrWorklistTy;
   BBInfoByAddrTy BBInfos;
   AddrWorklistTy Worklist;
@@ -370,7 +370,7 @@ MCBasicBlock *MCObjectDisassembler::getBBAt(MCModule *Module, MCFunction *MCFN,
       // We want to stop before the next atom and have a fallthrough to it.
       if (MCTextAtom *NextAtom =
               cast_or_null<MCTextAtom>(Module->findFirstAtomAfter(BeginAddr)))
-        EndAddr = MISTD::min(EndAddr, NextAtom->getBeginAddr());
+        EndAddr = std::min(EndAddr, NextAtom->getBeginAddr());
 
       for (uint64_t Addr = BeginAddr; Addr < EndAddr; Addr += InstSize) {
         MCInst Inst;

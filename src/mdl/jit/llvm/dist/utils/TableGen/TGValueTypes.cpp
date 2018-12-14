@@ -81,9 +81,9 @@ public:
 };
 } // end anonymous namespace
 
-static MISTD::map<unsigned, const Type *>
+static std::map<unsigned, const Type *>
   ExtendedIntegerTypeMap;
-static MISTD::map<MISTD::pair<uintptr_t, uintptr_t>, const Type *>
+static std::map<std::pair<uintptr_t, uintptr_t>, const Type *>
   ExtendedVectorTypeMap;
 
 bool EVT::isExtendedFloatingPoint() const {

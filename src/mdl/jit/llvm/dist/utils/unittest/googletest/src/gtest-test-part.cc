@@ -55,13 +55,13 @@ internal::String TestPartResult::ExtractSummary(const char* message) {
 }
 
 // Prints a TestPartResult object.
-MISTD::ostream& operator<<(MISTD::ostream& os, const TestPartResult& result) {
+std::ostream& operator<<(std::ostream& os, const TestPartResult& result) {
   return os
       << result.file_name() << ":" << result.line_number() << ": "
       << (result.type() == TestPartResult::kSuccess ? "Success" :
           result.type() == TestPartResult::kFatalFailure ? "Fatal failure" :
           "Non-fatal failure") << ":\n"
-      << result.message() << MISTD::endl;
+      << result.message() << std::endl;
 }
 
 // Appends a TestPartResult to the array.

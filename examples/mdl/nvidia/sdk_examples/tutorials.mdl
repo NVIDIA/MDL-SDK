@@ -275,14 +275,20 @@ export material example_df(
         anno::hard_range(0.0f, 1.0f)
     ]],
     Options add_checker = Checker,
-    color emission_intensity = color(0.25f,0.5f,0.75f)
+    color emission_intensity = color(0.25f,0.5f,0.75f),
+
+    uniform float emission_intensity_scale = 0.5f
+    [[
+        anno::hard_range(0.0f, 10.0f)
+    ]],
+    uniform texture_2d tex = "resources/example.png"
 )
 = let {
     float3 tex_coord3 = state::texture_coordinate(0);
     float2 tex_coord = float2(tex_coord3.x, tex_coord3.y) * tex_coord_scale;
-    color tex_value = tex::lookup_color(texture_2d("resources/example.png"), tex_coord);
-
+    color tex_value = tex::lookup_color(tex, tex_coord);
     checker_value cval = add_checker != None ? checker(tex_coord * checker_scale, roughness, anisotropy) : checker_value();
+    color scaled_intensity = emission_intensity * emission_intensity_scale;
 }
 in material(
     surface: material_surface(
@@ -304,8 +310,112 @@ in material(
         ),
         emission:  material_emission (
             emission: df::diffuse_edf(),
-            intensity: emission_intensity
+            intensity: scaled_intensity
         )
     )
 );
 
+
+export material example_edf(
+
+    color diffuse_tint = color(0.0f),
+    uniform float exponent = 32.0f
+    [[
+        anno::hard_range(0.0f, 1024.0f)
+    ]],
+
+    uniform float spread = math::PI
+    [[
+        anno::hard_range(0.0f, math::PI)
+    ]],
+
+    uniform color emission_intensity = color(0.25f,0.5f,0.75f),
+
+    uniform float emission_intensity_scale = 1.0f
+    [[
+        anno::hard_range(0.0f, 10.0f)
+    ]],
+
+    uniform float diffuse_emission_weight = 0.25f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    uniform float spot_emission_weight = 0.25f
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    uniform bool spot_global_distribution = false
+)
+= let {
+    color scaled_intensity = emission_intensity * emission_intensity_scale;
+ } 
+ in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: diffuse_tint
+        ),
+        emission: material_emission (
+            emission: df::clamped_mix(
+                df::edf_component[3](
+                    df::edf_component(
+                        weight: 0.5f,
+                        component: edf()
+                    ),
+                    df::edf_component(
+                        weight: diffuse_emission_weight,
+                        component: df::diffuse_edf()
+                    ),
+                    df::edf_component(
+                        weight: spot_emission_weight,
+                        component: df::spot_edf(
+                            exponent: exponent,
+                            spread: spread,
+                            global_distribution: spot_global_distribution
+                        )
+                    )
+                )
+            ),
+            intensity: scaled_intensity
+        )
+    )
+);
+
+// simple measured material
+export material example_measured_bsdf(
+    uniform df::scatter_mode mode = df::scatter_reflect_transmit,
+    uniform float multiplier = 1.0
+) = material (
+    surface: material_surface(
+        scattering: df::measured_bsdf(
+            measurement: bsdf_measurement("resources/example_modules.mbsdf"),
+            multiplier: multiplier,
+            mode: mode
+        )
+    )
+);
+
+// simple material with a light profile
+export material example_measured_edf(
+    color tint = color(0.0),
+    uniform light_profile profile = light_profile("resources/example_modules.ies"),
+    uniform bool global_distribution = false,
+    uniform float multiplier = 1.0
+    [[anno::hard_range(0.0f, 10.0f)]]
+) 
+= material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: tint
+        ),
+        emission:  material_emission (
+            emission: df::measured_edf(
+                profile: profile,
+                global_distribution: global_distribution,
+                multiplier: multiplier / df::light_profile_power(profile)
+            ),
+            intensity: color(1.0)
+        )
+    )
+);

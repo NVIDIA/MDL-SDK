@@ -223,7 +223,7 @@ function(add_unittest test_suite test_name)
   endif ()
 
   # Visual Studio 2012 only supports up to 8 template parameters in
-  # MISTD::tr1::tuple by default, but gtest requires 10
+  # std::tr1::tuple by default, but gtest requires 10
   if (MSVC AND MSVC_VERSION EQUAL 1700)
     set_property(TARGET ${test_name} APPEND PROPERTY COMPILE_DEFINITIONS _VARIADIC_MAX=10)
   endif ()

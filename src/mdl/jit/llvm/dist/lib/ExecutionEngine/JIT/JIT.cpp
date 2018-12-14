@@ -71,7 +71,7 @@ extern "C" void LLVMLinkInJIT() {
 /// machine, it does not fall back to the interpreter.  This takes ownership
 /// of the module.
 ExecutionEngine *JIT::createJIT(Module *M,
-                                MISTD::string *ErrorStr,
+                                std::string *ErrorStr,
                                 JITMemoryManager *JMM,
                                 bool GVsWithCode,
                                 TargetMachine *TM) {
@@ -231,7 +231,7 @@ bool JIT::removeModule(Module *M) {
 /// run - Start execution with the specified function and arguments.
 ///
 GenericValue JIT::runFunction(Function *F,
-                              const MISTD::vector<GenericValue> &ArgValues) {
+                              const std::vector<GenericValue> &ArgValues) {
   assert(F && "Function *F was null at entry to run()");
 
   void *FPtr = getPointerToFunction(F);
@@ -394,7 +394,7 @@ GenericValue JIT::runFunction(Function *F,
     ReturnInst::Create(F->getContext(), StubBB);           // Just return void.
 
   // Finally, call our nullary stub function.
-  GenericValue Result = runFunction(Stub, MISTD::vector<GenericValue>());
+  GenericValue Result = runFunction(Stub, std::vector<GenericValue>());
   // Erase it, since no other function can have a reference to it.
   Stub->eraseFromParent();
   // And return the result.
@@ -411,10 +411,10 @@ void JIT::UnregisterJITEventListener(JITEventListener *L) {
   if (L == NULL)
     return;
   MutexGuard locked(lock);
-  MISTD::vector<JITEventListener*>::reverse_iterator I=
-      MISTD::find(EventListeners.rbegin(), EventListeners.rend(), L);
+  std::vector<JITEventListener*>::reverse_iterator I=
+      std::find(EventListeners.rbegin(), EventListeners.rend(), L);
   if (I != EventListeners.rend()) {
-    MISTD::swap(*I, EventListeners.back());
+    std::swap(*I, EventListeners.back());
     EventListeners.pop_back();
   }
 }
@@ -506,7 +506,7 @@ void *JIT::getPointerToFunction(Function *F) {
 
   // Now that this thread owns the lock, make sure we read in the function if it
   // exists in this Module.
-  MISTD::string ErrorMsg;
+  std::string ErrorMsg;
   if (F->Materialize(&ErrorMsg)) {
     report_fatal_error("Error reading function '" + F->getName()+
                       "' from bitcode file: " + ErrorMsg);
@@ -564,7 +564,7 @@ void *JIT::getPointerToBasicBlock(BasicBlock *BB) {
   }
 }
 
-void *JIT::getPointerToNamedFunction(const MISTD::string &Name,
+void *JIT::getPointerToNamedFunction(const std::string &Name,
                                      bool AbortOnFailure){
   if (!isSymbolSearchingDisabled()) {
     void *ptr = JMM->getPointerToNamedFunction(Name, false);

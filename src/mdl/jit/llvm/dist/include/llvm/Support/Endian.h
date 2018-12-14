@@ -44,7 +44,7 @@ inline value_type byte_swap(value_type value) {
 
 template<typename value_type,
          endianness endian,
-         MISTD::size_t alignment>
+         std::size_t alignment>
 inline value_type read(const void *memory) {
   value_type ret;
 
@@ -57,7 +57,7 @@ inline value_type read(const void *memory) {
 
 template<typename value_type,
          endianness endian,
-         MISTD::size_t alignment>
+         std::size_t alignment>
 inline void write(void *memory, value_type value) {
   value = byte_swap<value_type, endian>(value);
   memcpy(LLVM_ASSUME_ALIGNED(memory,
@@ -70,7 +70,7 @@ inline void write(void *memory, value_type value) {
 namespace detail {
 template<typename value_type,
          endianness endian,
-         MISTD::size_t alignment>
+         std::size_t alignment>
 struct packed_endian_specific_integral {
   operator value_type() const {
     return endian::read<value_type, endian, alignment>(

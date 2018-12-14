@@ -21,7 +21,7 @@ namespace {
 class _object_error_category : public _do_message {
 public:
   virtual const char* name() const;
-  virtual MISTD::string message(int ev) const;
+  virtual std::string message(int ev) const;
   virtual error_condition default_error_condition(int ev) const;
 };
 }
@@ -30,7 +30,7 @@ const char *_object_error_category::name() const {
   return "llvm.object";
 }
 
-MISTD::string _object_error_category::message(int ev) const {
+std::string _object_error_category::message(int ev) const {
   object_error::Impl E = static_cast<object_error::Impl>(ev);
   switch (E) {
   case object_error::success: return "Success";

@@ -57,8 +57,8 @@ ResourcePriorityQueue::ResourcePriorityQueue(SelectionDAGISel *IS) :
    unsigned NumRC = TRI->getNumRegClasses();
    RegLimit.resize(NumRC);
    RegPressure.resize(NumRC);
-   MISTD::fill(RegLimit.begin(), RegLimit.end(), 0);
-   MISTD::fill(RegPressure.begin(), RegPressure.end(), 0);
+   std::fill(RegLimit.begin(), RegLimit.end(), 0);
+   std::fill(RegPressure.begin(), RegPressure.end(), 0);
    for (TargetRegisterInfo::regclass_iterator I = TRI->regclass_begin(),
         E = TRI->regclass_end(); I != E; ++I)
      RegLimit[(*I)->getID()] = TRI->getRegPressureLimit(*I, *IS->MF);
@@ -166,7 +166,7 @@ static unsigned numberCtrlPredInSU(SUnit *SU) {
 ///
 /// Initialize nodes.
 ///
-void ResourcePriorityQueue::initNodes(MISTD::vector<SUnit> &sunits) {
+void ResourcePriorityQueue::initNodes(std::vector<SUnit> &sunits) {
   SUnits = &sunits;
   NumNodesSolelyBlocking.resize(SUnits->size(), 0);
 
@@ -555,7 +555,7 @@ void ResourcePriorityQueue::initNumRegDefsLeft(SUnit *SU) {
         NodeNumDefs = 0;
         break;
       }
-      NodeNumDefs = MISTD::min(N->getNumValues(), TID.getNumDefs());
+      NodeNumDefs = std::min(N->getNumValues(), TID.getNumDefs());
     }
     else
       switch(N->getOpcode()) {
@@ -600,10 +600,10 @@ SUnit *ResourcePriorityQueue::pop() {
   if (empty())
     return 0;
 
-  MISTD::vector<SUnit *>::iterator Best = Queue.begin();
+  std::vector<SUnit *>::iterator Best = Queue.begin();
   if (!DisableDFASched) {
     signed BestCost = SUSchedulingCost(*Best);
-    for (MISTD::vector<SUnit *>::iterator I = llvm::next(Queue.begin()),
+    for (std::vector<SUnit *>::iterator I = llvm::next(Queue.begin()),
            E = Queue.end(); I != E; ++I) {
 
       if (SUSchedulingCost(*I) > BestCost) {
@@ -614,7 +614,7 @@ SUnit *ResourcePriorityQueue::pop() {
   }
   // Use default TD scheduling mechanism.
   else {
-    for (MISTD::vector<SUnit *>::iterator I = llvm::next(Queue.begin()),
+    for (std::vector<SUnit *>::iterator I = llvm::next(Queue.begin()),
        E = Queue.end(); I != E; ++I)
       if (Picker(*Best, *I))
         Best = I;
@@ -622,7 +622,7 @@ SUnit *ResourcePriorityQueue::pop() {
 
   SUnit *V = *Best;
   if (Best != prior(Queue.end()))
-    MISTD::swap(*Best, Queue.back());
+    std::swap(*Best, Queue.back());
 
   Queue.pop_back();
 
@@ -632,9 +632,9 @@ SUnit *ResourcePriorityQueue::pop() {
 
 void ResourcePriorityQueue::remove(SUnit *SU) {
   assert(!Queue.empty() && "Queue is empty!");
-  MISTD::vector<SUnit *>::iterator I = MISTD::find(Queue.begin(), Queue.end(), SU);
+  std::vector<SUnit *>::iterator I = std::find(Queue.begin(), Queue.end(), SU);
   if (I != prior(Queue.end()))
-    MISTD::swap(*I, Queue.back());
+    std::swap(*I, Queue.back());
 
   Queue.pop_back();
 }

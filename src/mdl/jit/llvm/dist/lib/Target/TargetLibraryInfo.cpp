@@ -671,7 +671,7 @@ bool TargetLibraryInfo::getLibFunc(StringRef funcName,
   // strip it if present.
   if (funcName.front() == '\01')
     funcName = funcName.substr(1);
-  const char **I = MISTD::lower_bound(Start, End, funcName, StringComparator());
+  const char **I = std::lower_bound(Start, End, funcName, StringComparator());
   if (I != End && *I == funcName) {
     F = (LibFunc::Func)(I - Start);
     return true;

@@ -35,7 +35,7 @@ Module *llvm::getLazyIRModule(MemoryBuffer *Buffer, SMDiagnostic &Err,
                               LLVMContext &Context) {
   if (isBitcode((const unsigned char *)Buffer->getBufferStart(),
                 (const unsigned char *)Buffer->getBufferEnd())) {
-    MISTD::string ErrMsg;
+    std::string ErrMsg;
     Module *M = getLazyBitcodeModule(Buffer, Context, &ErrMsg);
     if (M == 0) {
       Err = SMDiagnostic(Buffer->getBufferIdentifier(), SourceMgr::DK_Error,
@@ -50,7 +50,7 @@ Module *llvm::getLazyIRModule(MemoryBuffer *Buffer, SMDiagnostic &Err,
   return ParseAssembly(Buffer, 0, Err, Context);
 }
 
-Module *llvm::getLazyIRFileModule(const MISTD::string &Filename, SMDiagnostic &Err,
+Module *llvm::getLazyIRFileModule(const std::string &Filename, SMDiagnostic &Err,
                                   LLVMContext &Context) {
   OwningPtr<MemoryBuffer> File;
   if (error_code ec = MemoryBuffer::getFileOrSTDIN(Filename, File)) {
@@ -68,7 +68,7 @@ Module *llvm::ParseIR(MemoryBuffer *Buffer, SMDiagnostic &Err,
                      TimePassesIsEnabled);
   if (isBitcode((const unsigned char *)Buffer->getBufferStart(),
                 (const unsigned char *)Buffer->getBufferEnd())) {
-    MISTD::string ErrMsg;
+    std::string ErrMsg;
     Module *M = ParseBitcodeFile(Buffer, Context, &ErrMsg);
     if (M == 0)
       Err = SMDiagnostic(Buffer->getBufferIdentifier(), SourceMgr::DK_Error,
@@ -81,7 +81,7 @@ Module *llvm::ParseIR(MemoryBuffer *Buffer, SMDiagnostic &Err,
   return ParseAssembly(Buffer, 0, Err, Context);
 }
 
-Module *llvm::ParseIRFile(const MISTD::string &Filename, SMDiagnostic &Err,
+Module *llvm::ParseIRFile(const std::string &Filename, SMDiagnostic &Err,
                           LLVMContext &Context) {
   OwningPtr<MemoryBuffer> File;
   if (error_code ec = MemoryBuffer::getFileOrSTDIN(Filename, File)) {
@@ -106,7 +106,7 @@ LLVMBool LLVMParseIRInContext(LLVMContextRef ContextRef,
 
   if(!*OutM) {
     if (OutMessage) {
-      MISTD::string buf;
+      std::string buf;
       raw_string_ostream os(buf);
 
       Diag.print(NULL, os, false);

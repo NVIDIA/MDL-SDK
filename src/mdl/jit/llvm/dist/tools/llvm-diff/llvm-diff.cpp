@@ -57,13 +57,13 @@ static void diffGlobal(DifferenceEngine &Engine, Module *L, Module *R,
     errs() << "No function named @" << Name << " in right module\n";
 }
 
-static cl::opt<MISTD::string> LeftFilename(cl::Positional,
+static cl::opt<std::string> LeftFilename(cl::Positional,
                                          cl::desc("<first file>"),
                                          cl::Required);
-static cl::opt<MISTD::string> RightFilename(cl::Positional,
+static cl::opt<std::string> RightFilename(cl::Positional,
                                           cl::desc("<second file>"),
                                           cl::Required);
-static cl::list<MISTD::string> GlobalsToCompare(cl::Positional,
+static cl::list<std::string> GlobalsToCompare(cl::Positional,
                                               cl::desc("<globals to compare>"));
 
 int main(int argc, char **argv) {

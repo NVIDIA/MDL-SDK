@@ -102,15 +102,15 @@ namespace llvm {
     SmallString<128> CompilationDir;
 
     /// The main file name if passed in explicitly.
-    MISTD::string MainFileName;
+    std::string MainFileName;
 
     /// The dwarf file and directory tables from the dwarf .file directive.
     /// We now emit a line table for each compile unit. To reduce the prologue
     /// size of each line table, the files and directories used by each compile
     /// unit are separated.
-    typedef MISTD::map<unsigned, SmallVector<MCDwarfFile *, 4> > MCDwarfFilesMap;
+    typedef std::map<unsigned, SmallVector<MCDwarfFile *, 4> > MCDwarfFilesMap;
     MCDwarfFilesMap MCDwarfFilesCUMap;
-    MISTD::map<unsigned, SmallVector<StringRef, 4> > MCDwarfDirsCUMap;
+    std::map<unsigned, SmallVector<StringRef, 4> > MCDwarfDirsCUMap;
 
     /// The current dwarf line information from the last dwarf .loc directive.
     MCDwarfLoc CurrentDwarfLoc;
@@ -131,7 +131,7 @@ namespace llvm {
 
     /// The information gathered from labels that will have dwarf label
     /// entries when generating dwarf assembly source files.
-    MISTD::vector<const MCGenDwarfLabelEntry *> MCGenDwarfLabelEntries;
+    std::vector<const MCGenDwarfLabelEntry *> MCGenDwarfLabelEntries;
 
     /// The string to embed in the debug information for the compile unit, if
     /// non-empty.
@@ -151,7 +151,7 @@ namespace llvm {
     DenseMap<const MCSection *, MCLineSection *> MCLineSections;
     /// We need a deterministic iteration order, so we remember the order
     /// the elements were added.
-    MISTD::vector<const MCSection *> MCLineSectionOrder;
+    std::vector<const MCSection *> MCLineSectionOrder;
     /// The Compile Unit ID that we are currently processing.
     unsigned DwarfCompileUnitID;
     /// The line table start symbol for each Compile Unit.
@@ -287,7 +287,7 @@ namespace llvm {
     /// \brief Get the main file name for use in error messages and debug
     /// info. This can be set to ensure we've got the correct file name
     /// after preprocessing or for -save-temps.
-    const MISTD::string &getMainFileName() const { return MainFileName; }
+    const std::string &getMainFileName() const { return MainFileName; }
 
     /// \brief Set the main file name and override the default.
     void setMainFileName(StringRef S) { MainFileName = S.str(); }
@@ -319,7 +319,7 @@ namespace llvm {
     &getMCLineSections() const {
       return MCLineSections;
     }
-    const MISTD::vector<const MCSection *> &getMCLineSectionOrder() const {
+    const std::vector<const MCSection *> &getMCLineSectionOrder() const {
       return MCLineSectionOrder;
     }
     void addMCLineSection(const MCSection *Sec, MCLineSection *Line) {
@@ -380,7 +380,7 @@ namespace llvm {
     void setGenDwarfSectionEndSym(MCSymbol *Sym) {
       GenDwarfSectionEndSym = Sym;
     }
-    const MISTD::vector<const MCGenDwarfLabelEntry *>
+    const std::vector<const MCGenDwarfLabelEntry *>
       &getMCGenDwarfLabelEntries() const {
       return MCGenDwarfLabelEntries;
     }

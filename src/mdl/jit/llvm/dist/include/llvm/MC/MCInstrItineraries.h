@@ -168,7 +168,7 @@ public:
     unsigned Latency = 0, StartCycle = 0;
     for (const InstrStage *IS = beginStage(ItinClassIndx),
            *E = endStage(ItinClassIndx); IS != E; ++IS) {
-      Latency = MISTD::max(Latency, StartCycle + IS->getCycles());
+      Latency = std::max(Latency, StartCycle + IS->getCycles());
       StartCycle += IS->getNextCycles();
     }
     return Latency;

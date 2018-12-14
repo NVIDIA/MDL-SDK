@@ -60,13 +60,13 @@ namespace {
 
   struct claimed_file {
     void *handle;
-    MISTD::vector<ld_plugin_symbol> syms;
+    std::vector<ld_plugin_symbol> syms;
   };
 
   lto_codegen_model output_type = LTO_CODEGEN_PIC_MODEL_STATIC;
-  MISTD::string output_name = "";
-  MISTD::list<claimed_file> Modules;
-  MISTD::vector<MISTD::string> Cleanup;
+  std::string output_name = "";
+  std::list<claimed_file> Modules;
+  std::vector<std::string> Cleanup;
   lto_code_gen_t code_gen = NULL;
   StringSet<> CannotBeHidden;
 }
@@ -75,17 +75,17 @@ namespace options {
   enum generate_bc { BC_NO, BC_ALSO, BC_ONLY };
   static bool generate_api_file = false;
   static generate_bc generate_bc_file = BC_NO;
-  static MISTD::string bc_path;
-  static MISTD::string obj_path;
-  static MISTD::string extra_library_path;
-  static MISTD::string triple;
-  static MISTD::string mcpu;
+  static std::string bc_path;
+  static std::string obj_path;
+  static std::string extra_library_path;
+  static std::string triple;
+  static std::string mcpu;
   // Additional options to pass into the code generator.
   // Note: This array will contain all plugin options which are not claimed
   // as plugin exclusive to pass to the code generator.
   // For example, "generate-api-file" and "as"options are for the plugin
   // use only and will not be passed.
-  static MISTD::vector<MISTD::string> extra;
+  static std::vector<std::string> extra;
 
   static void process_plugin_option(const char* opt_)
   {
@@ -383,18 +383,18 @@ static bool mustPreserve(const claimed_file &F, int i) {
 /// been overridden by a native object file. Then, perform optimization and
 /// codegen.
 static ld_plugin_status all_symbols_read_hook(void) {
-  MISTD::ofstream api_file;
+  std::ofstream api_file;
   assert(code_gen);
 
   if (options::generate_api_file) {
-    api_file.open("apifile.txt", MISTD::ofstream::out | MISTD::ofstream::trunc);
+    api_file.open("apifile.txt", std::ofstream::out | std::ofstream::trunc);
     if (!api_file.is_open()) {
       (*message)(LDPL_FATAL, "Unable to open apifile.txt for writing.");
       abort();
     }
   }
 
-  for (MISTD::list<claimed_file>::iterator I = Modules.begin(),
+  for (std::list<claimed_file>::iterator I = Modules.begin(),
          E = Modules.end(); I != E; ++I) {
     if (I->syms.empty())
       continue;
@@ -419,14 +419,14 @@ static ld_plugin_status all_symbols_read_hook(void) {
 
   // Pass through extra options to the code generator.
   if (!options::extra.empty()) {
-    for (MISTD::vector<MISTD::string>::iterator it = options::extra.begin();
+    for (std::vector<std::string>::iterator it = options::extra.begin();
          it != options::extra.end(); ++it) {
       lto_codegen_debug_options(code_gen, (*it).c_str());
     }
   }
 
   if (options::generate_bc_file != options::BC_NO) {
-    MISTD::string path;
+    std::string path;
     if (options::generate_bc_file == options::BC_ONLY)
       path = output_name;
     else if (!options::bc_path.empty())
@@ -442,7 +442,7 @@ static ld_plugin_status all_symbols_read_hook(void) {
     }
   }
 
-  MISTD::string ObjPath;
+  std::string ObjPath;
   {
     const char *Temp;
     if (lto_codegen_compile_to_file(code_gen, &Temp)) {
@@ -452,7 +452,7 @@ static ld_plugin_status all_symbols_read_hook(void) {
   }
 
   lto_codegen_dispose(code_gen);
-  for (MISTD::list<claimed_file>::iterator I = Modules.begin(),
+  for (std::list<claimed_file>::iterator I = Modules.begin(),
          E = Modules.end(); I != E; ++I) {
     for (unsigned i = 0; i != I->syms.size(); ++i) {
       ld_plugin_symbol &sym = I->syms[i];

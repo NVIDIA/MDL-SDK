@@ -564,7 +564,7 @@ void Factory_serializer::push_type(IType const *type)
             m_type_root_queue.push_back(type);
     } else {
         MDL_ASSERT(
-            MISTD::find(m_type_queue.begin(), m_type_queue.end(), type) == m_type_queue.end());
+            std::find(m_type_queue.begin(), m_type_queue.end(), type) == m_type_queue.end());
         m_type_queue.push_back(type);
     }
 }
@@ -1189,7 +1189,7 @@ void Factory_serializer::write_enqueued_types()
     m_type_root_queue.swap(type_root_queue);
 
 #ifndef NO_MDL_SERIALIZATION_SORT
-    MISTD::sort(m_type_root_queue.begin(), m_type_root_queue.end(), IType_less());
+    std::sort(m_type_root_queue.begin(), m_type_root_queue.end(), IType_less());
 #endif
 
     // create the queue from the root set
@@ -1250,7 +1250,7 @@ void Factory_serializer::write_enqueued_values()
     m_value_root_queue.swap(value_root_queue);
 
 #ifndef NO_MDL_SERIALIZATION_SORT
-    MISTD::sort(m_value_root_queue.begin(), m_value_root_queue.end(), IValue_less());
+    std::sort(m_value_root_queue.begin(), m_value_root_queue.end(), IValue_less());
 #endif
 
     // create the queue from the root set
@@ -2764,7 +2764,7 @@ void Base_wait_queue::wait(Tag_t tag, void **adr)
 {
     Entry *e = get_entry(adr);
 
-    MISTD::pair<Wait_lists::iterator, bool> res =
+    std::pair<Wait_lists::iterator, bool> res =
         m_wait_list.insert(Wait_lists::value_type(tag, e));
     if (!res.second) {
         // there was already an entry

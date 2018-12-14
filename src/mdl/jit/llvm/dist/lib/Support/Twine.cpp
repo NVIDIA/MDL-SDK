@@ -13,8 +13,8 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-MISTD::string Twine::str() const {
-  // If we're storing only a MISTD::string, just return it.
+std::string Twine::str() const {
+  // If we're storing only a std::string, just return it.
   if (LHSKind == StdStringKind && RHSKind == EmptyKind)
     return *LHS.stdString;
 
@@ -42,7 +42,7 @@ StringRef Twine::toNullTerminatedStringRef(SmallVectorImpl<char> &Out) const {
       // Already null terminated, yay!
       return StringRef(LHS.cString);
     case StdStringKind: {
-      const MISTD::string *str = LHS.stdString;
+      const std::string *str = LHS.stdString;
       return StringRef(str->c_str(), str->size());
     }
     default:
@@ -115,7 +115,7 @@ void Twine::printOneChildRepr(raw_ostream &OS, Child Ptr,
        << Ptr.cString << "\"";
     break;
   case Twine::StdStringKind:
-    OS << "MISTD::string:\""
+    OS << "std::string:\""
        << Ptr.stdString << "\"";
     break;
   case Twine::StringRefKind:

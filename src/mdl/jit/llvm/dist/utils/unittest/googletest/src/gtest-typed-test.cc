@@ -50,7 +50,7 @@ static const char* SkipSpaces(const char* str) {
 // aborts the program otherwise.
 const char* TypedTestCasePState::VerifyRegisteredTestNames(
     const char* file, int line, const char* registered_tests) {
-  typedef ::MISTD::set<const char*>::const_iterator DefinedTestIter;
+  typedef ::std::set<const char*>::const_iterator DefinedTestIter;
   registered_ = true;
 
   // Skip initial whitespace in registered_tests since some
@@ -58,7 +58,7 @@ const char* TypedTestCasePState::VerifyRegisteredTestNames(
   registered_tests = SkipSpaces(registered_tests);
 
   Message errors;
-  ::MISTD::set<String> tests;
+  ::std::set<String> tests;
   for (const char* names = registered_tests; names != NULL;
        names = SkipComma(names)) {
     const String name = GetPrefixUntilComma(names);

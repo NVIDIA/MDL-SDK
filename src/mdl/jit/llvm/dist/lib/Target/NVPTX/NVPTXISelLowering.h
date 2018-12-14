@@ -467,9 +467,9 @@ public:
     return MVT::i1;
   }
 
-  ConstraintType getConstraintType(const MISTD::string &Constraint) const;
-  MISTD::pair<unsigned, const TargetRegisterClass *>
-  getRegForInlineAsmConstraint(const MISTD::string &Constraint, MVT VT) const;
+  ConstraintType getConstraintType(const std::string &Constraint) const;
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const;
 
   virtual SDValue LowerFormalArguments(
       SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
@@ -479,7 +479,7 @@ public:
   virtual SDValue
   LowerCall(CallLoweringInfo &CLI, SmallVectorImpl<SDValue> &InVals) const;
 
-  MISTD::string getPrototype(Type *, const ArgListTy &,
+  std::string getPrototype(Type *, const ArgListTy &,
                            const SmallVectorImpl<ISD::OutputArg> &,
                            unsigned retAlignment,
                            const ImmutableCallSite *CS,
@@ -491,8 +491,8 @@ public:
               const SmallVectorImpl<SDValue> &OutVals, SDLoc dl,
               SelectionDAG &DAG) const;
 
-  virtual void LowerAsmOperandForConstraint(SDValue Op, MISTD::string &Constraint,
-                                            MISTD::vector<SDValue> &Ops,
+  virtual void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                            std::vector<SDValue> &Ops,
                                             SelectionDAG &DAG) const;
 
   NVPTXTargetMachine *nvTM;

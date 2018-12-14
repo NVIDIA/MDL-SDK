@@ -50,7 +50,7 @@ namespace {
 
     /// Roots - GC roots in the current function. Each is a pair of the
     /// intrinsic call and its corresponding alloca.
-    MISTD::vector<MISTD::pair<CallInst*,AllocaInst*> > Roots;
+    std::vector<std::pair<CallInst*,AllocaInst*> > Roots;
 
   public:
     ShadowStackGC();
@@ -257,7 +257,7 @@ Constant *ShadowStackGC::GetFrameMap(Function &F) {
 
 Type* ShadowStackGC::GetConcreteStackEntryType(Function &F) {
   // doInitialization creates the generic version of this type.
-  MISTD::vector<Type*> EltTys;
+  std::vector<Type*> EltTys;
   EltTys.push_back(StackEntryTy);
   for (size_t I = 0; I != Roots.size(); I++)
     EltTys.push_back(Roots[I].second->getAllocatedType());
@@ -273,7 +273,7 @@ bool ShadowStackGC::initializeCustomLowering(Module &M) {
   //   int32_t NumMeta;  // Number of metadata descriptors. May be < NumRoots.
   //   void *Meta[];     // May be absent for roots without metadata.
   // };
-  MISTD::vector<Type*> EltTys;
+  std::vector<Type*> EltTys;
   // 32 bits is ok up to a 32GB stack frame. :)
   EltTys.push_back(Type::getInt32Ty(M.getContext()));
   // Specifies length of variable length array. 
@@ -325,14 +325,14 @@ void ShadowStackGC::CollectRoots(Function &F) {
 
   assert(Roots.empty() && "Not cleaned up?");
 
-  SmallVector<MISTD::pair<CallInst*, AllocaInst*>, 16> MetaRoots;
+  SmallVector<std::pair<CallInst*, AllocaInst*>, 16> MetaRoots;
 
   for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
     for (BasicBlock::iterator II = BB->begin(), E = BB->end(); II != E;)
       if (IntrinsicInst *CI = dyn_cast<IntrinsicInst>(II++))
         if (Function *F = CI->getCalledFunction())
           if (F->getIntrinsicID() == Intrinsic::gcroot) {
-            MISTD::pair<CallInst*, AllocaInst*> Pair = MISTD::make_pair(
+            std::pair<CallInst*, AllocaInst*> Pair = std::make_pair(
               CI, cast<AllocaInst>(CI->getArgOperand(0)->stripPointerCasts()));
             if (IsNullValue(CI->getArgOperand(1)))
               Roots.push_back(Pair);

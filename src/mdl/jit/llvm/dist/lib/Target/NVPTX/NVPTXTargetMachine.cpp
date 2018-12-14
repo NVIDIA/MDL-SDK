@@ -64,8 +64,8 @@ extern "C" void LLVMInitializeNVPTXTarget() {
   initializeNVPTXAssignValidGlobalNamesPass(*PassRegistry::getPassRegistry());
 }
 
-static MISTD::string computeDataLayout(const NVPTXSubtarget &ST) {
-  MISTD::string Ret = "e";
+static std::string computeDataLayout(const NVPTXSubtarget &ST) {
+  std::string Ret = "e";
 
   if (ST.is64Bit())
     Ret += "-p:64:64:64";

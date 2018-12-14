@@ -46,7 +46,7 @@ using namespace llvm;
 using namespace llvm::object;
 
 namespace opts {
-  cl::list<MISTD::string> InputFilenames(cl::Positional,
+  cl::list<std::string> InputFilenames(cl::Positional,
     cl::desc("<input object files>"),
     cl::ZeroOrMore);
 
@@ -291,7 +291,7 @@ int main(int argc, const char *argv[]) {
   if (opts::InputFilenames.size() == 0)
     opts::InputFilenames.push_back("-");
 
-  MISTD::for_each(opts::InputFilenames.begin(), opts::InputFilenames.end(),
+  std::for_each(opts::InputFilenames.begin(), opts::InputFilenames.end(),
                 dumpInput);
 
   return ReturnValue;

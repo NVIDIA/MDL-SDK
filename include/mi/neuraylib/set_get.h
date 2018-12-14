@@ -33,14 +33,12 @@
 
 #include <mi/base/config.h>
 #include <mi/base/handle.h>
-#include <mi/neuraylib/iattachable.h>
 #include <mi/neuraylib/iattribute_set.h>
 #include <mi/neuraylib/ibbox.h>
 #include <mi/neuraylib/icolor.h>
 #include <mi/neuraylib/ienum.h>
 #include <mi/neuraylib/imatrix.h>
 #include <mi/neuraylib/inumber.h>
-#include <mi/neuraylib/iparameter.h>
 #include <mi/neuraylib/iref.h>
 #include <mi/neuraylib/ispectrum.h>
 #include <mi/neuraylib/istring.h>
@@ -82,21 +80,10 @@ mi::Sint32 set_value( mi::IData* data, const T& value)
         v->set_value( value);
         return 0;
     }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        a->set_reference( static_cast<const char*>( 0));
-        mi::base::Handle<mi::IData> d( a->get_value());
-        return set_value( d.get(), value);
-    }
     mi::base::Handle<mi::IEnum> e( data->get_interface<mi::IEnum>());
     if( e.is_valid_interface()) {
         mi::Sint32 result = e->set_value( static_cast<mi::Sint32>( value));
         return result == 0 ? 0 : -2;
-    }
-    mi::base::Handle<mi::IParameter> p( data->get_interface<mi::IParameter>());
-    if( p.is_valid_interface()) {
-        p->set_value( static_cast<mi::Uint32>( value));
-        return 0;
     }
     return -1;
 }
@@ -115,18 +102,6 @@ inline mi::Sint32 set_value( mi::IData* data, const char* value)
     if( r.is_valid_interface()) {
         mi::Sint32 result = r->set_reference( value);
         return result == 0 ? 0 : -2;
-    }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<mi::IString> s( a->get_value<mi::IString>());
-        if( s.is_valid_interface()) {
-            a->set_reference( static_cast<const char*>( 0));
-            s->set_c_str( value);
-            return 0;
-        } else {
-            mi::Sint32 result = a->set_reference( value);
-            return result == 0 ? 0 : -2;
-        }
     }
     mi::base::Handle<mi::IEnum> e( data->get_interface<mi::IEnum>());
     if( e.is_valid_interface()) {
@@ -168,12 +143,6 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::math::Vector<T,DIM>& val
         v->set_value( value);
         return 0;
     }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        a->set_reference( static_cast<const char*>( 0));
-        mi::base::Handle<mi::IData> d( a->get_value());
-        return set_value( d.get(), value);
-    }
     return -1;
 }
 
@@ -196,12 +165,6 @@ mi::Sint32 set_value( mi::IData* data, const mi::math::Matrix<T,ROW,COL>& value)
         m->set_value( value);
         return 0;
     }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        a->set_reference( static_cast<const char*>( 0));
-        mi::base::Handle<mi::IData> d( a->get_value());
-        return set_value( d.get(), value);
-    }
     return -1;
 }
 
@@ -220,12 +183,6 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::Color& value)
         c3->set_value( value);
         return 0;
     }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        a->set_reference( static_cast<const char*>( 0));
-        mi::base::Handle<mi::IData> d( a->get_value());
-        return set_value( d.get(), value);
-    }
     return -1;
 }
 
@@ -238,12 +195,6 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::Spectrum& value)
     if( s.is_valid_interface()) {
         s->set_value( value);
         return 0;
-    }
-    mi::base::Handle<mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        a->set_reference( static_cast<const char*>( 0));
-        mi::base::Handle<mi::IData> d( a->get_value());
-        return set_value( d.get(), value);
     }
     return -1;
 }
@@ -336,14 +287,6 @@ mi::Sint32 get_value( const mi::IData* data, T& value)
         v->get_value( value);
         return 0;
     }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::base::IInterface> i( a->get_reference());
-        if( i.is_valid_interface())
-            return -1;
-        mi::base::Handle<const mi::IData> v( a->get_value<mi::IData>());
-        return get_value( v.get(), value);
-    }
 // disable C4800: 'mi::Sint32' : forcing value to bool 'true' or 'false' (performance warning)
 // disable C4800: 'mi::Uint32' : forcing value to bool 'true' or 'false' (performance warning)
 #ifdef MI_COMPILER_MSC
@@ -353,11 +296,6 @@ mi::Sint32 get_value( const mi::IData* data, T& value)
     mi::base::Handle<const mi::IEnum> e( data->get_interface<mi::IEnum>());
     if( e.is_valid_interface()) {
         value = static_cast<T>( e->get_value());
-        return 0;
-    }
-    mi::base::Handle<const mi::IParameter> p( data->get_interface<mi::IParameter>());
-    if( p.is_valid_interface()) {
-        value = static_cast<T>( p->get_value());
         return 0;
     }
 #ifdef MI_COMPILER_MSC
@@ -379,15 +317,6 @@ inline mi::Sint32 get_value( const mi::IData* data, const char*& value)
     mi::base::Handle<const mi::IRef> r( data->get_interface<mi::IRef>());
     if( r.is_valid_interface()) {
         value = r->get_reference_name();
-        return 0;
-    }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::IString> s( a->get_value<mi::IString>());
-        if( s.is_valid_interface())
-            value = s->get_c_str();
-        else
-            value = a->get_reference_name();
         return 0;
     }
     mi::base::Handle<const mi::IEnum> e( data->get_interface<mi::IEnum>());
@@ -430,14 +359,6 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::math::Vector<T,DIM>& val
         value = v->get_value();
         return 0;
     }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::base::IInterface> i( a->get_reference());
-        if( i.is_valid_interface())
-            return -1;
-        mi::base::Handle<const mi::IData> v( a->get_value<mi::IData>());
-        return get_value( v.get(), value);
-    }
     return -1;
 }
 
@@ -460,14 +381,6 @@ mi::Sint32 get_value( const mi::IData* data, mi::math::Matrix<T,ROW,COL>& value)
         value = m->get_value();
         return 0;
     }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::base::IInterface> i( a->get_reference());
-        if( i.is_valid_interface())
-            return -1;
-        mi::base::Handle<const mi::IData> v( a->get_value<mi::IData>());
-        return get_value( v.get(), value);
-    }
     return -1;
 }
 
@@ -486,14 +399,6 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::Color& value)
         value = c3->get_value();
         return 0;
     }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::base::IInterface> i( a->get_reference());
-        if( i.is_valid_interface())
-            return -1;
-        mi::base::Handle<const mi::IData> v( a->get_value<mi::IData>());
-        return get_value( v.get(), value);
-    }
     return -1;
 }
 
@@ -506,14 +411,6 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::Spectrum& value)
     if( s.is_valid_interface()) {
         value = s->get_value();
         return 0;
-    }
-    mi::base::Handle<const mi::IAttachable> a( data->get_interface<mi::IAttachable>());
-    if( a.is_valid_interface()) {
-        mi::base::Handle<const mi::base::IInterface> i( a->get_reference());
-        if( i.is_valid_interface())
-            return -1;
-        mi::base::Handle<const mi::IData> v( a->get_value<mi::IData>());
-        return get_value( v.get(), value);
     }
     return -1;
 }

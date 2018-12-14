@@ -58,7 +58,6 @@ class IStructure;
 class INumber;
 class IUuid;
 
-
 namespace neuraylib { class ITransaction; }
 
 }
@@ -140,7 +139,6 @@ private:
     mi::Uint32 assign_from_to(
         const mi::IData_collection* source, mi::IData_collection* target, mi::Uint32 options);
 
-
     mi::Uint32 assign_from_to( const mi::INumber* source, mi::INumber* target);
 
     mi::Uint32 assign_from_to( const mi::IString* source, mi::IString* target);
@@ -152,7 +150,6 @@ private:
 
     mi::Uint32 assign_from_to(
         const mi::IEnum* source, mi::ISint32* target, mi::Uint32 options);
-
 
     mi::Uint32 assign_from_to( const mi::IUuid* source, mi::IUuid* target);
 
@@ -177,7 +174,6 @@ private:
     mi::IData_simple* clone( const mi::IData_simple* source, mi::Uint32 options);
 
     mi::IData_collection* clone( const mi::IData_collection* source, mi::Uint32 options);
-
 
     mi::IRef* clone( const mi::IRef* source, mi::Uint32 options);
 
@@ -205,7 +201,6 @@ private:
 
     mi::Sint32 compare( const mi::IData_collection* lhs, const mi::IData_collection* rhs);
 
-
     mi::Sint32 compare( const mi::INumber* lhs, const mi::INumber* target);
 
     mi::Sint32 compare( const mi::IString* lhs, const mi::IString* target);
@@ -213,7 +208,6 @@ private:
     mi::Sint32 compare( const mi::IRef* lhs, const mi::IRef* target);
 
     mi::Sint32 compare( const mi::IEnum* lhs, const mi::IEnum* rhs);
-
 
     mi::Sint32 compare( const mi::IUuid* lhs, const mi::IUuid* target);
 
@@ -251,8 +245,8 @@ private:
         mi::Size depth,
         std::ostringstream& s);
 
-    /// Returns the transaction that is embedded in references, attachables, arrays, or calls
-    /// (or in collections containing such types), or \c NULL in case of failure.
+    /// Returns the transaction that is embedded in references, arrays, or calls (or in collections
+    /// containing such types), or \c NULL in case of failure.
     mi::neuraylib::ITransaction* get_transaction( const mi::IData* data);
 
     /// Convenience wrapper around create() for interfaces that need a transaction.
@@ -294,4 +288,3 @@ private:
 } // namespace MI
 
 #endif // API_API_NEURAY_FACTORY_IMPL_H
-

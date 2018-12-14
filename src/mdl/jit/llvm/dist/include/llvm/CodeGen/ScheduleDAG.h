@@ -489,7 +489,7 @@ namespace llvm {
 
     virtual bool isBottomUp() const = 0;
 
-    virtual void initNodes(MISTD::vector<SUnit> &SUnits) = 0;
+    virtual void initNodes(std::vector<SUnit> &SUnits) = 0;
     virtual void addNode(const SUnit *SU) = 0;
     virtual void updateNode(const SUnit *SU) = 0;
     virtual void releaseState() = 0;
@@ -506,8 +506,8 @@ namespace llvm {
     }
     virtual void push(SUnit *U) = 0;
 
-    void push_all(const MISTD::vector<SUnit *> &Nodes) {
-      for (MISTD::vector<SUnit *>::const_iterator I = Nodes.begin(),
+    void push_all(const std::vector<SUnit *> &Nodes) {
+      for (std::vector<SUnit *>::const_iterator I = Nodes.begin(),
            E = Nodes.end(); I != E; ++I)
         push(*I);
     }
@@ -542,7 +542,7 @@ namespace llvm {
     const TargetRegisterInfo *TRI;        // Target processor register info
     MachineFunction &MF;                  // Machine function
     MachineRegisterInfo &MRI;             // Virtual/real register map
-    MISTD::vector<SUnit> SUnits;            // The scheduling units.
+    std::vector<SUnit> SUnits;            // The scheduling units.
     SUnit EntrySU;                        // Special node for the region entry.
     SUnit ExitSU;                         // Special node for the region exit.
 
@@ -576,10 +576,10 @@ namespace llvm {
 
     /// getGraphNodeLabel - Return a label for an SUnit node in a visualization
     /// of the ScheduleDAG.
-    virtual MISTD::string getGraphNodeLabel(const SUnit *SU) const = 0;
+    virtual std::string getGraphNodeLabel(const SUnit *SU) const = 0;
 
     /// getDAGLabel - Return a label for the region of code covered by the DAG.
-    virtual MISTD::string getDAGName() const = 0;
+    virtual std::string getDAGName() const = 0;
 
     /// addCustomGraphFeatures - Add custom features for a visualization of
     /// the ScheduleDAG.
@@ -596,7 +596,7 @@ namespace llvm {
     const MCInstrDesc *getNodeDesc(const SDNode *Node) const;
   };
 
-  class SUnitIterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+  class SUnitIterator : public std::iterator<std::forward_iterator_tag,
                                              SUnit, ptrdiff_t> {
     SUnit *Node;
     unsigned Operand;
@@ -659,7 +659,7 @@ namespace llvm {
   };
 
   template <> struct GraphTraits<ScheduleDAG*> : public GraphTraits<SUnit*> {
-    typedef MISTD::vector<SUnit>::iterator nodes_iterator;
+    typedef std::vector<SUnit>::iterator nodes_iterator;
     static nodes_iterator nodes_begin(ScheduleDAG *G) {
       return G->SUnits.begin();
     }
@@ -676,13 +676,13 @@ namespace llvm {
   ///
   class ScheduleDAGTopologicalSort {
     /// SUnits - A reference to the ScheduleDAG's SUnits.
-    MISTD::vector<SUnit> &SUnits;
+    std::vector<SUnit> &SUnits;
     SUnit *ExitSU;
 
     /// Index2Node - Maps topological index to the node number.
-    MISTD::vector<int> Index2Node;
+    std::vector<int> Index2Node;
     /// Node2Index - Maps the node number to its topological index.
-    MISTD::vector<int> Node2Index;
+    std::vector<int> Node2Index;
     /// Visited - a set of nodes visited during a DFS traversal.
     BitVector Visited;
 
@@ -699,7 +699,7 @@ namespace llvm {
     void Allocate(int n, int index);
 
   public:
-    ScheduleDAGTopologicalSort(MISTD::vector<SUnit> &SUnits, SUnit *ExitSU);
+    ScheduleDAGTopologicalSort(std::vector<SUnit> &SUnits, SUnit *ExitSU);
 
     /// InitDAGTopologicalSorting - create the initial topological
     /// ordering from the DAG to be scheduled.
@@ -720,15 +720,15 @@ namespace llvm {
     /// of the current node M.
     void RemovePred(SUnit *M, SUnit *N);
 
-    typedef MISTD::vector<int>::iterator iterator;
-    typedef MISTD::vector<int>::const_iterator const_iterator;
+    typedef std::vector<int>::iterator iterator;
+    typedef std::vector<int>::const_iterator const_iterator;
     iterator begin() { return Index2Node.begin(); }
     const_iterator begin() const { return Index2Node.begin(); }
     iterator end() { return Index2Node.end(); }
     const_iterator end() const { return Index2Node.end(); }
 
-    typedef MISTD::vector<int>::reverse_iterator reverse_iterator;
-    typedef MISTD::vector<int>::const_reverse_iterator const_reverse_iterator;
+    typedef std::vector<int>::reverse_iterator reverse_iterator;
+    typedef std::vector<int>::const_reverse_iterator const_reverse_iterator;
     reverse_iterator rbegin() { return Index2Node.rbegin(); }
     const_reverse_iterator rbegin() const { return Index2Node.rbegin(); }
     reverse_iterator rend() { return Index2Node.rend(); }

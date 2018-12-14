@@ -36,7 +36,7 @@ public:
   /// Add - Add the specified instruction to the worklist if it isn't already
   /// in it.
   void Add(Instruction *I) {
-    if (WorklistMap.insert(MISTD::make_pair(I, Worklist.size())).second) {
+    if (WorklistMap.insert(std::make_pair(I, Worklist.size())).second) {
       DEBUG(dbgs() << "IC: ADD: " << *I << '\n');
       Worklist.push_back(I);
     }
@@ -57,7 +57,7 @@ public:
     DEBUG(dbgs() << "IC: ADDING: " << NumEntries << " instrs to worklist\n");
     for (unsigned Idx = 0; NumEntries; --NumEntries) {
       Instruction *I = List[NumEntries-1];
-      WorklistMap.insert(MISTD::make_pair(I, Idx++));
+      WorklistMap.insert(std::make_pair(I, Idx++));
       Worklist.push_back(I);
     }
   }

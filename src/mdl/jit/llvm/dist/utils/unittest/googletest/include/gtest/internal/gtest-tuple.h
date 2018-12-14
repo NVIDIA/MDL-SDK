@@ -36,7 +36,7 @@
 #ifndef GTEST_INCLUDE_GTEST_INTERNAL_GTEST_TUPLE_H_
 #define GTEST_INCLUDE_GTEST_INTERNAL_GTEST_TUPLE_H_
 
-#include <utility>  // For ::MISTD::pair.
+#include <utility>  // For ::std::pair.
 
 // The compiler used in Symbian has a bug that prevents us from declaring the
 // tuple template as a friend (it complains that tuple is redefined).  This
@@ -99,7 +99,7 @@
 // In theory, defining stuff in the ::std namespace is undefined
 // behavior.  We can do this as we are playing the role of a standard
 // library vendor.
-namespace MISTD {
+namespace std {
 namespace tr1 {
 
 template <typename T0 = void, typename T1 = void, typename T2 = void,
@@ -119,7 +119,7 @@ template <typename T>
 struct ByRef<T&> { typedef T& type; };  // NOLINT
 
 // A handy wrapper for ByRef.
-#define GTEST_BY_REF_(T) typename ::MISTD::tr1::gtest_internal::ByRef<T>::type
+#define GTEST_BY_REF_(T) typename ::std::tr1::gtest_internal::ByRef<T>::type
 
 // AddRef<T>::type is T if T is a reference; otherwise it's T&.  This
 // is the same as tr1::add_reference<T>::type.
@@ -129,7 +129,7 @@ template <typename T>
 struct AddRef<T&> { typedef T& type; };  // NOLINT
 
 // A handy wrapper for AddRef.
-#define GTEST_ADD_REF_(T) typename ::MISTD::tr1::gtest_internal::AddRef<T>::type
+#define GTEST_ADD_REF_(T) typename ::std::tr1::gtest_internal::AddRef<T>::type
 
 // A helper for implementing get<k>().
 template <int k> class Get;
@@ -226,7 +226,7 @@ class GTEST_2_TUPLE_(T) {
   template <GTEST_2_TYPENAMES_(U)>
   tuple(const GTEST_2_TUPLE_(U)& t) : f0_(t.f0_), f1_(t.f1_) {}
   template <typename U0, typename U1>
-  tuple(const ::MISTD::pair<U0, U1>& p) : f0_(p.first), f1_(p.second) {}
+  tuple(const ::std::pair<U0, U1>& p) : f0_(p.first), f1_(p.second) {}
 
   tuple& operator=(const tuple& t) { return CopyFrom(t); }
 
@@ -235,7 +235,7 @@ class GTEST_2_TUPLE_(T) {
     return CopyFrom(t);
   }
   template <typename U0, typename U1>
-  tuple& operator=(const ::MISTD::pair<U0, U1>& p) {
+  tuple& operator=(const ::std::pair<U0, U1>& p) {
     f0_ = p.first;
     f1_ = p.second;
     return *this;
@@ -639,7 +639,7 @@ class tuple {
 // 6.1.3.2 Tuple creation functions.
 
 // Known limitations: we don't support passing an
-// MISTD::tr1::reference_wrapper<T> to make_tuple().  And we don't
+// std::tr1::reference_wrapper<T> to make_tuple().  And we don't
 // implement tie().
 
 inline tuple<> make_tuple() { return tuple<>(); }
@@ -912,7 +912,7 @@ struct SameSizeTuplePrefixComparator<k, k> {
   template <class Tuple1, class Tuple2>
   static bool Eq(const Tuple1& t1, const Tuple2& t2) {
     return SameSizeTuplePrefixComparator<k - 1, k - 1>::Eq(t1, t2) &&
-        ::MISTD::tr1::get<k - 1>(t1) == ::MISTD::tr1::get<k - 1>(t2);
+        ::std::tr1::get<k - 1>(t1) == ::std::tr1::get<k - 1>(t2);
   }
 };
 
@@ -934,7 +934,7 @@ inline bool operator!=(const GTEST_10_TUPLE_(T)& t,
 // Unimplemented.
 
 }  // namespace tr1
-}  // namespace MISTD
+}  // namespace std
 
 #undef GTEST_0_TUPLE_
 #undef GTEST_1_TUPLE_

@@ -37,10 +37,10 @@ public:
     bool PrintFunctions : 1;
     bool PrintInlining : 1;
     bool Demangle : 1;
-    MISTD::string DefaultArch;
+    std::string DefaultArch;
     Options(bool UseSymbolTable = true, bool PrintFunctions = true,
             bool PrintInlining = true, bool Demangle = true,
-            MISTD::string DefaultArch = "")
+            std::string DefaultArch = "")
         : UseSymbolTable(UseSymbolTable), PrintFunctions(PrintFunctions),
           PrintInlining(PrintInlining), Demangle(Demangle),
           DefaultArch(DefaultArch) {
@@ -54,33 +54,33 @@ public:
 
   // Returns the result of symbolization for module name/offset as
   // a string (possibly containing newlines).
-  MISTD::string
-  symbolizeCode(const MISTD::string &ModuleName, uint64_t ModuleOffset);
-  MISTD::string
-  symbolizeData(const MISTD::string &ModuleName, uint64_t ModuleOffset);
+  std::string
+  symbolizeCode(const std::string &ModuleName, uint64_t ModuleOffset);
+  std::string
+  symbolizeData(const std::string &ModuleName, uint64_t ModuleOffset);
   void flush();
-  static MISTD::string DemangleName(const MISTD::string &Name);
+  static std::string DemangleName(const std::string &Name);
 private:
-  typedef MISTD::pair<Binary*, Binary*> BinaryPair;
+  typedef std::pair<Binary*, Binary*> BinaryPair;
 
-  ModuleInfo *getOrCreateModuleInfo(const MISTD::string &ModuleName);
+  ModuleInfo *getOrCreateModuleInfo(const std::string &ModuleName);
   /// \brief Returns pair of pointers to binary and debug binary.
-  BinaryPair getOrCreateBinary(const MISTD::string &Path);
+  BinaryPair getOrCreateBinary(const std::string &Path);
   /// \brief Returns a parsed object file for a given architecture in a
   /// universal binary (or the binary itself if it is an object file).
-  ObjectFile *getObjectFileFromBinary(Binary *Bin, const MISTD::string &ArchName);
+  ObjectFile *getObjectFileFromBinary(Binary *Bin, const std::string &ArchName);
 
-  MISTD::string printDILineInfo(DILineInfo LineInfo) const;
-  static MISTD::string DemangleGlobalName(const MISTD::string &Name);
+  std::string printDILineInfo(DILineInfo LineInfo) const;
+  static std::string DemangleGlobalName(const std::string &Name);
 
   // Owns all the parsed binaries and object files.
   SmallVector<Binary*, 4> ParsedBinariesAndObjects;
   // Owns module info objects.
-  typedef MISTD::map<MISTD::string, ModuleInfo *> ModuleMapTy;
+  typedef std::map<std::string, ModuleInfo *> ModuleMapTy;
   ModuleMapTy Modules;
-  typedef MISTD::map<MISTD::string, BinaryPair> BinaryMapTy;
+  typedef std::map<std::string, BinaryPair> BinaryMapTy;
   BinaryMapTy BinaryForPath;
-  typedef MISTD::map<MISTD::pair<MachOUniversalBinary *, MISTD::string>, ObjectFile *>
+  typedef std::map<std::pair<MachOUniversalBinary *, std::string>, ObjectFile *>
       ObjectFileForArchMapTy;
   ObjectFileForArchMapTy ObjectFileForArch;
 
@@ -96,12 +96,12 @@ public:
                            const LLVMSymbolizer::Options &Opts) const;
   DIInliningInfo symbolizeInlinedCode(
       uint64_t ModuleOffset, const LLVMSymbolizer::Options &Opts) const;
-  bool symbolizeData(uint64_t ModuleOffset, MISTD::string &Name, uint64_t &Start,
+  bool symbolizeData(uint64_t ModuleOffset, std::string &Name, uint64_t &Start,
                      uint64_t &Size) const;
 
 private:
   bool getNameFromSymbolTable(SymbolRef::Type Type, uint64_t Address,
-                              MISTD::string &Name, uint64_t &Addr,
+                              std::string &Name, uint64_t &Addr,
                               uint64_t &Size) const;
   ObjectFile *Module;
   OwningPtr<DIContext> DebugInfoContext;
@@ -115,7 +115,7 @@ private:
       return s1.Addr < s2.Addr;
     }
   };
-  typedef MISTD::map<SymbolDesc, StringRef> SymbolMapTy;
+  typedef std::map<SymbolDesc, StringRef> SymbolMapTy;
   SymbolMapTy Functions;
   SymbolMapTy Objects;
 };

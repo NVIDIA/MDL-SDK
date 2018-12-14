@@ -36,7 +36,7 @@ tool_output_file::CleanupInstaller::~CleanupInstaller() {
     sys::DontRemoveFileOnSignal(Filename);
 }
 
-tool_output_file::tool_output_file(const char *filename, MISTD::string &ErrorInfo,
+tool_output_file::tool_output_file(const char *filename, std::string &ErrorInfo,
                                    sys::fs::OpenFlags Flags)
     : Installer(filename), OS(filename, ErrorInfo, Flags) {
   // If open fails, no cleanup is needed.

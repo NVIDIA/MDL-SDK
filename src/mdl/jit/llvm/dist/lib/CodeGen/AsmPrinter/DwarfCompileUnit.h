@@ -74,13 +74,13 @@ class CompileUnit {
 
   /// AccelNames - A map of names for the name accelerator table.
   ///
-  StringMap<MISTD::vector<DIE *> > AccelNames;
-  StringMap<MISTD::vector<DIE *> > AccelObjC;
-  StringMap<MISTD::vector<DIE *> > AccelNamespace;
-  StringMap<MISTD::vector<MISTD::pair<DIE *, unsigned> > > AccelTypes;
+  StringMap<std::vector<DIE *> > AccelNames;
+  StringMap<std::vector<DIE *> > AccelObjC;
+  StringMap<std::vector<DIE *> > AccelNamespace;
+  StringMap<std::vector<std::pair<DIE *, unsigned> > > AccelTypes;
 
   /// DIEBlocks - A list of all the DIEBlocks in use.
-  MISTD::vector<DIEBlock *> DIEBlocks;
+  std::vector<DIEBlock *> DIEBlocks;
 
   /// ContainingTypeMap - This map is used to keep track of subprogram DIEs that
   /// need DW_AT_containing_type attribute. This attribute points to a DIE that
@@ -106,16 +106,16 @@ public:
   const StringMap<DIE *> &getGlobalNames() const { return GlobalNames; }
   const StringMap<DIE *> &getGlobalTypes() const { return GlobalTypes; }
 
-  const StringMap<MISTD::vector<DIE *> > &getAccelNames() const {
+  const StringMap<std::vector<DIE *> > &getAccelNames() const {
     return AccelNames;
   }
-  const StringMap<MISTD::vector<DIE *> > &getAccelObjC() const {
+  const StringMap<std::vector<DIE *> > &getAccelObjC() const {
     return AccelObjC;
   }
-  const StringMap<MISTD::vector<DIE *> > &getAccelNamespace() const {
+  const StringMap<std::vector<DIE *> > &getAccelNamespace() const {
     return AccelNamespace;
   }
-  const StringMap<MISTD::vector<MISTD::pair<DIE *, unsigned> > > &
+  const StringMap<std::vector<std::pair<DIE *, unsigned> > > &
   getAccelTypes() const {
     return AccelTypes;
   }
@@ -129,7 +129,7 @@ public:
 
   /// getParentContextString - Get a string containing the language specific
   /// context for a global name.
-  MISTD::string getParentContextString(DIScope Context) const;
+  std::string getParentContextString(DIScope Context) const;
 
   /// addGlobalName - Add a new global entity to the compile unit.
   ///
@@ -152,7 +152,7 @@ public:
   void addAccelNamespace(StringRef Name, DIE *Die);
 
   /// addAccelType - Add a new type to the type accelerator table.
-  void addAccelType(StringRef Name, MISTD::pair<DIE *, unsigned> Die);
+  void addAccelType(StringRef Name, std::pair<DIE *, unsigned> Die);
 
   /// getDIE - Returns the debug information entry map slot for the
   /// specified debug variable. We delegate the request to DwarfDebug
@@ -384,7 +384,7 @@ private:
 
   /// insertDIEEntry - Insert debug information entry into the map.
   void insertDIEEntry(const MDNode *N, DIEEntry *E) {
-    MDNodeToDIEEntryMap.insert(MISTD::make_pair(N, E));
+    MDNodeToDIEEntryMap.insert(std::make_pair(N, E));
   }
 
   // getIndexTyDie - Get an anonymous type for index type.

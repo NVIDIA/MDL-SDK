@@ -48,8 +48,8 @@ namespace SERIAL {
 template <typename T>
 bool compress_and_serialize(
     SERIAL::Serializer* const serial,
-    const MISTD::vector<T>& data,
-    MISTD::vector<unsigned char>& temp_buffer,
+    const std::vector<T>& data,
+    std::vector<unsigned char>& temp_buffer,
     const int compression_level = Z_BEST_SPEED)
 {
     // make sure the result buffer is large enough
@@ -89,8 +89,8 @@ bool compress_and_serialize(
 template <typename T>
 bool deserialize_and_decompress(
     SERIAL::Deserializer* const deser,
-    MISTD::vector<T>& data,
-    MISTD::vector<unsigned char>& temp_buffer)
+    std::vector<T>& data,
+    std::vector<unsigned char>& temp_buffer)
 {
     // deserialize uncompressed data size
     size_t data_size = 0;

@@ -62,10 +62,10 @@ public:
 template<class GraphT,
 class SetType = llvm::SmallPtrSet<typename GraphTraits<GraphT>::NodeType*, 8>,
          bool ExtStorage = false, class GT = GraphTraits<GraphT> >
-class df_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class df_iterator : public std::iterator<std::forward_iterator_tag,
                                          typename GT::NodeType, ptrdiff_t>,
                     public df_iterator_storage<SetType, ExtStorage> {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag,
+  typedef std::iterator<std::forward_iterator_tag,
                         typename GT::NodeType, ptrdiff_t> super;
 
   typedef typename GT::NodeType          NodeType;
@@ -75,11 +75,11 @@ class df_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
   // VisitStack - Used to maintain the ordering.  Top = current block
   // First element is node pointer, second is the 'next child' to visit
   // if the int in PointerIntTy is 0, the 'next child' to visit is invalid
-  MISTD::vector<MISTD::pair<PointerIntTy, ChildItTy> > VisitStack;
+  std::vector<std::pair<PointerIntTy, ChildItTy> > VisitStack;
 private:
   inline df_iterator(NodeType *Node) {
     this->Visited.insert(Node);
-    VisitStack.push_back(MISTD::make_pair(PointerIntTy(Node, 0), 
+    VisitStack.push_back(std::make_pair(PointerIntTy(Node, 0), 
                                         GT::child_begin(Node)));
   }
   inline df_iterator() { 
@@ -88,7 +88,7 @@ private:
   inline df_iterator(NodeType *Node, SetType &S)
     : df_iterator_storage<SetType, ExtStorage>(S) {
     if (!S.count(Node)) {
-      VisitStack.push_back(MISTD::make_pair(PointerIntTy(Node, 0), 
+      VisitStack.push_back(std::make_pair(PointerIntTy(Node, 0), 
                                           GT::child_begin(Node)));
       this->Visited.insert(Node);
     }
@@ -100,7 +100,7 @@ private:
 
   inline void toNext() {
     do {
-      MISTD::pair<PointerIntTy, ChildItTy> &Top = VisitStack.back();
+      std::pair<PointerIntTy, ChildItTy> &Top = VisitStack.back();
       NodeType *Node = Top.first.getPointer();
       ChildItTy &It  = Top.second;
       if (!Top.first.getInt()) {
@@ -115,7 +115,7 @@ private:
         if (Next && !this->Visited.count(Next)) {  
           // No, do it now.
           this->Visited.insert(Next);
-          VisitStack.push_back(MISTD::make_pair(PointerIntTy(Next, 0), 
+          VisitStack.push_back(std::make_pair(PointerIntTy(Next, 0), 
                                               GT::child_begin(Next)));
           return;
         }
@@ -208,7 +208,7 @@ df_iterator<T> df_end(const T& G) {
 }
 
 // Provide global definitions of external depth first iterators...
-template <class T, class SetTy = MISTD::set<typename GraphTraits<T>::NodeType*> >
+template <class T, class SetTy = std::set<typename GraphTraits<T>::NodeType*> >
 struct df_ext_iterator : public df_iterator<T, SetTy, true> {
   df_ext_iterator(const df_iterator<T, SetTy, true> &V)
     : df_iterator<T, SetTy, true>(V) {}
@@ -245,7 +245,7 @@ idf_iterator<T> idf_end(const T& G){
 }
 
 // Provide global definitions of external inverse depth first iterators...
-template <class T, class SetTy = MISTD::set<typename GraphTraits<T>::NodeType*> >
+template <class T, class SetTy = std::set<typename GraphTraits<T>::NodeType*> >
 struct idf_ext_iterator : public idf_iterator<T, SetTy, true> {
   idf_ext_iterator(const idf_iterator<T, SetTy, true> &V)
     : idf_iterator<T, SetTy, true>(V) {}

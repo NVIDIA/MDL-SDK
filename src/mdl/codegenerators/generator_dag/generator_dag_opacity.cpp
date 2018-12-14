@@ -215,23 +215,8 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
 
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF:
-
-            has_mode = true;
-            break;
-
         case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF:
             break;
 
         default:
@@ -276,17 +261,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY:
-            return is_glossy_bsdf_opaque(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
             return opaque;
@@ -346,17 +320,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
-
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF:
-        case IDefinition::DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY:
-            return is_elemental_bsdf_opaque(bsdf);
 
         default:
             MDL_ASSERT(!"unhandled BSDF");
@@ -466,3 +429,4 @@ bool Generated_code_dag::Material_instance::is_opaque() const
 
 }  // mdl
 }  // mi
+

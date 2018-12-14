@@ -55,7 +55,7 @@ namespace {
 
 // Buffer for an in-memory object file in executable memory
 typedef llvm::DenseMap< const char*,
-                        MISTD::pair<MISTD::size_t, jit_code_entry*> >
+                        std::pair<std::size_t, jit_code_entry*> >
   RegisteredObjectBufferMap;
 
 /// Global access point for the JIT debugging interface designed for use with a
@@ -142,7 +142,7 @@ void GDBJITRegistrar::registerObject(const ObjectBuffer &Object) {
     JITCodeEntry->symfile_addr = Buffer;
     JITCodeEntry->symfile_size = Size;
 
-    ObjectBufferMap[Buffer] = MISTD::make_pair(Size, JITCodeEntry);
+    ObjectBufferMap[Buffer] = std::make_pair(Size, JITCodeEntry);
     NotifyDebugger(JITCodeEntry);
   }
 }

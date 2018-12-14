@@ -26,11 +26,11 @@ template<>
 struct DOTGraphTraits<CallGraph*> : public DefaultDOTGraphTraits {
   DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
-  static MISTD::string getGraphName(CallGraph *Graph) {
+  static std::string getGraphName(CallGraph *Graph) {
     return "Call graph";
   }
 
-  MISTD::string getNodeLabel(CallGraphNode *Node, CallGraph *Graph) {
+  std::string getNodeLabel(CallGraphNode *Node, CallGraph *Graph) {
     if (Function *Func = Node->getFunction())
       return Func->getName();
 

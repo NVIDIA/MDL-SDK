@@ -75,7 +75,7 @@ static unsigned getCompressedMask(unsigned short Mask) {
          getMaskElt(Mask, 2)*9     + getMaskElt(Mask, 3);
 }
 
-static void PrintMask(unsigned i, MISTD::ostream &OS) {
+static void PrintMask(unsigned i, std::ostream &OS) {
   OS << "<" << (char)(getMaskElt(i, 0) == 8 ? 'u' : ('0'+getMaskElt(i, 0)))
      << "," << (char)(getMaskElt(i, 1) == 8 ? 'u' : ('0'+getMaskElt(i, 1)))
      << "," << (char)(getMaskElt(i, 2) == 8 ? 'u' : ('0'+getMaskElt(i, 2)))
@@ -98,7 +98,7 @@ struct ShuffleVal {
 static ShuffleVal ShufTab[65536];
 
 /// TheOperators - All of the operators that this target supports.
-static MISTD::vector<Operator*> TheOperators;
+static std::vector<Operator*> TheOperators;
 
 /// Operator - This is a vector operation that is available for use.
 struct Operator {
@@ -157,37 +157,37 @@ static const char *getZeroCostOpName(unsigned short Op) {
 
 static void PrintOperation(unsigned ValNo, unsigned short Vals[]) {
   unsigned short ThisOp = Vals[ValNo];
-  MISTD::cerr << "t" << ValNo;
-  PrintMask(ThisOp, MISTD::cerr);
-  MISTD::cerr << " = " << ShufTab[ThisOp].Op->getName() << "(";
+  std::cerr << "t" << ValNo;
+  PrintMask(ThisOp, std::cerr);
+  std::cerr << " = " << ShufTab[ThisOp].Op->getName() << "(";
 
   if (ShufTab[ShufTab[ThisOp].Arg0].Cost == 0) {
-    MISTD::cerr << getZeroCostOpName(ShufTab[ThisOp].Arg0);
-    PrintMask(ShufTab[ThisOp].Arg0, MISTD::cerr);
+    std::cerr << getZeroCostOpName(ShufTab[ThisOp].Arg0);
+    PrintMask(ShufTab[ThisOp].Arg0, std::cerr);
   } else {
     // Figure out what tmp # it is.
     for (unsigned i = 0; ; ++i)
       if (Vals[i] == ShufTab[ThisOp].Arg0) {
-        MISTD::cerr << "t" << i;
+        std::cerr << "t" << i;
         break;
       }
   }
 
   if (!ShufTab[Vals[ValNo]].Op->isOnlyLHSOperator()) {
-    MISTD::cerr << ", ";
+    std::cerr << ", ";
     if (ShufTab[ShufTab[ThisOp].Arg1].Cost == 0) {
-      MISTD::cerr << getZeroCostOpName(ShufTab[ThisOp].Arg1);
-      PrintMask(ShufTab[ThisOp].Arg1, MISTD::cerr);
+      std::cerr << getZeroCostOpName(ShufTab[ThisOp].Arg1);
+      PrintMask(ShufTab[ThisOp].Arg1, std::cerr);
     } else {
       // Figure out what tmp # it is.
       for (unsigned i = 0; ; ++i)
         if (Vals[i] == ShufTab[ThisOp].Arg1) {
-          MISTD::cerr << "t" << i;
+          std::cerr << "t" << i;
           break;
         }
     }
   }
-  MISTD::cerr << ")  ";
+  std::cerr << ")  ";
 }
 
 static unsigned getNumEntered() {
@@ -232,7 +232,7 @@ int main() {
   while (MadeChange) {
     MadeChange = false;
     ++OpCount;
-    MISTD::cerr << "Starting iteration #" << OpCount << " with "
+    std::cerr << "Starting iteration #" << OpCount << " with "
               << getNumEntered() << " entries established.\n";
 
     // Scan the table for two reasons: First, compute the maximum cost of any
@@ -357,7 +357,7 @@ int main() {
     }
   }
 
-  MISTD::cerr << "Finished Table has " << getNumEntered()
+  std::cerr << "Finished Table has " << getNumEntered()
             << " entries established.\n";
 
   unsigned CostArray[10] = { 0 };
@@ -373,14 +373,14 @@ int main() {
 
   for (unsigned i = 0; i != 9; ++i)
     if (CostArray[i])
-      MISTD::cout << "// " << CostArray[i] << " entries have cost " << i << "\n";
+      std::cout << "// " << CostArray[i] << " entries have cost " << i << "\n";
   if (CostArray[9])
-    MISTD::cout << "// " << CostArray[9] << " entries have higher cost!\n";
+    std::cout << "// " << CostArray[9] << " entries have higher cost!\n";
 
 
   // Build up the table to emit.
-  MISTD::cout << "\n// This table is 6561*4 = 26244 bytes in size.\n";
-  MISTD::cout << "static const unsigned PerfectShuffleTable[6561+1] = {\n";
+  std::cout << "\n// This table is 6561*4 = 26244 bytes in size.\n";
+  std::cout << "static const unsigned PerfectShuffleTable[6561+1] = {\n";
 
   for (unsigned i = 0; i != 0x8889; ++i) {
     if (!isValidMask(i)) continue;
@@ -401,36 +401,36 @@ int main() {
     // LHS, and 13 bits of RHS = 32 bits.
     unsigned Val = (CostSat << 30) | (OpNum << 26) | (LHS << 13) | RHS;
 
-    MISTD::cout << "  " << MISTD::setw(10) << Val << "U, // ";
-    PrintMask(i, MISTD::cout);
-    MISTD::cout << ": Cost " << ShufTab[i].Cost;
-    MISTD::cout << " " << (ShufTab[i].Op ? ShufTab[i].Op->getName() : "copy");
-    MISTD::cout << " ";
+    std::cout << "  " << std::setw(10) << Val << "U, // ";
+    PrintMask(i, std::cout);
+    std::cout << ": Cost " << ShufTab[i].Cost;
+    std::cout << " " << (ShufTab[i].Op ? ShufTab[i].Op->getName() : "copy");
+    std::cout << " ";
     if (ShufTab[ShufTab[i].Arg0].Cost == 0) {
-      MISTD::cout << getZeroCostOpName(ShufTab[i].Arg0);
+      std::cout << getZeroCostOpName(ShufTab[i].Arg0);
     } else {
-      PrintMask(ShufTab[i].Arg0, MISTD::cout);
+      PrintMask(ShufTab[i].Arg0, std::cout);
     }
 
     if (ShufTab[i].Op && !ShufTab[i].Op->isOnlyLHSOperator()) {
-      MISTD::cout << ", ";
+      std::cout << ", ";
       if (ShufTab[ShufTab[i].Arg1].Cost == 0) {
-        MISTD::cout << getZeroCostOpName(ShufTab[i].Arg1);
+        std::cout << getZeroCostOpName(ShufTab[i].Arg1);
       } else {
-        PrintMask(ShufTab[i].Arg1, MISTD::cout);
+        PrintMask(ShufTab[i].Arg1, std::cout);
       }
     }
-    MISTD::cout << "\n";
+    std::cout << "\n";
   }
-  MISTD::cout << "  0\n};\n";
+  std::cout << "  0\n};\n";
 
   if (0) {
     // Print out the table.
     for (unsigned i = 0; i != 0x8889; ++i) {
       if (!isValidMask(i)) continue;
       if (ShufTab[i].Cost < 1000) {
-        PrintMask(i, MISTD::cerr);
-        MISTD::cerr << " - Cost " << ShufTab[i].Cost << " - ";
+        PrintMask(i, std::cerr);
+        std::cerr << " - Cost " << ShufTab[i].Cost << " - ";
 
         unsigned short Vals[30];
         unsigned NumVals = 0;
@@ -438,7 +438,7 @@ int main() {
 
         for (unsigned j = 0, e = NumVals; j != e; ++j)
           PrintOperation(j, Vals);
-        MISTD::cerr << "\n";
+        std::cerr << "\n";
       }
     }
   }

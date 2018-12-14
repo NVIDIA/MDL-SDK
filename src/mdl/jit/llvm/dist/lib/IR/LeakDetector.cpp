@@ -50,7 +50,7 @@ void LeakDetector::removeGarbageObjectImpl(const Value *Object) {
 }
 
 void LeakDetector::checkForGarbageImpl(LLVMContext &Context, 
-                                       const MISTD::string &Message) {
+                                       const std::string &Message) {
   LLVMContextImpl *pImpl = Context.pImpl;
   sys::SmartScopedLock<true> Lock(*ObjectsLock);
   

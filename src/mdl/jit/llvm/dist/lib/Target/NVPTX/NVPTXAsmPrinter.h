@@ -52,20 +52,20 @@ namespace llvm {
 class LineReader {
 private:
   unsigned theCurLine;
-  MISTD::ifstream fstr;
+  std::ifstream fstr;
   char buff[512];
-  MISTD::string theFileName;
+  std::string theFileName;
   SmallVector<unsigned, 32> lineOffset;
 public:
-  LineReader(const MISTD::string &filename)
+  LineReader(const std::string &filename)
   : theCurLine(0), theFileName(filename)
   {
     fstr.open(filename.c_str());
     buff[0] = '\0';
   }
-  const MISTD::string &fileName() { return theFileName; }
+  const std::string &fileName() { return theFileName; }
   ~LineReader() { fstr.close(); }
-  MISTD::string readLine(unsigned line);
+  std::string readLine(unsigned line);
 };
 
 class LLVM_LIBRARY_VISIBILITY NVPTXAsmPrinter : public AsmPrinter {
@@ -197,7 +197,7 @@ private:
   virtual const char *getPassName() const { return "NVPTX Assembly Printer"; }
 
   const Function *F;
-  MISTD::string CurrentFnName;
+  std::string CurrentFnName;
 
   void EmitFunctionEntryLabel();
   void EmitFunctionBodyStart();
@@ -250,7 +250,7 @@ protected:
   bool doFinalization(Module &M);
 
 private:
-  MISTD::string CurrentBankselLabelInBasicBlock;
+  std::string CurrentBankselLabelInBasicBlock;
 
   bool GlobalsEmitted;
   
@@ -266,18 +266,18 @@ private:
   const NVPTXSubtarget &nvptxSubtarget;
   // Build the map between type name and ID based on module's type
   // symbol table.
-  MISTD::map<const Type *, MISTD::string> TypeNameMap;
+  std::map<const Type *, std::string> TypeNameMap;
 
   // List of variables demoted to a function scope.
-  MISTD::map<const Function *, MISTD::vector<const GlobalVariable *> > localDecls;
+  std::map<const Function *, std::vector<const GlobalVariable *> > localDecls;
 
   // To record filename to ID mapping
-  MISTD::map<MISTD::string, unsigned> filenameMap;
+  std::map<std::string, unsigned> filenameMap;
   void recordAndEmitFilenames(Module &);
 
   void emitPTXGlobalVariable(const GlobalVariable *GVar, raw_ostream &O);
   void emitPTXAddressSpace(unsigned int AddressSpace, raw_ostream &O) const;
-  MISTD::string getPTXFundamentalTypeStr(const Type *Ty, bool = true) const;
+  std::string getPTXFundamentalTypeStr(const Type *Ty, bool = true) const;
   void printScalarConstant(const Constant *CPV, raw_ostream &O);
   void printFPConstant(const ConstantFP *Fp, raw_ostream &O);
   void bufferLEByte(const Constant *CPV, int Bytes, AggBuffer *aggBuffer);
@@ -297,7 +297,7 @@ private:
   void lowerImageHandleSymbol(unsigned Index, MCOperand &MCOp);
 
   LineReader *reader;
-  LineReader *getReader(MISTD::string);
+  LineReader *getReader(std::string);
 
   // Used to control the need to emit .generic() in the initializer of
   // module scope variables.
@@ -331,7 +331,7 @@ public:
 
   bool ignoreLoc(const MachineInstr &);
 
-  MISTD::string getVirtualRegisterName(unsigned) const;
+  std::string getVirtualRegisterName(unsigned) const;
 
   DebugLoc prevDebugLoc;
   void emitLineNumberAsDotLoc(const MachineInstr &);

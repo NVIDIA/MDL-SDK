@@ -97,7 +97,7 @@ MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
 
   // Find entry
   const SubtargetInfoKV *Found =
-    MISTD::lower_bound(ProcSchedModels, ProcSchedModels+NumProcs, CPU);
+    std::lower_bound(ProcSchedModels, ProcSchedModels+NumProcs, CPU);
   if (Found == ProcSchedModels+NumProcs || StringRef(Found->Key) != CPU) {
     errs() << "'" << CPU
            << "' is not a recognized processor for this target"

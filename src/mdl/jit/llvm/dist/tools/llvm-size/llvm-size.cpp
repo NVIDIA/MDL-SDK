@@ -61,11 +61,11 @@ static cl::opt<RadixTy>
                     clEnumValEnd),
          cl::init(decimal));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
        InputFilenames(cl::Positional, cl::desc("<input files>"),
                       cl::ZeroOrMore);
 
-static MISTD::string ToolName;
+static std::string ToolName;
 
 ///  @brief If ec is not success, print the error and return true.
 static bool error(error_code ec) {
@@ -90,7 +90,7 @@ static size_t getNumLengthAsString(uint64_t num) {
 /// The format used is determined by @c OutputFormat and @c Radix.
 static void PrintObjectSectionSizes(ObjectFile *o) {
   uint64_t total = 0;
-  MISTD::string fmtbuf;
+  std::string fmtbuf;
   raw_string_ostream fmt(fmtbuf);
 
   const char *radix_fmt = 0;
@@ -108,9 +108,9 @@ static void PrintObjectSectionSizes(ObjectFile *o) {
   if (OutputFormat == sysv) {
     // Run two passes over all sections. The first gets the lengths needed for
     // formatting the output. The second actually does the output.
-    MISTD::size_t max_name_len = strlen("section");
-    MISTD::size_t max_size_len = strlen("size");
-    MISTD::size_t max_addr_len = strlen("addr");
+    std::size_t max_name_len = strlen("section");
+    std::size_t max_size_len = strlen("size");
+    std::size_t max_addr_len = strlen("addr");
     error_code ec;
     for (section_iterator i = o->begin_sections(),
                           e = o->end_sections(); i != e;
@@ -126,9 +126,9 @@ static void PrintObjectSectionSizes(ObjectFile *o) {
       uint64_t addr = 0;
       if (error(i->getName(name))) return;
       if (error(i->getAddress(addr))) return;
-      max_name_len = MISTD::max(max_name_len, name.size());
-      max_size_len = MISTD::max(max_size_len, getNumLengthAsString(size));
-      max_addr_len = MISTD::max(max_addr_len, getNumLengthAsString(addr));
+      max_name_len = std::max(max_name_len, name.size());
+      max_size_len = std::max(max_size_len, getNumLengthAsString(size));
+      max_addr_len = std::max(max_addr_len, getNumLengthAsString(addr));
     }
 
     // Add extra padding.
@@ -166,7 +166,7 @@ static void PrintObjectSectionSizes(ObjectFile *o) {
       if (error(i->getName(name))) return;
       if (error(i->getSize(size))) return;
       if (error(i->getAddress(addr))) return;
-      MISTD::string namestr = name;
+      std::string namestr = name;
 
       outs() << format(fmt.str().c_str(),
                        namestr.c_str(),
@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
            << (Radix == octal ? "oct" : "dec")
            << "     hex filename\n";
 
-  MISTD::for_each(InputFilenames.begin(), InputFilenames.end(),
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
                 PrintFileSectionSizes);
 
   return 0;

@@ -78,7 +78,7 @@ void Region::replaceExit(BasicBlock *BB) {
 }
 
 void Region::replaceEntryRecursive(BasicBlock *NewEntry) {
-  MISTD::vector<Region *> RegionQueue;
+  std::vector<Region *> RegionQueue;
   BasicBlock *OldEntry = getEntry();
 
   RegionQueue.push_back(this);
@@ -94,7 +94,7 @@ void Region::replaceEntryRecursive(BasicBlock *NewEntry) {
 }
 
 void Region::replaceExitRecursive(BasicBlock *NewExit) {
-  MISTD::vector<Region *> RegionQueue;
+  std::vector<Region *> RegionQueue;
   BasicBlock *OldExit = getExit();
 
   RegionQueue.push_back(this);
@@ -208,9 +208,9 @@ bool Region::isSimple() const {
   return !isTopLevelRegion() && getEnteringBlock() && getExitingBlock();
 }
 
-MISTD::string Region::getNameStr() const {
-  MISTD::string exitName;
-  MISTD::string entryName;
+std::string Region::getNameStr() const {
+  std::string exitName;
+  std::string entryName;
 
   if (getEntry()->getName().empty()) {
     raw_string_ostream OS(entryName);
@@ -248,7 +248,7 @@ void Region::verifyBBInRegion(BasicBlock *BB) const {
         llvm_unreachable("Broken region found!");
 }
 
-void Region::verifyWalk(BasicBlock *BB, MISTD::set<BasicBlock*> *visited) const {
+void Region::verifyWalk(BasicBlock *BB, std::set<BasicBlock*> *visited) const {
   BasicBlock *exit = getExit();
 
   visited->insert(BB);
@@ -265,7 +265,7 @@ void Region::verifyRegion() const {
   // check will be invoked by PassManager.
   if (!VerifyRegionInfo) return;
 
-  MISTD::set<BasicBlock*> visited;
+  std::set<BasicBlock*> visited;
   verifyWalk(getEntry(), &visited);
 }
 
@@ -319,7 +319,7 @@ RegionNode* Region::getBBNode(BasicBlock *BB) const {
     return at->second;
 
   RegionNode *NewNode = new RegionNode(const_cast<Region*>(this), BB);
-  BBNodeMap.insert(MISTD::make_pair(BB, NewNode));
+  BBNodeMap.insert(std::make_pair(BB, NewNode));
   return NewNode;
 }
 
@@ -341,7 +341,7 @@ void Region::transferChildrenTo(Region *To) {
 
 void Region::addSubRegion(Region *SubRegion, bool moveChildren) {
   assert(SubRegion->parent == 0 && "SubRegion already has a parent!");
-  assert(MISTD::find(begin(), end(), SubRegion) == children.end()
+  assert(std::find(begin(), end(), SubRegion) == children.end()
          && "Subregion already exists!");
 
   SubRegion->parent = this;
@@ -361,7 +361,7 @@ void Region::addSubRegion(Region *SubRegion, bool moveChildren) {
         RI->setRegionFor(BB, SubRegion);
     }
 
-  MISTD::vector<Region*> Keep;
+  std::vector<Region*> Keep;
   for (iterator I = begin(), E = end(); I != E; ++I)
     if (SubRegion->contains(*I) && *I != SubRegion) {
       SubRegion->children.push_back(*I);
@@ -377,7 +377,7 @@ void Region::addSubRegion(Region *SubRegion, bool moveChildren) {
 Region *Region::removeSubRegion(Region *Child) {
   assert(Child->parent == this && "Child is not a child of this region!");
   Child->parent = 0;
-  RegionSet::iterator I = MISTD::find(children.begin(), children.end(), Child);
+  RegionSet::iterator I = std::find(children.begin(), children.end(), Child);
   assert(I != children.end() && "Region does not exit. Unable to remove.");
   children.erase(children.begin()+(I-begin()));
   return Child;
@@ -581,7 +581,7 @@ Region *RegionInfo::createRegion(BasicBlock *entry, BasicBlock *exit) {
     return 0;
 
   Region *region = new Region(entry, exit, this, DT);
-  BBtoRegion.insert(MISTD::make_pair(entry, region));
+  BBtoRegion.insert(std::make_pair(entry, region));
 
  #ifdef XDEBUG
     region->verifyRegion();

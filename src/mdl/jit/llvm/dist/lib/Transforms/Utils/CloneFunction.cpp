@@ -162,7 +162,7 @@ void llvm::CloneFunctionInto(Function *NewFunc, const Function *OldFunc,
 Function *llvm::CloneFunction(const Function *F, ValueToValueMapTy &VMap,
                               bool ModuleLevelChanges,
                               ClonedCodeInfo *CodeInfo) {
-  MISTD::vector<Type*> ArgTypes;
+  std::vector<Type*> ArgTypes;
 
   // The user might be deleting arguments to the function by specifying them in
   // the VMap.  If so, we need to not add the arguments to the arg ty vector
@@ -221,14 +221,14 @@ namespace {
     /// CloneBlock - The specified block is found to be reachable, clone it and
     /// anything that it can reach.
     void CloneBlock(const BasicBlock *BB,
-                    MISTD::vector<const BasicBlock*> &ToClone);
+                    std::vector<const BasicBlock*> &ToClone);
   };
 }
 
 /// CloneBlock - The specified block is found to be reachable, clone it and
 /// anything that it can reach.
 void PruningFunctionCloner::CloneBlock(const BasicBlock *BB,
-                                       MISTD::vector<const BasicBlock*> &ToClone){
+                                       std::vector<const BasicBlock*> &ToClone){
   WeakVH &BBEntry = VMap[BB];
 
   // Have we already cloned this block?
@@ -382,7 +382,7 @@ void llvm::CloneAndPruneFunctionInto(Function *NewFunc, const Function *OldFunc,
                             NameSuffix, CodeInfo, TD);
 
   // Clone the entry block, and anything recursively reachable from it.
-  MISTD::vector<const BasicBlock*> CloneWorklist;
+  std::vector<const BasicBlock*> CloneWorklist;
   CloneWorklist.push_back(&OldFunc->getEntryBlock());
   while (!CloneWorklist.empty()) {
     const BasicBlock *BB = CloneWorklist.back();
@@ -455,11 +455,11 @@ void llvm::CloneAndPruneFunctionInto(Function *NewFunc, const Function *OldFunc,
     // phi nodes will have invalid entries.  Update the PHI nodes in this
     // case.
     PHINode *PN = cast<PHINode>(NewBB->begin());
-    NumPreds = MISTD::distance(pred_begin(NewBB), pred_end(NewBB));
+    NumPreds = std::distance(pred_begin(NewBB), pred_end(NewBB));
     if (NumPreds != PN->getNumIncomingValues()) {
       assert(NumPreds < PN->getNumIncomingValues());
       // Count how many times each predecessor comes to this block.
-      MISTD::map<BasicBlock*, unsigned> PredCount;
+      std::map<BasicBlock*, unsigned> PredCount;
       for (pred_iterator PI = pred_begin(NewBB), E = pred_end(NewBB);
            PI != E; ++PI)
         --PredCount[*PI];
@@ -473,7 +473,7 @@ void llvm::CloneAndPruneFunctionInto(Function *NewFunc, const Function *OldFunc,
       // entries.
       BasicBlock::iterator I = NewBB->begin();
       for (; (PN = dyn_cast<PHINode>(I)); ++I) {
-        for (MISTD::map<BasicBlock*, unsigned>::iterator PCI =PredCount.begin(),
+        for (std::map<BasicBlock*, unsigned>::iterator PCI =PredCount.begin(),
              E = PredCount.end(); PCI != E; ++PCI) {
           BasicBlock *Pred     = PCI->first;
           for (unsigned NumToRemove = PCI->second; NumToRemove; --NumToRemove)

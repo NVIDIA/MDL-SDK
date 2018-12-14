@@ -44,7 +44,6 @@
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 
-
 namespace MI {
 
 namespace NEURAY {
@@ -76,8 +75,7 @@ mi::neuraylib::Element_type Function_definition_impl::get_element_type() const
 
 const char* Function_definition_impl::get_module() const
 {
-    DB::Tag tag = get_db_element()->get_module();
-    return get_db_transaction()->tag_to_name( tag);
+    return get_db_element()->get_module_db_name();
 }
 
 const char* Function_definition_impl::get_mdl_name() const
@@ -204,8 +202,6 @@ mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
     return api_call;
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

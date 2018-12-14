@@ -27,7 +27,7 @@ using namespace llvm;
 /// \param LockFileName The name of the lock file to read.
 ///
 /// \returns The process ID of the process that owns this lock file
-Optional<MISTD::pair<MISTD::string, int> >
+Optional<std::pair<std::string, int> >
 LockFileManager::readLockFile(StringRef LockFileName) {
   // Check whether the lock file exists. If not, clearly there's nothing
   // to read, so we just return.
@@ -47,7 +47,7 @@ LockFileManager::readLockFile(StringRef LockFileName) {
   PIDStr = PIDStr.substr(PIDStr.find_first_not_of(" "));
   int PID;
   if (!PIDStr.getAsInteger(10, PID))
-    return MISTD::make_pair(MISTD::string(Hostname), PID);
+    return std::make_pair(std::string(Hostname), PID);
 
   // Delete the lock file. It's invalid anyway.
   sys::fs::remove(LockFileName);

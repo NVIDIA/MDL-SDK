@@ -191,15 +191,15 @@ bool MemsetRange::isProfitableToUseMemset(const DataLayout &TD) const {
 
 namespace {
 class MemsetRanges {
-  /// Ranges - A sorted list of the memset ranges.  We use MISTD::list here
+  /// Ranges - A sorted list of the memset ranges.  We use std::list here
   /// because each element is relatively large and expensive to copy.
-  MISTD::list<MemsetRange> Ranges;
-  typedef MISTD::list<MemsetRange>::iterator range_iterator;
+  std::list<MemsetRange> Ranges;
+  typedef std::list<MemsetRange>::iterator range_iterator;
   const DataLayout &TD;
 public:
   MemsetRanges(const DataLayout &td) : TD(td) {}
 
-  typedef MISTD::list<MemsetRange>::const_iterator const_iterator;
+  typedef std::list<MemsetRange>::const_iterator const_iterator;
   const_iterator begin() const { return Ranges.begin(); }
   const_iterator end() const { return Ranges.end(); }
   bool empty() const { return Ranges.empty(); }
@@ -523,7 +523,7 @@ bool MemCpyOpt::processStore(StoreInst *SI, BasicBlock::iterator &BBI) {
                         SI->getPointerOperand()->stripPointerCasts(),
                         LI->getPointerOperand()->stripPointerCasts(),
                         TD->getTypeStoreSize(SI->getOperand(0)->getType()),
-                        MISTD::min(storeAlign, loadAlign), C);
+                        std::min(storeAlign, loadAlign), C);
         if (changed) {
           MD->removeInstruction(SI);
           SI->eraseFromParent();
@@ -792,7 +792,7 @@ bool MemCpyOpt::processMemCpyMemCpyDependence(MemCpyInst *M, MemCpyInst *MDep,
   // the alignment past what can be read from or written to.
   // TODO: Is this worth it if we're creating a less aligned memcpy? For
   // example we could be moving from movaps -> movq on x86.
-  unsigned Align = MISTD::min(MDep->getAlignment(), M->getAlignment());
+  unsigned Align = std::min(MDep->getAlignment(), M->getAlignment());
 
   IRBuilder<> Builder(M);
   if (UseMemMove)

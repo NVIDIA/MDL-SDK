@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This implements support adapting raw_ostream to MISTD::ostream.
+// This implements support adapting raw_ostream to std::ostream.
 //
 //===----------------------------------------------------------------------===//
 

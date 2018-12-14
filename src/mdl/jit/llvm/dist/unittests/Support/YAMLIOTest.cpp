@@ -35,7 +35,7 @@ struct FooBar {
   int foo;
   int bar;
 };
-typedef MISTD::vector<FooBar> FooBarSequence;
+typedef std::vector<FooBar> FooBarSequence;
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(FooBar)
 
@@ -100,7 +100,7 @@ TEST(YAMLIO, TestSequenceMapRead) {
 // Test writing then reading back a sequence of mappings
 //
 TEST(YAMLIO, TestSequenceMapWriteAndRead) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     FooBar entry1;
     entry1.foo = 10;
@@ -233,7 +233,7 @@ TEST(YAMLIO, TestReadBuiltInTypes) {
 // Test writing then reading back all built-in scalar types
 //
 TEST(YAMLIO, TestReadWriteBuiltInTypes) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     BuiltInTypes map;
     map.str = "one two";
@@ -307,7 +307,7 @@ namespace yaml {
 }
 
 TEST(YAMLIO, TestReadWriteStringTypes) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     StringTypes map;
     map.str1 = "'aaa";
@@ -484,7 +484,7 @@ TEST(YAMLIO, TestFlagsRead) {
 // Test writing then reading back bit-mask values
 //
 TEST(YAMLIO, TestReadWriteFlags) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     FlagsMap map;
     map.f1 = flagBig;
@@ -573,7 +573,7 @@ namespace yaml {
 // Test writing then reading back custom values
 //
 TEST(YAMLIO, TestReadWriteMyCustomType) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     MyCustomTypeMap map;
     map.f1.length = 1;
@@ -631,9 +631,9 @@ namespace yaml {
 
 struct NameAndNumbers {
   llvm::StringRef               name;
-  MISTD::vector<llvm::StringRef>  strings;
-  MISTD::vector<MyNumber>         single;
-  MISTD::vector<MyNumber>         numbers;
+  std::vector<llvm::StringRef>  strings;
+  std::vector<MyNumber>         single;
+  std::vector<MyNumber>         numbers;
 };
 
 namespace llvm {
@@ -655,7 +655,7 @@ namespace yaml {
 // Test writing then reading back custom values
 //
 TEST(YAMLIO, TestReadWriteMyFlowSequence) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     NameAndNumbers map;
     map.name  = "hello";
@@ -703,7 +703,7 @@ TEST(YAMLIO, TestReadWriteMyFlowSequence) {
 
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, TotalSeconds)
 
-typedef MISTD::vector<TotalSeconds> SecondsSequence;
+typedef std::vector<TotalSeconds> SecondsSequence;
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(TotalSeconds)
 
@@ -763,7 +763,7 @@ TEST(YAMLIO, TestReadMySecondsSequence) {
 // Test writing then reading back custom values
 //
 TEST(YAMLIO, TestReadWriteMySecondsSequence) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     SecondsSequence seq;
     seq.push_back(4000);
@@ -816,7 +816,7 @@ struct KindAndFlags {
   uint32_t    flags;
 };
 
-typedef MISTD::vector<KindAndFlags> KindAndFlagsSequence;
+typedef std::vector<KindAndFlags> KindAndFlagsSequence;
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(KindAndFlags)
 
@@ -886,7 +886,7 @@ TEST(YAMLIO, TestReadKindAndFlagsSequence) {
 // Test writing then reading back dynamic types
 //
 TEST(YAMLIO, TestReadWriteKindAndFlagsSequence) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     KindAndFlagsSequence seq;
     seq.push_back(KindAndFlags(kindA,a1));
@@ -928,7 +928,7 @@ struct FooBarMap {
   int foo;
   int bar;
 };
-typedef MISTD::vector<FooBarMap> FooBarMapDocumentList;
+typedef std::vector<FooBarMap> FooBarMapDocumentList;
 
 LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(FooBarMap)
 
@@ -965,7 +965,7 @@ TEST(YAMLIO, TestDocRead) {
 // Test writing then reading back a sequence of mappings
 //
 TEST(YAMLIO, TestSequenceDocListWriteAndRead) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     FooBarMap doc1;
     doc1.foo = 10;
@@ -973,7 +973,7 @@ TEST(YAMLIO, TestSequenceDocListWriteAndRead) {
     FooBarMap doc2;
     doc2.foo = 257;
     doc2.bar = 0;
-    MISTD::vector<FooBarMap> docList;
+    std::vector<FooBarMap> docList;
     docList.push_back(doc1);
     docList.push_back(doc2);
 
@@ -985,7 +985,7 @@ TEST(YAMLIO, TestSequenceDocListWriteAndRead) {
 
   {
     Input yin(intermediate);
-    MISTD::vector<FooBarMap> docList2;
+    std::vector<FooBarMap> docList2;
     yin >> docList2;
 
     EXPECT_FALSE(yin.error());
@@ -1042,7 +1042,7 @@ namespace yaml {
 // Test the reading of two different tagged yaml documents.
 //
 TEST(YAMLIO, TestTaggedDocuments) {
-  MISTD::vector<MyDouble> docList;
+  std::vector<MyDouble> docList;
   Input yin("--- !decimal\nvalue:  3.0\n"
             "--- !fraction\nnumerator:  9.0\ndenominator:  2\n...\n");
   yin >> docList;
@@ -1058,11 +1058,11 @@ TEST(YAMLIO, TestTaggedDocuments) {
 // Test writing then reading back tagged documents
 //
 TEST(YAMLIO, TestTaggedDocumentsWriteAndRead) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     MyDouble a(10.25);
     MyDouble b(-3.75);
-    MISTD::vector<MyDouble> docList;
+    std::vector<MyDouble> docList;
     docList.push_back(a);
     docList.push_back(b);
 
@@ -1073,7 +1073,7 @@ TEST(YAMLIO, TestTaggedDocumentsWriteAndRead) {
 
   {
     Input yin(intermediate);
-    MISTD::vector<MyDouble> docList2;
+    std::vector<MyDouble> docList2;
     yin >> docList2;
 
     EXPECT_FALSE(yin.error());
@@ -1091,7 +1091,7 @@ TEST(YAMLIO, TestTaggedDocumentsWriteAndRead) {
 struct DynCast {
   int value;
 };
-typedef MISTD::vector<DynCast> DynCastSequence;
+typedef std::vector<DynCast> DynCastSequence;
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(DynCast)
 
@@ -1122,7 +1122,7 @@ namespace yaml {
 // Test writing then reading back a sequence of mappings
 //
 TEST(YAMLIO, TestDynCast) {
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     DynCast entry1;
     entry1.value = 10;
@@ -1205,7 +1205,7 @@ TEST(YAMLIO, TestFlagsReadError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(uint8_t)
 TEST(YAMLIO, TestReadBuiltInTypesUint8Error) {
-  MISTD::vector<uint8_t> seq;
+  std::vector<uint8_t> seq;
   Input yin("---\n"
             "- 255\n"
             "- 0\n"
@@ -1224,7 +1224,7 @@ TEST(YAMLIO, TestReadBuiltInTypesUint8Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(uint16_t)
 TEST(YAMLIO, TestReadBuiltInTypesUint16Error) {
-  MISTD::vector<uint16_t> seq;
+  std::vector<uint16_t> seq;
   Input yin("---\n"
             "- 65535\n"
             "- 0\n"
@@ -1243,7 +1243,7 @@ TEST(YAMLIO, TestReadBuiltInTypesUint16Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(uint32_t)
 TEST(YAMLIO, TestReadBuiltInTypesUint32Error) {
-  MISTD::vector<uint32_t> seq;
+  std::vector<uint32_t> seq;
   Input yin("---\n"
             "- 4000000000\n"
             "- 0\n"
@@ -1262,7 +1262,7 @@ TEST(YAMLIO, TestReadBuiltInTypesUint32Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(uint64_t)
 TEST(YAMLIO, TestReadBuiltInTypesUint64Error) {
-  MISTD::vector<uint64_t> seq;
+  std::vector<uint64_t> seq;
   Input yin("---\n"
             "- 18446744073709551615\n"
             "- 0\n"
@@ -1281,7 +1281,7 @@ TEST(YAMLIO, TestReadBuiltInTypesUint64Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(int8_t)
 TEST(YAMLIO, TestReadBuiltInTypesint8OverError) {
-  MISTD::vector<int8_t> seq;
+  std::vector<int8_t> seq;
   Input yin("---\n"
             "- -128\n"
             "- 0\n"
@@ -1299,7 +1299,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint8OverError) {
 // Test error handling reading built-in int8_t type
 //
 TEST(YAMLIO, TestReadBuiltInTypesint8UnderError) {
-  MISTD::vector<int8_t> seq;
+  std::vector<int8_t> seq;
   Input yin("---\n"
             "- -128\n"
             "- 0\n"
@@ -1319,7 +1319,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint8UnderError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(int16_t)
 TEST(YAMLIO, TestReadBuiltInTypesint16UnderError) {
-  MISTD::vector<int16_t> seq;
+  std::vector<int16_t> seq;
   Input yin("---\n"
             "- 32767\n"
             "- 0\n"
@@ -1338,7 +1338,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint16UnderError) {
 // Test error handling reading built-in int16_t type
 //
 TEST(YAMLIO, TestReadBuiltInTypesint16OverError) {
-  MISTD::vector<int16_t> seq;
+  std::vector<int16_t> seq;
   Input yin("---\n"
             "- 32767\n"
             "- 0\n"
@@ -1358,7 +1358,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint16OverError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(int32_t)
 TEST(YAMLIO, TestReadBuiltInTypesint32UnderError) {
-  MISTD::vector<int32_t> seq;
+  std::vector<int32_t> seq;
   Input yin("---\n"
             "- 2147483647\n"
             "- 0\n"
@@ -1376,7 +1376,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint32UnderError) {
 // Test error handling reading built-in int32_t type
 //
 TEST(YAMLIO, TestReadBuiltInTypesint32OverError) {
-  MISTD::vector<int32_t> seq;
+  std::vector<int32_t> seq;
   Input yin("---\n"
             "- 2147483647\n"
             "- 0\n"
@@ -1396,7 +1396,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint32OverError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(int64_t)
 TEST(YAMLIO, TestReadBuiltInTypesint64UnderError) {
-  MISTD::vector<int64_t> seq;
+  std::vector<int64_t> seq;
   Input yin("---\n"
             "- -9223372036854775808\n"
             "- 0\n"
@@ -1414,7 +1414,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint64UnderError) {
 // Test error handling reading built-in int64_t type
 //
 TEST(YAMLIO, TestReadBuiltInTypesint64OverError) {
-  MISTD::vector<int64_t> seq;
+  std::vector<int64_t> seq;
   Input yin("---\n"
             "- -9223372036854775808\n"
             "- 0\n"
@@ -1433,7 +1433,7 @@ TEST(YAMLIO, TestReadBuiltInTypesint64OverError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(float)
 TEST(YAMLIO, TestReadBuiltInTypesFloatError) {
-  MISTD::vector<float> seq;
+  std::vector<float> seq;
   Input yin("---\n"
             "- 0.0\n"
             "- 1000.1\n"
@@ -1452,7 +1452,7 @@ TEST(YAMLIO, TestReadBuiltInTypesFloatError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(double)
 TEST(YAMLIO, TestReadBuiltInTypesDoubleError) {
-  MISTD::vector<double> seq;
+  std::vector<double> seq;
   Input yin("---\n"
             "- 0.0\n"
             "- 1000.1\n"
@@ -1471,7 +1471,7 @@ TEST(YAMLIO, TestReadBuiltInTypesDoubleError) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(Hex8)
 TEST(YAMLIO, TestReadBuiltInTypesHex8Error) {
-  MISTD::vector<Hex8> seq;
+  std::vector<Hex8> seq;
   Input yin("---\n"
             "- 0x12\n"
             "- 0xFE\n"
@@ -1490,7 +1490,7 @@ TEST(YAMLIO, TestReadBuiltInTypesHex8Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(Hex16)
 TEST(YAMLIO, TestReadBuiltInTypesHex16Error) {
-  MISTD::vector<Hex16> seq;
+  std::vector<Hex16> seq;
   Input yin("---\n"
             "- 0x0012\n"
             "- 0xFEFF\n"
@@ -1508,7 +1508,7 @@ TEST(YAMLIO, TestReadBuiltInTypesHex16Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(Hex32)
 TEST(YAMLIO, TestReadBuiltInTypesHex32Error) {
-  MISTD::vector<Hex32> seq;
+  std::vector<Hex32> seq;
   Input yin("---\n"
             "- 0x0012\n"
             "- 0xFEFF0000\n"
@@ -1526,7 +1526,7 @@ TEST(YAMLIO, TestReadBuiltInTypesHex32Error) {
 //
 LLVM_YAML_IS_SEQUENCE_VECTOR(Hex64)
 TEST(YAMLIO, TestReadBuiltInTypesHex64Error) {
-  MISTD::vector<Hex64> seq;
+  std::vector<Hex64> seq;
   Input yin("---\n"
             "- 0x0012\n"
             "- 0xFFEEDDCCBBAA9988\n"
@@ -1557,11 +1557,11 @@ TEST(YAMLIO, TestMalformedMapFailsGracefully) {
 }
 
 struct OptionalTest {
-  MISTD::vector<int> Numbers;
+  std::vector<int> Numbers;
 };
 
 struct OptionalTestSeq {
-  MISTD::vector<OptionalTest> Tests;
+  std::vector<OptionalTest> Tests;
 };
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(OptionalTest)
@@ -1595,7 +1595,7 @@ TEST(YAMLIO, SequenceElideTest) {
   Seq.Tests.push_back(Three);
   Seq.Tests.push_back(Four);
 
-  MISTD::string intermediate;
+  std::string intermediate;
   {
     llvm::raw_string_ostream ostr(intermediate);
     Output yout(ostr);
@@ -1635,7 +1635,7 @@ TEST(YAMLIO, TestEmptyStringSucceedsForMapWithOptionalFields) {
 }
 
 TEST(YAMLIO, TestEmptyStringSucceedsForSequence) {
-  MISTD::vector<uint8_t> seq;
+  std::vector<uint8_t> seq;
   Input yin("", /*Ctxt=*/NULL, suppressErrorMessages);
   yin >> seq;
 

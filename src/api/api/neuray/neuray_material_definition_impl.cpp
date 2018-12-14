@@ -45,7 +45,6 @@
 #include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 
-
 namespace MI {
 
 namespace NEURAY {
@@ -77,8 +76,7 @@ mi::neuraylib::Element_type Material_definition_impl::get_element_type() const
 
 const char* Material_definition_impl::get_module() const
 {
-    DB::Tag tag = get_db_element()->get_module();
-    return get_db_transaction()->tag_to_name( tag);
+    return get_db_element()->get_module_db_name();
 }
 
 const char* Material_definition_impl::get_mdl_name() const
@@ -183,8 +181,6 @@ mi::neuraylib::IMaterial_instance* Material_definition_impl::create_material_ins
     return api_instance;
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

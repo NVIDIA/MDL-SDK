@@ -154,7 +154,7 @@ bool LoopInstSimplify::runOnLoop(Loop *L, LPPassManager &LPM) {
           continue;
         }
 
-        bool IsExitBlock = MISTD::binary_search(ExitBlocks.begin(),
+        bool IsExitBlock = std::binary_search(ExitBlocks.begin(),
                                               ExitBlocks.end(), SuccBB);
         if (IsExitBlock)
           continue;
@@ -165,7 +165,7 @@ bool LoopInstSimplify::runOnLoop(Loop *L, LPPassManager &LPM) {
 
     // Place the list of instructions to simplify on the next loop iteration
     // into ToSimplify.
-    MISTD::swap(ToSimplify, Next);
+    std::swap(ToSimplify, Next);
     Next->clear();
 
     Changed |= LocalChanged;

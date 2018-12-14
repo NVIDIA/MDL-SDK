@@ -68,7 +68,7 @@ bool OProfileWrapper::initialize() {
     return false;
   }
 
-  MISTD::string error;
+  std::string error;
   if(!DynamicLibrary::LoadLibraryPermanently("libopagent.so", &error)) {
     DEBUG(dbgs()
             << "OProfile connector library libopagent.so could not be loaded: "

@@ -1568,15 +1568,15 @@ llvm::ConstantFoldCall(Function *F, ArrayRef<Constant *> Operands,
       } else if (ConstantInt *Op2C = dyn_cast<ConstantInt>(Operands[1])) {
         if (F->getIntrinsicID() == Intrinsic::powi && Ty->isHalfTy())
           return ConstantFP::get(F->getContext(),
-                                 APFloat((float)MISTD::pow((float)Op1V,
+                                 APFloat((float)std::pow((float)Op1V,
                                                  (int)Op2C->getZExtValue())));
         if (F->getIntrinsicID() == Intrinsic::powi && Ty->isFloatTy())
           return ConstantFP::get(F->getContext(),
-                                 APFloat((float)MISTD::pow((float)Op1V,
+                                 APFloat((float)std::pow((float)Op1V,
                                                  (int)Op2C->getZExtValue())));
         if (F->getIntrinsicID() == Intrinsic::powi && Ty->isDoubleTy())
           return ConstantFP::get(F->getContext(),
-                                 APFloat((double)MISTD::pow((double)Op1V,
+                                 APFloat((double)std::pow((double)Op1V,
                                                    (int)Op2C->getZExtValue())));
       }
       return 0;

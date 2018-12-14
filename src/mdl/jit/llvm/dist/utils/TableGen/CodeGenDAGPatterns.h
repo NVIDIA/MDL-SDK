@@ -101,7 +101,7 @@ namespace EEVT {
     bool hasVectorTypes() const;
 
     /// getName() - Return this TypeSet as a string.
-    MISTD::string getName() const;
+    std::string getName() const;
 
     /// MergeInTypeInfo - This merges in type information from the specified
     /// argument.  If 'this' changes, it returns true.  If the two types are
@@ -150,7 +150,7 @@ namespace EEVT {
 }
 
 /// Set type used to track multiply used variables in patterns
-typedef MISTD::set<MISTD::string> MultipleUseVarSet;
+typedef std::set<std::string> MultipleUseVarSet;
 
 /// SDTypeConstraint - This is a discriminated union of constraints,
 /// corresponding to the SDTypeConstraint tablegen class in Target.td.
@@ -198,12 +198,12 @@ struct SDTypeConstraint {
 /// processing.
 class SDNodeInfo {
   Record *Def;
-  MISTD::string EnumName;
-  MISTD::string SDClassName;
+  std::string EnumName;
+  std::string SDClassName;
   unsigned Properties;
   unsigned NumResults;
   int NumOperands;
-  MISTD::vector<SDTypeConstraint> TypeConstraints;
+  std::vector<SDTypeConstraint> TypeConstraints;
 public:
   SDNodeInfo(Record *R);  // Parse the specified record.
 
@@ -213,10 +213,10 @@ public:
   /// variadic.
   int getNumOperands() const { return NumOperands; }
   Record *getRecord() const { return Def; }
-  const MISTD::string &getEnumName() const { return EnumName; }
-  const MISTD::string &getSDClassName() const { return SDClassName; }
+  const std::string &getEnumName() const { return EnumName; }
+  const std::string &getSDClassName() const { return SDClassName; }
 
-  const MISTD::vector<SDTypeConstraint> &getTypeConstraints() const {
+  const std::vector<SDTypeConstraint> &getTypeConstraints() const {
     return TypeConstraints;
   }
 
@@ -263,8 +263,8 @@ public:
   /// getImmediatePredicateCode - Return the code that evaluates this pattern if
   /// this is an immediate predicate.  It is an error to call this on a
   /// non-immediate pattern.
-  MISTD::string getImmediatePredicateCode() const {
-    MISTD::string Result = getImmCode();
+  std::string getImmediatePredicateCode() const {
+    std::string Result = getImmCode();
     assert(!Result.empty() && "Isn't an immediate pattern!");
     return Result;
   }
@@ -278,17 +278,17 @@ public:
 
   /// Return the name to use in the generated code to reference this, this is
   /// "Predicate_foo" if from a pattern fragment "foo".
-  MISTD::string getFnName() const;
+  std::string getFnName() const;
   
   /// getCodeToRunOnSDNode - Return the code for the function body that
   /// evaluates this predicate.  The argument is expected to be in "Node",
   /// not N.  This handles casting and conversion to a concrete node type as
   /// appropriate.
-  MISTD::string getCodeToRunOnSDNode() const;
+  std::string getCodeToRunOnSDNode() const;
   
 private:
-  MISTD::string getPredCode() const;
-  MISTD::string getImmCode() const;
+  std::string getPredCode() const;
+  std::string getImmCode() const;
 };
   
 
@@ -311,19 +311,19 @@ class TreePatternNode {
 
   /// Name - The name given to this node with the :$foo notation.
   ///
-  MISTD::string Name;
+  std::string Name;
 
   /// PredicateFns - The predicate functions to execute on this node to check
   /// for a match.  If this list is empty, no predicate is involved.
-  MISTD::vector<TreePredicateFn> PredicateFns;
+  std::vector<TreePredicateFn> PredicateFns;
 
   /// TransformFn - The transformation function to execute on this node before
   /// it can be substituted into the resulting instruction on a pattern match.
   Record *TransformFn;
 
-  MISTD::vector<TreePatternNode*> Children;
+  std::vector<TreePatternNode*> Children;
 public:
-  TreePatternNode(Record *Op, const MISTD::vector<TreePatternNode*> &Ch,
+  TreePatternNode(Record *Op, const std::vector<TreePatternNode*> &Ch,
                   unsigned NumResults)
     : Operator(Op), Val(0), TransformFn(0), Children(Ch) {
     Types.resize(NumResults);
@@ -335,7 +335,7 @@ public:
   ~TreePatternNode();
 
   bool hasName() const { return !Name.empty(); }
-  const MISTD::string &getName() const { return Name; }
+  const std::string &getName() const { return Name; }
   void setName(StringRef N) { Name.assign(N.begin(), N.end()); }
 
   bool isLeaf() const { return Val != 0; }
@@ -378,17 +378,17 @@ public:
 
   bool hasAnyPredicate() const { return !PredicateFns.empty(); }
   
-  const MISTD::vector<TreePredicateFn> &getPredicateFns() const {
+  const std::vector<TreePredicateFn> &getPredicateFns() const {
     return PredicateFns;
   }
   void clearPredicateFns() { PredicateFns.clear(); }
-  void setPredicateFns(const MISTD::vector<TreePredicateFn> &Fns) {
+  void setPredicateFns(const std::vector<TreePredicateFn> &Fns) {
     assert(PredicateFns.empty() && "Overwriting non-empty predicate list!");
     PredicateFns = Fns;
   }
   void addPredicateFn(const TreePredicateFn &Fn) {
     assert(!Fn.isAlwaysTrue() && "Empty predicate string!");
-    if (MISTD::find(PredicateFns.begin(), PredicateFns.end(), Fn) ==
+    if (std::find(PredicateFns.begin(), PredicateFns.end(), Fn) ==
           PredicateFns.end())
       PredicateFns.push_back(Fn);
   }
@@ -437,7 +437,7 @@ public:   // Higher level manipulation routines.
 
   /// SubstituteFormalArguments - Replace the formal arguments in this tree
   /// with actual values specified by ArgMap.
-  void SubstituteFormalArguments(MISTD::map<MISTD::string,
+  void SubstituteFormalArguments(std::map<std::string,
                                           TreePatternNode*> &ArgMap);
 
   /// InlinePatternFragments - If this pattern refers to any pattern
@@ -482,7 +482,7 @@ public:   // Higher level manipulation routines.
 
   /// canPatternMatch - If it is impossible for this pattern to match on this
   /// target, fill in Reason and return false.  Otherwise, return true.
-  bool canPatternMatch(MISTD::string &Reason, const CodeGenDAGPatterns &CDP);
+  bool canPatternMatch(std::string &Reason, const CodeGenDAGPatterns &CDP);
 };
 
 inline raw_ostream &operator<<(raw_ostream &OS, const TreePatternNode &TPN) {
@@ -498,7 +498,7 @@ class TreePattern {
   /// Trees - The list of pattern trees which corresponds to this pattern.
   /// Note that PatFrag's only have a single tree.
   ///
-  MISTD::vector<TreePatternNode*> Trees;
+  std::vector<TreePatternNode*> Trees;
 
   /// NamedNodes - This is all of the nodes that have names in the trees in this
   /// pattern.
@@ -510,7 +510,7 @@ class TreePattern {
 
   /// Args - This is a list of all of the arguments to this pattern (for
   /// PatFrag patterns), which are the 'node' markers in this pattern.
-  MISTD::vector<MISTD::string> Args;
+  std::vector<std::string> Args;
 
   /// CDP - the top-level object coordinating this madness.
   ///
@@ -536,7 +536,7 @@ public:
 
   /// getTrees - Return the tree patterns which corresponds to this pattern.
   ///
-  const MISTD::vector<TreePatternNode*> &getTrees() const { return Trees; }
+  const std::vector<TreePatternNode*> &getTrees() const { return Trees; }
   unsigned getNumTrees() const { return Trees.size(); }
   TreePatternNode *getTree(unsigned i) const { return Trees[i]; }
   TreePatternNode *getOnlyTree() const {
@@ -556,11 +556,11 @@ public:
   Record *getRecord() const { return TheRecord; }
 
   unsigned getNumArgs() const { return Args.size(); }
-  const MISTD::string &getArgName(unsigned i) const {
+  const std::string &getArgName(unsigned i) const {
     assert(i < Args.size() && "Argument reference out of range!");
     return Args[i];
   }
-  MISTD::vector<MISTD::string> &getArgList() { return Args; }
+  std::vector<std::string> &getArgList() { return Args; }
 
   CodeGenDAGPatterns &getDAGPatterns() const { return CDP; }
 
@@ -580,7 +580,7 @@ public:
 
   /// error - If this is the first error in the current resolution step,
   /// print it and set the error flag.  Otherwise, continue silently.
-  void error(const MISTD::string &Msg);
+  void error(const std::string &Msg);
   bool hasError() const {
     return HasError;
   }
@@ -600,20 +600,20 @@ private:
 /// DAGDefaultOperand - One of these is created for each OperandWithDefaultOps
 /// that has a set ExecuteAlways / DefaultOps field.
 struct DAGDefaultOperand {
-  MISTD::vector<TreePatternNode*> DefaultOps;
+  std::vector<TreePatternNode*> DefaultOps;
 };
 
 class DAGInstruction {
   TreePattern *Pattern;
-  MISTD::vector<Record*> Results;
-  MISTD::vector<Record*> Operands;
-  MISTD::vector<Record*> ImpResults;
+  std::vector<Record*> Results;
+  std::vector<Record*> Operands;
+  std::vector<Record*> ImpResults;
   TreePatternNode *ResultPattern;
 public:
   DAGInstruction(TreePattern *TP,
-                 const MISTD::vector<Record*> &results,
-                 const MISTD::vector<Record*> &operands,
-                 const MISTD::vector<Record*> &impresults)
+                 const std::vector<Record*> &results,
+                 const std::vector<Record*> &operands,
+                 const std::vector<Record*> &impresults)
     : Pattern(TP), Results(results), Operands(operands),
       ImpResults(impresults), ResultPattern(0) {}
 
@@ -621,7 +621,7 @@ public:
   unsigned getNumResults() const { return Results.size(); }
   unsigned getNumOperands() const { return Operands.size(); }
   unsigned getNumImpResults() const { return ImpResults.size(); }
-  const MISTD::vector<Record*>& getImpResults() const { return ImpResults; }
+  const std::vector<Record*>& getImpResults() const { return ImpResults; }
 
   void setResultPattern(TreePatternNode *R) { ResultPattern = R; }
 
@@ -649,7 +649,7 @@ class PatternToMatch {
 public:
   PatternToMatch(Record *srcrecord, ListInit *preds,
                  TreePatternNode *src, TreePatternNode *dst,
-                 const MISTD::vector<Record*> &dstregs,
+                 const std::vector<Record*> &dstregs,
                  unsigned complexity, unsigned uid)
     : SrcRecord(srcrecord), Predicates(preds), SrcPattern(src), DstPattern(dst),
       Dstregs(dstregs), AddedComplexity(complexity), ID(uid) {}
@@ -658,7 +658,7 @@ public:
   ListInit        *Predicates;  // Top level predicate conditions to match.
   TreePatternNode *SrcPattern;  // Source pattern to match.
   TreePatternNode *DstPattern;  // Resulting pattern.
-  MISTD::vector<Record*> Dstregs; // Physical register defs being matched.
+  std::vector<Record*> Dstregs; // Physical register defs being matched.
   unsigned         AddedComplexity; // Add to matching pattern complexity.
   unsigned         ID;          // Unique ID for the record.
 
@@ -666,10 +666,10 @@ public:
   ListInit        *getPredicates() const { return Predicates; }
   TreePatternNode *getSrcPattern() const { return SrcPattern; }
   TreePatternNode *getDstPattern() const { return DstPattern; }
-  const MISTD::vector<Record*> &getDstRegs() const { return Dstregs; }
+  const std::vector<Record*> &getDstRegs() const { return Dstregs; }
   unsigned         getAddedComplexity() const { return AddedComplexity; }
 
-  MISTD::string getPredicateCheck() const;
+  std::string getPredicateCheck() const;
 
   /// Compute the complexity metric for the input pattern.  This roughly
   /// corresponds to the number of nodes that are covered.
@@ -679,15 +679,15 @@ public:
 class CodeGenDAGPatterns {
   RecordKeeper &Records;
   CodeGenTarget Target;
-  MISTD::vector<CodeGenIntrinsic> Intrinsics;
-  MISTD::vector<CodeGenIntrinsic> TgtIntrinsics;
+  std::vector<CodeGenIntrinsic> Intrinsics;
+  std::vector<CodeGenIntrinsic> TgtIntrinsics;
 
-  MISTD::map<Record*, SDNodeInfo, LessRecordByID> SDNodes;
-  MISTD::map<Record*, MISTD::pair<Record*, MISTD::string>, LessRecordByID> SDNodeXForms;
-  MISTD::map<Record*, ComplexPattern, LessRecordByID> ComplexPatterns;
-  MISTD::map<Record*, TreePattern*, LessRecordByID> PatternFragments;
-  MISTD::map<Record*, DAGDefaultOperand, LessRecordByID> DefaultOperands;
-  MISTD::map<Record*, DAGInstruction, LessRecordByID> Instructions;
+  std::map<Record*, SDNodeInfo, LessRecordByID> SDNodes;
+  std::map<Record*, std::pair<Record*, std::string>, LessRecordByID> SDNodeXForms;
+  std::map<Record*, ComplexPattern, LessRecordByID> ComplexPatterns;
+  std::map<Record*, TreePattern*, LessRecordByID> PatternFragments;
+  std::map<Record*, DAGDefaultOperand, LessRecordByID> DefaultOperands;
+  std::map<Record*, DAGInstruction, LessRecordByID> Instructions;
 
   // Specific SDNode definitions:
   Record *intrinsic_void_sdnode;
@@ -696,7 +696,7 @@ class CodeGenDAGPatterns {
   /// PatternsToMatch - All of the things we are matching on the DAG.  The first
   /// value is the pattern to match, the second pattern is the result to
   /// emit.
-  MISTD::vector<PatternToMatch> PatternsToMatch;
+  std::vector<PatternToMatch> PatternsToMatch;
 public:
   CodeGenDAGPatterns(RecordKeeper &R);
   ~CodeGenDAGPatterns();
@@ -704,7 +704,7 @@ public:
   CodeGenTarget &getTargetInfo() { return Target; }
   const CodeGenTarget &getTargetInfo() const { return Target; }
 
-  Record *getSDNodeNamed(const MISTD::string &Name) const;
+  Record *getSDNodeNamed(const std::string &Name) const;
 
   const SDNodeInfo &getSDNodeInfo(Record *R) const {
     assert(SDNodes.count(R) && "Unknown node!");
@@ -712,13 +712,13 @@ public:
   }
 
   // Node transformation lookups.
-  typedef MISTD::pair<Record*, MISTD::string> NodeXForm;
+  typedef std::pair<Record*, std::string> NodeXForm;
   const NodeXForm &getSDNodeTransform(Record *R) const {
     assert(SDNodeXForms.count(R) && "Invalid transform!");
     return SDNodeXForms.find(R)->second;
   }
 
-  typedef MISTD::map<Record*, NodeXForm, LessRecordByID>::const_iterator
+  typedef std::map<Record*, NodeXForm, LessRecordByID>::const_iterator
           nx_iterator;
   nx_iterator nx_begin() const { return SDNodeXForms.begin(); }
   nx_iterator nx_end() const { return SDNodeXForms.end(); }
@@ -768,18 +768,18 @@ public:
     return PatternFragments.find(R)->second;
   }
 
-  typedef MISTD::map<Record*, TreePattern*, LessRecordByID>::const_iterator
+  typedef std::map<Record*, TreePattern*, LessRecordByID>::const_iterator
           pf_iterator;
   pf_iterator pf_begin() const { return PatternFragments.begin(); }
   pf_iterator pf_end() const { return PatternFragments.end(); }
 
   // Patterns to match information.
-  typedef MISTD::vector<PatternToMatch>::const_iterator ptm_iterator;
+  typedef std::vector<PatternToMatch>::const_iterator ptm_iterator;
   ptm_iterator ptm_begin() const { return PatternsToMatch.begin(); }
   ptm_iterator ptm_end() const { return PatternsToMatch.end(); }
 
   /// Parse the Pattern for an instruction, and insert the result in DAGInsts.
-  typedef MISTD::map<Record*, DAGInstruction, LessRecordByID> DAGInstMap;
+  typedef std::map<Record*, DAGInstruction, LessRecordByID> DAGInstMap;
   const DAGInstruction &parseInstructionPattern(
       CodeGenInstruction &CGI, ListInit *Pattern,
       DAGInstMap &DAGInsts);
@@ -815,11 +815,11 @@ private:
 
   void AddPatternToMatch(TreePattern *Pattern, const PatternToMatch &PTM);
   void FindPatternInputsAndOutputs(TreePattern *I, TreePatternNode *Pat,
-                                   MISTD::map<MISTD::string,
+                                   std::map<std::string,
                                    TreePatternNode*> &InstInputs,
-                                   MISTD::map<MISTD::string,
+                                   std::map<std::string,
                                    TreePatternNode*> &InstResults,
-                                   MISTD::vector<Record*> &InstImpResults);
+                                   std::vector<Record*> &InstImpResults);
 };
 } // end namespace llvm
 

@@ -87,11 +87,11 @@ public:
   /// Terminate the remote process.
   virtual void stop();
 
-  RemoteTargetExternal(MISTD::string &Name) : RemoteTarget(), ChildName(Name) {}
+  RemoteTargetExternal(std::string &Name) : RemoteTarget(), ChildName(Name) {}
   virtual ~RemoteTargetExternal();
 
 private:
-  MISTD::string ChildName;
+  std::string ChildName;
 
   // This will get filled in as a point to an OS-specific structure.
   void *ConnectionData;

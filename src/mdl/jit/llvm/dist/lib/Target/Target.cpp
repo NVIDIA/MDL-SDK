@@ -64,7 +64,7 @@ void LLVMAddTargetLibraryInfo(LLVMTargetLibraryInfoRef TLI,
 }
 
 char *LLVMCopyStringRepOfTargetData(LLVMTargetDataRef TD) {
-  MISTD::string StringRep = unwrap(TD)->getStringRepresentation();
+  std::string StringRep = unwrap(TD)->getStringRepresentation();
   return strdup(StringRep.c_str());
 }
 

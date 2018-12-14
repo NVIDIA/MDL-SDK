@@ -38,8 +38,8 @@ class LoopBlocksTraversal;
 class LoopBlocksDFS {
 public:
   /// Postorder list iterators.
-  typedef MISTD::vector<BasicBlock*>::const_iterator POIterator;
-  typedef MISTD::vector<BasicBlock*>::const_reverse_iterator RPOIterator;
+  typedef std::vector<BasicBlock*>::const_iterator POIterator;
+  typedef std::vector<BasicBlock*>::const_reverse_iterator RPOIterator;
 
   friend class LoopBlocksTraversal;
 
@@ -50,7 +50,7 @@ private:
   /// preorder visited by DFS. It's postorder number is initially zero and set
   /// to nonzero after it is finished by postorder traversal.
   DenseMap<BasicBlock*, unsigned> PostNumbers;
-  MISTD::vector<BasicBlock*> PostBlocks;
+  std::vector<BasicBlock*> PostBlocks;
 
 public:
   LoopBlocksDFS(Loop *Container) :
@@ -154,7 +154,7 @@ public:
     if (!DFS.L->contains(LI->getLoopFor(BB)))
       return false;
 
-    return DFS.PostNumbers.insert(MISTD::make_pair(BB, 0)).second;
+    return DFS.PostNumbers.insert(std::make_pair(BB, 0)).second;
   }
 
   /// Called by po_iterator each time it advances, indicating a block's

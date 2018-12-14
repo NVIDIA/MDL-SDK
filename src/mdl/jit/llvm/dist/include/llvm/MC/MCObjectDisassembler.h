@@ -58,7 +58,7 @@ public:
 
   MCModule *buildEmptyModule();
 
-  typedef MISTD::vector<uint64_t> AddressSetTy;
+  typedef std::vector<uint64_t> AddressSetTy;
   /// \name Create a new MCFunction.
   MCFunction *createFunction(MCModule *Module, uint64_t BeginAddr,
                              AddressSetTy &CallTargets,

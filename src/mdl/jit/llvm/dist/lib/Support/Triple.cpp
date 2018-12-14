@@ -349,7 +349,7 @@ Triple::Triple(const Twine &ArchStr, const Twine &VendorStr, const Twine &OSStr,
       Environment(parseEnvironment(EnvironmentStr.str())) {
 }
 
-MISTD::string Triple::normalize(StringRef Str) {
+std::string Triple::normalize(StringRef Str) {
   // Parse into components.
   SmallVector<StringRef, 4> Components;
   Str.split(Components, "-");
@@ -426,7 +426,7 @@ MISTD::string Triple::normalize(StringRef Str) {
         // example, a-b-i386 -> i386-a-b when moving i386 to the front.
         StringRef CurrentComponent(""); // The empty component.
         // Replace the component we are moving with an empty component.
-        MISTD::swap(CurrentComponent, Components[Idx]);
+        std::swap(CurrentComponent, Components[Idx]);
         // Insert the component being moved at Pos, displacing any existing
         // components to the right.
         for (unsigned i = Pos; !CurrentComponent.empty(); ++i) {
@@ -435,7 +435,7 @@ MISTD::string Triple::normalize(StringRef Str) {
             ++i;
           // Place the component at the new position, getting the component
           // that was at this position - it will be moved right.
-          MISTD::swap(CurrentComponent, Components[i]);
+          std::swap(CurrentComponent, Components[i]);
         }
       } else if (Pos > Idx) {
         // Push right by inserting empty components until the component at Idx
@@ -447,7 +447,7 @@ MISTD::string Triple::normalize(StringRef Str) {
           for (unsigned i = Idx; i < Components.size();) {
             // Place the component at the new position, getting the component
             // that was at this position - it will be moved right.
-            MISTD::swap(CurrentComponent, Components[i]);
+            std::swap(CurrentComponent, Components[i]);
             // If it was placed on top of an empty component then we are done.
             if (CurrentComponent.empty())
               break;
@@ -475,7 +475,7 @@ MISTD::string Triple::normalize(StringRef Str) {
   // correct values for the computed components.
 
   // Stick the corrected components back together to form the normalized string.
-  MISTD::string Normalized;
+  std::string Normalized;
   for (unsigned i = 0, e = Components.size(); i != e; ++i) {
     if (i) Normalized += '-';
     Normalized += Components[i];

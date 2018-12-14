@@ -46,7 +46,7 @@ template <typename T>
 class FooTest : public testing::Test {
  public:
   ...
-  typedef MISTD::list<T> List;
+  typedef std::list<T> List;
   static T shared_;
   T value_;
 };

@@ -93,6 +93,9 @@ public:
     /// \returns        The index of the added note.
     int add_note(Message *note);
 
+    /// Get the file ID of this message.
+    size_t get_filename_id() const { return m_filename_id; }
+
 private:
     /// Constructor for a message.
     ///
@@ -342,6 +345,9 @@ public:
     /// \return the file ID of this file name
     size_t register_fname(char const *filename);
 
+    /// Get the number of registered filenames.
+    size_t get_fname_count() const { return m_filenames.size(); }
+
     /// Get the dynamic memory consumption of this message list.
     size_t get_dynamic_memory_consumption() const;
 
@@ -385,7 +391,7 @@ private:
     template<typename A>
     void serialize_msg_list(
         Entity_serializer                 &serializer,
-        MISTD::vector<Message *, A> const &msgs) const;
+        std::vector<Message *, A> const &msgs) const;
 
     /// Deserialize a message list.
     ///
@@ -394,7 +400,7 @@ private:
     template<typename A>
     void deserialize_msg_list(
         Entity_deserializer         &deserializer,
-        MISTD::vector<Message *, A> &msgs);
+        std::vector<Message *, A> &msgs);
 
 private:
     /// The memory arena all messages are allocated on.

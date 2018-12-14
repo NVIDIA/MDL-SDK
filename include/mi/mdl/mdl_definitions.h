@@ -96,11 +96,12 @@ public:
         DP_USES_NORMAL,         ///< True, if this function may call state::normal().
         DP_IS_NATIVE,           ///< True, if this function was declared native.
         DP_IS_CONST_EXPR,       ///< True, if this function is declared as const_expr.
+        DP_USES_DERIVATIVES,    ///< True, if this functions uses derivatives directly
     };
 
     /// Built-in semantics.
     enum Semantics {
-        DS_UNKNOWN,                              ///< Unknown semantics.
+        DS_UNKNOWN = 0,                          ///< Unknown semantics.
         DS_COPY_CONSTRUCTOR,                     ///< This is a copy constructor.
         DS_CONV_CONSTRUCTOR,                     ///< This is a conversion constructor.
         DS_ELEM_CONSTRUCTOR,                     ///< This is a elemental constructor.
@@ -113,21 +114,23 @@ public:
         DS_CONV_OPERATOR,                        ///< This is a type conversion operator.
 
         // annotation semantics
-        DS_ANNOTATION_FIRST,
+        DS_ANNOTATION_FIRST = 0x0100,
 
-        DS_INTRINSIC_ANNOTATION                  ///< This is the intrinsic() annotation.
+        DS_INTRINSIC_ANNOTATION                  ///< This is the internal intrinsic() annotation.
             = DS_ANNOTATION_FIRST,
-        DS_THROWS_ANNOTATION,                    ///< This is the throws() annotation.
-        DS_NATIVE_ANNOTATION,                    ///< This is the native() annotation.
+        DS_THROWS_ANNOTATION,                    ///< This is the internal throws() annotation.
+        DS_SINCE_ANNOTATION,                     ///< This is the internal since() annotation.
+        DS_REMOVED_ANNOTATION,                   ///< This is the internal removed() annotation.
+        DS_CONST_EXPR_ANNOTATION,                ///< This is the internal const_expr() annotation.
+        DS_DERIVABLE_ANNOTATION,                 ///< This is the internal derivable() annotation.
+        DS_NATIVE_ANNOTATION,                    ///< This is the internal native() annotation.
+
         DS_UNUSED_ANNOTATION,                    ///< This is the unused() annotation.
         DS_NOINLINE_ANNOTATION,                  ///< This is the noinline() annotation.
-        DS_SINCE_ANNOTATION,                     ///< This is the since() annotation.
-        DS_REMOVED_ANNOTATION,                   ///< This is the removed() annotation.
         DS_SOFT_RANGE_ANNOTATION,                ///< This is the soft_range() annotation.
         DS_HARD_RANGE_ANNOTATION,                ///< This is the hard_range() annotation.
         DS_HIDDEN_ANNOTATION,                    ///< This is the hidden() annotation.
         DS_DEPRECATED_ANNOTATION,                ///< This is the deprecated() annotation.
-        DS_CONST_EXPR_ANNOTATION,                ///< This is the const_expr() annotation.
         DS_VERSION_NUMBER_ANNOTATION,            ///< This is the (old) version_number() annotation.
         DS_VERSION_ANNOTATION,                   ///< This is the version() annotation.
         DS_DEPENDENCY_ANNOTATION,                ///< This is the dependency() annotation.
@@ -148,13 +151,13 @@ public:
         DS_ANNOTATION_LAST = DS_KEYWORDS_ANNOTATION,
 
         // operator semantics
-        DS_OP_BASE,                              ///< Base offset for operator semantics.
+        DS_OP_BASE = 0x0200,                     ///< Base offset for operator semantics.
         DS_OP_END =
             DS_OP_BASE +
             IExpression::OK_LAST,                ///< Last operator semantic.
 
         // math module intrinsics
-        DS_INTRINSIC_MATH_FIRST,
+        DS_INTRINSIC_MATH_FIRST = 0x0300,
 
         DS_INTRINSIC_MATH_ABS                    ///< The math::abs() intrinsic function.
             = DS_INTRINSIC_MATH_FIRST,
@@ -172,6 +175,8 @@ public:
         DS_INTRINSIC_MATH_DEGREES,               ///< The math::degrees() intrinsic function.
         DS_INTRINSIC_MATH_DISTANCE,              ///< The math::distance() intrinsic function.
         DS_INTRINSIC_MATH_DOT,                   ///< The math::dot() intrinsic function.
+        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,    ///< The math::eval_at_wavelength()
+                                                 ///  intrinsic function.
         DS_INTRINSIC_MATH_EXP,                   ///< The math::exp() intrinsic function.
         DS_INTRINSIC_MATH_EXP2,                  ///< The math::exp2() intrinsic function.
         DS_INTRINSIC_MATH_FLOOR,                 ///< The math::floor() intrinsic function.
@@ -187,8 +192,12 @@ public:
         DS_INTRINSIC_MATH_LUMINANCE,             ///< The math::luminance() intrinsic function.
         DS_INTRINSIC_MATH_MAX,                   ///< The math::max() intrinsic function.
         DS_INTRINSIC_MATH_MAX_VALUE,             ///< The math::max_value() intrinsic function.
+        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,  ///< The math::max_value_wavelength()
+                                                 ///  intrinsic function.
         DS_INTRINSIC_MATH_MIN,                   ///< The math::min() intrinsic function.
         DS_INTRINSIC_MATH_MIN_VALUE,             ///< The math::min_value() intrinsic function.
+        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,  ///< The math::min_value_wavelength()
+                                                 ///  intrinsic function.
         DS_INTRINSIC_MATH_MODF,                  ///< The math::modf() intrinsic function.
         DS_INTRINSIC_MATH_NORMALIZE,             ///< The math::normalize() intrinsic function.
         DS_INTRINSIC_MATH_POW,                   ///< The math::pow() intrinsic function.
@@ -206,10 +215,12 @@ public:
         DS_INTRINSIC_MATH_TRANSPOSE,             ///< The math::transpose() intrinsic function.
         DS_INTRINSIC_MATH_BLACKBODY,             ///< The math::blackbody() intrinsic function.
         DS_INTRINSIC_MATH_EMISSION_COLOR,        ///< The math::emission_color() intrinsic function.
-        DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_EMISSION_COLOR,
+        DS_INTRINSIC_MATH_DX,                    ///< The math::DX() intrinsic function.
+        DS_INTRINSIC_MATH_DY,                    ///< The math::DY() intrinsic function.
+        DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
 
         // state module intrinsics
-        DS_INTRINSIC_STATE_FIRST,
+        DS_INTRINSIC_STATE_FIRST = 0x0400,
 
         /// The state::position() function.
         DS_INTRINSIC_STATE_POSITION = DS_INTRINSIC_STATE_FIRST,
@@ -240,7 +251,7 @@ public:
         DS_INTRINSIC_STATE_LAST = DS_INTRINSIC_STATE_WAVELENGTH_MAX,
 
         // tex module intrinsics
-        DS_INTRINSIC_TEX_FIRST,
+        DS_INTRINSIC_TEX_FIRST = 0x0500,
 
         /// The tex::width() function.
         DS_INTRINSIC_TEX_WIDTH = DS_INTRINSIC_TEX_FIRST,
@@ -260,7 +271,7 @@ public:
         DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_TEXTURE_ISVALID,
 
         // df module intrinsics
-        DS_INTRINSIC_DF_FIRST,
+        DS_INTRINSIC_DF_FIRST = 0x0600,
 
         DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = DS_INTRINSIC_DF_FIRST,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,
@@ -300,27 +311,15 @@ public:
         DS_INTRINSIC_DF_FRESNEL_FACTOR,
         DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_FRESNEL_FACTOR,
 
-        // nvidia::df module
-        DS_INTRINSIC_NVIDIA_DF_ASHIKHMIN_SHIRLEY_GLOSSY_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_WARD_GM_GLOSSY_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_SMITH_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_SMITH_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_BECKMANN_VC_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_GGX_VC_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_MICROFACET_PHONG_VC_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF,
-        DS_INTRINSIC_NVIDIA_DF_SIMPLE_GLOSSY_BSDF_LEGACY,
-        DS_INTRINSIC_NVIDIA_DF_LEGACY_MCP_GLOSSY_BSDF,
-
         // debug module
-        DS_INTRINSIC_DEBUG_FIRST,
+        DS_INTRINSIC_DEBUG_FIRST = 0x0800,
         DS_INTRINSIC_DEBUG_BREAKPOINT = DS_INTRINSIC_DEBUG_FIRST,
         DS_INTRINSIC_DEBUG_ASSERT,
         DS_INTRINSIC_DEBUG_PRINT,
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsic functions
-        DS_INTRINSIC_DAG_FIRST,
+        DS_INTRINSIC_DAG_FIRST = 0x0900,
         /// This is a structure field access function.
         DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR, ///< This is an array constructor.
@@ -329,10 +328,13 @@ public:
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
         DS_INTRINSIC_DAG_SET_TRANSFORMS,    ///< Specifies the transform (w2o and o2w) matrices.
         DS_INTRINSIC_DAG_CALL_LAMBDA,       ///< Calls the lambda function specified by the name.
-        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_CALL_LAMBDA,
+        DS_INTRINSIC_DAG_GET_DERIV_VALUE,   ///< Extract value part of derivative value.
+        DS_INTRINSIC_DAG_MAKE_DERIV,        ///< Create a derivative value from a non-derivative
+                                            ///< value, setting dx and dy to zero.
+        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_MAKE_DERIV,
 
         // JIT Backend intrinsic functions
-        DS_INTRINSIC_JIT_LOOKUP,            ///< Texture result lookup.
+        DS_INTRINSIC_JIT_LOOKUP = 0x0A00,   ///< Texture result lookup.
     };
 
     /// Returns the kind of this definition.
@@ -377,6 +379,12 @@ public:
 
     /// Return the position of this definition if any.
     virtual Position const *get_position() const = 0;
+
+    /// Return the mask specifying which parameters of a function are derivable.
+    ///
+    /// For example, if bit 0 is set, a backend supporting derivatives may provide derivative
+    /// values as the first parameter of the function.
+    virtual unsigned get_parameter_derivable_mask() const = 0;
 };
 
 /// Check if the given semantic describes a constructor.
@@ -501,11 +509,13 @@ inline bool is_df_semantics(IDefinition::Semantics sema)
         sema <= IDefinition::DS_INTRINSIC_DF_LAST;
 }
 
+
 /// Check if the given semantics is an elemental distribution function (i.e. not a modifier or
 /// combiner).
 inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
 {
-    if (!is_df_semantics(sema)) return false;
+    if (!is_df_semantics(sema))
+        return false;
 
     switch (sema) {
     case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
@@ -623,3 +633,4 @@ public:
 }  // mi
 
 #endif
+

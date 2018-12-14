@@ -60,7 +60,7 @@ private:
   // Offset in .debug_ranges section.
   uint32_t Offset;
   uint8_t AddressSize;
-  MISTD::vector<RangeListEntry> Entries;
+  std::vector<RangeListEntry> Entries;
 
 public:
   DWARFDebugRangeList() { clear(); }

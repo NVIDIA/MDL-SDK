@@ -42,7 +42,7 @@ void RegisterClassInfo::runOnMachineFunction(const MachineFunction &mf) {
     RegClass.reset(new RCInfo[TRI->getNumRegClasses()]);
     unsigned NumPSets = TRI->getNumRegPressureSets();
     PSetLimits.reset(new unsigned[NumPSets]);
-    MISTD::fill(&PSetLimits[0], &PSetLimits[NumPSets], 0);
+    std::fill(&PSetLimits[0], &PSetLimits[NumPSets], 0);
     Update = true;
   }
 
@@ -99,7 +99,7 @@ void RegisterClassInfo::compute(const TargetRegisterClass *RC) const {
     if (Reserved.test(PhysReg))
       continue;
     unsigned Cost = TRI->getCostPerUse(PhysReg);
-    MinCost = MISTD::min(MinCost, Cost);
+    MinCost = std::min(MinCost, Cost);
 
     if (CSRNum[PhysReg])
       // PhysReg aliases a CSR, save it for later.

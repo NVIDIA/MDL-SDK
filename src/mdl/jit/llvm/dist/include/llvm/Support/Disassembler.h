@@ -27,7 +27,7 @@ bool hasDisassembler();
 
 /// This function provides some "glue" code to call external disassembler
 /// libraries.
-MISTD::string disassembleBuffer(uint8_t* start, size_t length, uint64_t pc = 0);
+std::string disassembleBuffer(uint8_t* start, size_t length, uint64_t pc = 0);
 
 }
 }

@@ -44,9 +44,9 @@ getDILineInfoSpecifierFlags(const LLVMSymbolizer::Options &Opts) {
   return Flags;
 }
 
-static void patchFunctionNameInDILineInfo(const MISTD::string &NewFunctionName,
+static void patchFunctionNameInDILineInfo(const std::string &NewFunctionName,
                                           DILineInfo &LineInfo) {
-  MISTD::string FileName = LineInfo.getFileName();
+  std::string FileName = LineInfo.getFileName();
   LineInfo = DILineInfo(StringRef(FileName), StringRef(NewFunctionName),
                         LineInfo.getLine(), LineInfo.getColumn());
 }
@@ -86,12 +86,12 @@ ModuleInfo::ModuleInfo(ObjectFile *Obj, DIContext *DICtx)
     // with same address size. Make sure we choose the correct one.
     SymbolMapTy &M = SymbolType == SymbolRef::ST_Function ? Functions : Objects;
     SymbolDesc SD = { SymbolAddress, SymbolSize };
-    M.insert(MISTD::make_pair(SD, SymbolName));
+    M.insert(std::make_pair(SD, SymbolName));
   }
 }
 
 bool ModuleInfo::getNameFromSymbolTable(SymbolRef::Type Type, uint64_t Address,
-                                        MISTD::string &Name, uint64_t &Addr,
+                                        std::string &Name, uint64_t &Addr,
                                         uint64_t &Size) const {
   const SymbolMapTy &M = Type == SymbolRef::ST_Function ? Functions : Objects;
   if (M.empty())
@@ -118,7 +118,7 @@ DILineInfo ModuleInfo::symbolizeCode(
   }
   // Override function name from symbol table if necessary.
   if (Opts.PrintFunctions && Opts.UseSymbolTable) {
-    MISTD::string FunctionName;
+    std::string FunctionName;
     uint64_t Start, Size;
     if (getNameFromSymbolTable(SymbolRef::ST_Function, ModuleOffset,
                                FunctionName, Start, Size)) {
@@ -145,7 +145,7 @@ DIInliningInfo ModuleInfo::symbolizeInlinedCode(
     for (uint32_t i = 0, n = InlinedContext.getNumberOfFrames(); i < n; i++) {
       DILineInfo LineInfo = InlinedContext.getFrame(i);
       if (i == n - 1) {
-        MISTD::string FunctionName;
+        std::string FunctionName;
         uint64_t Start, Size;
         if (getNameFromSymbolTable(SymbolRef::ST_Function, ModuleOffset,
                                    FunctionName, Start, Size)) {
@@ -159,7 +159,7 @@ DIInliningInfo ModuleInfo::symbolizeInlinedCode(
   return InlinedContext;
 }
 
-bool ModuleInfo::symbolizeData(uint64_t ModuleOffset, MISTD::string &Name,
+bool ModuleInfo::symbolizeData(uint64_t ModuleOffset, std::string &Name,
                                uint64_t &Start, uint64_t &Size) const {
   return getNameFromSymbolTable(SymbolRef::ST_Data, ModuleOffset, Name, Start,
                                 Size);
@@ -167,7 +167,7 @@ bool ModuleInfo::symbolizeData(uint64_t ModuleOffset, MISTD::string &Name,
 
 const char LLVMSymbolizer::kBadString[] = "??";
 
-MISTD::string LLVMSymbolizer::symbolizeCode(const MISTD::string &ModuleName,
+std::string LLVMSymbolizer::symbolizeCode(const std::string &ModuleName,
                                           uint64_t ModuleOffset) {
   ModuleInfo *Info = getOrCreateModuleInfo(ModuleName);
   if (Info == 0)
@@ -177,7 +177,7 @@ MISTD::string LLVMSymbolizer::symbolizeCode(const MISTD::string &ModuleName,
         Info->symbolizeInlinedCode(ModuleOffset, Opts);
     uint32_t FramesNum = InlinedContext.getNumberOfFrames();
     assert(FramesNum > 0);
-    MISTD::string Result;
+    std::string Result;
     for (uint32_t i = 0; i < FramesNum; i++) {
       DILineInfo LineInfo = InlinedContext.getFrame(i);
       Result += printDILineInfo(LineInfo);
@@ -188,9 +188,9 @@ MISTD::string LLVMSymbolizer::symbolizeCode(const MISTD::string &ModuleName,
   return printDILineInfo(LineInfo);
 }
 
-MISTD::string LLVMSymbolizer::symbolizeData(const MISTD::string &ModuleName,
+std::string LLVMSymbolizer::symbolizeData(const std::string &ModuleName,
                                           uint64_t ModuleOffset) {
-  MISTD::string Name = kBadString;
+  std::string Name = kBadString;
   uint64_t Start = 0;
   uint64_t Size = 0;
   if (Opts.UseSymbolTable) {
@@ -199,7 +199,7 @@ MISTD::string LLVMSymbolizer::symbolizeData(const MISTD::string &ModuleName,
         Name = DemangleGlobalName(Name);
     }
   }
-  MISTD::stringstream ss;
+  std::stringstream ss;
   ss << Name << "\n" << Start << " " << Size << "\n";
   return ss.str();
 }
@@ -211,9 +211,9 @@ void LLVMSymbolizer::flush() {
   ObjectFileForArch.clear();
 }
 
-static MISTD::string getDarwinDWARFResourceForPath(const MISTD::string &Path) {
+static std::string getDarwinDWARFResourceForPath(const std::string &Path) {
   StringRef Basename = sys::path::filename(Path);
-  const MISTD::string &DSymDirectory = Path + ".dSYM";
+  const std::string &DSymDirectory = Path + ".dSYM";
   SmallString<16> ResourceName = StringRef(DSymDirectory);
   sys::path::append(ResourceName, "Contents", "Resources", "DWARF");
   sys::path::append(ResourceName, Basename);
@@ -227,10 +227,10 @@ static bool checkFileCRC(StringRef Path, uint32_t CRCHash) {
   return !zlib::isAvailable() || CRCHash == zlib::crc32(MB->getBuffer());
 }
 
-static bool findDebugBinary(const MISTD::string &OrigPath,
-                            const MISTD::string &DebuglinkName, uint32_t CRCHash,
-                            MISTD::string &Result) {
-  MISTD::string OrigRealPath = OrigPath;
+static bool findDebugBinary(const std::string &OrigPath,
+                            const std::string &DebuglinkName, uint32_t CRCHash,
+                            std::string &Result) {
+  std::string OrigRealPath = OrigPath;
 #if defined(HAVE_REALPATH)
   if (char *RP = realpath(OrigPath.c_str(), NULL)) {
     OrigRealPath = RP;
@@ -264,7 +264,7 @@ static bool findDebugBinary(const MISTD::string &OrigPath,
   return false;
 }
 
-static bool getGNUDebuglinkContents(const Binary *Bin, MISTD::string &DebugName,
+static bool getGNUDebuglinkContents(const Binary *Bin, std::string &DebugName,
                                     uint32_t &CRCHash) {
   const ObjectFile *Obj = dyn_cast<ObjectFile>(Bin);
   if (!Obj)
@@ -296,7 +296,7 @@ static bool getGNUDebuglinkContents(const Binary *Bin, MISTD::string &DebugName,
 }
 
 LLVMSymbolizer::BinaryPair
-LLVMSymbolizer::getOrCreateBinary(const MISTD::string &Path) {
+LLVMSymbolizer::getOrCreateBinary(const std::string &Path) {
   BinaryMapTy::iterator I = BinaryForPath.find(Path);
   if (I != BinaryForPath.end())
     return I->second;
@@ -311,7 +311,7 @@ LLVMSymbolizer::getOrCreateBinary(const MISTD::string &Path) {
     if (Bin->isMachO() || Bin->isMachOUniversalBinary()) {
       // On Darwin we may find DWARF in separate object file in
       // resource directory.
-      const MISTD::string &ResourcePath =
+      const std::string &ResourcePath =
           getDarwinDWARFResourceForPath(Path);
       bool ResourceFileExists = false;
       if (!sys::fs::exists(ResourcePath, ResourceFileExists) &&
@@ -323,9 +323,9 @@ LLVMSymbolizer::getOrCreateBinary(const MISTD::string &Path) {
     }
     // Try to locate the debug binary using .gnu_debuglink section.
     if (DbgBin == 0) {
-      MISTD::string DebuglinkName;
+      std::string DebuglinkName;
       uint32_t CRCHash;
-      MISTD::string DebugBinaryPath;
+      std::string DebugBinaryPath;
       if (getGNUDebuglinkContents(Bin, DebuglinkName, CRCHash) &&
           findDebugBinary(Path, DebuglinkName, CRCHash, DebugBinaryPath) &&
           !error(createBinary(DebugBinaryPath, ParsedDbgBinary))) {
@@ -336,19 +336,19 @@ LLVMSymbolizer::getOrCreateBinary(const MISTD::string &Path) {
   }
   if (DbgBin == 0)
     DbgBin = Bin;
-  BinaryPair Res = MISTD::make_pair(Bin, DbgBin);
+  BinaryPair Res = std::make_pair(Bin, DbgBin);
   BinaryForPath[Path] = Res;
   return Res;
 }
 
 ObjectFile *
-LLVMSymbolizer::getObjectFileFromBinary(Binary *Bin, const MISTD::string &ArchName) {
+LLVMSymbolizer::getObjectFileFromBinary(Binary *Bin, const std::string &ArchName) {
   if (Bin == 0)
     return 0;
   ObjectFile *Res = 0;
   if (MachOUniversalBinary *UB = dyn_cast<MachOUniversalBinary>(Bin)) {
     ObjectFileForArchMapTy::iterator I = ObjectFileForArch.find(
-        MISTD::make_pair(UB, ArchName));
+        std::make_pair(UB, ArchName));
     if (I != ObjectFileForArch.end())
       return I->second;
     OwningPtr<ObjectFile> ParsedObj;
@@ -356,7 +356,7 @@ LLVMSymbolizer::getObjectFileFromBinary(Binary *Bin, const MISTD::string &ArchNa
       Res = ParsedObj.take();
       ParsedBinariesAndObjects.push_back(Res);
     }
-    ObjectFileForArch[MISTD::make_pair(UB, ArchName)] = Res;
+    ObjectFileForArch[std::make_pair(UB, ArchName)] = Res;
   } else if (Bin->isObject()) {
     Res = cast<ObjectFile>(Bin);
   }
@@ -364,16 +364,16 @@ LLVMSymbolizer::getObjectFileFromBinary(Binary *Bin, const MISTD::string &ArchNa
 }
 
 ModuleInfo *
-LLVMSymbolizer::getOrCreateModuleInfo(const MISTD::string &ModuleName) {
+LLVMSymbolizer::getOrCreateModuleInfo(const std::string &ModuleName) {
   ModuleMapTy::iterator I = Modules.find(ModuleName);
   if (I != Modules.end())
     return I->second;
-  MISTD::string BinaryName = ModuleName;
-  MISTD::string ArchName = Opts.DefaultArch;
+  std::string BinaryName = ModuleName;
+  std::string ArchName = Opts.DefaultArch;
   size_t ColonPos = ModuleName.find_last_of(':');
   // Verify that substring after colon form a valid arch name.
-  if (ColonPos != MISTD::string::npos) {
-    MISTD::string ArchStr = ModuleName.substr(ColonPos + 1);
+  if (ColonPos != std::string::npos) {
+    std::string ArchStr = ModuleName.substr(ColonPos + 1);
     if (Triple(ArchStr).getArch() != Triple::UnknownArch) {
       BinaryName = ModuleName.substr(0, ColonPos);
       ArchName = ArchStr;
@@ -395,20 +395,20 @@ LLVMSymbolizer::getOrCreateModuleInfo(const MISTD::string &ModuleName) {
   return Info;
 }
 
-MISTD::string LLVMSymbolizer::printDILineInfo(DILineInfo LineInfo) const {
+std::string LLVMSymbolizer::printDILineInfo(DILineInfo LineInfo) const {
   // By default, DILineInfo contains "<invalid>" for function/filename it
   // cannot fetch. We replace it to "??" to make our output closer to addr2line.
-  static const MISTD::string kDILineInfoBadString = "<invalid>";
-  MISTD::stringstream Result;
+  static const std::string kDILineInfoBadString = "<invalid>";
+  std::stringstream Result;
   if (Opts.PrintFunctions) {
-    MISTD::string FunctionName = LineInfo.getFunctionName();
+    std::string FunctionName = LineInfo.getFunctionName();
     if (FunctionName == kDILineInfoBadString)
       FunctionName = kBadString;
     else if (Opts.Demangle)
       FunctionName = DemangleName(FunctionName);
     Result << FunctionName << "\n";
   }
-  MISTD::string Filename = LineInfo.getFileName();
+  std::string Filename = LineInfo.getFileName();
   if (Filename == kDILineInfoBadString)
     Filename = kBadString;
   Result << Filename << ":" << LineInfo.getLine() << ":" << LineInfo.getColumn()
@@ -422,13 +422,13 @@ extern "C" char *__cxa_demangle(const char *mangled_name, char *output_buffer,
                                 size_t *length, int *status);
 #endif
 
-MISTD::string LLVMSymbolizer::DemangleName(const MISTD::string &Name) {
+std::string LLVMSymbolizer::DemangleName(const std::string &Name) {
 #if !defined(_MSC_VER)
   int status = 0;
   char *DemangledName = __cxa_demangle(Name.c_str(), 0, 0, &status);
   if (status != 0)
     return Name;
-  MISTD::string Result = DemangledName;
+  std::string Result = DemangledName;
   free(DemangledName);
   return Result;
 #else
@@ -436,7 +436,7 @@ MISTD::string LLVMSymbolizer::DemangleName(const MISTD::string &Name) {
 #endif
 }
 
-MISTD::string LLVMSymbolizer::DemangleGlobalName(const MISTD::string &Name) {
+std::string LLVMSymbolizer::DemangleGlobalName(const std::string &Name) {
   // We can spoil names of globals with C linkage, so use an heuristic
   // approach to check if the name should be demangled.
   return (Name.substr(0, 2) == "_Z") ? DemangleName(Name) : Name;

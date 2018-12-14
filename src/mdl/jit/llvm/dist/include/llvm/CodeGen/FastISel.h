@@ -113,7 +113,7 @@ public:
 
   /// This is a wrapper around getRegForValue that also takes care of truncating
   /// or sign-extending the given getelementptr index value.
-  MISTD::pair<unsigned, bool> getRegForGEPIndex(const Value *V);
+  std::pair<unsigned, bool> getRegForGEPIndex(const Value *V);
 
   /// \brief We're checking to see if we can fold \p LI into \p FoldInst. Note
   /// that we could have a sequence where multiple LLVM IR instructions are

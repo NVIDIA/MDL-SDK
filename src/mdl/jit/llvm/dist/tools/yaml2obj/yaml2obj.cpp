@@ -26,7 +26,7 @@
 
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
   Input(cl::Positional, cl::desc("<input>"), cl::init("-"));
 
 // TODO: The "right" way to tell what kind of object file a given YAML file

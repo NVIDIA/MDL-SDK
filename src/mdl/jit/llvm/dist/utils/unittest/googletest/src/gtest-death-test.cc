@@ -453,12 +453,12 @@ void DeathTestImpl::Abort(AbortReason reason) {
 // Returns an indented copy of stderr output for a death test.
 // This makes distinguishing death test output lines from regular log lines
 // much easier.
-static ::MISTD::string FormatDeathTestOutput(const ::MISTD::string& output) {
-  ::MISTD::string ret;
+static ::std::string FormatDeathTestOutput(const ::std::string& output) {
+  ::std::string ret;
   for (size_t at = 0; ; ) {
     const size_t line_end = output.find('\n', at);
     ret += "[  DEATH   ] ";
-    if (line_end == ::MISTD::string::npos) {
+    if (line_end == ::std::string::npos) {
       ret += output.substr(at);
       break;
     }
@@ -851,7 +851,7 @@ class Arguments {
   }
 
   ~Arguments() {
-    for (MISTD::vector<char*>::iterator i = args_.begin(); i != args_.end();
+    for (std::vector<char*>::iterator i = args_.begin(); i != args_.end();
          ++i) {
       free(*i);
     }
@@ -861,8 +861,8 @@ class Arguments {
   }
 
   template <typename Str>
-  void AddArguments(const ::MISTD::vector<Str>& arguments) {
-    for (typename ::MISTD::vector<Str>::const_iterator i = arguments.begin();
+  void AddArguments(const ::std::vector<Str>& arguments) {
+    for (typename ::std::vector<Str>::const_iterator i = arguments.begin();
          i != arguments.end();
          ++i) {
       args_.insert(args_.end() - 1, posix::StrDup(i->c_str()));
@@ -872,7 +872,7 @@ class Arguments {
     return &args_[0];
   }
  private:
-  MISTD::vector<char*> args_;
+  std::vector<char*> args_;
 };
 
 // A struct that encompasses the arguments to the child process of a
@@ -1099,14 +1099,14 @@ DeathTestFactory::~DeathTestFactory() {}
 
 // Splits a given string on a given delimiter, populating a given
 // vector with the fields.  GTEST_HAS_DEATH_TEST implies that we have
-// ::MISTD::string, so we can use it here.
-static void SplitString(const ::MISTD::string& str, char delimiter,
-                        ::MISTD::vector< ::MISTD::string>* dest) {
-  ::MISTD::vector< ::MISTD::string> parsed;
-  ::MISTD::string::size_type pos = 0;
+// ::std::string, so we can use it here.
+static void SplitString(const ::std::string& str, char delimiter,
+                        ::std::vector< ::std::string>* dest) {
+  ::std::vector< ::std::string> parsed;
+  ::std::string::size_type pos = 0;
   while (::testing::internal::AlwaysTrue()) {
-    const ::MISTD::string::size_type colon = str.find(delimiter, pos);
-    if (colon == ::MISTD::string::npos) {
+    const ::std::string::size_type colon = str.find(delimiter, pos);
+    if (colon == ::std::string::npos) {
       parsed.push_back(str.substr(pos));
       break;
     } else {
@@ -1189,11 +1189,11 @@ int GetStatusFileDescriptor(unsigned int parent_process_id,
 InternalRunDeathTestFlag* ParseInternalRunDeathTestFlag() {
   if (GTEST_FLAG(internal_run_death_test) == "") return NULL;
 
-  // GTEST_HAS_DEATH_TEST implies that we have ::MISTD::string, so we
+  // GTEST_HAS_DEATH_TEST implies that we have ::std::string, so we
   // can use it here.
   int line = -1;
   int index = -1;
-  ::MISTD::vector< ::MISTD::string> fields;
+  ::std::vector< ::std::string> fields;
   SplitString(GTEST_FLAG(internal_run_death_test).c_str(), '|', &fields);
   int write_fd = -1;
 

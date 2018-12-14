@@ -37,7 +37,7 @@ using namespace llvm;
 
 namespace llvm {
   bool DisableSimplifyCFG = false;
-  extern cl::opt<MISTD::string> OutputPrefix;
+  extern cl::opt<std::string> OutputPrefix;
 } // End llvm namespace
 
 namespace {
@@ -56,8 +56,8 @@ namespace {
 
     // walk the values used by the initializer
     // (and recurse into things like ConstantExpr)
-    MISTD::vector<Constant*> Todo;
-    MISTD::set<Constant*> Done;
+    std::vector<Constant*> Todo;
+    std::set<Constant*> Done;
     Todo.push_back(I);
 
     while (!Todo.empty()) {
@@ -95,14 +95,14 @@ Module *BugDriver::deleteInstructionFromProgram(const Instruction *I,
   const Function *PF = PBB->getParent();
 
   Module::iterator RFI = Clone->begin(); // Get iterator to corresponding fn
-  MISTD::advance(RFI, MISTD::distance(PF->getParent()->begin(),
+  std::advance(RFI, std::distance(PF->getParent()->begin(),
                                   Module::const_iterator(PF)));
 
   Function::iterator RBI = RFI->begin();  // Get iterator to corresponding BB
-  MISTD::advance(RBI, MISTD::distance(PF->begin(), Function::const_iterator(PBB)));
+  std::advance(RBI, std::distance(PF->begin(), Function::const_iterator(PBB)));
 
   BasicBlock::iterator RI = RBI->begin(); // Get iterator to corresponding inst
-  MISTD::advance(RI, MISTD::distance(PBB->begin(), BasicBlock::const_iterator(I)));
+  std::advance(RI, std::distance(PBB->begin(), BasicBlock::const_iterator(I)));
   Instruction *TheInst = RI;              // Got the corresponding instruction!
 
   // If this instruction produces a value, replace any users with null values
@@ -113,7 +113,7 @@ Module *BugDriver::deleteInstructionFromProgram(const Instruction *I,
   TheInst->getParent()->getInstList().erase(TheInst);
 
   // Spiff up the output a little bit.
-  MISTD::vector<MISTD::string> Passes;
+  std::vector<std::string> Passes;
 
   /// Can we get rid of the -disable-* options?
   if (Simplification > 1 && !NoDCE)
@@ -140,7 +140,7 @@ Module *BugDriver::performFinalCleanups(Module *M, bool MayModifySemantics) {
   for (Module::iterator I = M->begin(), E = M->end(); I != E; ++I)
     I->setLinkage(GlobalValue::ExternalLinkage);
 
-  MISTD::vector<MISTD::string> CleanupPasses;
+  std::vector<std::string> CleanupPasses;
   CleanupPasses.push_back("globaldce");
 
   if (MayModifySemantics)
@@ -162,7 +162,7 @@ Module *BugDriver::performFinalCleanups(Module *M, bool MayModifySemantics) {
 /// function.  This returns null if there are no extractable loops in the
 /// program or if the loop extractor crashes.
 Module *BugDriver::ExtractLoop(Module *M) {
-  MISTD::vector<MISTD::string> LoopExtractPasses;
+  std::vector<std::string> LoopExtractPasses;
   LoopExtractPasses.push_back("loop-extract-single");
 
   Module *NewM = runPassesOn(M, LoopExtractPasses);
@@ -202,9 +202,9 @@ void llvm::DeleteFunctionBody(Function *F) {
 
 /// GetTorInit - Given a list of entries for static ctors/dtors, return them
 /// as a constant array.
-static Constant *GetTorInit(MISTD::vector<MISTD::pair<Function*, int> > &TorList) {
+static Constant *GetTorInit(std::vector<std::pair<Function*, int> > &TorList) {
   assert(!TorList.empty() && "Don't create empty tor list!");
-  MISTD::vector<Constant*> ArrayElts;
+  std::vector<Constant*> ArrayElts;
   Type *Int32Ty = Type::getInt32Ty(TorList[0].first->getContext());
   
   StructType *STy =
@@ -231,7 +231,7 @@ static void SplitStaticCtorDtor(const char *GlobalName, Module *M1, Module *M2,
   if (!GV || GV->isDeclaration() || GV->hasLocalLinkage() ||
       !GV->use_empty()) return;
   
-  MISTD::vector<MISTD::pair<Function*, int> > M1Tors, M2Tors;
+  std::vector<std::pair<Function*, int> > M1Tors, M2Tors;
   ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer());
   if (!InitList) return;
   
@@ -251,11 +251,11 @@ static void SplitStaticCtorDtor(const char *GlobalName, Module *M1, Module *M2,
           FP = CE->getOperand(0);
       if (Function *F = dyn_cast<Function>(FP)) {
         if (!F->isDeclaration())
-          M1Tors.push_back(MISTD::make_pair(F, Priority));
+          M1Tors.push_back(std::make_pair(F, Priority));
         else {
           // Map to M2's version of the function.
           F = cast<Function>(VMap[F]);
-          M2Tors.push_back(MISTD::make_pair(F, Priority));
+          M2Tors.push_back(std::make_pair(F, Priority));
         }
       }
     }
@@ -288,7 +288,7 @@ static void SplitStaticCtorDtor(const char *GlobalName, Module *M1, Module *M2,
 /// the new module.
 Module *
 llvm::SplitFunctionsOutOfModule(Module *M,
-                                const MISTD::vector<Function*> &F,
+                                const std::vector<Function*> &F,
                                 ValueToValueMapTy &VMap) {
   // Make sure functions & globals are all external so that linkage
   // between the two modules will work.
@@ -305,7 +305,7 @@ llvm::SplitFunctionsOutOfModule(Module *M,
   Module *New = CloneModule(M, NewVMap);
 
   // Remove the Test functions from the Safe module
-  MISTD::set<Function *> TestFunctions;
+  std::set<Function *> TestFunctions;
   for (unsigned i = 0, e = F.size(); i != e; ++i) {
     Function *TNOF = cast<Function>(VMap[F[i]]);
     DEBUG(errs() << "Removing function ");
@@ -361,7 +361,7 @@ llvm::SplitFunctionsOutOfModule(Module *M,
 /// If this operation fails for some reason (ie the implementation is buggy),
 /// this function should return null, otherwise it returns a new Module.
 Module *BugDriver::ExtractMappedBlocksFromModule(const
-                                                 MISTD::vector<BasicBlock*> &BBs,
+                                                 std::vector<BasicBlock*> &BBs,
                                                  Module *M) {
   SmallString<128> Filename;
   int FD;
@@ -376,7 +376,7 @@ Module *BugDriver::ExtractMappedBlocksFromModule(const
   sys::RemoveFileOnSignal(Filename);
 
   tool_output_file BlocksToNotExtractFile(Filename.c_str(), FD);
-  for (MISTD::vector<BasicBlock*>::const_iterator I = BBs.begin(), E = BBs.end();
+  for (std::vector<BasicBlock*>::const_iterator I = BBs.begin(), E = BBs.end();
        I != E; ++I) {
     BasicBlock *BB = *I;
     // If the BB doesn't have a name, give it one so we have something to key
@@ -394,11 +394,11 @@ Module *BugDriver::ExtractMappedBlocksFromModule(const
   }
   BlocksToNotExtractFile.keep();
 
-  MISTD::string uniqueFN = "--extract-blocks-file=";
+  std::string uniqueFN = "--extract-blocks-file=";
   uniqueFN += Filename.str();
   const char *ExtraArg = uniqueFN.c_str();
 
-  MISTD::vector<MISTD::string> PI;
+  std::vector<std::string> PI;
   PI.push_back("extract-blocks");
   Module *Ret = runPassesOn(M, PI, false, 1, &ExtraArg);
 

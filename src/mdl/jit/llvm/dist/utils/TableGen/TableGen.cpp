@@ -87,7 +87,7 @@ namespace {
                                "Generate ctags-compatible index"),
                     clEnumValEnd));
 
-  cl::opt<MISTD::string>
+  cl::opt<std::string>
   Class("class", cl::desc("Print Enum list for this class"),
           cl::value_desc("class name"));
 
@@ -143,7 +143,7 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case PrintEnums:
   {
-    MISTD::vector<Record*> Recs = Records.getAllDerivedDefinitions(Class);
+    std::vector<Record*> Recs = Records.getAllDerivedDefinitions(Class);
     for (unsigned i = 0, e = Recs.size(); i != e; ++i)
       OS << Recs[i]->getName() << ", ";
     OS << "\n";
@@ -153,10 +153,10 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   {
     SetTheory Sets;
     Sets.addFieldExpander("Set", "Elements");
-    MISTD::vector<Record*> Recs = Records.getAllDerivedDefinitions("Set");
+    std::vector<Record*> Recs = Records.getAllDerivedDefinitions("Set");
     for (unsigned i = 0, e = Recs.size(); i != e; ++i) {
       OS << Recs[i]->getName() << " = [";
-      const MISTD::vector<Record*> *Elts = Sets.expand(Recs[i]);
+      const std::vector<Record*> *Elts = Sets.expand(Recs[i]);
       assert(Elts && "Couldn't expand Set instance");
       for (unsigned ei = 0, ee = Elts->size(); ei != ee; ++ei)
         OS << ' ' << (*Elts)[ei]->getName();

@@ -448,15 +448,15 @@ private:
 };
 
 template<>
-struct OptionValue<MISTD::string> : OptionValueCopy<MISTD::string> {
+struct OptionValue<std::string> : OptionValueCopy<std::string> {
   typedef StringRef WrapperType;
 
   OptionValue() {}
 
-  OptionValue(const MISTD::string& V) {
+  OptionValue(const std::string& V) {
     this->setValue(V);
   }
-  OptionValue<MISTD::string> &operator=(const MISTD::string& V) {
+  OptionValue<std::string> &operator=(const std::string& V) {
     setValue(V);
     return *this;
   }
@@ -481,20 +481,20 @@ class ValuesClass {
   // Use a vector instead of a map, because the lists should be short,
   // the overhead is less, and most importantly, it keeps them in the order
   // inserted so we can print our option out nicely.
-  SmallVector<MISTD::pair<const char *, MISTD::pair<int, const char *> >,4> Values;
+  SmallVector<std::pair<const char *, std::pair<int, const char *> >,4> Values;
   void processValues(va_list Vals);
 public:
   ValuesClass(const char *EnumName, DataType Val, const char *Desc,
               va_list ValueArgs) {
     // Insert the first value, which is required.
-    Values.push_back(MISTD::make_pair(EnumName, MISTD::make_pair(Val, Desc)));
+    Values.push_back(std::make_pair(EnumName, std::make_pair(Val, Desc)));
 
     // Process the varargs portion of the values...
     while (const char *enumName = va_arg(ValueArgs, const char *)) {
       DataType EnumVal = static_cast<DataType>(va_arg(ValueArgs, int));
       const char *EnumDesc = va_arg(ValueArgs, const char *);
-      Values.push_back(MISTD::make_pair(enumName,      // Add value to value map
-                                      MISTD::make_pair(EnumVal, EnumDesc)));
+      Values.push_back(std::make_pair(enumName,      // Add value to value map
+                                      std::make_pair(EnumVal, EnumDesc)));
     }
   }
 
@@ -899,13 +899,13 @@ public:
 EXTERN_TEMPLATE_INSTANTIATION(class basic_parser<float>);
 
 //--------------------------------------------------
-// parser<MISTD::string>
+// parser<std::string>
 //
 template<>
-class parser<MISTD::string> : public basic_parser<MISTD::string> {
+class parser<std::string> : public basic_parser<std::string> {
 public:
   // parse - Return true on error.
-  bool parse(Option &, StringRef, StringRef Arg, MISTD::string &Value) {
+  bool parse(Option &, StringRef, StringRef Arg, std::string &Value) {
     Value = Arg.str();
     return false;
   }
@@ -920,7 +920,7 @@ public:
   virtual void anchor();
 };
 
-EXTERN_TEMPLATE_INSTANTIATION(class basic_parser<MISTD::string>);
+EXTERN_TEMPLATE_INSTANTIATION(class basic_parser<std::string>);
 
 //--------------------------------------------------
 // parser<char>
@@ -1267,7 +1267,7 @@ public:
 
 EXTERN_TEMPLATE_INSTANTIATION(class opt<unsigned>);
 EXTERN_TEMPLATE_INSTANTIATION(class opt<int>);
-EXTERN_TEMPLATE_INSTANTIATION(class opt<MISTD::string>);
+EXTERN_TEMPLATE_INSTANTIATION(class opt<std::string>);
 EXTERN_TEMPLATE_INSTANTIATION(class opt<char>);
 EXTERN_TEMPLATE_INSTANTIATION(class opt<bool>);
 
@@ -1306,10 +1306,10 @@ public:
 // object in all cases that it is used.
 //
 template<class DataType>
-class list_storage<DataType, bool> : public MISTD::vector<DataType> {
+class list_storage<DataType, bool> : public std::vector<DataType> {
 public:
   template<class T>
-  void addValue(const T &V) { static_cast<MISTD::vector<DataType> *>(this)->push_back(V); }
+  void addValue(const T &V) { static_cast<std::vector<DataType> *>(this)->push_back(V); }
 };
 
 
@@ -1319,7 +1319,7 @@ public:
 template <class DataType, class Storage = bool,
           class ParserClass = parser<DataType> >
 class list : public Option, public list_storage<DataType, Storage> {
-  MISTD::vector<unsigned> Positions;
+  std::vector<unsigned> Positions;
   ParserClass Parser;
 
   virtual enum ValueExpected getValueExpectedFlagDefault() const {
@@ -1521,7 +1521,7 @@ public:
 template <class DataType, class Storage = bool,
           class ParserClass = parser<DataType> >
 class bits : public Option, public bits_storage<DataType, Storage> {
-  MISTD::vector<unsigned> Positions;
+  std::vector<unsigned> Positions;
   ParserClass Parser;
 
   virtual enum ValueExpected getValueExpectedFlagDefault() const {

@@ -312,7 +312,7 @@ namespace llvm {
     return os;
   }
 
-  typedef MISTD::pair<SlotIndex, MachineBasicBlock*> IdxMBBPair;
+  typedef std::pair<SlotIndex, MachineBasicBlock*> IdxMBBPair;
 
   inline bool operator<(SlotIndex V, const IdxMBBPair &IM) {
     return V < IM.first;
@@ -347,7 +347,7 @@ namespace llvm {
     Mi2IndexMap mi2iMap;
 
     /// MBBRanges - Map MBB number to (start, stop) indexes.
-    SmallVector<MISTD::pair<SlotIndex, SlotIndex>, 8> MBBRanges;
+    SmallVector<std::pair<SlotIndex, SlotIndex>, 8> MBBRanges;
 
     /// Idx2MBBMap - Sorted list of pairs of index of first instruction
     /// and MBB id.
@@ -471,13 +471,13 @@ namespace llvm {
     }
 
     /// Return the (start,end) range of the given basic block number.
-    const MISTD::pair<SlotIndex, SlotIndex> &
+    const std::pair<SlotIndex, SlotIndex> &
     getMBBRange(unsigned Num) const {
       return MBBRanges[Num];
     }
 
     /// Return the (start,end) range of the given basic block.
-    const MISTD::pair<SlotIndex, SlotIndex> &
+    const std::pair<SlotIndex, SlotIndex> &
     getMBBRange(const MachineBasicBlock *MBB) const {
       return getMBBRange(MBB->getNumber());
     }
@@ -507,7 +507,7 @@ namespace llvm {
       if (MachineInstr *MI = getInstructionFromIndex(index))
         return MI->getParent();
       SmallVectorImpl<IdxMBBPair>::const_iterator I =
-        MISTD::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), index);
+        std::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), index);
       // Take the pair containing the index
       SmallVectorImpl<IdxMBBPair>::const_iterator J =
         ((I != idx2MBBMap.end() && I->first > index) ||
@@ -522,7 +522,7 @@ namespace llvm {
     bool findLiveInMBBs(SlotIndex start, SlotIndex end,
                         SmallVectorImpl<MachineBasicBlock*> &mbbs) const {
       SmallVectorImpl<IdxMBBPair>::const_iterator itr =
-        MISTD::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), start);
+        std::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), start);
       bool resVal = false;
 
       while (itr != idx2MBBMap.end()) {
@@ -542,7 +542,7 @@ namespace llvm {
       assert(start < end && "Backwards ranges not allowed.");
 
       SmallVectorImpl<IdxMBBPair>::const_iterator itr =
-        MISTD::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), start);
+        std::lower_bound(idx2MBBMap.begin(), idx2MBBMap.end(), start);
 
       if (itr == idx2MBBMap.end()) {
         itr = prior(itr);
@@ -602,7 +602,7 @@ namespace llvm {
         renumberIndexes(newItr);
 
       SlotIndex newIndex(&*newItr, SlotIndex::Slot_Block);
-      mi2iMap.insert(MISTD::make_pair(mi, newIndex));
+      mi2iMap.insert(std::make_pair(mi, newIndex));
       return newIndex;
     }
 
@@ -632,7 +632,7 @@ namespace llvm {
              "Mismatched instruction in index tables.");
       miEntry->setInstr(newMI);
       mi2iMap.erase(mi2iItr);
-      mi2iMap.insert(MISTD::make_pair(newMI, replaceBaseIndex));
+      mi2iMap.insert(std::make_pair(newMI, replaceBaseIndex));
     }
 
     /// Add the given MachineBasicBlock into the maps.
@@ -664,11 +664,11 @@ namespace llvm {
 
       assert(unsigned(mbb->getNumber()) == MBBRanges.size() &&
              "Blocks must be added in order");
-      MBBRanges.push_back(MISTD::make_pair(startIdx, endIdx));
+      MBBRanges.push_back(std::make_pair(startIdx, endIdx));
       idx2MBBMap.push_back(IdxMBBPair(startIdx, mbb));
 
       renumberIndexes(newItr);
-      MISTD::sort(idx2MBBMap.begin(), idx2MBBMap.end(), Idx2MBBCompare());
+      std::sort(idx2MBBMap.begin(), idx2MBBMap.end(), Idx2MBBCompare());
     }
 
     /// \brief Free the resources that were required to maintain a SlotIndex.

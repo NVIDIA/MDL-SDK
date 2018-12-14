@@ -47,27 +47,62 @@
     using namespace mi::mdl;
 #endif
 
+#ifdef ENABLE_DERIVATIVES
+typedef Material_expr_function_with_derivs  Mat_expr_func;
+typedef Bsdf_init_function_with_derivs      Bsdf_init_func;
+typedef Bsdf_sample_function_with_derivs    Bsdf_sample_func;
+typedef Bsdf_evaluate_function_with_derivs  Bsdf_evaluate_func;
+typedef Bsdf_pdf_function_with_derivs       Bsdf_pdf_func;
+typedef Edf_init_function_with_derivs       Edf_init_func;
+typedef Edf_sample_function_with_derivs     Edf_sample_func;
+typedef Edf_evaluate_function_with_derivs   Edf_evaluate_func;
+typedef Edf_pdf_function_with_derivs        Edf_pdf_func;
+typedef Shading_state_material_with_derivs  Mdl_state;
+typedef Texture_handler_deriv               Tex_handler;
+#define TEX_VTABLE                          tex_deriv_vtable
+#else
+typedef Material_expr_function              Mat_expr_func;
+typedef Bsdf_init_function                  Bsdf_init_func;
+typedef Bsdf_sample_function                Bsdf_sample_func;
+typedef Bsdf_evaluate_function              Bsdf_evaluate_func;
+typedef Bsdf_pdf_function                   Bsdf_pdf_func;
+typedef Edf_init_function                   Edf_init_func;
+typedef Edf_sample_function                 Edf_sample_func;
+typedef Edf_evaluate_function               Edf_evaluate_func;
+typedef Edf_pdf_function                    Edf_pdf_func;
+typedef Shading_state_material              Mdl_state;
+typedef Texture_handler                     Tex_handler;
+#define TEX_VTABLE                          tex_vtable
+#endif
+
 // Custom structure representing the resources used by the generated code of a target code object.
 struct Target_code_data
 {
     size_t       num_textures;      // number of elements in the textures field
-    Texture     *textures;          // a list of Texture objects, if used
-    char const  *ro_data_segment;   // the read-only data segment, if used
+    Texture      *textures;         // a list of Texture objects, if used
+
+    size_t       num_mbsdfs;        // number of elements in the mbsdfs field
+    Mbsdf        *mbsdfs;           // a list of mbsdfs objects, if used
+
+    size_t       num_lightprofiles; // number of elements in the lightprofiles field
+    Lightprofile *lightprofiles;    // a list of lightprofiles objects, if used
+
+    char const   *ro_data_segment;  // the read-only data segment, if used
 };
 
 
 // all function types
 union Mdl_function_ptr
 {
-    Material_expr_function  *expression;
-    Bsdf_init_function      *bsdf_init;
-    Bsdf_sample_function    *bsdf_sample;
-    Bsdf_evaluate_function  *bsdf_evaluate;
-    Bsdf_pdf_function       *bsdf_pdf;
-    Edf_init_function       *edf_init;
-    Edf_sample_function     *edf_sample;
-    Edf_evaluate_function   *edf_evaluate;
-    Edf_pdf_function        *edf_pdf;
+    Mat_expr_func           *expression;
+    Bsdf_init_func          *bsdf_init;
+    Bsdf_sample_func        *bsdf_sample;
+    Bsdf_evaluate_func      *bsdf_evaluate;
+    Bsdf_pdf_func           *bsdf_pdf;
+    Edf_init_func           *edf_init;
+    Edf_sample_func         *edf_sample;
+    Edf_evaluate_func       *edf_evaluate;
+    Edf_pdf_func            *edf_pdf;
 };
 
 // function index offset depending on the target code
@@ -79,6 +114,15 @@ extern __constant__ unsigned int     mdl_functions_count;
 // the following arrays are indexed by an mdl_function_index
 extern __constant__ Mdl_function_ptr mdl_functions[];
 extern __constant__ unsigned int     mdl_arg_block_indices[];
+
+// Identity matrix.
+// The last row is always implied to be (0, 0, 0, 1).
+__constant__ const float4 identity[3] = {
+    {1.0f, 0.0f, 0.0f, 0.0f},
+    {0.0f, 1.0f, 0.0f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f}
+};
+
 
 // the material provides pairs for each generated function to evaluate
 // the functions and arg blocks array are indexed by:
@@ -98,9 +142,9 @@ struct Mdl_resource_handler
 {
     __device__ Mdl_resource_handler()
     {
-        m_tex_handler.vtable = &tex_vtable;   // only required in 'vtable' mode, otherwise NULL
+        m_tex_handler.vtable = &TEX_VTABLE;   // only required in 'vtable' mode, otherwise NULL
         data.shared_data = NULL;
-        data.texture_handler = &m_tex_handler;
+        data.texture_handler = reinterpret_cast<Texture_handler_base *>(&m_tex_handler);
     }
 
     // reuse the handler with a different target code index
@@ -109,13 +153,17 @@ struct Mdl_resource_handler
     {
         m_tex_handler.num_textures = params.tc_data[index.x].num_textures;
         m_tex_handler.textures = params.tc_data[index.x].textures;
+        m_tex_handler.num_mbsdfs = params.tc_data[index.x].num_mbsdfs;
+        m_tex_handler.mbsdfs = params.tc_data[index.x].mbsdfs;
+        m_tex_handler.num_lightprofiles = params.tc_data[index.x].num_lightprofiles;
+        m_tex_handler.lightprofiles = params.tc_data[index.x].lightprofiles;
     }
 
     // a pointer to this data is passed to all generated functions
     Resource_data data;
 
 private:
-    Texture_handler m_tex_handler;
+    Tex_handler m_tex_handler;
 };
 
 
@@ -126,76 +174,72 @@ __device__ inline bool is_valid(const Mdl_function_index& index)
 }
 
 // get a pointer to the material parameters which is passed to all generated functions
-__device__ inline const char* get_arg_block(const Kernel_params& params, const Mdl_function_index& index)
+__device__ inline const char* get_arg_block(
+    const Kernel_params& params,
+    const Mdl_function_index& index)
 {
     return params.arg_block_list[mdl_arg_block_indices[index.z]];
 }
 
 // restores the normal since the BSDF init will change it
 // sets the read-only data segment pointer for large arrays
-__device__ inline void prepare_state(const Kernel_params& params, const Mdl_function_index& index,
-                                     Shading_state_material& state, const float3& normal)
+__device__ inline void prepare_state(
+    const Kernel_params& params,
+    const Mdl_function_index& index,
+    Mdl_state& state,
+    const tct_float3& normal)
 {
     state.ro_data_segment = params.tc_data[index.x].ro_data_segment;
     state.normal = normal;
 }
 
 // Expression functions
-__device__ inline Material_expr_function* as_expression(const Mdl_function_index& index)
+__device__ inline Mat_expr_func* as_expression(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 0].expression;
 }
 
 // BSDF functions
-__device__ inline Bsdf_init_function* as_bsdf_init(const Mdl_function_index& index)
+__device__ inline Bsdf_init_func* as_bsdf_init(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 0].bsdf_init;
 }
 
-__device__ inline Bsdf_sample_function* as_bsdf_sample(const Mdl_function_index& index)
+__device__ inline Bsdf_sample_func* as_bsdf_sample(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 1].bsdf_sample;
 }
 
-__device__ inline Bsdf_evaluate_function* as_bsdf_evaluate(const Mdl_function_index& index)
+__device__ inline Bsdf_evaluate_func* as_bsdf_evaluate(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 2].bsdf_evaluate;
 }
 
-__device__ inline Bsdf_pdf_function* as_bsdf_pdf(const Mdl_function_index& index)
+__device__ inline Bsdf_pdf_func* as_bsdf_pdf(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 3].bsdf_pdf;
 }
 
 // EDF functions
-__device__ inline Edf_init_function* as_edf_init(const Mdl_function_index& index)
+__device__ inline Edf_init_func* as_edf_init(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 0].edf_init;
 }
 
-__device__ inline Edf_sample_function* as_edf_sample(const Mdl_function_index& index)
+__device__ inline Edf_sample_func* as_edf_sample(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 1].edf_sample;
 }
 
-__device__ inline Edf_evaluate_function* as_edf_evaluate(const Mdl_function_index& index)
+__device__ inline Edf_evaluate_func* as_edf_evaluate(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 2].edf_evaluate;
 }
 
-__device__ inline Edf_pdf_function* as_edf_pdf(const Mdl_function_index& index)
+__device__ inline Edf_pdf_func* as_edf_pdf(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 3].edf_pdf;
 }
-
-
-// Identity matrix
-__constant__ const float4 id[4] = {
-    {1.0f, 0.0f, 0.0f, 0.0f},
-    {0.0f, 1.0f, 0.0f, 0.0f},
-    {0.0f, 0.0f, 1.0f, 0.0f},
-    {0.0f, 0.0f, 0.0f, 1.0f}
-};
 
 
 // 3d vector math utilities
@@ -350,8 +394,8 @@ __device__ inline float intersect_sphere(
 struct Ray_state {
     float3 contribution;
     float3 weight;
-    float3 pos;
-    float3 dir;
+    float3 pos, pos_rx, pos_ry;
+    float3 dir, dir_rx, dir_ry;
     bool inside;
     int intersection;
 };
@@ -360,7 +404,7 @@ __device__ inline bool trace_sphere(
     Rand_state &rand_state,
     Ray_state &ray_state,
     const Kernel_params &params)
-{   
+{
     // intersect with geometry
     const float t = intersect_sphere(ray_state.pos, ray_state.dir, 1.0f);
     if (t < 0.0f) {
@@ -385,11 +429,75 @@ __device__ inline bool trace_sphere(
         1.0f - theta * (float)(1.0 / M_PI),
         0.0f);
 
+    // compute surface derivatives
     float sp, cp;
     sincosf(phi, &sp, &cp);
-    float3 tangent_u = make_float3(cp, 0.0f, -sp);
-    const float3 tangent_v = cross(normal, tangent_u);
-   
+    const float st = sinf(theta);
+    float3 tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float)M_PI;
+    float3 tangent_v = make_float3(sp * normal.y, -st, cp * normal.y) * (float)(-M_PI);
+
+#ifdef ENABLE_DERIVATIVES
+    tct_deriv_float3 texture_coords[1] = {
+        { uvw, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } };
+
+    if (params.use_derivatives && ray_state.intersection == 0)
+    {
+        // compute ray differential for one-pixel offset rays
+        // ("Physically Based Rendering", 3rd edition, chapter 10.1.1)
+        const float d = dot(normal, ray_state.pos);
+        const float tx = (d - dot(normal, ray_state.pos_rx)) / dot(normal, ray_state.dir_rx);
+        const float ty = (d - dot(normal, ray_state.pos_ry)) / dot(normal, ray_state.dir_ry);
+        ray_state.pos_rx += ray_state.dir_rx * tx;
+        ray_state.pos_ry += ray_state.dir_ry * ty;
+
+        float4 A;
+        float2 B_x, B_y;
+        if (fabsf(normal.x) > fabsf(normal.y) && fabsf(normal.x) > fabsf(normal.z)) {
+            B_x = make_float2(
+                ray_state.pos_rx.y - ray_state.pos.y,
+                ray_state.pos_rx.z - ray_state.pos.z);
+            B_y = make_float2(
+                ray_state.pos_ry.y - ray_state.pos.y,
+                ray_state.pos_ry.z - ray_state.pos.z);
+            A = make_float4(
+                tangent_u.y, tangent_u.z, tangent_v.y, tangent_v.z);
+        } else if (fabsf(normal.y) > fabsf(normal.z)) {
+            B_x = make_float2(
+                ray_state.pos_rx.x - ray_state.pos.x,
+                ray_state.pos_rx.z - ray_state.pos.z);
+            B_y = make_float2(
+                ray_state.pos_ry.x - ray_state.pos.x,
+                ray_state.pos_ry.z - ray_state.pos.z);
+            A = make_float4(
+                tangent_u.x, tangent_u.z, tangent_v.x, tangent_v.z);
+        } else {
+            B_x = make_float2(
+                ray_state.pos_rx.x - ray_state.pos.x,
+                ray_state.pos_rx.y - ray_state.pos.y);
+            B_y = make_float2(
+                ray_state.pos_ry.x - ray_state.pos.x,
+                ray_state.pos_ry.y - ray_state.pos.y);
+            A = make_float4(
+                tangent_u.x, tangent_u.y, tangent_v.x, tangent_v.y);
+        }
+
+        const float det = A.x * A.w - A.y * A.z;
+        if (fabsf(det) > 1e-10f) {
+            const float inv_det = 1.0f / det;
+
+            texture_coords[0].dx.x = inv_det * (A.w * B_x.x - A.z * B_x.y);
+            texture_coords[0].dx.y = inv_det * (A.x * B_x.y - A.y * B_x.x);
+
+            texture_coords[0].dy.x = inv_det * (A.w * B_y.x - A.z * B_y.y);
+            texture_coords[0].dy.y = inv_det * (A.x * B_y.y - A.y * B_y.x);
+        }
+    }
+#else
+    tct_float3 texture_coords[1] = { uvw };
+#endif
+    tangent_u = normalize(tangent_u);
+    tangent_v = normalize(tangent_v);
+
     float4 texture_results[16];
 
     // material of the current object
@@ -399,22 +507,79 @@ __device__ inline bool trace_sphere(
     Mdl_resource_handler mdl_resources;
 
     // create state
-    Shading_state_material state = {
+    Mdl_state state = {
         normal,
         normal,
         ray_state.pos,
         0.0f,
-        &uvw,
+        texture_coords,
         &tangent_u,
         &tangent_v,
         texture_results,
         NULL,
-        id,
-        id,
+        identity,
+        identity,
         0
     };
 
-    Mdl_function_index func_idx = get_mdl_function_index(material.bsdf);
+
+    Mdl_function_index func_idx;
+
+    // apply volume attenuation after first bounce
+    // (assuming uniform absorption coefficient and ignoring scattering coefficient)
+    if (ray_state.intersection > 0)
+    {
+        func_idx = get_mdl_function_index(material.volume_absorption);
+        if (is_valid(func_idx)) {
+            mdl_resources.set_target_code_index(params, func_idx);    // init resource handler
+            const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
+            prepare_state(params, func_idx, state, normal); // init state
+
+            float3 abs_coeff;
+            as_expression(func_idx)(
+                &abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
+
+            ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * t) : 1.0f;
+            ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * t) : 1.0f;
+            ray_state.weight.z *= abs_coeff.z > 0.0f ? expf(-abs_coeff.z * t) : 1.0f;
+        }
+    }
+
+    // add emission
+    func_idx = get_mdl_function_index(material.edf);
+    if (is_valid(func_idx))
+    {
+        // init for the use of the materials EDF
+        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
+        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
+        prepare_state(params, func_idx, state, normal); // init state
+        as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+
+        // evaluate EDF
+        Edf_evaluate_data eval_data;
+        eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
+        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
+
+        // evaluate intensity expression
+        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
+        func_idx = get_mdl_function_index(material.emission_intensity);
+        if (is_valid(func_idx))
+        {
+            // init for the use of the materials emission intensity
+            mdl_resources.set_target_code_index(params, func_idx); // init resource handler
+            arg_block = get_arg_block(params, func_idx); // get material parameters
+            prepare_state(params, func_idx, state, normal); // init state
+
+            as_expression(func_idx)(
+                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
+        }
+
+        // add emission
+        ray_state.contribution += emission_intensity * eval_data.edf;
+    }
+
+
+    func_idx = get_mdl_function_index(material.bsdf);
     if (is_valid(func_idx))
     {
         // init for the use of the materials BSDF
@@ -560,57 +725,41 @@ __device__ inline bool trace_sphere(
         }
     }
 
-    // add emission
-    func_idx = get_mdl_function_index(material.edf);
-    if (is_valid(func_idx))
-    {
-        // init for the use of the materials EDF
-        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
-        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
-        prepare_state(params, func_idx, state, normal); // init state
-        as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
-
-        // evaluate EDF
-        Edf_evaluate_data eval_data;
-        eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
-        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
-
-        // evaluate intensity expression
-        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
-        func_idx = get_mdl_function_index(material.emission_intensity);
-        if (is_valid(func_idx))
-        {
-            // init for the use of the materials emission intensity
-            mdl_resources.set_target_code_index(params, func_idx); // init resource handler
-            arg_block = get_arg_block(params, func_idx); // get material parameters
-            prepare_state(params, func_idx, state, normal); // init state
-
-            as_expression(func_idx)(
-                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
-        }
-
-        // add emission
-        ray_state.contribution += emission_intensity * eval_data.edf;
-    }
-
     return false;
 }
 
 __device__ inline float3 render_sphere(
     Rand_state &rand_state,
     const Kernel_params &params,
-    const float2 &screen_pos)
+    const unsigned x,
+    const unsigned y)
 {
-    const float r = (2.0f * screen_pos.x - 1.0f);
-    const float u = (2.0f * screen_pos.y - 1.0f);
+    const float inv_res_x = 1.0f / (float)params.resolution.x;
+    const float inv_res_y = 1.0f / (float)params.resolution.y;
+
+    const float dx = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
+    const float dy = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
+
+    const float2 screen_pos = make_float2(
+        ((float)x + dx) * inv_res_x,
+        ((float)y + dy) * inv_res_y);
+
+    const float r    = (2.0f * screen_pos.x               - 1.0f);
+    const float r_rx = (2.0f * (screen_pos.x + inv_res_x) - 1.0f);
+    const float u    = (2.0f * screen_pos.y               - 1.0f);
+    const float u_ry = (2.0f * (screen_pos.y + inv_res_y) - 1.0f);
     const float aspect = (float)params.resolution.y / (float)params.resolution.x;
 
     Ray_state ray_state;
     ray_state.contribution = make_float3(0.0f, 0.0f, 0.0f);
     ray_state.weight = make_float3(1.0f, 1.0f, 1.0f);
-    ray_state.pos = params.cam_pos;
+    ray_state.pos = ray_state.pos_rx = ray_state.pos_ry = params.cam_pos;
     ray_state.dir = normalize(
-        params.cam_dir * params.cam_focal + params.cam_right * r + params.cam_up * aspect * u);
+        params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u);
+    ray_state.dir_rx = normalize(
+        params.cam_dir * params.cam_focal + params.cam_right * r_rx + params.cam_up * aspect * u);
+    ray_state.dir_ry = normalize(
+        params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u_ry);
     ray_state.inside = false;
 
     const unsigned int max_num_intersections = params.max_path_length - 1;
@@ -654,20 +803,16 @@ extern "C" __global__ void render_sphere_kernel(
 
     const unsigned int idx = y * kernel_params.resolution.x + x;
     Rand_state rand_state;
-    const unsigned int num_dim = 8; // 2 camera, 3 BSDF, 3 environment
+    const unsigned int num_dim = kernel_params.disable_aa ? 6 : 8; // 2 camera, 3 BSDF, 3 environment
     curand_init(idx, /*subsequence=*/0, kernel_params.iteration_start * num_dim, &rand_state);
 
     float3 value = make_float3(0.0f, 0.0f, 0.0f);
     for (unsigned int s = 0; s < kernel_params.iteration_num; ++s)
     {
-        const float dx = curand_uniform(&rand_state);
-        const float dy = curand_uniform(&rand_state);
         value += render_sphere(
             rand_state,
             kernel_params,
-            make_float2(
-                ((float)x + dx) / (float)kernel_params.resolution.x,
-                ((float)y + dy) / (float)kernel_params.resolution.y));
+            x, y);
     }
     value *= 1.0f / (float)kernel_params.iteration_num;
 

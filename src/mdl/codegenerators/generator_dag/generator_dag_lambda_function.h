@@ -40,11 +40,13 @@
 #include "mdl/compiler/compilercore/compilercore_mdl.h"
 #include "mdl/compiler/compilercore/compilercore_cstring_hash.h"
 
+#include "generator_dag_derivatives.h"
 #include "generator_dag_ir.h"
 
 namespace mi {
 namespace mdl {
 
+class Derivative_infos;
 class Function_context;
 class IMDL;
 class IValue_resource;
@@ -80,10 +82,10 @@ class Lambda_function : public Allocator_interface_implement<ILambda_function>
 
 public:
     /// Get the type factory of this function.
-    IType_factory *get_type_factory() MDL_FINAL;
+    Type_factory *get_type_factory() MDL_FINAL;
 
     /// Get the value factory of this function.
-    IValue_factory *get_value_factory() MDL_FINAL;
+    Value_factory *get_value_factory() MDL_FINAL;
 
     /// Create a constant.
     /// \param  value       The value of the constant.
@@ -311,7 +313,16 @@ public:
     ///
     void set_parameter_mapping(size_t i, size_t j) MDL_FINAL;
 
+    /// Initialize the derivative information for this lambda function.
+    /// This rewrites the body/sub-expressions with derivative types.
+    ///
+    /// \param resolver  the call name resolver
+    void initialize_derivative_infos(ICall_name_resolver const *resolver) MDL_FINAL;
+
     // --------------- non-interface members ---------------
+
+    /// Get the derivative information if they have been initialized.
+    Derivative_infos const *get_derivative_infos() const;
 
     /// Get the MDL compiler used to create this lambda.
     MDL *get_compiler() const {
@@ -373,6 +384,12 @@ public:
 
     /// Checks if the uniform state was set.
     bool is_uniform_state_set() const;
+
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_cse(bool flag) { return m_node_factory.enable_cse(flag); }
 
     // for debugging only
 
@@ -516,6 +533,12 @@ private:
 
     /// If true, the hash is valid.
     mutable unsigned m_hash_is_valid:1;
+
+    /// If true, m_deriv_infos contains valid information.
+    bool m_deriv_infos_calculated;
+
+    /// The derivative analysis information, if requested during initialization.
+    Derivative_infos m_deriv_infos;
 };
 
 /// This class holds the DF and non-DF parts of an MDL material surface.
@@ -532,16 +555,18 @@ public:
     /// The DAG nodes must already be owned by the main DF lambda.
     ///
     /// \param material_constructor     the DAG node of the material constructor
-    /// \param df_node                  the DAG node of the distribution function
+    /// \param path                     the path of the distribution function
     /// \param include_geometry_normal  if true, the geometry normal will be handled
+    /// \param calc_derivative_infos    if true, derivative information will be calculated
     /// \param name_resolver            the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     ///     (Currently only BSDFs are supported)
     Error_code initialize(
         DAG_node const            *material_constructor,
-        DAG_node const            *df_node,
+        char const                *df_path,
         bool                       include_geometry_normal,
+        bool                       calc_derivative_infos,
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
     /// Get the main DF function representing a DF DAG call.
@@ -582,11 +607,17 @@ public:
     ///           the special lambda function has not been set
     size_t get_special_lambda_function_index(Special_kind kind) const MDL_FINAL;
 
+    /// Get the derivative information if they were requested during initialization.
+    Derivative_infos const *get_derivative_infos() const;
+
     /// Returns the MDL compiler used to create the distribution function.
     mi::base::Handle<MDL> get_compiler() const { return mi::base::Handle<MDL>(m_mdl); }
 
     /// Dump the distribution function to a .gv file with the given name.
     void dump(char const *name) const;
+
+    /// Get the derivative information if they were requested during initialization.
+    Derivative_infos *get_writable_derivative_infos() { return &m_deriv_infos; }
 
 private:
     /// Constructor.
@@ -610,6 +641,12 @@ private:
     /// used to get certain material properties.
     /// They are only set to non ~0 values if they are needed by the BSDFs.
     size_t m_special_lambdas[SK_NUM_KINDS];
+
+    /// If true, m_deriv_infos contains valid information.
+    bool m_deriv_infos_calculated;
+
+    /// The derivative analysis information, if requested during initialization.
+    Derivative_infos m_deriv_infos;
 };
 
 }  // mdl

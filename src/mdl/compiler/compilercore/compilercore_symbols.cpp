@@ -329,7 +329,7 @@ void Symbol_table::serialize(Factory_serializer &serializer) const
         symbols.push_back(sym);
     }
 
-    MISTD::sort(symbols.begin(), symbols.end(), Symbol_less());
+    std::sort(symbols.begin(), symbols.end(), Symbol_less());
 #endif
 
     // now do it

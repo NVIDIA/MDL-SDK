@@ -314,7 +314,7 @@ namespace llvm {
 
       /// Initialize BackedgeTakenInfo from a list of exact exit counts.
       BackedgeTakenInfo(
-        SmallVectorImpl< MISTD::pair<BasicBlock *, const SCEV *> > &ExitCounts,
+        SmallVectorImpl< std::pair<BasicBlock *, const SCEV *> > &ExitCounts,
         bool Complete, const SCEV *MaxCount);
 
       /// hasAnyInfo - Test whether this BackedgeTakenInfo contains any
@@ -362,18 +362,18 @@ namespace llvm {
     /// that we attempt to compute getSCEVAtScope information for, which can
     /// be expensive in extreme cases.
     DenseMap<const SCEV *,
-             SmallVector<MISTD::pair<const Loop *, const SCEV *>, 2> > ValuesAtScopes;
+             SmallVector<std::pair<const Loop *, const SCEV *>, 2> > ValuesAtScopes;
 
     /// LoopDispositions - Memoized computeLoopDisposition results.
     DenseMap<const SCEV *,
-             SmallVector<MISTD::pair<const Loop *, LoopDisposition>, 2> > LoopDispositions;
+             SmallVector<std::pair<const Loop *, LoopDisposition>, 2> > LoopDispositions;
 
     /// computeLoopDisposition - Compute a LoopDisposition value.
     LoopDisposition computeLoopDisposition(const SCEV *S, const Loop *L);
 
     /// BlockDispositions - Memoized computeBlockDisposition results.
     DenseMap<const SCEV *,
-             SmallVector<MISTD::pair<const BasicBlock *, BlockDisposition>, 2> > BlockDispositions;
+             SmallVector<std::pair<const BasicBlock *, BlockDisposition>, 2> > BlockDispositions;
 
     /// computeBlockDisposition - Compute a BlockDisposition value.
     BlockDisposition computeBlockDisposition(const SCEV *S, const BasicBlock *BB);
@@ -387,8 +387,8 @@ namespace llvm {
     /// setUnsignedRange - Set the memoized unsigned range for the given SCEV.
     const ConstantRange &setUnsignedRange(const SCEV *S,
                                           const ConstantRange &CR) {
-      MISTD::pair<DenseMap<const SCEV *, ConstantRange>::iterator, bool> Pair =
-        UnsignedRanges.insert(MISTD::make_pair(S, CR));
+      std::pair<DenseMap<const SCEV *, ConstantRange>::iterator, bool> Pair =
+        UnsignedRanges.insert(std::make_pair(S, CR));
       if (!Pair.second)
         Pair.first->second = CR;
       return Pair.first->second;
@@ -397,8 +397,8 @@ namespace llvm {
     /// setUnsignedRange - Set the memoized signed range for the given SCEV.
     const ConstantRange &setSignedRange(const SCEV *S,
                                         const ConstantRange &CR) {
-      MISTD::pair<DenseMap<const SCEV *, ConstantRange>::iterator, bool> Pair =
-        SignedRanges.insert(MISTD::make_pair(S, CR));
+      std::pair<DenseMap<const SCEV *, ConstantRange>::iterator, bool> Pair =
+        SignedRanges.insert(std::make_pair(S, CR));
       if (!Pair.second)
         Pair.first->second = CR;
       return Pair.first->second;
@@ -498,7 +498,7 @@ namespace llvm {
     /// (which may not be an immediate predecessor) which has exactly one
     /// successor from which BB is reachable, or null if no such block is
     /// found.
-    MISTD::pair<BasicBlock *, BasicBlock *>
+    std::pair<BasicBlock *, BasicBlock *>
     getPredecessorWithUniqueSuccessorForBB(BasicBlock *BB);
 
     /// isImpliedCond - Test whether the condition described by Pred, LHS, and

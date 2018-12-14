@@ -39,7 +39,7 @@ private:
   void releaseMemory(uint64_t Addr, uint32_t Size);
 
   // Store a map of allocated buffers to sizes.
-  typedef MISTD::map<uint64_t, uint32_t> AllocMapType;
+  typedef std::map<uint64_t, uint32_t> AllocMapType;
   AllocMapType m_AllocatedBufferMap;
 
   // Communication handles (OS-specific)

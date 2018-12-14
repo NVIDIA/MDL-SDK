@@ -98,7 +98,7 @@ class MachineFunction {
   // Function-level unique numbering for MachineBasicBlocks.  When a
   // MachineBasicBlock is inserted into a MachineFunction is it automatically
   // numbered and this vector keeps track of the mapping from ID's to MBB's.
-  MISTD::vector<MachineBasicBlock*> MBBNumbering;
+  std::vector<MachineBasicBlock*> MBBNumbering;
 
   // Pool-allocate MachineFunction-lifetime and IR objects.
   BumpPtrAllocator Allocator;
@@ -302,8 +302,8 @@ public:
   // Provide accessors for the MachineBasicBlock list...
   typedef BasicBlockListType::iterator iterator;
   typedef BasicBlockListType::const_iterator const_iterator;
-  typedef MISTD::reverse_iterator<const_iterator> const_reverse_iterator;
-  typedef MISTD::reverse_iterator<iterator>             reverse_iterator;
+  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+  typedef std::reverse_iterator<iterator>             reverse_iterator;
 
   /// addLiveIn - Add the specified physical register as a live-in value and
   /// create a corresponding virtual register for it.
@@ -433,14 +433,14 @@ public:
 
   /// extractLoadMemRefs - Allocate an array and populate it with just the
   /// load information from the given MachineMemOperand sequence.
-  MISTD::pair<MachineInstr::mmo_iterator,
+  std::pair<MachineInstr::mmo_iterator,
             MachineInstr::mmo_iterator>
     extractLoadMemRefs(MachineInstr::mmo_iterator Begin,
                        MachineInstr::mmo_iterator End);
 
   /// extractStoreMemRefs - Allocate an array and populate it with just the
   /// store information from the given MachineMemOperand sequence.
-  MISTD::pair<MachineInstr::mmo_iterator,
+  std::pair<MachineInstr::mmo_iterator,
             MachineInstr::mmo_iterator>
     extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
                         MachineInstr::mmo_iterator End);

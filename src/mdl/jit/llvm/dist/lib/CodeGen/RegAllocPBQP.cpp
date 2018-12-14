@@ -112,13 +112,13 @@ public:
 
 private:
 
-  typedef MISTD::map<const LiveInterval*, unsigned> LI2NodeMap;
-  typedef MISTD::vector<const LiveInterval*> Node2LIMap;
-  typedef MISTD::vector<unsigned> AllowedSet;
-  typedef MISTD::vector<AllowedSet> AllowedSetMap;
-  typedef MISTD::pair<unsigned, unsigned> RegPair;
-  typedef MISTD::map<RegPair, PBQP::PBQPNum> CoalesceMap;
-  typedef MISTD::set<unsigned> RegSet;
+  typedef std::map<const LiveInterval*, unsigned> LI2NodeMap;
+  typedef std::vector<const LiveInterval*> Node2LIMap;
+  typedef std::vector<unsigned> AllowedSet;
+  typedef std::vector<AllowedSet> AllowedSetMap;
+  typedef std::pair<unsigned, unsigned> RegPair;
+  typedef std::map<RegPair, PBQP::PBQPNum> CoalesceMap;
+  typedef std::set<unsigned> RegSet;
 
 
   OwningPtr<PBQPBuilder> builder;
@@ -218,7 +218,7 @@ PBQPRAProblem *PBQPBuilder::build(MachineFunction *mf, const LiveIntervals *lis,
     LIS->checkRegMaskInterference(*vregLI, regMaskOverlaps);
 
     // Compute an initial allowed set for the current vreg.
-    typedef MISTD::vector<unsigned> VRAllowed;
+    typedef std::vector<unsigned> VRAllowed;
     VRAllowed vrAllowed;
     ArrayRef<uint16_t> rawOrder = trc->getRawAllocationOrder(*mf);
     for (unsigned i = 0; i != rawOrder.size(); ++i) {
@@ -253,7 +253,7 @@ PBQPRAProblem *PBQPBuilder::build(MachineFunction *mf, const LiveIntervals *lis,
     p->recordVReg(vreg, node, vrAllowed.begin(), vrAllowed.end());
 
     PBQP::PBQPNum spillCost = (vregLI->weight != 0.0) ?
-        vregLI->weight : MISTD::numeric_limits<PBQP::PBQPNum>::min();
+        vregLI->weight : std::numeric_limits<PBQP::PBQPNum>::min();
 
     addSpillCosts(g.getNodeCosts(node), spillCost);
   }
@@ -304,7 +304,7 @@ void PBQPBuilder::addInterferenceCosts(
       unsigned preg2 = vr2Allowed[j];
 
       if (tri->regsOverlap(preg1, preg2)) {
-        costMat[i + 1][j + 1] = MISTD::numeric_limits<PBQP::PBQPNum>::infinity();
+        costMat[i + 1][j + 1] = std::numeric_limits<PBQP::PBQPNum>::infinity();
       }
     }
   }
@@ -378,8 +378,8 @@ PBQPRAProblem *PBQPBuilderWithCoalescing::build(MachineFunction *mf,
                                                       0));
         } else {
           if (g.getEdgeNode1(edge) == node2) {
-            MISTD::swap(node1, node2);
-            MISTD::swap(allowed1, allowed2);
+            std::swap(node1, node2);
+            std::swap(allowed1, allowed2);
           }
         }
 
@@ -573,7 +573,7 @@ bool RegAllocPBQP::runOnMachineFunction(MachineFunction &MF) {
 
 #ifndef NDEBUG
   const Function* func = mf->getFunction();
-  MISTD::string fqn =
+  std::string fqn =
     func->getParent()->getModuleIdentifier() + "." +
     func->getName().str();
 #endif
@@ -592,10 +592,10 @@ bool RegAllocPBQP::runOnMachineFunction(MachineFunction &MF) {
 
 #ifndef NDEBUG
       if (pbqpDumpGraphs) {
-        MISTD::ostringstream rs;
+        std::ostringstream rs;
         rs << round;
-        MISTD::string graphFileName(fqn + "." + rs.str() + ".pbqpgraph");
-        MISTD::string tmp;
+        std::string graphFileName(fqn + "." + rs.str() + ".pbqpgraph");
+        std::string tmp;
         raw_fd_ostream os(graphFileName.c_str(), tmp);
         DEBUG(dbgs() << "Dumping graph for round " << round << " to \""
               << graphFileName << "\"\n");

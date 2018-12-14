@@ -135,7 +135,7 @@ class X86InstrInfo : public X86GenInstrInfo {
   /// RegOp2MemOpTable2, RegOp2MemOpTable3 - Load / store folding opcode maps.
   ///
   typedef DenseMap<unsigned,
-                   MISTD::pair<unsigned, unsigned> > RegOp2MemOpTableType;
+                   std::pair<unsigned, unsigned> > RegOp2MemOpTableType;
   RegOp2MemOpTableType RegOp2MemOpTable2Addr;
   RegOp2MemOpTableType RegOp2MemOpTable0;
   RegOp2MemOpTableType RegOp2MemOpTable1;
@@ -145,7 +145,7 @@ class X86InstrInfo : public X86GenInstrInfo {
   /// MemOp2RegOpTable - Load / store unfolding opcode map.
   ///
   typedef DenseMap<unsigned,
-                   MISTD::pair<unsigned, unsigned> > MemOp2RegOpTableType;
+                   std::pair<unsigned, unsigned> > MemOp2RegOpTableType;
   MemOp2RegOpTableType MemOp2RegOpTable;
 
   static void AddTableEntry(RegOp2MemOpTableType &R2MTable,
@@ -364,7 +364,7 @@ public:
   ///
   unsigned getGlobalBaseReg(MachineFunction *MF) const;
 
-  MISTD::pair<uint16_t, uint16_t>
+  std::pair<uint16_t, uint16_t>
   getExecutionDomain(const MachineInstr *MI) const;
 
   void setExecutionDomain(MachineInstr *MI, unsigned Domain) const;

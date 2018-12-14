@@ -36,7 +36,7 @@ public:
   virtual bool runOnModule(Module &M);
 
   /// \brief Clean up the name to remove symbols invalid in PTX.
-  MISTD::string cleanUpName(StringRef Name);
+  std::string cleanUpName(StringRef Name);
 };
 }
 
@@ -65,8 +65,8 @@ bool NVPTXAssignValidGlobalNames::runOnModule(Module &M) {
   return true;
 }
 
-MISTD::string NVPTXAssignValidGlobalNames::cleanUpName(StringRef Name) {
-  MISTD::string ValidName;
+std::string NVPTXAssignValidGlobalNames::cleanUpName(StringRef Name) {
+  std::string ValidName;
   raw_string_ostream ValidNameStream(ValidName);
   for (unsigned I = 0, E = Name.size(); I != E; ++I) {
     char C = Name[I];

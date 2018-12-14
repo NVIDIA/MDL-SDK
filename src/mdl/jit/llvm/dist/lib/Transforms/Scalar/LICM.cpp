@@ -309,7 +309,7 @@ void LICM::SinkRegion(DomTreeNode *N) {
   if (!CurLoop->contains(BB)) return;
 
   // We are processing blocks in reverse dfo, so process children first.
-  const MISTD::vector<DomTreeNode*> &Children = N->getChildren();
+  const std::vector<DomTreeNode*> &Children = N->getChildren();
   for (unsigned i = 0, e = Children.size(); i != e; ++i)
     SinkRegion(Children[i]);
 
@@ -382,7 +382,7 @@ void LICM::HoistRegion(DomTreeNode *N) {
         hoist(I);
     }
 
-  const MISTD::vector<DomTreeNode*> &Children = N->getChildren();
+  const std::vector<DomTreeNode*> &Children = N->getChildren();
   for (unsigned i = 0, e = Children.size(); i != e; ++i)
     HoistRegion(Children[i]);
 }

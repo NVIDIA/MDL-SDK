@@ -27,9 +27,9 @@ int main(int argc, const char **argv) {
   if (argc == 0)
     return 1;
 
-  MISTD::string Program = sys::FindProgramByName(argv[0]);
+  std::string Program = sys::FindProgramByName(argv[0]);
 
-  MISTD::string ErrMsg;
+  std::string ErrMsg;
   int Result = sys::ExecuteAndWait(Program, argv, 0, 0, 0, 0, &ErrMsg);
   if (Result < 0) {
     errs() << "Error: " << ErrMsg << "\n";

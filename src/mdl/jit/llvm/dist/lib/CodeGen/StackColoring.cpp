@@ -487,7 +487,7 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
        VE = VMap.end(); VI != VE; ++VI) {
     const MDNode *Var = VI->first;
     if (!Var) continue;
-    MISTD::pair<unsigned, DebugLoc> &VP = VI->second;
+    std::pair<unsigned, DebugLoc> &VP = VI->second;
     if (SlotRemap.count(VP.first)) {
       DEBUG(dbgs()<<"Remapping debug info for ["<<Var->getName()<<"].\n");
       VP.first = SlotRemap[VP.first];
@@ -740,7 +740,7 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
 
   // Sort the slots according to their size. Place unused slots at the end.
   // Use stable sort to guarantee deterministic code generation.
-  MISTD::stable_sort(SortedSlots.begin(), SortedSlots.end(),
+  std::stable_sort(SortedSlots.begin(), SortedSlots.end(),
                    SlotSizeSorter(MFI));
 
   bool Changed = true;
@@ -768,7 +768,7 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
           SortedSlots[J] = -1;
           DEBUG(dbgs()<<"Merging #"<<FirstSlot<<" and slots #"<<
                 SecondSlot<<" together.\n");
-          unsigned MaxAlignment = MISTD::max(MFI->getObjectAlignment(FirstSlot),
+          unsigned MaxAlignment = std::max(MFI->getObjectAlignment(FirstSlot),
                                            MFI->getObjectAlignment(SecondSlot));
 
           assert(MFI->getObjectSize(FirstSlot) >=

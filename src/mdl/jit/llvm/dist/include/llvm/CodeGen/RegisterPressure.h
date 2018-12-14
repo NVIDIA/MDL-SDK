@@ -29,7 +29,7 @@ class MachineInstr;
 /// Base class for register pressure results.
 struct RegisterPressure {
   /// Map of max reg pressure indexed by pressure set ID, not class ID.
-  MISTD::vector<unsigned> MaxSetPressure;
+  std::vector<unsigned> MaxSetPressure;
 
   /// List of live in virtual registers or physical register units.
   SmallVector<unsigned,8> LiveInRegs;
@@ -273,7 +273,7 @@ class RegPressureTracker {
   MachineBasicBlock::const_iterator CurrPos;
 
   /// Pressure map indexed by pressure set ID, not class ID.
-  MISTD::vector<unsigned> CurrSetPressure;
+  std::vector<unsigned> CurrSetPressure;
 
   /// Set of live registers.
   LiveRegSet LiveRegs;
@@ -281,7 +281,7 @@ class RegPressureTracker {
   /// Set of vreg defs that start a live range.
   SparseSet<unsigned, VirtReg2IndexFunctor> UntiedDefs;
   /// Live-through pressure.
-  MISTD::vector<unsigned> LiveThruPressure;
+  std::vector<unsigned> LiveThruPressure;
 
 public:
   RegPressureTracker(IntervalPressure &rp) :
@@ -345,7 +345,7 @@ public:
 
   /// Get the register set pressure at the current position, which may be less
   /// than the pressure across the traversed region.
-  MISTD::vector<unsigned> &getRegSetPressureAtPos() { return CurrSetPressure; }
+  std::vector<unsigned> &getRegSetPressureAtPos() { return CurrSetPressure; }
 
   void discoverLiveOut(unsigned Reg);
   void discoverLiveIn(unsigned Reg);
@@ -399,17 +399,17 @@ public:
 
   /// Get the pressure of each PSet after traversing this instruction bottom-up.
   void getUpwardPressure(const MachineInstr *MI,
-                         MISTD::vector<unsigned> &PressureResult,
-                         MISTD::vector<unsigned> &MaxPressureResult);
+                         std::vector<unsigned> &PressureResult,
+                         std::vector<unsigned> &MaxPressureResult);
 
   /// Get the pressure of each PSet after traversing this instruction top-down.
   void getDownwardPressure(const MachineInstr *MI,
-                           MISTD::vector<unsigned> &PressureResult,
-                           MISTD::vector<unsigned> &MaxPressureResult);
+                           std::vector<unsigned> &PressureResult,
+                           std::vector<unsigned> &MaxPressureResult);
 
   void getPressureAfterInst(const MachineInstr *MI,
-                            MISTD::vector<unsigned> &PressureResult,
-                            MISTD::vector<unsigned> &MaxPressureResult) {
+                            std::vector<unsigned> &PressureResult,
+                            std::vector<unsigned> &MaxPressureResult) {
     if (isTopClosed())
       return getUpwardPressure(MI, PressureResult, MaxPressureResult);
 

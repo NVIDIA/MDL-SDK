@@ -196,7 +196,7 @@ class Transaction_wrapper : public Transaction
 
     void abort() { m_transaction->abort(); }
 
-    MISTD::vector<MISTD::pair<Tag, Journal_type> >* get_journal(
+    std::vector<std::pair<Tag, Journal_type> >* get_journal(
         Transaction_id last_transaction_id,
         Uint32 last_transaction_change_version,
         Journal_type journal_type,

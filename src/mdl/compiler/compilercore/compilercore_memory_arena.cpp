@@ -222,11 +222,11 @@ size_t Memory_arena::get_chunks_size() const
 // Swap this memory arena content with another.
 void Memory_arena::swap(Memory_arena &other)
 {
-    MISTD::swap(m_alloc,      other.m_alloc);
-    MISTD::swap(m_chunk_size, other.m_chunk_size);
-    MISTD::swap(m_chunks,     other.m_chunks);
-    MISTD::swap(m_next,       other.m_next);
-    MISTD::swap(m_curr_size,  other.m_curr_size);
+    std::swap(m_alloc,      other.m_alloc);
+    std::swap(m_chunk_size, other.m_chunk_size);
+    std::swap(m_chunks,     other.m_chunks);
+    std::swap(m_next,       other.m_next);
+    std::swap(m_curr_size,  other.m_curr_size);
 }
 
 // Put a C-string into the memory arena.

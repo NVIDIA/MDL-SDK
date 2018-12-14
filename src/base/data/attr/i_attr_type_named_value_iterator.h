@@ -60,7 +60,7 @@ public:
     Type_named_value_iterator& operator=(Type_named_value_iterator const&);
 
     /// Get qualified name of current value, e.g. "x[2].y"
-    MISTD::string get_qualified_name() const;
+    std::string get_qualified_name() const;
 
 protected:
     virtual void pre_increment();
@@ -69,9 +69,9 @@ protected:
 private:
     // Use vector-based stack, because vector is smaller than deque,
     // is simpler to debug, and sufficient for small stack depths.
-    MISTD::stack<int, MISTD::vector<int> > m_array_sizes;
-    MISTD::stack<MISTD::string, MISTD::vector<MISTD::string> > m_name_stack;
-    mutable MISTD::stringstream m_strbuf;
+    std::stack<int, std::vector<int> > m_array_sizes;
+    std::stack<std::string, std::vector<std::string> > m_name_stack;
+    mutable std::stringstream m_strbuf;
 };
 
 }

@@ -76,7 +76,7 @@ public:
 
   /// Return true if PhysReg is a preferred register.
   bool isHint(unsigned PhysReg) const {
-    return MISTD::find(Hints.begin(), Hints.end(), PhysReg) != Hints.end();
+    return std::find(Hints.begin(), Hints.end(), PhysReg) != Hints.end();
   }
 };
 

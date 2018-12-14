@@ -35,7 +35,7 @@ Module *getLazyIRModule(MemoryBuffer *Buffer, SMDiagnostic &Err,
 /// for it which does lazy deserialization of function bodies.  Otherwise,
 /// attempt to parse it as LLVM Assembly and return a fully populated
 /// Module.
-Module *getLazyIRFileModule(const MISTD::string &Filename, SMDiagnostic &Err,
+Module *getLazyIRFileModule(const std::string &Filename, SMDiagnostic &Err,
                             LLVMContext &Context);
 
 /// If the given MemoryBuffer holds a bitcode image, return a Module
@@ -47,7 +47,7 @@ Module *ParseIR(MemoryBuffer *Buffer, SMDiagnostic &Err, LLVMContext &Context);
 /// If the given file holds a bitcode image, return a Module for it.
 /// Otherwise, attempt to parse it as LLVM Assembly and return a Module
 /// for it.
-Module *ParseIRFile(const MISTD::string &Filename, SMDiagnostic &Err,
+Module *ParseIRFile(const std::string &Filename, SMDiagnostic &Err,
                     LLVMContext &Context);
 
 }

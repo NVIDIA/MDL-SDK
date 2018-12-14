@@ -286,11 +286,11 @@ public:
 
   /// viewGraph - Pop up a GraphViz/gv window with the DAG rendered using 'dot'.
   ///
-  void viewGraph(const MISTD::string &Title);
+  void viewGraph(const std::string &Title);
   void viewGraph();
 
 #ifndef NDEBUG
-  MISTD::map<const SDNode *, MISTD::string> NodeGraphAttrs;
+  std::map<const SDNode *, std::string> NodeGraphAttrs;
 #endif
 
   /// clearGraphAttrs - Clear all previously defined node graph attributes.
@@ -303,7 +303,7 @@ public:
 
   /// getGraphAttrs - Get graph attributes for a node. (eg. "color=red".)
   /// Used from getNodeAttributes.
-  const MISTD::string getGraphAttrs(const SDNode *N) const;
+  const std::string getGraphAttrs(const SDNode *N) const;
 
   /// setGraphColor - Convenience for setting node color attribute.
   ///
@@ -1132,16 +1132,16 @@ public:
 
   /// GetSplitDestVTs - Compute the VTs needed for the low/hi parts of a type
   /// which is split (or expanded) into two not necessarily identical pieces.
-  MISTD::pair<EVT, EVT> GetSplitDestVTs(const EVT &VT) const;
+  std::pair<EVT, EVT> GetSplitDestVTs(const EVT &VT) const;
 
   /// SplitVector - Split the vector with EXTRACT_SUBVECTOR using the provides
   /// VTs and return the low/high part.
-  MISTD::pair<SDValue, SDValue> SplitVector(const SDValue &N, const SDLoc &DL,
+  std::pair<SDValue, SDValue> SplitVector(const SDValue &N, const SDLoc &DL,
                                           const EVT &LoVT, const EVT &HiVT);
 
   /// SplitVector - Split the vector with EXTRACT_SUBVECTOR and return the
   /// low/high part.
-  MISTD::pair<SDValue, SDValue> SplitVector(const SDValue &N, const SDLoc &DL) {
+  std::pair<SDValue, SDValue> SplitVector(const SDValue &N, const SDLoc &DL) {
     EVT LoVT, HiVT;
     llvm::tie(LoVT, HiVT) = GetSplitDestVTs(N.getValueType());
     return SplitVector(N, DL, LoVT, HiVT);
@@ -1149,7 +1149,7 @@ public:
 
   /// SplitVectorOperand - Split the node's operand with EXTRACT_SUBVECTOR and
   /// return the low/high part.
-  MISTD::pair<SDValue, SDValue> SplitVectorOperand(const SDNode *N, unsigned OpNo)
+  std::pair<SDValue, SDValue> SplitVectorOperand(const SDNode *N, unsigned OpNo)
   {
     return SplitVector(N->getOperand(OpNo), SDLoc(N));
   }
@@ -1175,13 +1175,13 @@ private:
   FoldingSet<SDVTListNode> VTListMap;
 
   /// CondCodeNodes - Maps to auto-CSE operations.
-  MISTD::vector<CondCodeSDNode*> CondCodeNodes;
+  std::vector<CondCodeSDNode*> CondCodeNodes;
 
-  MISTD::vector<SDNode*> ValueTypeNodes;
-  MISTD::map<EVT, SDNode*, EVT::compareRawBits> ExtendedValueTypeNodes;
+  std::vector<SDNode*> ValueTypeNodes;
+  std::map<EVT, SDNode*, EVT::compareRawBits> ExtendedValueTypeNodes;
   StringMap<SDNode*> ExternalSymbols;
 
-  MISTD::map<MISTD::pair<MISTD::string, unsigned char>,SDNode*> TargetExternalSymbols;
+  std::map<std::pair<std::string, unsigned char>,SDNode*> TargetExternalSymbols;
 };
 
 template <> struct GraphTraits<SelectionDAG*> : public GraphTraits<SDNode*> {

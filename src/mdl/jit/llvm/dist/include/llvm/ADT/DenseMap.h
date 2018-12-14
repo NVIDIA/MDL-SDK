@@ -40,7 +40,7 @@ template<typename DerivedT,
          typename KeyT, typename ValueT, typename KeyInfoT>
 class DenseMapBase {
 protected:
-  typedef MISTD::pair<KeyT, ValueT> BucketT;
+  typedef std::pair<KeyT, ValueT> BucketT;
 
 public:
   typedef KeyT key_type;
@@ -150,32 +150,32 @@ public:
   // Inserts key,value pair into the map if the key isn't already in the map.
   // If the key is already in the map, it returns false and doesn't update the
   // value.
-  MISTD::pair<iterator, bool> insert(const MISTD::pair<KeyT, ValueT> &KV) {
+  std::pair<iterator, bool> insert(const std::pair<KeyT, ValueT> &KV) {
     BucketT *TheBucket;
     if (LookupBucketFor(KV.first, TheBucket))
-      return MISTD::make_pair(iterator(TheBucket, getBucketsEnd(), true),
+      return std::make_pair(iterator(TheBucket, getBucketsEnd(), true),
                             false); // Already in map.
 
     // Otherwise, insert the new element.
     TheBucket = InsertIntoBucket(KV.first, KV.second, TheBucket);
-    return MISTD::make_pair(iterator(TheBucket, getBucketsEnd(), true), true);
+    return std::make_pair(iterator(TheBucket, getBucketsEnd(), true), true);
   }
 
 #if LLVM_HAS_RVALUE_REFERENCES
   // Inserts key,value pair into the map if the key isn't already in the map.
   // If the key is already in the map, it returns false and doesn't update the
   // value.
-  MISTD::pair<iterator, bool> insert(MISTD::pair<KeyT, ValueT> &&KV) {
+  std::pair<iterator, bool> insert(std::pair<KeyT, ValueT> &&KV) {
     BucketT *TheBucket;
     if (LookupBucketFor(KV.first, TheBucket))
-      return MISTD::make_pair(iterator(TheBucket, getBucketsEnd(), true),
+      return std::make_pair(iterator(TheBucket, getBucketsEnd(), true),
                             false); // Already in map.
     
     // Otherwise, insert the new element.
-    TheBucket = InsertIntoBucket(MISTD::move(KV.first),
-                                 MISTD::move(KV.second),
+    TheBucket = InsertIntoBucket(std::move(KV.first),
+                                 std::move(KV.second),
                                  TheBucket);
-    return MISTD::make_pair(iterator(TheBucket, getBucketsEnd(), true), true);
+    return std::make_pair(iterator(TheBucket, getBucketsEnd(), true), true);
   }
 #endif
   
@@ -224,11 +224,11 @@ public:
     if (LookupBucketFor(Key, TheBucket))
       return *TheBucket;
 
-    return *InsertIntoBucket(MISTD::move(Key), ValueT(), TheBucket);
+    return *InsertIntoBucket(std::move(Key), ValueT(), TheBucket);
   }
 
   ValueT &operator[](KeyT &&Key) {
-    return FindAndConstruct(MISTD::move(Key)).second;
+    return FindAndConstruct(std::move(Key)).second;
   }
 #endif
 
@@ -326,8 +326,8 @@ protected:
   }
 
   void swap(DenseMapBase& RHS) {
-    MISTD::swap(getNumEntries(), RHS.getNumEntries());
-    MISTD::swap(getNumTombstones(), RHS.getNumTombstones());
+    std::swap(getNumEntries(), RHS.getNumEntries());
+    std::swap(getNumTombstones(), RHS.getNumTombstones());
   }
 
   static unsigned getHashValue(const KeyT &Val) {
@@ -409,15 +409,15 @@ private:
     TheBucket = InsertIntoBucketImpl(Key, TheBucket);
 
     TheBucket->first = Key;
-    new (&TheBucket->second) ValueT(MISTD::move(Value));
+    new (&TheBucket->second) ValueT(std::move(Value));
     return TheBucket;
   }
 
   BucketT *InsertIntoBucket(KeyT &&Key, ValueT &&Value, BucketT *TheBucket) {
     TheBucket = InsertIntoBucketImpl(Key, TheBucket);
 
-    TheBucket->first = MISTD::move(Key);
-    new (&TheBucket->second) ValueT(MISTD::move(Value));
+    TheBucket->first = std::move(Key);
+    new (&TheBucket->second) ValueT(std::move(Value));
     return TheBucket;
   }
 #endif
@@ -564,7 +564,7 @@ public:
 
   template<typename InputIt>
   DenseMap(const InputIt &I, const InputIt &E) {
-    init(NextPowerOf2(MISTD::distance(I, E)));
+    init(NextPowerOf2(std::distance(I, E)));
     this->insert(I, E);
   }
 
@@ -574,10 +574,10 @@ public:
   }
 
   void swap(DenseMap& RHS) {
-    MISTD::swap(Buckets, RHS.Buckets);
-    MISTD::swap(NumEntries, RHS.NumEntries);
-    MISTD::swap(NumTombstones, RHS.NumTombstones);
-    MISTD::swap(NumBuckets, RHS.NumBuckets);
+    std::swap(Buckets, RHS.Buckets);
+    std::swap(NumEntries, RHS.NumEntries);
+    std::swap(NumTombstones, RHS.NumTombstones);
+    std::swap(NumBuckets, RHS.NumBuckets);
   }
 
   DenseMap& operator=(const DenseMap& other) {
@@ -619,7 +619,7 @@ public:
     unsigned OldNumBuckets = NumBuckets;
     BucketT *OldBuckets = Buckets;
 
-    allocateBuckets(MISTD::max<unsigned>(64, static_cast<unsigned>(NextPowerOf2(AtLeast-1))));
+    allocateBuckets(std::max<unsigned>(64, static_cast<unsigned>(NextPowerOf2(AtLeast-1))));
     assert(Buckets);
     if (!OldBuckets) {
       this->BaseT::initEmpty();
@@ -639,7 +639,7 @@ public:
     // Reduce the number of buckets.
     unsigned NewNumBuckets = 0;
     if (OldNumEntries)
-      NewNumBuckets = MISTD::max(64, 1 << (Log2_32_Ceil(OldNumEntries) + 1));
+      NewNumBuckets = std::max(64, 1 << (Log2_32_Ceil(OldNumEntries) + 1));
     if (NewNumBuckets == NumBuckets) {
       this->BaseT::initEmpty();
       return;
@@ -728,7 +728,7 @@ public:
 
   template<typename InputIt>
   SmallDenseMap(const InputIt &I, const InputIt &E) {
-    init(NextPowerOf2(MISTD::distance(I, E)));
+    init(NextPowerOf2(std::distance(I, E)));
     this->insert(I, E);
   }
 
@@ -741,7 +741,7 @@ public:
     unsigned TmpNumEntries = RHS.NumEntries;
     RHS.NumEntries = NumEntries;
     NumEntries = TmpNumEntries;
-    MISTD::swap(NumTombstones, RHS.NumTombstones);
+    std::swap(NumTombstones, RHS.NumTombstones);
 
     const KeyT EmptyKey = this->getEmptyKey();
     const KeyT TombstoneKey = this->getTombstoneKey();
@@ -759,11 +759,11 @@ public:
                             !KeyInfoT::isEqual(RHSB->first, TombstoneKey));
         if (hasLHSValue && hasRHSValue) {
           // Swap together if we can...
-          MISTD::swap(*LHSB, *RHSB);
+          std::swap(*LHSB, *RHSB);
           continue;
         }
         // Swap separately and handle any assymetry.
-        MISTD::swap(LHSB->first, RHSB->first);
+        std::swap(LHSB->first, RHSB->first);
         if (hasLHSValue) {
           new (&RHSB->second) ValueT(llvm_move(LHSB->second));
           LHSB->second.~ValueT();
@@ -775,8 +775,8 @@ public:
       return;
     }
     if (!Small && !RHS.Small) {
-      MISTD::swap(getLargeRep()->Buckets, RHS.getLargeRep()->Buckets);
-      MISTD::swap(getLargeRep()->NumBuckets, RHS.getLargeRep()->NumBuckets);
+      std::swap(getLargeRep()->Buckets, RHS.getLargeRep()->Buckets);
+      std::swap(getLargeRep()->NumBuckets, RHS.getLargeRep()->NumBuckets);
       return;
     }
 
@@ -846,7 +846,7 @@ public:
 
   void grow(unsigned AtLeast) {
     if (AtLeast >= InlineBuckets)
-      AtLeast = MISTD::max<unsigned>(64, NextPowerOf2(AtLeast-1));
+      AtLeast = std::max<unsigned>(64, NextPowerOf2(AtLeast-1));
 
     if (Small) {
       if (AtLeast < InlineBuckets)
@@ -985,7 +985,7 @@ private:
 template<typename KeyT, typename ValueT,
          typename KeyInfoT, bool IsConst>
 class DenseMapIterator {
-  typedef MISTD::pair<KeyT, ValueT> Bucket;
+  typedef std::pair<KeyT, ValueT> Bucket;
   typedef DenseMapIterator<KeyT, ValueT,
                            KeyInfoT, true> ConstIterator;
   friend class DenseMapIterator<KeyT, ValueT, KeyInfoT, true>;
@@ -994,7 +994,7 @@ public:
   typedef typename conditional<IsConst, const Bucket, Bucket>::type value_type;
   typedef value_type *pointer;
   typedef value_type &reference;
-  typedef MISTD::forward_iterator_tag iterator_category;
+  typedef std::forward_iterator_tag iterator_category;
 private:
   pointer Ptr, End;
 public:

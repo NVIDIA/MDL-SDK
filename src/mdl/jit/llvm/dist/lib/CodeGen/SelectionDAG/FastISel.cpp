@@ -283,11 +283,11 @@ void FastISel::UpdateValueMap(const Value *I, unsigned Reg, unsigned NumRegs) {
   }
 }
 
-MISTD::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
+std::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
   unsigned IdxN = getRegForValue(Idx);
   if (IdxN == 0)
     // Unhandled operand. Halt "fast" selection and bail.
-    return MISTD::pair<unsigned, bool>(0, false);
+    return std::pair<unsigned, bool>(0, false);
 
   bool IdxNIsKill = hasTrivialKill(Idx);
 
@@ -304,7 +304,7 @@ MISTD::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
                       IdxN, IdxNIsKill);
     IdxNIsKill = true;
   }
-  return MISTD::pair<unsigned, bool>(IdxN, IdxNIsKill);
+  return std::pair<unsigned, bool>(IdxN, IdxNIsKill);
 }
 
 void FastISel::recomputeInsertPt() {
@@ -323,7 +323,7 @@ void FastISel::recomputeInsertPt() {
 
 void FastISel::removeDeadCode(MachineBasicBlock::iterator I,
                               MachineBasicBlock::iterator E) {
-  assert (I && E && MISTD::distance(I, E) > 0 && "Invalid iterator!");
+  assert (I && E && std::distance(I, E) > 0 && "Invalid iterator!");
   while (I != E) {
     MachineInstr *Dead = &*I;
     ++I;
@@ -525,7 +525,7 @@ bool FastISel::SelectGetElementPtr(const User *I) {
 
       // N = N + Idx * ElementSize;
       uint64_t ElementSize = TD.getTypeAllocSize(Ty);
-      MISTD::pair<unsigned, bool> Pair = getRegForGEPIndex(Idx);
+      std::pair<unsigned, bool> Pair = getRegForGEPIndex(Idx);
       unsigned IdxN = Pair.first;
       bool IdxNIsKill = Pair.second;
       if (IdxN == 0)
@@ -1507,7 +1507,7 @@ bool FastISel::HandlePHINodesInSuccessorBlocks(const BasicBlock *LLVMBB) {
         FuncInfo.PHINodesToUpdate.resize(OrigNumPHINodesToUpdate);
         return false;
       }
-      FuncInfo.PHINodesToUpdate.push_back(MISTD::make_pair(MBBI++, Reg));
+      FuncInfo.PHINodesToUpdate.push_back(std::make_pair(MBBI++, Reg));
       DL = DebugLoc();
     }
   }

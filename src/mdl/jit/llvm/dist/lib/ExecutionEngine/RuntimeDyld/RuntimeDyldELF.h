@@ -120,7 +120,7 @@ class RuntimeDyldELF : public RuntimeDyldImpl {
   // updated in a global offset table.
   typedef SmallVector<RelocationValueRef, 2> GOTRelocations;
   GOTRelocations GOTEntries; // List of entries requiring finalization.
-  SmallVector<MISTD::pair<SID, GOTRelocations>, 8> GOTs; // Allocated tables.
+  SmallVector<std::pair<SID, GOTRelocations>, 8> GOTs; // Allocated tables.
 
   // When a module is loaded we save the SectionID of the EH frame section
   // in a table until we receive a request to register all unregistered

@@ -47,13 +47,61 @@ BSDF_INLINE void absorb(BSDF_pdf_data *data)
     data->pdf  = 0.0f;
 }
 
-BSDF_INLINE void copy_data(BSDF_pdf_data *pdf_data, const BSDF_sample_data *sample_data)
+BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
 {
-    pdf_data->ior1 = sample_data->ior1;
-    pdf_data->ior2 = sample_data->ior2;
-    pdf_data->k1 = sample_data->k1;
-    pdf_data->k2 = sample_data->k2;
+    BSDF_pdf_data res;
+    res.ior1 = sample_data->ior1;
+    res.ior2 = sample_data->ior2;
+    res.k1 = sample_data->k1;
+    res.k2 = sample_data->k2;
+    return res;
 }
+
+BSDF_INLINE void no_emission(EDF_sample_data *data)
+{
+    data->k1 = make_float3(0.0f, 0.0f, 0.0f);
+    data->pdf = 0.f;
+    data->edf_over_pdf = make_float3(0.0f, 0.0f, 0.0f);
+    data->event_type = EDF_EVENT_NONE;
+}
+
+BSDF_INLINE void no_emission(EDF_evaluate_data *data)
+{
+    // keep cos if set
+    data->pdf = 0.f;
+    data->edf = make_float3(0.0f, 0.0f, 0.0f);
+}
+
+BSDF_INLINE void no_emission(EDF_pdf_data *data)
+{
+    data->pdf = 0.0f;
+}
+
+
+
+BSDF_INLINE EDF_evaluate_data to_eval_data(const EDF_sample_data* sample_data)
+{
+    EDF_evaluate_data res;
+    res.k1 = sample_data->k1;
+    return res;
+
+}
+BSDF_INLINE EDF_pdf_data to_pdf_data(const EDF_sample_data* sample_data)
+{
+    EDF_pdf_data res;
+    res.k1 = sample_data->k1;
+    return res;
+
+}
+
+template<typename TDF_data>
+BSDF_INLINE void no_contribution(TDF_data* data);
+template<> BSDF_INLINE void no_contribution(BSDF_sample_data* data) { absorb(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data) { absorb(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data) { absorb(data); }
+template<> BSDF_INLINE void no_contribution(EDF_sample_data* data) { no_emission(data); }
+template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data) { no_emission(data); }
+template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data) { no_emission(data); }
 
 // using color IORs would require some sort of spectral rendering, as of now libbsdf
 // reduces that to scalar by averaging
@@ -282,6 +330,29 @@ BSDF_INLINE void get_oriented_normals(
     shading_normal = shading_normal0 * copysignf(1.0f, math::dot(shading_normal0, geometry_normal));
 }
 
+struct Normals {
+    float3 shading_normal;
+    float3 geometry_normal;
+};
+
+struct Geometry {
+    Normals n;
+    float3 x_axis;
+    float3 z_axis;
+};
+
+BSDF_INLINE bool get_geometry(
+    Geometry &g,
+    const float3 &shading_normal,
+    const float3 &tangent_u,
+    const float3 &k1,
+    State *state)
+{
+    get_oriented_normals(
+        g.n.shading_normal, g.n.geometry_normal, shading_normal, state->geometry_normal(), k1);
+    return get_bumped_basis(g.x_axis, g.z_axis, tangent_u, g.n.shading_normal);
+}
+
 // compute half vector (convention: pointing to outgoing direction, like shading normal)
 BSDF_INLINE float3 compute_half_vector(
     const float3 &k1,
@@ -395,32 +466,34 @@ BSDF_INLINE float3 hvd_beckmann_sample(
 BSDF_INLINE float erff(const float a)
 {
     float r, s, t, u;
-#define fmaf(a,b,c) (a * b + c)
+    #define fmaf(a,b,c) (a * b + c)
     t = math::abs(a);
     s = a * a;
-    if (t > 0.921875f) { // 0.99527 ulp
-        r = fmaf (0x1.222900p-16f, t, -0x1.91d2ccp-12f); // 1.72948930e-5, -3.83208680e-4
-        u = fmaf (0x1.fd1336p-09f, t, -0x1.8d6300p-06f); // 3.88393435e-3, -2.42545605e-2
-        r = fmaf (r, s, u);
-        r = fmaf (r, t, 0x1.b55cb0p-4f); // 1.06777847e-1
-        r = fmaf (r, t, 0x1.450aa0p-1f); // 6.34846687e-1
-        r = fmaf (r, t, 0x1.079d0cp-3f); // 1.28717512e-1
-        r = fmaf (r, t, t);
-        r = math::exp (-r);
+    if (t > 0.921875f)
+    { // 0.99527 ulp
+        r = fmaf(0x1.222900p-16f, t, -0x1.91d2ccp-12f); // 1.72948930e-5, -3.83208680e-4
+        u = fmaf(0x1.fd1336p-09f, t, -0x1.8d6300p-06f); // 3.88393435e-3, -2.42545605e-2
+        r = fmaf(r, s, u);
+        r = fmaf(r, t, 0x1.b55cb0p-4f); // 1.06777847e-1
+        r = fmaf(r, t, 0x1.450aa0p-1f); // 6.34846687e-1
+        r = fmaf(r, t, 0x1.079d0cp-3f); // 1.28717512e-1
+        r = fmaf(r, t, t);
+        r = math::exp(-r);
         r = 1.0f - r;
         r = copysignf(r, a);
-    } else { // 0.99993 ulp
-        r =             -0x1.3a1a82p-11f;  // -5.99104969e-4
-        r = fmaf (r, s,  0x1.473f48p-08f); //  4.99339588e-3
-        r = fmaf (r, s, -0x1.b68bd2p-06f); // -2.67667342e-2
-        r = fmaf (r, s,  0x1.ce1a46p-04f); //  1.12818025e-1
-        r = fmaf (r, s, -0x1.8126e0p-02f); // -3.76124859e-1
-        r = fmaf (r, s,  0x1.06eba6p-03f); //  1.28379151e-1
-        r = fmaf (r, a, a);
     }
-#undef fmaf
+    else
+    { // 0.99993 ulp
+        r = -0x1.3a1a82p-11f;  // -5.99104969e-4
+        r = fmaf(r, s, 0x1.473f48p-08f); //  4.99339588e-3
+        r = fmaf(r, s, -0x1.b68bd2p-06f); // -2.67667342e-2
+        r = fmaf(r, s, 0x1.ce1a46p-04f); //  1.12818025e-1
+        r = fmaf(r, s, -0x1.8126e0p-02f); // -3.76124859e-1
+        r = fmaf(r, s, 0x1.06eba6p-03f); //  1.28379151e-1
+        r = fmaf(r, a, a);
+    }
+    #undef fmaf
     return r;
-
 }
 
 // from "Mike Giles - approximating the erfinv function"
@@ -584,7 +657,7 @@ BSDF_INLINE float3 hvd_ggx_sample_vndf(
 {
     const float3 v = math::normalize(make_float3(k.x * roughness.x, k.y, k.z * roughness.y));
 
-    const float3 t1 = (v.y < 0.9999f) ?
+    const float3 t1 = (v.y < 0.99999f) ?
         math::normalize(math::cross(v, make_float3(0.0f, 1.0f, 0.0f))) :
         make_float3(1.0f, 0.0f, 0.0f);
     const float3 t2 = math::cross(t1, v);
@@ -594,8 +667,10 @@ BSDF_INLINE float3 hvd_ggx_sample_vndf(
     
     const float phi = (xi.y < a) ?
         xi.y / a * (float)M_PI : (float)M_PI + (xi.y - a) / (1.0f - a) * (float)M_PI;
-    const float p1 = r * math::cos(phi);
-    const float p2 = r * math::sin(phi) * ((xi.y < a) ? 1.0f : v.y);
+    float sp, cp;
+    math::sincos(phi, &sp, &cp);
+    const float p1 = r * cp;
+    const float p2 = r * sp * ((xi.y < a) ? 1.0f : v.y);
 
     float3 h = p1 * t1 + p2 * t2 + math::sqrt(math::max(0.0f, 1.0f - p1 * p1 - p2 * p2)) * v;
 
@@ -812,8 +887,8 @@ BSDF_INLINE float3 measured_curve_factor(
 {
     const float angle01 = math::acos(math::min(cosine, 1.0f)) * (float)(2.0 / M_PI);
     const float f1 = angle01 * (float)(num_values - 1);
-    const unsigned int idx0 = math::min((unsigned int)f1, num_values - 1);
-    const unsigned int idx1 = math::min(idx0 + 1, num_values - 1);
+    const int idx0 = math::min((int)f1, (int)num_values - 1);
+    const int idx1 = math::min(idx0 + 1, (int)num_values - 1);
 
     const float cw1 = f1 - (float)idx0;
     const float cw0 = 1.0f - cw1;

@@ -66,8 +66,8 @@ class Config_module_impl : public Config_module
     virtual bool override(
         const char* opt);
     /// Retrieve the value of a given config entry key as a string.
-    virtual MISTD::string get_config_value_as_string(
-        const MISTD::string& key) const;
+    virtual std::string get_config_value_as_string(
+        const std::string& key) const;
 
     /// Update the host's config parameter with the current registered value.
     /// \param mod module ID of caller
@@ -78,7 +78,7 @@ class Config_module_impl : public Config_module
     virtual bool update(
         const char* name,
         const char* help,
-        MISTD::string& value);
+        std::string& value);
 
     /// Is now the initialization of the config module complete?
     /// \return true when initialization is complete
@@ -96,9 +96,9 @@ class Config_module_impl : public Config_module
     const Config_registry& get_configuration() const;
 
     /// Retrieve the product version.
-    MISTD::string get_product_version() const;
+    std::string get_product_version() const;
     /// Retrieve the product name.
-    MISTD::string get_product_name() const;
+    std::string get_product_name() const;
 
   private:
     mutable mi::base::Lock m_lock;		    ///< for thread-safe access.

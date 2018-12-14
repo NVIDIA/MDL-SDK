@@ -76,7 +76,7 @@ namespace llvm {
     bool HandlesExceptions;
     int LastFrameInst;
     MCWin64EHUnwindInfo *ChainedParent;
-    MISTD::vector<MCWin64EHInstruction> Instructions;
+    std::vector<MCWin64EHInstruction> Instructions;
   };
 
   class MCWin64EHUnwindEmitter {

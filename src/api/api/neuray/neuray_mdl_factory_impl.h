@@ -38,7 +38,7 @@
 
 #include <boost/core/noncopyable.hpp>
 
-namespace mi { namespace neuraylib { class INeuray; } }
+namespace mi { namespace neuraylib { class INeuray; class IMdl_execution_context;} }
 
 namespace MI {
 
@@ -101,6 +101,8 @@ public:
         bool shared,
         mi::Sint32* errors);
 
+    mi::neuraylib::IMdl_execution_context* create_execution_context();
+    
     // internal methods
 
 private:

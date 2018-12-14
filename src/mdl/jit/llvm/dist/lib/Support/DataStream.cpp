@@ -63,7 +63,7 @@ public:
     return read(Fd, buf, len);
   }
 
-  error_code OpenFile(const MISTD::string &Filename) {
+  error_code OpenFile(const std::string &Filename) {
     if (Filename == "-") {
       Fd = 0;
       sys::ChangeStdinToBinary();
@@ -77,11 +77,11 @@ public:
 }
 
 namespace llvm {
-DataStreamer *getDataFileStreamer(const MISTD::string &Filename,
-                                  MISTD::string *StrError) {
+DataStreamer *getDataFileStreamer(const std::string &Filename,
+                                  std::string *StrError) {
   DataFileStreamer *s = new DataFileStreamer();
   if (error_code e = s->OpenFile(Filename)) {
-    *StrError = MISTD::string("Could not open ") + Filename + ": " +
+    *StrError = std::string("Could not open ") + Filename + ": " +
         e.message() + "\n";
     return NULL;
   }

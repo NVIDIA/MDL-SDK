@@ -68,7 +68,7 @@ TEST(polymorphic_ptr_test, Basic) {
   EXPECT_FALSE(!p2);
   EXPECT_EQ(s, &*p2);
 
-  using MISTD::swap;
+  using std::swap;
   swap(p, p2);
   EXPECT_TRUE((bool)p);
   EXPECT_FALSE(!p);

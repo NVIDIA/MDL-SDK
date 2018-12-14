@@ -139,11 +139,11 @@ enum EDF_event_type
 struct EDF_sample_data
 {
     // Input fields
-    float3 xi;  // pseudo-random sample number
+    float3 xi;              // pseudo-random sample number
 
     // Output fields
     float3 k1;              // outgoing direction
-    float  pdf;             // pdf (non-projected hemisphere)
+    float pdf;              // pdf (non-projected hemisphere)
     float3 edf_over_pdf;    // edf * dot(normal,k1) / pdf
     int event_type;
 };
@@ -151,21 +151,21 @@ struct EDF_sample_data
 struct EDF_evaluate_data
 {
     // Input fields
-    float3 k1;  // outgoing direction
+    float3 k1;              // outgoing direction
 
     // Output fields
-    float cos;      // dot(normal, k1)
-    float3 edf;     // edf
-    float  pdf;     // pdf (non-projected hemisphere)
+    float cos;              // dot(normal, k1)
+    float3 edf;             // edf
+    float pdf;              // pdf (non-projected hemisphere)
 };
 
 struct EDF_pdf_data
 {
     // Input fields
-    float3 k1;  // outgoing direction
+    float3 k1;              // outgoing direction
 
     // Output fields
-    float pdf;  // pdf (non-projected hemisphere)
+    float pdf;              // pdf (non-projected hemisphere)
 };
 
 typedef void(*mdl_edf_sample_function)  (EDF_sample_data *,

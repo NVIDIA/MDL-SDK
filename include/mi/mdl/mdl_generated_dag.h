@@ -660,6 +660,9 @@ public:
 
         /// Get the instance properties.
         virtual Properties get_properties() const = 0;
+
+        /// Get the internal space.
+        virtual char const *get_internal_space() const = 0;
     };
 
     // -------------------------- methods --------------------------
@@ -1197,6 +1200,9 @@ public:
     /// \returns                   The annotation.
     virtual DAG_node const *get_module_annotation(
         int annotation_index) const = 0;
+
+    /// Get the internal space.
+    virtual char const *get_internal_space() const = 0;
 };
 
 /// Check if a DAG node is of a certain type.

@@ -178,7 +178,7 @@ static cl::opt<bool> ClDumpStrictInstructions("msan-dump-strict-instructions",
        cl::desc("print out instructions with default strict semantics"),
        cl::Hidden, cl::init(false));
 
-static cl::opt<MISTD::string>  ClBlacklistFile("msan-blacklist",
+static cl::opt<std::string>  ClBlacklistFile("msan-blacklist",
        cl::desc("File containing the list of functions where MemorySanitizer "
                 "should not report bugs"), cl::Hidden);
 
@@ -186,7 +186,7 @@ static cl::opt<MISTD::string>  ClBlacklistFile("msan-blacklist",
 // a call to the given function. This is needed to assist the dynamic
 // helper tool (MSanDR) to regain control on transition between instrumented and
 // non-instrumented code.
-static cl::opt<MISTD::string> ClWrapIndirectCalls("msan-wrap-indirect-calls",
+static cl::opt<std::string> ClWrapIndirectCalls("msan-wrap-indirect-calls",
        cl::desc("Wrap indirect calls with a given function"),
        cl::Hidden);
 
@@ -549,7 +549,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
         I.setOrdering(addReleaseOrdering(I.getOrdering()));
 
       if (MS.TrackOrigins) {
-        unsigned Alignment = MISTD::max(kMinOriginAlignment, I.getAlignment());
+        unsigned Alignment = std::max(kMinOriginAlignment, I.getAlignment());
         if (ClStoreCleanOrigin || isa<StructType>(Shadow->getType())) {
           IRB.CreateAlignedStore(getOrigin(Val), getOriginPtr(Addr, IRB),
                                  Alignment);
@@ -904,7 +904,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
               Type *EltType = A->getType()->getPointerElementType();
               ArgAlign = MS.TD->getABITypeAlignment(EltType);
             }
-            unsigned CopyAlign = MISTD::min(ArgAlign, kShadowTLSAlignment);
+            unsigned CopyAlign = std::min(ArgAlign, kShadowTLSAlignment);
             Value *Cpy = EntryIRB.CreateMemCpy(
                 getShadowPtr(V, EntryIRB.getInt8Ty(), EntryIRB), Base, Size,
                 CopyAlign);
@@ -1043,7 +1043,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
 
     if (MS.TrackOrigins) {
       if (LoadShadow) {
-        unsigned Alignment = MISTD::max(kMinOriginAlignment, I.getAlignment());
+        unsigned Alignment = std::max(kMinOriginAlignment, I.getAlignment());
         setOrigin(&I,
                   IRB.CreateAlignedLoad(getOriginPtr(Addr, IRB), Alignment));
       } else {

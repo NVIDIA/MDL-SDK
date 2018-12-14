@@ -37,7 +37,7 @@ enum Token {
   tok_for = -9, tok_in = -10
 };
 
-static MISTD::string IdentifierStr;  // Filled in if tok_identifier
+static std::string IdentifierStr;  // Filled in if tok_identifier
 static double NumVal;              // Filled in if tok_number
 
 /// gettok - Return the next token from standard input.
@@ -64,7 +64,7 @@ static int gettok() {
   }
 
   if (isdigit(LastChar) || LastChar == '.') {   // Number: [0-9.]+
-    MISTD::string NumStr;
+    std::string NumStr;
     do {
       NumStr += LastChar;
       LastChar = getchar();
@@ -114,9 +114,9 @@ public:
 
 /// VariableExprAST - Expression class for referencing a variable, like "a".
 class VariableExprAST : public ExprAST {
-  MISTD::string Name;
+  std::string Name;
 public:
-  VariableExprAST(const MISTD::string &name) : Name(name) {}
+  VariableExprAST(const std::string &name) : Name(name) {}
   virtual Value *Codegen();
 };
 
@@ -132,10 +132,10 @@ public:
 
 /// CallExprAST - Expression class for function calls.
 class CallExprAST : public ExprAST {
-  MISTD::string Callee;
-  MISTD::vector<ExprAST*> Args;
+  std::string Callee;
+  std::vector<ExprAST*> Args;
 public:
-  CallExprAST(const MISTD::string &callee, MISTD::vector<ExprAST*> &args)
+  CallExprAST(const std::string &callee, std::vector<ExprAST*> &args)
     : Callee(callee), Args(args) {}
   virtual Value *Codegen();
 };
@@ -151,10 +151,10 @@ public:
 
 /// ForExprAST - Expression class for for/in.
 class ForExprAST : public ExprAST {
-  MISTD::string VarName;
+  std::string VarName;
   ExprAST *Start, *End, *Step, *Body;
 public:
-  ForExprAST(const MISTD::string &varname, ExprAST *start, ExprAST *end,
+  ForExprAST(const std::string &varname, ExprAST *start, ExprAST *end,
              ExprAST *step, ExprAST *body)
     : VarName(varname), Start(start), End(end), Step(step), Body(body) {}
   virtual Value *Codegen();
@@ -164,10 +164,10 @@ public:
 /// which captures its name, and its argument names (thus implicitly the number
 /// of arguments the function takes).
 class PrototypeAST {
-  MISTD::string Name;
-  MISTD::vector<MISTD::string> Args;
+  std::string Name;
+  std::vector<std::string> Args;
 public:
-  PrototypeAST(const MISTD::string &name, const MISTD::vector<MISTD::string> &args)
+  PrototypeAST(const std::string &name, const std::vector<std::string> &args)
     : Name(name), Args(args) {}
   
   Function *Codegen();
@@ -199,7 +199,7 @@ static int getNextToken() {
 
 /// BinopPrecedence - This holds the precedence for each binary operator that is
 /// defined.
-static MISTD::map<char, int> BinopPrecedence;
+static std::map<char, int> BinopPrecedence;
 
 /// GetTokPrecedence - Get the precedence of the pending binary operator token.
 static int GetTokPrecedence() {
@@ -223,7 +223,7 @@ static ExprAST *ParseExpression();
 ///   ::= identifier
 ///   ::= identifier '(' expression* ')'
 static ExprAST *ParseIdentifierExpr() {
-  MISTD::string IdName = IdentifierStr;
+  std::string IdName = IdentifierStr;
   
   getNextToken();  // eat identifier.
   
@@ -232,7 +232,7 @@ static ExprAST *ParseIdentifierExpr() {
   
   // Call.
   getNextToken();  // eat (
-  MISTD::vector<ExprAST*> Args;
+  std::vector<ExprAST*> Args;
   if (CurTok != ')') {
     while (1) {
       ExprAST *Arg = ParseExpression();
@@ -305,7 +305,7 @@ static ExprAST *ParseForExpr() {
   if (CurTok != tok_identifier)
     return Error("expected identifier after for");
   
-  MISTD::string IdName = IdentifierStr;
+  std::string IdName = IdentifierStr;
   getNextToken();  // eat identifier.
   
   if (CurTok != '=')
@@ -406,13 +406,13 @@ static PrototypeAST *ParsePrototype() {
   if (CurTok != tok_identifier)
     return ErrorP("Expected function name in prototype");
 
-  MISTD::string FnName = IdentifierStr;
+  std::string FnName = IdentifierStr;
   getNextToken();
   
   if (CurTok != '(')
     return ErrorP("Expected '(' in prototype");
   
-  MISTD::vector<MISTD::string> ArgNames;
+  std::vector<std::string> ArgNames;
   while (getNextToken() == tok_identifier)
     ArgNames.push_back(IdentifierStr);
   if (CurTok != ')')
@@ -439,7 +439,7 @@ static FunctionAST *ParseDefinition() {
 static FunctionAST *ParseTopLevelExpr() {
   if (ExprAST *E = ParseExpression()) {
     // Make an anonymous proto.
-    PrototypeAST *Proto = new PrototypeAST("", MISTD::vector<MISTD::string>());
+    PrototypeAST *Proto = new PrototypeAST("", std::vector<std::string>());
     return new FunctionAST(Proto, E);
   }
   return 0;
@@ -457,7 +457,7 @@ static PrototypeAST *ParseExtern() {
 
 static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
-static MISTD::map<MISTD::string, Value*> NamedValues;
+static std::map<std::string, Value*> NamedValues;
 static FunctionPassManager *TheFPM;
 
 Value *ErrorV(const char *Str) { Error(Str); return 0; }
@@ -500,7 +500,7 @@ Value *CallExprAST::Codegen() {
   if (CalleeF->arg_size() != Args.size())
     return ErrorV("Incorrect # arguments passed");
 
-  MISTD::vector<Value*> ArgsV;
+  std::vector<Value*> ArgsV;
   for (unsigned i = 0, e = Args.size(); i != e; ++i) {
     ArgsV.push_back(Args[i]->Codegen());
     if (ArgsV.back() == 0) return 0;
@@ -655,7 +655,7 @@ Value *ForExprAST::Codegen() {
 
 Function *PrototypeAST::Codegen() {
   // Make the function type:  double(double,double) etc.
-  MISTD::vector<Type*> Doubles(Args.size(),
+  std::vector<Type*> Doubles(Args.size(),
                              Type::getDoubleTy(getGlobalContext()));
   FunctionType *FT = FunctionType::get(Type::getDoubleTy(getGlobalContext()),
                                        Doubles, false);
@@ -820,7 +820,7 @@ int main() {
   TheModule = new Module("my cool jit", Context);
 
   // Create the JIT.  This takes ownership of the module.
-  MISTD::string ErrStr;
+  std::string ErrStr;
   TheExecutionEngine = EngineBuilder(TheModule).setErrorStr(&ErrStr).create();
   if (!TheExecutionEngine) {
     fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());

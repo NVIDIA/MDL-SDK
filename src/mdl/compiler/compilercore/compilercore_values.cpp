@@ -759,6 +759,17 @@ public:
         return mi::math::isfinite(m_value) != 0;
     }
 
+    /// Return the FP class of this value.
+    FP_class get_fp_class() const MDL_FINAL {
+        if (m_value == 0.0f)
+            return mi::math::sign_bit(m_value) ? FPC_MINUS_ZERO : FPC_PLUS_ZERO;
+        if (mi::math::isinfinite(m_value))
+            return mi::math::sign_bit(m_value) ? FPC_MINUS_INF : FPC_PLUS_INF;
+        if (mi::math::isnan(m_value))
+            return FPC_NAN;
+        return FPC_NORMAL;
+    }
+
     /// Constructor.
     explicit Value_float(IType_float const *type, float value)
     : Base(type, value)
@@ -906,6 +917,17 @@ public:
     /// Returns true if this value is finite (i.e. neither Inf nor NaN).
     bool is_finite() const MDL_FINAL {
         return mi::math::isfinite(m_value) != 0;
+    }
+
+    /// Return the FP class of this value.
+    FP_class get_fp_class() const MDL_FINAL {
+        if (m_value == 0.0)
+            return mi::math::sign_bit(m_value) ? FPC_MINUS_ZERO : FPC_PLUS_ZERO;
+        if (mi::math::isinfinite(m_value))
+            return mi::math::sign_bit(m_value) ? FPC_MINUS_INF : FPC_PLUS_INF;
+        if (mi::math::isnan(m_value))
+            return FPC_NAN;
+        return FPC_NORMAL;
     }
 
     /// Constructor.
@@ -2536,7 +2558,7 @@ IValue_int const *Value_factory::create_int(int value)
 {
     IValue_int *v = m_builder.create<Value_int>(m_tf.create_int(), value);
 
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_int>(*res.first);
@@ -2549,7 +2571,7 @@ IValue_enum const *Value_factory::create_enum(IType_enum const *type, size_t ind
 {
     MDL_ASSERT(index < size_t(type->get_value_count()) && "enum index out of range");
     IValue_enum *v = m_builder.create<Value_enum>(type, (int)index);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_enum>(*res.first);
@@ -2561,7 +2583,7 @@ IValue_enum const *Value_factory::create_enum(IType_enum const *type, size_t ind
 IValue_float const *Value_factory::create_float(float value)
 {
     IValue_float *v = m_builder.create<Value_float>(m_tf.create_float(), value);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_float>(*res.first);
@@ -2573,7 +2595,7 @@ IValue_float const *Value_factory::create_float(float value)
 IValue_double const *Value_factory::create_double(double value)
 {
     IValue_double *v = m_builder.create<Value_double>(m_tf.create_double(), value);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_double>(*res.first);
@@ -2587,7 +2609,7 @@ IValue_string const *Value_factory::create_string(char const *value)
     MDL_ASSERT(value != NULL && "<NULL> strings are not allowed");
     IValue_string *v = m_builder.create<Value_string>(
         m_builder.get_arena(), m_tf.create_string(), value);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_string>(*res.first);
@@ -2602,7 +2624,7 @@ IValue_vector const *Value_factory::create_vector(
     size_t               size)
 {
     IValue_vector *v = m_builder.create<Value_vector>(m_builder.get_arena(), type, values, size);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_vector>(*res.first);
@@ -2617,7 +2639,7 @@ IValue_matrix const *Value_factory::create_matrix(
     size_t               size)
 {
     IValue_matrix *v = m_builder.create<Value_matrix>(m_builder.get_arena(), type, values, size);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_matrix>(*res.first);
@@ -2633,7 +2655,7 @@ IValue_array const *Value_factory::create_array(
 {
     MDL_ASSERT(type->is_immediate_sized() && "Array values must have a immediate sized array type");
     IValue_array *v = m_builder.create<Value_array>(m_builder.get_arena(), type, values, size);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_array>(*res.first);
@@ -2649,7 +2671,7 @@ IValue_rgb_color const *Value_factory::create_rgb_color(
 {
     IValue_rgb_color *v = m_builder.create<Value_rgb_color>(
         m_builder.get_arena(), m_tf.create_color(), value_r, value_g, value_b);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_rgb_color>(*res.first);
@@ -2666,7 +2688,7 @@ IValue const *Value_factory::create_spectrum_color(
 
     IValue_rgb_color *v = m_builder.create<Value_rgb_color>(
         m_builder.get_arena(), m_tf.create_color(), zero, zero, zero);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_rgb_color>(*res.first);
@@ -2681,7 +2703,7 @@ IValue_struct const *Value_factory::create_struct(
     size_t               size)
 {
     IValue_struct *v = m_builder.create<Value_struct>(m_builder.get_arena(), type, values, size);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_struct>(*res.first);
@@ -2700,7 +2722,7 @@ IValue_texture const *Value_factory::create_texture(
     MDL_ASSERT(value != NULL && "<NULL> textures are not allowed");
     IValue_texture *v = m_builder.create<Value_texture>(
         m_builder.get_arena(), type, value, gamma, tag_value, tag_version);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_texture>(*res.first);
@@ -2718,7 +2740,7 @@ IValue_light_profile const *Value_factory::create_light_profile(
     MDL_ASSERT(value != NULL && "<NULL> light_profiles are not allowed");
     IValue_light_profile *v = m_builder.create<Value_light_profile>(
             m_builder.get_arena(), type, value, tag_value, tag_version);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_light_profile>(*res.first);
@@ -2736,7 +2758,7 @@ IValue_bsdf_measurement const *Value_factory::create_bsdf_measurement(
     MDL_ASSERT(value != NULL && "<NULL> bsdf_measurements are not allowed");
     IValue_bsdf_measurement *v = m_builder.create<Value_bsdf_measurement>(
         m_builder.get_arena(), type, value, tag_value, tag_version);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_bsdf_measurement>(*res.first);
@@ -2749,7 +2771,7 @@ IValue_invalid_ref const *Value_factory::create_invalid_ref(
     IType_reference const *type)
 {
     IValue_invalid_ref *v = m_builder.create<Value_invalid_ref>(type);
-    MISTD::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {
         m_builder.get_arena()->drop(v);
         return cast<IValue_invalid_ref>(*res.first);

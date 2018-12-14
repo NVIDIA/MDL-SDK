@@ -298,8 +298,8 @@ bool TGLexer::LexInclude() {
   }
 
   // Get the string.
-  MISTD::string Filename = CurStrVal;
-  MISTD::string IncludedFile;
+  std::string Filename = CurStrVal;
+  std::string IncludedFile;
 
   
   CurBuffer = SrcMgr.AddIncludeFile(Filename, SMLoc::getFromPointer(CurPtr),
@@ -317,7 +317,7 @@ bool TGLexer::LexInclude() {
                         "previously included here");
     return true;
   }
-  Dependencies.insert(MISTD::make_pair(IncludedFile, getLoc()));
+  Dependencies.insert(std::make_pair(IncludedFile, getLoc()));
   // Save the line number and lex buffer of the includer.
   CurBuf = SrcMgr.getMemoryBuffer(CurBuffer);
   CurPtr = CurBuf->getBufferStart();

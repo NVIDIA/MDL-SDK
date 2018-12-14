@@ -29,7 +29,7 @@
 using namespace llvm;
 using namespace llvm::object;
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFileList(cl::Positional, cl::ZeroOrMore,
               cl::desc("<input file>"));
 
@@ -47,7 +47,7 @@ Action(cl::desc("Action to perform:"),
                              "Load, link, and print line information for each function."),
                   clEnumValEnd));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 EntryPoint("entry",
            cl::desc("Function to call as entry point."),
            cl::init("_main"));
@@ -67,12 +67,12 @@ public:
                                unsigned SectionID, StringRef SectionName,
                                bool IsReadOnly);
 
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) {
     return 0;
   }
 
-  bool finalizeMemory(MISTD::string *ErrMsg) { return false; }
+  bool finalizeMemory(std::string *ErrMsg) { return false; }
 
   // Invalidate instruction cache for sections with execute permissions.
   // Some platforms with separate data cache and instruction cache require
@@ -222,7 +222,7 @@ static int executeInput() {
   for (unsigned i = 0, e = MemMgr.FunctionMemory.size(); i != e; ++i) {
     sys::MemoryBlock &Data = MemMgr.FunctionMemory[i];
     // Make sure the memory is executable.
-    MISTD::string ErrorStr;
+    std::string ErrorStr;
     sys::Memory::InvalidateInstructionCache(Data.base(), Data.size());
     if (!sys::Memory::setExecutable(Data, &ErrorStr))
       return Error("unable to mark function executable: '" + ErrorStr + "'");

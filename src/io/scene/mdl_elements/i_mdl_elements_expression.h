@@ -280,18 +280,28 @@ public:
 
     virtual IAnnotation_list* create_annotation_list() const = 0;
 
-    virtual IExpression* clone( const IExpression* expr) const = 0;
+    virtual IExpression* clone(
+        const IExpression* expr, 
+        DB::Transaction* transaction,
+        bool copy_immutable_calls) const = 0;
 
     template <class T>
-    T* clone( const T* expr) const
+    T* clone(
+        const T* expr,
+        DB::Transaction* transaction,
+        bool copy_immutable_calls) const
     {
-        mi::base::Handle<IExpression> ptr_expr( clone( static_cast<const IExpression*>( expr)));
+        mi::base::Handle<IExpression> ptr_expr( 
+            clone( static_cast<const IExpression*>( expr), transaction, copy_immutable_calls));
         if( !ptr_expr)
             return 0;
         return static_cast<T*>( ptr_expr->get_interface( typename T::IID()));
     }
 
-    virtual IExpression_list* clone( const IExpression_list* list) const = 0;
+    virtual IExpression_list* clone(
+        const IExpression_list* list,
+        DB::Transaction* transaction,
+        bool copy_immutable_calls) const = 0;
 
     virtual mi::Sint32 compare( const IExpression* lhs, const IExpression* rhs) const = 0;
 

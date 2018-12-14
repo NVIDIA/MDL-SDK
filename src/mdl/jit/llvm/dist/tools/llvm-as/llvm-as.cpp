@@ -30,10 +30,10 @@
 #include <memory>
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input .llvm file>"), cl::init("-"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
@@ -56,11 +56,11 @@ static void WriteOutputFile(const Module *M) {
     if (InputFilename == "-") {
       OutputFilename = "-";
     } else {
-      MISTD::string IFN = InputFilename;
+      std::string IFN = InputFilename;
       int Len = IFN.length();
       if (IFN[Len-3] == '.' && IFN[Len-2] == 'l' && IFN[Len-1] == 'l') {
         // Source ends in .ll
-        OutputFilename = MISTD::string(IFN.begin(), IFN.end()-3);
+        OutputFilename = std::string(IFN.begin(), IFN.end()-3);
       } else {
         OutputFilename = IFN;   // Append a .bc to it
       }
@@ -68,7 +68,7 @@ static void WriteOutputFile(const Module *M) {
     }
   }
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   OwningPtr<tool_output_file> Out(new tool_output_file(
       OutputFilename.c_str(), ErrorInfo, sys::fs::F_Binary));
   if (!ErrorInfo.empty()) {
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
   }
 
   if (!DisableVerify) {
-    MISTD::string Err;
+    std::string Err;
     if (verifyModule(*M.get(), ReturnStatusAction, &Err)) {
       errs() << argv[0]
              << ": assembly parsed, but does not verify as correct!\n";

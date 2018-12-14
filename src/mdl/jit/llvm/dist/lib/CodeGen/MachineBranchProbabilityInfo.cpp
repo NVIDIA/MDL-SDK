@@ -74,7 +74,7 @@ getEdgeWeight(const MachineBasicBlock *Src,
               const MachineBasicBlock *Dst) const {
   // This is a linear search. Try to use the const_succ_iterator version when
   // possible.
-  return getEdgeWeight(Src, MISTD::find(Src->succ_begin(), Src->succ_end(), Dst));
+  return getEdgeWeight(Src, std::find(Src->succ_begin(), Src->succ_end(), Dst));
 }
 
 bool MachineBranchProbabilityInfo::isEdgeHot(MachineBasicBlock *Src,

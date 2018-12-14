@@ -54,13 +54,13 @@ namespace llvm {
   /// be abstractly described.
   class GCStrategy {
   public:
-    typedef MISTD::vector<GCFunctionInfo*> list_type;
+    typedef std::vector<GCFunctionInfo*> list_type;
     typedef list_type::iterator iterator;
     
   private:
     friend class GCModuleInfo;
     const Module *M;
-    MISTD::string Name;
+    std::string Name;
     
     list_type Functions;
     
@@ -82,7 +82,7 @@ namespace llvm {
     
     /// getName - The name of the GC strategy, for debugging.
     /// 
-    const MISTD::string &getName() const { return Name; }
+    const std::string &getName() const { return Name; }
 
     /// getModule - The module within which the GC strategy is operating.
     /// 

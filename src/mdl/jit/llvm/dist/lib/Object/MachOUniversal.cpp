@@ -77,7 +77,7 @@ error_code MachOUniversalBinary::ObjectForArch::getAsObjectFile(
   if (Parent) {
     StringRef ParentData = Parent->getData();
     StringRef ObjectData = ParentData.substr(Header.offset, Header.size);
-    MISTD::string ObjectName =
+    std::string ObjectName =
         Parent->getFileName().str() + ":" +
         Triple::getArchTypeName(MachOObjectFile::getArch(Header.cputype));
     MemoryBuffer *ObjBuffer = MemoryBuffer::getMemBuffer(

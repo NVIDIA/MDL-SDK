@@ -44,7 +44,7 @@ namespace MI {
 namespace ATTR {
 
 using namespace LOG;
-using namespace MISTD;
+using namespace std;
 
 //==================================================================================================
 
@@ -109,7 +109,7 @@ Uint Attribute_registry::add_entry(
 
 // Add an deprecated name for the given id. Currently only one deprecated name is allowed.
 bool Attribute_registry::add_deprecated_name(
-    const MISTD::string& dep_name,
+    const std::string& dep_name,
     Uint id)
 {
     // update spec
@@ -138,7 +138,7 @@ bool Attribute_registry::add_deprecated_name(
 
 // Retrieve the \c Attribute_spec of the given \p name.
 const Attribute_spec* Attribute_registry::get_attribute(
-    const MISTD::string& name) const
+    const std::string& name) const
 {
     // find id
     map<string, Uint>::const_iterator id_it = m_name_mapping.find(name);
@@ -174,7 +174,7 @@ const Attribute_spec* Attribute_registry::get_attribute(
 
 // Find a new unique id for a new registry entry.
 Uint Attribute_registry::get_new_id(
-    const MISTD::string& name)
+    const std::string& name)
 {
     return ++m_counter;
 }
@@ -184,7 +184,7 @@ Uint Attribute_registry::get_new_id(
 
 Uint Attribute_registry::add_entry(
     Uint id,
-    const MISTD::string& name,
+    const std::string& name,
     Type_code typecode,
     Uint array_size,
     const STLEXT::Any& value,
@@ -214,10 +214,10 @@ Uint Attribute_registry::add_entry(
 //--------------------------------------------------------------------------------------------------
 
 bool Attribute_registry::add_name_mapping(
-    const MISTD::string& name,
+    const std::string& name,
     Uint id)
 {
-    bool result = m_name_mapping.insert(MISTD::make_pair(name, id)).second;
+    bool result = m_name_mapping.insert(std::make_pair(name, id)).second;
     if (!result)
         mod_log->warning(M_ATTR, Mod_log::C_DATABASE, 1,
             "The attribute name %s does already exist.", name.c_str());
@@ -229,9 +229,9 @@ bool Attribute_registry::add_name_mapping(
 
 // Retrieve the id for a given name.
 Uint Attribute_registry::get_id(
-    const MISTD::string& name)
+    const std::string& name)
 {
-    MISTD::map<MISTD::string, Uint>::const_iterator it, end=m_name_mapping.end();
+    std::map<std::string, Uint>::const_iterator it, end=m_name_mapping.end();
     it = m_name_mapping.find(name);
     if (it != end)
         return it->second;

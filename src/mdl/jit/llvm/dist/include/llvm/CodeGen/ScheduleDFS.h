@@ -102,18 +102,18 @@ class SchedDFSResult {
   bool IsBottomUp;
   unsigned SubtreeLimit;
   /// DFS results for each SUnit in this DAG.
-  MISTD::vector<NodeData> DFSNodeData;
+  std::vector<NodeData> DFSNodeData;
 
   // Store per-tree data indexed on tree ID,
   SmallVector<TreeData, 16> DFSTreeData;
 
   // For each subtree discovered during DFS, record its connections to other
   // subtrees.
-  MISTD::vector<SmallVector<Connection, 4> > SubtreeConnections;
+  std::vector<SmallVector<Connection, 4> > SubtreeConnections;
 
   /// Cache the current connection level of each subtree.
   /// This mutable array is updated during scheduling.
-  MISTD::vector<unsigned> SubtreeConnectLevels;
+  std::vector<unsigned> SubtreeConnectLevels;
 
 public:
   SchedDFSResult(bool IsBU, unsigned lim)

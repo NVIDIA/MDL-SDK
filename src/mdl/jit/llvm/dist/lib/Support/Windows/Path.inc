@@ -215,7 +215,7 @@ namespace llvm {
 namespace sys  {
 namespace fs {
 
-MISTD::string getMainExecutable(const char *argv0, void *MainExecAddr) {
+std::string getMainExecutable(const char *argv0, void *MainExecAddr) {
   SmallVector<wchar_t, MAX_PATH> PathName;
   DWORD Size = ::GetModuleFileNameW(NULL, PathName.data(), PathName.capacity());
 
@@ -237,7 +237,7 @@ MISTD::string getMainExecutable(const char *argv0, void *MainExecAddr) {
   if (UTF16ToUTF8(PathName.data(), PathName.size(), PathNameUTF8))
     return "";
 
-  return MISTD::string(PathNameUTF8.data());
+  return std::string(PathNameUTF8.data());
 }
 
 UniqueID file_status::getUniqueID() const {
@@ -675,7 +675,7 @@ error_code get_magic(const Twine &path, uint32_t len,
 error_code mapped_file_region::init(int FD, bool CloseFD, uint64_t Offset) {
   FileDescriptor = FD;
   // Make sure that the requested size fits within SIZE_T.
-  if (Size > MISTD::numeric_limits<SIZE_T>::max()) {
+  if (Size > std::numeric_limits<SIZE_T>::max()) {
     if (FileDescriptor) {
       if (CloseFD)
         _close(FileDescriptor);

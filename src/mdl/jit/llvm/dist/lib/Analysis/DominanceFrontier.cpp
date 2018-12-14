@@ -43,7 +43,7 @@ DominanceFrontier::calculate(const DominatorTree &DT,
   BasicBlock *BB = Node->getBlock();
   DomSetType *Result = NULL;
 
-  MISTD::vector<DFCalculateWorkObject> workList;
+  std::vector<DFCalculateWorkObject> workList;
   SmallPtrSet<BasicBlock *, 32> visited;
 
   workList.push_back(DFCalculateWorkObject(BB, NULL, Node, NULL));
@@ -119,9 +119,9 @@ void DominanceFrontierBase::print(raw_ostream &OS, const Module* ) const {
       OS << " <<exit node>>";
     OS << " is:\t";
     
-    const MISTD::set<BasicBlock*> &BBs = I->second;
+    const std::set<BasicBlock*> &BBs = I->second;
     
-    for (MISTD::set<BasicBlock*>::const_iterator I = BBs.begin(), E = BBs.end();
+    for (std::set<BasicBlock*>::const_iterator I = BBs.begin(), E = BBs.end();
          I != E; ++I) {
       OS << ' ';
       if (*I)

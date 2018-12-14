@@ -24,8 +24,8 @@ namespace object {
 }
 class error_code;
 
-extern cl::opt<MISTD::string> TripleName;
-extern cl::opt<MISTD::string> ArchName;
+extern cl::opt<std::string> TripleName;
+extern cl::opt<std::string> ArchName;
 
 // Various helper functions.
 bool error(error_code ec);

@@ -157,7 +157,13 @@ public:
     /// Post-visit a Temporary.
     void visit(int index, DAG_node *init) MDL_FINAL;
 
+    /// Hash a parameter.
+    void hash_parameter(char const *name, IType const *type);
+
 private:
+    /// Hash a type.
+    void hash(IType const *tp);
+
     /// Hash a value.
     void hash(IValue const *v);
 

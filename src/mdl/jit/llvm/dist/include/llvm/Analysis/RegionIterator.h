@@ -31,10 +31,10 @@ namespace llvm {
 /// For a subregion RegionNode there is just one successor. The RegionNode
 /// representing the exit of the subregion.
 template<class NodeType>
-class RNSuccIterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class RNSuccIterator : public std::iterator<std::forward_iterator_tag,
                                            NodeType, ptrdiff_t>
 {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag, NodeType, ptrdiff_t> super;
+  typedef std::iterator<std::forward_iterator_tag, NodeType, ptrdiff_t> super;
   // The iterator works in two modes, bb mode or region mode.
   enum ItMode{
     // In BB mode it returns all successors of this BasicBlock as its
@@ -164,9 +164,9 @@ public:
 /// control flow graph of the Region.
 template<class NodeType>
 class RNSuccIterator<FlatIt<NodeType> >
-  : public MISTD::iterator<MISTD::forward_iterator_tag, NodeType, ptrdiff_t>
+  : public std::iterator<std::forward_iterator_tag, NodeType, ptrdiff_t>
 {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag, NodeType, ptrdiff_t> super;
+  typedef std::iterator<std::forward_iterator_tag, NodeType, ptrdiff_t> super;
   NodeType* Node;
   succ_iterator Itor;
 

@@ -25,7 +25,7 @@ class MCParsedAsmOperand {
 
   /// Constraint - The constraint on this operand.  Only valid when parsing
   /// MS-style inline assembly.
-  MISTD::string Constraint;
+  std::string Constraint;
 
 public:
   MCParsedAsmOperand() {}

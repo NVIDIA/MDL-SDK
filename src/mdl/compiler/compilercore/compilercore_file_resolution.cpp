@@ -887,22 +887,28 @@ private:
 namespace {
 
 /// Implementation of the IInput_stream interface using FILE I/O.
-class Simple_input_stream : public Allocator_interface_implement<IInput_stream>
+class Simple_file_input_stream : public Allocator_interface_implement<IInput_stream>
 {
     typedef Allocator_interface_implement<IInput_stream> Base;
 public:
     /// Constructor.
-    explicit Simple_input_stream(
+    ///
+    /// \param alloc     the allocator
+    /// \param f         the FILE handle, takes ownership
+    /// \param filename  the filename of the handle
+    explicit Simple_file_input_stream(
         IAllocator  *alloc,
         File_handle *f,
-        char const *filename)
+        char const  *filename)
     : Base(alloc)
     , m_file(f)
     , m_filename(filename, alloc)
     {}
 
     /// Destructor.
-    ~Simple_input_stream() MDL_FINAL
+    ///
+    /// \note Closes the file handle.
+    ~Simple_file_input_stream() MDL_FINAL
     {
         File_handle::close(m_file);
     }
@@ -969,7 +975,7 @@ public:
     /// \returns    The name of the file or null if the stream does not operate on a file.
     char const *get_filename() MDL_FINAL
     {
-        return m_filename.empty() ? 0 : m_filename.c_str();
+        return m_filename.empty() ? NULL : m_filename.c_str();
     }
 
     /// Get the manifest of the owning archive.
@@ -1039,6 +1045,8 @@ File_resolver::File_resolver(
 , m_killed_packages(String_set::key_compare(), m_alloc)
 , m_front_path(front_path)
 , m_resolve_entity(NULL)
+, m_repl_module_name(m_alloc)
+, m_repl_file_name(m_alloc)
 , m_last_msg_idx(0)
 , m_pathes_read(false)
 , m_resolving_resource(false)
@@ -1310,7 +1318,7 @@ void File_resolver::split_module_file_system_path(
     size_t strip_dotdot = 0;
     while (module_nesting_level-- > 0) {
         size_t last_sep = current_search_path.find_last_of(sep);
-        MDL_ASSERT(last_sep != MISTD::string::npos);
+        MDL_ASSERT(last_sep != std::string::npos);
         if (last_sep < archive_pos) {
             // do NOT remove the archive name, thread its ':' like '/'
             last_sep = archive_pos - 1;
@@ -2046,6 +2054,12 @@ bool File_resolver::file_exists(
     return false;
 }
 
+/// Check if a given MDL url is absolute.
+static bool is_url_absolute(char const *url)
+{
+    return url != NULL && url[0] == '/';
+}
+
 // Resolve a MDL file name.
 string File_resolver::resolve_filename(
     string         &abs_file_name,
@@ -2187,6 +2201,31 @@ string File_resolver::resolve_filename(
         }
     }
 
+    // If this is an absolute module name AND we have a cache, see if the module exists.
+    // If yes, use it.
+    if (m_module_cache && !is_resource && is_url_absolute(file_path)) {
+        string module_name(to_module_name(file_path));
+
+        // remove .mdl
+        size_t l = module_name.size();
+        if (l > 4) {
+            if (module_name[l - 4] == '.' &&
+                module_name[l - 3] == 'm' &&
+                module_name[l - 2] == 'd' &&
+                module_name[l - 1] == 'l')
+            {
+                module_name = module_name.substr(0, l - 4);
+            }
+        }
+
+        mi::base::Handle<IModule const> mod(m_module_cache->lookup(module_name.c_str()));
+
+        if (mod.is_valid_interface()) {
+            abs_file_name = string(mod->get_filename(), m_alloc);
+            return string(file_path, m_alloc);
+        }
+    }
+
     // Step 2: consider search paths
     string resolved_file_system_location = consider_search_paths(
         canonical_file_mask, is_resource, file_path, udim_mode);
@@ -2307,9 +2346,7 @@ string File_resolver::resolve_import(
 
     string absolute_name = to_module_name(canonical_file_name.c_str());
     MDL_ASSERT(absolute_name.substr(absolute_name.size() - 4) == ".mdl");
-    absolute_name = absolute_name.substr(0, absolute_name.size() - 4);
-
-    return absolute_name;
+    return absolute_name.substr(0, absolute_name.size() - 4);
 }
 
 // Resolve a resource (file) name to the corresponding absolute file path.
@@ -2365,6 +2402,11 @@ IInput_stream *File_resolver::open(
         return NULL;
     }
 
+    if (strcmp(module_name, m_repl_module_name.c_str()) == 0) {
+        // do the replacement
+        resolved_file_path = m_repl_file_name;
+    }
+
     Archiv_error_code err;
     File_handle *file = File_handle::open(m_alloc, resolved_file_path.c_str(), err);
     if (file == NULL) {
@@ -2379,7 +2421,7 @@ IInput_stream *File_resolver::open(
         return builder.create<Archive_input_stream>(
             m_alloc, file, resolved_file_path.c_str(), manifest.get());
     } else {
-        return builder.create<Simple_input_stream>(
+        return builder.create<Simple_file_input_stream>(
             m_alloc, file, resolved_file_path.c_str());
     }
 }

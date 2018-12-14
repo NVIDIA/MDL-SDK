@@ -84,7 +84,7 @@ public:
                                                   bool IsPCRel) const;
 
   virtual void sortRelocs(const MCAssembler &Asm,
-                          MISTD::vector<ELFRelocationEntry> &Relocs);
+                          std::vector<ELFRelocationEntry> &Relocs);
 
   /// @name Accessors
   /// @{

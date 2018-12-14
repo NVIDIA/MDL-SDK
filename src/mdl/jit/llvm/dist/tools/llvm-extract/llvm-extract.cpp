@@ -34,11 +34,11 @@
 using namespace llvm;
 
 // InputFilename - The filename to read from.
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input bitcode file>"),
               cl::init("-"), cl::value_desc("filename"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Specify output filename"),
                cl::value_desc("filename"), cl::init("-"));
 
@@ -49,38 +49,38 @@ static cl::opt<bool>
 DeleteFn("delete", cl::desc("Delete specified Globals from Module"));
 
 // ExtractFuncs - The functions to extract from the module.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractFuncs("func", cl::desc("Specify function to extract"),
              cl::ZeroOrMore, cl::value_desc("function"));
 
 // ExtractRegExpFuncs - The functions, matched via regular expression, to
 // extract from the module.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractRegExpFuncs("rfunc", cl::desc("Specify function(s) to extract using a "
                                      "regular expression"),
                    cl::ZeroOrMore, cl::value_desc("rfunction"));
 
 // ExtractAlias - The alias to extract from the module.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractAliases("alias", cl::desc("Specify alias to extract"),
                cl::ZeroOrMore, cl::value_desc("alias"));
 
 
 // ExtractRegExpAliases - The aliases, matched via regular expression, to
 // extract from the module.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractRegExpAliases("ralias", cl::desc("Specify alias(es) to extract using a "
                                         "regular expression"),
                      cl::ZeroOrMore, cl::value_desc("ralias"));
 
 // ExtractGlobals - The globals to extract from the module.
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractGlobals("glob", cl::desc("Specify global to extract"),
                cl::ZeroOrMore, cl::value_desc("global"));
 
 // ExtractRegExpGlobals - The globals, matched via regular expression, to
 // extract from the module...
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExtractRegExpGlobals("rglob", cl::desc("Specify global(s) to extract using a "
                                        "regular expression"),
                      cl::ZeroOrMore, cl::value_desc("rglobal"));
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
 
   // Extract aliases via regular expression matching.
   for (size_t i = 0, e = ExtractRegExpAliases.size(); i != e; ++i) {
-    MISTD::string Error;
+    std::string Error;
     Regex RegEx(ExtractRegExpAliases[i]);
     if (!RegEx.isValid(Error)) {
       errs() << argv[0] << ": '" << ExtractRegExpAliases[i] << "' "
@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 
   // Extract globals via regular expression matching.
   for (size_t i = 0, e = ExtractRegExpGlobals.size(); i != e; ++i) {
-    MISTD::string Error;
+    std::string Error;
     Regex RegEx(ExtractRegExpGlobals[i]);
     if (!RegEx.isValid(Error)) {
       errs() << argv[0] << ": '" << ExtractRegExpGlobals[i] << "' "
@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
   }
   // Extract functions via regular expression matching.
   for (size_t i = 0, e = ExtractRegExpFuncs.size(); i != e; ++i) {
-    MISTD::string Error;
+    std::string Error;
     StringRef RegExStr = ExtractRegExpFuncs[i];
     Regex RegEx(RegExStr);
     if (!RegEx.isValid(Error)) {
@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0, e = GVs.size(); i != e; ++i) {
       GlobalValue *GV = GVs[i];
       if (GV->isMaterializable()) {
-        MISTD::string ErrInfo;
+        std::string ErrInfo;
         if (GV->Materialize(&ErrInfo)) {
           errs() << argv[0] << ": error reading input: " << ErrInfo << "\n";
           return 1;
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
          I != E; ++I) {
       GlobalVariable *G = I;
       if (!GVSet.count(G) && G->isMaterializable()) {
-        MISTD::string ErrInfo;
+        std::string ErrInfo;
         if (G->Materialize(&ErrInfo)) {
           errs() << argv[0] << ": error reading input: " << ErrInfo << "\n";
           return 1;
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
     for (Module::iterator I = M->begin(), E = M->end(); I != E; ++I) {
       Function *F = I;
       if (!GVSet.count(F) && F->isMaterializable()) {
-        MISTD::string ErrInfo;
+        std::string ErrInfo;
         if (F->Materialize(&ErrInfo)) {
           errs() << argv[0] << ": error reading input: " << ErrInfo << "\n";
           return 1;
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
   PassManager Passes;
   Passes.add(new DataLayout(M.get())); // Use correct DataLayout
 
-  MISTD::vector<GlobalValue*> Gvs(GVs.begin(), GVs.end());
+  std::vector<GlobalValue*> Gvs(GVs.begin(), GVs.end());
 
   Passes.add(createGVExtractionPass(Gvs, DeleteFn));
   if (!DeleteFn)
@@ -264,7 +264,7 @@ int main(int argc, char **argv) {
   Passes.add(createStripDeadDebugInfoPass());    // Remove dead debug info
   Passes.add(createStripDeadPrototypesPass());   // Remove dead func decls
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   tool_output_file Out(OutputFilename.c_str(), ErrorInfo, sys::fs::F_Binary);
   if (!ErrorInfo.empty()) {
     errs() << ErrorInfo << '\n';

@@ -40,7 +40,7 @@ class MCModule {
   /// \brief Atoms in this module, sorted by begin address.
   /// FIXME: This doesn't handle overlapping atoms (which happen when a basic
   /// block starts in the middle of an instruction of another basic block.)
-  typedef MISTD::vector<MCAtom*> AtomListTy;
+  typedef std::vector<MCAtom*> AtomListTy;
   AtomListTy Atoms;
 
   // For access to map/remap.
@@ -58,7 +58,7 @@ class MCModule {
 
   /// \name Basic block tracking
   /// @{
-  typedef MISTD::vector<MCBasicBlock*> BBsByAtomTy;
+  typedef std::vector<MCBasicBlock*> BBsByAtomTy;
   BBsByAtomTy BBsByAtom;
 
   // For access to basic block > atom tracking.
@@ -73,7 +73,7 @@ class MCModule {
 
   /// \name Function tracking
   /// @{
-  typedef MISTD::vector<MCFunction*> FunctionListTy;
+  typedef std::vector<MCFunction*> FunctionListTy;
   FunctionListTy Functions;
   /// @}
 

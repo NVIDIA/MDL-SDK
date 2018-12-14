@@ -49,7 +49,7 @@ namespace llvm {
       BlockToPredCountMap[BB] = PredCache.size()-1;
 
       Entry = Memory.Allocate<BasicBlock*>(PredCache.size());
-      MISTD::copy(PredCache.begin(), PredCache.end(), Entry);
+      std::copy(PredCache.begin(), PredCache.end(), Entry);
       return Entry;
     }
     

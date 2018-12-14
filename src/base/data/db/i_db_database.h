@@ -220,7 +220,7 @@ class Database
     /// \param name				The name of the scope to lookup.
     /// \return					The found scope or NULL if it was not found.
     virtual Scope *lookup_scope(
-        const MISTD::string& name) = 0;
+        const std::string& name) = 0;
 
     /// Remove a scope from the database. Return true, if succeeded, otherwise false.
     ///
@@ -275,8 +275,8 @@ class Database
     /// call.
     ///
     /// \param pattern				The pattern for searching the names
-    virtual MISTD::string get_next_name(
-        const MISTD::string& pattern) = 0;
+    virtual std::string get_next_name(
+        const std::string& pattern) = 0;
 
     /// Get the database statistics
     ///

@@ -108,12 +108,12 @@ inline int Directory::error() const
 
 
 template <typename InputIterator>
-MISTD::string find_file_on_paths(
+std::string find_file_on_paths(
     const char* file_name,
     InputIterator iter,
     InputIterator end)
 {
-    MISTD::string fullpath = find_file_on_path(file_name);
+    std::string fullpath = find_file_on_path(file_name);
 
     if (fullpath.empty()) {
 	while (iter != end) {

@@ -68,19 +68,19 @@ class MachineBasicBlock : public ilist_node<MachineBasicBlock> {
 
   /// Predecessors/Successors - Keep track of the predecessor / successor
   /// basicblocks.
-  MISTD::vector<MachineBasicBlock *> Predecessors;
-  MISTD::vector<MachineBasicBlock *> Successors;
+  std::vector<MachineBasicBlock *> Predecessors;
+  std::vector<MachineBasicBlock *> Successors;
 
   /// Weights - Keep track of the weights to the successors. This vector
   /// has the same order as Successors, or it is empty if we don't use it
   /// (disable optimization).
-  MISTD::vector<uint32_t> Weights;
-  typedef MISTD::vector<uint32_t>::iterator weight_iterator;
-  typedef MISTD::vector<uint32_t>::const_iterator const_weight_iterator;
+  std::vector<uint32_t> Weights;
+  typedef std::vector<uint32_t>::iterator weight_iterator;
+  typedef std::vector<uint32_t>::const_iterator const_weight_iterator;
 
   /// LiveIns - Keep track of the physical registers that are livein of
   /// the basicblock.
-  MISTD::vector<unsigned> LiveIns;
+  std::vector<unsigned> LiveIns;
 
   /// Alignment - Alignment of the basic block. Zero if the basic block does
   /// not need to be aligned.
@@ -122,7 +122,7 @@ public:
 
   /// getFullName - Return a formatted string to identify this block and its
   /// parent function.
-  MISTD::string getFullName() const;
+  std::string getFullName() const;
 
   /// hasAddressTaken - Test whether this block is potentially the target
   /// of an indirect branch.
@@ -142,7 +142,7 @@ public:
   /// MIs that are inside bundles (i.e. walk top level MIs only).
   template<typename Ty, typename IterTy>
   class bundle_iterator
-    : public MISTD::iterator<MISTD::bidirectional_iterator_tag, Ty, ptrdiff_t> {
+    : public std::iterator<std::bidirectional_iterator_tag, Ty, ptrdiff_t> {
     IterTy MII;
 
   public:
@@ -204,16 +204,16 @@ public:
 
   typedef Instructions::iterator                                 instr_iterator;
   typedef Instructions::const_iterator                     const_instr_iterator;
-  typedef MISTD::reverse_iterator<instr_iterator>          reverse_instr_iterator;
+  typedef std::reverse_iterator<instr_iterator>          reverse_instr_iterator;
   typedef
-  MISTD::reverse_iterator<const_instr_iterator>      const_reverse_instr_iterator;
+  std::reverse_iterator<const_instr_iterator>      const_reverse_instr_iterator;
 
   typedef
   bundle_iterator<MachineInstr,instr_iterator>                         iterator;
   typedef
   bundle_iterator<const MachineInstr,const_instr_iterator>       const_iterator;
-  typedef MISTD::reverse_iterator<const_iterator>          const_reverse_iterator;
-  typedef MISTD::reverse_iterator<iterator>                      reverse_iterator;
+  typedef std::reverse_iterator<const_iterator>          const_reverse_iterator;
+  typedef std::reverse_iterator<iterator>                      reverse_iterator;
 
 
   unsigned size() const { return (unsigned)Insts.size(); }
@@ -244,17 +244,17 @@ public:
 
 
   // Machine-CFG iterators
-  typedef MISTD::vector<MachineBasicBlock *>::iterator       pred_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::const_iterator const_pred_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::iterator       succ_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::const_iterator const_succ_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::reverse_iterator
+  typedef std::vector<MachineBasicBlock *>::iterator       pred_iterator;
+  typedef std::vector<MachineBasicBlock *>::const_iterator const_pred_iterator;
+  typedef std::vector<MachineBasicBlock *>::iterator       succ_iterator;
+  typedef std::vector<MachineBasicBlock *>::const_iterator const_succ_iterator;
+  typedef std::vector<MachineBasicBlock *>::reverse_iterator
                                                          pred_reverse_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::const_reverse_iterator
+  typedef std::vector<MachineBasicBlock *>::const_reverse_iterator
                                                    const_pred_reverse_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::reverse_iterator
+  typedef std::vector<MachineBasicBlock *>::reverse_iterator
                                                          succ_reverse_iterator;
-  typedef MISTD::vector<MachineBasicBlock *>::const_reverse_iterator
+  typedef std::vector<MachineBasicBlock *>::const_reverse_iterator
                                                    const_succ_reverse_iterator;
 
   pred_iterator        pred_begin()       { return Predecessors.begin(); }
@@ -311,7 +311,7 @@ public:
 
   // Iteration support for live in sets.  These sets are kept in sorted
   // order by their register number.
-  typedef MISTD::vector<unsigned>::const_iterator livein_iterator;
+  typedef std::vector<unsigned>::const_iterator livein_iterator;
   livein_iterator livein_begin() const { return LiveIns.begin(); }
   livein_iterator livein_end()   const { return LiveIns.end(); }
   bool            livein_empty() const { return LiveIns.empty(); }
@@ -659,7 +659,7 @@ void WriteAsOperand(raw_ostream &, const MachineBasicBlock*, bool t);
 
 // This is useful when building IndexedMaps keyed on basic block pointers.
 struct MBB2NumberFunctor :
-  public MISTD::unary_function<const MachineBasicBlock*, unsigned> {
+  public std::unary_function<const MachineBasicBlock*, unsigned> {
   unsigned operator()(const MachineBasicBlock *MBB) const {
     return MBB->getNumber();
   }

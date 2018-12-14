@@ -60,6 +60,14 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:            " ${MDL_BUILD_CORE_EXAMPLES})
 endif()
 
+# enable tests if available
+if(MDL_ENABLE_TESTS)
+    enable_testing()
+    if(MDL_LOG_PLATFORM_INFOS)
+        MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                   " ${MDL_ENABLE_TESTS})
+    endif()
+endif()
+
 # -------------------------------------------------------------------------------------------------
 # presets and utility functions used in all CMakeLists
 include(${MDL_BASE_FOLDER}/cmake/utilities.cmake)
@@ -82,6 +90,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/base/system/version)
 # third party
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/libzip)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/zlib)
+add_subdirectory(${MDL_SRC_FOLDER}/base/lib/tinyxml2)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/coco)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/llvm)
 
@@ -114,12 +123,15 @@ add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/generator_jit)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_glsl/generator_stub)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_jit/generator_stub)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/runtime)
+add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/mdlnr)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)
 
 # libs/products
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 
@@ -169,3 +181,4 @@ if(MDL_BUILD_CORE_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/execution_cuda)
     endif()
 endif()
+

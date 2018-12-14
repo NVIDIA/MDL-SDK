@@ -65,7 +65,7 @@ namespace {
     /// specified function. Otherwise, it deletes as much of the module as
     /// possible, except for the function specified.
     ///
-    explicit GVExtractorPass(MISTD::vector<GlobalValue*>& GVs, bool deleteS = true)
+    explicit GVExtractorPass(std::vector<GlobalValue*>& GVs, bool deleteS = true)
       : ModulePass(ID), Named(GVs.begin(), GVs.end()), deleteStuff(deleteS) {}
 
     bool runOnModule(Module &M) {
@@ -149,7 +149,7 @@ namespace {
   char GVExtractorPass::ID = 0;
 }
 
-ModulePass *llvm::createGVExtractionPass(MISTD::vector<GlobalValue*>& GVs, 
+ModulePass *llvm::createGVExtractionPass(std::vector<GlobalValue*>& GVs, 
                                          bool deleteFn) {
   return new GVExtractorPass(GVs, deleteFn);
 }

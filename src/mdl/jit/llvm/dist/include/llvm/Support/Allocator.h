@@ -236,7 +236,7 @@ inline void *operator new(size_t Size, llvm::BumpPtrAllocator &Allocator) {
       void *P;
     } x;
   };
-  return Allocator.Allocate(Size, MISTD::min((size_t)llvm::NextPowerOf2(Size),
+  return Allocator.Allocate(Size, std::min((size_t)llvm::NextPowerOf2(Size),
                                            offsetof(S, x)));
 }
 

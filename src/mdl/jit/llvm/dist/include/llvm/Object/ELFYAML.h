@@ -60,9 +60,9 @@ struct Symbol {
   llvm::yaml::Hex64 Size;
 };
 struct LocalGlobalWeakSymbols {
-  MISTD::vector<Symbol> Local;
-  MISTD::vector<Symbol> Global;
-  MISTD::vector<Symbol> Weak;
+  std::vector<Symbol> Local;
+  std::vector<Symbol> Global;
+  std::vector<Symbol> Weak;
 };
 struct Section {
   StringRef Name;
@@ -75,7 +75,7 @@ struct Section {
 };
 struct Object {
   FileHeader Header;
-  MISTD::vector<Section> Sections;
+  std::vector<Section> Sections;
   // Although in reality the symbols reside in a section, it is a lot
   // cleaner and nicer if we read them from the YAML as a separate
   // top-level key, which automatically ensures that invariants like there

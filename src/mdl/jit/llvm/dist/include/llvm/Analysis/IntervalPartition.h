@@ -38,12 +38,12 @@ namespace llvm {
 // nodes following it.
 //
 class IntervalPartition : public FunctionPass {
-  typedef MISTD::map<BasicBlock*, Interval*> IntervalMapTy;
+  typedef std::map<BasicBlock*, Interval*> IntervalMapTy;
   IntervalMapTy IntervalMap;
 
-  typedef MISTD::vector<Interval*> IntervalListTy;
+  typedef std::vector<Interval*> IntervalListTy;
   Interval *RootInterval;
-  MISTD::vector<Interval*> Intervals;
+  std::vector<Interval*> Intervals;
 
 public:
   static char ID; // Pass identification, replacement for typeid
@@ -86,7 +86,7 @@ public:
   }
 
   // Interface to Intervals vector...
-  const MISTD::vector<Interval*> &getIntervals() const { return Intervals; }
+  const std::vector<Interval*> &getIntervals() const { return Intervals; }
 
   // releaseMemory - Reset state back to before function was analyzed
   void releaseMemory();

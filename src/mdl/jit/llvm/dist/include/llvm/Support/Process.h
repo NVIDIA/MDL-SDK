@@ -169,7 +169,7 @@ public:
 
   // This function returns the environment variable \arg name's value as a UTF-8
   // string. \arg Name is assumed to be in UTF-8 encoding too.
-  static Optional<MISTD::string> GetEnv(StringRef name);
+  static Optional<std::string> GetEnv(StringRef name);
 
   /// This function returns a SmallVector containing the arguments passed from
   /// the operating system to the program.  This function expects to be handed

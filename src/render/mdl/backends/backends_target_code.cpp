@@ -107,6 +107,7 @@ Target_code::Target_code(
     mi::mdl::IGenerated_code_executable* code,
     MI::DB::Transaction* transaction,
     bool string_ids,
+    bool use_derivatives,
     bool use_builtin_resource_handler)
   : m_native_code(),
     m_code(),
@@ -126,9 +127,8 @@ Target_code::Target_code(
     m_render_state_usage(~0u),
     m_string_args_mapped_to_ids(string_ids),
     m_use_builtin_resource_handler(use_builtin_resource_handler)
-
 {
-    finalize(code, transaction);
+    finalize(code, transaction, use_derivatives);
 
     size_t num_layouts = code->get_captured_argument_layouts_count();
     m_cap_arg_blocks.resize(num_layouts);   // already prepare the empty argument block slots
@@ -184,16 +184,16 @@ Target_code::~Target_code()
 
 void Target_code::finalize(
     mi::mdl::IGenerated_code_executable* code,
-    MI::DB::Transaction* transaction)
+    MI::DB::Transaction* transaction,
+    bool use_derivatives)
 {
     m_native_code = mi::base::make_handle(
         code->get_interface<mi::mdl::IGenerated_code_lambda_function>());
     m_render_state_usage = code->get_state_usage();
 
     if (m_native_code.is_valid_interface()) {
-
         if(m_use_builtin_resource_handler)
-            m_rh = new MDLRT::Resource_handler;
+            m_rh = new MDLRT::Resource_handler(use_derivatives);
 
         m_native_code->init(transaction, NULL, m_rh);
     } else {
@@ -201,7 +201,7 @@ void Target_code::finalize(
         size_t size = 0;
         char const *src = code->get_source_code(size);
 
-        m_code = MISTD::string(src, size);
+        m_code = std::string(src, size);
     }
 }
 
@@ -556,7 +556,7 @@ Target_code::State_usage Target_code::get_render_state_usage() const
 }
 
 size_t Target_code::add_function(
-    const MISTD::string& name,
+    const std::string& name,
     Distribution_kind dist_kind,
     Function_kind kind,
     mi::Size arg_block_index)
@@ -577,7 +577,7 @@ size_t Target_code::add_function(
 void Target_code::set_function_prototype(
     size_t index,
     Prototype_language lang,
-    const MISTD::string& prototype)
+    const std::string& prototype)
 {
     ASSERT( M_BACKENDS, index < m_callable_function_infos.size());
     if( lang >= m_callable_function_infos[ index].m_prototypes.size()) {
@@ -589,7 +589,7 @@ void Target_code::set_function_prototype(
 
 void Target_code::add_texture_index(
     size_t index,
-    const MISTD::string& name,
+    const std::string& name,
     Texture_shape shape)
 {
     if( index >= m_texture_table.size()) {
@@ -599,7 +599,7 @@ void Target_code::add_texture_index(
 }
 
 // Registers a used light profile index.
-void Target_code::add_light_profile_index( size_t index, const MISTD::string& name)
+void Target_code::add_light_profile_index( size_t index, const std::string& name)
 {
     if( index >= m_light_profile_table.size()) {
         m_light_profile_table.resize( index + 1, "");
@@ -608,7 +608,7 @@ void Target_code::add_light_profile_index( size_t index, const MISTD::string& na
 }
 
 // Registers a used bsdf measurement index.
-void Target_code::add_bsdf_measurement_index( size_t index, const MISTD::string& name)
+void Target_code::add_bsdf_measurement_index( size_t index, const std::string& name)
 {
     if( index >= m_bsdf_measurement_table.size()) {
         m_bsdf_measurement_table.resize( index + 1, "");
@@ -617,7 +617,7 @@ void Target_code::add_bsdf_measurement_index( size_t index, const MISTD::string&
 }
 
 // Registers a used string constant index.
-void Target_code::add_string_constant_index(size_t index, const MISTD::string& scons)
+void Target_code::add_string_constant_index(size_t index, const std::string& scons)
 {
     if (index >= m_string_constant_table.size()) {
         m_string_constant_table.resize(index + 1, "");
@@ -730,7 +730,7 @@ void Target_code::init_argument_block(
     const MDL::IValue_list* args)
 {
     ASSERT( M_BACKENDS, index < m_cap_arg_blocks.size() &&
-        "captured argument block slot not prepraded");
+        "captured argument block not prepared");
     if ( !args || index >= m_cap_arg_blocks.size())
         return;
 
@@ -780,7 +780,7 @@ mi::Uint32 Target_code::get_string_index(char const *s) const
         return 0u;
 
     // slow linear search here, but the number of string is expected to be small
-    MISTD::string str(s);
+    std::string str(s);
     for (size_t i = 1, n = m_string_constant_table.size(); i < n; ++i) {
         if (m_string_constant_table[i] == str)
             return mi::Uint32(i);

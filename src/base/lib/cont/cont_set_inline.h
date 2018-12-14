@@ -253,8 +253,8 @@ template<class T,int (*compare)(T *left,T *right),Set_link<T> T::*link>
 inline void Set_intr<T,compare,link>::swap(
             Set_intr<T,compare,link> &other)    // The other
 {
-    MISTD::swap(m_root,  other.m_root);
-    MISTD::swap(m_count, other.m_count);
+    std::swap(m_root,  other.m_root);
+    std::swap(m_count, other.m_count);
 }
 
 // Find pattern in set.
@@ -1033,7 +1033,7 @@ inline void Set<T,compare>::swap(
 {
     // Thanks to a xion's gcc 3.4.3 20041212 (Red Hat 3.4.3-9.EL4) compiler bug
     // the ADL namelookup-based call had to be changed into an explicit one.
-    //using MISTD::swap;
+    //using std::swap;
     m_map.swap(other.m_map);
 }
 

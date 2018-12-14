@@ -27,7 +27,7 @@ Constant *char2constant(char c) {
 TEST(WaymarkTest, NativeArray) {
   static uint8_t tail[22] = "s02s33s30y2y0s1x0syxS";
   Value * values[22];
-  MISTD::transform(tail, tail + 22, values, char2constant);
+  std::transform(tail, tail + 22, values, char2constant);
   FunctionType *FT = FunctionType::get(Type::getVoidTy(getGlobalContext()), true);
   Function *F = Function::Create(FT, GlobalValue::ExternalLinkage);
   const CallInst *A = CallInst::Create(F, makeArrayRef(values));

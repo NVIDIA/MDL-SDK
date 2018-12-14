@@ -104,7 +104,7 @@ private:
     unsigned ByteAlignment;
   };
 
-  MISTD::vector<LocalCommon> LocalCommons;
+  std::vector<LocalCommon> LocalCommons;
 
   SmallPtrSet<MCSymbol *, 16> BindingExplicitlySet;
 

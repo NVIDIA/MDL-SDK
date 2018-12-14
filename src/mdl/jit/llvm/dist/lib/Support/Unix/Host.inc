@@ -26,7 +26,7 @@
 
 using namespace llvm;
 
-static MISTD::string getOSVersion() {
+static std::string getOSVersion() {
   struct utsname info;
 
   if (uname(&info))
@@ -35,14 +35,14 @@ static MISTD::string getOSVersion() {
   return info.release;
 }
 
-MISTD::string sys::getDefaultTargetTriple() {
+std::string sys::getDefaultTargetTriple() {
   StringRef TargetTripleString(LLVM_DEFAULT_TARGET_TRIPLE);
-  MISTD::pair<StringRef, StringRef> ArchSplit = TargetTripleString.split('-');
+  std::pair<StringRef, StringRef> ArchSplit = TargetTripleString.split('-');
 
   // Normalize the arch, since the target triple may not actually match the target.
-  MISTD::string Arch = ArchSplit.first;
+  std::string Arch = ArchSplit.first;
 
-  MISTD::string Triple(Arch);
+  std::string Triple(Arch);
   Triple += '-';
   Triple += ArchSplit.second;
 
@@ -53,8 +53,8 @@ MISTD::string sys::getDefaultTargetTriple() {
 
   // On darwin, we want to update the version to match that of the
   // target.
-  MISTD::string::size_type DarwinDashIdx = Triple.find("-darwin");
-  if (DarwinDashIdx != MISTD::string::npos) {
+  std::string::size_type DarwinDashIdx = Triple.find("-darwin");
+  if (DarwinDashIdx != std::string::npos) {
     Triple.resize(DarwinDashIdx + strlen("-darwin"));
     Triple += getOSVersion();
   }

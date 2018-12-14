@@ -123,7 +123,7 @@ static bool mergeEmptyReturnBlocks(Function &F) {
       Value *InVal = cast<ReturnInst>(RetBlock->getTerminator())->getOperand(0);
       pred_iterator PB = pred_begin(RetBlock), PE = pred_end(RetBlock);
       RetBlockPHI = PHINode::Create(Ret->getOperand(0)->getType(),
-                                    MISTD::distance(PB, PE), "merge",
+                                    std::distance(PB, PE), "merge",
                                     &RetBlock->front());
 
       for (pred_iterator PI = PB; PI != PE; ++PI)

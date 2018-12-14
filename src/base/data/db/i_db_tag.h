@@ -145,7 +145,7 @@ template <class T>
 inline size_t dynamic_memory_consumption (Typed_tag<T> const &) { return 0; }
 
 // Abstract type that represents a set of database tags. Required for reference counting.
-typedef MISTD::set<Tag> Tag_set;
+typedef std::set<Tag> Tag_set;
 
 /// This structure acts as a unique identifier for a certain version of a tag.
 /// The database guarantees, that if two database accesses return the same Tag_version, then they

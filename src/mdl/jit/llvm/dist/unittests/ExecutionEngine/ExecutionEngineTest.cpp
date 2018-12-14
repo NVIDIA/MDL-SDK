@@ -37,7 +37,7 @@ protected:
   }
 
   Module *const M;
-  MISTD::string Error;
+  std::string Error;
   const OwningPtr<ExecutionEngine> Engine;
 };
 

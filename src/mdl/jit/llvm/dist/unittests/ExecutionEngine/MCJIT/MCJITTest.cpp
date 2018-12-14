@@ -166,7 +166,7 @@ TEST_F(MCJITTest, multiple_functions) {
 
   Function *Outer;
   for (unsigned int i = 0; i < numLevels; ++i) {
-    MISTD::stringstream funcName;
+    std::stringstream funcName;
     funcName << "level_" << i;
     Outer = startFunction<int32_t(void)>(M.get(), funcName.str());
     Value *innerResult = Builder.CreateCall(Inner);

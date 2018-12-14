@@ -29,11 +29,11 @@
 #include <memory>
 using namespace llvm;
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFilenames(cl::Positional, cl::OneOrMore,
                cl::desc("<input bitcode files>"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"), cl::init("-"),
                cl::value_desc("filename"));
 
@@ -53,7 +53,7 @@ DumpAsm("d", cl::desc("Print assembly as linked"), cl::Hidden);
 // LoadFile - Read the specified bitcode file in and return it.  This routine
 // searches the link path for the specified file to try to find it...
 //
-static inline Module *LoadFile(const char *argv0, const MISTD::string &FN,
+static inline Module *LoadFile(const char *argv0, const std::string &FN,
                                LLVMContext& Context) {
   SMDiagnostic Err;
   if (Verbose) errs() << "Loading '" << FN << "'\n";
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "llvm linker\n");
 
   unsigned BaseArg = 0;
-  MISTD::string ErrorMessage;
+  std::string ErrorMessage;
 
   OwningPtr<Module> Composite(LoadFile(argv[0],
                                        InputFilenames[BaseArg], Context));
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 
   if (DumpAsm) errs() << "Here's the assembly:\n" << *Composite;
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   tool_output_file Out(OutputFilename.c_str(), ErrorInfo, sys::fs::F_Binary);
   if (!ErrorInfo.empty()) {
     errs() << ErrorInfo << '\n';

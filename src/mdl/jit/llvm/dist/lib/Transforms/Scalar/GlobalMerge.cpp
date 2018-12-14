@@ -151,15 +151,15 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
   unsigned MaxOffset = TLI->getMaximalGlobalOffset();
 
   // FIXME: Find better heuristics
-  MISTD::stable_sort(Globals.begin(), Globals.end(), GlobalCmp(TD));
+  std::stable_sort(Globals.begin(), Globals.end(), GlobalCmp(TD));
 
   Type *Int32Ty = Type::getInt32Ty(M.getContext());
 
   for (size_t i = 0, e = Globals.size(); i != e; ) {
     size_t j = 0;
     uint64_t MergedSize = 0;
-    MISTD::vector<Type*> Tys;
-    MISTD::vector<Constant*> Inits;
+    std::vector<Type*> Tys;
+    std::vector<Constant*> Inits;
     for (j = i; j != e; ++j) {
       Type *Ty = Globals[j]->getType()->getElementType();
       MergedSize += TD->getTypeAllocSize(Ty);

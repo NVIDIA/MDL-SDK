@@ -85,7 +85,7 @@ LLVMTargetRef LLVMGetTargetFromName(const char *Name) {
 
 LLVMBool LLVMGetTargetFromTriple(const char* TripleStr, LLVMTargetRef *T,
                                  char **ErrorMessage) {
-  MISTD::string Error;
+  std::string Error;
   
   *T = wrap(TargetRegistry::lookupTarget(TripleStr, Error));
   
@@ -173,17 +173,17 @@ LLVMTargetRef LLVMGetTargetMachineTarget(LLVMTargetMachineRef T) {
 }
 
 char* LLVMGetTargetMachineTriple(LLVMTargetMachineRef T) {
-  MISTD::string StringRep = unwrap(T)->getTargetTriple();
+  std::string StringRep = unwrap(T)->getTargetTriple();
   return strdup(StringRep.c_str());
 }
 
 char* LLVMGetTargetMachineCPU(LLVMTargetMachineRef T) {
-  MISTD::string StringRep = unwrap(T)->getTargetCPU();
+  std::string StringRep = unwrap(T)->getTargetCPU();
   return strdup(StringRep.c_str());
 }
 
 char* LLVMGetTargetMachineFeatureString(LLVMTargetMachineRef T) {
-  MISTD::string StringRep = unwrap(T)->getTargetFeatureString();
+  std::string StringRep = unwrap(T)->getTargetFeatureString();
   return strdup(StringRep.c_str());
 }
 
@@ -203,7 +203,7 @@ static LLVMBool LLVMTargetMachineEmit(LLVMTargetMachineRef T, LLVMModuleRef M,
 
   PassManager pass;
 
-  MISTD::string error;
+  std::string error;
 
   const DataLayout* td = TM->getDataLayout();
 
@@ -237,7 +237,7 @@ static LLVMBool LLVMTargetMachineEmit(LLVMTargetMachineRef T, LLVMModuleRef M,
 
 LLVMBool LLVMTargetMachineEmitToFile(LLVMTargetMachineRef T, LLVMModuleRef M,
   char* Filename, LLVMCodeGenFileType codegen, char** ErrorMessage) {
-  MISTD::string error;
+  std::string error;
   raw_fd_ostream dest(Filename, error, sys::fs::F_Binary);
   if (!error.empty()) {
     *ErrorMessage = strdup(error.c_str());
@@ -252,13 +252,13 @@ LLVMBool LLVMTargetMachineEmitToFile(LLVMTargetMachineRef T, LLVMModuleRef M,
 LLVMBool LLVMTargetMachineEmitToMemoryBuffer(LLVMTargetMachineRef T,
   LLVMModuleRef M, LLVMCodeGenFileType codegen, char** ErrorMessage,
   LLVMMemoryBufferRef *OutMemBuf) {
-  MISTD::string CodeString;
+  std::string CodeString;
   raw_string_ostream OStream(CodeString);
   formatted_raw_ostream Out(OStream);
   bool Result = LLVMTargetMachineEmit(T, M, Out, codegen, ErrorMessage);
   OStream.flush();
 
-  MISTD::string &Data = OStream.str();
+  std::string &Data = OStream.str();
   *OutMemBuf = LLVMCreateMemoryBufferWithMemoryRangeCopy(Data.c_str(),
                                                      Data.length(), "");
   return Result;

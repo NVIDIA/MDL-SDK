@@ -60,7 +60,7 @@
 //   // Prints a value to a string.  For a (const or not) char
 //   // pointer, the NUL-terminated string (but not the pointer) is
 //   // printed.
-//   MISTD::string ::testing::PrintToString(const T& value);
+//   std::string ::testing::PrintToString(const T& value);
 //
 //   // Prints a value tersely: for a reference type, the referenced
 //   // value (but not the address) is printed; for a (const or not) char
@@ -76,7 +76,7 @@
 //   // Prints the fields of a tuple tersely to a string vector, one
 //   // element for each field. Tuple support must be enabled in
 //   // gtest-port.h.
-//   MISTD::vector<string> UniversalTersePrintTupleFieldsToStrings(
+//   std::vector<string> UniversalTersePrintTupleFieldsToStrings(
 //       const Tuple& value);
 //
 // Known limitation:
@@ -113,7 +113,7 @@ namespace internal2 {
 // ostream.
 GTEST_API_ void PrintBytesInObjectTo(const unsigned char* obj_bytes,
                                      size_t count,
-                                     ::MISTD::ostream* os);
+                                     ::std::ostream* os);
 
 // For selecting which printer to use when a given type has neither <<
 // nor PrintTo().
@@ -132,7 +132,7 @@ template <typename T, TypeKind kTypeKind>
 class TypeWithoutFormatter {
  public:
   // This default version is called when kTypeKind is kOtherType.
-  static void PrintValue(const T& value, ::MISTD::ostream* os) {
+  static void PrintValue(const T& value, ::std::ostream* os) {
     PrintBytesInObjectTo(reinterpret_cast<const unsigned char*>(&value),
                          sizeof(value), os);
   }
@@ -146,7 +146,7 @@ const size_t kProtobufOneLinerMaxLength = 50;
 template <typename T>
 class TypeWithoutFormatter<T, kProtobuf> {
  public:
-  static void PrintValue(const T& value, ::MISTD::ostream* os) {
+  static void PrintValue(const T& value, ::std::ostream* os) {
     const ::testing::internal::string short_str = value.ShortDebugString();
     const ::testing::internal::string pretty_str =
         short_str.length() <= kProtobufOneLinerMaxLength ?
@@ -165,7 +165,7 @@ class TypeWithoutFormatter<T, kConvertibleToInteger> {
   // case printing it as an integer is the desired behavior.  In case
   // T is not an enum, printing it as an integer is the best we can do
   // given that it has no user-defined printer.
-  static void PrintValue(const T& value, ::MISTD::ostream* os) {
+  static void PrintValue(const T& value, ::std::ostream* os) {
     const internal::BiggestInt kBigInt = value;
     *os << kBigInt;
   }
@@ -186,18 +186,18 @@ class TypeWithoutFormatter<T, kConvertibleToInteger> {
 // use << in STL, which would conflict with our own << were it defined
 // in 'internal'.
 //
-// Note that this operator<< takes a generic MISTD::basic_ostream<Char,
-// CharTraits> type instead of the more restricted MISTD::ostream.  If
-// we define it to take an MISTD::ostream instead, we'll get an
+// Note that this operator<< takes a generic std::basic_ostream<Char,
+// CharTraits> type instead of the more restricted std::ostream.  If
+// we define it to take an std::ostream instead, we'll get an
 // "ambiguous overloads" compiler error when trying to print a type
-// Foo that supports streaming to MISTD::basic_ostream<Char,
+// Foo that supports streaming to std::basic_ostream<Char,
 // CharTraits>, as the compiler cannot tell whether
-// operator<<(MISTD::ostream&, const T&) or
-// operator<<(MISTD::basic_stream<Char, CharTraits>, const Foo&) is more
+// operator<<(std::ostream&, const T&) or
+// operator<<(std::basic_stream<Char, CharTraits>, const Foo&) is more
 // specific.
 template <typename Char, typename CharTraits, typename T>
-::MISTD::basic_ostream<Char, CharTraits>& operator<<(
-    ::MISTD::basic_ostream<Char, CharTraits>& os, const T& x) {
+::std::basic_ostream<Char, CharTraits>& operator<<(
+    ::std::basic_ostream<Char, CharTraits>& os, const T& x) {
   TypeWithoutFormatter<T,
       (internal::IsAProtocolMessage<T>::value ? kProtobuf :
        internal::ImplicitlyConvertible<const T&, internal::BiggestInt>::value ?
@@ -215,7 +215,7 @@ namespace testing_internal {
 // Used to print a value that is not an STL-style container when the
 // user doesn't define PrintTo() for it.
 template <typename T>
-void DefaultPrintNonContainerTo(const T& value, ::MISTD::ostream* os) {
+void DefaultPrintNonContainerTo(const T& value, ::std::ostream* os) {
   // With the following statement, during unqualified name lookup,
   // testing::internal2::operator<< appears as if it was declared in
   // the nearest enclosing namespace that contains both
@@ -261,14 +261,14 @@ template <typename T>
 class UniversalPrinter;
 
 template <typename T>
-void UniversalPrint(const T& value, ::MISTD::ostream* os);
+void UniversalPrint(const T& value, ::std::ostream* os);
 
 // Used to print an STL-style container when the user doesn't define
 // a PrintTo() for it.
 template <typename C>
 void DefaultPrintTo(IsContainer /* dummy */,
                     false_type /* is not a pointer */,
-                    const C& container, ::MISTD::ostream* os) {
+                    const C& container, ::std::ostream* os) {
   const size_t kMaxCount = 32;  // The maximum number of elements to print.
   *os << '{';
   size_t count = 0;
@@ -302,7 +302,7 @@ void DefaultPrintTo(IsContainer /* dummy */,
 template <typename T>
 void DefaultPrintTo(IsNotContainer /* dummy */,
                     true_type /* is a pointer */,
-                    T* p, ::MISTD::ostream* os) {
+                    T* p, ::std::ostream* os) {
   if (p == NULL) {
     *os << "NULL";
   } else {
@@ -334,7 +334,7 @@ void DefaultPrintTo(IsNotContainer /* dummy */,
 template <typename T>
 void DefaultPrintTo(IsNotContainer /* dummy */,
                     false_type /* is not a pointer */,
-                    const T& value, ::MISTD::ostream* os) {
+                    const T& value, ::std::ostream* os) {
   ::testing_internal::DefaultPrintNonContainerTo(value, os);
 }
 
@@ -350,7 +350,7 @@ void DefaultPrintTo(IsNotContainer /* dummy */,
 // or there is already a << operator but it doesn't do what the user
 // wants).
 template <typename T>
-void PrintTo(const T& value, ::MISTD::ostream* os) {
+void PrintTo(const T& value, ::std::ostream* os) {
   // DefaultPrintTo() is overloaded.  The type of its first two
   // arguments determine which version will be picked.  If T is an
   // STL-style container, the version for container will be called; if
@@ -381,9 +381,9 @@ void PrintTo(const T& value, ::MISTD::ostream* os) {
 // types, strings, plain arrays, and pointers).
 
 // Overloads for various char types.
-GTEST_API_ void PrintTo(unsigned char c, ::MISTD::ostream* os);
-GTEST_API_ void PrintTo(signed char c, ::MISTD::ostream* os);
-inline void PrintTo(char c, ::MISTD::ostream* os) {
+GTEST_API_ void PrintTo(unsigned char c, ::std::ostream* os);
+GTEST_API_ void PrintTo(signed char c, ::std::ostream* os);
+inline void PrintTo(char c, ::std::ostream* os) {
   // When printing a plain char, we always treat it as unsigned.  This
   // way, the output won't be affected by whether the compiler thinks
   // char is signed or not.
@@ -391,7 +391,7 @@ inline void PrintTo(char c, ::MISTD::ostream* os) {
 }
 
 // Overloads for other simple built-in types.
-inline void PrintTo(bool x, ::MISTD::ostream* os) {
+inline void PrintTo(bool x, ::std::ostream* os) {
   *os << (x ? "true" : "false");
 }
 
@@ -402,26 +402,26 @@ inline void PrintTo(bool x, ::MISTD::ostream* os) {
 // as signed integer when wchar_t is implemented by the compiler
 // as a signed type and is printed as an unsigned integer when wchar_t
 // is implemented as an unsigned type.
-GTEST_API_ void PrintTo(wchar_t wc, ::MISTD::ostream* os);
+GTEST_API_ void PrintTo(wchar_t wc, ::std::ostream* os);
 
 // Overloads for C strings.
-GTEST_API_ void PrintTo(const char* s, ::MISTD::ostream* os);
-inline void PrintTo(char* s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintTo(const char* s, ::std::ostream* os);
+inline void PrintTo(char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const char*>(s), os);
 }
 
 // signed/unsigned char is often used for representing binary data, so
 // we print pointers to it as void* to be safe.
-inline void PrintTo(const signed char* s, ::MISTD::ostream* os) {
+inline void PrintTo(const signed char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const void*>(s), os);
 }
-inline void PrintTo(signed char* s, ::MISTD::ostream* os) {
+inline void PrintTo(signed char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const void*>(s), os);
 }
-inline void PrintTo(const unsigned char* s, ::MISTD::ostream* os) {
+inline void PrintTo(const unsigned char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const void*>(s), os);
 }
-inline void PrintTo(unsigned char* s, ::MISTD::ostream* os) {
+inline void PrintTo(unsigned char* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const void*>(s), os);
 }
 
@@ -432,8 +432,8 @@ inline void PrintTo(unsigned char* s, ::MISTD::ostream* os) {
 // possibly causing invalid memory accesses.
 #if !defined(_MSC_VER) || defined(_NATIVE_WCHAR_T_DEFINED)
 // Overloads for wide C strings
-GTEST_API_ void PrintTo(const wchar_t* s, ::MISTD::ostream* os);
-inline void PrintTo(wchar_t* s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintTo(const wchar_t* s, ::std::ostream* os);
+inline void PrintTo(wchar_t* s, ::std::ostream* os) {
   PrintTo(ImplicitCast_<const wchar_t*>(s), os);
 }
 #endif
@@ -444,7 +444,7 @@ inline void PrintTo(wchar_t* s, ::MISTD::ostream* os) {
 // Prints the given number of elements in an array, without printing
 // the curly braces.
 template <typename T>
-void PrintRawArrayTo(const T a[], size_t count, ::MISTD::ostream* os) {
+void PrintRawArrayTo(const T a[], size_t count, ::std::ostream* os) {
   UniversalPrint(a[0], os);
   for (size_t i = 1; i != count; i++) {
     *os << ", ";
@@ -452,118 +452,118 @@ void PrintRawArrayTo(const T a[], size_t count, ::MISTD::ostream* os) {
   }
 }
 
-// Overloads for ::string and ::MISTD::string.
+// Overloads for ::string and ::std::string.
 #if GTEST_HAS_GLOBAL_STRING
-GTEST_API_ void PrintStringTo(const ::string&s, ::MISTD::ostream* os);
-inline void PrintTo(const ::string& s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintStringTo(const ::string&s, ::std::ostream* os);
+inline void PrintTo(const ::string& s, ::std::ostream* os) {
   PrintStringTo(s, os);
 }
 #endif  // GTEST_HAS_GLOBAL_STRING
 
-GTEST_API_ void PrintStringTo(const ::MISTD::string&s, ::MISTD::ostream* os);
-inline void PrintTo(const ::MISTD::string& s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintStringTo(const ::std::string&s, ::std::ostream* os);
+inline void PrintTo(const ::std::string& s, ::std::ostream* os) {
   PrintStringTo(s, os);
 }
 
-// Overloads for ::wstring and ::MISTD::wstring.
+// Overloads for ::wstring and ::std::wstring.
 #if GTEST_HAS_GLOBAL_WSTRING
-GTEST_API_ void PrintWideStringTo(const ::wstring&s, ::MISTD::ostream* os);
-inline void PrintTo(const ::wstring& s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintWideStringTo(const ::wstring&s, ::std::ostream* os);
+inline void PrintTo(const ::wstring& s, ::std::ostream* os) {
   PrintWideStringTo(s, os);
 }
 #endif  // GTEST_HAS_GLOBAL_WSTRING
 
 #if GTEST_HAS_STD_WSTRING
-GTEST_API_ void PrintWideStringTo(const ::MISTD::wstring&s, ::MISTD::ostream* os);
-inline void PrintTo(const ::MISTD::wstring& s, ::MISTD::ostream* os) {
+GTEST_API_ void PrintWideStringTo(const ::std::wstring&s, ::std::ostream* os);
+inline void PrintTo(const ::std::wstring& s, ::std::ostream* os) {
   PrintWideStringTo(s, os);
 }
 #endif  // GTEST_HAS_STD_WSTRING
 
 #if GTEST_HAS_TR1_TUPLE
-// Overload for ::MISTD::tr1::tuple.  Needed for printing function arguments,
+// Overload for ::std::tr1::tuple.  Needed for printing function arguments,
 // which are packed as tuples.
 
 // Helper function for printing a tuple.  T must be instantiated with
 // a tuple type.
 template <typename T>
-void PrintTupleTo(const T& t, ::MISTD::ostream* os);
+void PrintTupleTo(const T& t, ::std::ostream* os);
 
 // Overloaded PrintTo() for tuples of various arities.  We support
 // tuples of up-to 10 fields.  The following implementation works
 // regardless of whether tr1::tuple is implemented using the
 // non-standard variadic template feature or not.
 
-inline void PrintTo(const ::MISTD::tr1::tuple<>& t, ::MISTD::ostream* os) {
+inline void PrintTo(const ::std::tr1::tuple<>& t, ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1>
-void PrintTo(const ::MISTD::tr1::tuple<T1>& t, ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1>& t, ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2>& t, ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2>& t, ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3>& t, ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3>& t, ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4>& t, ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4>& t, ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5>& t,
-             ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4, T5>& t,
+             ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5, T6>& t,
-             ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4, T5, T6>& t,
+             ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6, typename T7>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5, T6, T7>& t,
-             ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4, T5, T6, T7>& t,
+             ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6, typename T7, typename T8>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8>& t,
-             ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8>& t,
+             ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6, typename T7, typename T8, typename T9>
-void PrintTo(const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8, T9>& t,
-             ::MISTD::ostream* os) {
+void PrintTo(const ::std::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8, T9>& t,
+             ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5,
           typename T6, typename T7, typename T8, typename T9, typename T10>
 void PrintTo(
-    const ::MISTD::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>& t,
-    ::MISTD::ostream* os) {
+    const ::std::tr1::tuple<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>& t,
+    ::std::ostream* os) {
   PrintTupleTo(t, os);
 }
 #endif  // GTEST_HAS_TR1_TUPLE
 
-// Overload for MISTD::pair.
+// Overload for std::pair.
 template <typename T1, typename T2>
-void PrintTo(const ::MISTD::pair<T1, T2>& value, ::MISTD::ostream* os) {
+void PrintTo(const ::std::pair<T1, T2>& value, ::std::ostream* os) {
   *os << '(';
   // We cannot use UniversalPrint(value.first, os) here, as T1 may be
   // a reference type.  The same for printing value.second.
@@ -588,7 +588,7 @@ class UniversalPrinter {
   // Note: we deliberately don't call this PrintTo(), as that name
   // conflicts with ::testing::internal::PrintTo in the body of the
   // function.
-  static void Print(const T& value, ::MISTD::ostream* os) {
+  static void Print(const T& value, ::std::ostream* os) {
     // By default, ::testing::internal::PrintTo() is used for printing
     // the value.
     //
@@ -608,7 +608,7 @@ class UniversalPrinter {
 // UniversalPrintArray(begin, len, os) prints an array of 'len'
 // elements, starting at address 'begin'.
 template <typename T>
-void UniversalPrintArray(const T* begin, size_t len, ::MISTD::ostream* os) {
+void UniversalPrintArray(const T* begin, size_t len, ::std::ostream* os) {
   if (len == 0) {
     *os << "{}";
   } else {
@@ -632,7 +632,7 @@ void UniversalPrintArray(const T* begin, size_t len, ::MISTD::ostream* os) {
 // This overload prints a (const) char array compactly.
 GTEST_API_ void UniversalPrintArray(const char* begin,
                                     size_t len,
-                                    ::MISTD::ostream* os);
+                                    ::std::ostream* os);
 
 // Implements printing an array type T[N].
 template <typename T, size_t N>
@@ -640,7 +640,7 @@ class UniversalPrinter<T[N]> {
  public:
   // Prints the given array, omitting some elements when there are too
   // many.
-  static void Print(const T (&a)[N], ::MISTD::ostream* os) {
+  static void Print(const T (&a)[N], ::std::ostream* os) {
     UniversalPrintArray(a, N, os);
   }
 };
@@ -656,7 +656,7 @@ class UniversalPrinter<T&> {
 # pragma warning(disable:4180)  // Temporarily disables warning 4180.
 #endif  // _MSC_VER
 
-  static void Print(const T& value, ::MISTD::ostream* os) {
+  static void Print(const T& value, ::std::ostream* os) {
     // Prints the address of the value.  We use reinterpret_cast here
     // as static_cast doesn't compile when T is a function type.
     *os << "@" << reinterpret_cast<const void*>(&value) << " ";
@@ -674,17 +674,17 @@ class UniversalPrinter<T&> {
 // (but not the address) is printed; for a (const) char pointer, the
 // NUL-terminated string (but not the pointer) is printed.
 template <typename T>
-void UniversalTersePrint(const T& value, ::MISTD::ostream* os) {
+void UniversalTersePrint(const T& value, ::std::ostream* os) {
   UniversalPrint(value, os);
 }
-inline void UniversalTersePrint(const char* str, ::MISTD::ostream* os) {
+inline void UniversalTersePrint(const char* str, ::std::ostream* os) {
   if (str == NULL) {
     *os << "NULL";
   } else {
     UniversalPrint(string(str), os);
   }
 }
-inline void UniversalTersePrint(char* str, ::MISTD::ostream* os) {
+inline void UniversalTersePrint(char* str, ::std::ostream* os) {
   UniversalTersePrint(static_cast<const char*>(str), os);
 }
 
@@ -693,12 +693,12 @@ inline void UniversalTersePrint(char* str, ::MISTD::ostream* os) {
 // (const) char pointer, this prints both the pointer and the
 // NUL-terminated string.
 template <typename T>
-void UniversalPrint(const T& value, ::MISTD::ostream* os) {
+void UniversalPrint(const T& value, ::std::ostream* os) {
   UniversalPrinter<T>::Print(value, os);
 }
 
 #if GTEST_HAS_TR1_TUPLE
-typedef ::MISTD::vector<string> Strings;
+typedef ::std::vector<string> Strings;
 
 // This helper template allows PrintTo() for tuples and
 // UniversalTersePrintTupleFieldsToStrings() to be defined by
@@ -712,11 +712,11 @@ template <size_t N>
 struct TuplePrefixPrinter {
   // Prints the first N fields of a tuple.
   template <typename Tuple>
-  static void PrintPrefixTo(const Tuple& t, ::MISTD::ostream* os) {
+  static void PrintPrefixTo(const Tuple& t, ::std::ostream* os) {
     TuplePrefixPrinter<N - 1>::PrintPrefixTo(t, os);
     *os << ", ";
-    UniversalPrinter<typename ::MISTD::tr1::tuple_element<N - 1, Tuple>::type>
-        ::Print(::MISTD::tr1::get<N - 1>(t), os);
+    UniversalPrinter<typename ::std::tr1::tuple_element<N - 1, Tuple>::type>
+        ::Print(::std::tr1::get<N - 1>(t), os);
   }
 
   // Tersely prints the first N fields of a tuple to a string vector,
@@ -724,8 +724,8 @@ struct TuplePrefixPrinter {
   template <typename Tuple>
   static void TersePrintPrefixToStrings(const Tuple& t, Strings* strings) {
     TuplePrefixPrinter<N - 1>::TersePrintPrefixToStrings(t, strings);
-    ::MISTD::stringstream ss;
-    UniversalTersePrint(::MISTD::tr1::get<N - 1>(t), &ss);
+    ::std::stringstream ss;
+    UniversalTersePrint(::std::tr1::get<N - 1>(t), &ss);
     strings->push_back(ss.str());
   }
 };
@@ -734,7 +734,7 @@ struct TuplePrefixPrinter {
 template <>
 struct TuplePrefixPrinter<0> {
   template <typename Tuple>
-  static void PrintPrefixTo(const Tuple&, ::MISTD::ostream*) {}
+  static void PrintPrefixTo(const Tuple&, ::std::ostream*) {}
 
   template <typename Tuple>
   static void TersePrintPrefixToStrings(const Tuple&, Strings*) {}
@@ -747,15 +747,15 @@ struct TuplePrefixPrinter<0> {
 template <>
 struct TuplePrefixPrinter<1> {
   template <typename Tuple>
-  static void PrintPrefixTo(const Tuple& t, ::MISTD::ostream* os) {
-    UniversalPrinter<typename ::MISTD::tr1::tuple_element<0, Tuple>::type>::
-        Print(::MISTD::tr1::get<0>(t), os);
+  static void PrintPrefixTo(const Tuple& t, ::std::ostream* os) {
+    UniversalPrinter<typename ::std::tr1::tuple_element<0, Tuple>::type>::
+        Print(::std::tr1::get<0>(t), os);
   }
 
   template <typename Tuple>
   static void TersePrintPrefixToStrings(const Tuple& t, Strings* strings) {
-    ::MISTD::stringstream ss;
-    UniversalTersePrint(::MISTD::tr1::get<0>(t), &ss);
+    ::std::stringstream ss;
+    UniversalTersePrint(::std::tr1::get<0>(t), &ss);
     strings->push_back(ss.str());
   }
 };
@@ -763,9 +763,9 @@ struct TuplePrefixPrinter<1> {
 // Helper function for printing a tuple.  T must be instantiated with
 // a tuple type.
 template <typename T>
-void PrintTupleTo(const T& t, ::MISTD::ostream* os) {
+void PrintTupleTo(const T& t, ::std::ostream* os) {
   *os << "(";
-  TuplePrefixPrinter< ::MISTD::tr1::tuple_size<T>::value>::
+  TuplePrefixPrinter< ::std::tr1::tuple_size<T>::value>::
       PrintPrefixTo(t, os);
   *os << ")";
 }
@@ -776,7 +776,7 @@ void PrintTupleTo(const T& t, ::MISTD::ostream* os) {
 template <typename Tuple>
 Strings UniversalTersePrintTupleFieldsToStrings(const Tuple& value) {
   Strings result;
-  TuplePrefixPrinter< ::MISTD::tr1::tuple_size<Tuple>::value>::
+  TuplePrefixPrinter< ::std::tr1::tuple_size<Tuple>::value>::
       TersePrintPrefixToStrings(value, &result);
   return result;
 }
@@ -785,8 +785,8 @@ Strings UniversalTersePrintTupleFieldsToStrings(const Tuple& value) {
 }  // namespace internal
 
 template <typename T>
-::MISTD::string PrintToString(const T& value) {
-  ::MISTD::stringstream ss;
+::std::string PrintToString(const T& value) {
+  ::std::stringstream ss;
   internal::UniversalTersePrint(value, &ss);
   return ss.str();
 }

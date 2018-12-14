@@ -155,7 +155,7 @@ unsigned Attribute::getStackAlignment() const {
   return pImpl->getValueAsInt();
 }
 
-MISTD::string Attribute::getAsString(bool InAttrGrp) const {
+std::string Attribute::getAsString(bool InAttrGrp) const {
   if (!pImpl) return "";
 
   if (hasAttribute(Attribute::SanitizeAddress))
@@ -235,7 +235,7 @@ MISTD::string Attribute::getAsString(bool InAttrGrp) const {
   //   alignstack=8
   //
   if (hasAttribute(Attribute::Alignment)) {
-    MISTD::string Result;
+    std::string Result;
     Result += "align";
     Result += (InAttrGrp) ? "=" : " ";
     Result += utostr(getValueAsInt());
@@ -243,7 +243,7 @@ MISTD::string Attribute::getAsString(bool InAttrGrp) const {
   }
 
   if (hasAttribute(Attribute::StackAlignment)) {
-    MISTD::string Result;
+    std::string Result;
     Result += "alignstack";
     if (InAttrGrp) {
       Result += "=";
@@ -262,7 +262,7 @@ MISTD::string Attribute::getAsString(bool InAttrGrp) const {
   //   "kind" = "value"
   //
   if (isStringAttribute()) {
-    MISTD::string Result;
+    std::string Result;
     Result += '\"' + getKindAsString().str() + '"';
 
     StringRef Val = pImpl->getValueAsString();
@@ -472,8 +472,8 @@ unsigned AttributeSetNode::getStackAlignment() const {
   return 0;
 }
 
-MISTD::string AttributeSetNode::getAsString(bool InAttrGrp) const {
-  MISTD::string Str;
+std::string AttributeSetNode::getAsString(bool InAttrGrp) const {
+  std::string Str;
   for (iterator I = begin(), E = end(); I != E; ++I) {
     if (I != begin())
       Str += ' ';
@@ -525,7 +525,7 @@ void AttributeSetImpl::dump() const {
 
 AttributeSet
 AttributeSet::getImpl(LLVMContext &C,
-                      ArrayRef<MISTD::pair<unsigned, AttributeSetNode*> > Attrs) {
+                      ArrayRef<std::pair<unsigned, AttributeSetNode*> > Attrs) {
   LLVMContextImpl *pImpl = C.pImpl;
   FoldingSetNodeID ID;
   AttributeSetImpl::Profile(ID, Attrs);
@@ -538,7 +538,7 @@ AttributeSet::getImpl(LLVMContext &C,
   if (!PA) {
     // Coallocate entries after the AttributeSetImpl itself.
     void *Mem = ::operator new(sizeof(AttributeSetImpl) +
-                               sizeof(MISTD::pair<unsigned, AttributeSetNode *>) *
+                               sizeof(std::pair<unsigned, AttributeSetNode *>) *
                                    Attrs.size());
     PA = new (Mem) AttributeSetImpl(C, Attrs);
     pImpl->AttrsLists.InsertNode(PA, InsertPoint);
@@ -549,7 +549,7 @@ AttributeSet::getImpl(LLVMContext &C,
 }
 
 AttributeSet AttributeSet::get(LLVMContext &C,
-                               ArrayRef<MISTD::pair<unsigned, Attribute> > Attrs){
+                               ArrayRef<std::pair<unsigned, Attribute> > Attrs){
   // If there are no attributes then return a null AttributesList pointer.
   if (Attrs.empty())
     return AttributeSet();
@@ -565,8 +565,8 @@ AttributeSet AttributeSet::get(LLVMContext &C,
 
   // Create a vector if (unsigned, AttributeSetNode*) pairs from the attributes
   // list.
-  SmallVector<MISTD::pair<unsigned, AttributeSetNode*>, 8> AttrPairVec;
-  for (ArrayRef<MISTD::pair<unsigned, Attribute> >::iterator I = Attrs.begin(),
+  SmallVector<std::pair<unsigned, AttributeSetNode*>, 8> AttrPairVec;
+  for (ArrayRef<std::pair<unsigned, Attribute> >::iterator I = Attrs.begin(),
          E = Attrs.end(); I != E; ) {
     unsigned Index = I->first;
     SmallVector<Attribute, 4> AttrVec;
@@ -575,7 +575,7 @@ AttributeSet AttributeSet::get(LLVMContext &C,
       ++I;
     }
 
-    AttrPairVec.push_back(MISTD::make_pair(Index,
+    AttrPairVec.push_back(std::make_pair(Index,
                                          AttributeSetNode::get(C, AttrVec)));
   }
 
@@ -583,7 +583,7 @@ AttributeSet AttributeSet::get(LLVMContext &C,
 }
 
 AttributeSet AttributeSet::get(LLVMContext &C,
-                               ArrayRef<MISTD::pair<unsigned,
+                               ArrayRef<std::pair<unsigned,
                                                   AttributeSetNode*> > Attrs) {
   // If there are no attributes then return a null AttributesList pointer.
   if (Attrs.empty())
@@ -597,36 +597,36 @@ AttributeSet AttributeSet::get(LLVMContext &C, unsigned Index, AttrBuilder &B) {
     return AttributeSet();
 
   // Add target-independent attributes.
-  SmallVector<MISTD::pair<unsigned, Attribute>, 8> Attrs;
+  SmallVector<std::pair<unsigned, Attribute>, 8> Attrs;
   for (Attribute::AttrKind Kind = Attribute::None;
        Kind != Attribute::EndAttrKinds; Kind = Attribute::AttrKind(Kind + 1)) {
     if (!B.contains(Kind))
       continue;
 
     if (Kind == Attribute::Alignment)
-      Attrs.push_back(MISTD::make_pair(Index, Attribute::
+      Attrs.push_back(std::make_pair(Index, Attribute::
                                      getWithAlignment(C, B.getAlignment())));
     else if (Kind == Attribute::StackAlignment)
-      Attrs.push_back(MISTD::make_pair(Index, Attribute::
+      Attrs.push_back(std::make_pair(Index, Attribute::
                               getWithStackAlignment(C, B.getStackAlignment())));
     else
-      Attrs.push_back(MISTD::make_pair(Index, Attribute::get(C, Kind)));
+      Attrs.push_back(std::make_pair(Index, Attribute::get(C, Kind)));
   }
 
   // Add target-dependent (string) attributes.
   for (AttrBuilder::td_iterator I = B.td_begin(), E = B.td_end();
        I != E; ++I)
-    Attrs.push_back(MISTD::make_pair(Index, Attribute::get(C, I->first,I->second)));
+    Attrs.push_back(std::make_pair(Index, Attribute::get(C, I->first,I->second)));
 
   return get(C, Attrs);
 }
 
 AttributeSet AttributeSet::get(LLVMContext &C, unsigned Index,
                                ArrayRef<Attribute::AttrKind> Kind) {
-  SmallVector<MISTD::pair<unsigned, Attribute>, 8> Attrs;
+  SmallVector<std::pair<unsigned, Attribute>, 8> Attrs;
   for (ArrayRef<Attribute::AttrKind>::iterator I = Kind.begin(),
          E = Kind.end(); I != E; ++I)
-    Attrs.push_back(MISTD::make_pair(Index, Attribute::get(C, *I)));
+    Attrs.push_back(std::make_pair(Index, Attribute::get(C, *I)));
   return get(C, Attrs);
 }
 
@@ -634,7 +634,7 @@ AttributeSet AttributeSet::get(LLVMContext &C, ArrayRef<AttributeSet> Attrs) {
   if (Attrs.empty()) return AttributeSet();
   if (Attrs.size() == 1) return Attrs[0];
 
-  SmallVector<MISTD::pair<unsigned, AttributeSetNode*>, 8> AttrNodeVec;
+  SmallVector<std::pair<unsigned, AttributeSetNode*>, 8> AttrNodeVec;
   AttributeSetImpl *A0 = Attrs[0].pImpl;
   if (A0)
     AttrNodeVec.append(A0->getNode(0), A0->getNode(A0->getNumAttributes()));
@@ -645,7 +645,7 @@ AttributeSet AttributeSet::get(LLVMContext &C, ArrayRef<AttributeSet> Attrs) {
   for (unsigned I = 1, E = Attrs.size(); I != E; ++I) {
     AttributeSetImpl *AS = Attrs[I].pImpl;
     if (!AS) continue;
-    SmallVector<MISTD::pair<unsigned, AttributeSetNode *>, 8>::iterator
+    SmallVector<std::pair<unsigned, AttributeSetNode *>, 8>::iterator
       ANVI = AttrNodeVec.begin(), ANVE;
     for (const AttributeSetImpl::IndexAttrPair
              *AI = AS->getNode(0),
@@ -792,16 +792,16 @@ LLVMContext &AttributeSet::getContext() const {
 AttributeSet AttributeSet::getParamAttributes(unsigned Index) const {
   return pImpl && hasAttributes(Index) ?
     AttributeSet::get(pImpl->getContext(),
-                      ArrayRef<MISTD::pair<unsigned, AttributeSetNode*> >(
-                        MISTD::make_pair(Index, getAttributes(Index)))) :
+                      ArrayRef<std::pair<unsigned, AttributeSetNode*> >(
+                        std::make_pair(Index, getAttributes(Index)))) :
     AttributeSet();
 }
 
 AttributeSet AttributeSet::getRetAttributes() const {
   return pImpl && hasAttributes(ReturnIndex) ?
     AttributeSet::get(pImpl->getContext(),
-                      ArrayRef<MISTD::pair<unsigned, AttributeSetNode*> >(
-                        MISTD::make_pair(ReturnIndex,
+                      ArrayRef<std::pair<unsigned, AttributeSetNode*> >(
+                        std::make_pair(ReturnIndex,
                                        getAttributes(ReturnIndex)))) :
     AttributeSet();
 }
@@ -809,8 +809,8 @@ AttributeSet AttributeSet::getRetAttributes() const {
 AttributeSet AttributeSet::getFnAttributes() const {
   return pImpl && hasAttributes(FunctionIndex) ?
     AttributeSet::get(pImpl->getContext(),
-                      ArrayRef<MISTD::pair<unsigned, AttributeSetNode*> >(
-                        MISTD::make_pair(FunctionIndex,
+                      ArrayRef<std::pair<unsigned, AttributeSetNode*> >(
+                        std::make_pair(FunctionIndex,
                                        getAttributes(FunctionIndex)))) :
     AttributeSet();
 }
@@ -866,10 +866,10 @@ unsigned AttributeSet::getStackAlignment(unsigned Index) const {
   return ASN ? ASN->getStackAlignment() : 0;
 }
 
-MISTD::string AttributeSet::getAsString(unsigned Index,
+std::string AttributeSet::getAsString(unsigned Index,
                                       bool InAttrGrp) const {
   AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAsString(InAttrGrp) : MISTD::string("");
+  return ASN ? ASN->getAsString(InAttrGrp) : std::string("");
 }
 
 /// \brief The attributes for the specified index are returned.
@@ -1028,7 +1028,7 @@ AttrBuilder &AttrBuilder::removeAttributes(AttributeSet A, uint64_t Index) {
         StackAlignment = 0;
     } else {
       assert(Attr.isStringAttribute() && "Invalid attribute type!");
-      MISTD::map<MISTD::string, MISTD::string>::iterator
+      std::map<std::string, std::string>::iterator
         Iter = TargetDepAttrs.find(Attr.getKindAsString());
       if (Iter != TargetDepAttrs.end())
         TargetDepAttrs.erase(Iter);
@@ -1039,7 +1039,7 @@ AttrBuilder &AttrBuilder::removeAttributes(AttributeSet A, uint64_t Index) {
 }
 
 AttrBuilder &AttrBuilder::removeAttribute(StringRef A) {
-  MISTD::map<MISTD::string, MISTD::string>::iterator I = TargetDepAttrs.find(A);
+  std::map<std::string, std::string>::iterator I = TargetDepAttrs.find(A);
   if (I != TargetDepAttrs.end())
     TargetDepAttrs.erase(I);
   return *this;

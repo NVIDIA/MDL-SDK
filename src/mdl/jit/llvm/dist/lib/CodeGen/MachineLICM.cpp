@@ -84,7 +84,7 @@ namespace {
     SmallVector<MachineBasicBlock*, 8> ExitBlocks;
 
     bool isExitBlock(const MachineBasicBlock *MBB) const {
-      return MISTD::find(ExitBlocks.begin(), ExitBlocks.end(), MBB) !=
+      return std::find(ExitBlocks.begin(), ExitBlocks.end(), MBB) !=
         ExitBlocks.end();
     }
 
@@ -100,7 +100,7 @@ namespace {
     SmallVector<SmallVector<unsigned, 8>, 16> BackTrace;
 
     // For each opcode, keep a list of potential CSE instructions.
-    DenseMap<unsigned, MISTD::vector<const MachineInstr*> > CSEMap;
+    DenseMap<unsigned, std::vector<const MachineInstr*> > CSEMap;
 
     enum {
       SpeculateFalse   = 0,
@@ -141,7 +141,7 @@ namespace {
       RegPressure.clear();
       RegLimit.clear();
       BackTrace.clear();
-      for (DenseMap<unsigned,MISTD::vector<const MachineInstr*> >::iterator
+      for (DenseMap<unsigned,std::vector<const MachineInstr*> >::iterator
              CI = CSEMap.begin(), CE = CSEMap.end(); CI != CE; ++CI)
         CI->second.clear();
       CSEMap.clear();
@@ -265,14 +265,14 @@ namespace {
     /// LookForDuplicate - Find an instruction amount PrevMIs that is a
     /// duplicate of MI. Return this instruction if it's found.
     const MachineInstr *LookForDuplicate(const MachineInstr *MI,
-                                     MISTD::vector<const MachineInstr*> &PrevMIs);
+                                     std::vector<const MachineInstr*> &PrevMIs);
 
     /// EliminateCSE - Given a LICM'ed instruction, look for an instruction on
     /// the preheader that compute the same value. If it's found, do a RAU on
     /// with the definition of the existing instruction rather than hoisting
     /// the instruction to the preheader.
     bool EliminateCSE(MachineInstr *MI,
-           DenseMap<unsigned, MISTD::vector<const MachineInstr*> >::iterator &CI);
+           DenseMap<unsigned, std::vector<const MachineInstr*> >::iterator &CI);
 
     /// MayCSE - Return true if the given instruction will be CSE'd if it's
     /// hoisted out of the loop.
@@ -340,7 +340,7 @@ bool MachineLICM::runOnMachineFunction(MachineFunction &MF) {
     // Estimate register pressure during pre-regalloc pass.
     unsigned NumRC = TRI->getNumRegClasses();
     RegPressure.resize(NumRC);
-    MISTD::fill(RegPressure.begin(), RegPressure.end(), 0);
+    std::fill(RegPressure.begin(), RegPressure.end(), 0);
     RegLimit.resize(NumRC);
     for (TargetRegisterInfo::regclass_iterator I = TRI->regclass_begin(),
            E = TRI->regclass_end(); I != E; ++I)
@@ -502,7 +502,7 @@ void MachineLICM::HoistRegionPostRA() {
 
   // Walk the entire region, count number of defs for each register, and
   // collect potential LICM candidates.
-  const MISTD::vector<MachineBasicBlock *> &Blocks = CurLoop->getBlocks();
+  const std::vector<MachineBasicBlock *> &Blocks = CurLoop->getBlocks();
   for (unsigned i = 0, e = Blocks.size(); i != e; ++i) {
     MachineBasicBlock *BB = Blocks[i];
 
@@ -584,7 +584,7 @@ void MachineLICM::HoistRegionPostRA() {
 /// AddToLiveIns - Add register 'Reg' to the livein sets of BBs in the current
 /// loop, and make sure it is not killed by any instructions in the loop.
 void MachineLICM::AddToLiveIns(unsigned Reg) {
-  const MISTD::vector<MachineBasicBlock *> &Blocks = CurLoop->getBlocks();
+  const std::vector<MachineBasicBlock *> &Blocks = CurLoop->getBlocks();
   for (unsigned i = 0, e = Blocks.size(); i != e; ++i) {
     MachineBasicBlock *BB = Blocks[i];
     if (!BB->isLiveIn(Reg))
@@ -711,7 +711,7 @@ void MachineLICM::HoistOutOfLoop(MachineDomTreeNode *HeaderN) {
       continue;
 
     Scopes.push_back(Node);
-    const MISTD::vector<MachineDomTreeNode*> &Children = Node->getChildren();
+    const std::vector<MachineDomTreeNode*> &Children = Node->getChildren();
     unsigned NumChildren = Children.size();
 
     // Don't hoist things out of a large switch statement.  This often causes
@@ -794,7 +794,7 @@ MachineLICM::getRegisterClassIDAndCost(const MachineInstr *MI,
 /// the preheader to initialize the starting "register pressure". Note this
 /// does not count live through (livein but not used) registers.
 void MachineLICM::InitRegPressure(MachineBasicBlock *BB) {
-  MISTD::fill(RegPressure.begin(), RegPressure.end(), 0);
+  std::fill(RegPressure.begin(), RegPressure.end(), 0);
 
   // If the preheader has only a single predecessor and it ends with a
   // fallthrough or an unconditional branch, then scan its predecessor for live
@@ -1118,13 +1118,13 @@ void MachineLICM::UpdateBackTraceRegPressure(const MachineInstr *MI) {
       if (CI != Cost.end())
         CI->second += RCCost;
       else
-        Cost.insert(MISTD::make_pair(RCId, RCCost));
+        Cost.insert(std::make_pair(RCId, RCCost));
     } else if (isOperandKill(MO, MRI)) {
       DenseMap<unsigned, int>::iterator CI = Cost.find(RCId);
       if (CI != Cost.end())
         CI->second -= RCCost;
       else
-        Cost.insert(MISTD::make_pair(RCId, -RCCost));
+        Cost.insert(std::make_pair(RCId, -RCCost));
     }
   }
 
@@ -1300,21 +1300,21 @@ void MachineLICM::InitCSEMap(MachineBasicBlock *BB) {
   for (MachineBasicBlock::iterator I = BB->begin(),E = BB->end(); I != E; ++I) {
     const MachineInstr *MI = &*I;
     unsigned Opcode = MI->getOpcode();
-    DenseMap<unsigned, MISTD::vector<const MachineInstr*> >::iterator
+    DenseMap<unsigned, std::vector<const MachineInstr*> >::iterator
       CI = CSEMap.find(Opcode);
     if (CI != CSEMap.end())
       CI->second.push_back(MI);
     else {
-      MISTD::vector<const MachineInstr*> CSEMIs;
+      std::vector<const MachineInstr*> CSEMIs;
       CSEMIs.push_back(MI);
-      CSEMap.insert(MISTD::make_pair(Opcode, CSEMIs));
+      CSEMap.insert(std::make_pair(Opcode, CSEMIs));
     }
   }
 }
 
 const MachineInstr*
 MachineLICM::LookForDuplicate(const MachineInstr *MI,
-                              MISTD::vector<const MachineInstr*> &PrevMIs) {
+                              std::vector<const MachineInstr*> &PrevMIs) {
   for (unsigned i = 0, e = PrevMIs.size(); i != e; ++i) {
     const MachineInstr *PrevMI = PrevMIs[i];
     if (TII->produceSameValue(MI, PrevMI, (PreRegAlloc ? MRI : 0)))
@@ -1324,7 +1324,7 @@ MachineLICM::LookForDuplicate(const MachineInstr *MI,
 }
 
 bool MachineLICM::EliminateCSE(MachineInstr *MI,
-          DenseMap<unsigned, MISTD::vector<const MachineInstr*> >::iterator &CI) {
+          DenseMap<unsigned, std::vector<const MachineInstr*> >::iterator &CI) {
   // Do not CSE implicit_def so ProcessImplicitDefs can properly propagate
   // the undef property onto uses.
   if (CI == CSEMap.end() || MI->isImplicitDef())
@@ -1384,7 +1384,7 @@ bool MachineLICM::EliminateCSE(MachineInstr *MI,
 /// hoisted out of the loop.
 bool MachineLICM::MayCSE(MachineInstr *MI) {
   unsigned Opcode = MI->getOpcode();
-  DenseMap<unsigned, MISTD::vector<const MachineInstr*> >::iterator
+  DenseMap<unsigned, std::vector<const MachineInstr*> >::iterator
     CI = CSEMap.find(Opcode);
   // Do not CSE implicit_def so ProcessImplicitDefs can properly propagate
   // the undef property onto uses.
@@ -1427,7 +1427,7 @@ bool MachineLICM::Hoist(MachineInstr *MI, MachineBasicBlock *Preheader) {
 
   // Look for opportunity to CSE the hoisted instruction.
   unsigned Opcode = MI->getOpcode();
-  DenseMap<unsigned, MISTD::vector<const MachineInstr*> >::iterator
+  DenseMap<unsigned, std::vector<const MachineInstr*> >::iterator
     CI = CSEMap.find(Opcode);
   if (!EliminateCSE(MI, CI)) {
     // Otherwise, splice the instruction to the preheader.
@@ -1449,9 +1449,9 @@ bool MachineLICM::Hoist(MachineInstr *MI, MachineBasicBlock *Preheader) {
     if (CI != CSEMap.end())
       CI->second.push_back(MI);
     else {
-      MISTD::vector<const MachineInstr*> CSEMIs;
+      std::vector<const MachineInstr*> CSEMIs;
       CSEMIs.push_back(MI);
-      CSEMap.insert(MISTD::make_pair(Opcode, CSEMIs));
+      CSEMap.insert(std::make_pair(Opcode, CSEMIs));
     }
   }
 

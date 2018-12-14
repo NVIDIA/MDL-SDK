@@ -210,7 +210,7 @@ public:
   /// Our iterators are iterators over the collection of objects that share a
   /// key.
   template<typename SMSPtrTy>
-  class iterator_base : public MISTD::iterator<MISTD::bidirectional_iterator_tag,
+  class iterator_base : public std::iterator<std::bidirectional_iterator_tag,
                                              ValueT> {
     friend class SparseMultiSet;
     SMSPtrTy SMS;
@@ -239,7 +239,7 @@ public:
     void setNext(unsigned N) { SMS->Dense[Idx].Next = N; }
 
   public:
-    typedef MISTD::iterator<MISTD::bidirectional_iterator_tag, ValueT> super;
+    typedef std::iterator<std::bidirectional_iterator_tag, ValueT> super;
     typedef typename super::value_type value_type;
     typedef typename super::difference_type difference_type;
     typedef typename super::pointer pointer;
@@ -313,7 +313,7 @@ public:
   typedef iterator_base<const SparseMultiSet *> const_iterator;
 
   // Convenience types
-  typedef MISTD::pair<iterator, iterator> RangePair;
+  typedef std::pair<iterator, iterator> RangePair;
 
   /// Returns an iterator past this container. Note that such an iterator cannot
   /// be decremented, but will compare equal to other end iterators.
@@ -354,10 +354,10 @@ public:
   ///
   iterator findIndex(unsigned Idx) {
     assert(Idx < Universe && "Key out of range");
-    assert(MISTD::numeric_limits<SparseT>::is_integer &&
-           !MISTD::numeric_limits<SparseT>::is_signed &&
+    assert(std::numeric_limits<SparseT>::is_integer &&
+           !std::numeric_limits<SparseT>::is_signed &&
            "SparseT must be an unsigned integer type");
-    const unsigned Stride = MISTD::numeric_limits<SparseT>::max() + 1u;
+    const unsigned Stride = std::numeric_limits<SparseT>::max() + 1u;
     for (unsigned i = Sparse[Idx], e = Dense.size(); i < e; i += Stride) {
       const unsigned FoundIdx = sparseIndex(Dense[i]);
       // Check that we're pointing at the correct entry and that it is the head

@@ -152,13 +152,13 @@ TEST(ConstantsTest, PointerCast) {
 }
 
 #define CHECK(x, y) {                                         		\
-    MISTD::string __s;                                            	\
+    std::string __s;                                            	\
     raw_string_ostream __o(__s);                                	\
     Instruction *__I = cast<ConstantExpr>(x)->getAsInstruction();	\
     __I->print(__o);      						\
     delete __I; 							\
     __o.flush();                                                	\
-    EXPECT_EQ(MISTD::string("  <badref> = " y), __s);             	\
+    EXPECT_EQ(std::string("  <badref> = " y), __s);             	\
   }
 
 TEST(ConstantsTest, AsInstructionsTest) {
@@ -241,7 +241,7 @@ TEST(ConstantsTest, AsInstructionsTest) {
   CHECK(ConstantExpr::getFCmp(CmpInst::FCMP_ULT, P1, P5), "fcmp ult float "
         P1STR ", " P5STR);
 
-  MISTD::vector<Constant*> V;
+  std::vector<Constant*> V;
   V.push_back(One);
   // FIXME: getGetElementPtr() actually creates an inbounds ConstantGEP,
   //        not a normal one!

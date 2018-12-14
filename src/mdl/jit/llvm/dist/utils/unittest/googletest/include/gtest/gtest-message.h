@@ -67,7 +67,7 @@ namespace testing {
 //
 //   testing::Message foo;
 //   foo << 1 << " != " << 2;
-//   MISTD::cout << foo;
+//   std::cout << foo;
 //
 // will print "1 != 2".
 //
@@ -83,7 +83,7 @@ class GTEST_API_ Message {
  private:
   // The type of basic IO manipulators (endl, ends, and flush) for
   // narrow streams.
-  typedef MISTD::ostream& (*BasicNarrowIoManip)(MISTD::ostream&);
+  typedef std::ostream& (*BasicNarrowIoManip)(std::ostream&);
 
  public:
   // Constructs an empty Message.
@@ -91,19 +91,19 @@ class GTEST_API_ Message {
   // ASSERT/EXPECT in a procedure adds over 200 bytes to the procedure's
   // stack frame leading to huge stack frames in some cases; gcc does not reuse
   // the stack space.
-  Message() : ss_(new ::MISTD::stringstream) {
+  Message() : ss_(new ::std::stringstream) {
     // By default, we want there to be enough precision when printing
     // a double to a Message.
-    *ss_ << MISTD::setprecision(MISTD::numeric_limits<double>::digits10 + 2);
+    *ss_ << std::setprecision(std::numeric_limits<double>::digits10 + 2);
   }
 
   // Copy constructor.
-  Message(const Message& msg) : ss_(new ::MISTD::stringstream) {  // NOLINT
+  Message(const Message& msg) : ss_(new ::std::stringstream) {  // NOLINT
     *ss_ << msg.GetString();
   }
 
   // Constructs a Message from a C-string.
-  explicit Message(const char* str) : ss_(new ::MISTD::stringstream) {
+  explicit Message(const char* str) : ss_(new ::std::stringstream) {
     *ss_ << str;
   }
 
@@ -174,7 +174,7 @@ class GTEST_API_ Message {
 #if GTEST_HAS_STD_WSTRING
   // Converts the given wide string to a narrow string using the UTF-8
   // encoding, and streams the result to this Message object.
-  Message& operator <<(const ::MISTD::wstring& wstr);
+  Message& operator <<(const ::std::wstring& wstr);
 #endif  // GTEST_HAS_STD_WSTRING
 
 #if GTEST_HAS_GLOBAL_WSTRING
@@ -213,7 +213,7 @@ class GTEST_API_ Message {
 #endif  // GTEST_OS_SYMBIAN
 
   // We'll hold the text streamed to this object here.
-  const internal::scoped_ptr< ::MISTD::stringstream> ss_;
+  const internal::scoped_ptr< ::std::stringstream> ss_;
 
   // We declare (but don't implement) this to prevent the compiler
   // from implementing the assignment operator.
@@ -221,7 +221,7 @@ class GTEST_API_ Message {
 };
 
 // Streams a Message to an ostream.
-inline MISTD::ostream& operator <<(MISTD::ostream& os, const Message& sb) {
+inline std::ostream& operator <<(std::ostream& os, const Message& sb) {
   return os << sb.GetString();
 }
 

@@ -324,7 +324,7 @@ struct ExprMapKeyType {
   uint8_t opcode;
   uint8_t subclassoptionaldata;
   uint16_t subclassdata;
-  MISTD::vector<Constant*> operands;
+  std::vector<Constant*> operands;
   SmallVector<unsigned, 4> indices;
   bool operator==(const ExprMapKeyType& that) const {
     return this->opcode == that.opcode &&
@@ -356,8 +356,8 @@ struct InlineAsmKeyType {
     : asm_string(AsmString), constraints(Constraints),
       has_side_effects(hasSideEffects), is_align_stack(isAlignStack),
       asm_dialect(asmDialect) {}
-  MISTD::string asm_string;
-  MISTD::string constraints;
+  std::string asm_string;
+  std::string constraints;
   bool has_side_effects;
   bool is_align_stack;
   InlineAsm::AsmDialect asm_dialect;
@@ -395,8 +395,8 @@ struct InlineAsmKeyType {
 // constant.
 //
 template<typename T, typename Alloc>
-struct ConstantTraits< MISTD::vector<T, Alloc> > {
-  static unsigned uses(const MISTD::vector<T, Alloc>& v) {
+struct ConstantTraits< std::vector<T, Alloc> > {
+  static unsigned uses(const std::vector<T, Alloc>& v) {
     return v.size();
   }
 };
@@ -457,7 +457,7 @@ struct ConstantCreator<ConstantExpr, Type, ExprMapKeyType> {
     if (V.opcode == Instruction::ExtractValue)
       return new ExtractValueConstantExpr(V.operands[0], V.indices, Ty);
     if (V.opcode == Instruction::GetElementPtr) {
-      MISTD::vector<Constant*> IdxList(V.operands.begin()+1, V.operands.end());
+      std::vector<Constant*> IdxList(V.operands.begin()+1, V.operands.end());
       return GetElementPtrConstantExpr::Create(V.operands[0], IdxList, Ty,
                                                V.subclassoptionaldata);
     }
@@ -479,7 +479,7 @@ template<>
 struct ConstantKeyData<ConstantExpr> {
   typedef ExprMapKeyType ValType;
   static ValType getValType(ConstantExpr *CE) {
-    MISTD::vector<Constant*> Operands;
+    std::vector<Constant*> Operands;
     Operands.reserve(CE->getNumOperands());
     for (unsigned i = 0, e = CE->getNumOperands(); i != e; ++i)
       Operands.push_back(cast<Constant>(CE->getOperand(i)));
@@ -514,9 +514,9 @@ template<class ValType, class ValRefType, class TypeClass, class ConstantClass,
          bool HasLargeKey = false /*true for arrays and structs*/ >
 class ConstantUniqueMap {
 public:
-  typedef MISTD::pair<TypeClass*, ValType> MapKey;
-  typedef MISTD::map<MapKey, ConstantClass *> MapTy;
-  typedef MISTD::map<ConstantClass *, typename MapTy::iterator> InverseMapTy;
+  typedef std::pair<TypeClass*, ValType> MapKey;
+  typedef std::map<MapKey, ConstantClass *> MapTy;
+  typedef std::map<ConstantClass *, typename MapTy::iterator> InverseMapTy;
 private:
   /// Map - This is the main map from the element descriptor to the Constants.
   /// This is the primary way we avoid creating two of the same shape
@@ -546,10 +546,10 @@ public:
   /// entry and Exists=true.  If not, the iterator points to the newly
   /// inserted entry and returns Exists=false.  Newly inserted entries have
   /// I->second == 0, and should be filled in.
-  typename MapTy::iterator InsertOrGetItem(MISTD::pair<MapKey, ConstantClass *>
+  typename MapTy::iterator InsertOrGetItem(std::pair<MapKey, ConstantClass *>
                                  &InsertVal,
                                  bool &Exists) {
-    MISTD::pair<typename MapTy::iterator, bool> IP = Map.insert(InsertVal);
+    std::pair<typename MapTy::iterator, bool> IP = Map.insert(InsertVal);
     Exists = !IP.second;
     return IP.first;
   }
@@ -582,10 +582,10 @@ private:
       ConstantCreator<ConstantClass,TypeClass,ValType>::create(Ty, V);
 
     assert(Result->getType() == Ty && "Type specified is not correct!");
-    I = Map.insert(I, MISTD::make_pair(MapKey(Ty, V), Result));
+    I = Map.insert(I, std::make_pair(MapKey(Ty, V), Result));
 
     if (HasLargeKey)  // Remember the reverse mapping if needed.
-      InverseMap.insert(MISTD::make_pair(Result, I));
+      InverseMap.insert(std::make_pair(Result, I));
 
     return Result;
   }
@@ -651,7 +651,7 @@ template<class TypeClass, class ConstantClass>
 class ConstantAggrUniqueMap {
 public:
   typedef ArrayRef<Constant*> Operands;
-  typedef MISTD::pair<TypeClass*, Operands> LookupKey;
+  typedef std::pair<TypeClass*, Operands> LookupKey;
 private:
   struct MapInfo {
     typedef DenseMapInfo<ConstantClass*> ConstantClassInfo;

@@ -158,10 +158,10 @@ private:
       Mask(mask), BB(bb), Bits(bits), ExtraWeight(Weight) { }
   };
 
-  typedef MISTD::vector<Case>           CaseVector;
-  typedef MISTD::vector<CaseBits>       CaseBitsVector;
+  typedef std::vector<Case>           CaseVector;
+  typedef std::vector<CaseBits>       CaseBitsVector;
   typedef CaseVector::iterator        CaseItr;
-  typedef MISTD::pair<CaseItr, CaseItr> CaseRange;
+  typedef std::pair<CaseItr, CaseItr> CaseRange;
 
   /// CaseRec - A struct with ctor used in lowering switches to a binary tree
   /// of conditional branches.
@@ -181,7 +181,7 @@ private:
     CaseRange Range;
   };
 
-  typedef MISTD::vector<CaseRec> CaseRecVector;
+  typedef std::vector<CaseRec> CaseRecVector;
 
   /// The comparison function for sorting the switch case values in the vector.
   /// WARNING: Case ranges should be disjoint!
@@ -258,7 +258,7 @@ private:
     MachineBasicBlock *HeaderBB;
     bool Emitted;
   };
-  typedef MISTD::pair<JumpTableHeader, JumpTable> JumpTableBlock;
+  typedef std::pair<JumpTableHeader, JumpTable> JumpTableBlock;
 
   struct BitTestCase {
     BitTestCase(uint64_t M, MachineBasicBlock* T, MachineBasicBlock* Tr,
@@ -495,13 +495,13 @@ public:
 
   /// SwitchCases - Vector of CaseBlock structures used to communicate
   /// SwitchInst code generation information.
-  MISTD::vector<CaseBlock> SwitchCases;
+  std::vector<CaseBlock> SwitchCases;
   /// JTCases - Vector of JumpTable structures used to communicate
   /// SwitchInst code generation information.
-  MISTD::vector<JumpTableBlock> JTCases;
+  std::vector<JumpTableBlock> JTCases;
   /// BitTestCases - Vector of BitTestBlock structures used to communicate
   /// SwitchInst code generation information.
-  MISTD::vector<BitTestBlock> BitTestCases;
+  std::vector<BitTestBlock> BitTestCases;
   /// A StackProtectorDescriptor structure used to communicate stack protector
   /// information in between SelectBasicBlock and FinishBasicBlock.
   StackProtectorDescriptor SPDescriptor;
@@ -613,14 +613,14 @@ public:
                                     MachineBasicBlock *FBB,
                                     MachineBasicBlock *CurBB,
                                     MachineBasicBlock *SwitchBB);
-  bool ShouldEmitAsBranches(const MISTD::vector<CaseBlock> &Cases);
+  bool ShouldEmitAsBranches(const std::vector<CaseBlock> &Cases);
   bool isExportableFromCurrentBlock(const Value *V, const BasicBlock *FromBB);
   void CopyToExportRegsIfNeeded(const Value *V);
   void ExportFromCurrentBlock(const Value *V);
   void LowerCallTo(ImmutableCallSite CS, SDValue Callee, bool IsTailCall,
                    MachineBasicBlock *LandingPad = NULL);
 
-  MISTD::pair<SDValue, SDValue> LowerCallOperands(const CallInst &CI,
+  std::pair<SDValue, SDValue> LowerCallOperands(const CallInst &CI,
                                                 unsigned ArgIdx,
                                                 unsigned NumArgs,
                                                 SDValue Callee,

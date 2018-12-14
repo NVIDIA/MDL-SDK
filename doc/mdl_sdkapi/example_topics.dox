@@ -82,10 +82,12 @@ index.
   - \ref mi_neuray_example_df_cuda "Generated BSDF functions"
   - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime"
 
+  - \ref mi_neuray_example_derivatives "Automatic derivatives"
+
   - \ref mi_neuray_example_user_state_module "User-defined state modules"
 
 \if  MDL_BIN_RELEASE
-  - \ref mi_neuray_example_distilling "Material Distilling"
+  - \ref mi_neuray_example_distilling "Material distilling"
   - \ref mi_neuray_example_distilling "Baking material sub-expressions"
   
   - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"

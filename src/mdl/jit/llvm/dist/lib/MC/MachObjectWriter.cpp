@@ -379,7 +379,7 @@ void MachObjectWriter::WriteLinkeditLoadCommand(uint32_t Type,
 }
 
 static unsigned ComputeLinkerOptionsLoadCommandSize(
-  const MISTD::vector<MISTD::string> &Options, bool is64Bit)
+  const std::vector<std::string> &Options, bool is64Bit)
 {
   unsigned Size = sizeof(MachO::linker_options_command);
   for (unsigned i = 0, e = Options.size(); i != e; ++i)
@@ -388,7 +388,7 @@ static unsigned ComputeLinkerOptionsLoadCommandSize(
 }
 
 void MachObjectWriter::WriteLinkerOptionsLoadCommand(
-  const MISTD::vector<MISTD::string> &Options)
+  const std::vector<std::string> &Options)
 {
   unsigned Size = ComputeLinkerOptionsLoadCommandSize(Options, is64Bit());
   uint64_t Start = OS.tell();
@@ -400,7 +400,7 @@ void MachObjectWriter::WriteLinkerOptionsLoadCommand(
   uint64_t BytesWritten = sizeof(MachO::linker_options_command);
   for (unsigned i = 0, e = Options.size(); i != e; ++i) {
     // Write each string, including the null byte.
-    const MISTD::string &Option = Options[i];
+    const std::string &Option = Options[i];
     WriteBytes(Option.c_str(), Option.size() + 1);
     BytesWritten += Option.size() + 1;
   }
@@ -457,7 +457,7 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
       continue;
 
     // Initialize the section indirect symbol base, if necessary.
-    IndirectSymBase.insert(MISTD::make_pair(it->SectionData, IndirectIndex));
+    IndirectSymBase.insert(std::make_pair(it->SectionData, IndirectIndex));
 
     Asm.getOrCreateSymbolData(*it->Symbol);
   }
@@ -474,7 +474,7 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
       continue;
 
     // Initialize the section indirect symbol base, if necessary.
-    IndirectSymBase.insert(MISTD::make_pair(it->SectionData, IndirectIndex));
+    IndirectSymBase.insert(std::make_pair(it->SectionData, IndirectIndex));
 
     // Set the symbol type to undefined lazy, but only on construction.
     //
@@ -493,9 +493,9 @@ void MachObjectWriter::BindIndirectSymbols(MCAssembler &Asm) {
 /// string table.
 void MachObjectWriter::
 ComputeSymbolTable(MCAssembler &Asm, SmallString<256> &StringTable,
-                   MISTD::vector<MachSymbolData> &LocalSymbolData,
-                   MISTD::vector<MachSymbolData> &ExternalSymbolData,
-                   MISTD::vector<MachSymbolData> &UndefinedSymbolData) {
+                   std::vector<MachSymbolData> &LocalSymbolData,
+                   std::vector<MachSymbolData> &ExternalSymbolData,
+                   std::vector<MachSymbolData> &UndefinedSymbolData) {
   // Build section lookup table.
   DenseMap<const MCSection*, uint8_t> SectionIndexMap;
   unsigned Index = 1;
@@ -584,8 +584,8 @@ ComputeSymbolTable(MCAssembler &Asm, SmallString<256> &StringTable,
   }
 
   // External and undefined symbols are required to be in lexicographic order.
-  MISTD::sort(ExternalSymbolData.begin(), ExternalSymbolData.end());
-  MISTD::sort(UndefinedSymbolData.begin(), UndefinedSymbolData.end());
+  std::sort(ExternalSymbolData.begin(), ExternalSymbolData.end());
+  std::sort(UndefinedSymbolData.begin(), UndefinedSymbolData.end());
 
   // Set the symbol indices.
   Index = 0;
@@ -761,7 +761,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
   }
 
   // Add the linker option load commands sizes.
-  const MISTD::vector<MISTD::vector<MISTD::string> > &LinkerOptions =
+  const std::vector<std::vector<std::string> > &LinkerOptions =
     Asm.getLinkerOptions();
   for (unsigned i = 0, e = LinkerOptions.size(); i != e; ++i) {
     ++NumLoadCommands;
@@ -784,13 +784,13 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
     uint64_t FileSize = Layout.getSectionFileSize(&SD);
     FileSize += getPaddingSize(&SD, Layout);
 
-    VMSize = MISTD::max(VMSize, Address + Size);
+    VMSize = std::max(VMSize, Address + Size);
 
     if (SD.getSection().isVirtualSection())
       continue;
 
-    SectionDataSize = MISTD::max(SectionDataSize, Address + Size);
-    SectionDataFileSize = MISTD::max(SectionDataFileSize, Address + FileSize);
+    SectionDataSize = std::max(SectionDataSize, Address + Size);
+    SectionDataFileSize = std::max(SectionDataFileSize, Address + FileSize);
   }
 
   // The section data is padded to 4 bytes.
@@ -809,7 +809,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
   uint64_t RelocTableEnd = SectionDataStart + SectionDataFileSize;
   for (MCAssembler::const_iterator it = Asm.begin(),
          ie = Asm.end(); it != ie; ++it) {
-    MISTD::vector<MachO::any_relocation_info> &Relocs = Relocations[it];
+    std::vector<MachO::any_relocation_info> &Relocs = Relocations[it];
     unsigned NumRelocs = Relocs.size();
     uint64_t SectionStart = SectionDataStart + getSectionAddress(it);
     WriteSection(Asm, Layout, *it, SectionStart, RelocTableEnd, NumRelocs);
@@ -883,7 +883,7 @@ void MachObjectWriter::WriteObject(MCAssembler &Asm,
          ie = Asm.end(); it != ie; ++it) {
     // Write the section relocation entries, in reverse order to match 'as'
     // (approximately, the exact algorithm is more complicated than this).
-    MISTD::vector<MachO::any_relocation_info> &Relocs = Relocations[it];
+    std::vector<MachO::any_relocation_info> &Relocs = Relocations[it];
     for (unsigned i = 0, e = Relocs.size(); i != e; ++i) {
       Write32(Relocs[e - i - 1].r_word0);
       Write32(Relocs[e - i - 1].r_word1);

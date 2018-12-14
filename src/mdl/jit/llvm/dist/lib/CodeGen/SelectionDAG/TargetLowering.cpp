@@ -80,7 +80,7 @@ void TargetLowering::ArgListEntry::setAttributes(ImmutableCallSite *CS,
 
 /// Generate a libcall taking the given operands as arguments and returning a
 /// result of type RetVT.
-MISTD::pair<SDValue, SDValue>
+std::pair<SDValue, SDValue>
 TargetLowering::makeLibCall(SelectionDAG &DAG,
                             RTLIB::Libcall LC, EVT RetVT,
                             const SDValue *Ops, unsigned NumOps,
@@ -1940,7 +1940,7 @@ PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const {
 
 
 TargetLowering::ConstraintType
-TargetLowering::getConstraintType(const MISTD::string &Constraint) const {
+TargetLowering::getConstraintType(const std::string &Constraint) const {
   unsigned S = Constraint.size();
 
   if (S == 1) {
@@ -1994,8 +1994,8 @@ const char *TargetLowering::LowerXConstraint(EVT ConstraintVT) const{
 /// LowerAsmOperandForConstraint - Lower the specified operand into the Ops
 /// vector.  If it is invalid, don't add anything to Ops.
 void TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
-                                                  MISTD::string &Constraint,
-                                                  MISTD::vector<SDValue> &Ops,
+                                                  std::string &Constraint,
+                                                  std::vector<SDValue> &Ops,
                                                   SelectionDAG &DAG) const {
 
   if (Constraint.length() > 1) return;
@@ -2058,18 +2058,18 @@ void TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
   }
 }
 
-MISTD::pair<unsigned, const TargetRegisterClass*> TargetLowering::
-getRegForInlineAsmConstraint(const MISTD::string &Constraint,
+std::pair<unsigned, const TargetRegisterClass*> TargetLowering::
+getRegForInlineAsmConstraint(const std::string &Constraint,
                              MVT VT) const {
   if (Constraint.empty() || Constraint[0] != '{')
-    return MISTD::make_pair(0u, static_cast<TargetRegisterClass*>(0));
+    return std::make_pair(0u, static_cast<TargetRegisterClass*>(0));
   assert(*(Constraint.end()-1) == '}' && "Not a brace enclosed constraint?");
 
   // Remove the braces from around the name.
   StringRef RegName(Constraint.data()+1, Constraint.size()-2);
 
-  MISTD::pair<unsigned, const TargetRegisterClass*> R =
-    MISTD::make_pair(0u, static_cast<const TargetRegisterClass*>(0));
+  std::pair<unsigned, const TargetRegisterClass*> R =
+    std::make_pair(0u, static_cast<const TargetRegisterClass*>(0));
 
   // Figure out which register class contains this reg.
   const TargetRegisterInfo *RI = getTargetMachine().getRegisterInfo();
@@ -2085,8 +2085,8 @@ getRegForInlineAsmConstraint(const MISTD::string &Constraint,
     for (TargetRegisterClass::iterator I = RC->begin(), E = RC->end();
          I != E; ++I) {
       if (RegName.equals_lower(RI->getName(*I))) {
-        MISTD::pair<unsigned, const TargetRegisterClass*> S =
-          MISTD::make_pair(*I, RC);
+        std::pair<unsigned, const TargetRegisterClass*> S =
+          std::make_pair(*I, RC);
 
         // If this register class has the requested value type, return it,
         // otherwise keep searching and return the first class found
@@ -2291,10 +2291,10 @@ TargetLowering::AsmOperandInfoVector TargetLowering::ParseConstraints(
       AsmOperandInfo &Input = ConstraintOperands[OpInfo.MatchingInput];
 
       if (OpInfo.ConstraintVT != Input.ConstraintVT) {
-        MISTD::pair<unsigned, const TargetRegisterClass*> MatchRC =
+        std::pair<unsigned, const TargetRegisterClass*> MatchRC =
           getRegForInlineAsmConstraint(OpInfo.ConstraintCode,
                                        OpInfo.ConstraintVT);
-        MISTD::pair<unsigned, const TargetRegisterClass*> InputRC =
+        std::pair<unsigned, const TargetRegisterClass*> InputRC =
           getRegForInlineAsmConstraint(Input.ConstraintCode,
                                        Input.ConstraintVT);
         if ((OpInfo.ConstraintVT.isInteger() !=
@@ -2443,7 +2443,7 @@ static void ChooseConstraint(TargetLowering::AsmOperandInfo &OpInfo,
     if (CType == TargetLowering::C_Other && Op.getNode()) {
       assert(OpInfo.Codes[i].size() == 1 &&
              "Unhandled multi-letter 'other' constraint");
-      MISTD::vector<SDValue> ResultOps;
+      std::vector<SDValue> ResultOps;
       TLI.LowerAsmOperandForConstraint(Op, OpInfo.Codes[i],
                                        ResultOps, *DAG);
       if (!ResultOps.empty()) {
@@ -2539,7 +2539,7 @@ SDValue TargetLowering::BuildExactSDIV(SDValue Op1, SDValue Op2, SDLoc dl,
 /// <http://the.wall.riscom.net/books/proc/ppc/cwg/code2.html>
 SDValue TargetLowering::
 BuildSDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
-          MISTD::vector<SDNode*> *Created) const {
+          std::vector<SDNode*> *Created) const {
   EVT VT = N->getValueType(0);
   SDLoc dl(N);
 
@@ -2599,7 +2599,7 @@ BuildSDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
 /// <http://the.wall.riscom.net/books/proc/ppc/cwg/code2.html>
 SDValue TargetLowering::
 BuildUDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
-          MISTD::vector<SDNode*> *Created) const {
+          std::vector<SDNode*> *Created) const {
   EVT VT = N->getValueType(0);
   SDLoc dl(N);
 

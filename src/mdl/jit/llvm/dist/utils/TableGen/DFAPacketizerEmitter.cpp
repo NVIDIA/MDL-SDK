@@ -32,7 +32,7 @@ using namespace llvm;
 namespace {
 class DFAPacketizerEmitter {
 private:
-  MISTD::string TargetName;
+  std::string TargetName;
   //
   // allInsnClasses is the set of all possible resources consumed by an
   // InstrStage.
@@ -47,7 +47,7 @@ public:
   // collectAllInsnClasses: Populate allInsnClasses which is a set of units
   // used in each stage.
   //
-  void collectAllInsnClasses(const MISTD::string &Name,
+  void collectAllInsnClasses(const std::string &Name,
                              Record *ItinData,
                              unsigned &NStages,
                              raw_ostream &OS);
@@ -84,8 +84,8 @@ class State {
   static int currentStateNum;
   int stateNum;
   bool isInitial;
-  MISTD::set<unsigned> stateInfo;
-  typedef MISTD::map<unsigned, State *> TransitionMap;
+  std::set<unsigned> stateInfo;
+  typedef std::map<unsigned, State *> TransitionMap;
   TransitionMap Transitions;
 
   State();
@@ -108,7 +108,7 @@ class State {
   // AddInsnClass - Return all combinations of resource reservation
   // which are possible from this state (PossibleStates).
   //
-  void AddInsnClass(unsigned InsnClass, MISTD::set<unsigned> &PossibleStates);
+  void AddInsnClass(unsigned InsnClass, std::set<unsigned> &PossibleStates);
   // 
   // addTransition - Add a transition from this state given the input InsnClass
   //
@@ -131,7 +131,7 @@ public:
   ~DFA();
 
   // Set of states. Need to keep this sorted to emit the transition table.
-  typedef MISTD::set<State *, less_ptr<State> > StateSet;
+  typedef std::set<State *, less_ptr<State> > StateSet;
   StateSet states;
 
   State *currentState;
@@ -145,7 +145,7 @@ public:
   //
   // writeTable: Print out a table representing the DFA.
   //
-  void writeTableAndAPI(raw_ostream &OS, const MISTD::string &ClassName);
+  void writeTableAndAPI(raw_ostream &OS, const std::string &ClassName);
 };
 } // End anonymous namespace.
 
@@ -189,12 +189,12 @@ bool State::hasTransition(unsigned InsnClass) {
 // which are possible from this state (PossibleStates).
 //
 void State::AddInsnClass(unsigned InsnClass,
-                            MISTD::set<unsigned> &PossibleStates) {
+                            std::set<unsigned> &PossibleStates) {
   //
   // Iterate over all resource states in currentState.
   //
 
-  for (MISTD::set<unsigned>::iterator SI = stateInfo.begin();
+  for (std::set<unsigned>::iterator SI = stateInfo.begin();
        SI != stateInfo.end(); ++SI) {
     unsigned thisState = *SI;
 
@@ -239,7 +239,7 @@ void State::AddInsnClass(unsigned InsnClass,
 // be added to the packet represented by this state.
 //
 bool State::canAddInsnClass(unsigned InsnClass) const {
-  for (MISTD::set<unsigned>::const_iterator SI = stateInfo.begin();
+  for (std::set<unsigned>::const_iterator SI = stateInfo.begin();
        SI != stateInfo.end(); ++SI) {
     if (~*SI & InsnClass)
       return true;
@@ -278,12 +278,12 @@ DFAPacketizerEmitter::DFAPacketizerEmitter(RecordKeeper &R):
 //                         the ith state.
 //
 //
-void DFA::writeTableAndAPI(raw_ostream &OS, const MISTD::string &TargetName) {
-  static const MISTD::string SentinelEntry = "{-1, -1}";
+void DFA::writeTableAndAPI(raw_ostream &OS, const std::string &TargetName) {
+  static const std::string SentinelEntry = "{-1, -1}";
   DFA::StateSet::iterator SI = states.begin();
   // This table provides a map to the beginning of the transitions for State s
   // in DFAStateInputTable.
-  MISTD::vector<int> StateEntry(states.size());
+  std::vector<int> StateEntry(states.size());
 
   OS << "namespace llvm {\n\n";
   OS << "const int " << TargetName << "DFAStateInputTable[][2] = {\n";
@@ -335,7 +335,7 @@ void DFA::writeTableAndAPI(raw_ostream &OS, const MISTD::string &TargetName) {
   //
   // Emit DFA Packetizer tables if the target is a VLIW machine.
   //
-  MISTD::string SubTargetClassName = TargetName + "GenSubtargetInfo";
+  std::string SubTargetClassName = TargetName + "GenSubtargetInfo";
   OS << "\n" << "#include \"llvm/CodeGen/DFAPacketizer.h\"\n";
   OS << "namespace llvm {\n";
   OS << "DFAPacketizer *" << SubTargetClassName << "::"
@@ -350,30 +350,30 @@ void DFA::writeTableAndAPI(raw_ostream &OS, const MISTD::string &TargetName) {
 // collectAllInsnClasses - Populate allInsnClasses which is a set of units
 // used in each stage.
 //
-void DFAPacketizerEmitter::collectAllInsnClasses(const MISTD::string &Name,
+void DFAPacketizerEmitter::collectAllInsnClasses(const std::string &Name,
                                   Record *ItinData,
                                   unsigned &NStages,
                                   raw_ostream &OS) {
   // Collect processor itineraries.
-  MISTD::vector<Record*> ProcItinList =
+  std::vector<Record*> ProcItinList =
     Records.getAllDerivedDefinitions("ProcessorItineraries");
 
   // If just no itinerary then don't bother.
   if (ProcItinList.size() < 2)
     return;
-  MISTD::map<MISTD::string, unsigned> NameToBitsMap;
+  std::map<std::string, unsigned> NameToBitsMap;
 
   // Parse functional units for all the itineraries.
   for (unsigned i = 0, N = ProcItinList.size(); i < N; ++i) {
     Record *Proc = ProcItinList[i];
-    MISTD::vector<Record*> FUs = Proc->getValueAsListOfDefs("FU");
+    std::vector<Record*> FUs = Proc->getValueAsListOfDefs("FU");
 
     // Convert macros to bits for each stage.
     for (unsigned i = 0, N = FUs.size(); i < N; ++i)
       NameToBitsMap[FUs[i]->getName()] = (unsigned) (1U << i);
   }
 
-  const MISTD::vector<Record*> &StageList =
+  const std::vector<Record*> &StageList =
     ItinData->getValueAsListOfDefs("Stages");
 
   // The number of stages.
@@ -387,12 +387,12 @@ void DFAPacketizerEmitter::collectAllInsnClasses(const MISTD::string &Name,
     const Record *Stage = StageList[i];
 
     // Get unit list.
-    const MISTD::vector<Record*> &UnitList =
+    const std::vector<Record*> &UnitList =
       Stage->getValueAsListOfDefs("Units");
 
     for (unsigned j = 0, M = UnitList.size(); j < M; ++j) {
       // Conduct bitwise or.
-      MISTD::string UnitName = UnitList[j]->getName();
+      std::string UnitName = UnitList[j]->getName();
       assert(NameToBitsMap.count(UnitName));
       UnitBitValue |= NameToBitsMap[UnitName];
     }
@@ -409,7 +409,7 @@ void DFAPacketizerEmitter::collectAllInsnClasses(const MISTD::string &Name,
 void DFAPacketizerEmitter::run(raw_ostream &OS) {
 
   // Collect processor iteraries.
-  MISTD::vector<Record*> ProcItinList =
+  std::vector<Record*> ProcItinList =
     Records.getAllDerivedDefinitions("ProcessorItineraries");
 
   //
@@ -419,7 +419,7 @@ void DFAPacketizerEmitter::run(raw_ostream &OS) {
     Record *Proc = ProcItinList[i];
 
     // Get processor itinerary name.
-    const MISTD::string &Name = Proc->getName();
+    const std::string &Name = Proc->getName();
 
     // Skip default.
     if (Name == "NoItineraries")
@@ -432,7 +432,7 @@ void DFAPacketizerEmitter::run(raw_ostream &OS) {
       return;
 
     // Get itinerary data list.
-    MISTD::vector<Record*> ItinDataList = Proc->getValueAsListOfDefs("IID");
+    std::vector<Record*> ItinDataList = Proc->getValueAsListOfDefs("IID");
 
     // Collect instruction classes for all itinerary data.
     for (unsigned j = 0, M = ItinDataList.size(); j < M; j++) {
@@ -452,7 +452,7 @@ void DFAPacketizerEmitter::run(raw_ostream &OS) {
   Initial->stateInfo.insert(0x0);
   D.addState(Initial);
   SmallVector<State*, 32> WorkList;
-  MISTD::map<MISTD::set<unsigned>, State*> Visited;
+  std::map<std::set<unsigned>, State*> Visited;
 
   WorkList.push_back(Initial);
 
@@ -479,7 +479,7 @@ void DFAPacketizerEmitter::run(raw_ostream &OS) {
            CE = allInsnClasses.end(); CI != CE; ++CI) {
       unsigned InsnClass = *CI;
 
-      MISTD::set<unsigned> NewStateResources;
+      std::set<unsigned> NewStateResources;
       //
       // If we haven't already created a transition for this input
       // and the state can accommodate this InsnClass, create a transition.
@@ -494,7 +494,7 @@ void DFAPacketizerEmitter::run(raw_ostream &OS) {
         // If we have seen this state before, then do not create a new state.
         //
         //
-        MISTD::map<MISTD::set<unsigned>, State*>::iterator VI;
+        std::map<std::set<unsigned>, State*>::iterator VI;
         if ((VI = Visited.find(NewStateResources)) != Visited.end())
           NewState = VI->second;
         else {

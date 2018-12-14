@@ -98,7 +98,7 @@ class MachObjectWriter : public MCObjectWriter {
   /// @{
 
   llvm::DenseMap<const MCSectionData*,
-                 MISTD::vector<MachO::any_relocation_info> > Relocations;
+                 std::vector<MachO::any_relocation_info> > Relocations;
   llvm::DenseMap<const MCSectionData*, unsigned> IndirectSymBase;
 
   /// @}
@@ -106,9 +106,9 @@ class MachObjectWriter : public MCObjectWriter {
   /// @{
 
   SmallString<256> StringTable;
-  MISTD::vector<MachSymbolData> LocalSymbolData;
-  MISTD::vector<MachSymbolData> ExternalSymbolData;
-  MISTD::vector<MachSymbolData> UndefinedSymbolData;
+  std::vector<MachSymbolData> LocalSymbolData;
+  std::vector<MachSymbolData> ExternalSymbolData;
+  std::vector<MachSymbolData> UndefinedSymbolData;
 
   /// @}
 
@@ -195,7 +195,7 @@ public:
   void WriteLinkeditLoadCommand(uint32_t Type, uint32_t DataOffset,
                                 uint32_t DataSize);
 
-  void WriteLinkerOptionsLoadCommand(const MISTD::vector<MISTD::string> &Options);
+  void WriteLinkerOptionsLoadCommand(const std::vector<std::string> &Options);
 
   // FIXME: We really need to improve the relocation validation. Basically, we
   // want to implement a separate computation which evaluates the relocation
@@ -239,9 +239,9 @@ public:
   ///
   /// \param StringTable [out] - The string table data.
   void ComputeSymbolTable(MCAssembler &Asm, SmallString<256> &StringTable,
-                          MISTD::vector<MachSymbolData> &LocalSymbolData,
-                          MISTD::vector<MachSymbolData> &ExternalSymbolData,
-                          MISTD::vector<MachSymbolData> &UndefinedSymbolData);
+                          std::vector<MachSymbolData> &LocalSymbolData,
+                          std::vector<MachSymbolData> &ExternalSymbolData,
+                          std::vector<MachSymbolData> &UndefinedSymbolData);
 
   void computeSectionAddresses(const MCAssembler &Asm,
                                const MCAsmLayout &Layout);

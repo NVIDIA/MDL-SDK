@@ -55,7 +55,7 @@ public:
     while (true) {
       unsigned Target = (Index + 1) / 2 - 1;
       if (!Precedes(data[Index], data[Target])) return;
-      MISTD::swap(data[Index], data[Target]);
+      std::swap(data[Index], data[Target]);
       if (Target == 0) return;
       Index = Target;
     }
@@ -72,7 +72,7 @@ public:
       if (isPodLike<T>::value)
         Storage[0] = Storage[NewSize];
       else
-        MISTD::swap(Storage[0], Storage[NewSize]);
+        std::swap(Storage[0], Storage[NewSize]);
 
       // Bubble the root up as necessary.
       unsigned Index = 0;
@@ -88,7 +88,7 @@ public:
 
           // Otherwise, test whether we should swap L and Index.
           if (Precedes(Storage[L], Storage[Index]))
-            MISTD::swap(Storage[L], Storage[Index]);
+            std::swap(Storage[L], Storage[Index]);
           break;
         }
 
@@ -101,7 +101,7 @@ public:
           break;
 
         // Otherwise, keep bubbling up.
-        MISTD::swap(Storage[IndexToTest], Storage[Index]);
+        std::swap(Storage[IndexToTest], Storage[Index]);
         Index = IndexToTest;
       }
     }
@@ -121,7 +121,7 @@ class FunctionDifferenceEngine {
   /// The current mapping from old blocks to new blocks.
   DenseMap<BasicBlock*, BasicBlock*> Blocks;
 
-  DenseSet<MISTD::pair<Value*, Value*> > TentativeValues;
+  DenseSet<std::pair<Value*, Value*> > TentativeValues;
 
   unsigned getUnprocPredCount(BasicBlock *Block) const {
     unsigned Count = 0;
@@ -130,7 +130,7 @@ class FunctionDifferenceEngine {
     return Count;
   }
 
-  typedef MISTD::pair<BasicBlock*, BasicBlock*> BlockPair;
+  typedef std::pair<BasicBlock*, BasicBlock*> BlockPair;
 
   /// A type which sorts a priority queue by the number of unprocessed
   /// predecessor blocks it has remaining.
@@ -208,7 +208,7 @@ class FunctionDifferenceEngine {
 
       // Otherwise, tentatively unify them.
       if (!LeftI->use_empty())
-        TentativeValues.insert(MISTD::make_pair(LeftI, RightI));
+        TentativeValues.insert(std::make_pair(LeftI, RightI));
 
       ++LI, ++RI;
     } while (LI != LE); // This is sufficient: we can't get equality of
@@ -437,7 +437,7 @@ class FunctionDifferenceEngine {
       return equivalentAsOperands(cast<Constant>(L), cast<Constant>(R));
 
     if (isa<Instruction>(L))
-      return Values[L] == R || TentativeValues.count(MISTD::make_pair(L, R));
+      return Values[L] == R || TentativeValues.count(std::make_pair(L, R));
 
     if (isa<Argument>(L))
       return Values[L] == R;
@@ -489,7 +489,7 @@ void FunctionDifferenceEngine::runBlockDiff(BasicBlock::iterator LStart,
   BasicBlock::iterator LE = LStart->getParent()->end();
   BasicBlock::iterator RE = RStart->getParent()->end();
 
-  unsigned NL = MISTD::distance(LStart, LE);
+  unsigned NL = std::distance(LStart, LE);
 
   SmallVector<DiffEntry, 20> Paths1(NL+1);
   SmallVector<DiffEntry, 20> Paths2(NL+1);
@@ -522,7 +522,7 @@ void FunctionDifferenceEngine::runBlockDiff(BasicBlock::iterator LStart,
         Next[Index] = Cur[Index-1];
         Next[Index].Cost += MatchCost;
         Next[Index].Path.push_back(DC_match);
-        TentativeValues.insert(MISTD::make_pair(&*LI, &*RI));
+        TentativeValues.insert(std::make_pair(&*LI, &*RI));
       } else if (Next[Index-1].Cost <= Cur[Index].Cost) {
         Next[Index] = Next[Index-1];
         Next[Index].Cost += LeftCost;
@@ -534,7 +534,7 @@ void FunctionDifferenceEngine::runBlockDiff(BasicBlock::iterator LStart,
       }
     }
 
-    MISTD::swap(Cur, Next);
+    std::swap(Cur, Next);
   }
 
   // We don't need the tentative values anymore; everything from here
@@ -650,14 +650,14 @@ void DifferenceEngine::diff(Function *L, Function *R) {
 
 void DifferenceEngine::diff(Module *L, Module *R) {
   StringSet<> LNames;
-  SmallVector<MISTD::pair<Function*,Function*>, 20> Queue;
+  SmallVector<std::pair<Function*,Function*>, 20> Queue;
 
   for (Module::iterator I = L->begin(), E = L->end(); I != E; ++I) {
     Function *LFn = &*I;
     LNames.insert(LFn->getName());
 
     if (Function *RFn = R->getFunction(LFn->getName()))
-      Queue.push_back(MISTD::make_pair(LFn, RFn));
+      Queue.push_back(std::make_pair(LFn, RFn));
     else
       logf("function %l exists only in left module") << LFn;
   }
@@ -668,7 +668,7 @@ void DifferenceEngine::diff(Module *L, Module *R) {
       logf("function %r exists only in right module") << RFn;
   }
 
-  for (SmallVectorImpl<MISTD::pair<Function*,Function*> >::iterator
+  for (SmallVectorImpl<std::pair<Function*,Function*> >::iterator
          I = Queue.begin(), E = Queue.end(); I != E; ++I)
     diff(I->first, I->second);
 }

@@ -32,7 +32,7 @@ public:
 
 template <typename T>
 struct ImutIntervalInfo {
-  typedef const MISTD::pair<Interval, T> value_type;
+  typedef const std::pair<Interval, T> value_type;
   typedef const value_type &value_type_ref;
   typedef const Interval key_type;
   typedef const Interval &key_type_ref;
@@ -171,18 +171,18 @@ private:
     if (CurrentK.getStart() < K.getStart()) {
       if (CurrentK.getEnd() <= K.getEnd()) {
         Interval NewK(CurrentK.getStart(), K.getStart()-1);
-        return add_internal(MISTD::make_pair(NewK, OldData), T);
+        return add_internal(std::make_pair(NewK, OldData), T);
       } else {
         Interval NewK1(CurrentK.getStart(), K.getStart()-1);
-        T = add_internal(MISTD::make_pair(NewK1, OldData), T); 
+        T = add_internal(std::make_pair(NewK1, OldData), T); 
 
         Interval NewK2(K.getEnd()+1, CurrentK.getEnd());
-        return add_internal(MISTD::make_pair(NewK2, OldData), T);
+        return add_internal(std::make_pair(NewK2, OldData), T);
       }
     } else {
       if (CurrentK.getEnd() > K.getEnd()) {
         Interval NewK(K.getEnd()+1, CurrentK.getEnd());
-        return add_internal(MISTD::make_pair(NewK, OldData), T);
+        return add_internal(std::make_pair(NewK, OldData), T);
       } else
         return T;
     }
@@ -219,7 +219,7 @@ public:
 
     ImmutableIntervalMap add(ImmutableIntervalMap Old, 
                              key_type_ref K, data_type_ref D) {
-      TreeTy *T = F.add(Old.Root, MISTD::pair<key_type, data_type>(K, D));
+      TreeTy *T = F.add(Old.Root, std::pair<key_type, data_type>(K, D));
       return ImmutableIntervalMap(F.getCanonicalTree(T));
     }
 

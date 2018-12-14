@@ -58,18 +58,18 @@ Here's the material state structure just for reference:
 
 \code
     struct Shading_state_material {
-        Float32_3_struct           normal;              // state::normal() result
-        Float32_3_struct           geom_normal;         // state::geom_normal() result
-        Float32_3_struct           position;            // state::position() result
-        Float32                    animation_time;      // state::animation_time() result
-        const Float32_3_struct    *text_coords;         // state::texture_coordinate() table
-        const Float32_3_struct    *tangent_u;           // state::texture_tangent_u() table
-        const Float32_3_struct    *tangent_v;           // state::texture_tangent_v() table
-        Float32_4_struct          *text_results;        // texture results lookup table
-        const char                *ro_data_segment;     // read-only data segment
-        const Float32_4_struct    *world_to_object;     // world-to-object transform matrix
-        const Float32_4_struct    *object_to_world;     // object-to-world transform matrix
-        Sint32                     object_id;           // state::object_id() result
+        tct_float3           normal;              // state::normal() result
+        tct_float3           geom_normal;         // state::geom_normal() result
+        tct_float3           position;            // state::position() result
+        tct_float            animation_time;      // state::animation_time() result
+        const tct_float3    *text_coords;         // state::texture_coordinate() table
+        const tct_float3    *tangent_u;           // state::texture_tangent_u() table
+        const tct_float3    *tangent_v;           // state::texture_tangent_v() table
+        tct_float4          *text_results;        // texture results lookup table
+        const char          *ro_data_segment;     // read-only data segment
+        const tct_float4    *world_to_object;     // world-to-object transform matrix
+        const tct_float4    *object_to_world;     // object-to-world transform matrix
+        tct_int              object_id;           // state::object_id() result
     };
 \endcode
 
@@ -89,7 +89,10 @@ For the native (CPU) backend, filling this structure is actually already enough 
 prepare the execution of the generated code. Calling #mi::neuraylib::ITarget_code::execute()
 with the material state and a sufficiently large result buffer will fill the buffer
 with the requested result.
-In this example, we will provide a \c NULL pointer as a target argument block as we use instance compilation.
+In this example, we will provide a \c NULL pointer as a target argument block.
+For instance compilation, the target argument block parameter is not used, and for class
+compilation, providing a \c NULL pointer will result in the default target argument block
+for the used material instance.
 See \ref mi_neuray_compilation_modes for more details about compilation modes.
 
 
@@ -125,16 +128,16 @@ It also requires you to implement the following functions:
 
 - tex_resolution_2d
 
-Except for the last one, this functions correspond directly to the functions described in section 20.3
+Except for the last one, these functions correspond directly to the functions described in section 20.3
 "Standard library functions - Texture" in the MDL specification.
 
 You pass your functions to the
 \neurayAdjectiveName via an instance of the struct #mi::neuraylib::Texture_handler_base when calling any
 of the #mi::neuraylib::ITarget_code::execute*() functions. The #mi::neuraylib::Texture_handler_base has a
-vtable parameter which contains function pointers matching the signature of the required functions. This
+vtable parameter which contains function pointers matching the signature of the required functions. These
 function pointers need to point to your functions.
 
-An example implementation (limited to 2d texture lookup for now) can be found in texture_support.h.
+An example implementation (limited to 2D texture lookups for now) can be found in texture_support.h.
 To switch example_execution_native to the custom texturing code, please disable the define
 \c USE_BUILTIN_TEXTURE_RUNTIME on top of example_execution_native.cpp.
 
@@ -144,11 +147,14 @@ To switch example_execution_native to the custom texturing code, please disable 
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/execution_native/example_execution_native.cpp</tt>
-  
-  <tt>examples/mdl_sdk/execution_native/texture_support.h</tt>
 
 \include execution_native/example_execution_native.cpp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/execution_native/texture_support.h</tt>
+
 \include execution_native/texture_support.h
+
 
 <div align="right">
     [\link mi_neuray_example_compilation Previous\endlink]

@@ -67,7 +67,7 @@ class Zip_file : public IFile
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     bool open(
-	const MISTD::string& path,
+	const std::string& path,
 	IFile::Mode mode = IFile::M_READ);
 
     /// Close the file.
@@ -101,7 +101,7 @@ class Zip_file : public IFile
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     bool read_line(
-	MISTD::string& line,
+	std::string& line,
 	bool strip=true) { abort(); return false; }
 
     /// Write raw data to a file
@@ -203,7 +203,7 @@ class Zip_file : public IFile
 
 private:
     gzFile m_file;
-    MISTD::string m_path;			///< last path passed to open()
+    std::string m_path;			///< last path passed to open()
     Sint64 m_file_size;				///< size of compressed file
 
     Zip_file(const Zip_file&);

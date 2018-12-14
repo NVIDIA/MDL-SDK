@@ -91,6 +91,7 @@ function(FIND_CUDA_EXT)
                 ${_CUDA_SDK_DIR}/lib64
                 # macosx
                 /usr/local/cuda/lib
+                ${_CUDA_SDK_DIR}/lib
             )
         find_file(_CUDART_SO
             NAMES
@@ -100,6 +101,7 @@ function(FIND_CUDA_EXT)
                 ${_CUDA_SDK_DIR}/lib64
                 # macosx
                 /usr/local/cuda/lib
+                ${_CUDA_SDK_DIR}/lib
             )
 
         # error if dependencies can not be resolved
@@ -109,9 +111,13 @@ function(FIND_CUDA_EXT)
             message(STATUS "_CUDART_SO: ${_CUDART_SO}")
             message(FATAL_ERROR ${_DEFAULT_ERROR_MESSAGE})
         endif()
-        
+
         list(APPEND _CUDA_SHARED ${_CUDA_SO})
         list(APPEND _CUDA_SHARED ${_CUDART_SO})
+
+        if(MACOSX)
+            list(APPEND _CUDA_LIBS "-F${_CUDA_SDK_DIR}/lib/stubs -Xlinker -framework -Xlinker CUDA")
+        endif()
     endif()
 
     # store path that are later used in the add_cuda.cmake

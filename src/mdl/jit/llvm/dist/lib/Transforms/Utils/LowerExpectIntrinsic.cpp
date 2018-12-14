@@ -73,7 +73,7 @@ bool LowerExpectIntrinsic::HandleSwitchExpect(SwitchInst *SI) {
 
   SwitchInst::CaseIt Case = SI->findCaseValue(ExpectedValue);
   unsigned n = SI->getNumCases(); // +1 for default case.
-  MISTD::vector<uint32_t> Weights(n + 1);
+  std::vector<uint32_t> Weights(n + 1);
 
   Weights[0] = Case == SI->case_default() ? LikelyBranchWeight
                                           : UnlikelyBranchWeight;

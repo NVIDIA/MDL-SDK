@@ -27,7 +27,7 @@ class StringRef;
 /// MCSubtargetInfo - Generic base class for all target subtargets.
 ///
 class MCSubtargetInfo {
-  MISTD::string TargetTriple;            // Target triple
+  std::string TargetTriple;            // Target triple
   const SubtargetFeatureKV *ProcFeatures;  // Processor feature list
   const SubtargetFeatureKV *ProcDesc;  // Processor descriptions
 

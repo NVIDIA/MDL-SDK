@@ -47,10 +47,10 @@ using namespace llvm;
 // within the corresponding llc passes, and target-specific options
 // and back-end code generation options are specified with the target machine.
 //
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::init("-"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Output filename"), cl::value_desc("filename"));
 
 static cl::opt<unsigned>
@@ -67,7 +67,7 @@ OptLevel("O",
          cl::ZeroOrMore,
          cl::init(' '));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 TargetTriple("mtriple", cl::desc("Override target triple for module"));
 
 cl::opt<bool> NoVerify("disable-verify", cl::Hidden,
@@ -81,16 +81,16 @@ DisableSimplifyLibCalls("disable-simplify-libcalls",
 static int compileModule(char**, LLVMContext&);
 
 // GetFileNameRoot - Helper function to get the basename of a filename.
-static inline MISTD::string
-GetFileNameRoot(const MISTD::string &InputFilename) {
-  MISTD::string IFN = InputFilename;
-  MISTD::string outputFilename;
+static inline std::string
+GetFileNameRoot(const std::string &InputFilename) {
+  std::string IFN = InputFilename;
+  std::string outputFilename;
   int Len = IFN.length();
   if ((Len > 2) &&
       IFN[Len-3] == '.' &&
       ((IFN[Len-2] == 'b' && IFN[Len-1] == 'c') ||
        (IFN[Len-2] == 'l' && IFN[Len-1] == 'l'))) {
-    outputFilename = MISTD::string(IFN.begin(), IFN.end()-3); // s/.bc/.s/
+    outputFilename = std::string(IFN.begin(), IFN.end()-3); // s/.bc/.s/
   } else {
     outputFilename = IFN;
   }
@@ -144,7 +144,7 @@ static tool_output_file *GetOutputStream(const char *TargetName,
   }
 
   // Open the file.
-  MISTD::string error;
+  std::string error;
   sys::fs::OpenFlags OpenFlags = sys::fs::F_None;
   if (Binary)
     OpenFlags |= sys::fs::F_Binary;
@@ -230,7 +230,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
     TheTriple.setTriple(sys::getDefaultTargetTriple());
 
   // Get the target specific parser.
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(MArch, TheTriple,
                                                          Error);
   if (!TheTarget) {
@@ -239,7 +239,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
   }
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
   if (MAttrs.size()) {
     SubtargetFeatures Features;
     for (unsigned i = 0; i != MAttrs.size(); ++i)

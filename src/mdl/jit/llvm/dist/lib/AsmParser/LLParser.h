@@ -59,7 +59,7 @@ namespace llvm {
 
     LLLexer::LocTy Loc;
     unsigned UIntVal;
-    MISTD::string StrVal, StrVal2;
+    std::string StrVal, StrVal2;
     APSInt APSIntVal;
     APFloat APFloatVal;
     Constant *ConstantVal;
@@ -105,31 +105,31 @@ namespace llvm {
       SMLoc Loc;
       unsigned MDKind, MDSlot;
     };
-    DenseMap<Instruction*, MISTD::vector<MDRef> > ForwardRefInstMetadata;
+    DenseMap<Instruction*, std::vector<MDRef> > ForwardRefInstMetadata;
 
     SmallVector<Instruction*, 64> InstsWithTBAATag;
 
     // Type resolution handling data structures.  The location is set when we
     // have processed a use of the type but not a definition yet.
-    StringMap<MISTD::pair<Type*, LocTy> > NamedTypes;
-    MISTD::vector<MISTD::pair<Type*, LocTy> > NumberedTypes;
+    StringMap<std::pair<Type*, LocTy> > NamedTypes;
+    std::vector<std::pair<Type*, LocTy> > NumberedTypes;
 
-    MISTD::vector<TrackingVH<MDNode> > NumberedMetadata;
-    MISTD::map<unsigned, MISTD::pair<TrackingVH<MDNode>, LocTy> > ForwardRefMDNodes;
+    std::vector<TrackingVH<MDNode> > NumberedMetadata;
+    std::map<unsigned, std::pair<TrackingVH<MDNode>, LocTy> > ForwardRefMDNodes;
 
     // Global Value reference information.
-    MISTD::map<MISTD::string, MISTD::pair<GlobalValue*, LocTy> > ForwardRefVals;
-    MISTD::map<unsigned, MISTD::pair<GlobalValue*, LocTy> > ForwardRefValIDs;
-    MISTD::vector<GlobalValue*> NumberedVals;
+    std::map<std::string, std::pair<GlobalValue*, LocTy> > ForwardRefVals;
+    std::map<unsigned, std::pair<GlobalValue*, LocTy> > ForwardRefValIDs;
+    std::vector<GlobalValue*> NumberedVals;
 
     // References to blockaddress.  The key is the function ValID, the value is
     // a list of references to blocks in that function.
-    MISTD::map<ValID, MISTD::vector<MISTD::pair<ValID, GlobalValue*> > >
+    std::map<ValID, std::vector<std::pair<ValID, GlobalValue*> > >
       ForwardRefBlockAddresses;
 
     // Attribute builder reference information.
-    MISTD::map<Value*, MISTD::vector<unsigned> > ForwardRefAttrGroups;
-    MISTD::map<unsigned, AttrBuilder> NumberedAttrBuilders;
+    std::map<Value*, std::vector<unsigned> > ForwardRefAttrGroups;
+    std::map<unsigned, AttrBuilder> NumberedAttrBuilders;
 
   public:
     LLParser(MemoryBuffer *F, SourceMgr &SM, SMDiagnostic &Err, Module *m) :
@@ -151,7 +151,7 @@ namespace llvm {
     /// GetGlobalVal - Get a value with the specified name or ID, creating a
     /// forward reference record if needed.  This can return null if the value
     /// exists but does not have the right type.
-    GlobalValue *GetGlobalVal(const MISTD::string &N, Type *Ty, LocTy Loc);
+    GlobalValue *GetGlobalVal(const std::string &N, Type *Ty, LocTy Loc);
     GlobalValue *GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc);
 
     // Helper Routines.
@@ -187,7 +187,7 @@ namespace llvm {
       }
       return false;
     }
-    bool ParseStringConstant(MISTD::string &Result);
+    bool ParseStringConstant(std::string &Result);
     bool ParseUInt32(unsigned &Val);
     bool ParseUInt32(unsigned &Val, LocTy &Loc) {
       Loc = Lex.getLoc();
@@ -233,9 +233,9 @@ namespace llvm {
     bool ParseGlobalType(bool &IsConstant);
     bool ParseUnnamedGlobal();
     bool ParseNamedGlobal();
-    bool ParseGlobal(const MISTD::string &Name, LocTy Loc, unsigned Linkage,
+    bool ParseGlobal(const std::string &Name, LocTy Loc, unsigned Linkage,
                      bool HasLinkage, unsigned Visibility);
-    bool ParseAlias(const MISTD::string &Name, LocTy Loc, unsigned Visibility);
+    bool ParseAlias(const std::string &Name, LocTy Loc, unsigned Visibility);
     bool ParseStandaloneMetadata();
     bool ParseNamedMetadata();
     bool ParseMDString(MDString *&Result);
@@ -243,7 +243,7 @@ namespace llvm {
     bool ParseMDNodeID(MDNode *&Result, unsigned &SlotNo);
     bool ParseUnnamedAttrGrp();
     bool ParseFnAttributeValuePairs(AttrBuilder &B,
-                                    MISTD::vector<unsigned> &FwdRefAttrGrps,
+                                    std::vector<unsigned> &FwdRefAttrGrps,
                                     bool inAttrGrp, LocTy &BuiltinLoc);
 
     // Type Parsing.
@@ -255,7 +255,7 @@ namespace llvm {
     bool ParseAnonStructType(Type *&Result, bool Packed);
     bool ParseStructBody(SmallVectorImpl<Type*> &Body);
     bool ParseStructDefinition(SMLoc TypeLoc, StringRef Name,
-                               MISTD::pair<Type*, LocTy> &Entry,
+                               std::pair<Type*, LocTy> &Entry,
                                Type *&ResultTy);
 
     bool ParseArrayVectorType(Type *&Result, bool isVector);
@@ -265,9 +265,9 @@ namespace llvm {
     class PerFunctionState {
       LLParser &P;
       Function &F;
-      MISTD::map<MISTD::string, MISTD::pair<Value*, LocTy> > ForwardRefVals;
-      MISTD::map<unsigned, MISTD::pair<Value*, LocTy> > ForwardRefValIDs;
-      MISTD::vector<Value*> NumberedVals;
+      std::map<std::string, std::pair<Value*, LocTy> > ForwardRefVals;
+      std::map<unsigned, std::pair<Value*, LocTy> > ForwardRefValIDs;
+      std::vector<Value*> NumberedVals;
 
       /// FunctionNumber - If this is an unnamed function, this is the slot
       /// number of it, otherwise it is -1.
@@ -283,24 +283,24 @@ namespace llvm {
       /// GetVal - Get a value with the specified name or ID, creating a
       /// forward reference record if needed.  This can return null if the value
       /// exists but does not have the right type.
-      Value *GetVal(const MISTD::string &Name, Type *Ty, LocTy Loc);
+      Value *GetVal(const std::string &Name, Type *Ty, LocTy Loc);
       Value *GetVal(unsigned ID, Type *Ty, LocTy Loc);
 
       /// SetInstName - After an instruction is parsed and inserted into its
       /// basic block, this installs its name.
-      bool SetInstName(int NameID, const MISTD::string &NameStr, LocTy NameLoc,
+      bool SetInstName(int NameID, const std::string &NameStr, LocTy NameLoc,
                        Instruction *Inst);
 
       /// GetBB - Get a basic block with the specified name or ID, creating a
       /// forward reference record if needed.  This can return null if the value
       /// is not a BasicBlock.
-      BasicBlock *GetBB(const MISTD::string &Name, LocTy Loc);
+      BasicBlock *GetBB(const std::string &Name, LocTy Loc);
       BasicBlock *GetBB(unsigned ID, LocTy Loc);
 
       /// DefineBB - Define the specified basic block, which is either named or
       /// unnamed.  If there is an error, this returns null otherwise it returns
       /// the block being defined.
-      BasicBlock *DefineBB(const MISTD::string &Name, LocTy Loc);
+      BasicBlock *DefineBB(const std::string &Name, LocTy Loc);
     };
 
     bool ConvertValIDToValue(Type *Ty, ValID &ID, Value *&V,
@@ -357,8 +357,8 @@ namespace llvm {
       LocTy Loc;
       Type *Ty;
       AttributeSet Attrs;
-      MISTD::string Name;
-      ArgInfo(LocTy L, Type *ty, AttributeSet Attr, const MISTD::string &N)
+      std::string Name;
+      ArgInfo(LocTy L, Type *ty, AttributeSet Attr, const std::string &N)
         : Loc(L), Ty(ty), Attrs(Attr), Name(N) {}
     };
     bool ParseArgumentList(SmallVectorImpl<ArgInfo> &ArgList, bool &isVarArg);
@@ -404,7 +404,7 @@ namespace llvm {
     int ParseInsertValue(Instruction *&I, PerFunctionState &PFS);
 
     bool ResolveForwardRefBlockAddresses(Function *TheFn,
-                             MISTD::vector<MISTD::pair<ValID, GlobalValue*> > &Refs,
+                             std::vector<std::pair<ValID, GlobalValue*> > &Refs,
                                          PerFunctionState *PFS);
   };
 } // End llvm namespace

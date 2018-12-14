@@ -238,7 +238,7 @@ bool CGPassManager::RefreshCallGraph(CallGraphSCC &CurSCC,
       
       assert(!CallSites.count(I->first) &&
              "Call site occurs in node multiple times");
-      CallSites.insert(MISTD::make_pair(I->first, I->second));
+      CallSites.insert(std::make_pair(I->first, I->second));
       ++I;
     }
     
@@ -384,7 +384,7 @@ bool CGPassManager::RunAllPassesOnSCC(CallGraphSCC &CurSCC, CallGraph &CG,
     // If we're in -debug-pass=Executions mode, construct the SCC node list,
     // otherwise avoid constructing this string as it is expensive.
     if (isPassDebuggingExecutionsOrMore()) {
-      MISTD::string Functions;
+      std::string Functions;
   #ifndef NDEBUG
       raw_string_ostream OS(Functions);
       for (CallGraphSCC::iterator I = CurSCC.begin(), E = CurSCC.end();
@@ -434,7 +434,7 @@ bool CGPassManager::runOnModule(Module &M) {
   while (!CGI.isAtEnd()) {
     // Copy the current SCC and increment past it so that the pass can hack
     // on the SCC if it wants to without invalidating our iterator.
-    MISTD::vector<CallGraphNode*> &NodeVec = *CGI;
+    std::vector<CallGraphNode*> &NodeVec = *CGI;
     CurSCC.initialize(&NodeVec[0], &NodeVec[0]+NodeVec.size());
     ++CGI;
     
@@ -583,12 +583,12 @@ namespace {
   /// PrintCallGraphPass - Print a Module corresponding to a call graph.
   ///
   class PrintCallGraphPass : public CallGraphSCCPass {
-    MISTD::string Banner;
+    std::string Banner;
     raw_ostream &Out;       // raw_ostream to print on.
     
   public:
     static char ID;
-    PrintCallGraphPass(const MISTD::string &B, raw_ostream &o)
+    PrintCallGraphPass(const std::string &B, raw_ostream &o)
       : CallGraphSCCPass(ID), Banner(B), Out(o) {}
     
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -608,7 +608,7 @@ namespace {
 char PrintCallGraphPass::ID = 0;
 
 Pass *CallGraphSCCPass::createPrinterPass(raw_ostream &O,
-                                          const MISTD::string &Banner) const {
+                                          const std::string &Banner) const {
   return new PrintCallGraphPass(Banner, O);
 }
 

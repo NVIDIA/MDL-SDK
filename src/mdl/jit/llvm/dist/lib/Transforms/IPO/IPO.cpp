@@ -95,7 +95,7 @@ void LLVMAddIPSCCPPass(LLVMPassManagerRef PM) {
 }
 
 void LLVMAddInternalizePass(LLVMPassManagerRef PM, unsigned AllButMain) {
-  MISTD::vector<const char *> Export;
+  std::vector<const char *> Export;
   if (AllButMain)
     Export.push_back("main");
   unwrap(PM)->add(createInternalizePass(Export));

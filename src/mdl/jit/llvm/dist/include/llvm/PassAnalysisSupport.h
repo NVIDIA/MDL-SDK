@@ -145,7 +145,7 @@ public:
   void addAnalysisImplsPair(AnalysisID PI, Pass *P) {
     if (findImplPass(PI) == P)
       return;
-    MISTD::pair<AnalysisID, Pass*> pir = MISTD::make_pair(PI,P);
+    std::pair<AnalysisID, Pass*> pir = std::make_pair(PI,P);
     AnalysisImpls.push_back(pir);
   }
 
@@ -161,7 +161,7 @@ public:
 private:
   // AnalysisImpls - This keeps track of which passes implements the interfaces
   // that are required by the current pass (to implement getAnalysis()).
-  MISTD::vector<MISTD::pair<AnalysisID, Pass*> > AnalysisImpls;
+  std::vector<std::pair<AnalysisID, Pass*> > AnalysisImpls;
 
   // PassManager that is used to resolve analysis info
   PMDataManager &PM;

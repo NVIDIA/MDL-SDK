@@ -63,7 +63,7 @@ public:
     /// should not try to parse it.
     virtual char const *get_string() const = 0;
 
-    /// Get the file name assosiated with this massage if any.
+    /// Get the file name associated with this massage if any.
     virtual char const *get_file() const = 0;
 
     /// Get the position to which the message is associated.
@@ -71,9 +71,9 @@ public:
 
     /// Get the number of notes attached to this message.
     ///
-    /// Notes can be used to describe an error message further or add additinal details,
+    /// Notes can be used to describe an error message further or add additional details,
     /// like the set of possible overloads or the location of a previous definition.
-    /// An anplication can suppress the output of notes, but typically they deliver
+    /// An application can suppress the output of notes, but typically they deliver
     /// viable information for the user.
     virtual int get_note_count() const = 0;
 
@@ -86,12 +86,12 @@ public:
 
     /// Get the message class.
     ///
-    /// The message class gives a hint which part of teh MDL Core  (compiler, backend,
+    /// The message class gives a hint which part of the MDL Core  (compiler, backend,
     /// archive tool) issued this message.
     virtual char get_class() const = 0;
 };
 
-/// The interface descibes a list of messages.
+/// The interface describes a list of messages.
 ///
 /// If all messages have a source code position they are ordered in ascending position
 /// order.

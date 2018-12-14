@@ -19,7 +19,7 @@
 # include <cmath>
 #elif HAVE_STD_ISNAN_IN_CMATH
 # include <cmath>
-using MISTD::isnan;
+using std::isnan;
 #elif defined(_MSC_VER)
 #include <float.h>
 #define isnan _isnan

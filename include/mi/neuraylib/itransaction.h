@@ -324,6 +324,10 @@ public:
     ///              type is not supported. This applies to elements of type
     ///              #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition, and
     ///              #mi::neuraylib::IFunction_definition.
+    ///              It also applies to elements of type #mi::neuraylib::IFunction_call
+    ///              and #mi::neuraylib::IMaterial_instance that are used as defaults
+    ///              in an #mi::neuraylib::IMaterial_definition or
+    ///              #mi::neuraylib::IFunction_definition.
     virtual Sint32 store(
         base::IInterface* db_element, const char* name, Uint8 privacy = LOCAL_SCOPE) = 0;
 
@@ -430,6 +434,10 @@ public:
     ///                        of that type is not supported. This applies to elements of type
     ///                        #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition, and
     ///                        #mi::neuraylib::IFunction_definition.
+    ///                        It also applies to elements of type #mi::neuraylib::IFunction_call
+    ///                        and #mi::neuraylib::IMaterial_instance that are used as defaults
+    ///                        in an #mi::neuraylib::IMaterial_definition or
+    ///                        #mi::neuraylib::IFunction_definition.
     virtual Sint32 copy( const char* source, const char* target, Uint8 privacy = 0) = 0;
 
     /// Removes the element with the name \p name from the database.
@@ -444,10 +452,6 @@ public:
     /// avoided by using #mi::neuraylib::IDatabase::garbage_collection() after a transaction was
     /// committed and before starting the next one to force garbage collection of all possible
     /// elements.
-    ///
-    /// Be careful with the removal of elements of type #mi::neuraylib::IMaterial_definition and
-    /// #mi::neuraylib::IFunction_definition. As long as the corresponding MDL module still exists
-    /// in the DB it is not possible to recreate the material and/or function definition.
     ///
     /// \param name           The name of the element in the database to remove.
     /// \param only_localized \if MDL_SDK_API Unused. \else If \c true, the element is only removed

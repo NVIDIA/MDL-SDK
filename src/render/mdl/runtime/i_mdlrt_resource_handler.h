@@ -47,8 +47,16 @@ namespace MDLRT {
  */
 class Resource_handler : public mi::mdl::IResource_handler {
 public:
+    /// Constructor.
+    ///
+    /// \param use_derivatives  true if derivative texturing functions will be used
+    Resource_handler(bool use_derivatives=false)
+        : m_use_derivatives(use_derivatives)
+    {
+    }
+
     /// Get the number of bytes that must be allocated for a resource object.
-    virtual size_t get_data_size() const;
+    size_t get_data_size() const NEURAY_OVERRIDE;
 
     /// Initializes a texture data helper object.
     ///
@@ -102,6 +110,16 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const NEURAY_OVERRIDE;
 
+    /// Handle tex::lookup_float(texture_2d, ...) with derivatives.
+    float tex_lookup_deriv_float_2d(
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const NEURAY_OVERRIDE;
+
     /// Handle tex::lookup_float(texture_3d, ...)
     float tex_lookup_float_3d(
         void const    *tex_data,
@@ -137,6 +155,17 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const NEURAY_OVERRIDE;
 
+    /// Handle tex::lookup_float2(texture_2d, ...) with derivatives.
+    void tex_lookup_deriv_float2_2d(
+        float              result[2],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const NEURAY_OVERRIDE;
+
     /// Handle tex::lookup_float2(texture_3d, ...)
     void tex_lookup_float2_3d(
         float         result[2],
@@ -157,7 +186,7 @@ public:
         void          *thread_data,
         float const   coord[3]) const NEURAY_OVERRIDE;
 
-    // Handle tex::lookup_float2(texture_ptex, ...)
+    /// Handle tex::lookup_float2(texture_ptex, ...)
     void tex_lookup_float2_ptex(
         float         result[2],
         void const    *tex_data,
@@ -174,6 +203,17 @@ public:
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
         float const   crop_v[2]) const NEURAY_OVERRIDE;
+
+    /// Handle tex::lookup_float3(texture_2d, ...) with derivatives.
+    void tex_lookup_deriv_float3_2d(
+        float              result[3],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const NEURAY_OVERRIDE;
 
     /// Handle tex::lookup_float3(texture_3d, ...)
     void tex_lookup_float3_3d(
@@ -213,6 +253,17 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const NEURAY_OVERRIDE;
 
+    /// Handle tex::lookup_float4(texture_2d, ...) with derivatives.
+    void tex_lookup_deriv_float4_2d(
+        float              result[4],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const NEURAY_OVERRIDE;
+
     /// Handle tex::lookup_float4(texture_3d, ...)
     void tex_lookup_float4_3d(
         float         result[4],
@@ -251,7 +302,18 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const NEURAY_OVERRIDE;
 
-    /// Handle tex::lookup_color(texture_2d, ...)
+    /// Handle tex::lookup_color(texture_2d, ...) with derivatives.
+    void tex_lookup_deriv_color_2d(
+        float              rgb[3],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const NEURAY_OVERRIDE;
+
+    /// Handle tex::lookup_color(texture_3d, ...)
     void tex_lookup_color_3d(
         float         rgb[3],
         void const    *tex_data,
@@ -402,6 +464,25 @@ public:
     bool lp_isvalid(
         void const *lp_data) const NEURAY_OVERRIDE;
 
+    /// Handle // Handle df::lp_light_profile_evaluate(...)
+    float lp_evaluate(
+        void const    *lp_data,
+        void          *thread_data,
+        const float   theta_phi[2]) const NEURAY_OVERRIDE;
+
+    /// Handle // Handle df::lp_light_profile_sample(...)
+    void lp_sample(
+        float         result[3], // theta, phi, pdf
+        void const    *lp_data,
+        void          *thread_data,
+        const float   xi[3]) const NEURAY_OVERRIDE;
+
+    /// Handle // Handle df::lp_light_profile_pdf(...)
+    float lp_pdf(
+        void const    *lp_data,
+        void          *thread_data,
+        const float   theta_phi[2]) const NEURAY_OVERRIDE;
+
     /// Initializes a bsdf measurement data helper object from a given bsdf measurement tag.
     ///
     /// \param data    an 16byte aligned pointer to allocated data of at least
@@ -432,8 +513,80 @@ public:
     bool bm_isvalid(
         void const *bm_data) const NEURAY_OVERRIDE;
 
+    /// Handle df::bsdf_measurement_resolution(...).
+    ///
+    /// \param result       the result of bm::theta_res, bm::phi_res, bm::channels
+    /// \param bm_data      the read-only shared resource data pointer
+    /// \param part         part of the BSDF that is requested
+    void bm_resolution(
+        unsigned      result[3],
+        void const    *bm_data,
+        Mbsdf_part    part) const NEURAY_OVERRIDE;
+
+    /// Handle df::bsdf_measurement_evaluate(...).
+    ///
+    /// \param result           the result of lookup
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi_in     spherical coordinates of the incoming direction
+    /// \param theta_phi_out    spherical coordinates of the outgoing direction
+    /// \param part             part of the BSDF that is requested
+    void bm_evaluate(
+        float         result[3],
+        void const    *bm_data,
+        void          *thread_data,
+        const float   theta_phi_in[2],
+        const float   theta_phi_out[2],
+        Mbsdf_part    part) const NEURAY_OVERRIDE;
+
+    /// Handle df::bsdf_measurement_sample(...).
+    ///
+    /// \param result           sample theta and phi as well as the pdf
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param xi               set of independent uniformly distributed random value
+    /// \param part             part of the BSDF that is requested
+    virtual void bm_sample(
+        float           result[3],
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi_out[2],
+        const float     xi[3],
+        Mbsdf_part      part) const NEURAY_OVERRIDE;
+
+    /// Handle df::bsdf_measurement_pdf(...).
+    ///
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi_in     spherical coordinates of the incoming direction
+    /// \param theta_phi_out    spherical coordinates of the outgoing direction
+    /// \param part             part of the BSDF that is requested
+    /// \return                 the resulting pdf for a corresponding lookup
+    virtual float bm_pdf(
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi_in[2],
+        const float     theta_phi_out[2],
+        Mbsdf_part      part) const NEURAY_OVERRIDE;
+
+    /// Handle df::bsdf_measurement_albedos(...).
+    ///
+    /// \param result           maximum (in case of color) albedos for reflection and transmission
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi        spherical coordinates of the requested direction
+    virtual void bm_albedos(
+        float           result[4],
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi[2]) const NEURAY_OVERRIDE;
+
     /// Destructor.
     virtual ~Resource_handler();
+
+private:
+    /// Specifies, whether derivative texture functions will be used.
+    bool m_use_derivatives;
 };
 
 }  // MDLRT

@@ -50,7 +50,7 @@ namespace {
 /// on demand (when the first statistic is bumped) and destroyed only when
 /// llvm_shutdown is called.  We print statistics from the destructor.
 class StatisticInfo {
-  MISTD::vector<const Statistic*> Stats;
+  std::vector<const Statistic*> Stats;
   friend void llvm::PrintStatistics();
   friend void llvm::PrintStatistics(raw_ostream &OS);
 public:
@@ -117,19 +117,19 @@ void llvm::PrintStatistics(raw_ostream &OS) {
   // Figure out how long the biggest Value and Name fields are.
   unsigned MaxNameLen = 0, MaxValLen = 0;
   for (size_t i = 0, e = Stats.Stats.size(); i != e; ++i) {
-    MaxValLen = MISTD::max(MaxValLen,
+    MaxValLen = std::max(MaxValLen,
                          (unsigned)utostr(Stats.Stats[i]->getValue()).size());
-    MaxNameLen = MISTD::max(MaxNameLen,
+    MaxNameLen = std::max(MaxNameLen,
                           (unsigned)strlen(Stats.Stats[i]->getName()));
   }
 
   // Sort the fields by name.
-  MISTD::stable_sort(Stats.Stats.begin(), Stats.Stats.end(), NameCompare());
+  std::stable_sort(Stats.Stats.begin(), Stats.Stats.end(), NameCompare());
 
   // Print out the statistics header...
-  OS << "===" << MISTD::string(73, '-') << "===\n"
+  OS << "===" << std::string(73, '-') << "===\n"
      << "                          ... Statistics Collected ...\n"
-     << "===" << MISTD::string(73, '-') << "===\n\n";
+     << "===" << std::string(73, '-') << "===\n\n";
 
   // Print all of the statistics.
   for (size_t i = 0, e = Stats.Stats.size(); i != e; ++i)

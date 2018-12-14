@@ -34,7 +34,7 @@ namespace llvm {
 //===----------------------------------------------------------------------===//
 
 class BitcodeReaderValueList {
-  MISTD::vector<WeakVH> ValuePtrs;
+  std::vector<WeakVH> ValuePtrs;
 
   /// ResolveConstants - As we resolve forward-referenced constants, we add
   /// information about them to this vector.  This allows us to resolve them in
@@ -43,7 +43,7 @@ class BitcodeReaderValueList {
   ///
   /// The key of this vector is the placeholder constant, the value is the slot
   /// number that holds the resolved value.
-  typedef MISTD::vector<MISTD::pair<Constant*, unsigned> > ResolveConstantsTy;
+  typedef std::vector<std::pair<Constant*, unsigned> > ResolveConstantsTy;
   ResolveConstantsTy ResolveConstants;
   LLVMContext &Context;
 public:
@@ -93,7 +93,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 class BitcodeReaderMDValueList {
-  MISTD::vector<WeakVH> MDValuePtrs;
+  std::vector<WeakVH> MDValuePtrs;
 
   LLVMContext &Context;
 public:
@@ -133,37 +133,37 @@ class BitcodeReader : public GVMaterializer {
   uint64_t NextUnreadBit;
   bool SeenValueSymbolTable;
 
-  MISTD::vector<Type*> TypeList;
+  std::vector<Type*> TypeList;
   BitcodeReaderValueList ValueList;
   BitcodeReaderMDValueList MDValueList;
   SmallVector<Instruction *, 64> InstructionList;
   SmallVector<SmallVector<uint64_t, 64>, 64> UseListRecords;
 
-  MISTD::vector<MISTD::pair<GlobalVariable*, unsigned> > GlobalInits;
-  MISTD::vector<MISTD::pair<GlobalAlias*, unsigned> > AliasInits;
-  MISTD::vector<MISTD::pair<Function*, unsigned> > FunctionPrefixes;
+  std::vector<std::pair<GlobalVariable*, unsigned> > GlobalInits;
+  std::vector<std::pair<GlobalAlias*, unsigned> > AliasInits;
+  std::vector<std::pair<Function*, unsigned> > FunctionPrefixes;
 
   SmallVector<Instruction*, 64> InstsWithTBAATag;
 
   /// MAttributes - The set of attributes by index.  Index zero in the
   /// file is for null, and is thus not represented here.  As such all indices
   /// are off by one.
-  MISTD::vector<AttributeSet> MAttributes;
+  std::vector<AttributeSet> MAttributes;
 
   /// \brief The set of attribute groups.
-  MISTD::map<unsigned, AttributeSet> MAttributeGroups;
+  std::map<unsigned, AttributeSet> MAttributeGroups;
 
   /// FunctionBBs - While parsing a function body, this is a list of the basic
   /// blocks for the function.
-  MISTD::vector<BasicBlock*> FunctionBBs;
+  std::vector<BasicBlock*> FunctionBBs;
 
   // When reading the module header, this list is populated with functions that
   // have bodies later in the file.
-  MISTD::vector<Function*> FunctionsWithBodies;
+  std::vector<Function*> FunctionsWithBodies;
 
   // When intrinsic functions are encountered which require upgrading they are
   // stored here with their replacement function.
-  typedef MISTD::vector<MISTD::pair<Function*, Function*> > UpgradedIntrinsicMap;
+  typedef std::vector<std::pair<Function*, Function*> > UpgradedIntrinsicMap;
   UpgradedIntrinsicMap UpgradedIntrinsics;
 
   // Map the bitcode's custom MDKind ID to the Module's MDKind ID.
@@ -181,8 +181,8 @@ class BitcodeReader : public GVMaterializer {
 
   /// BlockAddrFwdRefs - These are blockaddr references to basic blocks.  These
   /// are resolved lazily when functions are loaded.
-  typedef MISTD::pair<unsigned, GlobalVariable*> BlockAddrRefTy;
-  DenseMap<Function*, MISTD::vector<BlockAddrRefTy> > BlockAddrFwdRefs;
+  typedef std::pair<unsigned, GlobalVariable*> BlockAddrRefTy;
+  DenseMap<Function*, std::vector<BlockAddrRefTy> > BlockAddrFwdRefs;
 
   /// UseRelativeIDs - Indicates that we are using a new encoding for
   /// instruction operands where most operands in the current
@@ -259,7 +259,7 @@ public:
 
   /// @brief Cheap mechanism to just extract module triple
   /// @returns true if an error occurred.
-  error_code ParseTriple(MISTD::string &Triple);
+  error_code ParseTriple(std::string &Triple);
 
   static uint64_t decodeSignRotatedValue(uint64_t V);
 
@@ -361,7 +361,7 @@ private:
   error_code ResolveGlobalAndAliasInits();
   error_code ParseMetadata();
   error_code ParseMetadataAttachment();
-  error_code ParseModuleTriple(MISTD::string &Triple);
+  error_code ParseModuleTriple(std::string &Triple);
   error_code ParseUseLists();
   error_code InitStream();
   error_code InitStreamFromBuffer();

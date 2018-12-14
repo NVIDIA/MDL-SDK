@@ -111,7 +111,7 @@ void Class_registration::register_classes_part1( Class_factory* factory)
     REG( "Size",            Number_impl<mi::ISize,       mi::Size>::create_api_class);
     REG( "Difference",      Number_impl<mi::IDifference, mi::Difference>::create_api_class);
     REG( "String",          String_impl::create_api_class);
-    REG( "Ref",             Ref_impl<REF_UNTYPED>::create_api_class);
+    REG( "Ref",             Ref_impl::create_api_class);
     REG( "Uuid",            Uuid_impl::create_api_class);
     REG( "Void",            Void_impl::create_api_class);
     REG( "__Pointer",       Pointer_impl::create_api_class);
@@ -215,12 +215,11 @@ void Class_registration::register_classes_part1( Class_factory* factory)
     REG( "__Uint16_proxy", Number_impl_proxy<mi::IUint16,  mi::Uint16>::create_api_class);
     REG( "__Uint64_proxy", Number_impl_proxy<mi::IUint64,  mi::Uint64>::create_api_class);
     REG( "__String_proxy", String_impl_proxy::create_api_class);
-    REG( "__Ref_proxy", Ref_impl_proxy<REF_UNTYPED>::create_api_class);
+    REG( "__Ref_proxy", Ref_impl_proxy::create_api_class);
     REG( "__Enum_proxy", Enum_impl_proxy::create_api_class);
     REG( "__Array_proxy", Array_impl_proxy::create_api_class);
     REG( "__Dynamic_array_proxy", Dynamic_array_impl_proxy::create_api_class);
     REG( "__Structure_proxy", Structure_impl_proxy::create_api_class);
-
 
 #undef REG
 }
@@ -299,10 +298,6 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     factory->register_structure_decl( "Preset_data", decl.get());
 
     decl = factory->create_type_instance<mi::IStructure_decl>( 0, "Structure_decl", 0, 0);
-    decl->add_member( "String",  "argument");
-    factory->register_structure_decl( "String_annotation", decl.get());
-
-    decl = factory->create_type_instance<mi::IStructure_decl>( 0, "Structure_decl", 0, 0);
     decl->add_member( "String",  "variant_name");
     decl->add_member( "String",  "prototype_name");
     decl->add_member( "Interface",  "defaults");
@@ -331,7 +326,6 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
     factory->unregister_structure_decl( "Material_data");
     factory->unregister_structure_decl( "Parameter_data");
     factory->unregister_structure_decl( "Preset_data");
-    factory->unregister_structure_decl( "String_annotation");
     factory->unregister_structure_decl( "Variant_data");
     factory->unregister_structure_decl( "Uvtile");
     factory->unregister_structure_decl( "Uvtile_reader");
@@ -347,8 +341,6 @@ bool Class_registration::is_predefined_structure_declaration( const char* name)
     if( strcmp( name, "Parameter_data") == 0)
         return true;
     if( strcmp( name, "Preset_data") == 0)
-        return true;
-    if( strcmp( name, "String_annotation") == 0)
         return true;
     if( strcmp( name, "Variant_data") == 0)
         return true;

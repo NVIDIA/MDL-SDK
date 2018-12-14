@@ -93,9 +93,6 @@ public:
     mi::Sint32 set_argument(
         const char* name,
         const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
-
-    // methods of IInterface
-
 };
 
 } // namespace NEURAY
@@ -103,4 +100,3 @@ public:
 } // namespace MI
 
 #endif // API_API_NEURAY_FUNCTION_CALL_IMPL_H
-

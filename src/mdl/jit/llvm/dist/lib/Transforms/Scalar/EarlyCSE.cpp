@@ -91,7 +91,7 @@ unsigned DenseMapInfo<SimpleValue>::getHashValue(SimpleValue Val) {
     Value *LHS = BinOp->getOperand(0);
     Value *RHS = BinOp->getOperand(1);
     if (BinOp->isCommutative() && BinOp->getOperand(0) > BinOp->getOperand(1))
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
 
     if (isa<OverflowingBinaryOperator>(BinOp)) {
       // Hash the overflow behavior
@@ -109,7 +109,7 @@ unsigned DenseMapInfo<SimpleValue>::getHashValue(SimpleValue Val) {
     Value *RHS = CI->getOperand(1);
     CmpInst::Predicate Pred = CI->getPredicate();
     if (Inst->getOperand(0) > Inst->getOperand(1)) {
-      MISTD::swap(LHS, RHS);
+      std::swap(LHS, RHS);
       Pred = CI->getSwappedPredicate();
     }
     return hash_combine(Inst->getOpcode(), Pred, LHS, RHS);
@@ -285,14 +285,14 @@ public:
   /// incremented after every possibly writing memory operation, which ensures
   /// that we only CSE loads with other loads that have no intervening store.
   typedef RecyclingAllocator<BumpPtrAllocator,
-    ScopedHashTableVal<Value*, MISTD::pair<Value*, unsigned> > > LoadMapAllocator;
-  typedef ScopedHashTable<Value*, MISTD::pair<Value*, unsigned>,
+    ScopedHashTableVal<Value*, std::pair<Value*, unsigned> > > LoadMapAllocator;
+  typedef ScopedHashTable<Value*, std::pair<Value*, unsigned>,
                           DenseMapInfo<Value*>, LoadMapAllocator> LoadHTType;
   LoadHTType *AvailableLoads;
 
   /// AvailableCalls - This scoped hash table contains the current values
   /// of read-only call values.  It uses the same generation count as loads.
-  typedef ScopedHashTable<CallValue, MISTD::pair<Value*, unsigned> > CallHTType;
+  typedef ScopedHashTable<CallValue, std::pair<Value*, unsigned> > CallHTType;
   CallHTType *AvailableCalls;
 
   /// CurrentGeneration - This is the current generation of the memory value.
@@ -468,7 +468,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
 
       // If we have an available version of this load, and if it is the right
       // generation, replace this instruction.
-      MISTD::pair<Value*, unsigned> InVal =
+      std::pair<Value*, unsigned> InVal =
         AvailableLoads->lookup(Inst->getOperand(0));
       if (InVal.first != 0 && InVal.second == CurrentGeneration) {
         DEBUG(dbgs() << "EarlyCSE CSE LOAD: " << *Inst << "  to: "
@@ -482,7 +482,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
 
       // Otherwise, remember that we have this instruction.
       AvailableLoads->insert(Inst->getOperand(0),
-                          MISTD::pair<Value*, unsigned>(Inst, CurrentGeneration));
+                          std::pair<Value*, unsigned>(Inst, CurrentGeneration));
       LastStore = 0;
       continue;
     }
@@ -495,7 +495,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
     if (CallValue::canHandle(Inst)) {
       // If we have an available version of this call, and if it is the right
       // generation, replace this instruction.
-      MISTD::pair<Value*, unsigned> InVal = AvailableCalls->lookup(Inst);
+      std::pair<Value*, unsigned> InVal = AvailableCalls->lookup(Inst);
       if (InVal.first != 0 && InVal.second == CurrentGeneration) {
         DEBUG(dbgs() << "EarlyCSE CSE CALL: " << *Inst << "  to: "
                      << *InVal.first << '\n');
@@ -508,7 +508,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
 
       // Otherwise, remember that we have this instruction.
       AvailableCalls->insert(Inst,
-                         MISTD::pair<Value*, unsigned>(Inst, CurrentGeneration));
+                         std::pair<Value*, unsigned>(Inst, CurrentGeneration));
       continue;
     }
 
@@ -538,7 +538,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
         // to non-volatile loads, so we don't have to check for volatility of
         // the store.
         AvailableLoads->insert(SI->getPointerOperand(),
-         MISTD::pair<Value*, unsigned>(SI->getValueOperand(), CurrentGeneration));
+         std::pair<Value*, unsigned>(SI->getValueOperand(), CurrentGeneration));
 
         // Remember that this was the last store we saw for DSE.
         if (SI->isSimple())
@@ -552,7 +552,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
 
 
 bool EarlyCSE::runOnFunction(Function &F) {
-  MISTD::deque<StackNode *> nodesToProcess;
+  std::deque<StackNode *> nodesToProcess;
 
   TD = getAnalysisIfAvailable<DataLayout>();
   TLI = &getAnalysis<TargetLibraryInfo>();

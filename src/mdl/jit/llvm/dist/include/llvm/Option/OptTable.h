@@ -63,7 +63,7 @@ private:
   /// The union of all option prefixes. If an argument does not begin with
   /// one of these, it is an input.
   StringSet<> PrefixesUnion;
-  MISTD::string PrefixChars;
+  std::string PrefixChars;
 
 private:
   const Info &getInfo(OptSpecifier Opt) const {

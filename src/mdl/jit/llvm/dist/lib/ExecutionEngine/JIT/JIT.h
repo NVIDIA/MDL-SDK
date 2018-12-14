@@ -34,7 +34,7 @@ private:
 
   /// PendingFunctions - Functions which have not been code generated yet, but
   /// were called from a function being code generated.
-  MISTD::vector<AssertingVH<Function> > PendingFunctions;
+  std::vector<AssertingVH<Function> > PendingFunctions;
 
 public:
   explicit JITState(Module *M) : PM(M), M(M) {}
@@ -44,7 +44,7 @@ public:
   }
 
   Module *getModule() const { return M; }
-  MISTD::vector<AssertingVH<Function> > &getPendingFunctions(const MutexGuard &L){
+  std::vector<AssertingVH<Function> > &getPendingFunctions(const MutexGuard &L){
     return PendingFunctions;
   }
 };
@@ -59,7 +59,7 @@ class JIT : public ExecutionEngine {
   TargetJITInfo &TJI;      // The JITInfo for the target we are compiling to
   JITCodeEmitter *JCE;     // JCE object
   JITMemoryManager *JMM;
-  MISTD::vector<JITEventListener*> EventListeners;
+  std::vector<JITEventListener*> EventListeners;
 
   /// AllocateGVsWithCode - Some applications require that global variables and
   /// code be allocated into the same region of memory, in which case this flag
@@ -95,7 +95,7 @@ public:
   /// for the current target.  Otherwise, return null.
   ///
   static ExecutionEngine *create(Module *M,
-                                 MISTD::string *Err,
+                                 std::string *Err,
                                  JITMemoryManager *JMM,
                                  CodeGenOpt::Level OptLevel =
                                    CodeGenOpt::Default,
@@ -115,7 +115,7 @@ public:
   /// runFunction - Start execution with the specified function and arguments.
   ///
   virtual GenericValue runFunction(Function *F,
-                                   const MISTD::vector<GenericValue> &ArgValues);
+                                   const std::vector<GenericValue> &ArgValues);
 
   /// getPointerToNamedFunction - This method returns the address of the
   /// specified function by using the MemoryManager. As such it is only
@@ -125,7 +125,7 @@ public:
   /// found, this function silently returns a null pointer. Otherwise,
   /// it prints a message to stderr and aborts.
   ///
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true);
 
   // CompilationCallback - Invoked the first time that a call site is found,
@@ -183,7 +183,7 @@ public:
   JITCodeEmitter *getCodeEmitter() const { return JCE; }
 
   static ExecutionEngine *createJIT(Module *M,
-                                    MISTD::string *ErrorStr,
+                                    std::string *ErrorStr,
                                     JITMemoryManager *JMM,
                                     bool GVsWithCode,
                                     TargetMachine *TM);

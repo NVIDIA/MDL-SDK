@@ -80,13 +80,13 @@ namespace {
     /// names which were recorded.  The second element of each pair is the first
     /// slot number that the OPC_CheckComplexPat opcode drops the matched
     /// results into.
-    SmallVector<MISTD::pair<const TreePatternNode*,
+    SmallVector<std::pair<const TreePatternNode*,
                           unsigned>, 2> MatchedComplexPatterns;
 
     /// PhysRegInputs - List list has an entry for each explicitly specified
     /// physreg input to the pattern.  The first elt is the Register node, the
     /// second is the recorded slot number the input pattern match saved it in.
-    SmallVector<MISTD::pair<Record*, unsigned>, 2> PhysRegInputs;
+    SmallVector<std::pair<Record*, unsigned>, 2> PhysRegInputs;
 
     /// Matcher - This is the top level of the generated matcher, the result.
     Matcher *TheMatcher;
@@ -249,7 +249,7 @@ void MatcherGen::EmitLeafMatchCode(const TreePatternNode *N) {
   if (LeafRec->isSubClassOf("Register")) {
     AddMatcher(new RecordMatcher("physreg input "+LeafRec->getName(),
                                  NextRecordedOperandNo));
-    PhysRegInputs.push_back(MISTD::make_pair(LeafRec, NextRecordedOperandNo++));
+    PhysRegInputs.push_back(std::make_pair(LeafRec, NextRecordedOperandNo++));
     return;
   }
 
@@ -266,7 +266,7 @@ void MatcherGen::EmitLeafMatchCode(const TreePatternNode *N) {
 
     // Remember this ComplexPattern so that we can emit it after all the other
     // structural matches are done.
-    MatchedComplexPatterns.push_back(MISTD::make_pair(N, 0));
+    MatchedComplexPatterns.push_back(std::make_pair(N, 0));
     return;
   }
 
@@ -472,7 +472,7 @@ bool MatcherGen::EmitMatcherCode(unsigned Variant) {
   // check.
   if (const ComplexPattern *CP =
                    Pattern.getSrcPattern()->getComplexPatternInfo(CGP)) {
-    const MISTD::vector<Record*> &OpNodes = CP->getRootNodes();
+    const std::vector<Record*> &OpNodes = CP->getRootNodes();
     assert(!OpNodes.empty() &&"Complex Pattern must specify what it can match");
     if (Variant >= OpNodes.size()) return true;
 
@@ -610,7 +610,7 @@ void MatcherGen::EmitResultLeafAsOperand(const TreePatternNode *N,
     if (Def->isSubClassOf("RegisterOperand"))
       Def = Def->getValueAsDef("RegClass");
     if (Def->isSubClassOf("RegisterClass")) {
-      MISTD::string Value = getQualifiedName(Def) + "RegClassID";
+      std::string Value = getQualifiedName(Def) + "RegClassID";
       AddMatcher(new EmitStringIntegerMatcher(Value, MVT::i32));
       ResultOps.push_back(NextRecordedOperandNo++);
       return;
@@ -618,7 +618,7 @@ void MatcherGen::EmitResultLeafAsOperand(const TreePatternNode *N,
 
     // Handle a subregister index. This is used for INSERT_SUBREG etc.
     if (Def->isSubClassOf("SubRegIndex")) {
-      MISTD::string Value = getQualifiedName(Def);
+      std::string Value = getQualifiedName(Def);
       AddMatcher(new EmitStringIntegerMatcher(Value, MVT::i32));
       ResultOps.push_back(NextRecordedOperandNo++);
       return;

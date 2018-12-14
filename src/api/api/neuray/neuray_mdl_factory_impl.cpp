@@ -41,9 +41,11 @@
 #include <mi/neuraylib/inumber.h>
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/istructure.h>
+#include <api/api/neuray/neuray_mdl_execution_context_impl.h>
 #include <base/lib/log/i_log_logger.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
+#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
@@ -55,7 +57,6 @@
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
 #include "neuray_value_impl.h"
-
 
 #include "neuray_scope_impl.h"
 
@@ -142,15 +143,14 @@ mi::Sint32 Mdl_factory_impl::create_variants(
             variant->get_value<mi::neuraylib::IExpression_list>( "defaults"));
         mdl_variant_data[i].m_defaults = get_internal_expression_list( defaults.get());
 
-
         mi::base::Handle<const mi::neuraylib::IAnnotation_block> annotations(
             variant->get_value<mi::neuraylib::IAnnotation_block>( "annotations"));
         mdl_variant_data[i].m_annotations = get_internal_annotation_block( annotations.get());
-
     }
 
+    MDL::Execution_context context;
     return MDL::Mdl_module::create_module(
-        db_transaction, module_name, mdl_variant_data.get(), variant_count);
+        db_transaction, module_name, mdl_variant_data.get(), variant_count, &context);
 }
 
 mi::Sint32 Mdl_factory_impl::create_materials(
@@ -243,6 +243,11 @@ mi::neuraylib::IValue_bsdf_measurement* Mdl_factory_impl::create_bsdf_measuremen
 
     mi::base::Handle<Value_factory> vf( transaction_impl->get_value_factory());
     return vf->create<mi::neuraylib::IValue_bsdf_measurement>( result.get(), /*owner*/ 0);
+}
+
+mi::neuraylib::IMdl_execution_context* Mdl_factory_impl::create_execution_context()
+{
+    return new Mdl_execution_context_impl();
 }
 
 } // namespace NEURAY

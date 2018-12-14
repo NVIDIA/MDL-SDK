@@ -657,7 +657,7 @@ namespace llvm {
 class TargetLibraryInfo : public ImmutablePass {
   virtual void anchor();
   unsigned char AvailableArray[(LibFunc::NumLibFuncs+3)/4];
-  llvm::DenseMap<unsigned, MISTD::string> CustomNames;
+  llvm::DenseMap<unsigned, std::string> CustomNames;
   static const char* StandardNames[LibFunc::NumLibFuncs];
 
   enum AvailabilityState {

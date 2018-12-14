@@ -178,7 +178,7 @@ Memory::protectMappedMemory(const MemoryBlock &M, unsigned Flags) {
 ///
 MemoryBlock
 Memory::AllocateRWX(size_t NumBytes, const MemoryBlock* NearBlock,
-                    MISTD::string *ErrMsg) {
+                    std::string *ErrMsg) {
   if (NumBytes == 0) return MemoryBlock();
 
   size_t PageSize = process::get_self()->page_size();
@@ -245,14 +245,14 @@ Memory::AllocateRWX(size_t NumBytes, const MemoryBlock* NearBlock,
   return result;
 }
 
-bool Memory::ReleaseRWX(MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::ReleaseRWX(MemoryBlock &M, std::string *ErrMsg) {
   if (M.Address == 0 || M.Size == 0) return false;
   if (0 != ::munmap(M.Address, M.Size))
     return MakeErrMsg(ErrMsg, "Can't release RWX Memory");
   return false;
 }
 
-bool Memory::setWritable (MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::setWritable (MemoryBlock &M, std::string *ErrMsg) {
 #if defined(__APPLE__) && defined(__arm__)
   if (M.Address == 0 || M.Size == 0) return false;
   Memory::InvalidateInstructionCache(M.Address, M.Size);
@@ -264,7 +264,7 @@ bool Memory::setWritable (MemoryBlock &M, MISTD::string *ErrMsg) {
 #endif
 }
 
-bool Memory::setExecutable (MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::setExecutable (MemoryBlock &M, std::string *ErrMsg) {
 #if defined(__APPLE__) && defined(__arm__)
   if (M.Address == 0 || M.Size == 0) return false;
   Memory::InvalidateInstructionCache(M.Address, M.Size);

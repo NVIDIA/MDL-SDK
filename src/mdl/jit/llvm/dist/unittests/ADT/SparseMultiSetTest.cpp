@@ -133,9 +133,9 @@ TEST(SparseMultiSetTest, MultipleEntrySet) {
   Set.insert(8);
 
   // Erase all the 8s
-  EXPECT_EQ(5, MISTD::distance(Set.getHead(8), Set.end()));
+  EXPECT_EQ(5, std::distance(Set.getHead(8), Set.end()));
   Set.eraseAll(8);
-  EXPECT_EQ(0, MISTD::distance(Set.getHead(8), Set.end()));
+  EXPECT_EQ(0, std::distance(Set.getHead(8), Set.end()));
 
   // Clear and resize the universe.
   Set.clear();
@@ -175,7 +175,7 @@ TEST(SparseMultiSetTest, Iterators) {
   USet::iterator E = RangePair.second;
 
   // Move the iterators around, going to end and coming back.
-  EXPECT_EQ(3, MISTD::distance(B, E));
+  EXPECT_EQ(3, std::distance(B, E));
   EXPECT_EQ(B, --(--(--E)));
   EXPECT_EQ(++(++(++E)), Set.end());
   EXPECT_EQ(B, --(--(--E)));

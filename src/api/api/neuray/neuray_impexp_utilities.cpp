@@ -497,10 +497,10 @@ void Impexp_utilities::get_export_elements_internal(
         DB::Tag_set references;
         if( shortcuts_mdl && class_id == MDL::ID_MDL_MATERIAL_DEFINITION) {
             DB::Access<MDL::Mdl_material_definition> element( tag, db_transaction);
-            references.insert( element->get_module());
+            references.insert( element->get_module(db_transaction));
         } else if( shortcuts_mdl && class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
             DB::Access<MDL::Mdl_function_definition> element( tag, db_transaction);
-            references.insert( element->get_module());
+            references.insert( element->get_module(db_transaction));
         } else {
             DB::Access<DB::Element_base> element( tag, db_transaction);
             element->get_references( &references);

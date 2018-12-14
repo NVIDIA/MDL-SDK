@@ -74,13 +74,13 @@ struct DOTGraphTraits<BlockFrequencyInfo*> : public DefaultDOTGraphTraits {
   explicit DOTGraphTraits(bool isSimple=false) :
     DefaultDOTGraphTraits(isSimple) {}
 
-  static MISTD::string getGraphName(const BlockFrequencyInfo *G) {
+  static std::string getGraphName(const BlockFrequencyInfo *G) {
     return G->getFunction()->getName();
   }
 
-  MISTD::string getNodeLabel(const BasicBlock *Node,
+  std::string getNodeLabel(const BasicBlock *Node,
                            const BlockFrequencyInfo *Graph) {
-    MISTD::string Result;
+    std::string Result;
     raw_string_ostream OS(Result);
 
     OS << Node->getName().str() << ":";

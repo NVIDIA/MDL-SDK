@@ -137,7 +137,7 @@ static void CloneLoopBlocks(Loop *L,
                             bool FirstCopy,
                             BasicBlock *InsertTop,
                             BasicBlock *InsertBot,
-                            MISTD::vector<BasicBlock *> &NewBlocks,
+                            std::vector<BasicBlock *> &NewBlocks,
                             LoopBlocksDFS &LoopBlocks,
                             ValueToValueMapTy &VMap,
                             ValueToValueMapTy &LVMap,
@@ -314,7 +314,7 @@ bool llvm::UnrollRuntimeLoopProlog(Loop *L, unsigned Count, LoopInfo *LI,
   // number of 'left over' iterations.
   //
   for (unsigned leftOverIters = Count-1; leftOverIters > 0; --leftOverIters) {
-    MISTD::vector<BasicBlock*> NewBlocks;
+    std::vector<BasicBlock*> NewBlocks;
     ValueToValueMapTy VMap;
 
     // Clone all the basic blocks in the loop, but we don't clone the loop

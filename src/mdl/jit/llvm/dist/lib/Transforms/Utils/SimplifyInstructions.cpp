@@ -77,7 +77,7 @@ namespace {
 
         // Place the list of instructions to simplify on the next loop iteration
         // into ToSimplify.
-        MISTD::swap(ToSimplify, Next);
+        std::swap(ToSimplify, Next);
         Next->clear();
       } while (!ToSimplify->empty());
 

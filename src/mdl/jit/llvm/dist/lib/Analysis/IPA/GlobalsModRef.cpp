@@ -49,14 +49,14 @@ namespace {
     /// GlobalInfo - Maintain mod/ref info for all of the globals without
     /// addresses taken that are read or written (transitively) by this
     /// function.
-    MISTD::map<const GlobalValue*, unsigned> GlobalInfo;
+    std::map<const GlobalValue*, unsigned> GlobalInfo;
 
     /// MayReadAnyGlobal - May read global variables, but it is not known which.
     bool MayReadAnyGlobal;
 
     unsigned getInfoForGlobal(const GlobalValue *GV) const {
       unsigned Effect = MayReadAnyGlobal ? AliasAnalysis::Ref : 0;
-      MISTD::map<const GlobalValue*, unsigned>::const_iterator I =
+      std::map<const GlobalValue*, unsigned>::const_iterator I =
         GlobalInfo.find(GV);
       if (I != GlobalInfo.end())
         Effect |= I->second;
@@ -74,19 +74,19 @@ namespace {
   class GlobalsModRef : public ModulePass, public AliasAnalysis {
     /// NonAddressTakenGlobals - The globals that do not have their addresses
     /// taken.
-    MISTD::set<const GlobalValue*> NonAddressTakenGlobals;
+    std::set<const GlobalValue*> NonAddressTakenGlobals;
 
     /// IndirectGlobals - The memory pointed to by this global is known to be
     /// 'owned' by the global.
-    MISTD::set<const GlobalValue*> IndirectGlobals;
+    std::set<const GlobalValue*> IndirectGlobals;
 
     /// AllocsForIndirectGlobals - If an instruction allocates memory for an
     /// indirect global, this map indicates which one.
-    MISTD::map<const Value*, const GlobalValue*> AllocsForIndirectGlobals;
+    std::map<const Value*, const GlobalValue*> AllocsForIndirectGlobals;
 
     /// FunctionInfo - For each function, keep track of what globals are
     /// modified or read.
-    MISTD::map<const Function*, FunctionRecord> FunctionInfo;
+    std::map<const Function*, FunctionRecord> FunctionInfo;
 
   public:
     static char ID;
@@ -169,7 +169,7 @@ namespace {
     /// getFunctionInfo - Return the function info for the function, or null if
     /// we don't have anything useful to say about it.
     FunctionRecord *getFunctionInfo(const Function *F) {
-      MISTD::map<const Function*, FunctionRecord>::iterator I =
+      std::map<const Function*, FunctionRecord>::iterator I =
         FunctionInfo.find(F);
       if (I != FunctionInfo.end())
         return &I->second;
@@ -178,8 +178,8 @@ namespace {
 
     void AnalyzeGlobals(Module &M);
     void AnalyzeCallGraph(CallGraph &CG, Module &M);
-    bool AnalyzeUsesOfPointer(Value *V, MISTD::vector<Function*> &Readers,
-                              MISTD::vector<Function*> &Writers,
+    bool AnalyzeUsesOfPointer(Value *V, std::vector<Function*> &Readers,
+                              std::vector<Function*> &Writers,
                               GlobalValue *OkayStoreDest = 0);
     bool AnalyzeIndirectGlobalMemory(GlobalValue *GV);
   };
@@ -201,7 +201,7 @@ Pass *llvm::createGlobalsModRefPass() { return new GlobalsModRef(); }
 /// (really, their address passed to something nontrivial), record this fact,
 /// and record the functions that they are used directly in.
 void GlobalsModRef::AnalyzeGlobals(Module &M) {
-  MISTD::vector<Function*> Readers, Writers;
+  std::vector<Function*> Readers, Writers;
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I)
     if (I->hasLocalLinkage()) {
       if (!AnalyzeUsesOfPointer(I, Readers, Writers)) {
@@ -243,8 +243,8 @@ void GlobalsModRef::AnalyzeGlobals(Module &M) {
 ///
 /// If OkayStoreDest is non-null, stores into this global are allowed.
 bool GlobalsModRef::AnalyzeUsesOfPointer(Value *V,
-                                         MISTD::vector<Function*> &Readers,
-                                         MISTD::vector<Function*> &Writers,
+                                         std::vector<Function*> &Readers,
+                                         std::vector<Function*> &Writers,
                                          GlobalValue *OkayStoreDest) {
   if (!V->getType()->isPointerTy()) return true;
 
@@ -304,7 +304,7 @@ bool GlobalsModRef::AnalyzeUsesOfPointer(Value *V,
 bool GlobalsModRef::AnalyzeIndirectGlobalMemory(GlobalValue *GV) {
   // Keep track of values related to the allocation of the memory, f.e. the
   // value produced by the malloc call and any casts.
-  MISTD::vector<Value*> AllocRelatedValues;
+  std::vector<Value*> AllocRelatedValues;
 
   // Walk the user list of the global.  If we find anything other than a direct
   // load or store, bail out.
@@ -314,7 +314,7 @@ bool GlobalsModRef::AnalyzeIndirectGlobalMemory(GlobalValue *GV) {
       // The pointer loaded from the global can only be used in simple ways:
       // we allow addressing of it and loading storing to it.  We do *not* allow
       // storing the loaded pointer somewhere else or passing to a function.
-      MISTD::vector<Function*> ReadersWriters;
+      std::vector<Function*> ReadersWriters;
       if (AnalyzeUsesOfPointer(LI, ReadersWriters, ReadersWriters))
         return false;  // Loaded pointer escapes.
       // TODO: Could try some IP mod/ref of the loaded pointer.
@@ -334,7 +334,7 @@ bool GlobalsModRef::AnalyzeIndirectGlobalMemory(GlobalValue *GV) {
 
       // Analyze all uses of the allocation.  If any of them are used in a
       // non-simple way (e.g. stored to another global) bail out.
-      MISTD::vector<Function*> ReadersWriters;
+      std::vector<Function*> ReadersWriters;
       if (AnalyzeUsesOfPointer(Ptr, ReadersWriters, ReadersWriters, GV))
         return false;  // Loaded pointer escapes.
 
@@ -365,7 +365,7 @@ void GlobalsModRef::AnalyzeCallGraph(CallGraph &CG, Module &M) {
   // visit all callees before callers (leaf-first).
   for (scc_iterator<CallGraph*> I = scc_begin(&CG), E = scc_end(&CG); I != E;
        ++I) {
-    MISTD::vector<CallGraphNode *> &SCC = *I;
+    std::vector<CallGraphNode *> &SCC = *I;
     assert(!SCC.empty() && "SCC with no functions?");
 
     if (!SCC[0]->getFunction()) {
@@ -417,7 +417,7 @@ void GlobalsModRef::AnalyzeCallGraph(CallGraph &CG, Module &M) {
             FunctionEffect |= CalleeFR->FunctionEffect;
 
             // Incorporate callee's effects on globals into our info.
-            for (MISTD::map<const GlobalValue*, unsigned>::iterator GI =
+            for (std::map<const GlobalValue*, unsigned>::iterator GI =
                    CalleeFR->GlobalInfo.begin(), E = CalleeFR->GlobalInfo.end();
                  GI != E; ++GI)
               FR.GlobalInfo[GI->first] |= GI->second;
@@ -426,7 +426,7 @@ void GlobalsModRef::AnalyzeCallGraph(CallGraph &CG, Module &M) {
             // Can't say anything about it.  However, if it is inside our SCC,
             // then nothing needs to be done.
             CallGraphNode *CalleeNode = CG[Callee];
-            if (MISTD::find(SCC.begin(), SCC.end(), CalleeNode) == SCC.end())
+            if (std::find(SCC.begin(), SCC.end(), CalleeNode) == SCC.end())
               KnowNothing = true;
           }
         } else {
@@ -572,7 +572,7 @@ void GlobalsModRef::deleteValue(Value *V) {
       // any AllocRelatedValues for it.
       if (IndirectGlobals.erase(GV)) {
         // Remove any entries in AllocsForIndirectGlobals for this global.
-        for (MISTD::map<const Value*, const GlobalValue*>::iterator
+        for (std::map<const Value*, const GlobalValue*>::iterator
              I = AllocsForIndirectGlobals.begin(),
              E = AllocsForIndirectGlobals.end(); I != E; ) {
           if (I->second == GV) {

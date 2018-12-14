@@ -297,8 +297,9 @@ enum Compilation_error {
     ENABLE_IF_CONDITION_HAS_WARNINGS,
     FUNC_VARIANT_WITH_DEFERRED_ARRAY_RET_TYPE,
     ARCHIVE_CONFLICT,
+    MATERIAL_PTR_USED,
 
-    MAX_ERROR_NUM = ARCHIVE_CONFLICT,
+    MAX_ERROR_NUM = MATERIAL_PTR_USED,
     INTERNAL_COMPILER_ERROR = 999,
 };
 
@@ -353,6 +354,38 @@ enum Jit_backend_error {
     INTERNAL_JIT_BACKEND_ERROR = 999,
 };
 
+/// Comparator errors.
+enum Comparator_error {
+    OTHER_DEFINED_AT,
+    MISSING_STRUCT_MEMBER,
+    DIFFERENT_STRUCT_MEMBER_TYPE,
+    ADDED_STRUCT_MEMBER,
+    MISSING_ENUM_VALUE,
+    DIFFERENT_ENUM_VALUE,
+    ADDED_ENUM_VALUE,
+
+    TYPE_DOES_NOT_EXISTS = 100,
+    TYPES_DIFFERENT,
+    INCOMPATIBLE_STRUCT,
+    INCOMPATIBLE_ENUM,
+    DIFFERENT_MDL_VERSIONS,
+    DIFFERENT_DEFAULT_ARGUMENT,
+    CONSTANT_DOES_NOT_EXISTS,
+    CONSTANT_OF_DIFFERENT_TYPE,
+    CONSTANT_OF_DIFFERENT_VALUE,
+    FUNCTION_DOES_NOT_EXISTS,
+    FUNCTION_RET_TYPE_DIFFERENT,
+    FUNCTION_PARAM_DEF_ARG_DELETED,
+    FUNCTION_PARAM_DEF_ARG_CHANGED,
+    ANNOTATION_DOES_NOT_EXISTS,
+    ANNOTATION_PARAM_DEF_ARG_DELETED,
+    ANNOTATION_PARAM_DEF_ARG_CHANGED,
+    SEMA_VERSION_IS_HIGHER,
+    ARCHIVE_DOES_NOT_CONTAIN_MODULE,
+
+    INTERNAL_COMPARATOR_ERROR = 999,
+};
+
 /// Get the error template for the given code.
 ///
 /// \param code       the error code
@@ -384,6 +417,7 @@ public:
         EK_OPERATOR,
         EK_DIRECTION,
         EK_SIGNATURE,
+        EK_SIGNATURE_NO_RT,
         EK_VALUE,
         EK_QUALIFIER,
         EK_OPT_MESSAGE,
@@ -530,6 +564,11 @@ public:
     /// \param s  the string
     Error_params &add(char const *s);
 
+    /// Add a string argument.
+    ///
+    /// \param s  the string
+    Error_params &add(string const &s);
+
     /// Return the string argument of given index.
     ///
     /// \param index  the argument index
@@ -577,10 +616,15 @@ public:
     /// \param index  the argument index
     int get_pos_arg(size_t index) const;
 
-    /// Add a function signature.
+    /// Add a function signature (including return type).
     ///
     /// \param def  a definition of a function of constructor
     Error_params &add_signature(IDefinition const *def);
+
+    /// Add a function signature (without return type).
+    ///
+    /// \param def  a definition of a function of constructor
+    Error_params &add_signature_no_rt(IDefinition const *def);
 
     /// Return the signature argument of given index.
     ///

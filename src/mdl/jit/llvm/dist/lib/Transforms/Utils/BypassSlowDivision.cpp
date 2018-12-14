@@ -174,7 +174,7 @@ static bool insertFastDiv(Function &F,
   // of div or rem with the same sign, dividend, and divisor
   DivOpInfo Key(UseSignedOp, Dividend, Divisor);
   DivPhiNodes Value(QuoPhi, RemPhi);
-  PerBBDivCache.insert(MISTD::pair<DivOpInfo, DivPhiNodes>(Key, Value));
+  PerBBDivCache.insert(std::pair<DivOpInfo, DivPhiNodes>(Key, Value));
   return true;
 }
 

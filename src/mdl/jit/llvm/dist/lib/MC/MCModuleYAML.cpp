@@ -31,7 +31,7 @@ namespace {
 //
 // There are at least 3 obvious ways to do this:
 // 1- Generate an MII/MRI method using a tablegen StringMatcher
-// 2- Write an MII/MRI method using MISTD::lower_bound and the assumption that
+// 2- Write an MII/MRI method using std::lower_bound and the assumption that
 //    the enums are sorted (starting at a fixed value).
 // 3- Do the matching manually as is done here.
 //
@@ -91,7 +91,7 @@ struct Operand {
 
 struct Inst {
   OpcodeEnum Opcode;
-  MISTD::vector<Operand> Operands;
+  std::vector<Operand> Operands;
   uint64_t Size;
 };
 
@@ -100,24 +100,24 @@ struct Atom {
   yaml::Hex64 StartAddress;
   uint64_t Size;
 
-  MISTD::vector<Inst> Insts;
+  std::vector<Inst> Insts;
   object::yaml::BinaryRef Data;
 };
 
 struct BasicBlock {
   yaml::Hex64 Address;
-  MISTD::vector<yaml::Hex64> Preds;
-  MISTD::vector<yaml::Hex64> Succs;
+  std::vector<yaml::Hex64> Preds;
+  std::vector<yaml::Hex64> Succs;
 };
 
 struct Function {
   StringRef Name;
-  MISTD::vector<BasicBlock> BasicBlocks;
+  std::vector<BasicBlock> BasicBlocks;
 };
 
 struct Module {
-  MISTD::vector<Atom> Atoms;
-  MISTD::vector<Function> Functions;
+  std::vector<Atom> Atoms;
+  std::vector<Function> Functions;
 };
 
 } // end namespace MCModuleYAML
@@ -354,9 +354,9 @@ MCModuleYAML::Module &MCModule2YAML::getYAMLModule() { return YAMLModule; }
 YAML2MCModule::YAML2MCModule(MCModule &MCM) : MCM(MCM) {}
 
 StringRef YAML2MCModule::parse(const MCModuleYAML::Module &YAMLModule) {
-  typedef MISTD::vector<MCModuleYAML::Atom>::const_iterator AtomIt;
-  typedef MISTD::vector<MCModuleYAML::Inst>::const_iterator InstIt;
-  typedef MISTD::vector<MCModuleYAML::Operand>::const_iterator OpIt;
+  typedef std::vector<MCModuleYAML::Atom>::const_iterator AtomIt;
+  typedef std::vector<MCModuleYAML::Inst>::const_iterator InstIt;
+  typedef std::vector<MCModuleYAML::Operand>::const_iterator OpIt;
 
   typedef DenseMap<uint64_t, MCTextAtom *> AddrToTextAtomTy;
   AddrToTextAtomTy TAByAddr;
@@ -395,9 +395,9 @@ StringRef YAML2MCModule::parse(const MCModuleYAML::Module &YAMLModule) {
     }
   }
 
-  typedef MISTD::vector<MCModuleYAML::Function>::const_iterator FuncIt;
-  typedef MISTD::vector<MCModuleYAML::BasicBlock>::const_iterator BBIt;
-  typedef MISTD::vector<yaml::Hex64>::const_iterator AddrIt;
+  typedef std::vector<MCModuleYAML::Function>::const_iterator FuncIt;
+  typedef std::vector<MCModuleYAML::BasicBlock>::const_iterator BBIt;
+  typedef std::vector<yaml::Hex64>::const_iterator AddrIt;
   for (FuncIt FI = YAMLModule.Functions.begin(),
               FE = YAMLModule.Functions.end();
        FI != FE; ++FI) {

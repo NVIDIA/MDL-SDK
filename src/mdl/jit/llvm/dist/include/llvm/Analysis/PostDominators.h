@@ -38,7 +38,7 @@ struct PostDominatorTree : public FunctionPass {
     AU.setPreservesAll();
   }
 
-  inline const MISTD::vector<BasicBlock*> &getRoots() const {
+  inline const std::vector<BasicBlock*> &getRoots() const {
     return DT->getRoots();
   }
 

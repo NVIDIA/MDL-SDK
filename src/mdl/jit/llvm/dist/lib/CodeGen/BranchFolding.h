@@ -46,8 +46,8 @@ namespace llvm {
 
       bool operator<(const MergePotentialsElt &) const;
     };
-    typedef MISTD::vector<MergePotentialsElt>::iterator MPIterator;
-    MISTD::vector<MergePotentialsElt> MergePotentials;
+    typedef std::vector<MergePotentialsElt>::iterator MPIterator;
+    std::vector<MergePotentialsElt> MergePotentials;
     SmallPtrSet<const MachineBasicBlock*, 2> TriedMerging;
 
     class SameTailElt {
@@ -83,7 +83,7 @@ namespace llvm {
         TailStartPos = Pos;
       }
     };
-    MISTD::vector<SameTailElt> SameTails;
+    std::vector<SameTailElt> SameTails;
 
     bool EnableTailMerge;
     bool EnableHoistCommonCode;

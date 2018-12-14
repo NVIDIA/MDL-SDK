@@ -33,7 +33,7 @@
 ///      Different classes sometimes don't agree on the native types they use to
 ///      represent integer or floating point values. The standard STL
 ///      containers, for example, consistently return the number of their
-///      elements as MISTD::size_t, but most of our code will store that
+///      elements as std::size_t, but most of our code will store that
 ///      information in an Uint. On some platforms both are the same type, on
 ///      other platforms they won't be. As a result, the code snippet
 ///
@@ -141,8 +141,8 @@ inline TO_T assert_cast(
     FROM_T v ) // input
 {
     // to be replaced with ASSERT
-    MI_CAST_ASSERT( MISTD::numeric_limits<TO_T>::min() <= v &&
-             v <= MISTD::numeric_limits<TO_T>::max( ) );
+    MI_CAST_ASSERT( std::numeric_limits<TO_T>::min() <= v &&
+             v <= std::numeric_limits<TO_T>::max( ) );
 
     return static_cast<TO_T>( v );
 }
@@ -153,7 +153,7 @@ inline TO_T assert_cast_s2u(
 {
     // to be replaced with ASSERT
     MI_CAST_ASSERT( v >= static_cast<FROM_T>(0) &&
-             (UFROM_T) v <= MISTD::numeric_limits<TO_T>::max( ) );
+             (UFROM_T) v <= std::numeric_limits<TO_T>::max( ) );
     return static_cast<TO_T>( v );
 }
 
@@ -171,7 +171,7 @@ inline TO_T assert_cast_u2s(
     FROM_T v ) // input
 {
     // to be replaced with ASSERT
-    MI_CAST_ASSERT( v <= static_cast<UTO_T>( MISTD::numeric_limits<TO_T>::max( )) );
+    MI_CAST_ASSERT( v <= static_cast<UTO_T>( std::numeric_limits<TO_T>::max( )) );
     return static_cast<TO_T>( v );
 }
 

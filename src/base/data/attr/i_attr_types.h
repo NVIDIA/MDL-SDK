@@ -133,24 +133,24 @@ enum Type_code {                  ///< see m_typeinfo[] in attr_type.cpp
     TYPE_MATRIX4X2,               ///< = 42, size 32, Scalar[8]
     TYPE_MATRIX2X4,               ///< = 43, size 32, Scalar[8]
     // MetaSL-specific attribute types
-    TYPE_TEXTURE1D,               ///< = 44, size 4, Tag
-    TYPE_TEXTURE2D,               ///< = 45, size 4, Tag
-    TYPE_TEXTURE3D,               ///< = 46, size 4, Tag
-    TYPE_TEXTURE_CUBE,            ///< = 47, size 4, Tag
-    TYPE_BRDF,                    ///< = 48, size 4, Tag
-    TYPE_LIGHT,                   ///< = 49, size 4, Tag
-    TYPE_LIGHTPROFILE,            ///< = 50, size 4, Tag (also used by MDL)
-    TYPE_SHADER,                  ///< = 51, size 4, Tag
-    TYPE_PARTICLE_MAP,            ///< = 52, size 4, Tag
+    TYPE_TEXTURE1D,               ///< = 44, size 4, Tag, unused
+    TYPE_TEXTURE2D,               ///< = 45, size 4, Tag, unused
+    TYPE_TEXTURE3D,               ///< = 46, size 4, Tag, unused
+    TYPE_TEXTURE_CUBE,            ///< = 47, size 4, Tag, unused
+    TYPE_BRDF,                    ///< = 48, size 4, Tag, unused
+    TYPE_LIGHT,                   ///< = 49, size 4, Tag, unused
+    TYPE_LIGHTPROFILE,            ///< = 50, size 4, Tag, unused
+    TYPE_SHADER,                  ///< = 51, size 4, Tag, unused
+    TYPE_PARTICLE_MAP,            ///< = 52, size 4, Tag, unused
     TYPE_SPECTRUM,                ///< = 53, size 12, Scalar[3] (currently)
     // MDL-specific attribute types
-    TYPE_ID,                      ///< = 54, size 4, Uint32/Sint32
-    TYPE_PARAMETER,               ///< = 55, size 4, Uint32/Sint32
-    TYPE_TEMPORARY,               ///< = 56, size 4, Uint32/Sint32
-    TYPE_ATTACHABLE,              ///< = 57, size 0, struct{...}
-    TYPE_CALL,                    ///< = 58, size 2*4/8, Tag + char *, but counted as 2 const char*
-    TYPE_TEXTURE,                 ///< = 59, size 4, Tag
-    TYPE_BSDF_MEASUREMENT,        ///< = 60, size 4, Tag
+    TYPE_ID,                      ///< = 54, size 4, Uint32/Sint32, unused
+    TYPE_PARAMETER,               ///< = 55, size 4, Uint32/Sint32, unused
+    TYPE_TEMPORARY,               ///< = 56, size 4, Uint32/Sint32, unused
+    TYPE_ATTACHABLE,              ///< = 57, size 0, struct{...}, unused
+    TYPE_CALL,                    ///< = 58, size 2*4/8, Tag + char *, but counted as 2 const char*, unused
+    TYPE_TEXTURE,                 ///< = 59, size 4, Tag, unused
+    TYPE_BSDF_MEASUREMENT,        ///< = 60, size 4, Tag, unused
     TYPE_ENUM,                    ///< = 61, size 4, Uint32
     // general attribute types
     TYPE_DMATRIX2X2,              ///< = 62, size 32, Dscalar[4]

@@ -90,7 +90,7 @@ namespace MI {
 namespace MEM {
 
 template<class T, size_t alignment>
-struct aligned_allocator : MISTD::allocator<T>
+struct aligned_allocator : std::allocator<T>
 {
 #if defined(_MSC_VER)
 #if (_MSC_VER >= 1900)
@@ -102,7 +102,7 @@ struct aligned_allocator : MISTD::allocator<T>
     template<class U>
     struct rebind { typedef aligned_allocator<U, alignment> other; };
 
-    typedef MISTD::allocator<T> base;
+    typedef std::allocator<T> base;
 
     typedef typename base::pointer pointer;
     typedef typename base::size_type size_type;
@@ -111,7 +111,7 @@ struct aligned_allocator : MISTD::allocator<T>
     {
 	if(pointer p = (pointer)alloc_aligned(n * sizeof(T), alignment))
 	    return p;
-	throw MISTD::bad_alloc();
+	throw std::bad_alloc();
     }
 
     pointer allocate(size_type n, void const*)

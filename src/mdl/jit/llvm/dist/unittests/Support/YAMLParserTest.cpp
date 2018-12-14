@@ -144,7 +144,7 @@ TEST(YAMLParser, HandlesEndOfFileGracefully) {
 // Checks that the given string can be parsed into an identical string inside
 // of an array.
 static void ExpectCanParseString(StringRef String) {
-  MISTD::string StringInArray = (llvm::Twine("[\"") + String + "\"]").str();
+  std::string StringInArray = (llvm::Twine("[\"") + String + "\"]").str();
   SourceMgr SM;
   yaml::Stream Stream(StringInArray, SM);
   yaml::SequenceNode *ParsedSequence
@@ -158,7 +158,7 @@ static void ExpectCanParseString(StringRef String) {
 
 // Checks that parsing the given string inside an array fails.
 static void ExpectCannotParseString(StringRef String) {
-  MISTD::string StringInArray = (llvm::Twine("[\"") + String + "\"]").str();
+  std::string StringInArray = (llvm::Twine("[\"") + String + "\"]").str();
   ExpectParseError((Twine("When parsing string \"") + String + "\"").str(),
                    StringInArray);
 }
@@ -186,7 +186,7 @@ TEST(YAMLParser, WorksWithIteratorAlgorithms) {
   yaml::Stream Stream("[\"1\", \"2\", \"3\", \"4\", \"5\", \"6\"]", SM);
   yaml::SequenceNode *Array
     = dyn_cast<yaml::SequenceNode>(Stream.begin()->getRoot());
-  EXPECT_EQ(6, MISTD::distance(Array->begin(), Array->end()));
+  EXPECT_EQ(6, std::distance(Array->begin(), Array->end()));
 }
 
 TEST(YAMLParser, DefaultDiagnosticFilename) {

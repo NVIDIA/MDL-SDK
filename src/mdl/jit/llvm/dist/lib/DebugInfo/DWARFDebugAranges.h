@@ -71,7 +71,7 @@ private:
     uint32_t CUOffset; // Offset of the compile unit or die.
   };
 
-  typedef MISTD::vector<Range>              RangeColl;
+  typedef std::vector<Range>              RangeColl;
   typedef RangeColl::const_iterator       RangeCollIterator;
   typedef DenseSet<uint32_t>              ParsedCUOffsetColl;
 

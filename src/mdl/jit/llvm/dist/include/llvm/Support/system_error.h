@@ -22,7 +22,7 @@
 /*
     system_error synopsis
 
-namespace MISTD
+namespace std
 {
 
 class error_category
@@ -37,7 +37,7 @@ public:
     virtual error_condition default_error_condition(int ev) const;
     virtual bool equivalent(int code, const error_condition& condition) const;
     virtual bool equivalent(const error_code& code, int condition) const;
-    virtual MISTD::string message(int ev) const = 0;
+    virtual std::string message(int ev) const = 0;
 
     bool operator==(const error_category& rhs) const;
     bool operator!=(const error_category& rhs) const;
@@ -72,7 +72,7 @@ public:
     int value() const;
     const error_category& category() const;
     error_condition default_error_condition() const;
-    MISTD::string message() const;
+    std::string message() const;
     explicit operator bool() const;
 };
 
@@ -100,7 +100,7 @@ public:
     // observers:
     int value() const;
     const error_category& category() const;
-    MISTD::string message() const;
+    std::string message() const;
     explicit operator bool() const;
 };
 
@@ -110,10 +110,10 @@ class system_error
     : public runtime_error
 {
 public:
-    system_error(error_code ec, const MISTD::string& what_arg);
+    system_error(error_code ec, const std::string& what_arg);
     system_error(error_code ec, const char* what_arg);
     system_error(error_code ec);
-    system_error(int ev, const error_category& ecat, const MISTD::string& what_arg);
+    system_error(int ev, const error_category& ecat, const std::string& what_arg);
     system_error(int ev, const error_category& ecat, const char* what_arg);
     system_error(int ev, const error_category& ecat);
 
@@ -218,7 +218,7 @@ bool operator!=(const error_code& lhs, const error_condition& rhs);
 bool operator!=(const error_condition& lhs, const error_code& rhs);
 bool operator!=(const error_condition& lhs, const error_condition& rhs);
 
-template <> struct hash<MISTD::error_code>;
+template <> struct hash<std::error_code>;
 
 }  // std
 
@@ -639,7 +639,7 @@ public:
   virtual error_condition default_error_condition(int _ev) const;
   virtual bool equivalent(int _code, const error_condition& _condition) const;
   virtual bool equivalent(const error_code& _code, int _condition) const;
-  virtual MISTD::string message(int _ev) const = 0;
+  virtual std::string message(int _ev) const = 0;
 
   bool operator==(const error_category& _rhs) const {return this == &_rhs;}
 
@@ -653,7 +653,7 @@ public:
 class _do_message : public error_category
 {
 public:
-  virtual MISTD::string message(int ev) const LLVM_OVERRIDE;
+  virtual std::string message(int ev) const LLVM_OVERRIDE;
 };
 
 const error_category& generic_category();
@@ -702,7 +702,7 @@ public:
   int value() const {return _val_;}
 
   const error_category& category() const {return *_cat_;}
-  MISTD::string message() const;
+  std::string message() const;
 
   typedef void (*unspecified_bool_type)();
   static void unspecified_bool_true() {}
@@ -769,7 +769,7 @@ public:
   error_condition default_error_condition() const
     {return _cat_->default_error_condition(_val_);}
 
-  MISTD::string message() const;
+  std::string message() const;
 
   typedef void (*unspecified_bool_type)();
   static void unspecified_bool_true() {}

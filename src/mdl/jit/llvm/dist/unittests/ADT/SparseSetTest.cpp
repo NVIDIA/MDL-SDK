@@ -43,7 +43,7 @@ TEST(SparseSetTest, EmptySet) {
 TEST(SparseSetTest, SingleEntrySet) {
   USet Set;
   Set.setUniverse(10);
-  MISTD::pair<USet::iterator, bool> IP = Set.insert(5);
+  std::pair<USet::iterator, bool> IP = Set.insert(5);
   EXPECT_TRUE(IP.second);
   EXPECT_TRUE(IP.first == Set.begin());
 
@@ -103,7 +103,7 @@ TEST(SparseSetTest, MultipleEntrySet) {
   EXPECT_TRUE(I == Set.end());
 
   // Redundant insert.
-  MISTD::pair<USet::iterator, bool> IP = Set.insert(3);
+  std::pair<USet::iterator, bool> IP = Set.insert(3);
   EXPECT_FALSE(IP.second);
   EXPECT_TRUE(IP.first == Set.begin() + 1);
 

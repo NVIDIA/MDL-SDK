@@ -23,13 +23,13 @@
 // A Traits class specifies how keys are compared. It also allows IntervalMap to
 // work with both closed and half-open intervals.
 //
-// Keys and values are not stored next to each other in a MISTD::pair, so we don't
+// Keys and values are not stored next to each other in a std::pair, so we don't
 // provide such a value_type. Dereferencing iterators only returns the mapped
 // value. The interval bounds are accessible through the start() and stop()
 // iterator methods.
 //
 // IntervalMap is optimized for small key and value objects, 4 or 8 bytes each
-// is the optimal size. For large objects use MISTD::map instead.
+// is the optimal size. For large objects use std::map instead.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -65,7 +65,7 @@
 //
 // template <typename KeyT, typename ValT, unsigned N, typename Traits>
 // class IntervalMap::const_iterator :
-//   public MISTD::iterator<MISTD::bidirectional_iterator_tag, ValT> {
+//   public std::iterator<std::bidirectional_iterator_tag, ValT> {
 // public:
 //   bool operator==(const const_iterator &) const;
 //   bool operator!=(const const_iterator &) const;
@@ -179,7 +179,7 @@ namespace IntervalMapImpl {
 template <typename, typename, unsigned, typename> class LeafNode;
 template <typename, typename, unsigned, typename> class BranchNode;
 
-typedef MISTD::pair<unsigned,unsigned> IdxPair;
+typedef std::pair<unsigned,unsigned> IdxPair;
 
 
 //===----------------------------------------------------------------------===//
@@ -309,12 +309,12 @@ public:
   int adjustFromLeftSib(unsigned Size, NodeBase &Sib, unsigned SSize, int Add) {
     if (Add > 0) {
       // We want to grow, copy from sib.
-      unsigned Count = MISTD::min(MISTD::min(unsigned(Add), SSize), N - Size);
+      unsigned Count = std::min(std::min(unsigned(Add), SSize), N - Size);
       Sib.transferToRightSib(SSize, *this, Size, Count);
       return Count;
     } else {
       // We want to shrink, copy to sib.
-      unsigned Count = MISTD::min(MISTD::min(unsigned(-Add), Size), N - SSize);
+      unsigned Count = std::min(std::min(unsigned(-Add), Size), N - SSize);
       transferToLeftSib(Size, Sib, SSize, Count);
       return -Count;
     }
@@ -414,7 +414,7 @@ IdxPair distribute(unsigned Nodes, unsigned Elements, unsigned Capacity,
 //
 // The branching factors are chosen to make nodes fit in three cache lines.
 // This may not be possible if keys or values are very large. Such large objects
-// are handled correctly, but a MISTD::map would probably give better performance.
+// are handled correctly, but a std::map would probably give better performance.
 //
 //===----------------------------------------------------------------------===//
 
@@ -440,7 +440,7 @@ struct NodeSizer {
     LeafSize = DesiredLeafSize > MinLeafSize ? DesiredLeafSize : MinLeafSize
   };
 
-  typedef NodeBase<MISTD::pair<KeyT, KeyT>, ValT, LeafSize> LeafBase;
+  typedef NodeBase<std::pair<KeyT, KeyT>, ValT, LeafSize> LeafBase;
 
   enum {
     // Now that we have the leaf branching factor, compute the actual allocation
@@ -556,7 +556,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
-class LeafNode : public NodeBase<MISTD::pair<KeyT, KeyT>, ValT, N> {
+class LeafNode : public NodeBase<std::pair<KeyT, KeyT>, ValT, N> {
 public:
   const KeyT &start(unsigned i) const { return this->first[i].first; }
   const KeyT &stop(unsigned i) const { return this->first[i].second; }
@@ -1293,7 +1293,7 @@ clear() {
 
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
 class IntervalMap<KeyT, ValT, N, Traits>::const_iterator :
-  public MISTD::iterator<MISTD::bidirectional_iterator_tag, ValT> {
+  public std::iterator<std::bidirectional_iterator_tag, ValT> {
 protected:
   friend class IntervalMap;
 

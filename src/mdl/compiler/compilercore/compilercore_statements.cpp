@@ -112,7 +112,7 @@ protected:
             m_args[i] = args[i];
     }
 
-    MISTD::vector<ArgIf, Memory_arena_allocator<ArgIf> > m_args;
+    std::vector<ArgIf, Memory_arena_allocator<ArgIf> > m_args;
 };
 
 /// A mixin for compound statements

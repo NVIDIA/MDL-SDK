@@ -59,7 +59,7 @@ struct ProcessInfo {
   /// @returns A Path object initialized to the path of the program or a
   /// Path object that is empty (invalid) if the program could not be found.
   /// @brief Construct a Program by finding it by name.
-  MISTD::string FindProgramByName(const MISTD::string& name);
+  std::string FindProgramByName(const std::string& name);
 
   // These functions change the specified standard stream (stdin, stdout, or
   // stderr) to binary mode. They return errc::success if the specified stream
@@ -103,7 +103,7 @@ struct ProcessInfo {
       ///< of memory can be allocated by process. If memory usage will be
       ///< higher limit, the child is killed and this call returns. If zero
       ///< - no memory limit.
-      MISTD::string *ErrMsg = 0, ///< If non-zero, provides a pointer to a string
+      std::string *ErrMsg = 0, ///< If non-zero, provides a pointer to a string
       ///< instance in which error messages will be returned. If the string
       ///< is non-empty upon return an error occurred while invoking the
       ///< program.
@@ -117,7 +117,7 @@ struct ProcessInfo {
   ProcessInfo
   ExecuteNoWait(StringRef Program, const char **args, const char **env = 0,
                 const StringRef **redirects = 0, unsigned memoryLimit = 0,
-                MISTD::string *ErrMsg = 0, bool *ExecutionFailed = 0);
+                std::string *ErrMsg = 0, bool *ExecutionFailed = 0);
 
   /// Return true if the given arguments fit within system-specific
   /// argument length limits.
@@ -138,7 +138,7 @@ struct ProcessInfo {
       ///< will perform a non-blocking wait on the child process.
       bool WaitUntilTerminates, ///< If true, ignores \p SecondsToWait and waits
       ///< until child has terminated.
-      MISTD::string *ErrMsg = 0 ///< If non-zero, provides a pointer to a string
+      std::string *ErrMsg = 0 ///< If non-zero, provides a pointer to a string
       ///< instance in which error messages will be returned. If the string
       ///< is non-empty upon return an error occurred while invoking the
       ///< program.

@@ -192,7 +192,7 @@ static void DetectX86FamilyModel(unsigned EAX, unsigned &Family,
   }
 }
 
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   unsigned EAX = 0, EBX = 0, ECX = 0, EDX = 0;
   if (GetX86CpuIDAndInfo(0x1, &EAX, &EBX, &ECX, &EDX))
     return "generic";
@@ -448,7 +448,7 @@ MISTD::string sys::getHostCPUName() {
   return "generic";
 }
 #elif defined(__APPLE__) && (defined(__ppc__) || defined(__powerpc__))
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   host_basic_info_data_t hostInfo;
   mach_msg_type_number_t infoCount;
 
@@ -477,7 +477,7 @@ MISTD::string sys::getHostCPUName() {
   return "generic";
 }
 #elif defined(__linux__) && (defined(__ppc__) || defined(__powerpc__))
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   // Access to the Processor Version Register (PVR) on PowerPC is privileged,
   // and so we must use an operating-system interface to determine the current
   // processor type. On Linux, this is exposed through the /proc/cpuinfo file.
@@ -487,7 +487,7 @@ MISTD::string sys::getHostCPUName() {
   // memory buffer because the 'file' has 0 size (it can be read from only
   // as a stream).
 
-  MISTD::string Err;
+  std::string Err;
   DataStreamer *DS = getDataFileStreamer("/proc/cpuinfo", &Err);
   if (!DS) {
     DEBUG(dbgs() << "Unable to open /proc/cpuinfo: " << Err << "\n");
@@ -567,14 +567,14 @@ MISTD::string sys::getHostCPUName() {
     .Default(generic);
 }
 #elif defined(__linux__) && defined(__arm__)
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   // The cpuid register on arm is not accessible from user space. On Linux,
   // it is exposed through the /proc/cpuinfo file.
   // Note: We cannot mmap /proc/cpuinfo here and then process the resulting
   // memory buffer because the 'file' has 0 size (it can be read from only
   // as a stream).
 
-  MISTD::string Err;
+  std::string Err;
   DataStreamer *DS = getDataFileStreamer("/proc/cpuinfo", &Err);
   if (!DS) {
     DEBUG(dbgs() << "Unable to open /proc/cpuinfo: " << Err << "\n");
@@ -622,13 +622,13 @@ MISTD::string sys::getHostCPUName() {
   return "generic";
 }
 #elif defined(__linux__) && defined(__s390x__)
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   // STIDP is a privileged operation, so use /proc/cpuinfo instead.
   // Note: We cannot mmap /proc/cpuinfo here and then process the resulting
   // memory buffer because the 'file' has 0 size (it can be read from only
   // as a stream).
 
-  MISTD::string Err;
+  std::string Err;
   DataStreamer *DS = getDataFileStreamer("/proc/cpuinfo", &Err);
   if (!DS) {
     DEBUG(dbgs() << "Unable to open /proc/cpuinfo: " << Err << "\n");
@@ -664,14 +664,14 @@ MISTD::string sys::getHostCPUName() {
   return "generic";
 }
 #else
-MISTD::string sys::getHostCPUName() {
+std::string sys::getHostCPUName() {
   return "generic";
 }
 #endif
 
 #if defined(__linux__) && defined(__arm__)
 bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
-  MISTD::string Err;
+  std::string Err;
   DataStreamer *DS = getDataFileStreamer("/proc/cpuinfo", &Err);
   if (!DS) {
     DEBUG(dbgs() << "Unable to open /proc/cpuinfo: " << Err << "\n");
@@ -721,7 +721,7 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features){
 }
 #endif
 
-MISTD::string sys::getProcessTriple() {
+std::string sys::getProcessTriple() {
   Triple PT(Triple::normalize(LLVM_HOST_TRIPLE));
 
   if (sizeof(void *) == 8 && PT.isArch32Bit())

@@ -112,7 +112,7 @@ class EquivalenceClasses {
 
   /// TheMapping - This implicitly provides a mapping from ElemTy values to the
   /// ECValues, it just keeps the key as part of the value.
-  MISTD::set<ECValue> TheMapping;
+  std::set<ECValue> TheMapping;
 
 public:
   EquivalenceClasses() {}
@@ -137,7 +137,7 @@ public:
   //
 
   /// iterator* - Provides a way to iterate over all values in the set.
-  typedef typename MISTD::set<ECValue>::const_iterator iterator;
+  typedef typename std::set<ECValue>::const_iterator iterator;
   iterator begin() const { return TheMapping.begin(); }
   iterator end() const { return TheMapping.end(); }
 
@@ -237,9 +237,9 @@ public:
     return L1;
   }
 
-  class member_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+  class member_iterator : public std::iterator<std::forward_iterator_tag,
                                                const ElemTy, ptrdiff_t> {
-    typedef MISTD::iterator<MISTD::forward_iterator_tag,
+    typedef std::iterator<std::forward_iterator_tag,
                           const ElemTy, ptrdiff_t> super;
     const ECValue *Node;
     friend class EquivalenceClasses;

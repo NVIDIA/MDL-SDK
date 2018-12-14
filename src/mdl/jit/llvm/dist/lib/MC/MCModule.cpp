@@ -28,7 +28,7 @@ void MCModule::map(MCAtom *NewAtom) {
   assert(Begin <= NewAtom->End && "Creating MCAtom with endpoints reversed?");
 
   // Check for atoms already covering this range.
-  AtomListTy::iterator I = MISTD::lower_bound(atom_begin(), atom_end(),
+  AtomListTy::iterator I = std::lower_bound(atom_begin(), atom_end(),
                                             Begin, AtomComp);
   assert((I == atom_end() || (*I)->getBeginAddr() > NewAtom->End)
          && "Offset range already occupied!");
@@ -52,7 +52,7 @@ MCDataAtom *MCModule::createDataAtom(uint64_t Begin, uint64_t End) {
 // remap - Update the interval mapping for an atom.
 void MCModule::remap(MCAtom *Atom, uint64_t NewBegin, uint64_t NewEnd) {
   // Find and erase the old mapping.
-  AtomListTy::iterator I = MISTD::lower_bound(atom_begin(), atom_end(),
+  AtomListTy::iterator I = std::lower_bound(atom_begin(), atom_end(),
                                             Atom->Begin, AtomComp);
   assert(I != atom_end() && "Atom offset not found in module!");
   assert(*I == Atom && "Previous atom mapping was invalid!");
@@ -61,7 +61,7 @@ void MCModule::remap(MCAtom *Atom, uint64_t NewBegin, uint64_t NewEnd) {
   // FIXME: special case NewBegin == Atom->Begin
 
   // Insert the new mapping.
-  AtomListTy::iterator NewI = MISTD::lower_bound(atom_begin(), atom_end(),
+  AtomListTy::iterator NewI = std::lower_bound(atom_begin(), atom_end(),
                                                NewBegin, AtomComp);
   assert((NewI == atom_end() || (*NewI)->getBeginAddr() > Atom->End)
          && "Offset range already occupied!");
@@ -73,7 +73,7 @@ void MCModule::remap(MCAtom *Atom, uint64_t NewBegin, uint64_t NewEnd) {
 }
 
 const MCAtom *MCModule::findAtomContaining(uint64_t Addr) const {
-  AtomListTy::const_iterator I = MISTD::lower_bound(atom_begin(), atom_end(),
+  AtomListTy::const_iterator I = std::lower_bound(atom_begin(), atom_end(),
                                                   Addr, AtomComp);
   if (I != atom_end() && (*I)->getBeginAddr() <= Addr)
     return *I;
@@ -86,7 +86,7 @@ MCAtom *MCModule::findAtomContaining(uint64_t Addr) {
 }
 
 const MCAtom *MCModule::findFirstAtomAfter(uint64_t Addr) const {
-  AtomListTy::const_iterator I = MISTD::upper_bound(atom_begin(), atom_end(),
+  AtomListTy::const_iterator I = std::upper_bound(atom_begin(), atom_end(),
                                                   Addr, AtomCompInv);
   if (I != atom_end())
     return *I;
@@ -110,7 +110,7 @@ static bool CompBBToAtom(MCBasicBlock *BB, const MCTextAtom *Atom) {
 void MCModule::splitBasicBlocksForAtom(const MCTextAtom *TA,
                                        const MCTextAtom *NewTA) {
   BBsByAtomTy::iterator
-    I = MISTD::lower_bound(BBsByAtom.begin(), BBsByAtom.end(),
+    I = std::lower_bound(BBsByAtom.begin(), BBsByAtom.end(),
                          TA, CompBBToAtom);
   for (; I != BBsByAtom.end() && (*I)->getInsts() == TA; ++I) {
     MCBasicBlock *BB = *I;
@@ -121,7 +121,7 @@ void MCModule::splitBasicBlocksForAtom(const MCTextAtom *TA,
 
 void MCModule::trackBBForAtom(const MCTextAtom *Atom, MCBasicBlock *BB) {
   assert(Atom == BB->getInsts() && "Text atom doesn't back the basic block!");
-  BBsByAtomTy::iterator I = MISTD::lower_bound(BBsByAtom.begin(),
+  BBsByAtomTy::iterator I = std::lower_bound(BBsByAtom.begin(),
                                              BBsByAtom.end(),
                                              Atom, CompBBToAtom);
   for (; I != BBsByAtom.end() && (*I)->getInsts() == Atom; ++I)

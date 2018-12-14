@@ -17,7 +17,7 @@
 
 namespace llvm {
 
-typedef MISTD::vector<DWARFAbbreviationDeclaration>
+typedef std::vector<DWARFAbbreviationDeclaration>
   DWARFAbbreviationDeclarationColl;
 typedef DWARFAbbreviationDeclarationColl::iterator
   DWARFAbbreviationDeclarationCollIter;
@@ -27,7 +27,7 @@ typedef DWARFAbbreviationDeclarationColl::const_iterator
 class DWARFAbbreviationDeclarationSet {
   uint32_t Offset;
   uint32_t IdxOffset;
-  MISTD::vector<DWARFAbbreviationDeclaration> Decls;
+  std::vector<DWARFAbbreviationDeclaration> Decls;
   public:
   DWARFAbbreviationDeclarationSet()
     : Offset(0), IdxOffset(0) {}
@@ -49,7 +49,7 @@ class DWARFAbbreviationDeclarationSet {
 
 class DWARFDebugAbbrev {
 public:
-  typedef MISTD::map<uint64_t, DWARFAbbreviationDeclarationSet>
+  typedef std::map<uint64_t, DWARFAbbreviationDeclarationSet>
     DWARFAbbreviationDeclarationCollMap;
   typedef DWARFAbbreviationDeclarationCollMap::iterator
     DWARFAbbreviationDeclarationCollMapIter;

@@ -646,7 +646,7 @@ void DAGTypeLegalizer::SplitVecRes_BITCAST(SDNode *N, SDValue &Lo,
     if (LoVT == HiVT) {
       GetExpandedOp(InOp, Lo, Hi);
       if (TLI.isBigEndian())
-        MISTD::swap(Lo, Hi);
+        std::swap(Lo, Hi);
       Lo = DAG.getNode(ISD::BITCAST, dl, LoVT, Lo);
       Hi = DAG.getNode(ISD::BITCAST, dl, HiVT, Hi);
       return;
@@ -665,12 +665,12 @@ void DAGTypeLegalizer::SplitVecRes_BITCAST(SDNode *N, SDValue &Lo,
   EVT LoIntVT = EVT::getIntegerVT(*DAG.getContext(), LoVT.getSizeInBits());
   EVT HiIntVT = EVT::getIntegerVT(*DAG.getContext(), HiVT.getSizeInBits());
   if (TLI.isBigEndian())
-    MISTD::swap(LoIntVT, HiIntVT);
+    std::swap(LoIntVT, HiIntVT);
 
   SplitInteger(BitConvertToInteger(InOp), LoIntVT, HiIntVT, Lo, Hi);
 
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
   Lo = DAG.getNode(ISD::BITCAST, dl, LoVT, Lo);
   Hi = DAG.getNode(ISD::BITCAST, dl, HiVT, Hi);
 }
@@ -1203,7 +1203,7 @@ SDValue DAGTypeLegalizer::SplitVecOp_BITCAST(SDNode *N) {
   Hi = BitConvertToInteger(Hi);
 
   if (TLI.isBigEndian())
-    MISTD::swap(Lo, Hi);
+    std::swap(Lo, Hi);
 
   return DAG.getNode(ISD::BITCAST, SDLoc(N), N->getValueType(0),
                      JoinIntegers(Lo, Hi));
@@ -1769,7 +1769,7 @@ SDValue DAGTypeLegalizer::WidenVecRes_Convert(SDNode *N) {
   // Otherwise unroll into some nasty scalar code and rebuild the vector.
   SmallVector<SDValue, 16> Ops(WidenNumElts);
   EVT EltVT = WidenVT.getVectorElementType();
-  unsigned MinElts = MISTD::min(InVTNumElts, WidenNumElts);
+  unsigned MinElts = std::min(InVTNumElts, WidenNumElts);
   unsigned i;
   for (i=0; i < MinElts; ++i) {
     SDValue Val = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, InEltVT, InOp,
@@ -2071,7 +2071,7 @@ SDValue DAGTypeLegalizer::WidenVecRes_CONVERT_RNDSAT(SDNode *N) {
   DTyOp = DAG.getValueType(EltVT);
   STyOp = DAG.getValueType(InEltVT);
 
-  unsigned MinElts = MISTD::min(InVTNumElts, WidenNumElts);
+  unsigned MinElts = std::min(InVTNumElts, WidenNumElts);
   unsigned i;
   for (i=0; i < MinElts; ++i) {
     SDValue ExtVal = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, InEltVT, InOp,
@@ -2910,7 +2910,7 @@ SDValue DAGTypeLegalizer::ModifyToType(SDValue InOp, EVT NVT) {
   // Fall back to extract and build.
   SmallVector<SDValue, 16> Ops(WidenNumElts);
   EVT EltVT = NVT.getVectorElementType();
-  unsigned MinNumElts = MISTD::min(WidenNumElts, InNumElts);
+  unsigned MinNumElts = std::min(WidenNumElts, InNumElts);
   unsigned Idx;
   for (Idx = 0; Idx < MinNumElts; ++Idx)
     Ops[Idx] = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, EltVT, InOp,

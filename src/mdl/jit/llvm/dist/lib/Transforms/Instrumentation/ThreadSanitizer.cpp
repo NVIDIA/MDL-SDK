@@ -46,7 +46,7 @@
 
 using namespace llvm;
 
-static cl::opt<MISTD::string>  ClBlacklistFile("tsan-blacklist",
+static cl::opt<std::string>  ClBlacklistFile("tsan-blacklist",
        cl::desc("Blacklist file"), cl::Hidden);
 static cl::opt<bool>  ClInstrumentMemoryAccesses(
     "tsan-instrument-memory-accesses", cl::init(true),

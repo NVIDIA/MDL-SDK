@@ -23,7 +23,7 @@
 #include "llvm/Support/system_error.h"
 using namespace llvm;
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
        InputFilenames(cl::Positional, cl::desc("<input files>"),
                       cl::ZeroOrMore);
 static cl::opt<bool>
@@ -131,7 +131,7 @@ MarkupTag MarkupParser::parseTag() {
       FatalError(SMLoc::getFromPointer(Start), "unterminated markup tag");
   }
   StringRef RawTag(Start, Lex.getPosition() - Start - 1);
-  MISTD::pair<StringRef, StringRef> SplitTag = RawTag.split(' ');
+  std::pair<StringRef, StringRef> SplitTag = RawTag.split(' ');
   return MarkupTag(SplitTag.first, SplitTag.second, Loc);
 }
 
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
   if (InputFilenames.size() == 0)
     InputFilenames.push_back("-");
 
-  MISTD::for_each(InputFilenames.begin(), InputFilenames.end(),
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
                 parseMCMarkup);
   return 0;
 }

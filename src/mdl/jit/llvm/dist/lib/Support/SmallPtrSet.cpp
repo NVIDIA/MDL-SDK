@@ -227,10 +227,10 @@ void SmallPtrSetImpl::swap(SmallPtrSetImpl &RHS) {
 
   // We can only avoid copying elements if neither set is small.
   if (!this->isSmall() && !RHS.isSmall()) {
-    MISTD::swap(this->CurArray, RHS.CurArray);
-    MISTD::swap(this->CurArraySize, RHS.CurArraySize);
-    MISTD::swap(this->NumElements, RHS.NumElements);
-    MISTD::swap(this->NumTombstones, RHS.NumTombstones);
+    std::swap(this->CurArray, RHS.CurArray);
+    std::swap(this->CurArraySize, RHS.CurArraySize);
+    std::swap(this->NumElements, RHS.NumElements);
+    std::swap(this->NumTombstones, RHS.NumTombstones);
     return;
   }
 
@@ -239,10 +239,10 @@ void SmallPtrSetImpl::swap(SmallPtrSetImpl &RHS) {
   // If only RHS is small, copy the small elements into LHS and move the pointer
   // from LHS to RHS.
   if (!this->isSmall() && RHS.isSmall()) {
-    MISTD::copy(RHS.SmallArray, RHS.SmallArray+RHS.CurArraySize,
+    std::copy(RHS.SmallArray, RHS.SmallArray+RHS.CurArraySize,
               this->SmallArray);
-    MISTD::swap(this->NumElements, RHS.NumElements);
-    MISTD::swap(this->CurArraySize, RHS.CurArraySize);
+    std::swap(this->NumElements, RHS.NumElements);
+    std::swap(this->CurArraySize, RHS.CurArraySize);
     RHS.CurArray = this->CurArray;
     RHS.NumTombstones = this->NumTombstones;
     this->CurArray = this->SmallArray;
@@ -253,10 +253,10 @@ void SmallPtrSetImpl::swap(SmallPtrSetImpl &RHS) {
   // If only LHS is small, copy the small elements into RHS and move the pointer
   // from RHS to LHS.
   if (this->isSmall() && !RHS.isSmall()) {
-    MISTD::copy(this->SmallArray, this->SmallArray+this->CurArraySize,
+    std::copy(this->SmallArray, this->SmallArray+this->CurArraySize,
               RHS.SmallArray);
-    MISTD::swap(RHS.NumElements, this->NumElements);
-    MISTD::swap(RHS.CurArraySize, this->CurArraySize);
+    std::swap(RHS.NumElements, this->NumElements);
+    std::swap(RHS.CurArraySize, this->CurArraySize);
     this->CurArray = RHS.CurArray;
     this->NumTombstones = RHS.NumTombstones;
     RHS.CurArray = RHS.SmallArray;
@@ -267,9 +267,9 @@ void SmallPtrSetImpl::swap(SmallPtrSetImpl &RHS) {
   // Both a small, just swap the small elements.
   assert(this->isSmall() && RHS.isSmall());
   assert(this->CurArraySize == RHS.CurArraySize);
-  MISTD::swap_ranges(this->SmallArray, this->SmallArray+this->CurArraySize,
+  std::swap_ranges(this->SmallArray, this->SmallArray+this->CurArraySize,
                    RHS.SmallArray);
-  MISTD::swap(this->NumElements, RHS.NumElements);
+  std::swap(this->NumElements, RHS.NumElements);
 }
 
 SmallPtrSetImpl::~SmallPtrSetImpl() {

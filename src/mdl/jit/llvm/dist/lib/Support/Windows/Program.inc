@@ -30,14 +30,14 @@ using namespace sys;
 ProcessInfo::ProcessInfo() : ProcessHandle(0), Pid(0), ReturnCode(0) {}
 
 // This function just uses the PATH environment variable to find the program.
-MISTD::string sys::FindProgramByName(const MISTD::string &progName) {
+std::string sys::FindProgramByName(const std::string &progName) {
   // Check some degenerate cases
   if (progName.length() == 0) // no program
     return "";
-  MISTD::string temp = progName;
+  std::string temp = progName;
   // Return paths with slashes verbatim.
-  if (progName.find('\\') != MISTD::string::npos ||
-      progName.find('/') != MISTD::string::npos)
+  if (progName.find('\\') != std::string::npos ||
+      progName.find('/') != std::string::npos)
     return temp;
 
   // At this point, the file name is valid and does not contain slashes.
@@ -65,10 +65,10 @@ MISTD::string sys::FindProgramByName(const MISTD::string &progName) {
   if (windows::UTF16ToUTF8(buffer.begin(), buffer.size(), result))
     return "";
 
-  return MISTD::string(result.data(), result.size());
+  return std::string(result.data(), result.size());
 }
 
-static HANDLE RedirectIO(const StringRef *path, int fd, MISTD::string* ErrMsg) {
+static HANDLE RedirectIO(const StringRef *path, int fd, std::string* ErrMsg) {
   HANDLE h;
   if (path == 0) {
     if (!DuplicateHandle(GetCurrentProcess(), (HANDLE)_get_osfhandle(fd),
@@ -78,7 +78,7 @@ static HANDLE RedirectIO(const StringRef *path, int fd, MISTD::string* ErrMsg) {
     return h;
   }
 
-  MISTD::string fname;
+  std::string fname;
   if (path->empty())
     fname = "NUL";
   else
@@ -97,7 +97,7 @@ static HANDLE RedirectIO(const StringRef *path, int fd, MISTD::string* ErrMsg) {
                   FILE_SHARE_READ, &sa, fd == 0 ? OPEN_EXISTING : CREATE_ALWAYS,
                   FILE_ATTRIBUTE_NORMAL, NULL);
   if (h == INVALID_HANDLE_VALUE) {
-    MakeErrMsg(ErrMsg, MISTD::string(fname) + ": Can't open file for " +
+    MakeErrMsg(ErrMsg, std::string(fname) + ": Can't open file for " +
         (fd ? "input: " : "output: "));
   }
 
@@ -169,7 +169,7 @@ static unsigned int ArgLenWithQuotes(const char *Str) {
 
 static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
                     const char **envp, const StringRef **redirects,
-                    unsigned memoryLimit, MISTD::string *ErrMsg) {
+                    unsigned memoryLimit, std::string *ErrMsg) {
   if (!sys::fs::can_execute(Program)) {
     if (ErrMsg)
       *ErrMsg = "program not executable";
@@ -219,7 +219,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
   *p = 0;
 
   // The pointer to the environment block for the new process.
-  MISTD::vector<wchar_t> EnvBlock;
+  std::vector<wchar_t> EnvBlock;
 
   if (envp) {
     // An environment block consists of a null-terminated block of
@@ -294,7 +294,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
   if (error_code ec = windows::UTF8ToUTF16(Program, ProgramUtf16)) {
     SetLastError(ec.value());
     MakeErrMsg(ErrMsg,
-               MISTD::string("Unable to convert application name to UTF-16"));
+               std::string("Unable to convert application name to UTF-16"));
     return false;
   }
 
@@ -302,7 +302,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
   if (error_code ec = windows::UTF8ToUTF16(command.get(), CommandUtf16)) {
     SetLastError(ec.value());
     MakeErrMsg(ErrMsg,
-               MISTD::string("Unable to convert command-line to UTF-16"));
+               std::string("Unable to convert command-line to UTF-16"));
     return false;
   }
 
@@ -321,7 +321,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
   // Now return an error if the process didn't get created.
   if (!rc) {
     SetLastError(err);
-    MakeErrMsg(ErrMsg, MISTD::string("Couldn't execute program '") +
+    MakeErrMsg(ErrMsg, std::string("Couldn't execute program '") +
                Program.str() + "'");
     return false;
   }
@@ -350,7 +350,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
     }
     if (!success) {
       SetLastError(GetLastError());
-      MakeErrMsg(ErrMsg, MISTD::string("Unable to set memory limit"));
+      MakeErrMsg(ErrMsg, std::string("Unable to set memory limit"));
       TerminateProcess(pi.hProcess, 1);
       WaitForSingleObject(pi.hProcess, INFINITE);
       return false;
@@ -362,7 +362,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program, const char **args,
 
 namespace llvm {
 ProcessInfo sys::Wait(const ProcessInfo &PI, unsigned SecondsToWait,
-                      bool WaitUntilChildTerminates, MISTD::string *ErrMsg) {
+                      bool WaitUntilChildTerminates, std::string *ErrMsg) {
   assert(PI.Pid && "invalid pid to wait on, process not started?");
   assert(PI.ProcessHandle &&
          "invalid process handle to wait on, process not started?");

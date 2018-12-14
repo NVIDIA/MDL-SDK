@@ -66,7 +66,7 @@ GCModuleInfo::~GCModuleInfo() {
 }
 
 GCStrategy *GCModuleInfo::getOrCreateStrategy(const Module *M,
-                                              const MISTD::string &Name) {
+                                              const std::string &Name) {
   strategy_map_type::iterator NMI = StrategyMap.find(Name);
   if (NMI != StrategyMap.end())
     return NMI->getValue();

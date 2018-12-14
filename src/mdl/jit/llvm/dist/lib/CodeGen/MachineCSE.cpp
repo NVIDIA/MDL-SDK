@@ -434,7 +434,7 @@ void MachineCSE::ExitScope(MachineBasicBlock *MBB) {
 bool MachineCSE::ProcessBlock(MachineBasicBlock *MBB) {
   bool Changed = false;
 
-  SmallVector<MISTD::pair<unsigned, unsigned>, 8> CSEPairs;
+  SmallVector<std::pair<unsigned, unsigned>, 8> CSEPairs;
   SmallVector<unsigned, 2> ImplicitDefsToUpdate;
   for (MachineBasicBlock::iterator I = MBB->begin(), E = MBB->end(); I != E; ) {
     MachineInstr *MI = &*I;
@@ -549,7 +549,7 @@ bool MachineCSE::ProcessBlock(MachineBasicBlock *MBB) {
         break;
       }
 
-      CSEPairs.push_back(MISTD::make_pair(OldReg, NewReg));
+      CSEPairs.push_back(std::make_pair(OldReg, NewReg));
       --NumDefs;
     }
 
@@ -628,7 +628,7 @@ bool MachineCSE::PerformCSE(MachineDomTreeNode *Node) {
   do {
     Node = WorkList.pop_back_val();
     Scopes.push_back(Node);
-    const MISTD::vector<MachineDomTreeNode*> &Children = Node->getChildren();
+    const std::vector<MachineDomTreeNode*> &Children = Node->getChildren();
     unsigned NumChildren = Children.size();
     OpenChildren[Node] = NumChildren;
     for (unsigned i = 0; i != NumChildren; ++i) {

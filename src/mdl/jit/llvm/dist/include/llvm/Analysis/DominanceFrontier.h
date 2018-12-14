@@ -30,11 +30,11 @@ namespace llvm {
 ///
 class DominanceFrontierBase : public FunctionPass {
 public:
-  typedef MISTD::set<BasicBlock*>             DomSetType;    // Dom set for a bb
-  typedef MISTD::map<BasicBlock*, DomSetType> DomSetMapType; // Dom set map
+  typedef std::set<BasicBlock*>             DomSetType;    // Dom set for a bb
+  typedef std::map<BasicBlock*, DomSetType> DomSetMapType; // Dom set map
 protected:
   DomSetMapType Frontiers;
-  MISTD::vector<BasicBlock*> Roots;
+  std::vector<BasicBlock*> Roots;
   const bool IsPostDominators;
 
 public:
@@ -45,7 +45,7 @@ public:
   /// multiple blocks if we are computing post dominators.  For forward
   /// dominators, this will always be a single block (the entry node).
   ///
-  inline const MISTD::vector<BasicBlock*> &getRoots() const { return Roots; }
+  inline const std::vector<BasicBlock*> &getRoots() const { return Roots; }
 
   /// isPostDominator - Returns true if analysis based of postdoms
   ///
@@ -65,7 +65,7 @@ public:
 
   iterator addBasicBlock(BasicBlock *BB, const DomSetType &frontier) {
     assert(find(BB) == end() && "Block already in DominanceFrontier!");
-    return Frontiers.insert(MISTD::make_pair(BB, frontier)).first;
+    return Frontiers.insert(std::make_pair(BB, frontier)).first;
   }
 
   /// removeBlock - Remove basic block BB's frontier.
@@ -90,7 +90,7 @@ public:
   /// compareDomSet - Return false if two domsets match. Otherwise
   /// return true;
   bool compareDomSet(DomSetType &DS1, const DomSetType &DS2) const {
-    MISTD::set<BasicBlock *> tmpSet;
+    std::set<BasicBlock *> tmpSet;
     for (DomSetType::const_iterator I = DS2.begin(),
            E = DS2.end(); I != E; ++I)
       tmpSet.insert(*I);
@@ -118,7 +118,7 @@ public:
     DomSetMapType tmpFrontiers;
     for (DomSetMapType::const_iterator I = Other.begin(),
            E = Other.end(); I != E; ++I)
-      tmpFrontiers.insert(MISTD::make_pair(I->first, I->second));
+      tmpFrontiers.insert(std::make_pair(I->first, I->second));
 
     for (DomSetMapType::iterator I = tmpFrontiers.begin(),
            E = tmpFrontiers.end(); I != E; ) {

@@ -603,7 +603,7 @@ inline
 void Array<T, Allocator>::swap(
     Array<T, Allocator>& other)		// the other
 {
-    using MISTD::swap;
+    using std::swap;
     swap(m_allocator, other.m_allocator);
     swap(m_array, other.m_array);
     swap(m_count, other.m_count);

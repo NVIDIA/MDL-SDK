@@ -214,7 +214,7 @@ public:
     /// Write out back more complex types (typically implemented by using the previous types).
     virtual void write(const DB::Tag& value) = 0;
     virtual void write(const char* value) = 0;
-    virtual void write(const MISTD::string& value) = 0;
+    virtual void write(const std::string& value) = 0;
     virtual void write(const mi::math::Color& value) = 0;
     virtual void write(const CONT::Bitvector& value) = 0;
     virtual void write(const CONT::Dictionary& value) = 0;
@@ -238,7 +238,7 @@ public:
     template <typename T> void write(const CONT::Array<T>& array);
     template <typename T> void write(const CONT::Array<T*>& array);
     template <typename T, typename A1, typename A2>
-    void write(const MISTD::vector< MISTD::vector<T, A1>, A2>& array);
+    void write(const std::vector< std::vector<T, A1>, A2>& array);
 
     /// Write a serializable object to the stream.
     virtual void write(const Serializable& object) = 0;
@@ -339,7 +339,7 @@ public:
     /// Read back more complex types (typically implemented by using the previous types).
     virtual void read(DB::Tag* value_pointer) = 0;
     virtual void read(char** value_pointer) = 0; ///< Use release() to free the memory.
-    virtual void read(MISTD::string* value_pointer) = 0;
+    virtual void read(std::string* value_pointer) = 0;
     virtual void read(mi::math::Color* value_pointer) = 0;
     virtual void read(CONT::Bitvector* value_type) = 0;
     virtual void read(CONT::Dictionary* value_pointer) = 0;
@@ -365,7 +365,7 @@ public:
     template <typename T> void read(CONT::Array<T>* array);
     template <typename T> void read(CONT::Array<T*>* array);
     template <typename T, typename A1, typename A2>
-    void read(MISTD::vector< MISTD::vector<T, A1>, A2>* array);
+    void read(std::vector< std::vector<T, A1>, A2>* array);
 
     /// Read back a serializable object from the stream.
     virtual void read(Serializable* object) = 0;
@@ -406,7 +406,7 @@ template <class T> void write(Serializer* serial, const DB::Typed_tag<T>& value)
 void write(Serializer* serial, const DB::Tag_version& value);
 template <typename T, Size R, Size C> void write(Serializer* serial,const mi::math::Matrix<T,R,C>&);
 void write(Serializer* serial, const char* value);
-void write(Serializer* serial, const MISTD::string& value);
+void write(Serializer* serial, const std::string& value);
 void write(Serializer* serial, const mi::math::Color& value);
 template <typename T, Size DIM> void write(Serializer* serial,const mi::math::Vector<T,DIM>& value);
 void write(Serializer* serial, const CONT::Bitvector& value);
@@ -433,7 +433,7 @@ template <class T> void read(Deserializer* deser, DB::Typed_tag<T>* value_pointe
 void read(Deserializer* deser, DB::Tag_version* value_pointer);
 template <typename T, Size R, Size C> void read(Deserializer* deser, mi::math::Matrix<T,R,C>*);
 void read(Deserializer* deser, char** value_pointer);
-void read(Deserializer* deser, MISTD::string* value_pointer);
+void read(Deserializer* deser, std::string* value_pointer);
 void read(Deserializer* deser, mi::math::Color* value_pointer);
 template <typename T, Size DIM> void read(Deserializer* deser, mi::math::Vector<T,DIM>* value_type);
 void read(Deserializer* deser, CONT::Bitvector* value_type);
@@ -471,63 +471,63 @@ inline void write_range(Serializer& serializer, Iterator begin, Iterator end);
 
 /// Serialize a vector.
 template <typename T>
-void write(Serializer* serializer, const MISTD::vector<T>& array);
+void write(Serializer* serializer, const std::vector<T>& array);
 template <typename T,typename A>
-void write(Serializer* serializer, const MISTD::vector<T,A>& array);
+void write(Serializer* serializer, const std::vector<T,A>& array);
 template <typename T>
-void write(Serializer* serializer, const MISTD::vector<T*>& array);
+void write(Serializer* serializer, const std::vector<T*>& array);
 template <typename T,typename A>
-void write(Serializer* serializer, const MISTD::vector<T*,A>& array);
+void write(Serializer* serializer, const std::vector<T*,A>& array);
 
 /// Deserialize a vector.
 template <typename T>
-void read(Deserializer* deserializer, MISTD::vector<T>* array);
-inline void read(Deserializer* deserializer, const MISTD::vector<bool>* array);
+void read(Deserializer* deserializer, std::vector<T>* array);
+inline void read(Deserializer* deserializer, const std::vector<bool>* array);
 template <typename T,typename A>
-void read(Deserializer* deserializer, MISTD::vector<T,A>* array);
+void read(Deserializer* deserializer, std::vector<T,A>* array);
 template <typename T>
-void read(Deserializer* deserializer, MISTD::vector<T*>* array);
+void read(Deserializer* deserializer, std::vector<T*>* array);
 template <typename T,typename A>
-void read(Deserializer* deserializer, MISTD::vector<T*,A>* array);
+void read(Deserializer* deserializer, std::vector<T*,A>* array);
 
 /// Serialize a list.
 template <typename T>
-void write(Serializer* serializer, const MISTD::list<T>& list);
+void write(Serializer* serializer, const std::list<T>& list);
 
 /// Deserialize a list.
 template <typename T>
-void read(Deserializer* deserializer, MISTD::list<T>* list);
+void read(Deserializer* deserializer, std::list<T>* list);
 
 /// Serialize a pair.
 template <typename T, typename U>
-void write(Serializer* serializer, const MISTD::pair<T, U>& pair);
+void write(Serializer* serializer, const std::pair<T, U>& pair);
 
 /// Deserialize a pair.
 template <typename T, typename U>
-void read(Deserializer* deserializer, MISTD::pair<T, U>* pair);
+void read(Deserializer* deserializer, std::pair<T, U>* pair);
 
 /// Serialize a set.
 template <typename T, typename SWO>
-void write(Serializer* serializer, const MISTD::set<T,SWO>& set);
+void write(Serializer* serializer, const std::set<T,SWO>& set);
 
 /// Deserialize a set.
 template <typename T, typename SWO>
-void read(Deserializer* deserializer, MISTD::set<T,SWO>* set);
+void read(Deserializer* deserializer, std::set<T,SWO>* set);
 
 /// Serialize a map.
 template <typename T, typename U, typename SWO>
-void write(Serializer* serializer, const MISTD::map<T,U,SWO>& map);
+void write(Serializer* serializer, const std::map<T,U,SWO>& map);
 
 /// Deserialize a map.
 template <typename T, typename U, typename SWO>
-void read(Deserializer* deserializer, MISTD::map<T,U,SWO>* map);
+void read(Deserializer* deserializer, std::map<T,U,SWO>* map);
 
 
 template<class K, class V, class C, class A>
-void write(Serializer* serializer, const MISTD::multimap<K,V,C,A>&);
+void write(Serializer* serializer, const std::multimap<K,V,C,A>&);
 
 template<class K, class V, class C, class A>
-void read(Deserializer* deserializer, MISTD::multimap<K,V,C,A>*);
+void read(Deserializer* deserializer, std::multimap<K,V,C,A>*);
 
 
 } /// namespace SERIAL

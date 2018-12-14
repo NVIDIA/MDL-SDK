@@ -100,9 +100,6 @@ public:
     mi::neuraylib::IMaterial_instance* create_material_instance(
         const mi::neuraylib::IExpression_list* arguments,
         mi::Sint32* errors = 0) const NEURAY_FINAL;
-
-    // methods of IInterface
-
 };
 
 } // namespace NEURAY
@@ -110,4 +107,3 @@ public:
 } // namespace MI
 
 #endif // API_API_NEURAY_MATERIAL_DEFINITION_IMPL_H
-

@@ -30,7 +30,7 @@ class tool_output_file {
   /// cleanups in its constructor and uninstalls them in its destructor.
   class CleanupInstaller {
     /// Filename - The name of the file.
-    MISTD::string Filename;
+    std::string Filename;
   public:
     /// Keep - The flag which indicates whether we should not delete the file.
     bool Keep;
@@ -46,7 +46,7 @@ class tool_output_file {
 public:
   /// tool_output_file - This constructor's arguments are passed to
   /// to raw_fd_ostream's constructor.
-  tool_output_file(const char *filename, MISTD::string &ErrorInfo,
+  tool_output_file(const char *filename, std::string &ErrorInfo,
                    sys::fs::OpenFlags Flags = sys::fs::F_None);
 
   tool_output_file(const char *Filename, int FD);

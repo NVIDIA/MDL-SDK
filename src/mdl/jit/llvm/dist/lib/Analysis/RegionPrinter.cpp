@@ -38,7 +38,7 @@ struct DOTGraphTraits<RegionNode*> : public DefaultDOTGraphTraits {
   DOTGraphTraits (bool isSimple=false)
     : DefaultDOTGraphTraits(isSimple) {}
 
-  MISTD::string getNodeLabel(RegionNode *Node, RegionNode *Graph) {
+  std::string getNodeLabel(RegionNode *Node, RegionNode *Graph) {
 
     if (!Node->isSubRegion()) {
       BasicBlock *BB = Node->getNodeAs<BasicBlock>();
@@ -61,16 +61,16 @@ struct DOTGraphTraits<RegionInfo*> : public DOTGraphTraits<RegionNode*> {
   DOTGraphTraits (bool isSimple=false)
     : DOTGraphTraits<RegionNode*>(isSimple) {}
 
-  static MISTD::string getGraphName(RegionInfo *DT) {
+  static std::string getGraphName(RegionInfo *DT) {
     return "Region Graph";
   }
 
-  MISTD::string getNodeLabel(RegionNode *Node, RegionInfo *G) {
+  std::string getNodeLabel(RegionNode *Node, RegionInfo *G) {
     return DOTGraphTraits<RegionNode*>::getNodeLabel(Node,
                                                      G->getTopLevelRegion());
   }
 
-  MISTD::string getEdgeAttributes(RegionNode *srcNode,
+  std::string getEdgeAttributes(RegionNode *srcNode,
     GraphTraits<RegionInfo*>::ChildIteratorType CI, RegionInfo *RI) {
 
     RegionNode *destNode = *CI;

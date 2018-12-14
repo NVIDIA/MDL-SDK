@@ -42,7 +42,7 @@ private:
   // The passed parameters when the disassembler context is created.
   //
   // The TripleName for this disassembler.
-  MISTD::string TripleName;
+  std::string TripleName;
   // The pointer to the caller's block of symbolic information.
   void *DisInfo;
   // The Triple specific symbolic information type returned by GetOpInfo.
@@ -76,14 +76,14 @@ private:
   // The options used to set up the disassembler.
   uint64_t Options;
   // The CPU string.
-  MISTD::string CPU;
+  std::string CPU;
 
 public:
   // Comment stream and backing vector.
   SmallString<128> CommentsToEmit;
   raw_svector_ostream CommentStream;
 
-  LLVMDisasmContext(MISTD::string tripleName, void *disInfo, int tagType,
+  LLVMDisasmContext(std::string tripleName, void *disInfo, int tagType,
                     LLVMOpInfoCallback getOpInfo,
                     LLVMSymbolLookupCallback symbolLookUp,
                     const Target *theTarget, const MCAsmInfo *mAI,
@@ -104,7 +104,7 @@ public:
     DisAsm.reset(disAsm);
     IP.reset(iP);
   }
-  const MISTD::string &getTripleName() const { return TripleName; }
+  const std::string &getTripleName() const { return TripleName; }
   void *getDisInfo() const { return DisInfo; }
   int getTagType() const { return TagType; }
   LLVMOpInfoCallback getGetOpInfo() const { return GetOpInfo; }

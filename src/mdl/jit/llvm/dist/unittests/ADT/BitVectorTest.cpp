@@ -89,12 +89,12 @@ TYPED_TEST(BitVectorTest, TrivialOperation) {
   TypeParam Copy = Vec;
   TypeParam Alt(3, false);
   Alt.resize(6, true);
-  MISTD::swap(Alt, Vec);
+  std::swap(Alt, Vec);
   EXPECT_TRUE(Copy == Alt);
   EXPECT_TRUE(Vec.size() == 6);
   EXPECT_TRUE(Vec.count() == 3);
   EXPECT_TRUE(Vec.find_first() == 3);
-  MISTD::swap(Copy, Vec);
+  std::swap(Copy, Vec);
 
   // Add some more "interesting" data.
   Vec.resize(68, true);

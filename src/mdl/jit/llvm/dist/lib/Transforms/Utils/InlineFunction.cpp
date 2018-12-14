@@ -376,7 +376,7 @@ static Value *HandleByValArgument(Value *Arg, Instruction *TheCall,
   // If the byval had an alignment specified, we *must* use at least that
   // alignment, as it is required by the byval argument (and uses of the
   // pointer inside the callee).
-  Align = MISTD::max(Align, ByValAlignment);
+  Align = std::max(Align, ByValAlignment);
   
   Function *Caller = TheCall->getParent()->getParent(); 
   
@@ -750,7 +750,7 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
   // If we cloned in _exactly one_ basic block, and if that block ends in a
   // return instruction, we splice the body of the inlined callee directly into
   // the calling basic block.
-  if (Returns.size() == 1 && MISTD::distance(FirstNewBlock, Caller->end()) == 1) {
+  if (Returns.size() == 1 && std::distance(FirstNewBlock, Caller->end()) == 1) {
     // Move all of the instructions right before the call.
     OrigBB->getInstList().splice(TheCall, FirstNewBlock->getInstList(),
                                  FirstNewBlock->begin(), FirstNewBlock->end());

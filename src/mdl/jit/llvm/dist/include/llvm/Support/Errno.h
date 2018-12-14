@@ -23,10 +23,10 @@ namespace sys {
 /// thread-safe variant of strerror() is available.  Be sure to call this
 /// immediately after the function that set errno, or errno may have been
 /// overwritten by an intervening call.
-MISTD::string StrError();
+std::string StrError();
 
 /// Like the no-argument version above, but uses \p errnum instead of errno.
-MISTD::string StrError(int errnum);
+std::string StrError(int errnum);
 
 }  // namespace sys
 }  // namespace llvm

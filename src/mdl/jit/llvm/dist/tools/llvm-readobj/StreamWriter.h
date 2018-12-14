@@ -63,7 +63,7 @@ public:
   }
 
   void unindent(int Levels = 1) {
-    IndentLevel = MISTD::max(0, IndentLevel - Levels);
+    IndentLevel = std::max(0, IndentLevel - Levels);
   }
 
   void printIndent() {
@@ -115,7 +115,7 @@ public:
       }
     }
 
-    MISTD::sort(SetFlags.begin(), SetFlags.end(), &flagName<TFlag>);
+    std::sort(SetFlags.begin(), SetFlags.end(), &flagName<TFlag>);
 
     startLine() << Label << " [ (" << hex(Value) << ")\n";
     for (typename FlagVector::const_iterator I = SetFlags.begin(),
@@ -186,7 +186,7 @@ public:
     startLine() << Label << ": " << Value << "\n";
   }
 
-  void printString(StringRef Label, const MISTD::string &Value) {
+  void printString(StringRef Label, const std::string &Value) {
     startLine() << Label << ": " << Value << "\n";
   }
 

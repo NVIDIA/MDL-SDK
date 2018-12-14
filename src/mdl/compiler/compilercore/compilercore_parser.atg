@@ -69,17 +69,19 @@ COMPILER mdl
     }
 
     Module *m_module;
+    bool m_enable_experimental_features;
 
-    void set_module(Module *module)
+    void set_module(Module *module, bool enable_experimental_features)
     {
-        m_module              = module;
-        m_name_factory        = m_module->get_name_factory();
-        m_type_factory        = m_module->get_type_factory();
-        m_expression_factory  = m_module->get_expression_factory();
-        m_value_factory       = m_module->get_value_factory();
-        m_statement_factory   = m_module->get_statement_factory();
-        m_declaration_factory = m_module->get_declaration_factory();
-        m_annotation_factory  = m_module->get_annotation_factory();
+        m_module                       = module;
+        m_enable_experimental_features = enable_experimental_features;
+        m_name_factory                 = m_module->get_name_factory();
+        m_type_factory                 = m_module->get_type_factory();
+        m_expression_factory           = m_module->get_expression_factory();
+        m_value_factory                = m_module->get_value_factory();
+        m_statement_factory            = m_module->get_statement_factory();
+        m_declaration_factory          = m_module->get_declaration_factory();
+        m_annotation_factory           = m_module->get_annotation_factory();
     }
 
     Module *get_module()
@@ -928,8 +930,40 @@ COMPILER mdl
     // The type of vectors of parameters.
     typedef vector<IParameter const *>::Type Parameter_vector;
 
-    // The type of vectors of arguments.
-    typedef vector<IArgument const *>::Type Argument_vector;
+    // A class for adding arguments to either a call or an annotation.
+    class Argument_owner
+    {
+        public:
+            // Constructor.
+            // \param call  the call expression to which arguments should be added
+            Argument_owner(IExpression_call *call)
+            : m_call(call)
+            , m_anno(NULL)
+            {}
+
+            // Constructor.
+            // \param anno  the annotation to which arguments should be added
+            Argument_owner(IAnnotation *anno)
+            : m_call(NULL)
+            , m_anno(anno)
+            {}
+
+            // Add the given argument to the call or annotation provided with the constructor.
+            void add_argument(IArgument const *arg)
+            {
+                if (m_call != NULL)
+                    m_call->add_argument(arg);
+                else if (m_anno != NULL)
+                    m_anno->add_argument(arg);
+            }
+
+        private:
+            // The call expression, or NULL if not used.
+            IExpression_call *m_call;
+
+            // The annotation, or NULL if not used.
+            IAnnotation *m_anno;
+    };
 
 CHARACTERS
 
@@ -1240,7 +1274,10 @@ mdl_version
                                         // do this only if we had NO error here
                                         if (errDist > 0) {
                                             bool res = m_module->set_version(
-                                                m_mdl, major, minor);
+                                                m_mdl,
+                                                major,
+                                                minor,
+                                                m_enable_experimental_features);
                                             if (!res) {
                                                 errors->Error(
                                                     t->line, t->col,
@@ -1554,25 +1591,25 @@ named_argument<IArgument const *&arg>
                                                 .)
     .
 
-argument_list<Argument_vector &args>
+argument_list<Argument_owner &arg_owner>
     = '('                                                                       /// @break@tab
                                                 (. IArgument const *argument = NULL; .)
             [ IF(is_named_argument())
                 named_argument<argument>
-                                                (. args.push_back(argument); .)
+                                                (. arg_owner.add_argument(argument); .)
                 { WEAK ','
                     named_argument<argument>
-                                                (. args.push_back(argument); .)
+                                                (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break
             | positional_argument<argument>
-                                                (. args.push_back(argument); .)
+                                                (. arg_owner.add_argument(argument); .)
                 { IF(see_comma() && !is_named_argument())
                     WEAK ',' positional_argument<argument>
-                                                (. args.push_back(argument); .)
+                                                (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break@tab
                 { WEAK ','
                     named_argument<argument>
-                                                (. args.push_back(argument); .)
+                                                (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break
             ]                                                                   /// @break
         ')'
@@ -1713,14 +1750,10 @@ constant_declarator<IDeclaration_constant *declaration>
                                                 .)
         simple_name<constant_name>
         (                                       (.
-                                                    Argument_vector arguments(m_alloc);
                                                     Position const &start_pos =
                                                         constant_name->access_position();
                                                     int sl = start_pos.get_start_line();
                                                     int sc = start_pos.get_start_column();
-                                                .)
-            argument_list<arguments>
-                                                (.
                                                     IType_name *tn = m_module->clone_name(
                                                         declaration->get_type_name(),
                                                         /*modifier=*/NULL);
@@ -1732,9 +1765,10 @@ constant_declarator<IDeclaration_constant *declaration>
                                                                 sc,
                                                                 t->line,
                                                                 t->col);
-                                                    size_t count = arguments.size();
-                                                    for (size_t i = 0; i < count; ++i)
-                                                        call->add_argument(arguments[i]);
+                                                    Argument_owner arg_owner(call);
+                                                .)
+            argument_list<arg_owner>
+                                                (.
                                                     init_exp = call;
                                                 .)
         | '=' conditional_expression<init_exp>
@@ -1945,14 +1979,10 @@ variable_declarator<IDeclaration_variable *declaration>
                                                 .)
         simple_name<variable_name>
         [                                       (.
-                                                    Argument_vector arguments(m_alloc);
                                                     Position const &start_pos =
                                                         variable_name->access_position();
                                                     int sl = start_pos.get_start_line();
                                                     int sc = start_pos.get_start_column();
-                                                .)
-            argument_list<arguments>
-                                                (.
                                                     IType_name *tn = m_module->clone_name(
                                                         declaration->get_type_name(),
                                                         /*modifier=*/NULL);
@@ -1964,9 +1994,10 @@ variable_declarator<IDeclaration_variable *declaration>
                                                                 sc,
                                                                 t->line,
                                                                 t->col);
-                                                    size_t count = arguments.size();
-                                                    for (size_t i = 0; i < count; ++i)
-                                                        call->add_argument(arguments[i]);
+                                                    Argument_owner arg_owner(call);
+                                                .)
+            argument_list<arg_owner>
+                                                (.
                                                     init_exp = call;
                                                 .)
         | '=' assignment_expression<init_exp>
@@ -2181,7 +2212,6 @@ annotation<IAnnotation *&anno>
                                                 (.
                                                     anno = NULL;
                                                     IQualified_name *annotation_name = NULL;
-                                                    Argument_vector arguments(m_alloc);
                                                 .)
         qualified_name<annotation_name>
                                                 (.
@@ -2192,12 +2222,10 @@ annotation<IAnnotation *&anno>
                                                                 annotation_name,
                                                                 n_pos.get_start_line(),
                                                                 n_pos.get_start_column());
+                                                    Argument_owner arg_owner(anno);
                                                 .)
-        argument_list<arguments>
+        argument_list<arg_owner>
                                                 (.
-                                                    size_t count = arguments.size();
-                                                    for (size_t i = 0; i < count; ++i)
-                                                        anno->add_argument(arguments[i]);
                                                     Position &pos = anno->access_position();
                                                     pos.set_end_line(t->line);
                                                     pos.set_end_column(t->col);
@@ -2723,9 +2751,7 @@ postfix_expression<IExpression const *&exp>
                                                 exp = bin_exp;
 
                                             .)
-        |                                   (. Argument_vector arguments(m_alloc); .)
-            argument_list<arguments>                                              /// @break
-                                            (.
+        |                                   (.
                                                 IExpression_call *call
                                                     = m_expression_factory->create_call(
                                                         check_expr(exp),
@@ -2733,9 +2759,10 @@ postfix_expression<IExpression const *&exp>
                                                         sc,
                                                         t->line,
                                                         t->col);
-                                                size_t count = arguments.size();
-                                                for (size_t i = 0; i < count; ++i)
-                                                    call->add_argument(arguments[i]);
+                                                Argument_owner arg_owner(call);
+                                            .)
+            argument_list<arg_owner>                                              /// @break
+                                            (.
                                                 exp = call;
                                             .)
         |

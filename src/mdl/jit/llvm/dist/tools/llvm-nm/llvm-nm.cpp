@@ -55,7 +55,7 @@ namespace {
   cl::alias OutputFormat2("f", cl::desc("Alias for --format"),
                           cl::aliasopt(OutputFormat));
 
-  cl::list<MISTD::string>
+  cl::list<std::string>
   InputFilenames(cl::Positional, cl::desc("<input bitcode files>"),
                  cl::ZeroOrMore);
 
@@ -126,7 +126,7 @@ namespace {
 
   bool HadError = false;
 
-  MISTD::string ToolName;
+  std::string ToolName;
 }
 
 
@@ -186,18 +186,18 @@ namespace {
   }
 
   StringRef CurrentFilename;
-  typedef MISTD::vector<NMSymbol> SymbolListT;
+  typedef std::vector<NMSymbol> SymbolListT;
   SymbolListT SymbolList;
 }
 
 static void SortAndPrintSymbolList() {
   if (!NoSort) {
     if (NumericSort)
-      MISTD::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolAddress);
+      std::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolAddress);
     else if (SizeSort)
-      MISTD::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolSize);
+      std::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolSize);
     else
-      MISTD::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolName);
+      std::sort(SymbolList.begin(), SymbolList.end(), CompareSymbolName);
   }
 
   if (OutputFormat == posix && MultipleFiles) {
@@ -246,7 +246,7 @@ static void SortAndPrintSymbolList() {
       }
       outs() << i->TypeChar << " " << i->Name  << "\n";
     } else if (OutputFormat == sysv) {
-      MISTD::string PaddedName (i->Name);
+      std::string PaddedName (i->Name);
       while (PaddedName.length () < 20)
         PaddedName += " ";
       outs() << PaddedName << "|" << SymbolAddrStr << "|   "
@@ -296,11 +296,11 @@ static void DumpSymbolNameForGlobalValue(GlobalValue &GV) {
 
 static void DumpSymbolNamesFromModule(Module *M) {
   CurrentFilename = M->getModuleIdentifier();
-  MISTD::for_each (M->begin(), M->end(), DumpSymbolNameForGlobalValue);
-  MISTD::for_each (M->global_begin(), M->global_end(),
+  std::for_each (M->begin(), M->end(), DumpSymbolNameForGlobalValue);
+  std::for_each (M->global_begin(), M->global_end(),
                  DumpSymbolNameForGlobalValue);
   if (!WithoutAliases)
-    MISTD::for_each (M->alias_begin(), M->alias_end(),
+    std::for_each (M->alias_begin(), M->alias_end(),
 		   DumpSymbolNameForGlobalValue);
 
   SortAndPrintSymbolList();
@@ -557,7 +557,7 @@ static void DumpSymbolNamesFromObject(ObjectFile *obj) {
   SortAndPrintSymbolList();
 }
 
-static void DumpSymbolNamesFromFile(MISTD::string &Filename) {
+static void DumpSymbolNamesFromFile(std::string &Filename) {
   if (Filename != "-" && !sys::fs::exists(Filename)) {
     errs() << ToolName << ": '" << Filename << "': " << "No such file\n";
     return;
@@ -570,7 +570,7 @@ static void DumpSymbolNamesFromFile(MISTD::string &Filename) {
   sys::fs::file_magic magic = sys::fs::identify_magic(Buffer->getBuffer());
 
   LLVMContext &Context = getGlobalContext();
-  MISTD::string ErrorMessage;
+  std::string ErrorMessage;
   if (magic == sys::fs::file_magic::bitcode) {
     Module *Result = 0;
     Result = ParseBitcodeFile(Buffer.get(), Context, &ErrorMessage);
@@ -691,7 +691,7 @@ int main(int argc, char **argv) {
   default: MultipleFiles = true;
   }
 
-  MISTD::for_each(InputFilenames.begin(), InputFilenames.end(),
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
                 DumpSymbolNamesFromFile);
 
   if (HadError)

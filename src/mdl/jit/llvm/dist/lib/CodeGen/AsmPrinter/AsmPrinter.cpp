@@ -475,7 +475,7 @@ void AsmPrinter::EmitFunctionHeader() {
   // If the function had address-taken blocks that got deleted, then we have
   // references to the dangling symbols.  Emit them at the start of the function
   // so that we don't get references to undefined symbols.
-  MISTD::vector<MCSymbol*> DeadBlockSyms;
+  std::vector<MCSymbol*> DeadBlockSyms;
   MMI->takeDeletedSymbolsForFunction(F, DeadBlockSyms);
   for (unsigned i = 0, e = DeadBlockSyms.size(); i != e; ++i) {
     OutStreamer.AddComment("Address taken block that was later removed");
@@ -555,7 +555,7 @@ void AsmPrinter::emitImplicitDef(const MachineInstr *MI) const {
 }
 
 static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
-  MISTD::string Str = "kill:";
+  std::string Str = "kill:";
   for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {
     const MachineOperand &Op = MI->getOperand(i);
     assert(Op.isReg() && "KILL instruction must have only register operands");
@@ -675,10 +675,10 @@ void AsmPrinter::emitPrologLabel(const MachineInstr &MI) {
     OutStreamer.EmitCompactUnwindEncoding(MMI->getCompactUnwindEncoding());
 
   const MachineModuleInfo &MMI = MF->getMMI();
-  const MISTD::vector<MCCFIInstruction> &Instrs = MMI.getFrameInstructions();
+  const std::vector<MCCFIInstruction> &Instrs = MMI.getFrameInstructions();
   bool FoundOne = false;
   (void)FoundOne;
-  for (MISTD::vector<MCCFIInstruction>::const_iterator I = Instrs.begin(),
+  for (std::vector<MCCFIInstruction>::const_iterator I = Instrs.begin(),
          E = Instrs.end(); I != E; ++I) {
     if (I->getLabel() == Label) {
       emitCFIInstruction(*I);
@@ -1028,7 +1028,7 @@ namespace {
 ///
 void AsmPrinter::EmitConstantPool() {
   const MachineConstantPool *MCP = MF->getConstantPool();
-  const MISTD::vector<MachineConstantPoolEntry> &CP = MCP->getConstants();
+  const std::vector<MachineConstantPoolEntry> &CP = MCP->getConstants();
   if (CP.empty()) return;
 
   // Calculate sections for constant pool entries. We collect entries to go into
@@ -1110,7 +1110,7 @@ void AsmPrinter::EmitJumpTableInfo() {
   const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();
   if (MJTI == 0) return;
   if (MJTI->getEntryKind() == MachineJumpTableInfo::EK_Inline) return;
-  const MISTD::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
+  const std::vector<MachineJumpTableEntry> &JT = MJTI->getJumpTables();
   if (JT.empty()) return;
 
   // Pick the directive to use to print the jump table entries, and switch to
@@ -1143,7 +1143,7 @@ void AsmPrinter::EmitJumpTableInfo() {
     OutStreamer.EmitDataRegion(MCDR_DataRegionJT32);
 
   for (unsigned JTI = 0, e = JT.size(); JTI != e; ++JTI) {
-    const MISTD::vector<MachineBasicBlock*> &JTBBs = JT[JTI].MBBs;
+    const std::vector<MachineBasicBlock*> &JTBBs = JT[JTI].MBBs;
 
     // If this jump table was deleted, ignore it.
     if (JTBBs.empty()) continue;
@@ -1331,7 +1331,7 @@ void AsmPrinter::EmitXXStructorList(const Constant *List, bool isCtor) {
       !isa<PointerType>(ETy->getTypeAtIndex(1U))) return; // Not (int, ptr).
 
   // Gather the structors in a form that's convenient for sorting by priority.
-  typedef MISTD::pair<unsigned, Constant *> Structor;
+  typedef std::pair<unsigned, Constant *> Structor;
   SmallVector<Structor, 8> Structors;
   for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
     ConstantStruct *CS = dyn_cast<ConstantStruct>(InitList->getOperand(i));
@@ -1340,14 +1340,14 @@ void AsmPrinter::EmitXXStructorList(const Constant *List, bool isCtor) {
       break;  // Found a null terminator, skip the rest.
     ConstantInt *Priority = dyn_cast<ConstantInt>(CS->getOperand(0));
     if (!Priority) continue; // Malformed.
-    Structors.push_back(MISTD::make_pair(Priority->getLimitedValue(65535),
+    Structors.push_back(std::make_pair(Priority->getLimitedValue(65535),
                                        CS->getOperand(1)));
   }
 
   // Emit the function pointers in the target-specific order
   const DataLayout *DL = TM.getDataLayout();
   unsigned Align = Log2_32(DL->getPointerPrefAlignment());
-  MISTD::stable_sort(Structors.begin(), Structors.end(), less_first());
+  std::stable_sort(Structors.begin(), Structors.end(), less_first());
   for (unsigned i = 0, e = Structors.size(); i != e; ++i) {
     const MCSection *OutputSection =
       (isCtor ?
@@ -1528,7 +1528,7 @@ static const MCExpr *lowerConstant(const Constant *CV, AsmPrinter &AP) {
 
     // Otherwise report the problem to the user.
     {
-      MISTD::string S;
+      std::string S;
       raw_string_ostream OS(S);
       OS << "Unsupported expression in static initializer: ";
       WriteAsOperand(OS, CE, /*PrintType=*/false,
@@ -2140,7 +2140,7 @@ void AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock *MBB) const {
     if (isVerbose())
       OutStreamer.AddComment("Block address taken");
 
-    MISTD::vector<MCSymbol*> Syms = MMI->getAddrLabelSymbolToEmit(BB);
+    std::vector<MCSymbol*> Syms = MMI->getAddrLabelSymbolToEmit(BB);
 
     for (unsigned i = 0, e = Syms.size(); i != e; ++i)
       OutStreamer.EmitLabel(Syms[i]);
@@ -2256,7 +2256,7 @@ GCMetadataPrinter *AsmPrinter::GetOrCreateGCPrinter(GCStrategy *S) {
     if (strcmp(Name, I->getName()) == 0) {
       GCMetadataPrinter *GMP = I->instantiate();
       GMP->S = S;
-      GCMap.insert(MISTD::make_pair(S, GMP));
+      GCMap.insert(std::make_pair(S, GMP));
       return GMP;
     }
 

@@ -132,7 +132,7 @@ class TwoAddressInstructionPass : public MachineFunctionPass {
 
   void processCopy(MachineInstr *MI);
 
-  typedef SmallVector<MISTD::pair<unsigned, unsigned>, 4> TiedPairList;
+  typedef SmallVector<std::pair<unsigned, unsigned>, 4> TiedPairList;
   typedef SmallDenseMap<unsigned, TiedPairList> TiedOperandMap;
   bool collectTiedOperands(MachineInstr *MI, TiedOperandMap&);
   void processTiedPairs(MachineInstr *MI, TiedPairList&, unsigned &Dist);
@@ -645,7 +645,7 @@ TwoAddressInstructionPass::convertInstTo3Addr(MachineBasicBlock::iterator &mi,
   MBB->erase(mi); // Nuke the old inst.
 
   if (!Sunk) {
-    DistanceMap.insert(MISTD::make_pair(NewMI, Dist));
+    DistanceMap.insert(std::make_pair(NewMI, Dist));
     mi = NewMI;
     nmi = llvm::next(mi);
   }
@@ -679,7 +679,7 @@ TwoAddressInstructionPass::scanUses(unsigned DstReg) {
       VirtRegPairs.push_back(NewReg);
       break;
     }
-    bool isNew = SrcRegMap.insert(MISTD::make_pair(NewReg, Reg)).second;
+    bool isNew = SrcRegMap.insert(std::make_pair(NewReg, Reg)).second;
     if (!isNew)
       assert(SrcRegMap[NewReg] == Reg && "Can't map to two src registers!");
     VirtRegPairs.push_back(NewReg);
@@ -692,12 +692,12 @@ TwoAddressInstructionPass::scanUses(unsigned DstReg) {
     while (!VirtRegPairs.empty()) {
       unsigned FromReg = VirtRegPairs.back();
       VirtRegPairs.pop_back();
-      bool isNew = DstRegMap.insert(MISTD::make_pair(FromReg, ToReg)).second;
+      bool isNew = DstRegMap.insert(std::make_pair(FromReg, ToReg)).second;
       if (!isNew)
         assert(DstRegMap[FromReg] == ToReg &&"Can't map to two dst registers!");
       ToReg = FromReg;
     }
-    bool isNew = DstRegMap.insert(MISTD::make_pair(DstReg, ToReg)).second;
+    bool isNew = DstRegMap.insert(std::make_pair(DstReg, ToReg)).second;
     if (!isNew)
       assert(DstRegMap[DstReg] == ToReg && "Can't map to two dst registers!");
   }
@@ -725,9 +725,9 @@ void TwoAddressInstructionPass::processCopy(MachineInstr *MI) {
     return;
 
   if (IsDstPhys && !IsSrcPhys)
-    DstRegMap.insert(MISTD::make_pair(SrcReg, DstReg));
+    DstRegMap.insert(std::make_pair(SrcReg, DstReg));
   else if (!IsDstPhys && IsSrcPhys) {
-    bool isNew = SrcRegMap.insert(MISTD::make_pair(DstReg, SrcReg)).second;
+    bool isNew = SrcRegMap.insert(std::make_pair(DstReg, SrcReg)).second;
     if (!isNew)
       assert(SrcRegMap[DstReg] == SrcReg &&
              "Can't map to two src physical registers!");
@@ -1327,7 +1327,7 @@ collectTiedOperands(MachineInstr *MI, TiedOperandMap &TiedOperands) {
       DEBUG(dbgs() << "\t\trewrite undef:\t" << *MI);
       continue;
     }
-    TiedOperands[SrcReg].push_back(MISTD::make_pair(SrcIdx, DstIdx));
+    TiedOperands[SrcReg].push_back(std::make_pair(SrcIdx, DstIdx));
   }
   return AnyOps;
 }
@@ -1389,7 +1389,7 @@ TwoAddressInstructionPass::processTiedPairs(MachineInstr *MI,
     // Update DistanceMap.
     MachineBasicBlock::iterator PrevMI = MI;
     --PrevMI;
-    DistanceMap.insert(MISTD::make_pair(PrevMI, Dist));
+    DistanceMap.insert(std::make_pair(PrevMI, Dist));
     DistanceMap[MI] = ++Dist;
 
     if (LIS) {
@@ -1520,7 +1520,7 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
       if (mi->isRegSequence())
         eliminateRegSequence(mi);
 
-      DistanceMap.insert(MISTD::make_pair(mi, ++Dist));
+      DistanceMap.insert(std::make_pair(mi, ++Dist));
 
       processCopy(&*mi);
 
@@ -1539,7 +1539,7 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
       // transformations that may either eliminate the tied operands or
       // improve the opportunities for coalescing away the register copy.
       if (TiedOperands.size() == 1) {
-        SmallVectorImpl<MISTD::pair<unsigned, unsigned> > &TiedPairs
+        SmallVectorImpl<std::pair<unsigned, unsigned> > &TiedPairs
           = TiedOperands.begin()->second;
         if (TiedPairs.size() == 1) {
           unsigned SrcIdx = TiedPairs[0].first;

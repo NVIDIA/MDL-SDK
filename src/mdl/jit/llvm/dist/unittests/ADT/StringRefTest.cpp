@@ -17,13 +17,13 @@ using namespace llvm;
 
 namespace llvm {
 
-MISTD::ostream &operator<<(MISTD::ostream &OS, const StringRef &S) {
+std::ostream &operator<<(std::ostream &OS, const StringRef &S) {
   OS << S.str();
   return OS;
 }
 
-MISTD::ostream &operator<<(MISTD::ostream &OS,
-                         const MISTD::pair<StringRef, StringRef> &P) {
+std::ostream &operator<<(std::ostream &OS,
+                         const std::pair<StringRef, StringRef> &P) {
   OS << "(" << P.first << ", " << P.second << ")";
   return OS;
 }
@@ -35,7 +35,7 @@ TEST(StringRefTest, Construction) {
   EXPECT_EQ("", StringRef());
   EXPECT_EQ("hello", StringRef("hello"));
   EXPECT_EQ("hello", StringRef("hello world", 5));
-  EXPECT_EQ("hello", StringRef(MISTD::string("hello")));
+  EXPECT_EQ("hello", StringRef(std::string("hello")));
 }
 
 TEST(StringRefTest, Iteration) {
@@ -122,26 +122,26 @@ TEST(StringRefTest, Slice) {
 
 TEST(StringRefTest, Split) {
   StringRef Str("hello");
-  EXPECT_EQ(MISTD::make_pair(StringRef("hello"), StringRef("")),
+  EXPECT_EQ(std::make_pair(StringRef("hello"), StringRef("")),
             Str.split('X'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("h"), StringRef("llo")),
+  EXPECT_EQ(std::make_pair(StringRef("h"), StringRef("llo")),
             Str.split('e'));
-  EXPECT_EQ(MISTD::make_pair(StringRef(""), StringRef("ello")),
+  EXPECT_EQ(std::make_pair(StringRef(""), StringRef("ello")),
             Str.split('h'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("he"), StringRef("lo")),
+  EXPECT_EQ(std::make_pair(StringRef("he"), StringRef("lo")),
             Str.split('l'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("hell"), StringRef("")),
+  EXPECT_EQ(std::make_pair(StringRef("hell"), StringRef("")),
             Str.split('o'));
 
-  EXPECT_EQ(MISTD::make_pair(StringRef("hello"), StringRef("")),
+  EXPECT_EQ(std::make_pair(StringRef("hello"), StringRef("")),
             Str.rsplit('X'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("h"), StringRef("llo")),
+  EXPECT_EQ(std::make_pair(StringRef("h"), StringRef("llo")),
             Str.rsplit('e'));
-  EXPECT_EQ(MISTD::make_pair(StringRef(""), StringRef("ello")),
+  EXPECT_EQ(std::make_pair(StringRef(""), StringRef("ello")),
             Str.rsplit('h'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("hel"), StringRef("o")),
+  EXPECT_EQ(std::make_pair(StringRef("hel"), StringRef("o")),
             Str.rsplit('l'));
-  EXPECT_EQ(MISTD::make_pair(StringRef("hell"), StringRef("")),
+  EXPECT_EQ(std::make_pair(StringRef("hell"), StringRef("")),
             Str.rsplit('o'));
 }
 
@@ -340,27 +340,27 @@ TEST(StringRefTest, EditDistance) {
 }
 
 TEST(StringRefTest, Misc) {
-  MISTD::string Storage;
+  std::string Storage;
   raw_string_ostream OS(Storage);
   OS << StringRef("hello");
   EXPECT_EQ("hello", OS.str());
 }
 
 TEST(StringRefTest, Hashing) {
-  EXPECT_EQ(hash_value(MISTD::string()), hash_value(StringRef()));
-  EXPECT_EQ(hash_value(MISTD::string()), hash_value(StringRef("")));
-  MISTD::string S = "hello world";
+  EXPECT_EQ(hash_value(std::string()), hash_value(StringRef()));
+  EXPECT_EQ(hash_value(std::string()), hash_value(StringRef("")));
+  std::string S = "hello world";
   hash_code H = hash_value(S);
   EXPECT_EQ(H, hash_value(StringRef("hello world")));
   EXPECT_EQ(H, hash_value(StringRef(S)));
   EXPECT_NE(H, hash_value(StringRef("hello worl")));
-  EXPECT_EQ(hash_value(MISTD::string("hello worl")),
+  EXPECT_EQ(hash_value(std::string("hello worl")),
             hash_value(StringRef("hello worl")));
   EXPECT_NE(H, hash_value(StringRef("hello world ")));
-  EXPECT_EQ(hash_value(MISTD::string("hello world ")),
+  EXPECT_EQ(hash_value(std::string("hello world ")),
             hash_value(StringRef("hello world ")));
   EXPECT_EQ(H, hash_value(StringRef("hello world\0")));
-  EXPECT_NE(hash_value(MISTD::string("ello worl")),
+  EXPECT_NE(hash_value(std::string("ello worl")),
             hash_value(StringRef("hello world").slice(1, -1)));
 }
 
@@ -509,8 +509,8 @@ static const char join_result2[] = "a:b:c";
 static const char join_result3[] = "a::b::c";
 
 TEST(StringRefTest, joinStrings) {
-  MISTD::vector<StringRef> v1;
-  MISTD::vector<MISTD::string> v2;
+  std::vector<StringRef> v1;
+  std::vector<std::string> v2;
   for (size_t i = 0; i < array_lengthof(join_input); ++i) {
     v1.push_back(join_input[i]);
     v2.push_back(join_input[i]);

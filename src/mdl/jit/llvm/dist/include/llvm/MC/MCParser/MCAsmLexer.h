@@ -111,7 +111,7 @@ class MCAsmLexer {
 
   /// The location and description of the current error
   SMLoc ErrLoc;
-  MISTD::string Err;
+  std::string Err;
 
   MCAsmLexer(const MCAsmLexer &) LLVM_DELETED_FUNCTION;
   void operator=(const MCAsmLexer &) LLVM_DELETED_FUNCTION;
@@ -123,7 +123,7 @@ protected: // Can only create subclasses.
 
   virtual AsmToken LexToken() = 0;
 
-  void SetError(const SMLoc &errLoc, const MISTD::string &err) {
+  void SetError(const SMLoc &errLoc, const std::string &err) {
     ErrLoc = errLoc;
     Err = err;
   }
@@ -155,7 +155,7 @@ public:
   }
 
   /// getErr - Get the current error string
-  const MISTD::string &getErr() {
+  const std::string &getErr() {
     return Err;
   }
 

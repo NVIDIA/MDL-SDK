@@ -37,28 +37,28 @@ static cl::opt<bool>
 DisableGVNLoadPRE("disable-gvn-loadpre", cl::init(false),
   cl::desc("Do not run the GVN load PRE pass"));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 InputFilenames(cl::Positional, cl::OneOrMore,
   cl::desc("<input bitcode files>"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::init(""),
   cl::desc("Override output filename"),
   cl::value_desc("filename"));
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 ExportedSymbols("exported-symbol",
   cl::desc("Symbol to export from the resulting object file"),
   cl::ZeroOrMore);
 
-static cl::list<MISTD::string>
+static cl::list<std::string>
 DSOSymbols("dso-symbol",
   cl::desc("Symbol to put in the symtab in the resulting dso"),
   cl::ZeroOrMore);
 
 namespace {
 struct ModuleInfo {
-  MISTD::vector<bool> CanBeHidden;
+  std::vector<bool> CanBeHidden;
 };
 }
 
@@ -110,10 +110,10 @@ int main(int argc, char **argv) {
   for (unsigned i = 0; i < DSOSymbols.size(); ++i)
     DSOSymbolsSet.insert(DSOSymbols[i]);
 
-  MISTD::vector<MISTD::string> KeptDSOSyms;
+  std::vector<std::string> KeptDSOSyms;
 
   for (unsigned i = BaseArg; i < InputFilenames.size(); ++i) {
-    MISTD::string error;
+    std::string error;
     OwningPtr<LTOModule> Module(LTOModule::makeLTOModule(InputFilenames[i].c_str(),
                                                          Options, error));
     if (!error.empty()) {
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
 
   if (!OutputFilename.empty()) {
     size_t len = 0;
-    MISTD::string ErrorInfo;
+    std::string ErrorInfo;
     const void *Code = CodeGen.compile(&len, DisableOpt, DisableInline,
                                        DisableGVNLoadPRE, ErrorInfo);
     if (Code == NULL) {
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
 
     FileStream.write(reinterpret_cast<const char *>(Code), len);
   } else {
-    MISTD::string ErrorInfo;
+    std::string ErrorInfo;
     const char *OutputName = NULL;
     if (!CodeGen.compile_to_file(&OutputName, DisableOpt, DisableInline,
                                  DisableGVNLoadPRE, ErrorInfo)) {

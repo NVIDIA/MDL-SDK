@@ -60,7 +60,7 @@ public:
 
 private:
     /// The type of vectors of strings.
-    typedef MISTD::vector<MISTD::string> String_vector;
+    typedef std::vector<std::string> String_vector;
 
     /// The search path roots.
     String_vector m_roots;

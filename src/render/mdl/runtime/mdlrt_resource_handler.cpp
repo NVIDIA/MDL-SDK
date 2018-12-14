@@ -71,7 +71,10 @@ void Resource_handler::tex_init(
     switch (shape) {
     case mi::mdl::IType_texture::TS_2D:
         new (data) MI::MDLRT::Texture_2d(
-            typed_tag, MI::MDLRT::Texture::Gamma_mode(gamma), (MI::DB::Transaction *)ctx);
+            typed_tag,
+            MI::MDLRT::Texture::Gamma_mode(gamma),
+            m_use_derivatives,
+            (MI::DB::Transaction *)ctx);
         break;
     case mi::mdl::IType_texture::TS_3D:
         new (data) MI::MDLRT::Texture_3d(
@@ -177,6 +180,28 @@ float Resource_handler::tex_lookup_float_2d(
         *reinterpret_cast<mi::Float32_2 const *>(crop_v));
 }
 
+// Handle tex::lookup_float(texture_2d, ...) with derivatives
+float Resource_handler::tex_lookup_deriv_float_2d(
+    void const         *tex_data,
+    void               * /*thread_data*/,
+    Deriv_float2 const *coord,
+    Tex_wrap_mode      wrap_u,
+    Tex_wrap_mode      wrap_v,
+    float const        crop_u[2],
+    float const        crop_v[2]) const
+{
+    MI::MDLRT::Texture_2d const *o = reinterpret_cast<MI::MDLRT::Texture_2d const *>(tex_data);
+
+    return o->lookup_deriv_float4(
+        *reinterpret_cast<mi::Float32_2 const *>(coord->val),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
+        MI::MDLRT::Texture::Wrap_mode(wrap_u),
+        MI::MDLRT::Texture::Wrap_mode(wrap_v),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_u),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_v)).x;
+}
+
 // Handle tex::lookup_float(texture_3d, ...)
 float Resource_handler::tex_lookup_float_3d(
     void const    *tex_data,
@@ -243,6 +268,32 @@ void Resource_handler::tex_lookup_float2_2d(
             MI::MDLRT::Texture::Wrap_mode(wrap_v),
             *reinterpret_cast<mi::Float32_2 const *>(crop_u),
             *reinterpret_cast<mi::Float32_2 const *>(crop_v));
+}
+
+// Handle tex::lookup_float2(texture_2d, ...) with derivatives
+void Resource_handler::tex_lookup_deriv_float2_2d(
+    float              result[2],
+    void const         *tex_data,
+    void               * /*thread_data*/,
+    Deriv_float2 const *coord,
+    Tex_wrap_mode      wrap_u,
+    Tex_wrap_mode      wrap_v,
+    float const        crop_u[2],
+    float const        crop_v[2]) const
+{
+    MI::MDLRT::Texture_2d const *o = reinterpret_cast<MI::MDLRT::Texture_2d const *>(tex_data);
+
+    mi::Float32_4 res = o->lookup_deriv_float4(
+        *reinterpret_cast<mi::Float32_2 const *>(coord->val),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
+        MI::MDLRT::Texture::Wrap_mode(wrap_u),
+        MI::MDLRT::Texture::Wrap_mode(wrap_v),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_u),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_v));
+
+    result[0] = res.x;
+    result[1] = res.y;
 }
 
 // Handle tex::lookup_float2(texture_3d, ...)
@@ -318,6 +369,32 @@ void Resource_handler::tex_lookup_float3_2d(
             *reinterpret_cast<mi::Float32_2 const *>(crop_v));
 }
 
+// Handle tex::lookup_float3(texture_2d, ...) with derivatives
+void Resource_handler::tex_lookup_deriv_float3_2d(
+    float              result[3],
+    void const         *tex_data,
+    void               * /*thread_data*/,
+    Deriv_float2 const *coord,
+    Tex_wrap_mode      wrap_u,
+    Tex_wrap_mode      wrap_v,
+    float const        crop_u[2],
+    float const        crop_v[2]) const
+{
+    MI::MDLRT::Texture_2d const *o = reinterpret_cast<MI::MDLRT::Texture_2d const *>(tex_data);
+
+    mi::Float32_4 res = o->lookup_deriv_float4(
+        *reinterpret_cast<mi::Float32_2 const *>(coord->val),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
+        MI::MDLRT::Texture::Wrap_mode(wrap_u),
+        MI::MDLRT::Texture::Wrap_mode(wrap_v),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_u),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_v));
+    result[0] = res.x;
+    result[1] = res.y;
+    result[2] = res.z;
+}
+
 // Handle tex::lookup_float3(texture_3d, ...)
 void Resource_handler::tex_lookup_float3_3d(
     float         result[3],
@@ -386,6 +463,30 @@ void Resource_handler::tex_lookup_float4_2d(
     *reinterpret_cast<mi::Float32_4*>(result) =
         o->lookup_float4(
             *reinterpret_cast<mi::Float32_2 const *>(coord),
+            wrap_u,
+            wrap_v,
+            *reinterpret_cast<mi::Float32_2 const *>(crop_u),
+            *reinterpret_cast<mi::Float32_2 const *>(crop_v));
+}
+
+// Handle tex::lookup_float4(texture_2d, ...) with derivatives
+void Resource_handler::tex_lookup_deriv_float4_2d(
+    float              result[4],
+    void const         *tex_data,
+    void               * /*thread_data*/,
+    Deriv_float2 const *coord,
+    Tex_wrap_mode      wrap_u,
+    Tex_wrap_mode      wrap_v,
+    float const        crop_u[2],
+    float const        crop_v[2]) const
+{
+    MI::MDLRT::Texture_2d const *o = reinterpret_cast<MI::MDLRT::Texture_2d const *>(tex_data);
+
+    *reinterpret_cast<mi::Float32_4*>(result) =
+        o->lookup_deriv_float4(
+            *reinterpret_cast<mi::Float32_2 const *>(coord->val),
+            *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
+            *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
             wrap_u,
             wrap_v,
             *reinterpret_cast<mi::Float32_2 const *>(crop_u),
@@ -463,6 +564,32 @@ void Resource_handler::tex_lookup_color_2d(
             wrap_v,
             *reinterpret_cast<mi::Float32_2 const *>(crop_u),
             *reinterpret_cast<mi::Float32_2 const *>(crop_v)).to_vector3();
+}
+
+// Handle tex::lookup_color(texture_2d, ...) with derivatives
+void Resource_handler::tex_lookup_deriv_color_2d(
+    float              rgb[3],
+    void const         *tex_data,
+    void               * /*thread_data*/,
+    Deriv_float2 const *coord,
+    Tex_wrap_mode      wrap_u,
+    Tex_wrap_mode      wrap_v,
+    float const        crop_u[2],
+    float const        crop_v[2]) const
+{
+    MI::MDLRT::Texture_2d const *o = reinterpret_cast<MI::MDLRT::Texture_2d const *>(tex_data);
+
+    mi::Float32_4 res = o->lookup_deriv_float4(
+        *reinterpret_cast<mi::Float32_2 const *>(coord->val),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
+        *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
+        MI::MDLRT::Texture::Wrap_mode(wrap_u),
+        MI::MDLRT::Texture::Wrap_mode(wrap_v),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_u),
+        *reinterpret_cast<mi::Float32_2 const *>(crop_v));
+    rgb[0] = res.x;
+    rgb[1] = res.y;
+    rgb[2] = res.z;
 }
 
 // Handle tex::lookup_color(texture_3d, ...)
@@ -713,6 +840,46 @@ bool Resource_handler::lp_isvalid(
     return o->is_valid();
 }
 
+
+/// Handle df::light_profile_evaluate(...)
+float Resource_handler::lp_evaluate(
+    void const    *lp_data,
+    void          *thread_data,
+    const float   theta_phi[2]) const
+{
+    MI::MDLRT::Light_profile const *o =
+        reinterpret_cast<MI::MDLRT::Light_profile const *>(lp_data);
+
+    return o->evaluate(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
+}
+
+/// Handle df::light_profile_sample(...)
+void Resource_handler::lp_sample(
+    float         result[3],
+    void const    *lp_data,
+    void          *thread_data,
+    const float   xi[3]) const
+{
+    MI::MDLRT::Light_profile const *o =
+        reinterpret_cast<MI::MDLRT::Light_profile const *>(lp_data);
+
+    *reinterpret_cast<mi::Float32_3*>(result) =
+        o->sample(*reinterpret_cast<mi::Float32_3 const *>(xi));
+}
+
+/// Handle df::light_profile_pdf(...)
+float Resource_handler::lp_pdf(
+    void const    *lp_data,
+    void          *thread_data,
+    const float   theta_phi[2]) const
+{
+    MI::MDLRT::Light_profile const *o =
+        reinterpret_cast<MI::MDLRT::Light_profile const *>(lp_data);
+
+    return o->pdf(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
+}
+
+
 // Initializes a bsdf measurement data helper object from a given bsdf measurement tag.
 void Resource_handler::bm_init(
     void     *data,
@@ -740,6 +907,91 @@ bool Resource_handler::bm_isvalid(
     MI::MDLRT::Bsdf_measurement const *o =
         reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
     return o->is_valid();
+}
+
+// Handle df::bsdf_measurement_resolution(...)
+void Resource_handler::bm_resolution(
+    unsigned      result[3],
+    void const    *bm_data,
+    Mbsdf_part    part) const
+{
+    MI::MDLRT::Bsdf_measurement const *o = 
+        reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
+
+    mi::Uint32_3 res = o->get_resolution(part);
+    result[0] = res.x;
+    result[1] = res.y;
+    result[2] = res.z;
+}
+
+// Handle df::bsdf_measurement_evaluate(...)
+void Resource_handler::bm_evaluate(
+    float         result[3],
+    void const    *bm_data,
+    void          *thread_data,
+    const float   theta_phi_in[2],
+    const float   theta_phi_out[2],
+    Mbsdf_part    part) const
+{
+    MI::MDLRT::Bsdf_measurement const *o =
+        reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
+
+    *reinterpret_cast<mi::Float32_3*>(result) =
+        o->evaluate(
+            *reinterpret_cast<mi::Float32_2 const *>(theta_phi_in),
+            *reinterpret_cast<mi::Float32_2 const *>(theta_phi_out),
+            part
+        );
+}
+
+/// Handle // Handle df::bsdf_measurement_sample(...)
+void Resource_handler::bm_sample(
+    float         result[3],
+    void const    *bm_data,
+    void          *thread_data,
+    const float   theta_phi_out[2],
+    const float   xi[3],
+    Mbsdf_part    part) const
+{
+    MI::MDLRT::Bsdf_measurement const *o =
+        reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
+
+    *reinterpret_cast<mi::Float32_3*>(result) =
+        o->sample(
+            *reinterpret_cast<mi::Float32_2 const *>(theta_phi_out),
+            *reinterpret_cast<mi::Float32_3 const *>(xi),
+            part
+        );
+}
+
+// Handle df::bsdf_measurement_pdf(...)
+float Resource_handler::bm_pdf(
+    void const    *bm_data,
+    void          *thread_data,
+    const float   theta_phi_in[2],
+    const float   theta_phi_out[2],
+    Mbsdf_part    part) const
+{
+    MI::MDLRT::Bsdf_measurement const *o = 
+        reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
+
+    return o->pdf(*reinterpret_cast<mi::Float32_2 const *>(theta_phi_in),
+                  *reinterpret_cast<mi::Float32_2 const *>(theta_phi_out),
+                  part);
+}
+
+/// Handle df::bsdf_measurement_albedos(...)
+void Resource_handler::bm_albedos(
+    float         result[4],
+    void const    *bm_data,
+    void          *thread_data,
+    const float   theta_phi[2]) const
+{
+    MI::MDLRT::Bsdf_measurement const *o =
+        reinterpret_cast<MI::MDLRT::Bsdf_measurement const *>(bm_data);
+
+    *reinterpret_cast<mi::Float32_4*>(result) =
+        o->albedos(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
 }
 
 // Destructor.

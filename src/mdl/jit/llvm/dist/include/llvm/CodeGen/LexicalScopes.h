@@ -36,7 +36,7 @@ class LexicalScope;
 /// InsnRange - This is used to track range of instructions with identical
 /// lexical scope.
 ///
-typedef MISTD::pair<const MachineInstr *, const MachineInstr *> InsnRange;
+typedef std::pair<const MachineInstr *, const MachineInstr *> InsnRange;
 
 //===----------------------------------------------------------------------===//
 /// LexicalScopes -  This class provides interface to collect and use lexical

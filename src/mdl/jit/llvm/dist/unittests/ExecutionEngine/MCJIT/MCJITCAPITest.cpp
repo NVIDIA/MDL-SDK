@@ -45,7 +45,7 @@ static uint8_t *roundTripAllocateDataSection(void *object, uintptr_t size,
 }
 
 static LLVMBool roundTripFinalizeMemory(void *object, char **errMsg) {
-  MISTD::string errMsgString;
+  std::string errMsgString;
   bool result =
     static_cast<SectionMemoryManager*>(object)->finalizeMemory(&errMsgString);
   if (result) {

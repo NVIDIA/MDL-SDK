@@ -310,7 +310,7 @@ void X86FrameLowering::emitCalleeSavedFrameMoves(MachineFunction &MF,
   const MCRegisterInfo *MRI = MMI.getContext().getRegisterInfo();
 
   // Add callee saved registers to move list.
-  const MISTD::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
   if (CSI.empty()) return;
 
   const X86RegisterInfo *RegInfo = TM.getRegisterInfo();
@@ -324,14 +324,14 @@ void X86FrameLowering::emitCalleeSavedFrameMoves(MachineFunction &MF,
 
   // Determine maximum offset (minimum due to stack growth).
   int64_t MaxOffset = 0;
-  for (MISTD::vector<CalleeSavedInfo>::const_iterator
+  for (std::vector<CalleeSavedInfo>::const_iterator
          I = CSI.begin(), E = CSI.end(); I != E; ++I)
-    MaxOffset = MISTD::min(MaxOffset,
+    MaxOffset = std::min(MaxOffset,
                          MFI->getObjectOffset(I->getFrameIdx()));
 
   // Calculate offsets.
   int64_t saveAreaOffset = (HasFP ? 3 : 2) * stackGrowth;
-  for (MISTD::vector<CalleeSavedInfo>::const_iterator
+  for (std::vector<CalleeSavedInfo>::const_iterator
          I = CSI.begin(), E = CSI.end(); I != E; ++I) {
     int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
     unsigned Reg = I->getReg();
@@ -442,7 +442,7 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
       !MF.getTarget().Options.EnableSegmentedStacks) {  // Regular stack
     uint64_t MinSize = X86FI->getCalleeSavedFrameSize();
     if (HasFP) MinSize += SlotSize;
-    StackSize = MISTD::max(MinSize, StackSize > 128 ? StackSize - 128 : 0);
+    StackSize = std::max(MinSize, StackSize > 128 ? StackSize - 128 : 0);
     MFI->setStackSize(StackSize);
   }
 
@@ -973,7 +973,7 @@ int X86FrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
 bool X86FrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                                              MachineBasicBlock::iterator MI,
-                                        const MISTD::vector<CalleeSavedInfo> &CSI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
                                           const TargetRegisterInfo *TRI) const {
   if (CSI.empty())
     return false;
@@ -1028,7 +1028,7 @@ bool X86FrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 
 bool X86FrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                                                MachineBasicBlock::iterator MI,
-                                        const MISTD::vector<CalleeSavedInfo> &CSI,
+                                        const std::vector<CalleeSavedInfo> &CSI,
                                           const TargetRegisterInfo *TRI) const {
   if (CSI.empty())
     return false;
@@ -1419,7 +1419,7 @@ void X86FrameLowering::adjustForHiPEPrologue(MachineFunction &MF) const {
         unsigned CalleeStkArity =
           F->arg_size() > CCRegisteredArgs ? F->arg_size()-CCRegisteredArgs : 0;
         if (HipeLeafWords - 1 > CalleeStkArity)
-          MoreStackForCalls = MISTD::max(MoreStackForCalls,
+          MoreStackForCalls = std::max(MoreStackForCalls,
                                (HipeLeafWords - 1 - CalleeStkArity) * SlotSize);
       }
     MaxStack += MoreStackForCalls;

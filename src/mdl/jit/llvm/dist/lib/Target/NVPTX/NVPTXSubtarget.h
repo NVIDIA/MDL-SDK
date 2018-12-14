@@ -27,7 +27,7 @@ namespace llvm {
 
 class NVPTXSubtarget : public NVPTXGenSubtargetInfo {
   virtual void anchor();
-  MISTD::string TargetName;
+  std::string TargetName;
   NVPTX::DrvInterface drvInterface;
   bool Is64Bit;
 
@@ -43,8 +43,8 @@ public:
   /// This constructor initializes the data members to match that
   /// of the specified module.
   ///
-  NVPTXSubtarget(const MISTD::string &TT, const MISTD::string &CPU,
-                 const MISTD::string &FS, bool is64Bit);
+  NVPTXSubtarget(const std::string &TT, const std::string &CPU,
+                 const std::string &FS, bool is64Bit);
 
   bool hasBrkPt() const { return SmVersion >= 11; }
   bool hasAtomRedG32() const { return SmVersion >= 11; }
@@ -83,7 +83,7 @@ public:
 
   unsigned int getSmVersion() const { return SmVersion; }
   NVPTX::DrvInterface getDrvInterface() const { return drvInterface; }
-  MISTD::string getTargetName() const { return TargetName; }
+  std::string getTargetName() const { return TargetName; }
 
   unsigned getPTXVersion() const { return PTXVersion; }
 

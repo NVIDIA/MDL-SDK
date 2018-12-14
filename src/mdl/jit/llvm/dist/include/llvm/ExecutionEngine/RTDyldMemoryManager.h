@@ -64,7 +64,7 @@ public:
 
   /// This method returns the address of the specified function or variable.
   /// It is used to resolve symbols during module linking.
-  virtual uint64_t getSymbolAddress(const MISTD::string &Name);
+  virtual uint64_t getSymbolAddress(const std::string &Name);
 
   /// This method returns the address of the specified function. As such it is
   /// only useful for resolving library symbols, not code generated symbols.
@@ -75,7 +75,7 @@ public:
   ///
   /// This function is deprecated for memory managers to be used with
   /// MCJIT or RuntimeDyld.  Use getSymbolAddress instead.
-  virtual void *getPointerToNamedFunction(const MISTD::string &Name,
+  virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true);
 
   /// This method is called after an object has been loaded into memory but
@@ -100,7 +100,7 @@ public:
   /// operations needed to reliably use the memory are also performed.
   ///
   /// Returns true if an error occurred, false otherwise.
-  virtual bool finalizeMemory(MISTD::string *ErrMsg = 0) = 0;
+  virtual bool finalizeMemory(std::string *ErrMsg = 0) = 0;
 };
 
 // Create wrappers for C Binding types (see CBindingWrapping.h).

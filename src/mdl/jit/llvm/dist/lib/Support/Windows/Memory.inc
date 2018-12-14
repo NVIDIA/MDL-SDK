@@ -154,7 +154,7 @@ void Memory::InvalidateInstructionCache(
 
 MemoryBlock Memory::AllocateRWX(size_t NumBytes,
                                 const MemoryBlock *NearBlock,
-                                MISTD::string *ErrMsg) {
+                                std::string *ErrMsg) {
   MemoryBlock MB;
   error_code EC;
   MB = allocateMappedMemory(NumBytes, NearBlock,
@@ -165,7 +165,7 @@ MemoryBlock Memory::AllocateRWX(size_t NumBytes,
   return MB;
 }
 
-bool Memory::ReleaseRWX(MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::ReleaseRWX(MemoryBlock &M, std::string *ErrMsg) {
   error_code EC = releaseMappedMemory(M);
   if (EC == error_code::success())
     return false;
@@ -181,14 +181,14 @@ static DWORD getProtection(const void *addr) {
   return 0;
 }
 
-bool Memory::setWritable(MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::setWritable(MemoryBlock &M, std::string *ErrMsg) {
   if (!setRangeWritable(M.Address, M.Size)) {
     return MakeErrMsg(ErrMsg, "Cannot set memory to writeable: ");
   }
   return true;
 }
 
-bool Memory::setExecutable(MemoryBlock &M, MISTD::string *ErrMsg) {
+bool Memory::setExecutable(MemoryBlock &M, std::string *ErrMsg) {
   if (!setRangeExecutable(M.Address, M.Size)) {
     return MakeErrMsg(ErrMsg, "Cannot set memory to executable: ");
   }

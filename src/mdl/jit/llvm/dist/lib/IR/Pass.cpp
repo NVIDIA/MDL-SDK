@@ -34,7 +34,7 @@ Pass::~Pass() {
 ModulePass::~ModulePass() { }
 
 Pass *ModulePass::createPrinterPass(raw_ostream &O,
-                                    const MISTD::string &Banner) const {
+                                    const std::string &Banner) const {
   return createPrintModulePass(&O, false, Banner);
 }
 
@@ -129,7 +129,7 @@ void ImmutablePass::initializePass() {
 //
 
 Pass *FunctionPass::createPrinterPass(raw_ostream &O,
-                                      const MISTD::string &Banner) const {
+                                      const std::string &Banner) const {
   return createPrintFunctionPass(Banner, &O);
 }
 
@@ -142,7 +142,7 @@ PassManagerType FunctionPass::getPotentialPassManagerType() const {
 //
 
 Pass *BasicBlockPass::createPrinterPass(raw_ostream &O,
-                                        const MISTD::string &Banner) const {
+                                        const std::string &Banner) const {
   return createPrintBasicBlockPass(&O, false, Banner);
 }
 

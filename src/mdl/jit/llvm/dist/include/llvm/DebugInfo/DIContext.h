@@ -58,7 +58,7 @@ public:
   }
 };
 
-typedef SmallVector<MISTD::pair<uint64_t, DILineInfo>, 16> DILineInfoTable;
+typedef SmallVector<std::pair<uint64_t, DILineInfo>, 16> DILineInfoTable;
 
 /// DIInliningInfo - a format-neutral container for inlined code description.
 class DIInliningInfo {
@@ -122,7 +122,7 @@ enum DIDumpType {
 // dwarf where we expect relocated values. This adds a bit of complexity to the
 // dwarf parsing/extraction at the benefit of not allocating memory for the
 // entire size of the debug info sections.
-typedef DenseMap<uint64_t, MISTD::pair<uint8_t, int64_t> > RelocAddrMap;
+typedef DenseMap<uint64_t, std::pair<uint8_t, int64_t> > RelocAddrMap;
 
 class DIContext {
 public:

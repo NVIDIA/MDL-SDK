@@ -74,7 +74,7 @@ LTOCodeGenerator::~LTOCodeGenerator() {
 
   Linker.deleteModule();
 
-  for (MISTD::vector<char *>::iterator I = CodegenOptions.begin(),
+  for (std::vector<char *>::iterator I = CodegenOptions.begin(),
                                      E = CodegenOptions.end();
        I != E; ++I)
     free(*I);
@@ -110,10 +110,10 @@ void LTOCodeGenerator::initializeLTOPasses() {
   initializeCFGSimplifyPassPass(R);
 }
 
-bool LTOCodeGenerator::addModule(LTOModule* mod, MISTD::string& errMsg) {
+bool LTOCodeGenerator::addModule(LTOModule* mod, std::string& errMsg) {
   bool ret = Linker.linkInModule(mod->getLLVVMModule(), &errMsg);
 
-  const MISTD::vector<const char*> &undefs = mod->getAsmUndefinedRefs();
+  const std::vector<const char*> &undefs = mod->getAsmUndefinedRefs();
   for (int i = 0, e = undefs.size(); i != e; ++i)
     AsmUndefinedRefs[undefs[i]] = 1;
 
@@ -166,7 +166,7 @@ void LTOCodeGenerator::setCodePICModel(lto_codegen_model model) {
 }
 
 bool LTOCodeGenerator::writeMergedModules(const char *path,
-                                          MISTD::string &errMsg) {
+                                          std::string &errMsg) {
   if (!determineTarget(errMsg))
     return false;
 
@@ -174,7 +174,7 @@ bool LTOCodeGenerator::writeMergedModules(const char *path,
   applyScopeRestrictions();
 
   // create output file
-  MISTD::string ErrInfo;
+  std::string ErrInfo;
   tool_output_file Out(path, ErrInfo, sys::fs::F_Binary);
   if (!ErrInfo.empty()) {
     errMsg = "could not open bitcode file for writing: ";
@@ -201,7 +201,7 @@ bool LTOCodeGenerator::compile_to_file(const char** name,
                                        bool disableOpt,
                                        bool disableInline,
                                        bool disableGVNLoadPRE,
-                                       MISTD::string& errMsg) {
+                                       std::string& errMsg) {
   // make unique temp .o file to put generated object file
   SmallString<128> Filename;
   int FD;
@@ -238,7 +238,7 @@ const void* LTOCodeGenerator::compile(size_t* length,
                                       bool disableOpt,
                                       bool disableInline,
                                       bool disableGVNLoadPRE,
-                                      MISTD::string& errMsg) {
+                                      std::string& errMsg) {
   const char *name;
   if (!compile_to_file(&name, disableOpt, disableInline, disableGVNLoadPRE,
                        errMsg))
@@ -266,11 +266,11 @@ const void* LTOCodeGenerator::compile(size_t* length,
   return NativeObjectFile->getBufferStart();
 }
 
-bool LTOCodeGenerator::determineTarget(MISTD::string &errMsg) {
+bool LTOCodeGenerator::determineTarget(std::string &errMsg) {
   if (TargetMach != NULL)
     return true;
 
-  MISTD::string TripleStr = Linker.getModule()->getTargetTriple();
+  std::string TripleStr = Linker.getModule()->getTargetTriple();
   if (TripleStr.empty())
     TripleStr = sys::getDefaultTargetTriple();
   llvm::Triple Triple(TripleStr);
@@ -298,7 +298,7 @@ bool LTOCodeGenerator::determineTarget(MISTD::string &errMsg) {
   // construct LTOModule, hand over ownership of module and target
   SubtargetFeatures Features;
   Features.getDefaultSubtargetFeatures(Triple);
-  MISTD::string FeatureStr = Features.getString();
+  std::string FeatureStr = Features.getString();
   // Set a default CPU for Darwin triples.
   if (MCpu.empty() && Triple.isOSDarwin()) {
     if (Triple.getArch() == llvm::Triple::x86_64)
@@ -316,7 +316,7 @@ bool LTOCodeGenerator::determineTarget(MISTD::string &errMsg) {
 void LTOCodeGenerator::
 applyRestriction(GlobalValue &GV,
                  const ArrayRef<StringRef> &Libcalls,
-                 MISTD::vector<const char*> &MustPreserveList,
+                 std::vector<const char*> &MustPreserveList,
                  SmallPtrSet<GlobalValue*, 8> &AsmUsed,
                  Mangler &Mangler) {
   SmallString<64> Buffer;
@@ -335,7 +335,7 @@ applyRestriction(GlobalValue &GV,
   // add new library calls (e.g., llvm.memset => memset and printf => puts).
   // Leave it to the linker to remove any dead code (e.g. with -dead_strip).
   if (isa<Function>(GV) &&
-      MISTD::binary_search(Libcalls.begin(), Libcalls.end(), GV.getName()))
+      std::binary_search(Libcalls.begin(), Libcalls.end(), GV.getName()))
     AsmUsed.insert(&GV);
 }
 
@@ -350,7 +350,7 @@ static void findUsedValues(GlobalVariable *LLVMUsed,
       UsedValues.insert(GV);
 }
 
-static void accumulateAndSortLibcalls(MISTD::vector<StringRef> &Libcalls,
+static void accumulateAndSortLibcalls(std::vector<StringRef> &Libcalls,
                                       const TargetLibraryInfo& TLI,
                                       const TargetLowering *Lowering)
 {
@@ -373,7 +373,7 @@ static void accumulateAndSortLibcalls(MISTD::vector<StringRef> &Libcalls,
         Libcalls.push_back(Name);
 
   array_pod_sort(Libcalls.begin(), Libcalls.end());
-  Libcalls.erase(MISTD::unique(Libcalls.begin(), Libcalls.end()),
+  Libcalls.erase(std::unique(Libcalls.begin(), Libcalls.end()),
                  Libcalls.end());
 }
 
@@ -388,9 +388,9 @@ void LTOCodeGenerator::applyScopeRestrictions() {
 
   // mark which symbols can not be internalized
   Mangler Mangler(TargetMach);
-  MISTD::vector<const char*> MustPreserveList;
+  std::vector<const char*> MustPreserveList;
   SmallPtrSet<GlobalValue*, 8> AsmUsed;
-  MISTD::vector<StringRef> Libcalls;
+  std::vector<StringRef> Libcalls;
   TargetLibraryInfo TLI(Triple(TargetMach->getTargetTriple()));
   accumulateAndSortLibcalls(Libcalls, TLI, TargetMach->getTargetLowering());
 
@@ -412,7 +412,7 @@ void LTOCodeGenerator::applyScopeRestrictions() {
 
   if (!AsmUsed.empty()) {
     llvm::Type *i8PTy = llvm::Type::getInt8PtrTy(Context);
-    MISTD::vector<Constant*> asmUsed2;
+    std::vector<Constant*> asmUsed2;
     for (SmallPtrSet<GlobalValue*, 16>::const_iterator i = AsmUsed.begin(),
            e = AsmUsed.end(); i !=e; ++i) {
       GlobalValue *GV = *i;
@@ -443,7 +443,7 @@ bool LTOCodeGenerator::generateObjectFile(raw_ostream &out,
                                           bool DisableOpt,
                                           bool DisableInline,
                                           bool DisableGVNLoadPRE,
-                                          MISTD::string &errMsg) {
+                                          std::string &errMsg) {
   if (!this->determineTarget(errMsg))
     return false;
 
@@ -505,7 +505,7 @@ bool LTOCodeGenerator::generateObjectFile(raw_ostream &out,
 /// setCodeGenDebugOptions - Set codegen debugging options to aid in debugging
 /// LTO problems.
 void LTOCodeGenerator::setCodeGenDebugOptions(const char *options) {
-  for (MISTD::pair<StringRef, StringRef> o = getToken(options);
+  for (std::pair<StringRef, StringRef> o = getToken(options);
        !o.first.empty(); o = getToken(o.second)) {
     // ParseCommandLineOptions() expects argv[0] to be program name. Lazily add
     // that.

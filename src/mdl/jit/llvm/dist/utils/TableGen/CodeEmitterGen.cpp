@@ -41,20 +41,20 @@ public:
 
   void run(raw_ostream &o);
 private:
-  void emitMachineOpEmitter(raw_ostream &o, const MISTD::string &Namespace);
-  void emitGetValueBit(raw_ostream &o, const MISTD::string &Namespace);
-  void reverseBits(MISTD::vector<Record*> &Insts);
-  int getVariableBit(const MISTD::string &VarName, BitsInit *BI, int bit);
-  MISTD::string getInstructionCase(Record *R, CodeGenTarget &Target);
+  void emitMachineOpEmitter(raw_ostream &o, const std::string &Namespace);
+  void emitGetValueBit(raw_ostream &o, const std::string &Namespace);
+  void reverseBits(std::vector<Record*> &Insts);
+  int getVariableBit(const std::string &VarName, BitsInit *BI, int bit);
+  std::string getInstructionCase(Record *R, CodeGenTarget &Target);
   void AddCodeToMergeInOperand(Record *R, BitsInit *BI,
-                               const MISTD::string &VarName,
+                               const std::string &VarName,
                                unsigned &NumberedOp,
-                               MISTD::string &Case, CodeGenTarget &Target);
+                               std::string &Case, CodeGenTarget &Target);
 
 };
 
-void CodeEmitterGen::reverseBits(MISTD::vector<Record*> &Insts) {
-  for (MISTD::vector<Record*>::iterator I = Insts.begin(), E = Insts.end();
+void CodeEmitterGen::reverseBits(std::vector<Record*> &Insts) {
+  for (std::vector<Record*>::iterator I = Insts.begin(), E = Insts.end();
        I != E; ++I) {
     Record *R = *I;
     if (R->getValueAsString("Namespace") == "TargetOpcode" ||
@@ -89,7 +89,7 @@ void CodeEmitterGen::reverseBits(MISTD::vector<Record*> &Insts) {
 
 // If the VarBitInit at position 'bit' matches the specified variable then
 // return the variable bit position.  Otherwise return -1.
-int CodeEmitterGen::getVariableBit(const MISTD::string &VarName,
+int CodeEmitterGen::getVariableBit(const std::string &VarName,
                                    BitsInit *BI, int bit) {
   if (VarBitInit *VBI = dyn_cast<VarBitInit>(BI->getBit(bit))) {
     if (VarInit *VI = dyn_cast<VarInit>(VBI->getBitVar()))
@@ -104,9 +104,9 @@ int CodeEmitterGen::getVariableBit(const MISTD::string &VarName,
 }
 
 void CodeEmitterGen::
-AddCodeToMergeInOperand(Record *R, BitsInit *BI, const MISTD::string &VarName,
+AddCodeToMergeInOperand(Record *R, BitsInit *BI, const std::string &VarName,
                         unsigned &NumberedOp,
-                        MISTD::string &Case, CodeGenTarget &Target) {
+                        std::string &Case, CodeGenTarget &Target) {
   CodeGenInstruction &CGI = Target.getInstruction(R);
 
   // Determine if VarName actually contributes to the Inst encoding.
@@ -144,8 +144,8 @@ AddCodeToMergeInOperand(Record *R, BitsInit *BI, const MISTD::string &VarName,
     OpIdx = NumberedOp++;
   }
   
-  MISTD::pair<unsigned, unsigned> SO = CGI.Operands.getSubOperandNumber(OpIdx);
-  MISTD::string &EncoderMethodName = CGI.Operands[SO.first].EncoderMethodName;
+  std::pair<unsigned, unsigned> SO = CGI.Operands.getSubOperandNumber(OpIdx);
+  std::string &EncoderMethodName = CGI.Operands[SO.first].EncoderMethodName;
   
   // If the source operand has a custom encoder, use it. This will
   // get the encoding for all of the suboperands.
@@ -207,12 +207,12 @@ AddCodeToMergeInOperand(Record *R, BitsInit *BI, const MISTD::string &VarName,
 }
 
 
-MISTD::string CodeEmitterGen::getInstructionCase(Record *R,
+std::string CodeEmitterGen::getInstructionCase(Record *R,
                                                CodeGenTarget &Target) {
-  MISTD::string Case;
+  std::string Case;
   
   BitsInit *BI = R->getValueAsBitsInit("Inst");
-  const MISTD::vector<RecordVal> &Vals = R->getValues();
+  const std::vector<RecordVal> &Vals = R->getValues();
   unsigned NumberedOp = 0;
 
   // Loop over all of the fields in the instruction, determining which are the
@@ -226,7 +226,7 @@ MISTD::string CodeEmitterGen::getInstructionCase(Record *R,
     AddCodeToMergeInOperand(R, BI, Vals[i].getName(), NumberedOp, Case, Target);
   }
   
-  MISTD::string PostEmitter = R->getValueAsString("PostEncoderMethod");
+  std::string PostEmitter = R->getValueAsString("PostEncoderMethod");
   if (!PostEmitter.empty())
     Case += "      Value = " + PostEmitter + "(MI, Value);\n";
   
@@ -235,13 +235,13 @@ MISTD::string CodeEmitterGen::getInstructionCase(Record *R,
 
 void CodeEmitterGen::run(raw_ostream &o) {
   CodeGenTarget Target(Records);
-  MISTD::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
+  std::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
 
   // For little-endian instruction bit encodings, reverse the bit order
   if (Target.isLittleEndianEncoding()) reverseBits(Insts);
 
 
-  const MISTD::vector<const CodeGenInstruction*> &NumberedInstructions =
+  const std::vector<const CodeGenInstruction*> &NumberedInstructions =
     Target.getInstructionsByEnumValue();
 
   // Emit function declaration
@@ -254,7 +254,7 @@ void CodeEmitterGen::run(raw_ostream &o) {
 
   // Emit instruction base values
   o << "  static const uint64_t InstBits[] = {\n";
-  for (MISTD::vector<const CodeGenInstruction*>::const_iterator
+  for (std::vector<const CodeGenInstruction*>::const_iterator
           IN = NumberedInstructions.begin(),
           EN = NumberedInstructions.end();
        IN != EN; ++IN) {
@@ -280,18 +280,18 @@ void CodeEmitterGen::run(raw_ostream &o) {
   o << "    UINT64_C(0)\n  };\n";
 
   // Map to accumulate all the cases.
-  MISTD::map<MISTD::string, MISTD::vector<MISTD::string> > CaseMap;
+  std::map<std::string, std::vector<std::string> > CaseMap;
 
   // Construct all cases statement for each opcode
-  for (MISTD::vector<Record*>::iterator IC = Insts.begin(), EC = Insts.end();
+  for (std::vector<Record*>::iterator IC = Insts.begin(), EC = Insts.end();
         IC != EC; ++IC) {
     Record *R = *IC;
     if (R->getValueAsString("Namespace") == "TargetOpcode" ||
         R->getValueAsBit("isPseudo"))
       continue;
-    const MISTD::string &InstName = R->getValueAsString("Namespace") + "::"
+    const std::string &InstName = R->getValueAsString("Namespace") + "::"
       + R->getName();
-    MISTD::string Case = getInstructionCase(R, Target);
+    std::string Case = getInstructionCase(R, Target);
 
     CaseMap[Case].push_back(InstName);
   }
@@ -304,10 +304,10 @@ void CodeEmitterGen::run(raw_ostream &o) {
     << "  switch (opcode) {\n";
 
   // Emit each case statement
-  MISTD::map<MISTD::string, MISTD::vector<MISTD::string> >::iterator IE, EE;
+  std::map<std::string, std::vector<std::string> >::iterator IE, EE;
   for (IE = CaseMap.begin(), EE = CaseMap.end(); IE != EE; ++IE) {
-    const MISTD::string &Case = IE->first;
-    MISTD::vector<MISTD::string> &InstList = IE->second;
+    const std::string &Case = IE->first;
+    std::vector<std::string> &InstList = IE->second;
 
     for (int i = 0, N = InstList.size(); i < N; i++) {
       if (i) o << "\n";
@@ -321,7 +321,7 @@ void CodeEmitterGen::run(raw_ostream &o) {
 
   // Default case: unhandled opcode
   o << "  default:\n"
-    << "    MISTD::string msg;\n"
+    << "    std::string msg;\n"
     << "    raw_string_ostream Msg(msg);\n"
     << "    Msg << \"Not supported instr: \" << MI;\n"
     << "    report_fatal_error(Msg.str());\n"

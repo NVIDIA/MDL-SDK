@@ -122,7 +122,7 @@ bool Value::isUsedInBasicBlock(const BasicBlock *BB) const {
   const_use_iterator UI = use_begin(), UE = use_end();
   for (; BI != BE && UI != UE; ++BI, ++UI) {
     // Scan basic block: Check if this Value is used by the instruction at BI.
-    if (MISTD::find(BI->op_begin(), BI->op_end(), this) != BI->op_end())
+    if (std::find(BI->op_begin(), BI->op_end(), this) != BI->op_end())
       return true;
     // Scan use list: Check if the use at UI is in BB.
     const Instruction *User = dyn_cast<Instruction>(*UI);
@@ -137,7 +137,7 @@ bool Value::isUsedInBasicBlock(const BasicBlock *BB) const {
 /// is a linear time operation.  Use hasOneUse or hasNUses to check for specific
 /// values.
 unsigned Value::getNumUses() const {
-  return (unsigned)MISTD::distance(use_begin(), use_end());
+  return (unsigned)std::distance(use_begin(), use_end());
 }
 
 static bool getSymTab(Value *V, ValueSymbolTable *&ST) {

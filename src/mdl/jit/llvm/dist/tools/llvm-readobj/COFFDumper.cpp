@@ -60,41 +60,41 @@ private:
 
   void printRelocation(section_iterator SecI, relocation_iterator RelI);
 
-  void printDataDirectory(uint32_t Index, const MISTD::string &FieldName);
+  void printDataDirectory(uint32_t Index, const std::string &FieldName);
 
   void printX64UnwindInfo();
 
   void printRuntimeFunction(
     const RuntimeFunction& RTF,
     uint64_t OffsetInSection,
-    const MISTD::vector<RelocationRef> &Rels);
+    const std::vector<RelocationRef> &Rels);
 
   void printUnwindInfo(
     const Win64EH::UnwindInfo& UI,
     uint64_t OffsetInSection,
-    const MISTD::vector<RelocationRef> &Rels);
+    const std::vector<RelocationRef> &Rels);
 
   void printUnwindCode(const Win64EH::UnwindInfo& UI, ArrayRef<UnwindCode> UCs);
 
   void cacheRelocations();
 
   error_code getSectionContents(
-    const MISTD::vector<RelocationRef> &Rels,
+    const std::vector<RelocationRef> &Rels,
     uint64_t Offset,
     ArrayRef<uint8_t> &Contents,
     uint64_t &Addr);
 
   error_code getSection(
-    const MISTD::vector<RelocationRef> &Rels,
+    const std::vector<RelocationRef> &Rels,
     uint64_t Offset,
     const coff_section **Section,
     uint64_t *AddrPtr);
 
-  typedef DenseMap<const coff_section*, MISTD::vector<RelocationRef> > RelocMapTy;
+  typedef DenseMap<const coff_section*, std::vector<RelocationRef> > RelocMapTy;
 
   const llvm::object::COFFObjectFile *Obj;
   RelocMapTy RelocMap;
-  MISTD::vector<RelocationRef> EmptyRelocs;
+  std::vector<RelocationRef> EmptyRelocs;
 };
 
 } // namespace
@@ -193,9 +193,9 @@ static error_code resolveSectionAndAddress(const COFFObjectFile *Obj,
 
 // Given a vector of relocations for a section and an offset into this section
 // the function returns the symbol used for the relocation at the offset.
-static error_code resolveSymbol(const MISTD::vector<RelocationRef> &Rels,
+static error_code resolveSymbol(const std::vector<RelocationRef> &Rels,
                                 uint64_t Offset, SymbolRef &Sym) {
-  for (MISTD::vector<RelocationRef>::const_iterator RelI = Rels.begin(),
+  for (std::vector<RelocationRef>::const_iterator RelI = Rels.begin(),
                                                   RelE = Rels.end();
                                                   RelI != RelE; ++RelI) {
     uint64_t Ofs;
@@ -214,7 +214,7 @@ static error_code resolveSymbol(const MISTD::vector<RelocationRef> &Rels,
 // Given a vector of relocations for a section and an offset into this section
 // the function returns the name of the symbol used for the relocation at the
 // offset.
-static error_code resolveSymbolName(const MISTD::vector<RelocationRef> &Rels,
+static error_code resolveSymbolName(const std::vector<RelocationRef> &Rels,
                                     uint64_t Offset, StringRef &Name) {
   SymbolRef Sym;
   if (error_code EC = resolveSymbol(Rels, Offset, Sym)) return EC;
@@ -474,9 +474,9 @@ static error_code getSymbolAuxData(const COFFObjectFile *Obj,
   return readobj_error::success;
 }
 
-static MISTD::string formatSymbol(const MISTD::vector<RelocationRef> &Rels,
+static std::string formatSymbol(const std::vector<RelocationRef> &Rels,
                                 uint64_t Offset, uint32_t Disp) {
-  MISTD::string Buffer;
+  std::string Buffer;
   raw_string_ostream Str(Buffer);
 
   StringRef Sym;
@@ -500,7 +500,7 @@ static MISTD::string formatSymbol(const MISTD::vector<RelocationRef> &Rels,
 // returns the section content and the address inside the content pointed to
 // by the symbol.
 error_code COFFDumper::getSectionContents(
-    const MISTD::vector<RelocationRef> &Rels, uint64_t Offset,
+    const std::vector<RelocationRef> &Rels, uint64_t Offset,
     ArrayRef<uint8_t> &Contents, uint64_t &Addr) {
 
   SymbolRef Sym;
@@ -517,7 +517,7 @@ error_code COFFDumper::getSectionContents(
 }
 
 error_code COFFDumper::getSection(
-    const MISTD::vector<RelocationRef> &Rels, uint64_t Offset,
+    const std::vector<RelocationRef> &Rels, uint64_t Offset,
     const coff_section **SectionPtr, uint64_t *AddrPtr) {
 
   SymbolRef Sym;
@@ -557,12 +557,12 @@ void COFFDumper::cacheRelocations() {
     }
 
     // Sort relocations by address.
-    MISTD::sort(RelocMap[Section].begin(), RelocMap[Section].end(),
+    std::sort(RelocMap[Section].begin(), RelocMap[Section].end(),
               relocAddressLess);
   }
 }
 
-void COFFDumper::printDataDirectory(uint32_t Index, const MISTD::string &FieldName) {
+void COFFDumper::printDataDirectory(uint32_t Index, const std::string &FieldName) {
   const data_directory *Data;
   if (Obj->getDataDirectory(Index, Data))
     return;
@@ -962,7 +962,7 @@ void COFFDumper::printX64UnwindInfo() {
       Contents.size() / sizeof(RuntimeFunction));
 
     for (const RuntimeFunction *I = RFs.begin(), *E = RFs.end(); I < E; ++I) {
-      const uint64_t OffsetInSection = MISTD::distance(RFs.begin(), I)
+      const uint64_t OffsetInSection = std::distance(RFs.begin(), I)
                                      * sizeof(RuntimeFunction);
 
       printRuntimeFunction(*I, OffsetInSection, RelocMap[PData]);
@@ -973,7 +973,7 @@ void COFFDumper::printX64UnwindInfo() {
 void COFFDumper::printRuntimeFunction(
     const RuntimeFunction& RTF,
     uint64_t OffsetInSection,
-    const MISTD::vector<RelocationRef> &Rels) {
+    const std::vector<RelocationRef> &Rels) {
 
   DictScope D(W, "RuntimeFunction");
   W.printString("StartAddress",
@@ -1006,7 +1006,7 @@ void COFFDumper::printRuntimeFunction(
 void COFFDumper::printUnwindInfo(
     const Win64EH::UnwindInfo& UI,
     uint64_t OffsetInSection,
-    const MISTD::vector<RelocationRef> &Rels) {
+    const std::vector<RelocationRef> &Rels) {
   DictScope D(W, "UnwindInfo");
   W.printNumber("Version", UI.getVersion());
   W.printFlags("Flags", UI.getFlags(), makeArrayRef(UnwindFlags));

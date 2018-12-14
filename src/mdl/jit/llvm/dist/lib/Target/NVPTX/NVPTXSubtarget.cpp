@@ -23,8 +23,8 @@ using namespace llvm;
 // Pin the vtable to this file.
 void NVPTXSubtarget::anchor() {}
 
-NVPTXSubtarget::NVPTXSubtarget(const MISTD::string &TT, const MISTD::string &CPU,
-                               const MISTD::string &FS, bool is64Bit)
+NVPTXSubtarget::NVPTXSubtarget(const std::string &TT, const std::string &CPU,
+                               const std::string &FS, bool is64Bit)
     : NVPTXGenSubtargetInfo(TT, CPU, FS), Is64Bit(is64Bit), PTXVersion(0),
       SmVersion(20) {
 
@@ -36,7 +36,7 @@ NVPTXSubtarget::NVPTXSubtarget(const MISTD::string &TT, const MISTD::string &CPU
     drvInterface = NVPTX::CUDA;
 
   // Provide the default CPU if none
-  MISTD::string defCPU = "sm_20";
+  std::string defCPU = "sm_20";
 
   ParseSubtargetFeatures((CPU.empty() ? defCPU : CPU), FS);
 

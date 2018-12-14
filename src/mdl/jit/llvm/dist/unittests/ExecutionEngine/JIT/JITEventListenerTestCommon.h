@@ -27,8 +27,8 @@
 #include <utility>
 #include <vector>
 
-typedef MISTD::vector<MISTD::pair<MISTD::string, unsigned int> > SourceLocations;
-typedef MISTD::map<uint64_t, SourceLocations> NativeCodeMap;
+typedef std::vector<std::pair<std::string, unsigned int> > SourceLocations;
+typedef std::map<uint64_t, SourceLocations> NativeCodeMap;
 
 class JITEnvironment : public testing::Environment {
   virtual void SetUp() {
@@ -132,7 +132,7 @@ public:
 
   void TestSingleLine(NativeCodeMap& ReportedDebugFuncs) {
     SourceLocations DebugLocations;
-    DebugLocations.push_back(MISTD::make_pair(MISTD::string(getFilename()),
+    DebugLocations.push_back(std::make_pair(std::string(getFilename()),
                                             getLine()));
     llvm::Function* f = buildFunction(DebugLocations);
     EXPECT_TRUE(0 != f);
@@ -148,7 +148,7 @@ public:
   }
 
   void TestMultipleLines(NativeCodeMap& ReportedDebugFuncs) {
-    using namespace MISTD;
+    using namespace std;
 
     SourceLocations DebugLocations;
     unsigned int c = 5;
@@ -179,12 +179,12 @@ public:
 
   void TestMultipleFiles(NativeCodeMap& ReportedDebugFuncs) {
 
-    MISTD::string secondFilename("another_file.cpp");
+    std::string secondFilename("another_file.cpp");
 
     SourceLocations DebugLocations;
-    DebugLocations.push_back(MISTD::make_pair(MISTD::string(getFilename()),
+    DebugLocations.push_back(std::make_pair(std::string(getFilename()),
                                             getLine()));
-    DebugLocations.push_back(MISTD::make_pair(secondFilename, getLine()));
+    DebugLocations.push_back(std::make_pair(secondFilename, getLine()));
     llvm::Function* f = buildFunction(DebugLocations);
     EXPECT_TRUE(0 != f);
 

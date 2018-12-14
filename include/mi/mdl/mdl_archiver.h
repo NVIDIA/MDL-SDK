@@ -63,7 +63,7 @@ public:
     virtual void fire_event(Event ev, char const *name) = 0;
 };
 
-/// This Interafce describes an export inside the archive manifest.
+/// This Interface describes an export inside the archive manifest.
 class IArchive_manifest_export : public Interface_owned
 {
 public:

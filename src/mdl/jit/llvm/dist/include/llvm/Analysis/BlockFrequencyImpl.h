@@ -50,12 +50,12 @@ class BlockFrequencyImpl {
 
   const uint32_t EntryFreq;
 
-  MISTD::string getBlockName(BasicBlock *BB) const {
+  std::string getBlockName(BasicBlock *BB) const {
     return BB->getName().str();
   }
 
-  MISTD::string getBlockName(MachineBasicBlock *MBB) const {
-    MISTD::string str;
+  std::string getBlockName(MachineBasicBlock *MBB) const {
+    std::string str;
     raw_string_ostream ss(str);
     ss << "BB#" << MBB->getNumber();
 
@@ -86,7 +86,7 @@ class BlockFrequencyImpl {
   }
 
   // All blocks in postorder.
-  MISTD::vector<BlockT *> POT;
+  std::vector<BlockT *> POT;
 
   // Map Block -> Position in reverse-postorder list.
   DenseMap<BlockT *, unsigned> RPO;
@@ -97,8 +97,8 @@ class BlockFrequencyImpl {
   LoopExitProbMap LoopExitProb;
 
   // (reverse-)postorder traversal iterators.
-  typedef typename MISTD::vector<BlockT *>::iterator pot_iterator;
-  typedef typename MISTD::vector<BlockT *>::reverse_iterator rpot_iterator;
+  typedef typename std::vector<BlockT *>::iterator pot_iterator;
+  typedef typename std::vector<BlockT *>::reverse_iterator rpot_iterator;
 
   pot_iterator pot_begin() { return POT.begin(); }
   pot_iterator pot_end() { return POT.end(); }
@@ -110,7 +110,7 @@ class BlockFrequencyImpl {
     rpot_iterator I = rpot_begin();
     unsigned idx = RPO.lookup(BB);
     assert(idx);
-    MISTD::advance(I, idx - 1);
+    std::advance(I, idx - 1);
 
     assert(*I == BB);
     return I;
@@ -235,8 +235,8 @@ class BlockFrequencyImpl {
     //
     //   Iterations = 1 / ExitProb
     //
-    uint64_t D = MISTD::max(getBlockFreq(Head).getFrequency(), UINT64_C(1));
-    uint64_t N = MISTD::max(BackFreq.getFrequency(), UINT64_C(1));
+    uint64_t D = std::max(getBlockFreq(Head).getFrequency(), UINT64_C(1));
+    uint64_t N = std::max(BackFreq.getFrequency(), UINT64_C(1));
     if (N < D)
       N = D - N;
     else
@@ -254,7 +254,7 @@ class BlockFrequencyImpl {
         N = 1;
     }
     BranchProbability LEP = BranchProbability(N, D);
-    LoopExitProb.insert(MISTD::make_pair(Head, LEP));
+    LoopExitProb.insert(std::make_pair(Head, LEP));
     DEBUG(dbgs() << "LoopExitProb[" << getBlockName(Head) << "] = " << LEP
                  << " from 1 - " << BackFreq << " / " << getBlockFreq(Head)
                  << ".\n");
@@ -277,7 +277,7 @@ class BlockFrequencyImpl {
 
     BlockT *EntryBlock = fn->begin();
 
-    MISTD::copy(po_begin(EntryBlock), po_end(EntryBlock), MISTD::back_inserter(POT));
+    std::copy(po_begin(EntryBlock), po_end(EntryBlock), std::back_inserter(POT));
 
     unsigned RPOidx = 0;
     for (rpot_iterator I = rpot_begin(), E = rpot_end(); I != E; ++I) {

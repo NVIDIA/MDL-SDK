@@ -158,7 +158,7 @@ struct InterleaveOp : public SetTheory::Operator {
     unsigned MaxSize = 0;
     for (unsigned i = 0, e = Expr->getNumArgs(); i != e; ++i) {
       ST.evaluate(Expr->getArg(i), Args[i], Loc);
-      MaxSize = MISTD::max(MaxSize, unsigned(Args[i].size()));
+      MaxSize = std::max(MaxSize, unsigned(Args[i].size()));
     }
     // Interleave arguments into Elts.
     for (unsigned n = 0; n != MaxSize; ++n)
@@ -184,7 +184,7 @@ struct SequenceOp : public SetTheory::Operator {
           Expr->getAsString());
     }
 
-    MISTD::string Format;
+    std::string Format;
     if (StringInit *SI = dyn_cast<StringInit>(Expr->arg_begin()[0]))
       Format = SI->getValue();
     else
@@ -214,7 +214,7 @@ struct SequenceOp : public SetTheory::Operator {
         break;
       else if (Step < 0 && From < To)
         break;
-      MISTD::string Name;
+      std::string Name;
       raw_string_ostream OS(Name);
       OS << format(Format.c_str(), unsigned(From));
       Record *Rec = Records.getDef(OS.str());
@@ -307,7 +307,7 @@ const RecVec *SetTheory::expand(Record *Set) {
     return &I->second;
 
   // This is the first time we see Set. Find a suitable expander.
-  const MISTD::vector<Record*> &SC = Set->getSuperClasses();
+  const std::vector<Record*> &SC = Set->getSuperClasses();
   for (unsigned i = 0, e = SC.size(); i != e; ++i) {
     // Skip unnamed superclasses.
     if (!dyn_cast<StringInit>(SC[i]->getNameInit()))

@@ -181,7 +181,7 @@ void RuntimeDyldELF::deregisterEHFrames() {
 ObjectImage *RuntimeDyldELF::createObjectImage(ObjectBuffer *Buffer) {
   if (Buffer->getBufferSize() < ELF::EI_NIDENT)
     llvm_unreachable("Unexpected ELF object size");
-  MISTD::pair<unsigned char, unsigned char> Ident = MISTD::make_pair(
+  std::pair<unsigned char, unsigned char> Ident = std::make_pair(
                          (uint8_t)Buffer->getBufferStart()[ELF::EI_CLASS],
                          (uint8_t)Buffer->getBufferStart()[ELF::EI_DATA]);
   error_code ec;
@@ -1269,8 +1269,8 @@ void RuntimeDyldELF::processRelocationRef(unsigned SectionID,
 
 void RuntimeDyldELF::updateGOTEntries(StringRef Name, uint64_t Addr) {
 
-  SmallVectorImpl<MISTD::pair<SID, GOTRelocations> >::iterator it;
-  SmallVectorImpl<MISTD::pair<SID, GOTRelocations> >::iterator end = GOTs.end();
+  SmallVectorImpl<std::pair<SID, GOTRelocations> >::iterator it;
+  SmallVectorImpl<std::pair<SID, GOTRelocations> >::iterator end = GOTs.end();
 
   for (it = GOTs.begin(); it != end; ++it) {
     GOTRelocations &GOTEntries = it->second;
@@ -1311,8 +1311,8 @@ uint64_t RuntimeDyldELF::findGOTEntry(uint64_t LoadAddress,
 
   const size_t GOTEntrySize = getGOTEntrySize();
 
-  SmallVectorImpl<MISTD::pair<SID, GOTRelocations> >::const_iterator it;
-  SmallVectorImpl<MISTD::pair<SID, GOTRelocations> >::const_iterator end = GOTs.end();
+  SmallVectorImpl<std::pair<SID, GOTRelocations> >::const_iterator it;
+  SmallVectorImpl<std::pair<SID, GOTRelocations> >::const_iterator end = GOTs.end();
 
   int GOTIndex = -1;
   for (it = GOTs.begin(); it != end; ++it) {
@@ -1374,7 +1374,7 @@ void RuntimeDyldELF::finalizeLoad(ObjSectionToIDMap &SectionMap) {
       if (!Addr)
         report_fatal_error("Unable to allocate memory for GOT!");
 
-      GOTs.push_back(MISTD::make_pair(SectionID, GOTEntries));
+      GOTs.push_back(std::make_pair(SectionID, GOTEntries));
       Sections.push_back(SectionEntry(".got", Addr, TotalSize, 0));
       // For now, initialize all GOT entries to zero.  We'll fill them in as
       // needed when GOT-based relocations are applied.

@@ -43,7 +43,7 @@ struct JITEvent_EmittedFunctionDetails {
   const MachineFunction *MF;
 
   /// The list of line boundary information, sorted by address.
-  MISTD::vector<LineStart> LineStarts;
+  std::vector<LineStart> LineStarts;
 };
 
 /// JITEventListener - Abstract interface for use by the JIT to notify clients

@@ -43,6 +43,7 @@ namespace neuraylib {
 */
 
 class ICompiled_material;
+class IMdl_execution_context;
 
 /// This interface represents a material instance.
 ///
@@ -194,12 +195,72 @@ public:
     ///                                          type is uniform.
     /// \return                            The corresponding compiled material, or \c NULL in case
     ///                                    of failure.
-    virtual ICompiled_material* create_compiled_material(
+    virtual ICompiled_material* deprecated_create_compiled_material(
         Uint32 flags,
         Float32 mdl_meters_per_scene_unit,
         Float32 mdl_wavelength_min,
         Float32 mdl_wavelength_max,
         Sint32* errors = 0) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+    /// Creates a compiled material.
+    ///
+    /// \param flags                       A bitmask of flags of type #Compilation_options.
+    /// \param mdl_meters_per_scene_unit   The conversion ratio between meters and scene units for
+    ///                                    this material.
+    /// \param mdl_wavelength_min          The smallest supported wavelength. Typical value: 380.
+    /// \param mdl_wavelength_max          The largest supported wavelength. Typical value: 780.
+    /// \param[out] errors                 An optional pointer to an #mi::Sint32 to which an error
+    ///                                    code will be written. The error codes have the following
+    ///                                    meaning:
+    ///                                    -  0: Success.
+    ///                                    - -1: Type mismatch, call of an unsuitable DB element, or
+    ///                                          call cycle in the graph of this material instance.
+    ///                                    - -2: The thin-walled material instance has different
+    ///                                          transmission for surface and backface.
+    ///                                    - -3: An argument type of the graph of this material
+    ///                                          instance is varying but the corresponding parameter
+    ///                                          type is uniform.
+    /// \return                            The corresponding compiled material, or \c NULL in case
+    ///                                    of failure.
+    ICompiled_material* create_compiled_material(
+        Uint32 flags,
+        Float32 mdl_meters_per_scene_unit,
+        Float32 mdl_wavelength_min,
+        Float32 mdl_wavelength_max,
+        Sint32* errors = 0) const
+    {
+        return deprecated_create_compiled_material(
+            flags,
+            mdl_meters_per_scene_unit,
+            mdl_wavelength_min,
+            mdl_wavelength_max,
+            errors);
+    }
+#endif
+
+    /// Creates a compiled material.
+    ///
+    /// \param flags                       A bitmask of flags of type #Compilation_options.
+    /// \param[inout] context              An optional pointer to an
+    ///                                    #mi::neuraylib::IMdl_execution_context which can be used
+    ///                                    to pass compilation options to the MDL compiler. The
+    ///                                    following options are supported for this operation:
+    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                      ratio between meters and scene units for this
+    ///                                      material. Default: 1.0f.
+    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                      supported wavelength. Default: 380.0f.
+    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                      wavelength. Default: 780.0f.
+    ///                                    During material compilation, messages like errors and
+    ///                                    warnings will be passed to the context for
+    ///                                    later evaluation by the caller.
+    /// \return                            The corresponding compiled material, or \c NULL in case
+    ///                                    of failure.
+    virtual ICompiled_material* create_compiled_material(
+        Uint32 flags,
+        IMdl_execution_context* context = 0) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

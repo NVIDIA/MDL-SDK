@@ -160,7 +160,7 @@ private:
   void collectRegsToSpill();
 
   bool isRegToSpill(unsigned Reg) {
-    return MISTD::find(RegsToSpill.begin(),
+    return std::find(RegsToSpill.begin(),
                      RegsToSpill.end(), Reg) != RegsToSpill.end();
   }
 
@@ -177,7 +177,7 @@ private:
   void reMaterializeAll();
 
   bool coalesceStackAccess(MachineInstr *MI, unsigned Reg);
-  bool foldMemoryOperand(ArrayRef<MISTD::pair<MachineInstr*, unsigned> >,
+  bool foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> >,
                          MachineInstr *LoadMI = 0);
   void insertReload(unsigned VReg, SlotIndex, MachineBasicBlock::iterator MI);
   void insertSpill(unsigned VReg, bool isKill, MachineBasicBlock::iterator MI);
@@ -477,7 +477,7 @@ MachineInstr *InlineSpiller::traceSiblingValue(unsigned UseReg, VNInfo *UseVNI,
   SibValueMap::iterator SVI;
   bool Inserted;
   tie(SVI, Inserted) =
-    SibValues.insert(MISTD::make_pair(UseVNI, SibValueInfo(UseReg, UseVNI)));
+    SibValues.insert(std::make_pair(UseVNI, SibValueInfo(UseReg, UseVNI)));
   if (!Inserted) {
     DEBUG(dbgs() << "Cached value " << PrintReg(UseReg) << ':'
                  << UseVNI->id << '@' << UseVNI->def << ' ' << SVI->second);
@@ -489,8 +489,8 @@ MachineInstr *InlineSpiller::traceSiblingValue(unsigned UseReg, VNInfo *UseVNI,
 
   // List of (Reg, VNI) that have been inserted into SibValues, but need to be
   // processed.
-  SmallVector<MISTD::pair<unsigned, VNInfo*>, 8> WorkList;
-  WorkList.push_back(MISTD::make_pair(UseReg, UseVNI));
+  SmallVector<std::pair<unsigned, VNInfo*>, 8> WorkList;
+  WorkList.push_back(std::make_pair(UseReg, UseVNI));
 
   do {
     unsigned Reg;
@@ -548,20 +548,20 @@ MachineInstr *InlineSpiller::traceSiblingValue(unsigned UseReg, VNInfo *UseVNI,
       // Create entries for all the PHIs.  Don't add them to the worklist, we
       // are processing all of them in one go here.
       for (unsigned i = 0, e = PHIs.size(); i != e; ++i)
-        SibValues.insert(MISTD::make_pair(PHIs[i], SibValueInfo(Reg, PHIs[i])));
+        SibValues.insert(std::make_pair(PHIs[i], SibValueInfo(Reg, PHIs[i])));
 
       // Add every PHI as a dependent of all the non-PHIs.
       for (unsigned i = 0, e = NonPHIs.size(); i != e; ++i) {
         VNInfo *NonPHI = NonPHIs[i];
         // Known value? Try an insertion.
         tie(SVI, Inserted) =
-          SibValues.insert(MISTD::make_pair(NonPHI, SibValueInfo(Reg, NonPHI)));
+          SibValues.insert(std::make_pair(NonPHI, SibValueInfo(Reg, NonPHI)));
         // Add all the PHIs as dependents of NonPHI.
         for (unsigned pi = 0, pe = PHIs.size(); pi != pe; ++pi)
           SVI->second.Deps.push_back(PHIs[pi]);
         // This is the first time we see NonPHI, add it to the worklist.
         if (Inserted)
-          WorkList.push_back(MISTD::make_pair(Reg, NonPHI));
+          WorkList.push_back(std::make_pair(Reg, NonPHI));
         else
           // Propagate to all inserted PHIs, not just VNI.
           propagateSiblingValue(SVI);
@@ -587,11 +587,11 @@ MachineInstr *InlineSpiller::traceSiblingValue(unsigned UseReg, VNInfo *UseVNI,
                      << SrcVNI->id << '@' << SrcVNI->def
                      << " kill=" << unsigned(SVI->second.KillsSource) << '\n');
         // Known sibling source value? Try an insertion.
-        tie(SVI, Inserted) = SibValues.insert(MISTD::make_pair(SrcVNI,
+        tie(SVI, Inserted) = SibValues.insert(std::make_pair(SrcVNI,
                                                  SibValueInfo(SrcReg, SrcVNI)));
         // This is the first time we see Src, add it to the worklist.
         if (Inserted)
-          WorkList.push_back(MISTD::make_pair(SrcReg, SrcVNI));
+          WorkList.push_back(std::make_pair(SrcReg, SrcVNI));
         propagateSiblingValue(SVI, VNI);
         // Next work list item.
         continue;
@@ -739,8 +739,8 @@ bool InlineSpiller::hoistSpill(LiveInterval &SpillLI, MachineInstr *CopyMI) {
 /// redundant spills of this value in SLI.reg and sibling copies.
 void InlineSpiller::eliminateRedundantSpills(LiveInterval &SLI, VNInfo *VNI) {
   assert(VNI && "Missing value");
-  SmallVector<MISTD::pair<LiveInterval*, VNInfo*>, 8> WorkList;
-  WorkList.push_back(MISTD::make_pair(&SLI, VNI));
+  SmallVector<std::pair<LiveInterval*, VNInfo*>, 8> WorkList;
+  WorkList.push_back(std::make_pair(&SLI, VNI));
   assert(StackInt && "No stack slot assigned yet.");
 
   do {
@@ -774,7 +774,7 @@ void InlineSpiller::eliminateRedundantSpills(LiveInterval &SLI, VNInfo *VNI) {
            VNInfo *DstVNI = DstLI.getVNInfoAt(Idx.getRegSlot());
            assert(DstVNI && "Missing defined value");
            assert(DstVNI->def == Idx.getRegSlot() && "Wrong copy def slot");
-           WorkList.push_back(MISTD::make_pair(&DstLI, DstVNI));
+           WorkList.push_back(std::make_pair(&DstLI, DstVNI));
         }
         continue;
       }
@@ -801,8 +801,8 @@ void InlineSpiller::eliminateRedundantSpills(LiveInterval &SLI, VNInfo *VNI) {
 /// markValueUsed - Remember that VNI failed to rematerialize, so its defining
 /// instruction cannot be eliminated. See through snippet copies
 void InlineSpiller::markValueUsed(LiveInterval *LI, VNInfo *VNI) {
-  SmallVector<MISTD::pair<LiveInterval*, VNInfo*>, 8> WorkList;
-  WorkList.push_back(MISTD::make_pair(LI, VNI));
+  SmallVector<std::pair<LiveInterval*, VNInfo*>, 8> WorkList;
+  WorkList.push_back(std::make_pair(LI, VNI));
   do {
     tie(LI, VNI) = WorkList.pop_back_val();
     if (!UsedValues.insert(VNI))
@@ -814,7 +814,7 @@ void InlineSpiller::markValueUsed(LiveInterval *LI, VNInfo *VNI) {
              PE = MBB->pred_end(); PI != PE; ++PI) {
         VNInfo *PVNI = LI->getVNInfoBefore(LIS.getMBBEndIdx(*PI));
         if (PVNI)
-          WorkList.push_back(MISTD::make_pair(LI, PVNI));
+          WorkList.push_back(std::make_pair(LI, PVNI));
       }
       continue;
     }
@@ -827,7 +827,7 @@ void InlineSpiller::markValueUsed(LiveInterval *LI, VNInfo *VNI) {
     assert(isRegToSpill(SnipLI.reg) && "Unexpected register in copy");
     VNInfo *SnipVNI = SnipLI.getVNInfoAt(VNI->def.getRegSlot(true));
     assert(SnipVNI && "Snippet undefined before copy");
-    WorkList.push_back(MISTD::make_pair(&SnipLI, SnipVNI));
+    WorkList.push_back(std::make_pair(&SnipLI, SnipVNI));
   } while (!WorkList.empty());
 }
 
@@ -864,7 +864,7 @@ bool InlineSpiller::reMaterializeFor(LiveInterval &VirtReg,
 
   // If the instruction also writes VirtReg.reg, it had better not require the
   // same register for uses and defs.
-  SmallVector<MISTD::pair<MachineInstr*, unsigned>, 8> Ops;
+  SmallVector<std::pair<MachineInstr*, unsigned>, 8> Ops;
   MIBundleOperands::VirtRegInfo RI =
     MIBundleOperands(MI).analyzeVirtReg(VirtReg.reg, &Ops);
   if (RI.Tied) {
@@ -1045,7 +1045,7 @@ static void dumpMachineInstrRangeWithSlotIndex(MachineBasicBlock::iterator B,
 /// @param LoadMI Load instruction to use instead of stack slot when non-null.
 /// @return       True on success.
 bool InlineSpiller::
-foldMemoryOperand(ArrayRef<MISTD::pair<MachineInstr*, unsigned> > Ops,
+foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
                   MachineInstr *LoadMI) {
   if (Ops.empty())
     return false;
@@ -1214,7 +1214,7 @@ void InlineSpiller::spillAroundUses(unsigned Reg) {
       continue;
 
     // Analyze instruction.
-    SmallVector<MISTD::pair<MachineInstr*, unsigned>, 8> Ops;
+    SmallVector<std::pair<MachineInstr*, unsigned>, 8> Ops;
     MIBundleOperands::VirtRegInfo RI =
       MIBundleOperands(MI).analyzeVirtReg(Reg, &Ops);
 

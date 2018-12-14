@@ -391,7 +391,7 @@ public:
     if (!isSmall() && !RHS.isSmall())
       return getPointer()->anyCommon(*RHS.getPointer());
 
-    for (unsigned i = 0, e = MISTD::min(size(), RHS.size()); i != e; ++i)
+    for (unsigned i = 0, e = std::min(size(), RHS.size()); i != e; ++i)
       if (test(i) && RHS.test(i))
         return true;
     return false;
@@ -413,7 +413,7 @@ public:
 
   // Intersection, union, disjoint union.
   SmallBitVector &operator&=(const SmallBitVector &RHS) {
-    resize(MISTD::max(size(), RHS.size()));
+    resize(std::max(size(), RHS.size()));
     if (isSmall())
       setSmallBits(getSmallBits() & RHS.getSmallBits());
     else if (!RHS.isSmall())
@@ -433,7 +433,7 @@ public:
     else if (!isSmall() && !RHS.isSmall())
       getPointer()->reset(*RHS.getPointer());
     else
-      for (unsigned i = 0, e = MISTD::min(size(), RHS.size()); i != e; ++i)
+      for (unsigned i = 0, e = std::min(size(), RHS.size()); i != e; ++i)
         if (RHS.test(i))
           reset(i);
 
@@ -449,7 +449,7 @@ public:
       return getPointer()->test(*RHS.getPointer());
 
     unsigned i, e;
-    for (i = 0, e = MISTD::min(size(), RHS.size()); i != e; ++i)
+    for (i = 0, e = std::min(size(), RHS.size()); i != e; ++i)
       if (test(i) && !RHS.test(i))
         return true;
 
@@ -461,7 +461,7 @@ public:
   }
 
   SmallBitVector &operator|=(const SmallBitVector &RHS) {
-    resize(MISTD::max(size(), RHS.size()));
+    resize(std::max(size(), RHS.size()));
     if (isSmall())
       setSmallBits(getSmallBits() | RHS.getSmallBits());
     else if (!RHS.isSmall())
@@ -475,7 +475,7 @@ public:
   }
 
   SmallBitVector &operator^=(const SmallBitVector &RHS) {
-    resize(MISTD::max(size(), RHS.size()));
+    resize(std::max(size(), RHS.size()));
     if (isSmall())
       setSmallBits(getSmallBits() ^ RHS.getSmallBits());
     else if (!RHS.isSmall())
@@ -517,7 +517,7 @@ public:
 #endif
 
   void swap(SmallBitVector &RHS) {
-    MISTD::swap(X, RHS.X);
+    std::swap(X, RHS.X);
   }
 
   /// setBitsInMask - Add '1' bits from Mask to this vector. Don't resize.
@@ -597,8 +597,8 @@ operator^(const SmallBitVector &LHS, const SmallBitVector &RHS) {
 
 } // End llvm namespace
 
-namespace MISTD {
-  /// Implement MISTD::swap in terms of BitVector swap.
+namespace std {
+  /// Implement std::swap in terms of BitVector swap.
   inline void
   swap(llvm::SmallBitVector &LHS, llvm::SmallBitVector &RHS) {
     LHS.swap(RHS);

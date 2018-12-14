@@ -246,6 +246,14 @@ class IResource_handler
 public:
     typedef mi::mdl::stdlib::Tex_wrap_mode Tex_wrap_mode;
 
+    typedef struct {
+        float val[2];
+        float dx[2];
+        float dy[2];
+    } Deriv_float2;
+
+    typedef mi::mdl::stdlib::Mbsdf_part Mbsdf_part;
+
     /// Get the number of bytes that must be allocated for a resource object.
     virtual size_t get_data_size() const = 0;
 
@@ -333,6 +341,26 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const = 0;
 
+    /// Handle tex::lookup_float(texture_2d, ...) with derivatives.
+    ///
+    /// \param tex_data     the read-only shared texture data pointer
+    /// \param thread_data  extra per-thread data that was passed to the lambda function
+    /// \param coord        coord parameter of tex::lookup_float(texture_2d, ...)
+    /// \param wrap_u       wrap_u parameter of tex::lookup_float(texture_2d, ...)
+    /// \param wrap_v       wrap_v parameter of tex::lookup_float(texture_2d, ...)
+    /// \param crop_u       crop_u parameter of tex::lookup_float(texture_2d, ...)
+    /// \param crop_v       crop_u parameter of tex::lookup_float(texture_2d, ...)
+    ///
+    /// \return the result of tex::lookup_float(texture_2d, ...)
+    virtual float tex_lookup_deriv_float_2d(
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const = 0;
+
     /// Handle tex::lookup_float(texture_3d, ...).
     ///
     /// \param tex_data     the read-only shared texture data pointer
@@ -400,6 +428,26 @@ public:
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
         float const   crop_v[2]) const = 0;
+
+    /// Handle tex::lookup_float2(texture_2d, ...) with derivatives.
+    ///
+    /// \param result       the result of tex::lookup_float2(texture_2d, ...)
+    /// \param tex_data     the read-only shared texture data pointer
+    /// \param thread_data  extra per-thread data that was passed to the lambda function
+    /// \param coord        coord parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param wrap_u       wrap_u parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param wrap_v       wrap_v parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param crop_u       crop_u parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param crop_v       crop_u parameter of tex::lookup_float2(texture_2d, ...)
+    virtual void tex_lookup_deriv_float2_2d(
+        float              result[2],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const = 0;
 
     /// Handle tex::lookup_float2(texture_3d, ...).
     ///
@@ -469,6 +517,26 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const = 0;
 
+    /// Handle tex::lookup_float3(texture_2d, ...) with derivatives.
+    ///
+    /// \param result       the result of tex::lookup_float3(texture_2d, ...)
+    /// \param tex_data     the read-only shared texture data pointer
+    /// \param thread_data  extra per-thread data that was passed to the lambda function
+    /// \param coord        coord parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param wrap_u       wrap_u parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param wrap_v       wrap_v parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param crop_u       crop_u parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param crop_v       crop_u parameter of tex::lookup_float3(texture_2d, ...)
+    virtual void tex_lookup_deriv_float3_2d(
+        float              result[3],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const = 0;
+
     /// Handle tex::lookup_float3(texture_3d, ...).
     ///
     /// \param result       the result of tex::lookup_float3(texture_3d, ...)
@@ -537,6 +605,26 @@ public:
         float const   crop_u[2],
         float const   crop_v[2]) const = 0;
 
+    /// Handle tex::lookup_float4(texture_2d, ...) with derivatives.
+    ///
+    /// \param result       the result of tex::lookup_float4(texture_2d, ...)
+    /// \param tex_data     the read-only shared texture data pointer
+    /// \param thread_data  extra per-thread data that was passed to the lambda function
+    /// \param coord        coord parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param wrap_u       wrap_u parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param wrap_v       wrap_v parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param crop_u       crop_u parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param crop_v       crop_u parameter of tex::lookup_float4(texture_2d, ...)
+    virtual void tex_lookup_deriv_float4_2d(
+        float              result[4],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const = 0;
+
     /// Handle tex::lookup_float4(texture_3d, ...).
     ///
     /// \param result       the result of tex::lookup_float4(texture_3d, ...)
@@ -604,6 +692,26 @@ public:
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
         float const   crop_v[2]) const = 0;
+
+    /// Handle tex::lookup_color(texture_2d, ...) with derivatives.
+    ///
+    /// \param rgb          the result of tex::lookup_color(texture_2d, ...) as RGB
+    /// \param tex_data     the read-only shared texture data pointer
+    /// \param thread_data  extra per-thread data that was passed to the lambda function
+    /// \param coord        coord parameter of tex::lookup_color(texture_2d, ...)
+    /// \param wrap_u       wrap_u parameter of tex::lookup_color(texture_2d, ...)
+    /// \param wrap_v       wrap_v parameter of tex::lookup_color(texture_2d, ...)
+    /// \param crop_u       crop_u parameter of tex::lookup_color(texture_2d, ...)
+    /// \param crop_v       crop_u parameter of tex::lookup_color(texture_2d, ...)
+    virtual void tex_lookup_deriv_color_2d(
+        float              rgb[3],
+        void const         *tex_data,
+        void               *thread_data,
+        Deriv_float2 const *coord,
+        Tex_wrap_mode      wrap_u,
+        Tex_wrap_mode      wrap_v,
+        float const        crop_u[2],
+        float const        crop_v[2]) const = 0;
 
     /// Handle tex::lookup_color(texture_3d, ...).
     ///
@@ -840,6 +948,40 @@ public:
     virtual bool lp_isvalid(
         void const *lp_data) const = 0;
 
+    /// Handle df::light_profile_evaluate(...).
+    ///
+    /// \param lp_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi        spherical coordinates of the requested direction
+    /// \return                 the intensity of the light source at the given direction
+    virtual float lp_evaluate(
+        void const      *lp_data,
+        void            *thread_data,
+        const float     theta_phi[2]) const = 0;
+
+    /// Handle df::light_profile_sample(...).
+    ///
+    /// \param result           sampled theta and phi as well as the pdf
+    /// \param lp_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param xi               set of independent uniformly distributed random value
+    virtual void lp_sample(
+        float           result[3],
+        void const      *lp_data,
+        void            *thread_data,
+        const float     xi[3]) const = 0;
+
+    /// Handle df::light_profile_pdf(...).
+    ///
+    /// \param lp_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi        spherical coordinates of the requested direction
+    /// \return                 the resulting pdf for a corresponding lookup
+    virtual float lp_pdf(
+        void const      *lp_data,
+        void            *thread_data,
+        const float     theta_phi[2]) const = 0;
+
     /// Initializes a bsdf measurement data helper object from a given bsdf measurement tag.
     ///
     /// \param data    a 16byte aligned pointer to allocated data of at least
@@ -871,6 +1013,76 @@ public:
     /// \return True if bm_data represents a valid bsdf measurement, false otherwise.
     virtual bool bm_isvalid(
         void const *bm_data) const = 0;
+
+    /// Handle df::bsdf_measurement_resolution(...).
+    ///
+    /// \param result    the result of bm::theta_res, bm::phi_res, bm::channels
+    /// \param bm_data   the read-only shared resource data pointer
+    /// \param part      part of the BSDF that is requested
+    virtual void bm_resolution(
+        unsigned        result[3],
+        void const      *bm_data,
+        Mbsdf_part      part) const = 0;
+
+    /// Handle df::bsdf_measurement_evaluate(...).
+    ///
+    /// \param result           the result of lookup
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi_in     spherical coordinates of the incoming direction
+    /// \param theta_phi_out    spherical coordinates of the outgoing direction
+    /// \param part             part of the BSDF that is requested
+    virtual void bm_evaluate(
+        float           result[3],
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi_in[2],
+        const float     theta_phi_out[2],
+        Mbsdf_part      part) const = 0;
+
+    /// Handle df::bsdf_measurement_sample(...).
+    ///
+    /// \param result           sampled theta and phi as well as the pdf
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi_out    spherical coordinates of the outgoing direction
+    /// \param xi               set of independent uniformly distributed random value
+    /// \param part             part of the BSDF that is requested
+    virtual void bm_sample(
+        float           result[3],
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi_out[2],
+        const float     xi[3],
+        Mbsdf_part      part) const = 0;
+
+    /// Handle df::bsdf_measurement_pdf(...).
+    ///
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi_in     spherical coordinates of the incoming direction
+    /// \param theta_phi_out    spherical coordinates of the outgoing direction
+    /// \param part             part of the BSDF that is requested
+    /// \return                 the resulting pdf for a corresponding lookup
+    virtual float bm_pdf(
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi_in[2],
+        const float     theta_phi_out[2],
+        Mbsdf_part      part) const = 0;
+
+    /// Handle df::bsdf_measurement_albedos(...).
+    ///
+    /// \param result           maximum (in case of color) albedos for reflection and transmission
+    ///                         for the selected direction and globally
+    /// \param bm_data          the read-only shared resource data pointer
+    /// \param thread_data      extra per-thread data that was passed to the lambda function
+    /// \param theta_phi        spherical coordinates of the requested direction
+    virtual void bm_albedos(
+        float           result[4],
+        void const      *bm_data,
+        void            *thread_data,
+        const float     theta_phi[2]) const = 0;
 };
 
 /// Executable code of a compiled lambda function.

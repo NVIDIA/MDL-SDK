@@ -495,7 +495,6 @@ private:
         mi::Uint32 argc,
         const mi::base::IInterface* argv[]) const;
 
-
     /// Creates an instance of a structure declaration.
     ///
     /// \param transaction          The transaction.

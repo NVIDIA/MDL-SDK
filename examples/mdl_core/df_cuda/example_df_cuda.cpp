@@ -57,6 +57,23 @@
 
 #define WINDOW_TITLE "MDL Core DF Example"
 
+
+/////////////////////////////
+// Vector helper functions //
+/////////////////////////////
+
+inline float length(const float3 &d)
+{
+    return sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+}
+
+inline float3 normalize(const float3 &d)
+{
+    const float inv_len = 1.0f / length(d);
+    return make_float3(d.x * inv_len, d.y * inv_len, d.z * inv_len);
+}
+
+
 /////////////////
 // OpenGL code //
 /////////////////
@@ -73,7 +90,7 @@ static GLFWwindow *init_opengl()
 
     // Create an OpenGL window and a context
     GLFWwindow *window = glfwCreateWindow(
-        1024, 768, WINDOW_TITLE, NULL, NULL);
+        1024, 768, WINDOW_TITLE, nullptr, nullptr);
     if (!window) {
         std::cerr << "Error creating OpenGL window!" << std::endl;
         terminate();
@@ -103,7 +120,7 @@ static void dump_info(GLuint shader, const char* text)
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
     if (length > 0) {
         GLchar *log = new GLchar[length + 1];
-        glGetShaderInfoLog(shader, length + 1, NULL, log);
+        glGetShaderInfoLog(shader, length + 1, nullptr, log);
         std::cerr << text << log << std::endl;
         delete [] log;
     } else {
@@ -116,7 +133,7 @@ static void add_shader(GLenum shader_type, const std::string& source_code, GLuin
     const GLchar* src_buffers[1] = { source_code.c_str() };
     GLuint shader = glCreateShader(shader_type);
     check_success(shader);
-    glShaderSource(shader, 1, src_buffers, NULL);
+    glShaderSource(shader, 1, src_buffers, nullptr);
     glCompileShader(shader);
 
     GLint success;
@@ -320,7 +337,7 @@ static void resize_buffers(
 {
     // Allocate GL display buffer
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, display_buffer);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, NULL, GL_DYNAMIC_COPY);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * 4, nullptr, GL_DYNAMIC_COPY);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     check_success(glGetError() == GL_NO_ERROR);
@@ -504,12 +521,16 @@ struct Options {
     float gui_scale;
     bool opengl;
     bool use_class_compilation;
+    bool no_aa;
+    bool enable_derivatives;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
     unsigned int mdl_test_type;
     unsigned int max_path_length;
+    float fov;
     float exposure;
+    float3 cam_pos;
     float3 light_pos;
     float3 light_intensity;
 
@@ -517,6 +538,30 @@ struct Options {
     std::string outputfile;
     std::vector<std::string> material_names;
     std::vector<std::string> mdl_paths;
+
+    // Default constructor, sets default values.
+    Options()
+    : gui_scale(1.0f)
+    , opengl(true)
+    , use_class_compilation(true)
+    , no_aa(false)
+    , enable_derivatives(false)
+    , res_x(1024)
+    , res_y(1024)
+    , iterations(4096)
+    , samples_per_iteration(8)
+    , mdl_test_type(MDL_TEST_MIS)
+    , max_path_length(4)
+    , fov(96.0f)
+    , exposure(0.0f)
+    , cam_pos(make_float3(0, 0, 3))
+    , light_pos(make_float3(0, 0, 0))
+    , light_intensity(make_float3(0, 0, 0))
+    , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
+    , outputfile("output.exr")
+    , material_names()
+    , mdl_paths()
+    {}
 };
 
 // Possible enum values if any.
@@ -534,6 +579,7 @@ struct Enum_value {
 struct Enum_type_info {
     std::vector<Enum_value> values;
 
+    // Adds a enum value and its integer value to the enum type info.
     void add(const std::string &name, int value) {
         values.push_back(Enum_value(name, value));
     }
@@ -667,32 +713,54 @@ private:
     Enum_type_map enum_types;
 };
 
-bool get_annotation_argument_value(mi::mdl::DAG_call const *anno, int index, float &res)
+// Type trait to get the value type for a given type.
+template<typename T> struct Value_trait     { /* error */ };
+template<> struct Value_trait<float>        { typedef mi::mdl::IValue_float IVALUE_TYPE; };
+template<> struct Value_trait<char const *> { typedef mi::mdl::IValue_string IVALUE_TYPE; };
+
+template<typename T>
+bool get_annotation_argument_value(mi::mdl::DAG_call const *anno, int index, T &res)
 {
     mi::mdl::DAG_constant const *dag_const =
         mi::mdl::as<mi::mdl::DAG_constant>(anno->get_argument(index));
-    if (!dag_const) return false;
+    if (dag_const == nullptr)
+        return false;
 
-    mi::mdl::IValue_float const *val = mi::mdl::as<mi::mdl::IValue_float>(dag_const->get_value());
-    if (!val) return false;
+    typedef typename Value_trait<T>::IVALUE_TYPE IValue_type;
+
+    IValue_type const *val = mi::mdl::as<IValue_type>(dag_const->get_value());
+    if (val == nullptr)
+        return false;
 
     res = val->get_value();
     return true;
 }
 
-bool get_annotation_argument_value(mi::mdl::DAG_call const *anno, int index, const char *&res)
+// Update the camera kernel parameters.
+static void update_camera(
+    Kernel_params &kernel_params,
+    double phi,
+    double theta,
+    float base_dist,
+    int zoom)
 {
-    mi::mdl::DAG_constant const *dag_const =
-        mi::mdl::as<mi::mdl::DAG_constant>(anno->get_argument(index));
-    if (!dag_const) return false;
+    kernel_params.cam_dir.x = float(-sin(phi) * sin(theta));
+    kernel_params.cam_dir.y = float(-cos(theta));
+    kernel_params.cam_dir.z = float(-cos(phi) * sin(theta));
 
-    mi::mdl::IValue_string const *val = mi::mdl::as<mi::mdl::IValue_string>(dag_const->get_value());
-    if (!val) return false;
+    kernel_params.cam_right.x = float(cos(phi));
+    kernel_params.cam_right.y = 0.0f;
+    kernel_params.cam_right.z = float(-sin(phi));
 
-    res = val->get_value();
-    return true;
+    kernel_params.cam_up.x = float(-sin(phi) * cos(theta));
+    kernel_params.cam_up.y = float(sin(theta));
+    kernel_params.cam_up.z = float(-cos(phi) * cos(theta));
+
+    const float dist = float(base_dist * pow(0.95, double(zoom)));
+    kernel_params.cam_pos.x = -kernel_params.cam_dir.x * dist;
+    kernel_params.cam_pos.y = -kernel_params.cam_dir.y * dist;
+    kernel_params.cam_pos.z = -kernel_params.cam_dir.z * dist;
 }
-
 
 // Progressively render scene
 static void render_scene(
@@ -752,11 +820,7 @@ static void render_scene(
     // Setup initial CUDA kernel parameters
     Kernel_params kernel_params;
     memset(&kernel_params, 0, sizeof(Kernel_params));
-    kernel_params.cam_pos = make_float3(0, 0, 3.0f);
-    kernel_params.cam_dir = make_float3(0, 0, -1.0f);
-    kernel_params.cam_right = make_float3(1.0f, 0.0f, 0.0f);
-    kernel_params.cam_up = make_float3(0.0f, 1.0f, 0.0f);
-    kernel_params.cam_focal = 0.9f;
+    kernel_params.cam_focal = 1.0f / tanf(options.fov / 2 * float(2 * M_PI / 360));
     kernel_params.light_pos = options.light_pos;
     kernel_params.light_intensity = options.light_intensity;
     kernel_params.iteration_start = 0;
@@ -764,14 +828,29 @@ static void render_scene(
     kernel_params.mdl_test_type = options.mdl_test_type;
     kernel_params.max_path_length = options.max_path_length;
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
+    kernel_params.disable_aa = options.no_aa;
+    kernel_params.use_derivatives = options.enable_derivatives;
+
+    // Setup camera
+    float base_dist = length(options.cam_pos);
+    double theta, phi;
+    {
+        const float3 inv_dir = normalize(options.cam_pos);
+        phi = atan2(inv_dir.x, inv_dir.z);
+        theta = acos(inv_dir.y);
+    }
+
+    update_camera(kernel_params, phi, theta, base_dist, window_context.zoom);
 
     // Build the full CUDA kernel with all the generated code
     std::vector<std::unique_ptr<Ptx_code> > target_codes;
     target_codes.push_back(std::move(target_code));
     CUfunction  cuda_function;
+    char const *ptx_name = options.enable_derivatives ?
+        "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + "example_df_cuda.ptx").c_str(),
+        (get_executable_folder() + ptx_name).c_str(),
         "render_sphere_kernel",
         &cuda_function);
 
@@ -792,9 +871,6 @@ static void render_scene(
         options.hdrfile.c_str(), mdl_compiler);
     kernel_params.env_accel = reinterpret_cast<Env_accel *>(env_accel);
 
-    // Camera position
-    double phi = 0.0f, theta = (M_PI * 0.5);
-
     // Setup file name for nogl mode
     std::string next_filename;
     std::string filename_base, filename_ext;
@@ -813,7 +889,7 @@ static void render_scene(
     // Scope for material context resources
     {
         // Prepare the needed data of all target codes for the GPU
-        Material_gpu_context material_gpu_context;
+        Material_gpu_context material_gpu_context(options.enable_derivatives);
         if (!material_gpu_context.prepare_target_code_data(target_codes[0].get()))
             terminate();
         kernel_params.tc_data = reinterpret_cast<Target_code_data *>(
@@ -1146,6 +1222,15 @@ static void render_scene(
                     ImGui::PopID();
                 }
 
+                if (options.enable_derivatives) {
+                    ImGui::Separator();
+                    bool b = kernel_params.use_derivatives != 0;
+                    if (ImGui::Checkbox("Use derivatives", &b)) {
+                        kernel_params.iteration_start = 0;
+                        kernel_params.use_derivatives = b;
+                    }
+                }
+
                 ImGui::PopItemWidth();
                 ImGui::End();
 
@@ -1195,27 +1280,11 @@ static void render_scene(
                     // Update camera
                     phi -= ctx->move_dx * 0.001 * M_PI;
                     theta -= ctx->move_dy * 0.001 * M_PI;
-                    theta = std::max(theta, 0.05 * M_PI);
-                    theta = std::min(theta, 0.95 * M_PI);
+                    theta = std::max(theta, 0.00 * M_PI);
+                    theta = std::min(theta, 1.00 * M_PI);
                     ctx->move_dx = ctx->move_dy = 0.0;
 
-                    kernel_params.cam_dir.x = float(-sin(phi) * sin(theta));
-                    kernel_params.cam_dir.y = float(-cos(theta));
-                    kernel_params.cam_dir.z = float(-cos(phi) * sin(theta));
-
-                    kernel_params.cam_right.x = float(cos(phi));
-                    kernel_params.cam_right.y = 0.0f;
-                    kernel_params.cam_right.z = float(-sin(phi));
-
-                    kernel_params.cam_up.x = float(-sin(phi) * cos(theta));
-                    kernel_params.cam_up.y = float(sin(theta));
-                    kernel_params.cam_up.z = float(-cos(phi) * cos(theta));
-
-
-                    const float dist = float(3.0 * pow(0.95, double(ctx->zoom)));
-                    kernel_params.cam_pos.x = -kernel_params.cam_dir.x * dist;
-                    kernel_params.cam_pos.y = -kernel_params.cam_dir.y * dist;
-                    kernel_params.cam_pos.z = -kernel_params.cam_dir.z * dist;
+                    update_camera(kernel_params, phi, theta, base_dist, ctx->zoom);
                 }
 
                 // Clear all events
@@ -1235,6 +1304,7 @@ static void render_scene(
                 kernel_params.display_buffer = reinterpret_cast<unsigned int *>(p);
             }
 
+
             // Launch kernel
             dim3 threads_per_block(16, 16);
             dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
@@ -1245,9 +1315,10 @@ static void render_scene(
                 threads_per_block.x, threads_per_block.y, threads_per_block.z,
                 0, nullptr, params, nullptr));
 
+
             kernel_params.iteration_start += kernel_params.iteration_num;
 
-            // make sure, any debug::print()s are written to the console
+            // Make sure, any debug::print()s are written to the console
             check_cuda_success(cuStreamSynchronize(0));
 
             if (options.opengl)
@@ -1259,7 +1330,7 @@ static void render_scene(
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, display_buffer);
                 glBindTexture(GL_TEXTURE_2D, display_tex);
                 glTexImage2D(
-                    GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+                    GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -1292,6 +1363,7 @@ static void render_scene(
     check_cuda_success(cudaFreeArray(env_tex_data));
     check_cuda_success(cuMemFree(env_accel));
     check_cuda_success(cuMemFree(accum_buffer));
+    check_cuda_success(cuMemFree(material_buffer));
     check_cuda_success(cuModuleUnload(cuda_module));
     uninit_cuda(cuda_context);
 
@@ -1325,10 +1397,7 @@ Df_cuda_material create_cuda_material(
     // used here to alter the materials parameter set
     mat.compiled_material_index = static_cast<unsigned int>(compiled_material_index);
 
-    // not used at the moment in this example, it but allows more flexible implementations.
-    // Since the generated functions belong to the same material, they will use
-    // the same argument block. Therefore, the CUDA code can be optimized because the
-    // argument block has to be fetched only once (instead of once per function).
+    // not used at the moment in this example but allows more flexible implementations
     mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
 
     // identify the BSDF function by target_code_index (i'th link unit)
@@ -1343,9 +1412,11 @@ Df_cuda_material create_cuda_material(
     mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
     mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
 
+    mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
+    mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
+
     return mat;
 }
-
 
 static void usage(const char *name)
 {
@@ -1366,11 +1437,16 @@ static void usage(const char *name)
         << "-t <type>                   0: eval, 1: sample, 2: mis, 3: mis + pdf, 4: no env\n"
         << "                            (default: 2)\n"
         << "-e <exposure>               exposure for interactive display (default: 0.0)\n"
+        << "-f <fov>                    the camera field of view in degree (default: 96.0)\n"
+        << "-p <x> <y> <z>              set the camera position (default 0 0 3).\n"
+        << "                            The camera will always look towards (0, 0, 0).\n"
         << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and "
            "intensity (flux)\n"
-        << "--mdl_path <path>           mdl search path, can occur multiple times.\n"
-        << "--max_path_length <num>     maximum path length, default 4 (up to one total internal "
-           "reflection), clamped to 2..100\n"
+        << "--mdl_path <path>           MDL search path, can occur multiple times.\n"
+        << "--max_path_length <num>     maximum path length, default 4 (up to one total internal\n"
+        << "                            reflection), clamped to 2..100\n"
+        << "--noaa                      disable pixel oversampling\n"
+        << "-d                          enable use of derivatives\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n";
 
@@ -1381,19 +1457,6 @@ int main(int argc, char* argv[])
 {
     // Parse commandline options
     Options options;
-    options.gui_scale = 1.0f;
-    options.opengl = true;
-    options.use_class_compilation = true;
-    options.res_x = options.res_y = 1024;
-    options.iterations = 4096;
-    options.samples_per_iteration = 8;
-    options.mdl_test_type = MDL_TEST_MIS;
-    options.max_path_length = 4;
-    options.exposure = 0.0f;
-    options.light_pos = make_float3(0.0f, 0.0f, 0.0f);
-    options.light_intensity = make_float3(0.0f, 0.0f, 0.0f);
-    options.hdrfile = "nvidia/sdk_examples/resources/environment.hdr";
-    options.outputfile = "output.exr";
     options.mdl_paths.push_back(get_samples_mdl_root());
 
     for (int i = 1; i < argc; ++i) {
@@ -1425,6 +1488,12 @@ int main(int argc, char* argv[])
                 options.mdl_test_type = type;
             } else if (strcmp(opt, "-e") == 0 && i < argc - 1) {
                 options.exposure = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "-f") == 0 && i < argc - 1) {
+                options.fov = static_cast<float>(atof(argv[++i]));
+            } else if (strcmp(opt, "-p") == 0 && i < argc - 3) {
+                options.cam_pos.x = static_cast<float>(atof(argv[++i]));
+                options.cam_pos.y = static_cast<float>(atof(argv[++i]));
+                options.cam_pos.z = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "-l") == 0 && i < argc - 6) {
                 options.light_pos.x = static_cast<float>(atof(argv[++i]));
                 options.light_pos.y = static_cast<float>(atof(argv[++i]));
@@ -1432,16 +1501,16 @@ int main(int argc, char* argv[])
                 options.light_intensity.x = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.y = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.z = static_cast<float>(atof(argv[++i]));
-            } else if (strcmp(opt, "--mdl_path") == 0) {
-                if (i < argc - 1)
-                    options.mdl_paths.push_back(argv[++i]);
-                else
-                    usage(argv[0]);
+            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+                options.mdl_paths.push_back(argv[++i]);
             } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
                 options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
+            } else if (strcmp(opt, "--noaa") == 0) {
+                options.no_aa = true;
+            } else if (strcmp(opt, "-d") == 0) {
+                options.enable_derivatives = true;
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
-
                 usage(argv[0]);
             }
         }
@@ -1461,7 +1530,10 @@ int main(int argc, char* argv[])
 
     {
         // Initialize the material compiler with 16 result buffer slots ("texture results")
-        Material_ptx_compiler mc(mdl_compiler.get(), 16);
+        Material_ptx_compiler mc(
+            mdl_compiler.get(),
+            16,
+            options.enable_derivatives);
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
             mc.add_module_path(options.mdl_paths[i].c_str());
 
@@ -1476,6 +1548,8 @@ int main(int argc, char* argv[])
             mi::mdl::ILink_unit::Target_function_description("surface.emission.emission"));
         descs.push_back(
             mi::mdl::ILink_unit::Target_function_description("surface.emission.intensity"));
+        descs.push_back(
+            mi::mdl::ILink_unit::Target_function_description("volume.absorption_coefficient"));
 
         // Generate code for all materials
         bool success = true;

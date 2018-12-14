@@ -78,7 +78,7 @@ void* Library_impl::get_symbol( const char* symbol_name)
 #endif // MI_PLATFORM_WINDOWS
 }
 
-MISTD::string Library_impl::get_filename( const char* symbol_name)
+std::string Library_impl::get_filename( const char* symbol_name)
 {
 #ifndef MI_PLATFORM_WINDOWS
     void* symbol = dlsym( m_handle, symbol_name);
@@ -122,7 +122,7 @@ ILibrary* Link_module_impl::load_library( const char* path)
 
 #else // MI_PLATFORM_WINDOWS
 
-    const MISTD::wstring& wpath( MI::STRING::utf8_to_wchar( path));
+    const std::wstring& wpath( MI::STRING::utf8_to_wchar( path));
     void* handle = LoadLibraryW( wpath.c_str());
 
     if( !handle) {

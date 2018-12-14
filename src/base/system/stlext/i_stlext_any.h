@@ -40,7 +40,7 @@ namespace STLEXT {
 /// the creation of containers holding values of any types in a typesafe manner. A typical
 /// example of creating such a container would be
 /// \code
-///   typedef MISTD::list<STLEXT::Any> many;
+///   typedef std::list<STLEXT::Any> many;
 ///   int i=9; string txt="Text"; float f=12.5; STLEXT::Any empty;
 ///   many myList;
 ///   myList.push_back(i);

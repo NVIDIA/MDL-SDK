@@ -78,9 +78,14 @@ void instantiate_definitions(
     mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
         mdl_factory->create_expression_factory( transaction));
 
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+        mdl_factory->create_execution_context());
+
     // Load the module "example" and access it from the DB.
     check_success( mdl_compiler->load_module(
-        transaction, "::nvidia::sdk_examples::tutorials") >= 0);
+        transaction, "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
+    print_messages( context.get());
+
     mi::base::Handle<const mi::neuraylib::IModule> module(
         transaction->access<mi::neuraylib::IModule>( "mdl::nvidia::sdk_examples::tutorials"));
     check_success( module.is_valid_interface());
@@ -230,15 +235,15 @@ void print_annotations( const mi::neuraylib::IAnnotation_block* anno_block)
             mi::base::Handle<const mi::neuraylib::IType> type_handle(
                 annotations.get_annotation_param_type( a, p));
 
-            std::cout << "  '" << annotations.get_annotation_param_name(a, p)
+            std::cout << "  '" << annotations.get_annotation_param_name( a, p)
                 << "' of kind of type '"
                 << type_handle->get_kind() << "' -> ";
 
-            switch (type_handle->get_kind())
+            switch( type_handle->get_kind())
             {
                 case mi::neuraylib::IType::TK_STRING:
                 {
-                    const char* string_value = NULL;
+                    const char* string_value = nullptr;
                     annotations.get_annotation_param_value<const char*>( a, p, string_value);
                     std::cout << "\"" << string_value << "\"\n";
                     break;
@@ -267,13 +272,13 @@ void print_annotations( const mi::neuraylib::IAnnotation_block* anno_block)
     std::cout << "\n";
     std::cout << "Index of 'hard_range': " << annotations.get_annotation_index(
         "::anno::hard_range(float,float)") << "\n";
-    std::cout << "Index of 'foo': " << static_cast<mi::Sint32>(annotations.get_annotation_index(
+    std::cout << "Index of 'foo': " << static_cast<mi::Sint32>( annotations.get_annotation_index(
         "::anno::foo(int)")) << " (which is not present)\n";
 
-    const char* descValue = NULL;
+    const char* descValue = nullptr;
     mi::Sint32 res = annotations.get_annotation_param_value_by_name<const char*>(
         "::anno::description(string)", 0, descValue);
-    std::cout << "Value of 'description': \"" << ( res == 0 ? descValue : "NULL") << "\"\n";
+    std::cout << "Value of 'description': \"" << ( res == 0 ? descValue : "nullptr") << "\"\n";
 
     mi::Sint32 fooValue = 0;
     res = annotations.get_annotation_param_value_by_name<mi::Sint32>(
@@ -324,10 +329,11 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
         expression_factory->create_constant( range_max_value.get()));
     mi::base::Handle<mi::neuraylib::IExpression_list> range_args(
         expression_factory->create_expression_list());
-    range_args->add_expression("min", range_min_expression.get());
-    range_args->add_expression("max", range_max_expression.get());
+    range_args->add_expression( "min", range_min_expression.get());
+    range_args->add_expression( "max", range_max_expression.get());
     mi::base::Handle<mi::neuraylib::IAnnotation> range_anno(
-        expression_factory->create_annotation("::anno::hard_range(float,float)", range_args.get()));
+        expression_factory->create_annotation(
+            "::anno::hard_range(float,float)", range_args.get()));
 
     // Add annotations to a annotation block
     mi::base::Handle<mi::neuraylib::IAnnotation_block> anno_block(
@@ -382,7 +388,7 @@ int main( int /*argc*/, char* /*argv*/[])
     check_success( neuray.is_valid_interface());
 
     // Configure the MDL SDK
-    configure(neuray.get());
+    configure( neuray.get());
 
     // Start the MDL SDK
     mi::Sint32 result = neuray->start();

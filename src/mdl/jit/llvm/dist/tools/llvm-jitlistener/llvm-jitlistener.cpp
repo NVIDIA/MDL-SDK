@@ -37,8 +37,8 @@ using namespace llvm;
 
 namespace {
 
-typedef MISTD::vector<MISTD::pair<MISTD::string, unsigned int> > SourceLocations;
-typedef MISTD::map<uint64_t, SourceLocations> NativeCodeMap;
+typedef std::vector<std::pair<std::string, unsigned int> > SourceLocations;
+typedef std::map<uint64_t, SourceLocations> NativeCodeMap;
 
 NativeCodeMap  ReportedDebugFuncs;
 
@@ -62,8 +62,8 @@ int NotifyEvent(iJIT_JVM_EVENT EventType, void *EventSpecificData) {
           errs() << "A function with a non-zero line count had no line table.";
           return -1;
         }
-        MISTD::pair<MISTD::string, unsigned int> loc(
-          MISTD::string(msg->source_file_name),
+        std::pair<std::string, unsigned int> loc(
+          std::string(msg->source_file_name),
           msg->line_number_table[i].LineNumber);
         ReportedDebugFuncs[msg->method_id].push_back(loc);
         outs() << "  Line info @ " << msg->line_number_table[i].Offset
@@ -104,7 +104,7 @@ unsigned int GetNewMethodID(void) {
 
 class JitEventListenerTest {
 protected:
-  void InitEE(const MISTD::string &IRFile) {
+  void InitEE(const std::string &IRFile) {
     LLVMContext &Context = getGlobalContext();
 
     // If we have a native target, initialize it to ensure it is linked in and
@@ -145,7 +145,7 @@ protected:
     }
 
     // Compile the IR
-    MISTD::string Error;
+    std::string Error;
     TheJIT.reset(EngineBuilder(TheModule)
       .setEngineKind(EngineKind::JIT)
       .setErrorStr(&Error)
@@ -166,7 +166,7 @@ protected:
   OwningPtr<ExecutionEngine> TheJIT;
 
 public:
-  void ProcessInput(const MISTD::string &Filename) {
+  void ProcessInput(const std::string &Filename) {
     InitEE(Filename);
 
     llvm::OwningPtr<llvm::JITEventListener> Listener(JITEventListener::createIntelJITEventListener(
@@ -187,7 +187,7 @@ public:
 
 } // end anonymous namespace
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input IR file>"),
                cl::Required);
 

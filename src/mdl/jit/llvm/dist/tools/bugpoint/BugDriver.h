@@ -46,9 +46,9 @@ extern bool BugpointIsInterrupted;
 class BugDriver {
   LLVMContext& Context;
   const char *ToolName;            // argv[0] of bugpoint
-  MISTD::string ReferenceOutputFile; // Name of `good' output file
+  std::string ReferenceOutputFile; // Name of `good' output file
   Module *Program;             // The raw program, linked together
-  MISTD::vector<MISTD::string> PassesToRun;
+  std::vector<std::string> PassesToRun;
   AbstractInterpreter *Interpreter;   // How to run the program
   AbstractInterpreter *SafeInterpreter;  // To generate reference output, etc.
   GCC *gcc;
@@ -74,12 +74,12 @@ public:
   // Set up methods... these methods are used to copy information about the
   // command line arguments into instance variables of BugDriver.
   //
-  bool addSources(const MISTD::vector<MISTD::string> &FileNames);
-  void addPass(MISTD::string p) { PassesToRun.push_back(p); }
-  void setPassesToRun(const MISTD::vector<MISTD::string> &PTR) {
+  bool addSources(const std::vector<std::string> &FileNames);
+  void addPass(std::string p) { PassesToRun.push_back(p); }
+  void setPassesToRun(const std::vector<std::string> &PTR) {
     PassesToRun = PTR;
   }
-  const MISTD::vector<MISTD::string> &getPassesToRun() const {
+  const std::vector<std::string> &getPassesToRun() const {
     return PassesToRun;
   }
 
@@ -87,23 +87,23 @@ public:
   /// variables are set up from command line arguments. The \p as_child argument
   /// indicates whether the driver is to run in parent mode or child mode.
   ///
-  bool run(MISTD::string &ErrMsg);
+  bool run(std::string &ErrMsg);
 
   /// debugOptimizerCrash - This method is called when some optimizer pass
   /// crashes on input.  It attempts to prune down the testcase to something
   /// reasonable, and figure out exactly which pass is crashing.
   ///
-  bool debugOptimizerCrash(const MISTD::string &ID = "passes");
+  bool debugOptimizerCrash(const std::string &ID = "passes");
 
   /// debugCodeGeneratorCrash - This method is called when the code generator
   /// crashes on an input.  It attempts to reduce the input as much as possible
   /// while still causing the code generator to crash.
-  bool debugCodeGeneratorCrash(MISTD::string &Error);
+  bool debugCodeGeneratorCrash(std::string &Error);
 
   /// debugMiscompilation - This method is used when the passes selected are not
   /// crashing, but the generated output is semantically different from the
   /// input.
-  void debugMiscompilation(MISTD::string *Error);
+  void debugMiscompilation(std::string *Error);
 
   /// debugPassMiscompilation - This method is called when the specified pass
   /// miscompiles Program as input.  It tries to reduce the testcase to
@@ -112,18 +112,18 @@ public:
   /// are to match.
   ///
   bool debugPassMiscompilation(const PassInfo *ThePass,
-                               const MISTD::string &ReferenceOutput);
+                               const std::string &ReferenceOutput);
 
   /// compileSharedObject - This method creates a SharedObject from a given
   /// BitcodeFile for debugging a code generator.
   ///
-  MISTD::string compileSharedObject(const MISTD::string &BitcodeFile,
-                                  MISTD::string &Error);
+  std::string compileSharedObject(const std::string &BitcodeFile,
+                                  std::string &Error);
 
   /// debugCodeGenerator - This method narrows down a module to a function or
   /// set of functions, using the CBE as a ``safe'' code generator for other
   /// functions that are not under consideration.
-  bool debugCodeGenerator(MISTD::string *Error);
+  bool debugCodeGenerator(std::string *Error);
 
   /// isExecutingJIT - Returns true if bugpoint is currently testing the JIT
   ///
@@ -164,33 +164,33 @@ public:
   /// setting Error if an error occurs.  This is used for code generation
   /// crash testing.
   ///
-  void compileProgram(Module *M, MISTD::string *Error) const;
+  void compileProgram(Module *M, std::string *Error) const;
 
   /// executeProgram - This method runs "Program", capturing the output of the
   /// program to a file.  A recommended filename may be optionally specified.
   ///
-  MISTD::string executeProgram(const Module *Program,
-                             MISTD::string OutputFilename,
-                             MISTD::string Bitcode,
-                             const MISTD::string &SharedObjects,
+  std::string executeProgram(const Module *Program,
+                             std::string OutputFilename,
+                             std::string Bitcode,
+                             const std::string &SharedObjects,
                              AbstractInterpreter *AI,
-                             MISTD::string *Error) const;
+                             std::string *Error) const;
 
   /// executeProgramSafely - Used to create reference output with the "safe"
   /// backend, if reference output is not provided.  If there is a problem with
   /// the code generator (e.g., llc crashes), this will return false and set
   /// Error.
   ///
-  MISTD::string executeProgramSafely(const Module *Program,
-                                   MISTD::string OutputFile,
-                                   MISTD::string *Error) const;
+  std::string executeProgramSafely(const Module *Program,
+                                   std::string OutputFile,
+                                   std::string *Error) const;
 
   /// createReferenceFile - calls compileProgram and then records the output
   /// into ReferenceOutputFile. Returns true if reference file created, false 
   /// otherwise. Note: initializeExecutionEnvironment should be called BEFORE
   /// this function.
   ///
-  bool createReferenceFile(Module *M, const MISTD::string &Filename
+  bool createReferenceFile(Module *M, const std::string &Filename
                                             = "bugpoint.reference.out-%%%%%%%");
 
   /// diffProgram - This method executes the specified module and diffs the
@@ -199,15 +199,15 @@ public:
   /// generator (e.g., llc crashes), this will return -1 and set Error.
   ///
   bool diffProgram(const Module *Program,
-                   const MISTD::string &BitcodeFile = "",
-                   const MISTD::string &SharedObj = "",
+                   const std::string &BitcodeFile = "",
+                   const std::string &SharedObj = "",
                    bool RemoveBitcode = false,
-                   MISTD::string *Error = 0) const;
+                   std::string *Error = 0) const;
 
   /// EmitProgressBitcode - This function is used to output M to a file named
   /// "bugpoint-ID.bc".
   ///
-  void EmitProgressBitcode(const Module *M, const MISTD::string &ID,
+  void EmitProgressBitcode(const Module *M, const std::string &ID,
                            bool NoFlyer = false) const;
 
   /// deleteInstructionFromProgram - This method clones the current Program and
@@ -234,7 +234,7 @@ public:
   /// cloned from the one the BBs are in, so some mapping needs to be performed.
   /// If this operation fails for some reason (ie the implementation is buggy),
   /// this function should return null, otherwise it returns a new Module.
-  Module *ExtractMappedBlocksFromModule(const MISTD::vector<BasicBlock*> &BBs,
+  Module *ExtractMappedBlocksFromModule(const std::vector<BasicBlock*> &BBs,
                                         Module *M);
 
   /// runPassesOn - Carefully run the specified set of pass on the specified
@@ -242,7 +242,7 @@ public:
   /// failure.  If AutoDebugCrashes is set to true, then bugpoint will
   /// automatically attempt to track down a crashing pass if one exists, and
   /// this method will never return null.
-  Module *runPassesOn(Module *M, const MISTD::vector<MISTD::string> &Passes,
+  Module *runPassesOn(Module *M, const std::vector<std::string> &Passes,
                       bool AutoDebugCrashes = false, unsigned NumExtraArgs = 0,
                       const char * const *ExtraArgs = NULL);
 
@@ -256,8 +256,8 @@ public:
   /// to pass to the child bugpoint instance.
   ///
   bool runPasses(Module *Program,
-                 const MISTD::vector<MISTD::string> &PassesToRun,
-                 MISTD::string &OutputFilename, bool DeleteOutput = false,
+                 const std::vector<std::string> &PassesToRun,
+                 std::string &OutputFilename, bool DeleteOutput = false,
                  bool Quiet = false, unsigned NumExtraArgs = 0,
                  const char * const *ExtraArgs = NULL) const;
                  
@@ -268,14 +268,14 @@ public:
   /// If the passes did not compile correctly, output the command required to 
   /// recreate the failure. This returns true if a compiler error is found.
   ///
-  bool runManyPasses(const MISTD::vector<MISTD::string> &AllPasses,
-                     MISTD::string &ErrMsg);
+  bool runManyPasses(const std::vector<std::string> &AllPasses,
+                     std::string &ErrMsg);
 
   /// writeProgramToFile - This writes the current "Program" to the named
   /// bitcode file.  If an error occurs, true is returned.
   ///
-  bool writeProgramToFile(const MISTD::string &Filename, const Module *M) const;
-  bool writeProgramToFile(const MISTD::string &Filename, int FD,
+  bool writeProgramToFile(const std::string &Filename, const Module *M) const;
+  bool writeProgramToFile(const std::string &Filename, int FD,
                           const Module *M) const;
 
 private:
@@ -284,9 +284,9 @@ private:
   /// input (true = crashed).
   ///
   bool runPasses(Module *M,
-                 const MISTD::vector<MISTD::string> &PassesToRun,
+                 const std::vector<std::string> &PassesToRun,
                  bool DeleteOutput = true) const {
-    MISTD::string Filename;
+    std::string Filename;
     return runPasses(M, PassesToRun, Filename, DeleteOutput);
   }
 
@@ -299,22 +299,22 @@ private:
 /// ParseInputFile - Given a bitcode or assembly input filename, parse and
 /// return it, or return null if not possible.
 ///
-Module *ParseInputFile(const MISTD::string &InputFilename,
+Module *ParseInputFile(const std::string &InputFilename,
                        LLVMContext& ctxt);
 
 
 /// getPassesString - Turn a list of passes into a string which indicates the
 /// command line options that must be passed to add the passes.
 ///
-MISTD::string getPassesString(const MISTD::vector<MISTD::string> &Passes);
+std::string getPassesString(const std::vector<std::string> &Passes);
 
 /// PrintFunctionList - prints out list of problematic functions
 ///
-void PrintFunctionList(const MISTD::vector<Function*> &Funcs);
+void PrintFunctionList(const std::vector<Function*> &Funcs);
 
 /// PrintGlobalVariableList - prints out list of problematic global variables
 ///
-void PrintGlobalVariableList(const MISTD::vector<GlobalVariable*> &GVs);
+void PrintGlobalVariableList(const std::vector<GlobalVariable*> &GVs);
 
 // DeleteFunctionBody - "Remove" the function by deleting all of it's basic
 // blocks, making it external.
@@ -324,7 +324,7 @@ void DeleteFunctionBody(Function *F);
 /// SplitFunctionsOutOfModule - Given a module and a list of functions in the
 /// module, split the functions OUT of the specified module, and place them in
 /// the new module.
-Module *SplitFunctionsOutOfModule(Module *M, const MISTD::vector<Function*> &F,
+Module *SplitFunctionsOutOfModule(Module *M, const std::vector<Function*> &F,
                                   ValueToValueMapTy &VMap);
 
 } // End llvm namespace

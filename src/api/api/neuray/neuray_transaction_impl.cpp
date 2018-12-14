@@ -57,6 +57,8 @@
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
+#include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
+#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 
 
 namespace MI {
@@ -248,6 +250,17 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
          || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
         return -6;
 
+    if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
+        DB::Access<MDL::Mdl_function_call> f_call(source_tag, m_db_transaction);
+        if (f_call->is_immutable())
+            return -6;
+    }
+    if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
+        DB::Access<MDL::Mdl_material_instance> m_inst(source_tag, m_db_transaction);
+        if (m_inst->is_immutable())
+            return -6;
+    }
+
     if( strcmp( source, target) == 0) {
         // If source and target names are identical, reuse the source tag.
         // Use special DB method that defaults to no journal flags (in contrast to store()).
@@ -261,9 +274,6 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
         m_db_transaction->localize( source_tag, privacy);
     } else {
         // If source and target names are different, lookup target tag.
-        DB::Access<DB::Element_base> access( source_tag, m_db_transaction);
-        // Create a copy of the DB element.
-        DB::Element_base* element = access->copy();
         // Prevent overwriting an existing DB element with one of a different type
         DB::Tag target_tag = m_db_transaction->name_to_tag( target);
         if( target_tag) {
@@ -272,7 +282,22 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
                 || (target_class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
                 || (target_class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
                 return -9;
+
+            if (target_class_id == MDL::ID_MDL_FUNCTION_CALL) {
+                DB::Access<MDL::Mdl_function_call> f_call(target_tag, m_db_transaction);
+                if (f_call->is_immutable())
+                    return -9;
+            }
+            if (target_class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
+                DB::Access<MDL::Mdl_material_instance> m_inst(target_tag, m_db_transaction);
+                if (m_inst->is_immutable())
+                    return -9;
+            }
         }
+
+        DB::Access<DB::Element_base> access(source_tag, m_db_transaction);
+        // Create a copy of the DB element.
+        DB::Element_base* element = access->copy();
         // And store it.
         target_tag = get_tag_for_store( target_tag);
 #ifdef VERBOSE_TX

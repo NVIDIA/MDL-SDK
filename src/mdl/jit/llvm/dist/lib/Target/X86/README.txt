@@ -105,7 +105,7 @@ Instead of doing an explicit test, we can use the flags off the sar.  This
 occurs in a bigger testcase like this, which is pretty common:
 
 #include <vector>
-int test1(MISTD::vector<int> &X) {
+int test1(std::vector<int> &X) {
   int Sum = 0;
   for (long i = 0, e = X.size(); i != e; ++i)
     X[i] = 0;
@@ -691,8 +691,8 @@ be pretty easy, and will nuke all the copies.
 
 This:
         #include <algorithm>
-        inline MISTD::pair<unsigned, bool> full_add(unsigned a, unsigned b)
-        { return MISTD::make_pair(a + b, a + b < a); }
+        inline std::pair<unsigned, bool> full_add(unsigned a, unsigned b)
+        { return std::make_pair(a + b, a + b < a); }
         bool no_overflow(unsigned a, unsigned b)
         { return !full_add(a, b).second; }
 

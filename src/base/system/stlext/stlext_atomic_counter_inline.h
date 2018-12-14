@@ -334,12 +334,12 @@ MI_FORCE_INLINE Uint32 atomic_post_sub(Native_atomic_counter& counter, Uint32 i)
 #  warning "Using pthreads as a fallback."
 #endif
 
-#include <utility>          // MISTD::pair<>
+#include <utility>          // std::pair<>
 #include <pthread.h>                            // POSIX threads
 
 namespace MI { namespace STLEXT { namespace IMPL {
 
-typedef MISTD::pair<pthread_mutex_t, Uint32 volatile> Native_atomic_counter;
+typedef std::pair<pthread_mutex_t, Uint32 volatile> Native_atomic_counter;
 
 MI_FORCE_INLINE void create_counter(Native_atomic_counter & counter, Uint32 i)
 {

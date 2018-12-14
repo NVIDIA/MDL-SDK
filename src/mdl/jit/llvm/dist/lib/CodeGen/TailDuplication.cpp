@@ -54,7 +54,7 @@ TailDupVerify("tail-dup-verify",
 static cl::opt<unsigned>
 TailDupLimit("tail-dup-limit", cl::init(~0U), cl::Hidden);
 
-typedef MISTD::vector<MISTD::pair<MachineBasicBlock*,unsigned> > AvailableValsTy;
+typedef std::vector<std::pair<MachineBasicBlock*,unsigned> > AvailableValsTy;
 
 namespace {
   /// TailDuplicatePass - Perform tail duplication.
@@ -86,7 +86,7 @@ namespace {
     void ProcessPHI(MachineInstr *MI, MachineBasicBlock *TailBB,
                     MachineBasicBlock *PredBB,
                     DenseMap<unsigned, unsigned> &LocalVRMap,
-                    SmallVectorImpl<MISTD::pair<unsigned,unsigned> > &Copies,
+                    SmallVectorImpl<std::pair<unsigned,unsigned> > &Copies,
                     const DenseSet<unsigned> &UsedByPhi,
                     bool Remove);
     void DuplicateInstruction(MachineInstr *MI,
@@ -370,11 +370,11 @@ void TailDuplicatePass::AddSSAUpdateEntry(unsigned OrigReg, unsigned NewReg,
                                           MachineBasicBlock *BB) {
   DenseMap<unsigned, AvailableValsTy>::iterator LI= SSAUpdateVals.find(OrigReg);
   if (LI != SSAUpdateVals.end())
-    LI->second.push_back(MISTD::make_pair(BB, NewReg));
+    LI->second.push_back(std::make_pair(BB, NewReg));
   else {
     AvailableValsTy Vals;
-    Vals.push_back(MISTD::make_pair(BB, NewReg));
-    SSAUpdateVals.insert(MISTD::make_pair(OrigReg, Vals));
+    Vals.push_back(std::make_pair(BB, NewReg));
+    SSAUpdateVals.insert(std::make_pair(OrigReg, Vals));
     SSAUpdateVRs.push_back(OrigReg);
   }
 }
@@ -385,19 +385,19 @@ void TailDuplicatePass::AddSSAUpdateEntry(unsigned OrigReg, unsigned NewReg,
 void TailDuplicatePass::ProcessPHI(
     MachineInstr *MI, MachineBasicBlock *TailBB, MachineBasicBlock *PredBB,
     DenseMap<unsigned, unsigned> &LocalVRMap,
-    SmallVectorImpl<MISTD::pair<unsigned, unsigned> > &Copies,
+    SmallVectorImpl<std::pair<unsigned, unsigned> > &Copies,
     const DenseSet<unsigned> &RegsUsedByPhi, bool Remove) {
   unsigned DefReg = MI->getOperand(0).getReg();
   unsigned SrcOpIdx = getPHISrcRegOpIdx(MI, PredBB);
   assert(SrcOpIdx && "Unable to find matching PHI source?");
   unsigned SrcReg = MI->getOperand(SrcOpIdx).getReg();
   const TargetRegisterClass *RC = MRI->getRegClass(DefReg);
-  LocalVRMap.insert(MISTD::make_pair(DefReg, SrcReg));
+  LocalVRMap.insert(std::make_pair(DefReg, SrcReg));
 
   // Insert a copy from source to the end of the block. The def register is the
   // available value liveout of the block.
   unsigned NewDef = MRI->createVirtualRegister(RC);
-  Copies.push_back(MISTD::make_pair(NewDef, SrcReg));
+  Copies.push_back(std::make_pair(NewDef, SrcReg));
   if (isDefLiveOut(DefReg, TailBB, MRI) || RegsUsedByPhi.count(DefReg))
     AddSSAUpdateEntry(DefReg, NewDef, PredBB);
 
@@ -431,7 +431,7 @@ void TailDuplicatePass::DuplicateInstruction(MachineInstr *MI,
       const TargetRegisterClass *RC = MRI->getRegClass(Reg);
       unsigned NewReg = MRI->createVirtualRegister(RC);
       MO.setReg(NewReg);
-      LocalVRMap.insert(MISTD::make_pair(Reg, NewReg));
+      LocalVRMap.insert(std::make_pair(Reg, NewReg));
       if (isDefLiveOut(Reg, TailBB, MRI) || UsedByPhi.count(Reg))
         AddSSAUpdateEntry(Reg, NewReg, PredBB);
     } else {
@@ -801,7 +801,7 @@ TailDuplicatePass::TailDuplicate(MachineBasicBlock *TailBB,
 
     // Clone the contents of TailBB into PredBB.
     DenseMap<unsigned, unsigned> LocalVRMap;
-    SmallVector<MISTD::pair<unsigned,unsigned>, 4> CopyInfos;
+    SmallVector<std::pair<unsigned,unsigned>, 4> CopyInfos;
     // Use instr_iterator here to properly handle bundles, e.g.
     // ARM Thumb2 IT block.
     MachineBasicBlock::instr_iterator I = TailBB->instr_begin();
@@ -858,7 +858,7 @@ TailDuplicatePass::TailDuplicate(MachineBasicBlock *TailBB,
           << "From MBB: " << *TailBB);
     if (PreRegAlloc) {
       DenseMap<unsigned, unsigned> LocalVRMap;
-      SmallVector<MISTD::pair<unsigned,unsigned>, 4> CopyInfos;
+      SmallVector<std::pair<unsigned,unsigned>, 4> CopyInfos;
       MachineBasicBlock::iterator I = TailBB->begin();
       // Process PHI instructions first.
       while (I != TailBB->end() && I->isPHI()) {
@@ -923,7 +923,7 @@ TailDuplicatePass::TailDuplicate(MachineBasicBlock *TailBB,
   for (SmallSetVector<MachineBasicBlock *, 8>::iterator PI = Preds.begin(),
        PE = Preds.end(); PI != PE; ++PI) {
     MachineBasicBlock *PredBB = *PI;
-    if (MISTD::find(TDBBs.begin(), TDBBs.end(), PredBB) != TDBBs.end())
+    if (std::find(TDBBs.begin(), TDBBs.end(), PredBB) != TDBBs.end())
       continue;
 
     // EH edges
@@ -931,7 +931,7 @@ TailDuplicatePass::TailDuplicate(MachineBasicBlock *TailBB,
       continue;
 
     DenseMap<unsigned, unsigned> LocalVRMap;
-    SmallVector<MISTD::pair<unsigned,unsigned>, 4> CopyInfos;
+    SmallVector<std::pair<unsigned,unsigned>, 4> CopyInfos;
     MachineBasicBlock::iterator I = TailBB->begin();
     // Process PHI instructions first.
     while (I != TailBB->end() && I->isPHI()) {

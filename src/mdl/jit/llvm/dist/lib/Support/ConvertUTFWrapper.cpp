@@ -81,7 +81,7 @@ bool hasUTF16ByteOrderMark(ArrayRef<char> S) {
            (S[0] == '\xfe' && S[1] == '\xff')));
 }
 
-bool convertUTF16ToUTF8String(ArrayRef<char> SrcBytes, MISTD::string &Out) {
+bool convertUTF16ToUTF8String(ArrayRef<char> SrcBytes, std::string &Out) {
   assert(Out.empty());
 
   // Error out on an uneven byte count.
@@ -96,7 +96,7 @@ bool convertUTF16ToUTF8String(ArrayRef<char> SrcBytes, MISTD::string &Out) {
   const UTF16 *SrcEnd = reinterpret_cast<const UTF16 *>(SrcBytes.end());
 
   // Byteswap if necessary.
-  MISTD::vector<UTF16> ByteSwapped;
+  std::vector<UTF16> ByteSwapped;
   if (Src[0] == UNI_UTF16_BYTE_ORDER_MARK_SWAPPED) {
     ByteSwapped.insert(ByteSwapped.end(), Src, SrcEnd);
     for (unsigned I = 0, E = ByteSwapped.size(); I != E; ++I)

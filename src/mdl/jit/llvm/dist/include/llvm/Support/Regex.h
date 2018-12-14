@@ -49,7 +49,7 @@ namespace llvm {
 
     /// isValid - returns the error encountered during regex compilation, or
     /// matching, if any.
-    bool isValid(MISTD::string &Error);
+    bool isValid(std::string &Error);
 
     /// getNumMatches - In a valid regex, return the number of parenthesized
     /// matches it contains.  The number filled in by match will include this
@@ -75,7 +75,7 @@ namespace llvm {
     /// \param Error If non-null, any errors in the substitution (invalid
     /// backreferences, trailing backslashes) will be recorded as a non-empty
     /// string.
-    MISTD::string sub(StringRef Repl, StringRef String, MISTD::string *Error = 0);
+    std::string sub(StringRef Repl, StringRef String, std::string *Error = 0);
 
     /// \brief If this function returns true, ^Str$ is an extended regular
     /// expression that matches Str and only Str.

@@ -39,11 +39,11 @@ bool llvm::sys::hasDisassembler()
 #endif
 }
 
-MISTD::string llvm::sys::disassembleBuffer(uint8_t* start, size_t length,
+std::string llvm::sys::disassembleBuffer(uint8_t* start, size_t length,
                                          uint64_t pc) {
 #if (defined (__i386__) || defined (__amd64__) || defined (__x86_64__)) \
   && USE_UDIS86
-  MISTD::stringstream res;
+  std::stringstream res;
 
   unsigned bits;
 # if defined(__i386__)
@@ -60,8 +60,8 @@ MISTD::string llvm::sys::disassembleBuffer(uint8_t* start, size_t length,
   ud_set_pc(&ud_obj, pc);
   ud_set_syntax(&ud_obj, UD_SYN_ATT);
 
-  res << MISTD::setbase(16)
-      << MISTD::setw(bits/4);
+  res << std::setbase(16)
+      << std::setw(bits/4);
 
   while (ud_disassemble(&ud_obj)) {
     res << ud_insn_off(&ud_obj) << ":\t" << ud_insn_asm(&ud_obj) << "\n";

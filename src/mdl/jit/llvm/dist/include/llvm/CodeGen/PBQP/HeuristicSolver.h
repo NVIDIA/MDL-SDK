@@ -40,7 +40,7 @@ namespace PBQP {
     typedef typename HImpl::NodeData HeuristicNodeData;
     typedef typename HImpl::EdgeData HeuristicEdgeData;
 
-    typedef MISTD::list<Graph::EdgeId> SolverEdges;
+    typedef std::list<Graph::EdgeId> SolverEdges;
 
   public:
 
@@ -104,12 +104,12 @@ namespace PBQP {
     Graph &g;
     HImpl h;
     Solution s;
-    MISTD::vector<Graph::NodeId> stack;
+    std::vector<Graph::NodeId> stack;
 
-    typedef MISTD::list<NodeData> NodeDataList;
+    typedef std::list<NodeData> NodeDataList;
     NodeDataList nodeDataList;
 
-    typedef MISTD::list<EdgeData> EdgeDataList;
+    typedef std::list<EdgeData> EdgeDataList;
     EdgeDataList edgeDataList;
 
   public:
@@ -445,7 +445,7 @@ namespace PBQP {
 
         if (g.getNodeCosts(nId).getLength() == 1) {
 
-          MISTD::vector<Graph::EdgeId> edgesToRemove;
+          std::vector<Graph::EdgeId> edgesToRemove;
 
           for (Graph::AdjEdgeItr aeItr = g.adjEdgesBegin(nId),
                                  aeEnd = g.adjEdgesEnd(nId);
@@ -479,7 +479,7 @@ namespace PBQP {
     }
 
     void eliminateIndependentEdges() {
-      MISTD::vector<Graph::EdgeId> edgesToProcess;
+      std::vector<Graph::EdgeId> edgesToProcess;
       unsigned numEliminated = 0;
 
       for (Graph::EdgeItr eItr = g.edgesBegin(), eEnd = g.edgesEnd();
@@ -504,7 +504,7 @@ namespace PBQP {
 
     bool tryNormaliseEdgeMatrix(Graph::EdgeId &eId) {
 
-      const PBQPNum infinity = MISTD::numeric_limits<PBQPNum>::infinity();
+      const PBQPNum infinity = std::numeric_limits<PBQPNum>::infinity();
 
       Matrix &edgeCosts = g.getEdgeCosts(eId);
       Vector &uCosts = g.getNodeCosts(g.getEdgeNode1(eId)),

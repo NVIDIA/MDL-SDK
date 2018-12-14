@@ -95,10 +95,13 @@ void dump_compiled_material(
 void create_material_instance(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_execution_context* context,
     const char* instance_name)
 {
     // Load the "example" module.
-    check_success( mdl_compiler->load_module( transaction, "::nvidia::sdk_examples::tutorials") >= 0);
+    check_success( mdl_compiler->load_module( 
+        transaction, "::nvidia::sdk_examples::tutorials", context) >= 0);
+    print_messages( context);
 
     // Create a material instance from the material definition 
     // "mdl::nvidia::sdk_examples::tutorials::compilation_material" with the default arguments.
@@ -117,21 +120,22 @@ void create_material_instance(
 void compile_material_instance(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_factory* mdl_factory,
+    mi::neuraylib::IMdl_execution_context* context,
     const char* instance_name,
     const char* compiled_material_name,
     bool class_compilation)
 {
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
        transaction->access<mi::neuraylib::IMaterial_instance>( instance_name));
-    mi::Sint32 result = 0;
+
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        material_instance->create_compiled_material( flags, 1.0f, 380.0f, 780.0f, &result));
-    check_success( result == 0);
+        material_instance->create_compiled_material( flags, context));
+    check_success( print_messages( context));
 
-    std::cout << "Dumping compiled material (" << (class_compilation?"class":"instance")
+    std::cout << "Dumping compiled material (" << ( class_compilation ? "class" : "instance")
               << " compilation) for \"" << instance_name << "\":" << std::endl << std::endl;
     dump_compiled_material( transaction, mdl_factory, compiled_material.get(), std::cout);
     std::cout << std::endl;
@@ -166,6 +170,7 @@ void change_arguments(
 void generate_llvm_ir(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_execution_context* context,
     const char* compiled_material_name,
     const char* path,
     const char* fname)
@@ -178,11 +183,10 @@ void generate_llvm_ir(
     check_success( be_llvm_ir->set_option( "num_texture_spaces", "16") == 0);
     check_success( be_llvm_ir->set_option( "enable_simd", "on") == 0);
 
-    mi::Sint32 result = -1;
     mi::base::Handle<const mi::neuraylib::ITarget_code> code_llvm_ir(
         be_llvm_ir->translate_material_expression(
-            transaction, compiled_material.get(), path, fname, &result));
-    check_success( result == 0);
+            transaction, compiled_material.get(), path, fname, context));
+    check_success( print_messages( context));
     check_success( code_llvm_ir);
 
     std::cout << "Dumping LLVM IR code for \"" << path << "\" of \"" << compiled_material_name
@@ -194,6 +198,7 @@ void generate_llvm_ir(
 void generate_cuda_ptx(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_execution_context* context,
     const char* compiled_material_name,
     const char* path,
     const char* fname)
@@ -206,11 +211,10 @@ void generate_cuda_ptx(
     check_success( be_cuda_ptx->set_option( "num_texture_spaces", "16") == 0);
     check_success( be_cuda_ptx->set_option( "sm_version", "50") == 0);
 
-    mi::Sint32 result = -1;
     mi::base::Handle<const mi::neuraylib::ITarget_code> code_cuda_ptx(
         be_cuda_ptx->translate_material_expression(
-            transaction, compiled_material.get(), path, fname, &result));
-    check_success( result == 0);
+            transaction, compiled_material.get(), path, fname, context));
+    check_success( print_messages( context));
     check_success( code_cuda_ptx);
 
     std::cout << "Dumping CUDA PTX code for \"" << path << "\" of \"" << compiled_material_name
@@ -226,7 +230,7 @@ int main( int /*argc*/, char* /*argv*/[])
     check_success( neuray.is_valid_interface());
 
     // Configure the MDL SDK
-    configure(neuray.get());
+    configure( neuray.get());
 
     // Start the MDL SDK
     mi::Sint32 result = neuray->start();
@@ -245,22 +249,26 @@ int main( int /*argc*/, char* /*argv*/[])
         mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
 
         {
+            // Create an execution context for options and error message handling
+            mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+                mdl_factory->create_execution_context());
+
             // Load the "example" module and create a material instance
             std::string instance_name = "instance of compilation_material";
-            create_material_instance( transaction.get(), mdl_compiler.get(), instance_name.c_str());
+            create_material_instance( transaction.get(), mdl_compiler.get(), context.get(), instance_name.c_str());
 
             // Compile the material instance in instance compilation mode
             std::string instance_compilation_name
                 = std::string( "instance compilation of ") + instance_name;
             compile_material_instance(
-                transaction.get(), mdl_factory.get(), instance_name.c_str(),
+                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
                 instance_compilation_name.c_str(), false);
 
             // Compile the material instance in class compilation mode
             std::string class_compilation_name
                 = std::string( "class compilation of ") + instance_name;
             compile_material_instance(
-                transaction.get(), mdl_factory.get(), instance_name.c_str(),
+                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
                 class_compilation_name.c_str(), true);
 
             // Change some material argument and compile again in both modes. Note the differences
@@ -268,21 +276,21 @@ int main( int /*argc*/, char* /*argv*/[])
             // class compilation mode.
             change_arguments( transaction.get(), mdl_factory.get(), instance_name.c_str());
             compile_material_instance(
-                transaction.get(), mdl_factory.get(), instance_name.c_str(),
+                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
                 instance_compilation_name.c_str(), false);
             compile_material_instance(
-                transaction.get(), mdl_factory.get(), instance_name.c_str(),
+                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
                 class_compilation_name.c_str(), true);
 
             // Use the various backends to generate target code for some material expression.
             generate_llvm_ir(
-                transaction.get(), mdl_compiler.get(), instance_compilation_name.c_str(),
+                transaction.get(), mdl_compiler.get(), context.get(), instance_compilation_name.c_str(),
                 "backface.scattering.tint", "tint");
             generate_cuda_ptx(
-                transaction.get(), mdl_compiler.get(), instance_compilation_name.c_str(),
+                transaction.get(), mdl_compiler.get(), context.get(), instance_compilation_name.c_str(),
                 "backface.scattering.tint", "tint");
             generate_cuda_ptx(
-                transaction.get(), mdl_compiler.get(), class_compilation_name.c_str(),
+                transaction.get(), mdl_compiler.get(), context.get(), class_compilation_name.c_str(),
                 "backface.scattering.tint", "tint");
         }
 

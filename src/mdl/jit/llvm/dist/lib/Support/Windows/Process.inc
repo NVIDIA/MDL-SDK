@@ -149,7 +149,7 @@ void Process::PreventCoreFiles() {
 
 /// Returns the environment variable \arg Name's value as a string encoded in
 /// UTF-8. \arg Name is assumed to be in UTF-8 encoding.
-Optional<MISTD::string> Process::GetEnv(StringRef Name) {
+Optional<std::string> Process::GetEnv(StringRef Name) {
   // Convert the argument to UTF-16 to pass it to _wgetenv().
   SmallVector<wchar_t, 128> NameUTF16;
   if (error_code ec = windows::UTF8ToUTF16(Name, NameUTF16))
@@ -175,7 +175,7 @@ Optional<MISTD::string> Process::GetEnv(StringRef Name) {
   SmallVector<char, MAX_PATH> Res;
   if (error_code ec = windows::UTF16ToUTF8(Buf.data(), Size, Res))
     return None;
-  return MISTD::string(Res.data());
+  return std::string(Res.data());
 }
 
 error_code

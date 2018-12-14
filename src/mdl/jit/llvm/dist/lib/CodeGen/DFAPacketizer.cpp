@@ -161,7 +161,7 @@ void VLIWPacketizerList::PacketizeMIs(MachineBasicBlock *MBB,
   assert(VLIWScheduler && "VLIW Scheduler is not initialized!");
   VLIWScheduler->startBlock(MBB);
   VLIWScheduler->enterRegion(MBB, BeginItr, EndItr,
-                             MISTD::distance(BeginItr, EndItr));
+                             std::distance(BeginItr, EndItr));
   VLIWScheduler->schedule();
 
   // Generate MI -> SU map.
@@ -194,7 +194,7 @@ void VLIWPacketizerList::PacketizeMIs(MachineBasicBlock *MBB,
     bool ResourceAvail = ResourceTracker->canReserveResources(MI);
     if (ResourceAvail) {
       // Dependency check for MI with instructions in CurrentPacketMIs.
-      for (MISTD::vector<MachineInstr*>::iterator VI = CurrentPacketMIs.begin(),
+      for (std::vector<MachineInstr*>::iterator VI = CurrentPacketMIs.begin(),
            VE = CurrentPacketMIs.end(); VI != VE; ++VI) {
         MachineInstr *MJ = *VI;
         SUnit *SUJ = MIToSUnit[MJ];

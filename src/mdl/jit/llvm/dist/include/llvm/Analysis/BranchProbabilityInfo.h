@@ -110,7 +110,7 @@ public:
 private:
   // Since we allow duplicate edges from one basic block to another, we use
   // a pair (PredBlock and an index in the successors) to specify an edge.
-  typedef MISTD::pair<const BasicBlock *, unsigned> Edge;
+  typedef std::pair<const BasicBlock *, unsigned> Edge;
 
   // Default weight value. Used when we don't have information about the edge.
   // TODO: DEFAULT_WEIGHT makes sense during static predication, when none of

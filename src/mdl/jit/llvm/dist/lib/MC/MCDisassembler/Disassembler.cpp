@@ -41,7 +41,7 @@ LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
                                          LLVMOpInfoCallback GetOpInfo,
                                          LLVMSymbolLookupCallback SymbolLookUp){
   // Get the target.
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(Triple, Error);
   if (!TheTarget)
     return 0;
@@ -60,7 +60,7 @@ LLVMDisasmContextRef LLVMCreateDisasmCPU(const char *Triple, const char *CPU,
     return 0;
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
 
   const MCSubtargetInfo *STI = TheTarget->createMCSubtargetInfo(Triple, CPU,
                                                                 FeaturesStr);
@@ -196,7 +196,7 @@ static int getItineraryLatency(LLVMDisasmContext *DC, const MCInst &Inst) {
   int Latency = 0;
   for (unsigned OpIdx = 0, OpIdxEnd = Inst.getNumOperands(); OpIdx != OpIdxEnd;
        ++OpIdx)
-    Latency = MISTD::max(Latency, IID.getOperandCycle(SCClass, OpIdx));
+    Latency = std::max(Latency, IID.getOperandCycle(SCClass, OpIdx));
 
   return Latency;
 }
@@ -232,7 +232,7 @@ static int getLatency(LLVMDisasmContext *DC, const MCInst &Inst) {
     // Lookup the definition's write latency in SubtargetInfo.
     const MCWriteLatencyEntry *WLEntry = STI->getWriteLatencyEntry(SCDesc,
                                                                    DefIdx);
-    Latency = MISTD::max(Latency, WLEntry->Cycles);
+    Latency = std::max(Latency, WLEntry->Cycles);
   }
 
   return Latency;
@@ -300,7 +300,7 @@ size_t LLVMDisasmInstruction(LLVMDisasmContextRef DCR, uint8_t *Bytes,
     emitComments(DC, FormattedOS);
 
     assert(OutStringSize != 0 && "Output buffer cannot be zero size");
-    size_t OutputSize = MISTD::min(OutStringSize-1, InsnStr.size());
+    size_t OutputSize = std::min(OutStringSize-1, InsnStr.size());
     ::memcpy(OutString, InsnStr.data(), OutputSize);
     OutString[OutputSize] = '\0'; // Terminate string.
 

@@ -44,20 +44,20 @@ enum ZeroBehavior {
 /// \param ZB the behavior on an input of 0. Only ZB_Width and ZB_Undefined are
 ///   valid arguments.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     !MISTD::numeric_limits<T>::is_signed, MISTD::size_t>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     !std::numeric_limits<T>::is_signed, std::size_t>::type
 countTrailingZeros(T Val, ZeroBehavior ZB = ZB_Width) {
   (void)ZB;
 
   if (!Val)
-    return MISTD::numeric_limits<T>::digits;
+    return std::numeric_limits<T>::digits;
   if (Val & 0x1)
     return 0;
 
   // Bisection method.
-  MISTD::size_t ZeroBits = 0;
-  T Shift = MISTD::numeric_limits<T>::digits >> 1;
-  T Mask = MISTD::numeric_limits<T>::max() >> Shift;
+  std::size_t ZeroBits = 0;
+  T Shift = std::numeric_limits<T>::digits >> 1;
+  T Mask = std::numeric_limits<T>::max() >> Shift;
   while (Shift) {
     if ((Val & Mask) == 0) {
       Val >>= Shift;
@@ -71,13 +71,13 @@ countTrailingZeros(T Val, ZeroBehavior ZB = ZB_Width) {
 
 // Disable signed.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     MISTD::numeric_limits<T>::is_signed, MISTD::size_t>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     std::numeric_limits<T>::is_signed, std::size_t>::type
 countTrailingZeros(T Val, ZeroBehavior ZB = ZB_Width) LLVM_DELETED_FUNCTION;
 
 #if __GNUC__ >= 4 || _MSC_VER
 template <>
-inline MISTD::size_t countTrailingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB) {
+inline std::size_t countTrailingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB) {
   if (ZB != ZB_Undefined && Val == 0)
     return 32;
 
@@ -92,7 +92,7 @@ inline MISTD::size_t countTrailingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB)
 
 #if !defined(_MSC_VER) || defined(_M_X64)
 template <>
-inline MISTD::size_t countTrailingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB) {
+inline std::size_t countTrailingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB) {
   if (ZB != ZB_Undefined && Val == 0)
     return 64;
 
@@ -115,17 +115,17 @@ inline MISTD::size_t countTrailingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB)
 /// \param ZB the behavior on an input of 0. Only ZB_Width and ZB_Undefined are
 ///   valid arguments.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     !MISTD::numeric_limits<T>::is_signed, MISTD::size_t>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     !std::numeric_limits<T>::is_signed, std::size_t>::type
 countLeadingZeros(T Val, ZeroBehavior ZB = ZB_Width) {
   (void)ZB;
 
   if (!Val)
-    return MISTD::numeric_limits<T>::digits;
+    return std::numeric_limits<T>::digits;
 
   // Bisection method.
-  MISTD::size_t ZeroBits = 0;
-  for (T Shift = MISTD::numeric_limits<T>::digits >> 1; Shift; Shift >>= 1) {
+  std::size_t ZeroBits = 0;
+  for (T Shift = std::numeric_limits<T>::digits >> 1; Shift; Shift >>= 1) {
     T Tmp = Val >> Shift;
     if (Tmp)
       Val = Tmp;
@@ -137,13 +137,13 @@ countLeadingZeros(T Val, ZeroBehavior ZB = ZB_Width) {
 
 // Disable signed.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     MISTD::numeric_limits<T>::is_signed, MISTD::size_t>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     std::numeric_limits<T>::is_signed, std::size_t>::type
 countLeadingZeros(T Val, ZeroBehavior ZB = ZB_Width) LLVM_DELETED_FUNCTION;
 
 #if __GNUC__ >= 4 || _MSC_VER
 template <>
-inline MISTD::size_t countLeadingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB) {
+inline std::size_t countLeadingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB) {
   if (ZB != ZB_Undefined && Val == 0)
     return 32;
 
@@ -158,7 +158,7 @@ inline MISTD::size_t countLeadingZeros<uint32_t>(uint32_t Val, ZeroBehavior ZB) 
 
 #if !defined(_MSC_VER) || defined(_M_X64)
 template <>
-inline MISTD::size_t countLeadingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB) {
+inline std::size_t countLeadingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB) {
   if (ZB != ZB_Undefined && Val == 0)
     return 64;
 
@@ -181,19 +181,19 @@ inline MISTD::size_t countLeadingZeros<uint64_t>(uint64_t Val, ZeroBehavior ZB) 
 /// \param ZB the behavior on an input of 0. Only ZB_Max and ZB_Undefined are
 ///   valid arguments.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     !MISTD::numeric_limits<T>::is_signed, T>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     !std::numeric_limits<T>::is_signed, T>::type
 findFirstSet(T Val, ZeroBehavior ZB = ZB_Max) {
   if (ZB == ZB_Max && Val == 0)
-    return MISTD::numeric_limits<T>::max();
+    return std::numeric_limits<T>::max();
 
   return countTrailingZeros(Val, ZB_Undefined);
 }
 
 // Disable signed.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     MISTD::numeric_limits<T>::is_signed, T>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     std::numeric_limits<T>::is_signed, T>::type
 findFirstSet(T Val, ZeroBehavior ZB = ZB_Max) LLVM_DELETED_FUNCTION;
 
 /// \brief Get the index of the last set bit starting from the least
@@ -204,22 +204,22 @@ findFirstSet(T Val, ZeroBehavior ZB = ZB_Max) LLVM_DELETED_FUNCTION;
 /// \param ZB the behavior on an input of 0. Only ZB_Max and ZB_Undefined are
 ///   valid arguments.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     !MISTD::numeric_limits<T>::is_signed, T>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     !std::numeric_limits<T>::is_signed, T>::type
 findLastSet(T Val, ZeroBehavior ZB = ZB_Max) {
   if (ZB == ZB_Max && Val == 0)
-    return MISTD::numeric_limits<T>::max();
+    return std::numeric_limits<T>::max();
 
   // Use ^ instead of - because both gcc and llvm can remove the associated ^
   // in the __builtin_clz intrinsic on x86.
   return countLeadingZeros(Val, ZB_Undefined) ^
-         (MISTD::numeric_limits<T>::digits - 1);
+         (std::numeric_limits<T>::digits - 1);
 }
 
 // Disable signed.
 template <typename T>
-typename enable_if_c<MISTD::numeric_limits<T>::is_integer &&
-                     MISTD::numeric_limits<T>::is_signed, T>::type
+typename enable_if_c<std::numeric_limits<T>::is_integer &&
+                     std::numeric_limits<T>::is_signed, T>::type
 findLastSet(T Val, ZeroBehavior ZB = ZB_Max) LLVM_DELETED_FUNCTION;
 
 /// \brief Macro compressed bit reversal table for 256 bits.
@@ -607,7 +607,7 @@ inline int64_t SignExtend64(uint64_t X, unsigned B) {
 #if defined(_MSC_VER)
   // Visual Studio defines the HUGE_VAL class of macros using purposeful
   // constant arithmetic overflow, which it then warns on when encountered.
-  const float huge_valf = MISTD::numeric_limits<float>::infinity();
+  const float huge_valf = std::numeric_limits<float>::infinity();
 #else
   const float huge_valf = HUGE_VALF;
 #endif

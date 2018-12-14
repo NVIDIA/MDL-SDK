@@ -33,7 +33,7 @@ class TypeFinder {
   DenseSet<const Value*> VisitedConstants;
   DenseSet<Type*> VisitedTypes;
 
-  MISTD::vector<StructType*> StructTypes;
+  std::vector<StructType*> StructTypes;
   bool OnlyNamed;
 
 public:
@@ -42,8 +42,8 @@ public:
   void run(const Module &M, bool onlyNamed);
   void clear();
 
-  typedef MISTD::vector<StructType*>::iterator iterator;
-  typedef MISTD::vector<StructType*>::const_iterator const_iterator;
+  typedef std::vector<StructType*>::iterator iterator;
+  typedef std::vector<StructType*>::const_iterator const_iterator;
 
   iterator begin() { return StructTypes.begin(); }
   iterator end() { return StructTypes.end(); }

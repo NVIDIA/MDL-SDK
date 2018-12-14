@@ -326,7 +326,7 @@ bool X86AsmBackend::writeNopData(uint64_t Count, MCObjectWriter *OW) const {
   // 15 is the longest single nop instruction.  Emit as many 15-byte nops as
   // needed, then emit a nop of the remaining length.
   do {
-    const uint8_t ThisNopLength = (uint8_t) MISTD::min(Count, (uint64_t) 15);
+    const uint8_t ThisNopLength = (uint8_t) std::min(Count, (uint64_t) 15);
     const uint8_t Prefixes = ThisNopLength <= 10 ? 0 : ThisNopLength - 10;
     for (uint8_t i = 0; i < Prefixes; i++)
       OW->Write8(0x66);
@@ -495,7 +495,7 @@ protected:
         //     .cfi_def_cfa_offset 80
         //
         PrevStackSize = StackSize;
-        StackSize = MISTD::abs(Inst.getOffset()) / StackDivide;
+        StackSize = std::abs(Inst.getOffset()) / StackDivide;
         ++NumDefCFAOffsets;
         break;
       }
@@ -578,7 +578,7 @@ protected:
       }
 
       // Encode the number of registers saved. (Reverse the list first.)
-      MISTD::reverse(&SavedRegs[0], &SavedRegs[SavedRegIdx]);
+      std::reverse(&SavedRegs[0], &SavedRegs[SavedRegIdx]);
       CompactUnwindEncoding |= (SavedRegIdx & 0x7) << 10;
 
       // Get the encoding of the saved registers when we don't have a frame
@@ -660,7 +660,7 @@ private:
     }
 
     // Reverse the list.
-    MISTD::reverse(&SavedRegs[0], &SavedRegs[CU_NUM_SAVED_REGS]);
+    std::reverse(&SavedRegs[0], &SavedRegs[CU_NUM_SAVED_REGS]);
 
     uint32_t RenumRegs[CU_NUM_SAVED_REGS];
     for (unsigned i = CU_NUM_SAVED_REGS - RegCount; i < CU_NUM_SAVED_REGS; ++i){

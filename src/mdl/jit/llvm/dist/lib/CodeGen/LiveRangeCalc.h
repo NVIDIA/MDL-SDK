@@ -48,7 +48,7 @@ class LiveRangeCalc {
 
   /// LiveOutPair - A value and the block that defined it.  The domtree node is
   /// redundant, it can be computed as: MDT[Indexes.getMBBFromIndex(VNI->def)].
-  typedef MISTD::pair<VNInfo*, MachineDomTreeNode*> LiveOutPair;
+  typedef std::pair<VNInfo*, MachineDomTreeNode*> LiveOutPair;
 
   /// LiveOutMap - Map basic blocks to the value leaving the block.
   typedef IndexedMap<LiveOutPair, MBB2NumberFunctor> LiveOutMap;

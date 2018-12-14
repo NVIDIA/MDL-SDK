@@ -61,7 +61,7 @@ class Target_value_layout;
 struct Callable_function_info
 {
     Callable_function_info(
-        MISTD::string const &name,
+        std::string const &name,
         mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
         mi::neuraylib::ITarget_code::Function_kind kind,
         mi::Size arg_block_index)
@@ -72,7 +72,7 @@ struct Callable_function_info
     {}
 
     /// The name of the callable function.
-    MISTD::string m_name;
+    std::string m_name;
 
     /// The distribution kind of the callable function.
     mi::neuraylib::ITarget_code::Distribution_kind m_dist_kind;
@@ -82,7 +82,7 @@ struct Callable_function_info
 
     /// The prototypes for the different languages according to
     /// #mi::neuraylib::ITarget_code::Prototype_language.
-    MISTD::vector<MISTD::string> m_prototypes;
+    std::vector<std::string> m_prototypes;
 
     /// The index of the target argument block associated with this function, or ~0 if not used.
     mi::Size m_arg_block_index;
@@ -95,16 +95,18 @@ public:
 
     /// Constructor from executable code.
     ///
-    /// \param code            MDL generated executable code
-    /// \param transaction     the current transaction
-    /// \param string_ids      True, if string arguments inside target argument blocks
-    ///                        are mapped to identifiers
+    /// \param code             MDL generated executable code
+    /// \param transaction      the current transaction
+    /// \param string_ids       True if string arguments inside target argument blocks
+    ///                         are mapped to identifiers
+    /// \param use_derivatives  True if derivative support is enabled for the generated code
     /// \param use_builtin_resource_handler True, if the builtin texture runtime is supposed to be
-    ///                        used when running x86 code.
+    ///                         used when running x86 code.
     Target_code(
         mi::mdl::IGenerated_code_executable* code,
         MI::DB::Transaction* transaction,
         bool string_ids,
+        bool use_derivatives,
         bool use_builtin_resource_handler);
 
 
@@ -117,7 +119,8 @@ public:
 
     /// Finalization method for link mode for executable code.
     void finalize( mi::mdl::IGenerated_code_executable* code,
-        MI::DB::Transaction* transaction);
+        MI::DB::Transaction* transaction,
+        bool use_derivatives);
 
 
     // API methods
@@ -499,7 +502,7 @@ public:
     ///
     /// \return  The index of this function.
     size_t add_function( 
-        const MISTD::string& name, 
+        const std::string& name, 
         Distribution_kind dist_kind, 
         Function_kind kind, 
         mi::Size arg_block_index);
@@ -509,32 +512,32 @@ public:
     /// \param index  the index of the callable function
     /// \param lang   the language of the prototype being set
     /// \param proto  the function prototype
-    void set_function_prototype( size_t index, Prototype_language lang, const MISTD::string& proto);
+    void set_function_prototype( size_t index, Prototype_language lang, const std::string& proto);
 
     /// Registers a used texture index.
     ///
     /// \param index  the texture index as used in compiled code
     /// \param name   the name of the DB element this index refers to.
     /// \param shape  the texture shape of the texture
-    void add_texture_index( size_t index, const MISTD::string& name, Texture_shape shape);
+    void add_texture_index( size_t index, const std::string& name, Texture_shape shape);
 
     /// Registers a used light profile index.
     ///
     /// \param index  the texture index as used in compiled code
     /// \param name   the name of the DB element this index refers to.
-    void add_light_profile_index( size_t index, const MISTD::string& name);
+    void add_light_profile_index( size_t index, const std::string& name);
 
     /// Registers a used bsdf measurement index.
     ///
     /// \param index  the texture index as used in compiled code
     /// \param name   the name of the DB element this index refers to.
-    void add_bsdf_measurement_index( size_t index, const MISTD::string& name);
+    void add_bsdf_measurement_index( size_t index, const std::string& name);
 
     /// Registers a used string constant index.
     ///
     /// \param index  the string constant index as used in compiled code
     /// \param scons  the string constant this index refers to.
-    void add_string_constant_index(size_t index, const MISTD::string& scons);
+    void add_string_constant_index(size_t index, const std::string& scons);
 
     /// Add a new read-only data segment.
     ///
@@ -586,26 +589,26 @@ private:
     mutable mi::base::Handle<mi::mdl::IGenerated_code_lambda_function> m_native_code;
 
     /// The code.
-    MISTD::string m_code;
+    std::string m_code;
 
     /// The code segments if any.
-    MISTD::vector<MISTD::string> m_code_segments;
+    std::vector<std::string> m_code_segments;
 
     /// The code segments descriptions if any.
-    MISTD::vector<MISTD::string> m_code_segment_descriptions;
+    std::vector<std::string> m_code_segment_descriptions;
 
-    typedef MISTD::map<MISTD::string, size_t> Function_map;
+    typedef std::map<std::string, size_t> Function_map;
 
     /// The map of callable functions (to ensure that m_callable_functions contains unique entries).
     Function_map m_callable_function_map;
 
     /// The list of all callable function infos.
-    MISTD::vector<Callable_function_info> m_callable_function_infos;
+    std::vector<Callable_function_info> m_callable_function_infos;
 
     /// Helper value type for texture entries.
     struct Texture_info {
         /// Constructor.
-        Texture_info(MISTD::string const &db_name, Texture_shape shape)
+        Texture_info(std::string const &db_name, Texture_shape shape)
         : m_db_name(db_name), m_texture_shape(shape)
         {
         }
@@ -624,7 +627,7 @@ private:
 
     private:
         /// The db name of the texture.
-        MISTD::string  m_db_name;
+        std::string  m_db_name;
 
         /// The shape of the texture.
         Texture_shape   m_texture_shape;
@@ -649,16 +652,16 @@ private:
         const mi::neuraylib::ITarget_argument_block *cap_args) const;
 
     /// The texture resource table.
-    MISTD::vector<Texture_info> m_texture_table;
+    std::vector<Texture_info> m_texture_table;
 
     /// The light profile resource table.
-    MISTD::vector<MISTD::string> m_light_profile_table;
+    std::vector<std::string> m_light_profile_table;
 
     /// The bsdf measurement resource table.
-    MISTD::vector<MISTD::string> m_bsdf_measurement_table;
+    std::vector<std::string> m_bsdf_measurement_table;
 
     /// The string constant table.
-    MISTD::vector<MISTD::string> m_string_constant_table;
+    std::vector<std::string> m_string_constant_table;
 
     /// Helper class for handling segments.
     class Segment {
@@ -685,22 +688,22 @@ private:
         mi::Size get_size() const { return m_size; }
 
     private:
-        MISTD::string m_name;
+        std::string m_name;
         const unsigned char* m_data;
         mi::Size m_size;
     };
 
     /// The list of all segments.
-    MISTD::vector<Segment> m_data_segments;
+    std::vector<Segment> m_data_segments;
 
     /// The list of all segment data blobs.
-    MISTD::vector<const unsigned char*> m_data;
+    std::vector<const unsigned char*> m_data;
 
     /// The layouts of the captured arguments blocks.
-    MISTD::vector<mi::base::Handle<MI::BACKENDS::Target_value_layout const> > m_cap_arg_layouts;
+    std::vector<mi::base::Handle<MI::BACKENDS::Target_value_layout const> > m_cap_arg_layouts;
 
     /// The captured arguments blocks.
-    MISTD::vector<mi::base::Handle<mi::neuraylib::ITarget_argument_block> > m_cap_arg_blocks;
+    std::vector<mi::base::Handle<mi::neuraylib::ITarget_argument_block> > m_cap_arg_blocks;
 
     /// The resource handler if any.
     MDLRT::Resource_handler *m_rh;

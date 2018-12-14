@@ -82,7 +82,7 @@ TEST(SmallPtrSetTest, SwapTest) {
   a.insert(&buf[1]);
   b.insert(&buf[2]);
 
-  MISTD::swap(a, b);
+  std::swap(a, b);
 
   EXPECT_EQ(1U, a.size());
   EXPECT_EQ(2U, b.size());
@@ -91,7 +91,7 @@ TEST(SmallPtrSetTest, SwapTest) {
   EXPECT_TRUE(b.count(&buf[1]));
 
   b.insert(&buf[3]);
-  MISTD::swap(a, b);
+  std::swap(a, b);
 
   EXPECT_EQ(3U, a.size());
   EXPECT_EQ(1U, b.size());
@@ -100,7 +100,7 @@ TEST(SmallPtrSetTest, SwapTest) {
   EXPECT_TRUE(a.count(&buf[3]));
   EXPECT_TRUE(b.count(&buf[2]));
 
-  MISTD::swap(a, b);
+  std::swap(a, b);
 
   EXPECT_EQ(1U, a.size());
   EXPECT_EQ(3U, b.size());
@@ -113,7 +113,7 @@ TEST(SmallPtrSetTest, SwapTest) {
   a.insert(&buf[5]);
   a.insert(&buf[6]);
 
-  MISTD::swap(b, a);
+  std::swap(b, a);
 
   EXPECT_EQ(3U, a.size());
   EXPECT_EQ(4U, b.size());

@@ -30,7 +30,7 @@ class LLVMContext;
 /// run the verifier after parsing the file to check that it is okay.
 /// @brief Parse LLVM Assembly from a file
 Module *ParseAssemblyFile(
-  const MISTD::string &Filename, ///< The name of the file to parse
+  const std::string &Filename, ///< The name of the file to parse
   SMDiagnostic &Error,         ///< Error result info.
   LLVMContext &Context         ///< Context in which to allocate globals info.
 );

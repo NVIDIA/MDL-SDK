@@ -73,8 +73,8 @@ private:
   /// that are "live". These nodes must be scheduled before any other nodes that
   /// modifies the registers can be scheduled.
   unsigned NumLiveRegs;
-  MISTD::vector<SUnit*> LiveRegDefs;
-  MISTD::vector<unsigned> LiveRegCycles;
+  std::vector<SUnit*> LiveRegDefs;
+  std::vector<unsigned> LiveRegCycles;
 
 public:
   ScheduleDAGFast(MachineFunction &mf)
@@ -361,7 +361,7 @@ SUnit *ScheduleDAGFast::CopyAndMoveSuccessors(SUnit *SU) {
 
   // Only copy scheduled successors. Cut them from old node's successor
   // list and move them over.
-  SmallVector<MISTD::pair<SUnit *, SDep>, 4> DelDeps;
+  SmallVector<std::pair<SUnit *, SDep>, 4> DelDeps;
   for (SUnit::succ_iterator I = SU->Succs.begin(), E = SU->Succs.end();
        I != E; ++I) {
     if (I->isArtificial())
@@ -372,7 +372,7 @@ SUnit *ScheduleDAGFast::CopyAndMoveSuccessors(SUnit *SU) {
       D.setSUnit(NewSU);
       AddPred(SuccSU, D);
       D.setSUnit(SU);
-      DelDeps.push_back(MISTD::make_pair(SuccSU, D));
+      DelDeps.push_back(std::make_pair(SuccSU, D));
     }
   }
   for (unsigned i = 0, e = DelDeps.size(); i != e; ++i)
@@ -398,7 +398,7 @@ void ScheduleDAGFast::InsertCopiesAndMoveSuccs(SUnit *SU, unsigned Reg,
 
   // Only copy scheduled successors. Cut them from old node's successor
   // list and move them over.
-  SmallVector<MISTD::pair<SUnit *, SDep>, 4> DelDeps;
+  SmallVector<std::pair<SUnit *, SDep>, 4> DelDeps;
   for (SUnit::succ_iterator I = SU->Succs.begin(), E = SU->Succs.end();
        I != E; ++I) {
     if (I->isArtificial())
@@ -408,7 +408,7 @@ void ScheduleDAGFast::InsertCopiesAndMoveSuccs(SUnit *SU, unsigned Reg,
       SDep D = *I;
       D.setSUnit(CopyToSU);
       AddPred(SuccSU, D);
-      DelDeps.push_back(MISTD::make_pair(SuccSU, *I));
+      DelDeps.push_back(std::make_pair(SuccSU, *I));
     }
   }
   for (unsigned i = 0, e = DelDeps.size(); i != e; ++i) {
@@ -446,7 +446,7 @@ static EVT getPhysicalRegisterVT(SDNode *N, unsigned Reg,
 /// CheckForLiveRegDef - Return true and update live register vector if the
 /// specified register def of the specified SUnit clobbers any "live" registers.
 static bool CheckForLiveRegDef(SUnit *SU, unsigned Reg,
-                               MISTD::vector<SUnit*> &LiveRegDefs,
+                               std::vector<SUnit*> &LiveRegDefs,
                                SmallSet<unsigned, 4> &RegAdded,
                                SmallVectorImpl<unsigned> &LRegs,
                                const TargetRegisterInfo *TRI) {
@@ -551,7 +551,7 @@ void ScheduleDAGFast::ListScheduleBottomUp() {
       if (!DelayForLiveRegsBottomUp(CurSU, LRegs))
         break;
       Delayed = true;
-      LRegsMap.insert(MISTD::make_pair(CurSU, LRegs));
+      LRegsMap.insert(std::make_pair(CurSU, LRegs));
 
       CurSU->isPending = true;  // This SU is not in AvailableQueue right now.
       NotReady.push_back(CurSU);
@@ -628,7 +628,7 @@ void ScheduleDAGFast::ListScheduleBottomUp() {
   }
 
   // Reverse the order since it is bottom up.
-  MISTD::reverse(Sequence.begin(), Sequence.end());
+  std::reverse(Sequence.begin(), Sequence.end());
 
 #ifndef NDEBUG
   VerifyScheduledSequence(/*isBottomUp=*/true);
@@ -651,7 +651,7 @@ public:
   MachineBasicBlock *EmitSchedule(MachineBasicBlock::iterator &InsertPos);
 
 private:
-  MISTD::vector<SDNode*> Sequence;
+  std::vector<SDNode*> Sequence;
   DenseMap<SDNode*, SDNode*> GluedMap;  // Cache glue to its user
 
   void ScheduleNode(SDNode *N);
@@ -731,7 +731,7 @@ void ScheduleDAGLinearize::Schedule() {
       SDNode *User = findGluedUser(N);
       if (User) {
         Glues.push_back(N);
-        GluedMap.insert(MISTD::make_pair(N, User));
+        GluedMap.insert(std::make_pair(N, User));
       }
     }
 

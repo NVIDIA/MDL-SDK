@@ -162,8 +162,8 @@ inline void Attribute_list::swap(
     Attribute_list& other)			// swap with this
 {
     Parent_type::swap(other);
-    MISTD::swap(m_listsize, other.m_listsize);
-    MISTD::swap(m_listalloc, other.m_listalloc);
+    std::swap(m_listsize, other.m_listsize);
+    std::swap(m_listalloc, other.m_listalloc);
 }
 
 

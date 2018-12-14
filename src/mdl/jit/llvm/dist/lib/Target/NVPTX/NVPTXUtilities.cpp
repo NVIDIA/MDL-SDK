@@ -41,11 +41,11 @@ void NVVMAnnotations::cacheAnnotationFromMD(const MDNode *md, key_val_pair_t &re
     ConstantInt *Val = dyn_cast<ConstantInt>(md->getOperand(i + 1));
     assert(Val && "Value operand not a constant int");
 
-    MISTD::string keyname = prop->getString().str();
+    std::string keyname = prop->getString().str();
     if (retval.find(keyname) != retval.end())
       retval[keyname].push_back(Val->getZExtValue());
     else {
-      MISTD::vector<unsigned> tmp;
+      std::vector<unsigned> tmp;
       tmp.push_back(Val->getZExtValue());
       retval[keyname] = tmp;
     }
@@ -83,7 +83,7 @@ void NVVMAnnotations::cacheAnnotationFromMD(const Module *m, const GlobalValue *
   }
 }
 
-bool NVVMAnnotations::findOneNVVMAnnotation(const GlobalValue *gv, MISTD::string prop,
+bool NVVMAnnotations::findOneNVVMAnnotation(const GlobalValue *gv, std::string prop,
                                             unsigned &retval) const {
   const Module *m = gv->getParent();
   if (Cache.find(m) == Cache.end())
@@ -96,8 +96,8 @@ bool NVVMAnnotations::findOneNVVMAnnotation(const GlobalValue *gv, MISTD::string
   return true;
 }
 
-bool NVVMAnnotations::findAllNVVMAnnotation(const GlobalValue *gv, MISTD::string prop,
-                                            MISTD::vector<unsigned> &retval) const {
+bool NVVMAnnotations::findAllNVVMAnnotation(const GlobalValue *gv, std::string prop,
+                                            std::vector<unsigned> &retval) const {
   const Module *m = gv->getParent();
   if (Cache.find(m) == Cache.end())
     cacheAnnotationFromMD(m, gv);
@@ -147,11 +147,11 @@ bool NVVMAnnotations::isSampler(const Value &val) const {
   }
   if (const Argument *arg = dyn_cast<Argument>(&val)) {
     const Function *func = arg->getParent();
-    MISTD::vector<unsigned> annot;
+    std::vector<unsigned> annot;
     if (findAllNVVMAnnotation(
             func, PropertyAnnotationNames[PROPERTY_ISSAMPLER],
             annot)) {
-      if (MISTD::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
+      if (std::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
         return true;
     }
   }
@@ -161,12 +161,12 @@ bool NVVMAnnotations::isSampler(const Value &val) const {
 bool NVVMAnnotations::isImageReadOnly(const Value &val) const {
   if (const Argument *arg = dyn_cast<Argument>(&val)) {
     const Function *func = arg->getParent();
-    MISTD::vector<unsigned> annot;
+    std::vector<unsigned> annot;
     if (findAllNVVMAnnotation(func,
                               PropertyAnnotationNames[
                                   PROPERTY_ISREADONLY_IMAGE_PARAM],
                               annot)) {
-      if (MISTD::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
+      if (std::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
         return true;
     }
   }
@@ -176,12 +176,12 @@ bool NVVMAnnotations::isImageReadOnly(const Value &val) const {
 bool NVVMAnnotations::isImageWriteOnly(const Value &val) const {
   if (const Argument *arg = dyn_cast<Argument>(&val)) {
     const Function *func = arg->getParent();
-    MISTD::vector<unsigned> annot;
+    std::vector<unsigned> annot;
     if (findAllNVVMAnnotation(func,
                               PropertyAnnotationNames[
                                   PROPERTY_ISWRITEONLY_IMAGE_PARAM],
                               annot)) {
-      if (MISTD::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
+      if (std::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
         return true;
     }
   }
@@ -191,12 +191,12 @@ bool NVVMAnnotations::isImageWriteOnly(const Value &val) const {
 bool NVVMAnnotations::isImageReadWrite(const llvm::Value &val) const {
   if (const Argument *arg = dyn_cast<Argument>(&val)) {
     const Function *func = arg->getParent();
-    MISTD::vector<unsigned> annot;
+    std::vector<unsigned> annot;
     if (findAllNVVMAnnotation(func,
                               PropertyAnnotationNames[
                                   PROPERTY_ISREADWRITE_IMAGE_PARAM],
                               annot)) {
-      if (MISTD::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
+      if (std::find(annot.begin(), annot.end(), arg->getArgNo()) != annot.end())
         return true;
     }
   }
@@ -271,7 +271,7 @@ bool NVVMAnnotations::isKernelFunction(const Function &F) const {
 }
 
 bool NVVMAnnotations::getAlign(const Function &F, unsigned index, unsigned &align) const {
-  MISTD::vector<unsigned> Vs;
+  std::vector<unsigned> Vs;
   bool retval = findAllNVVMAnnotation(
       &F, PropertyAnnotationNames[PROPERTY_ALIGN], Vs);
   if (retval == false)
@@ -305,17 +305,17 @@ bool getAlign(const CallInst &I, unsigned index, unsigned &align) {
   return false;
 }
 
-MISTD::string getTextureName(const Value &val) {
+std::string getTextureName(const Value &val) {
     assert(val.hasName() && "Found texture variable with no name");
     return val.getName();
 }
 
-MISTD::string getSurfaceName(const Value &val) {
+std::string getSurfaceName(const Value &val) {
     assert(val.hasName() && "Found surface variable with no name");
     return val.getName();
 }
 
-MISTD::string getSamplerName(const Value &val) {
+std::string getSamplerName(const Value &val) {
     assert(val.hasName() && "Found sampler variable with no name");
     return val.getName();
 }
@@ -374,7 +374,7 @@ skipPointerTransfer(const Value *V, bool ignore_GEP_indices) {
 // - tracking PHINode
 // which could be used in simple alias disambigurate.
 const Value *
-skipPointerTransfer(const Value *V, MISTD::set<const Value *> &processed) {
+skipPointerTransfer(const Value *V, std::set<const Value *> &processed) {
   if (processed.find(V) != processed.end())
     return NULL;
   processed.insert(V);
@@ -483,7 +483,7 @@ void dumpInst(Value *base, char *instName) {
 }
 
 // Dump an instruction and all dependent instructions
-void dumpInstRec(Value *v, MISTD::set<Instruction *> *visited) {
+void dumpInstRec(Value *v, std::set<Instruction *> *visited) {
   if (Instruction *I = dyn_cast<Instruction>(v)) {
 
     if (visited->find(I) != visited->end())
@@ -500,7 +500,7 @@ void dumpInstRec(Value *v, MISTD::set<Instruction *> *visited) {
 
 // Dump an instruction and all dependent instructions
 void dumpInstRec(Value *v) {
-  MISTD::set<Instruction *> visited;
+  std::set<Instruction *> visited;
 
   //BasicBlock *B = getParentBlock(v);
 

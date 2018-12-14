@@ -34,10 +34,10 @@
 #include "llvm/Support/system_error.h"
 using namespace llvm;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::init("-"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
@@ -122,13 +122,13 @@ int main(int argc, char **argv) {
 
   cl::ParseCommandLineOptions(argc, argv, "llvm .bc -> .ll disassembler\n");
 
-  MISTD::string ErrorMessage;
+  std::string ErrorMessage;
   OwningPtr<Module> M;
 
   // Use the bitcode streaming interface
   DataStreamer *streamer = getDataFileStreamer(InputFilename, &ErrorMessage);
   if (streamer) {
-    MISTD::string DisplayFilename;
+    std::string DisplayFilename;
     if (InputFilename == "-")
       DisplayFilename = "<stdin>";
     else
@@ -157,17 +157,17 @@ int main(int argc, char **argv) {
     if (InputFilename == "-") {
       OutputFilename = "-";
     } else {
-      const MISTD::string &IFN = InputFilename;
+      const std::string &IFN = InputFilename;
       int Len = IFN.length();
       // If the source ends in .bc, strip it off.
       if (IFN[Len-3] == '.' && IFN[Len-2] == 'b' && IFN[Len-1] == 'c')
-        OutputFilename = MISTD::string(IFN.begin(), IFN.end()-3)+".ll";
+        OutputFilename = std::string(IFN.begin(), IFN.end()-3)+".ll";
       else
         OutputFilename = IFN+".ll";
     }
   }
 
-  MISTD::string ErrorInfo;
+  std::string ErrorInfo;
   OwningPtr<tool_output_file> Out(new tool_output_file(
       OutputFilename.c_str(), ErrorInfo, sys::fs::F_Binary));
   if (!ErrorInfo.empty()) {

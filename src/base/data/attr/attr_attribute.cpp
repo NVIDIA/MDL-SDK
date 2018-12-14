@@ -47,7 +47,7 @@
 namespace MI {
 namespace ATTR {
 
-using namespace MISTD;
+using namespace std;
 using namespace LOG;
 using namespace CONT;
 
@@ -459,8 +459,8 @@ SERIAL::Serializable* Attribute::deserialize(
 // dump attribute to debug messages, for debugging only.
 void Attribute::dump() const
 {
-    MISTD::string head("attribute id ");
-    head += MISTD::to_string(m_id);
+    std::string head("attribute id ");
+    head += std::to_string(m_id);
     if(m_global)
         head += " global";
     if(m_override)

@@ -1,0 +1,1420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:trolltech="urn:trolltech:names:ts:document:1.0">
+  <file original="" datatype="plaintext" source-language="en" target-language="de"><body>
+    <trans-unit id="0" approved="yes">
+      <source xml:space="preserve">Used to annotate materials as hint for grouping in the ui</source>
+      <target xml:space="preserve">Zur Verwendung von gruppenweiser Annotation von Materialien</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="1" approved="yes">
+      <source xml:space="preserve">Used in light sources to define the emission mode</source>
+      <target xml:space="preserve">Definiert den emissiven Modus einer Lichtquelle </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="2" approved="yes">
+      <source xml:space="preserve">used to define the behavior of Worley noise</source>
+      <target xml:space="preserve">Wird zur Definition von Worley Noise verwendet</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="3" approved="yes">
+      <source xml:space="preserve">Blend colors</source>
+      <target xml:space="preserve">Farbmischung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="4" approved="yes">
+      <source xml:space="preserve">Allows combining textures in varied ways</source>
+      <target xml:space="preserve">Bietet verschiedene Varianten für das Mischen von zwei Farben</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="5" approved="yes">
+      <source xml:space="preserve">NVIDIA Corporation</source>
+      <target xml:space="preserve"></target>
+      <note from="translator">::anno::author(string)</note>
+    </trans-unit>
+    <trans-unit id="6" approved="yes">
+      <source xml:space="preserve">Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.</source>
+      <target xml:space="preserve"></target>
+      <note from="translator">::anno::copyright_notice(string)</note>
+    </trans-unit>
+    <trans-unit id="7" approved="yes">
+      <source xml:space="preserve">Color 1</source>
+      <target xml:space="preserve">Farbe 1</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="8" approved="yes">
+      <source xml:space="preserve">Color 2</source>
+      <target xml:space="preserve">Farbe 2</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="9" approved="yes">
+      <source xml:space="preserve">Describes how Color 1 and Color 2 are combined</source>
+      <target xml:space="preserve">Beschreibt wie Farbe 1 und Farbe 2 kombiniert werden</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="10" approved="yes">
+      <source xml:space="preserve">Blend mode</source>
+      <target xml:space="preserve">Überblendungs-Modus</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="11" approved="yes">
+      <source xml:space="preserve">Defines strength of the effect. At weight of 0, only color 1 will be visible. At weight 1, the blend function will have full effect</source>
+      <target xml:space="preserve">Definiert die Effektstärke. Eine Gewichtung von 0 visualisiert nur Farbe 1. Bei einer Gewichtung von 1 hat die Blend-Funktion die volle Auswirkung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="12" approved="yes">
+      <source xml:space="preserve">Blend weight</source>
+      <target xml:space="preserve">Überblendungs-Gewichtung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="13" approved="yes">
+      <source xml:space="preserve">Bitmap texture</source>
+      <target xml:space="preserve">Bitmap Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="14" approved="yes">
+      <source xml:space="preserve">Allows texturing using image files of various file formats</source>
+      <target xml:space="preserve">Erzeugt eine Bitmap-Textur aus diversen Dateiformaten</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="15" approved="yes">
+      <source xml:space="preserve">Bitmap file</source>
+      <target xml:space="preserve">Bitmap Datei</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="16" approved="yes">
+      <source xml:space="preserve">Bitmap parameters</source>
+      <target xml:space="preserve">Bitmap Parameter</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="17" approved="yes">
+      <source xml:space="preserve">Scalar mode</source>
+      <target xml:space="preserve">Skalarmodus</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="18" approved="yes">
+      <source xml:space="preserve">Defines how the texture applies to scalar parameters</source>
+      <target xml:space="preserve">Definiert die Auswirkung der skalaren Parameter auf die Textur </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="19" approved="yes">
+      <source xml:space="preserve">Brightness</source>
+      <target xml:space="preserve">Helligkeit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="20" approved="yes">
+      <source xml:space="preserve">Contrast</source>
+      <target xml:space="preserve">Kontrast</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="21" approved="yes">
+      <source xml:space="preserve">Controls the scale of the texture on the object</source>
+      <target xml:space="preserve">Kontrolliert die Skalierung der Textur auf dem Objekt</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="22" approved="yes">
+      <source xml:space="preserve">Tiling</source>
+      <target xml:space="preserve">Kachelung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="23" approved="yes">
+      <source xml:space="preserve">Placement</source>
+      <target xml:space="preserve">Platzierung</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="24" approved="yes">
+      <source xml:space="preserve">Controls position of the texture on the object</source>
+      <target xml:space="preserve">Kontrolliert die Position der Textur auf dem Objekt</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="25" approved="yes">
+      <source xml:space="preserve">Offset</source>
+      <target xml:space="preserve">Verschiebung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="26" approved="yes">
+      <source xml:space="preserve">Rotation angle of the texture in degrees</source>
+      <target xml:space="preserve">Rotations-Winkel der Textur in Grad</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="27" approved="yes">
+      <source xml:space="preserve">Rotation</source>
+      <target xml:space="preserve">Rotation</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="28" approved="yes">
+      <source xml:space="preserve">If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0</source>
+      <target xml:space="preserve">Wenn true, wird die Textur nicht repetiert. Der Bereich ausserhalb der Textur wird geschwärzt und die Skalare Wert wird zu 0</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="29" approved="yes">
+      <source xml:space="preserve">Clip</source>
+      <target xml:space="preserve">Clip</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="30" approved="yes">
+      <source xml:space="preserve">Selects a specific UV space</source>
+      <target xml:space="preserve">Markiert einen spezifischen UV Abstand</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="31" approved="yes">
+      <source xml:space="preserve">UV space index</source>
+      <target xml:space="preserve">UV Index</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="32" approved="yes">
+      <source xml:space="preserve">Invert image</source>
+      <target xml:space="preserve">Bild Invertierung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="33" approved="yes">
+      <source xml:space="preserve">Perlin noise texture</source>
+      <target xml:space="preserve">Perlin-Rauschen Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="34" approved="yes">
+      <source xml:space="preserve">Allow texturing with a random noise pattern</source>
+      <target xml:space="preserve">Erzeugt eine Textur mit Zufalls-Rauschen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="35" approved="yes">
+      <source xml:space="preserve">Noise parameters</source>
+      <target xml:space="preserve">Parameter für Rauschen</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="36" approved="yes">
+      <source xml:space="preserve">If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used</source>
+      <target xml:space="preserve">Bei Deaktivierung wird der UV Bereich benutzt. Bei Aktivierung wird eine dreidimensionale Texturierung im Objekt-Raum vollzogen. Wird der Objekt Raum applikationsseitig nicht unterstützt, wird der Welt-Raum verwendet</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="37" approved="yes">
+      <source xml:space="preserve">Use object space</source>
+      <target xml:space="preserve">Objekt Raum benutzen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="38" approved="yes">
+      <source xml:space="preserve">Higher amounts will add detail to the noise</source>
+      <target xml:space="preserve">Höhere Werte bewirken ein detailreicheres Rauschen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="39" approved="yes">
+      <source xml:space="preserve">Levels</source>
+      <target xml:space="preserve">Ebenen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="40" approved="yes">
+      <source xml:space="preserve">Billowing appearance</source>
+      <target xml:space="preserve">Aufbauschen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="41" approved="yes">
+      <source xml:space="preserve">Lowering this value will create bigger areas uniformly colored with Color 1</source>
+      <target xml:space="preserve">Niedrige Werte implizieren grössere Bereiche mit gleichmässiger Einfärbung der Farbe 1</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="42" approved="yes">
+      <source xml:space="preserve">Upper threshold</source>
+      <target xml:space="preserve">Oberer Grenzwert</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="43" approved="yes">
+      <source xml:space="preserve">Increasing this value will create bigger areas uniformly colored with Color 2</source>
+      <target xml:space="preserve">Niedrige Werte implizieren grössere Bereiche mit gleichmässiger Einfärbung der Farbe 2</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="44" approved="yes">
+      <source xml:space="preserve">Lower threshold</source>
+      <target xml:space="preserve">Unterer Grenzwert</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="45" approved="yes">
+      <source xml:space="preserve">Only applies if &quot;Use object space&quot; is off. Selects a specific UV space</source>
+      <target xml:space="preserve">Markiert einen bestimmten UV Bereich. Dies hat nur einen Effekt wenn die Objekt-Raum Benutung deaktiviert ist</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="46" approved="yes">
+      <source xml:space="preserve">Allows texturing a random noise pattern</source>
+      <target xml:space="preserve">Erzeugt eine Textur mit zufälligem Rauschen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="47" approved="yes">
+      <source xml:space="preserve">Bump strength</source>
+      <target xml:space="preserve">Bump Stärke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="48" approved="yes">
+      <source xml:space="preserve">Cellular noise texture</source>
+      <target xml:space="preserve">Zellulär-Rauschen Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="49" approved="yes">
+      <source xml:space="preserve">Allow texturing with a cell forming pattern</source>
+      <target xml:space="preserve">Erzeugt eine Textur mit wabenartigem Muster</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="50" approved="yes">
+      <source xml:space="preserve">Cell type</source>
+      <target xml:space="preserve">Zellen-Typ</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="51" approved="yes">
+      <source xml:space="preserve">Cell pattern type</source>
+      <target xml:space="preserve">Zellen-Muster Typ</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="52" approved="yes">
+      <source xml:space="preserve">Cell shape</source>
+      <target xml:space="preserve">Zellen-Form</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="53" approved="yes">
+      <source xml:space="preserve">The shape of the cell form</source>
+      <target xml:space="preserve">Zellen-Kontur</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="54" approved="yes">
+      <source xml:space="preserve">Flow noise texture</source>
+      <target xml:space="preserve">Strömungs-Rauschen Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="55" approved="yes">
+      <source xml:space="preserve">Allow texturing with a 2D noise pattern suitable for waves</source>
+      <target xml:space="preserve">Ermöglicht ein zweidimensionales wellenförmiges Rauschen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="56" approved="yes">
+      <source xml:space="preserve">Phase offset</source>
+      <target xml:space="preserve">Phasenverschiebung </target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="57" approved="yes">
+      <source xml:space="preserve">Controls the 3rd dimension of the function</source>
+      <target xml:space="preserve">Kontrolliert die dritte Diemsion der Funktion</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="58" approved="yes">
+      <source xml:space="preserve">Level intensity gain</source>
+      <target xml:space="preserve">Ebenen Intensität-Verstärkung </target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="59" approved="yes">
+      <source xml:space="preserve">If multiple levels are used, &quot;level_gain&quot; specifies a weighting factor for subsequent levels</source>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der Ebenen Gain-Wert einen Gewichtungsfaktor für nachfolgende Ebenen </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="60" approved="yes">
+      <source xml:space="preserve">Level scaling</source>
+      <target xml:space="preserve">Skalierung der Ebene</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="61" approved="yes">
+      <source xml:space="preserve">If multiple levels are used, &quot;level_scale&quot; specifies a global scaling factor for subsequent levels</source>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der Ebenen-Skalierungs-Wert einen globalen Skalierungs-Faktor für nachfolgende Ebenen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="62" approved="yes">
+      <source xml:space="preserve">Progressive u scale</source>
+      <target xml:space="preserve">Fortlaufende Skalierung in u-Richtung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="63" approved="yes">
+      <source xml:space="preserve">If multiple levels are used, &quot;level_progressive_u_scale&quot; specifies an additional scaling factor in the &quot;u&quot; direction</source>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der u-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in u-Richtung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="64" approved="yes">
+      <source xml:space="preserve">Progressive v offset</source>
+      <target xml:space="preserve">Fortlaufende Verschiebung in v-Richtung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="65" approved="yes">
+      <source xml:space="preserve">If multiple levels are used, &quot;level_progressive_v_motion&quot; specifies an offset for subsequent levels in the &quot;v&quot; direction</source>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der v-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in v-Richtung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="66" approved="yes">
+      <source xml:space="preserve">3d checker texture</source>
+      <target xml:space="preserve">Schachbrett-Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="67" approved="yes">
+      <source xml:space="preserve">Allows texturing a checkerboard pattern</source>
+      <target xml:space="preserve">Erzeugt eine Textur im Schachbrettmuster</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="68" approved="yes">
+      <source xml:space="preserve">Checker parameters</source>
+      <target xml:space="preserve">Schachbrettmuster Parameter</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="69" approved="yes">
+      <source xml:space="preserve">Blur</source>
+      <target xml:space="preserve">Unschärfe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="70" approved="yes">
+      <source xml:space="preserve">Bump mode</source>
+      <target xml:space="preserve">Bump Modus</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="71" approved="yes">
+      <source xml:space="preserve">Defines how the texture is evaluated to create the bumps</source>
+      <target xml:space="preserve">Definition wie die Textur zur Erzeugung von Bumps evaliert wird</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="72" approved="yes">
+      <source xml:space="preserve">If set to true, texture will not repeat. Outside of the texture the surface will be flat</source>
+      <target xml:space="preserve">Bei dem Wert true wird die Textur nicht gekachelt. Ausserhalb der Textur bleibt die Oberfläche unverändert</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="73" approved="yes">
+      <source xml:space="preserve">Normalmap texture</source>
+      <target xml:space="preserve">Normalen Map Textur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="74" approved="yes">
+      <source xml:space="preserve">Allows the use of tangent space normal maps</source>
+      <target xml:space="preserve">Erzeugt eine Tangentialraum-Normalmap </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="75" approved="yes">
+      <source xml:space="preserve">Normalmap file</source>
+      <target xml:space="preserve">Normalen Map Datei</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="76" approved="yes">
+      <source xml:space="preserve">Normalmap parameters</source>
+      <target xml:space="preserve">Normalen Map Parameter</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="77" approved="yes">
+      <source xml:space="preserve">Strength</source>
+      <target xml:space="preserve">Stärke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="78" approved="yes">
+      <source xml:space="preserve">Simple diffuse</source>
+      <target xml:space="preserve">Einfaches Diffuses Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="79" approved="yes">
+      <source xml:space="preserve">A basic diffuse material</source>
+      <target xml:space="preserve">Erzeugt ein simples Basis-Material</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="80" approved="yes">
+      <source xml:space="preserve">Color</source>
+      <target xml:space="preserve">Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="81" approved="yes">
+      <source xml:space="preserve">The color of the material</source>
+      <target xml:space="preserve">Farbe des Materials</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="82" approved="yes">
+      <source xml:space="preserve">Diffuse roughness</source>
+      <target xml:space="preserve">Diffuse Rauheit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="83" approved="yes">
+      <source xml:space="preserve">Higher roughness values lead a powdery appearance</source>
+      <target xml:space="preserve">Höhere Werte erzeugen ein pulveriges Aussehen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="84" approved="yes">
+      <source xml:space="preserve">Bumps</source>
+      <target xml:space="preserve">Bumps</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="85" approved="yes">
+      <source xml:space="preserve">Attach bump or normal maps here</source>
+      <target xml:space="preserve">Bump oder Normalen Maps hinzufügen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="86" approved="yes">
+      <source xml:space="preserve">Metal</source>
+      <target xml:space="preserve">Metall</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="87" approved="yes">
+      <source xml:space="preserve">A metallic material with stretched reflections</source>
+      <target xml:space="preserve">Ein Material mit Metalloptik</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="88" approved="yes">
+      <source xml:space="preserve">The color of the metal</source>
+      <target xml:space="preserve">Die Farbe des Metalls</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="89" approved="yes">
+      <source xml:space="preserve">Roughness</source>
+      <target xml:space="preserve">Rauheit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="90" approved="yes">
+      <source xml:space="preserve">Higher roughness values lead to bigger highlights and blurry reflections</source>
+      <target xml:space="preserve">Höhere Rauheit führt zu grösseren Lichteffekten und verwischte Reflektionen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="91" approved="yes">
+      <source xml:space="preserve">Reflection weight</source>
+      <target xml:space="preserve">Reflektions-Stärke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="92" approved="yes">
+      <source xml:space="preserve">Intensity of highlights and glossy reflections and highlights</source>
+      <target xml:space="preserve">Intensität der Lichtreflexe und der glänzenden Reflektionen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="93" approved="yes">
+      <source xml:space="preserve">Anisotropy</source>
+      <target xml:space="preserve">Anisotropie</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="94" approved="yes">
+      <source xml:space="preserve">Higher values will stretch the highlight</source>
+      <target xml:space="preserve">Höhere Werte streuen die Lichtreflexe</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="95" approved="yes">
+      <source xml:space="preserve">Anisotropy rotation</source>
+      <target xml:space="preserve">Anisotropie-Rotation</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="96" approved="yes">
+      <source xml:space="preserve">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees</source>
+      <target xml:space="preserve">Modifiziert die Orientierung der Anisotropie. Der Wert 1 dreht die Orientierung um 360 Grad</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="97" approved="yes">
+      <source xml:space="preserve">Simple metal, deprecated</source>
+      <target xml:space="preserve">Einfaches Metall (deprecated)</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="98" approved="yes">
+      <source xml:space="preserve">A basic metallic material</source>
+      <target xml:space="preserve">Ein Basis-Material für Metall</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="99" approved="yes">
+      <source xml:space="preserve">Reflectivity</source>
+      <target xml:space="preserve">Reflektivität</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="100" approved="yes">
+      <source xml:space="preserve">Simple plastic, deprecated</source>
+      <target xml:space="preserve">Einfaches Plastik (deprecated)</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="101" approved="yes">
+      <source xml:space="preserve">A basic dielectric, works for everything opaque that is not metallic</source>
+      <target xml:space="preserve">Ein dielektrisches Basis-Material. Funktioniert für alle opaquen Oberflächen ausser für Metall</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="102" approved="yes">
+      <source xml:space="preserve">IOR</source>
+      <target xml:space="preserve">Brechungsindex</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="103" approved="yes">
+      <source xml:space="preserve">Determines reflectivity</source>
+      <target xml:space="preserve">Legt die Reflektivität fest</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="104" approved="yes">
+      <source xml:space="preserve">Plastic</source>
+      <target xml:space="preserve">Plastik</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="105" approved="yes">
+      <source xml:space="preserve">A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights</source>
+      <target xml:space="preserve">Ein dielektrisches, nicht-metallisches Material mit verzerrten Lichtreflexen </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="106" approved="yes">
+      <source xml:space="preserve">Additional Reflectivity control</source>
+      <target xml:space="preserve">Zusätzliche Reflektivitäts-Kontrolle</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="107" approved="yes">
+      <source xml:space="preserve">Retroreflective</source>
+      <target xml:space="preserve">Retroreflektives Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="108" approved="yes">
+      <source xml:space="preserve">A material with a retroreflective component, works well for road signs and retroreflective stickers</source>
+      <target xml:space="preserve">Erzeugt ein retroreflektives Material. Gut geeignet zum Darstellen von Verkehrsschildern oder reflektiven Aufklebern</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="109" approved="yes">
+      <source xml:space="preserve">Reflection color</source>
+      <target xml:space="preserve">Reflektions-Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="110" approved="yes">
+      <source xml:space="preserve">The color of the retroreflection</source>
+      <target xml:space="preserve">Die Farbe der Retroreflexion </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="111" approved="yes">
+      <source xml:space="preserve">Reflection weight facing</source>
+      <target xml:space="preserve">Gewichtung der zugewandten Reflektion</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="112" approved="yes">
+      <source xml:space="preserve">Reflectivity control for geometry facing the viewer</source>
+      <target xml:space="preserve">Reflektivitäts-Kontrolle für zugewandte Geometrien</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="113" approved="yes">
+      <source xml:space="preserve">Reflection weight edge</source>
+      <target xml:space="preserve">Reflektions-Gewicht am Rand</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="114" approved="yes">
+      <source xml:space="preserve">Reflectivity control for the reflectivity at geometry edges</source>
+      <target xml:space="preserve">Reflektivitäts-Kontrolle für Geometrie-Ränder </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="115" approved="yes">
+      <source xml:space="preserve">Flexible material model</source>
+      <target xml:space="preserve">Flexibles Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="116" approved="yes">
+      <source xml:space="preserve">A complex material that can be configured to a wide variety of looks</source>
+      <target xml:space="preserve">Erzeugt ein komplexes Material mit vielfältigen Design-Möglichkeiten</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="117" approved="yes">
+      <source xml:space="preserve">Base color</source>
+      <target xml:space="preserve">Basisfarbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="118" approved="yes">
+      <source xml:space="preserve">Base</source>
+      <target xml:space="preserve">Basis</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="119" approved="yes">
+      <source xml:space="preserve">Higher roughness values lead to a more &quot;powdery&quot; look</source>
+      <target xml:space="preserve">Höhere Rauheit führt zu einem pulverigem Aussehen </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="120" approved="yes">
+      <source xml:space="preserve">Metallic material</source>
+      <target xml:space="preserve">Material für Metall</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="121" approved="yes">
+      <source xml:space="preserve">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnell effect)</source>
+      <target xml:space="preserve">Farbige Reflektion falls der Wert auf true gesetzt wird. Ist er false, wird weiss reflektiert in Abhängigkeit der Richtung des Brechungsindex (Fresnell Effekt) </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="122" approved="yes">
+      <source xml:space="preserve">Controls the amount of reflection</source>
+      <target xml:space="preserve">Definiert dieReflktionsstärke </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="123" approved="yes">
+      <source xml:space="preserve">Reflection roughness</source>
+      <target xml:space="preserve">Reflektions-Rauheit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="124" approved="yes">
+      <source xml:space="preserve">Higher roughness values lead to more blurry reflections</source>
+      <target xml:space="preserve">Höhere Rauheit führt zu mehr unscharfen Reflektionen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="125" approved="yes">
+      <source xml:space="preserve">Reflection anisotropy</source>
+      <target xml:space="preserve">Reflektions-Anisotropie </target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="126" approved="yes">
+      <source xml:space="preserve">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees</source>
+      <target xml:space="preserve">Modifiziert die Orientierung der Anisotropie. Der Wert 1 dreht die Orientierung um 360 Grad</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="127" approved="yes">
+      <source xml:space="preserve">Transmission weight</source>
+      <target xml:space="preserve">Transmissions-Stärke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="128" approved="yes">
+      <source xml:space="preserve">Transmission</source>
+      <target xml:space="preserve">Transmission</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="129" approved="yes">
+      <source xml:space="preserve">Weights how much light passes through the object vs. its diffuse reflectivity</source>
+      <target xml:space="preserve">Gewichtet die Lichtdurchlässigkeit des Objekts gegen die diffuse Reflektivität</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="130" approved="yes">
+      <source xml:space="preserve">Transmission color</source>
+      <target xml:space="preserve">Transmissions-Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="131" approved="yes">
+      <source xml:space="preserve">Color effect for transmission independent of thickness of the object. Think stained glass</source>
+      <target xml:space="preserve">Farbeffekt für Transmission unabhängig von dem Volumen des Objekts (z.B. Buntglas)</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="132" approved="yes">
+      <source xml:space="preserve">Volume color</source>
+      <target xml:space="preserve">Volumen-Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="133" approved="yes">
+      <source xml:space="preserve">If the material is not &quot;Thin walled&quot;, &quot;Volume color&quot; will be reached at &quot;Volume reference distance&quot;(m)</source>
+      <target xml:space="preserve">Wenn das mMaterial nicht dünnwandig ist, wird die Volumenfarbe  bei Referenz Distanz erreicht</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="134" approved="yes">
+      <source xml:space="preserve">Transmission roughness</source>
+      <target xml:space="preserve">Transmissions-Rauheit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="135" approved="yes">
+      <source xml:space="preserve">higher values lead to objects seen through the material to appear blurry</source>
+      <target xml:space="preserve">Werden höhere Werte gesetzt, erscheinen die überlagerten Objekte verschwommen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="136" approved="yes">
+      <source xml:space="preserve">Volume reference distance</source>
+      <target xml:space="preserve">Referenzdistanz der Volumen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="137" approved="yes">
+      <source xml:space="preserve">If the material is not &quot;Thin walled&quot;, &quot;Volume color&quot; will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+      <target xml:space="preserve">Wenn das mMaterial nicht dünnwandig ist, wird die Volumenfarbe  bei Referenz Distanz erreicht. Geben sie eine typische Objektdicke an</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="138" approved="yes">
+      <source xml:space="preserve">Global</source>
+      <target xml:space="preserve">Global</target>
+      <note from="translator">::anno::in_group(string)</note>
+    </trans-unit>
+    <trans-unit id="139" approved="yes">
+      <source xml:space="preserve">Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic</source>
+      <target xml:space="preserve">Bestimmt die Refraktion des Volumens. Es beeinflusst zudem die Reflektivität der Materialien (ausser Metall) </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="140" approved="yes">
+      <source xml:space="preserve">Thin walled</source>
+      <target xml:space="preserve">Dünnwandig</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="141" approved="yes">
+      <source xml:space="preserve">Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass</source>
+      <target xml:space="preserve">Dünnwandige Materialien haben keine Refraktion und keinen Volumen Effekt. Geeignet für Seifenblasen oder Fensterglas</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="142" approved="yes">
+      <source xml:space="preserve">Abbe number</source>
+      <target xml:space="preserve">Abbesche Zahl</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="143" approved="yes">
+      <source xml:space="preserve">Controls dispersion. 0 switches dispersion off, dispersive materials have abbe numbers between 25 and 85</source>
+      <target xml:space="preserve">Kontrolliert Dispersion. Der Wert 0 deaktiviert Dispersion. Dispersive Materialien haben einen Abbeschen Wert von 25 bis 85</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="144" approved="yes">
+      <source xml:space="preserve">Thin glass</source>
+      <target xml:space="preserve">Dünnes Glas</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="145" approved="yes">
+      <source xml:space="preserve">A basic transmissive dielectric without refraction or volume</source>
+      <target xml:space="preserve">Ein transmissiv-dielektrisches Material ohne Refraktion und Volumen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="146" approved="yes">
+      <source xml:space="preserve">Thin translucent</source>
+      <target xml:space="preserve">Dünnes transluzentes Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="147" approved="yes">
+      <source xml:space="preserve">A diffuse transmissive dielectric material</source>
+      <target xml:space="preserve">Ein transmissiv-dielektrisches Material</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="148" approved="yes">
+      <source xml:space="preserve">Diffuse color</source>
+      <target xml:space="preserve">Diffuse Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="149" approved="yes">
+      <source xml:space="preserve">Translucence color</source>
+      <target xml:space="preserve">Transluzente Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="150" approved="yes">
+      <source xml:space="preserve">The color of the volume of the material</source>
+      <target xml:space="preserve">Die Volumenfarbe</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="151" approved="yes">
+      <source xml:space="preserve">Translucence weight</source>
+      <target xml:space="preserve">Transluzente Stärke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="152" approved="yes">
+      <source xml:space="preserve">Fraction of the incoming light that should be visible on the backside</source>
+      <target xml:space="preserve">Teil des einfallenden Lichtes das die Rückseite beleuchtet</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="153" approved="yes">
+      <source xml:space="preserve">Thick glass</source>
+      <target xml:space="preserve">Dickes Glas</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="154" approved="yes">
+      <source xml:space="preserve">A basic transmissive dielectric with refraction and coloring in the volume</source>
+      <target xml:space="preserve">Ein transmissiv-refraktives Material mit farbigem Volumen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="155" approved="yes">
+      <source xml:space="preserve">Colors the light entering the volume. Think stained glass</source>
+      <target xml:space="preserve">Farbe des Lichtes an der Objekt-Oberfläche (z.B. Buntglas)</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="156" approved="yes">
+      <source xml:space="preserve">The color of the glass body</source>
+      <target xml:space="preserve">Die Farbe des Glases</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="157" approved="yes">
+      <source xml:space="preserve">Determines reflectivity as well as amount of refraction</source>
+      <target xml:space="preserve">Bestimmt die Reflektivität und die Ausmasse der Refraktion</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="158" approved="yes">
+      <source xml:space="preserve">&quot;Volume color&quot; will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+      <target xml:space="preserve">Die Volumenfarbe wird bei dieser Entfernung erreicht. Geben Sie eine typische Objektdicke an</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="159" approved="yes">
+      <source xml:space="preserve">Controls dispersion. 0.0 switches dispersion off, dispersive materials have abbe numbers between 25.0 and 85.0</source>
+      <target xml:space="preserve">Kontrolliert Dispersion. Der Wert 0 deaktiviert Dispersion. Dispersive Materialien haben einen Abbeschen Wert von 25 bis 85</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="160" approved="yes">
+      <source xml:space="preserve">Thick translucent</source>
+      <target xml:space="preserve">Dickes transluzentes Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="161" approved="yes">
+      <source xml:space="preserve">A subsurface scattering material</source>
+      <target xml:space="preserve">Ein lichtdurchlässiges Material mit Streueffekten in Volumen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="162" approved="yes">
+      <source xml:space="preserve">The color of the volume at &quot;Volume reference distance&quot;</source>
+      <target xml:space="preserve">Die Volumenfarbe bei Referenzdistanz</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="163" approved="yes">
+      <source xml:space="preserve">Volume scattering</source>
+      <target xml:space="preserve">Volumen-Streuung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="164" approved="yes">
+      <source xml:space="preserve">Amount of scattering for objects at &quot;Volume reference distance&quot;</source>
+      <target xml:space="preserve">Menge an Streuung bei Referenz-Distanz</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="165" approved="yes">
+      <source xml:space="preserve">Overall reflectivity of the material</source>
+      <target xml:space="preserve">Gesamte Reflektivität des Objekts</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="166" approved="yes">
+      <source xml:space="preserve">&quot;Volume color&quot; and &quot;Volume scattering&quot; will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+      <target xml:space="preserve">Volumenfarbe und Volumenstreuung werden bei dieser Entfernung erreicht. Geben Sie eine typische Objektdicke an</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="167" approved="yes">
+      <source xml:space="preserve">Surface blender</source>
+      <target xml:space="preserve">Oberflächen-Mischer</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="168" approved="yes">
+      <source xml:space="preserve">Blend surface characteristics of 2 materials or mask them using a texture</source>
+      <target xml:space="preserve">Mischt zwei Materialien. Die Maskierung erfolgt mittels einer Textur</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="169" approved="yes">
+      <source xml:space="preserve">Base material</source>
+      <target xml:space="preserve">Basis Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="170" approved="yes">
+      <source xml:space="preserve">The material the blend is based on</source>
+      <target xml:space="preserve">Basis-Material für Überblendungenl</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="171" approved="yes">
+      <source xml:space="preserve">Blend Material</source>
+      <target xml:space="preserve">Überblendetes Material</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="172" approved="yes">
+      <source xml:space="preserve">Surface properties to use for the blend</source>
+      <target xml:space="preserve">Oberflächeneigenschaften der Überblendung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="173" approved="yes">
+      <source xml:space="preserve">Blend weight or mask texture</source>
+      <target xml:space="preserve">Überblendungs-Stärke oder -Textur</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="174" approved="yes">
+      <source xml:space="preserve">Apply clear coating</source>
+      <target xml:space="preserve">Klarlack Aufbringen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="175" approved="yes">
+      <source xml:space="preserve">Apply clear coat to an existing material</source>
+      <target xml:space="preserve">Das Material mit Klarlack überzogen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="176" approved="yes">
+      <source xml:space="preserve">The material that will get a clear coating applied</source>
+      <target xml:space="preserve">Das Material, welches mit Klarlack überzogen werden soll</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="177" approved="yes">
+      <source xml:space="preserve">Determines reflectivity of the clear coat</source>
+      <target xml:space="preserve">Bestimmt die Reflektivität des Klarlacks</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="178" approved="yes">
+      <source xml:space="preserve">Determines roughness of the clear coat</source>
+      <target xml:space="preserve">Bestimmt die Rauheit des Klarlacks</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="179" approved="yes">
+      <source xml:space="preserve">Coat visibility</source>
+      <target xml:space="preserve">Sichtbarkeit der Schicht</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="180" approved="yes">
+      <source xml:space="preserve">Determines visibility of the clear coat</source>
+      <target xml:space="preserve">Bestimmt die Sichtbarkeit des Klarlacks</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="181" approved="yes">
+      <source xml:space="preserve">Coat filter color</source>
+      <target xml:space="preserve">Filter-Farbe der Schicht</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="182" approved="yes">
+      <source xml:space="preserve">For simulating coatings with colored resins that modulate the color of underlying layers</source>
+      <target xml:space="preserve">Zur Simulation von Lacken und Harzen, die unterliegende Ebenen beeinflussen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="183" approved="yes">
+      <source xml:space="preserve">Apply thin film</source>
+      <target xml:space="preserve">Dünnschicht Aufbringen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="184" approved="yes">
+      <source xml:space="preserve">Apply thin film to an existing material</source>
+      <target xml:space="preserve">Fügt dem Material eine dünne Interferenzschicht hinzu</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="185" approved="yes">
+      <source xml:space="preserve">The material that will get shows a thin film effect</source>
+      <target xml:space="preserve">Das Material, dem ein Dünnschicht-Effekt zugeordnet werden soll</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="186" approved="yes">
+      <source xml:space="preserve">The IOR of the thin film interface</source>
+      <target xml:space="preserve">Der Brechungsindex der Dünnfilm-Schicht</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="187" approved="yes">
+      <source xml:space="preserve">Thickness</source>
+      <target xml:space="preserve">Dicke</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="188" approved="yes">
+      <source xml:space="preserve">Thickness of the thin film in nm</source>
+      <target xml:space="preserve">Stärke der Dünnschicht in nm</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="189" approved="yes">
+      <source xml:space="preserve">Apply thin metal coating</source>
+      <target xml:space="preserve">Metall-Beschichtung Aufbringen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="190" approved="yes">
+      <source xml:space="preserve">Apply metal coat to an existing material</source>
+      <target xml:space="preserve">Überzieht das Material mit einer Metallschicht</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="191" approved="yes">
+      <source xml:space="preserve">The material that will get a metallic coating applied</source>
+      <target xml:space="preserve">Das Material, dem der metallische Effekt zugewiesen wird</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="192" approved="yes">
+      <source xml:space="preserve">the color of the metal</source>
+      <target xml:space="preserve">Die Farbe des Metalls</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="193" approved="yes">
+      <source xml:space="preserve">the opacity of the coat</source>
+      <target xml:space="preserve">Lichtdurchlässigkeit der Schicht</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="194" approved="yes">
+      <source xml:space="preserve">Determines roughness of the metal coat</source>
+      <target xml:space="preserve">Die Rauhheit der metallischen Ummantelung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="195" approved="yes">
+      <source xml:space="preserve">Apply a cover of dust</source>
+      <target xml:space="preserve">Staubschicht Aufbringen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="196" approved="yes">
+      <source xml:space="preserve">Apply a diffuse cover of dust or dirt</source>
+      <target xml:space="preserve">Fügt eine diffuse Staub- oder Schmutzschicht hinzu</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="197" approved="yes">
+      <source xml:space="preserve">Dust color</source>
+      <target xml:space="preserve">Staubfarbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="198" approved="yes">
+      <source xml:space="preserve">The color of the dust</source>
+      <target xml:space="preserve">Die Farbe des Staubes</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="199" approved="yes">
+      <source xml:space="preserve">Dust density</source>
+      <target xml:space="preserve">Staubdichte</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="200" approved="yes">
+      <source xml:space="preserve">The opacity of the cover</source>
+      <target xml:space="preserve">Lichtdurchlässigkeit der Ummantelung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="201" approved="yes">
+      <source xml:space="preserve">Dust amount</source>
+      <target xml:space="preserve">Staubhöhe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="202" approved="yes">
+      <source xml:space="preserve">How dusty the material is</source>
+      <target xml:space="preserve">Bestimmt wie staubig das Material ist</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="203" approved="yes">
+      <source xml:space="preserve">Apply a color falloff</source>
+      <target xml:space="preserve">Farbverlauf Anwenden</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="204" approved="yes">
+      <source xml:space="preserve">Makes the color view dependent</source>
+      <target xml:space="preserve">Der Farbwert bezieht sich auf die Blickrichtung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="205" approved="yes">
+      <source xml:space="preserve">Color 1 (facing direction)</source>
+      <target xml:space="preserve">Farbe 1 (zugewandte Seite)</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="206" approved="yes">
+      <source xml:space="preserve">Color 3</source>
+      <target xml:space="preserve">Farbe 3</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="207" approved="yes">
+      <source xml:space="preserve">Color 4</source>
+      <target xml:space="preserve">Farbe 4</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="208" approved="yes">
+      <source xml:space="preserve">Color 5</source>
+      <target xml:space="preserve">Farbe 5</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="209" approved="yes">
+      <source xml:space="preserve">Color 5 (object edges)</source>
+      <target xml:space="preserve">Farbe 5</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="210" approved="yes">
+      <source xml:space="preserve">Apply a color falloff, deprecated</source>
+      <target xml:space="preserve">Einen Farbverlauf hinzufügen (deprecated)</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="211" approved="yes">
+      <source xml:space="preserve">the color of the dust</source>
+      <target xml:space="preserve">Die Farbe des Staubes</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="212" approved="yes">
+      <source xml:space="preserve">Apply flake coating</source>
+      <target xml:space="preserve">Metalleffekt-Schicht Aufbringen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="213" approved="yes">
+      <source xml:space="preserve">Apply layer of metallic flakes to an existing material</source>
+      <target xml:space="preserve">Fügt dem Material einen metallischen Effekt hinzu</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="214" approved="yes">
+      <source xml:space="preserve">The material that will get a flake layer applied</source>
+      <target xml:space="preserve">Das Material mit der zugewiesenen Partikel-Ebene</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="215" approved="yes">
+      <source xml:space="preserve">The color of the Flakes</source>
+      <target xml:space="preserve">Die Farbe der Partikel</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="216" approved="yes">
+      <source xml:space="preserve">Determines roughness of the metallic flakes</source>
+      <target xml:space="preserve">Legt die Rauheit der metallischen Partikel fest</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="217" approved="yes">
+      <source xml:space="preserve">Flake size</source>
+      <target xml:space="preserve">Grösse der Partikel</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="218" approved="yes">
+      <source xml:space="preserve">Determines size of the metallic flakes, in mm</source>
+      <target xml:space="preserve">Legt die Grösse der matallischen Partikel fest (in nm)</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="219" approved="yes">
+      <source xml:space="preserve">Flake amount</source>
+      <target xml:space="preserve">Anzahl der Partikel</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="220" approved="yes">
+      <source xml:space="preserve">Determines amount of visible metallic flakes</source>
+      <target xml:space="preserve">Legt die Sichtbarkeit der metallischen Partikel fest</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="221" approved="yes">
+      <source xml:space="preserve">Flake opacity</source>
+      <target xml:space="preserve">Partikel Deckkraft</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="222" approved="yes">
+      <source xml:space="preserve">Determines visibility of the metallic flakes</source>
+      <target xml:space="preserve">Bestimmt die Sichtbarkeit der metallischen Partikel</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="223" approved="yes">
+      <source xml:space="preserve">Flake orientation randomness</source>
+      <target xml:space="preserve">Zufälligkeit der Partikel-Orientierung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="224" approved="yes">
+      <source xml:space="preserve">Larger numbers will increase the sparkle radius around highlights</source>
+      <target xml:space="preserve">Höhere Werte führen zu einem grösseren Strahlungsradius</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="225" approved="yes">
+      <source xml:space="preserve">Flaky paint</source>
+      <target xml:space="preserve">Metallic-Lack</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="226" approved="yes">
+      <source xml:space="preserve">A multi layer paint material containing flakes</source>
+      <target xml:space="preserve">Erzeugt ein mehrschichtiges Material mit metallischem Effekt</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="227" approved="yes">
+      <source xml:space="preserve">The color of the base paint</source>
+      <target xml:space="preserve">Die Grundfarbe</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="228" approved="yes">
+      <source xml:space="preserve">Flake color</source>
+      <target xml:space="preserve">Partikel-Farbe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="229" approved="yes">
+      <source xml:space="preserve">Flake roughness</source>
+      <target xml:space="preserve">Partikel-Rauheit</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="230" approved="yes">
+      <source xml:space="preserve">Flake weight</source>
+      <target xml:space="preserve">Partikel-Gewichtung</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="231" approved="yes">
+      <source xml:space="preserve">Coat roughness</source>
+      <target xml:space="preserve">Rauheit der Schicht</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="232" approved="yes">
+      <source xml:space="preserve">Coat bump</source>
+      <target xml:space="preserve">Bump Map der Schicht</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="233" approved="yes">
+      <source xml:space="preserve">Add cut-outs</source>
+      <target xml:space="preserve">Ausschnitte Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="234" approved="yes">
+      <source xml:space="preserve">Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences</source>
+      <target xml:space="preserve">Definiert Ausschnitte und erzwingt ein dünnwandiges Material. Gut geeignet zum Darstellen von Blättern, Gras oder Zäunen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="235" approved="yes">
+      <source xml:space="preserve">The material that will get a cut-out</source>
+      <target xml:space="preserve">Das Material, welchem Ausschnitte hinzugefügt werden soll</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="236" approved="yes">
+      <source xml:space="preserve">Cutout</source>
+      <target xml:space="preserve">Ausschnitt</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="237" approved="yes">
+      <source xml:space="preserve">Determines where the object is visible</source>
+      <target xml:space="preserve">Definiert die sichtbaren Teile eines Objekts</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="238" approved="yes">
+      <source xml:space="preserve">Add simple sticker</source>
+      <target xml:space="preserve">Aufkleber Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="239" approved="yes">
+      <source xml:space="preserve">A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent</source>
+      <target xml:space="preserve">Einen Aufkleber anbringen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="240" approved="yes">
+      <source xml:space="preserve">Sticker color</source>
+      <target xml:space="preserve">Farbe des Aufklebers</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="241" approved="yes">
+      <source xml:space="preserve">Sticker roughness</source>
+      <target xml:space="preserve">Rauheit des Aufklebers</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="242" approved="yes">
+      <source xml:space="preserve">Sticker IOR</source>
+      <target xml:space="preserve">Brechungsindex des Aufklebers</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="243" approved="yes">
+      <source xml:space="preserve">Sticker reflectivity</source>
+      <target xml:space="preserve">Reflektivität des Aufklebers</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="244" approved="yes">
+      <source xml:space="preserve">Sticker bumps</source>
+      <target xml:space="preserve">Aufkleber Bump Map</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="245" approved="yes">
+      <source xml:space="preserve">Sticker mask</source>
+      <target xml:space="preserve">Aufkleber-Maske</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="246" approved="yes">
+      <source xml:space="preserve">Determines extent of the sticker</source>
+      <target xml:space="preserve">Bestimmt die Ausdehnung eines Aufklebers</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="247" approved="yes">
+      <source xml:space="preserve">The material that will get a sticker added</source>
+      <target xml:space="preserve">Das Material, welchem ein Aufkleber zugeordnet wird</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="248" approved="yes">
+      <source xml:space="preserve">Add global bumpmap</source>
+      <target xml:space="preserve">Globale Bump Map Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="249" approved="yes">
+      <source xml:space="preserve">Adds global bumpmap to existing materials. Local bump map of the base material is preserved</source>
+      <target xml:space="preserve">Eine Bump Map hinzufügen zur Simulation von Oberflächenunebenheiten</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="250" approved="yes">
+      <source xml:space="preserve">The material that will get a bump map</source>
+      <target xml:space="preserve">Das Material, welches eine Bump Map bekommt</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="251" approved="yes">
+      <source xml:space="preserve">Bump</source>
+      <target xml:space="preserve">Bump</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="252" approved="yes">
+      <source xml:space="preserve">An additional global bump map for the material. Local bump map of the base material is preserved</source>
+      <target xml:space="preserve">Eine zusätzliche globale Bump Map für das Material. Lokale Bump Maps bleiben erhalten</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="253" approved="yes">
+      <source xml:space="preserve">Add displacement</source>
+      <target xml:space="preserve">Reliefstruktur Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="254" approved="yes">
+      <source xml:space="preserve">Adds displacement to existing materials</source>
+      <target xml:space="preserve">Erzeugt eine Reliefstruktur eines Materials </target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="255" approved="yes">
+      <source xml:space="preserve">Displacement amount</source>
+      <target xml:space="preserve">Reliefhöhe</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="256" approved="yes">
+      <source xml:space="preserve">Attach displacement texture here. Note that the object needs to be set up correctly to have good displacement results</source>
+      <target xml:space="preserve">Deklarierung der Relieftextur. Das Objekt muss dazu korrekt vorbereitet sein um gute Relief-Resultate zu erzielen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="257" approved="yes">
+      <source xml:space="preserve">Displacement scale</source>
+      <target xml:space="preserve">Ausmass des Reliefs</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="258" approved="yes">
+      <source xml:space="preserve">A global scale factor for the displacement amount</source>
+      <target xml:space="preserve">Globaler Skalierungsfaktor für die Reliefhöhe</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="259" approved="yes">
+      <source xml:space="preserve">Add emission</source>
+      <target xml:space="preserve">Emmission Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="260" approved="yes">
+      <source xml:space="preserve">Adds emission to a material</source>
+      <target xml:space="preserve">Emissive Lichtausstrahlung hinzufügen</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="261" approved="yes">
+      <source xml:space="preserve">The material that will get emission added</source>
+      <target xml:space="preserve">Das Material, welchem Emission zugewiesen wird</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="262" approved="yes">
+      <source xml:space="preserve">The color of the Light</source>
+      <target xml:space="preserve">Die Farbe des Lichtes</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="263" approved="yes">
+      <source xml:space="preserve">Intensity</source>
+      <target xml:space="preserve">Intensität</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="264" approved="yes">
+      <source xml:space="preserve">The brightness of the light source</source>
+      <target xml:space="preserve">Die Helligkeit der Lichtquelle</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="265" approved="yes">
+      <source xml:space="preserve">Unit scale</source>
+      <target xml:space="preserve">Einheitsskala</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="266" approved="yes">
+      <source xml:space="preserve">Modeling unit to meter conversion factor</source>
+      <target xml:space="preserve">Konvertierung von Unit zu Meter</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="267" approved="yes">
+      <source xml:space="preserve">Unit for emission</source>
+      <target xml:space="preserve">Einheit für Emission</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="268" approved="yes">
+      <source xml:space="preserve">The physical unit of Intensity</source>
+      <target xml:space="preserve">Die physikalische Einheit von Intensität</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="269" approved="yes">
+      <source xml:space="preserve">Add thermal emission</source>
+      <target xml:space="preserve">Thermische Abstrahlung Hinzufügen</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="270" approved="yes">
+      <source xml:space="preserve">Adds emission to a material, color is based on a &quot;color temperature&quot;</source>
+      <target xml:space="preserve">Der Farbwert der thermischen Abstahlung wird durch die Farbtemperatur bestimmt</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="271" approved="yes">
+      <source xml:space="preserve">Temperature</source>
+      <target xml:space="preserve">Temperatur</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="272" approved="yes">
+      <source xml:space="preserve">The color temperature of the Light in Kelvin</source>
+      <target xml:space="preserve">Die Farbtemperatur des Lichtes in Kelvin</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="273" approved="yes">
+      <source xml:space="preserve">Diffuse emission</source>
+      <target xml:space="preserve">Diffuse Emission</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="274" approved="yes">
+      <source xml:space="preserve">Emissive material emitting in all directions</source>
+      <target xml:space="preserve">Erzeugt ein Material mit diffuser Emission</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="275" approved="yes">
+      <source xml:space="preserve">Spotlight emission</source>
+      <target xml:space="preserve">Scheinwerfer-Emmision</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="276" approved="yes">
+      <source xml:space="preserve">Emissive material emitting focused in one direction</source>
+      <target xml:space="preserve">Erzeugt ein Material mit gerichteter Emission</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="277" approved="yes">
+      <source xml:space="preserve">Spot focus</source>
+      <target xml:space="preserve">Fokus des Scheinwerfers </target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="278" approved="yes">
+      <source xml:space="preserve">larger values lead to more focused spotlights</source>
+      <target xml:space="preserve">Fokus des Scheinwerfers. Höhere Werte führen zu einer grösseren Eingrenzung</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="279" approved="yes">
+      <source xml:space="preserve">IES file based emission</source>
+      <target xml:space="preserve">Emission aus einer IES Datei</target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="280" approved="yes">
+      <source xml:space="preserve">Emissive material emitting as described in an IES file</source>
+      <target xml:space="preserve">Erzeugt ein Emissives Material aus in einer IES Datei</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+    <trans-unit id="281" approved="yes">
+      <source xml:space="preserve">IES light profile data</source>
+      <target xml:space="preserve">Datensatz des IES Licht-Profils </target>
+      <note from="translator">::anno::display_name(string)</note>
+    </trans-unit>
+    <trans-unit id="282" approved="yes">
+      <source xml:space="preserve">data to describe the distribution of the light</source>
+      <target xml:space="preserve">Datensatz zur Beschreibung der Verteilung des Lichtes</target>
+      <note from="translator">::anno::description(string)</note>
+    </trans-unit>
+  </body></file>
+</xliff>

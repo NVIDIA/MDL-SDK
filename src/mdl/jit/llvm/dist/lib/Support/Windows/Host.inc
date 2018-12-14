@@ -17,6 +17,6 @@
 
 using namespace llvm;
 
-MISTD::string sys::getDefaultTargetTriple() {
+std::string sys::getDefaultTargetTriple() {
   return LLVM_DEFAULT_TARGET_TRIPLE;
 }

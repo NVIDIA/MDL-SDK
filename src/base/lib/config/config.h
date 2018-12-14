@@ -104,8 +104,8 @@ class Config_module : public SYSTEM::IModule
     virtual bool override(
         const char* opt) = 0;
     /// Retrieve the value of a given config entry key as a string.
-    virtual MISTD::string get_config_value_as_string(
-        const MISTD::string& key) const = 0;
+    virtual std::string get_config_value_as_string(
+        const std::string& key) const = 0;
 
     /// Is now the initialization of the config module complete?
     /// \return true when initialization is complete
@@ -123,9 +123,9 @@ class Config_module : public SYSTEM::IModule
     virtual const Config_registry& get_configuration() const = 0;
 
     /// Retrieve the product version.
-    virtual MISTD::string get_product_version() const = 0;
+    virtual std::string get_product_version() const = 0;
     /// Retrieve the product name.
-    virtual MISTD::string get_product_name() const = 0;
+    virtual std::string get_product_name() const = 0;
 
     /// \name ModuleImpl
     /// Required functionality for implementing a \c SYSTEM::IModule.
@@ -146,7 +146,7 @@ class Config_module : public SYSTEM::IModule
     virtual bool update(
         const char* name,
         const char* help,
-        MISTD::string& value) = 0;
+        std::string& value) = 0;
 };
 
 }

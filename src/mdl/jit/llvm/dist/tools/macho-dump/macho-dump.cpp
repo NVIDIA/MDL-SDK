@@ -24,7 +24,7 @@
 using namespace llvm;
 using namespace llvm::object;
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFile(cl::Positional, cl::desc("<input file>"), cl::init("-"));
 
 static cl::opt<bool>
@@ -309,7 +309,7 @@ DumpLinkerOptionsCommand(const MachOObjectFile &Obj,
   const char *P = LCI.Ptr + sizeof(MachO::linker_options_command);
   StringRef Data(P, DataSize);
   for (unsigned i = 0; i != LOLC.count; ++i) {
-    MISTD::pair<StringRef,StringRef> Split = Data.split('\0');
+    std::pair<StringRef,StringRef> Split = Data.split('\0');
     outs() << "\t\"";
     outs().write_escaped(Split.first);
     outs() << "\",\n";

@@ -153,18 +153,18 @@ protected:
 
   // Keep a map of sections from object file to the SectionID which
   // references it.
-  typedef MISTD::map<SectionRef, unsigned> ObjSectionToIDMap;
+  typedef std::map<SectionRef, unsigned> ObjSectionToIDMap;
 
   // A global symbol table for symbols from all loaded modules.  Maps the
   // symbol name to a (SectionID, offset in section) pair.
-  typedef MISTD::pair<unsigned, uintptr_t> SymbolLoc;
+  typedef std::pair<unsigned, uintptr_t> SymbolLoc;
   typedef StringMap<SymbolLoc> SymbolTableMap;
   SymbolTableMap GlobalSymbolTable;
 
   // Pair representing the size and alignment requirement for a common symbol.
-  typedef MISTD::pair<unsigned, unsigned> CommonSymbolInfo;
+  typedef std::pair<unsigned, unsigned> CommonSymbolInfo;
   // Keep a map of common symbols to their info pairs
-  typedef MISTD::map<SymbolRef, CommonSymbolInfo> CommonSymbolMap;
+  typedef std::map<SymbolRef, CommonSymbolInfo> CommonSymbolMap;
 
   // For each symbol, keep a list of relocations based on it. Anytime
   // its address is reassigned (the JIT re-compiled the function, e.g.),
@@ -182,7 +182,7 @@ protected:
   // modules.  This map is indexed by symbol name.
   StringMap<RelocationList> ExternalSymbolRelocations;
 
-  typedef MISTD::map<RelocationValueRef, uintptr_t> StubMap;
+  typedef std::map<RelocationValueRef, uintptr_t> StubMap;
 
   Triple::ArchType Arch;
   bool IsTargetLittleEndian;
@@ -203,7 +203,7 @@ protected:
   virtual unsigned getStubAlignment() = 0;
 
   bool HasError;
-  MISTD::string ErrorStr;
+  std::string ErrorStr;
 
   // Set the error state and record an error string.
   bool Error(const Twine &Msg) {

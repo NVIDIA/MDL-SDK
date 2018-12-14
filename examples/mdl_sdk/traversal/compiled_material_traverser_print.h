@@ -202,7 +202,7 @@ private:
     // Returns the type of a struct as string.
     static std::string struct_type_to_string(const mi::neuraylib::IType_struct* struct_type,
                                              Context* context,
-                                             bool* out_is_material_keyword = NULL);
+                                             bool* out_is_material_keyword = nullptr);
     
     // Returns the type of an elemental type as string.
     static std::string atomic_type_to_string(const mi::neuraylib::IType_atomic* atomic_type,

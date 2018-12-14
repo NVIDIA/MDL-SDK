@@ -52,11 +52,11 @@ process::id_type self_process::get_id() {
   return getpid();
 }
 
-static MISTD::pair<TimeValue, TimeValue> getRUsageTimes() {
+static std::pair<TimeValue, TimeValue> getRUsageTimes() {
 #if defined(HAVE_GETRUSAGE)
   struct rusage RU;
   ::getrusage(RUSAGE_SELF, &RU);
-  return MISTD::make_pair(
+  return std::make_pair(
       TimeValue(
           static_cast<TimeValue::SecondsType>(RU.ru_utime.tv_sec),
           static_cast<TimeValue::NanoSecondsType>(
@@ -67,7 +67,7 @@ static MISTD::pair<TimeValue, TimeValue> getRUsageTimes() {
               RU.ru_stime.tv_usec * TimeValue::NANOSECONDS_PER_MICROSECOND)));
 #else
 #warning Cannot get usage times on this platform
-  return MISTD::make_pair(TimeValue(), TimeValue());
+  return std::make_pair(TimeValue(), TimeValue());
 #endif
 }
 
@@ -182,12 +182,12 @@ void Process::PreventCoreFiles() {
 #endif
 }
 
-Optional<MISTD::string> Process::GetEnv(StringRef Name) {
-  MISTD::string NameStr = Name.str();
+Optional<std::string> Process::GetEnv(StringRef Name) {
+  std::string NameStr = Name.str();
   const char *Val = ::getenv(NameStr.c_str());
   if (!Val)
     return None;
-  return MISTD::string(Val);
+  return std::string(Val);
 }
 
 error_code Process::GetArgumentVector(SmallVectorImpl<const char *> &ArgsOut,

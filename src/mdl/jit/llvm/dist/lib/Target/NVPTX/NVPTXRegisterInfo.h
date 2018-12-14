@@ -64,15 +64,15 @@ public:
   }
 
   const char *getName(unsigned RegNo) const {
-    MISTD::stringstream O;
+    std::stringstream O;
     O << "reg" << RegNo;
     return getStrPool()->getManagedString(O.str().c_str())->c_str();
   }
 
 };
 
-MISTD::string getNVPTXRegClassName(const TargetRegisterClass *RC);
-MISTD::string getNVPTXRegClassStr(const TargetRegisterClass *RC);
+std::string getNVPTXRegClassName(const TargetRegisterClass *RC);
+std::string getNVPTXRegClassStr(const TargetRegisterClass *RC);
 
 } // end namespace llvm
 

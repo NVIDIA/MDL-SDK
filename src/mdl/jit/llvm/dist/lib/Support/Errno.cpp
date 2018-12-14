@@ -29,16 +29,16 @@ namespace llvm {
 namespace sys {
 
 #if HAVE_ERRNO_H
-MISTD::string StrError() {
+std::string StrError() {
   return StrError(errno);
 }
 #endif  // HAVE_ERRNO_H
 
-MISTD::string StrError(int errnum) {
+std::string StrError(int errnum) {
   const int MaxErrStrLen = 2000;
   char buffer[MaxErrStrLen];
   buffer[0] = '\0';
-  MISTD::string str;
+  std::string str;
   if (errnum == 0)
     return str;
 

@@ -75,12 +75,12 @@ struct char_traits {
 
     // copy data
     static void copy(CharT *dst, CharT const *src, size_t len) {
-        MISTD::memcpy(dst, src, sizeof(CharT) * len);
+        std::memcpy(dst, src, sizeof(CharT) * len);
     }
 
     // move data
     static void move(CharT *dst, CharT const *src, size_t len) {
-        MISTD::memmove(dst, src, sizeof(CharT) * len);
+        std::memmove(dst, src, sizeof(CharT) * len);
     }
 
     static CharT const  *find(CharT const *s, size_t n, CharT c) {
@@ -100,12 +100,12 @@ struct char_traits<wchar_t> {
         CharT const *s,
         CharT const *t,
         size_t      count) {
-        return count == 0 ? 0 : MISTD::wmemcmp(s, t, count);
+        return count == 0 ? 0 : std::wmemcmp(s, t, count);
     }
 
     // find length of null-terminated sequence
     static size_t length(CharT const *s) {
-        return *s == 0 ? 0 : MISTD::wcslen(s);
+        return *s == 0 ? 0 : std::wcslen(s);
     }
 
     // test for element equality
@@ -120,12 +120,12 @@ struct char_traits<wchar_t> {
 
     // copy data
     static void copy(CharT *dst, CharT const *src, size_t len) {
-        MISTD::wmemcpy(dst, src, len);
+        std::wmemcpy(dst, src, len);
     }
 
     // move data
     static void move(CharT *dst, CharT const *src, size_t len) {
-        MISTD::wmemmove(dst, src, len + 1);
+        std::wmemmove(dst, src, len + 1);
     }
 
     static CharT const  *find(CharT const *s, size_t n, CharT c) {
@@ -145,12 +145,12 @@ struct char_traits<char> {
         CharT const *s,
         CharT const *t,
         size_t      count) {
-            return count == 0 ? 0 : MISTD::memcmp(s, t, count);
+            return count == 0 ? 0 : std::memcmp(s, t, count);
     }
 
     // find length of null-terminated sequence
     static size_t length(CharT const *s) {
-        return *s == 0 ? 0 : MISTD::strlen(s);
+        return *s == 0 ? 0 : std::strlen(s);
     }
 
     // test for element equality
@@ -165,12 +165,12 @@ struct char_traits<char> {
 
     // copy data
     static void copy(CharT *dst, CharT const *src, size_t len) {
-        MISTD::memcpy(dst, src, len);
+        std::memcpy(dst, src, len);
     }
 
     // move data
     static void move(CharT *dst, CharT const *src, size_t len) {
-        MISTD::memmove(dst, src, len);
+        std::memmove(dst, src, len);
     }
 
     static CharT const  *find(CharT const *s, size_t n, CharT c) {
@@ -343,7 +343,7 @@ public:
             len = Traits::length(ptr + off);
         }
 
-        this->reserve(MISTD::max(this->m_size + len, 2*this->m_size));
+        this->reserve(std::max(this->m_size + len, 2*this->m_size));
         Traits::copy(this->m_buf + this->m_size, ptr + off, len);
         this->m_size += len;
         this->m_buf[this->m_size] = CharT(0);
@@ -364,7 +364,7 @@ public:
     Self &append(CharT ch)
     {
         if (this->m_size + 1 > this->m_reserved_size)
-            this->reserve(MISTD::max(this->m_size + 1, 2*this->m_size));
+            this->reserve(std::max(this->m_size + 1, 2*this->m_size));
 
         this->m_buf[this->m_size] = ch;
         ++this->m_size;
@@ -376,7 +376,7 @@ public:
     Self &append(size_t count, CharT ch)
     {
         if (this->m_size + count > this->m_reserved_size)
-            this->reserve(MISTD::max(this->m_size + count, 2*this->m_size));
+            this->reserve(std::max(this->m_size + count, 2*this->m_size));
 
         for (size_t i = this->m_size; i < this->m_size + count; ++i)
             this->m_buf[i] = ch;
@@ -643,7 +643,7 @@ private:
     void swap_buffers(Self &other) {
         if (this->m_buf != this->m_static_buf && other.m_buf != other.m_static_buf) {
             // none are dynamic
-            MISTD::swap(this->m_buf, other.m_buf);
+            std::swap(this->m_buf, other.m_buf);
         } else if (this->m_buf == this->m_static_buf) {
             // our is static
             Traits::copy(other.m_static_buf, this->m_static_buf, s_buf_size);
@@ -661,12 +661,12 @@ private:
         } else {
             // both are static
             for (size_type i = 0; i < s_buf_size; ++i) {
-                MISTD::swap(this->m_static_buf[i], other.m_static_buf[i]);
+                std::swap(this->m_static_buf[i], other.m_static_buf[i]);
             }
         }
 
-        MISTD::swap(this->m_size,          other.m_size);
-        MISTD::swap(this->m_reserved_size, other.m_reserved_size);
+        std::swap(this->m_size,          other.m_size);
+        std::swap(this->m_reserved_size, other.m_reserved_size);
     }
 
     void bufalloc(size_type len)

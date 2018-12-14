@@ -131,7 +131,7 @@ struct remove_const<T const volatile[N]>
 /// Usage
 /// \code
 ///  MI_CHECK_EQUAL(is_pod<char*>::value, true);
-///  MI_CHECK_EQUAL(is_pod<MISTD::string>::value, false);
+///  MI_CHECK_EQUAL(is_pod<std::string>::value, false);
 /// \endcode
 template <typename T>
 struct is_pod : Integral_constant<bool, ::MI::STLEXT::detail::is_pod_impl<T>::value>

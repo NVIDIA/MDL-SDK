@@ -7,9 +7,10 @@
 #ifndef TEXTURE_SUPPORT_H
 #define TEXTURE_SUPPORT_H
 
+#include <mi/mdl_sdk.h>
+
 #define USE_SMOOTHERSTEP_FILTER
 
-#include <mi/mdl_sdk.h>
 
 typedef mi::neuraylib::Texture_handler_base Texture_handler_base;
 typedef mi::neuraylib::Tex_wrap_mode Tex_wrap_mode;
@@ -114,7 +115,7 @@ static inline mi::Sint64 f2ll_rz(const mi::Float32 f) {
 static inline mi::Sint64 f2ll_rd(const mi::Float32 f) {
     return (mi::Sint64) mi::math::floor(f);
 }
-    
+
 mi::Uint32 texremap(
     mi::Uint32 tex_size, Tex_wrap_mode wrap_mode, const mi::Sint32 crop_offset, float texf)
 {
@@ -129,12 +130,12 @@ mi::Uint32 texremap(
             texi = (int) std::min(std::max(texil, 0ll), (texsizel - 1ll));
         // Repeat
         else {
-            
+
             texi = mi::Sint32(texil % texsizel);
-            
+
             const mi::Sint32 s = mi::math::sign_bit(texf);
             const mi::Sint64 d = texil / (mi::Sint64) tex_size;
-            const mi::Sint32 a = 
+            const mi::Sint32 a =
                 (mi::Sint32) (wrap_mode == Tex_wrap_mode::TEX_WRAP_MIRRORED_REPEAT) &
                 ((mi::Sint32) d^s) & 1;
             const bool alternate = (a != 0);
@@ -152,14 +153,14 @@ mi::Uint32 texremap(
 }
 
 void tex_lookup2D(
-    mi::Float32 res[4], 
-    Texture tex, 
-    const mi::Float32 uv[2], 
-    mi::neuraylib::Tex_wrap_mode wrap_u,
-    mi::neuraylib::Tex_wrap_mode wrap_v,
-    const mi::Float32            crop_u[2],
-    const mi::Float32            crop_v[2]) {
-
+    mi::Float32                   res[4],
+    Texture const                 &tex,
+    const mi::Float32             uv[2],
+    mi::neuraylib::Tex_wrap_mode  wrap_u,
+    mi::neuraylib::Tex_wrap_mode  wrap_v,
+    const mi::Float32             crop_u[2],
+    const mi::Float32             crop_v[2])
+{
     const mi::Float32 crop_w = crop_u[1] - crop_u[0];
     const mi::Float32 crop_h = crop_v[1] - crop_v[0];
 
@@ -170,7 +171,7 @@ void tex_lookup2D(
     const mi::Uint32_2 crop_texres(
         std::max(f2u_rz(u2f_rn(tex.size.x) * crop_w), 1u),
         std::max(f2u_rz(u2f_rn(tex.size.y) * crop_h), 1u));
-    
+
     const float U = uv[0] * crop_texres.x - 0.5f;
     const float V = uv[1] * crop_texres.y - 0.5f;
 
@@ -187,15 +188,17 @@ void tex_lookup2D(
     mi::Float32 ufrac = U - mi::math::floor(U);
     mi::Float32 vfrac = V - mi::math::floor(V);
 
+#ifdef USE_SMOOTHERSTEP_FILTER
     ufrac *= ufrac*ufrac*(ufrac*(ufrac*6.0f - 15.0f) + 10.0f); // smoother step
     vfrac *= vfrac*vfrac*(vfrac*(vfrac*6.0f - 15.0f) + 10.0f);
+#endif
 
-    const  mi::Float32_4 c1 = mi::math::lerp(
+    const mi::Float32_4 c1 = mi::math::lerp(
         mi::Float32_4(tex.data[i00 + 0], tex.data[i00 + 1], tex.data[i00 + 2], tex.data[i00 + 3]),
         mi::Float32_4(tex.data[i01 + 0], tex.data[i01 + 1], tex.data[i01 + 2], tex.data[i01 + 3]),
         ufrac);
 
-    const  mi::Float32_4 c2 = mi::math::lerp(
+    const mi::Float32_4 c2 = mi::math::lerp(
         mi::Float32_4(tex.data[i10 + 0], tex.data[i10 + 1], tex.data[i10 + 2], tex.data[i10 + 3]),
         mi::Float32_4(tex.data[i11 + 0], tex.data[i11 + 1], tex.data[i11 + 2], tex.data[i11 + 3]),
         ufrac);
@@ -205,14 +208,14 @@ void tex_lookup2D(
 
 /// Implementation of \c tex::lookup_float4() for a texture_2d texture.
 void tex_lookup_float4_2d(
-    mi::Float32                  result[4],
+    mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self_base,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[2],
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[2],
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
-    const mi::Float32            crop_u[2],
-    const mi::Float32            crop_v[2])
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2])
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -228,14 +231,14 @@ void tex_lookup_float4_2d(
 
 /// Implementation of \c tex::lookup_float3() for a texture_2d texture.
 void tex_lookup_float3_2d(
-    mi::Float32                  result[3],
+    mi::Float32 result[3],
     const mi::neuraylib::Texture_handler_base *self_base,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[2],
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[2],
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
-    const mi::Float32            crop_u[2],
-    const mi::Float32            crop_v[2])
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2])
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -255,11 +258,11 @@ void tex_lookup_float3_2d(
 
 /// Implementation of \c tex::texel_float4() for a texture_2d texture.
 void tex_texel_float4_2d(
-    mi::Float32                  result[4],
+    mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self_base,
-    mi::Uint32                   texture_idx,
-    const mi::Sint32             coord[2],
-    const mi::Sint32             uv_tile[2])
+    mi::Uint32 texture_idx,
+    const mi::Sint32 coord[2],
+    const mi::Sint32 uv_tile[2])
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -279,16 +282,16 @@ void tex_texel_float4_2d(
 
 /// Implementation of \c tex::lookup_float4() for a texture_3d texture.
 void tex_lookup_float4_3d(
-    mi::Float32                  result[4],
+    mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[3],
-    mi::neuraylib::Tex_wrap_mode              wrap_u,
-    mi::neuraylib::Tex_wrap_mode              wrap_v,
-    mi::neuraylib::Tex_wrap_mode              wrap_w,
-    const mi::Float32            crop_u[2],
-    const mi::Float32            crop_v[2],
-    const mi::Float32            crop_w[2])
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[3],
+    mi::neuraylib::Tex_wrap_mode wrap_u,
+    mi::neuraylib::Tex_wrap_mode wrap_v,
+    mi::neuraylib::Tex_wrap_mode wrap_w,
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2],
+    const mi::Float32 crop_w[2])
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -298,16 +301,16 @@ void tex_lookup_float4_3d(
 
 /// Implementation of \c tex::lookup_float3() for a texture_3d texture.
 void tex_lookup_float3_3d(
-    mi::Float32                  result[3],
+    mi::Float32 result[3],
     const mi::neuraylib::Texture_handler_base *self,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[3],
-    mi::neuraylib::Tex_wrap_mode              wrap_u,
-    mi::neuraylib::Tex_wrap_mode              wrap_v,
-    mi::neuraylib::Tex_wrap_mode              wrap_w,
-    const mi::Float32            crop_u[2],
-    const mi::Float32            crop_v[2],
-    const mi::Float32            crop_w[2])
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[3],
+    mi::neuraylib::Tex_wrap_mode wrap_u,
+    mi::neuraylib::Tex_wrap_mode wrap_v,
+    mi::neuraylib::Tex_wrap_mode wrap_w,
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2],
+    const mi::Float32 crop_w[2])
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -316,10 +319,10 @@ void tex_lookup_float3_3d(
 
 /// Implementation of \c tex::texel_float4() for a texture_3d texture.
 void tex_texel_float4_3d(
-    mi::Float32                  result[4],
+    mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self,
-    mi::Uint32                   texture_idx,
-    const mi::Sint32              coord[3])
+    mi::Uint32 texture_idx,
+    const mi::Sint32 coord[3])
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -329,10 +332,10 @@ void tex_texel_float4_3d(
 
 /// Implementation of \c tex::lookup_float4() for a texture_cube texture.
 void tex_lookup_float4_cube(
-    mi::Float32                  result[4],
+    mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[3])
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[3])
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -342,10 +345,10 @@ void tex_lookup_float4_cube(
 
 /// Implementation of \c tex::lookup_float3() for a texture_cube texture.
 void tex_lookup_float3_cube(
-    mi::Float32                  result[3],
+    mi::Float32 result[3],
     const mi::neuraylib::Texture_handler_base *self,
-    mi::Uint32                   texture_idx,
-    const mi::Float32            coord[3])
+    mi::Uint32 texture_idx,
+    const mi::Float32 coord[3])
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -355,10 +358,10 @@ void tex_lookup_float3_cube(
 /// Implementation of \c resolution_2d function needed by generated code,
 /// which retrieves the width and height of the given texture.
 void tex_resolution_2d(
-    mi::Sint32                   result[2],
+    mi::Sint32 result[2],
     const mi::neuraylib::Texture_handler_base *self_base,
-    mi::Uint32                   texture_idx,
-    const mi::Sint32             uv_tile[2])
+    mi::Uint32 texture_idx,
+    const mi::Sint32 uv_tile[2])
 {
 
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
@@ -369,10 +372,106 @@ void tex_resolution_2d(
         result[1] = 0;
         return;
     }
+
     Texture const &tex = self->textures[texture_idx - 1];
 
     result[0] = tex.size.x;
     result[1] = tex.size.y;
+}
+
+/// Implementation of \c df::light_profile_evaluate() for a light profile.
+mi::Float32 light_profile_evaluate(
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const float theta_phi[2])
+{
+    return 0.0f;
+}
+
+/// Implementation of \c df::light_profile_sample() for a light profile.
+void light_profile_sample(
+    mi::Float32 result[3], // theta, phi, pdf
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const float xi[3])
+{
+    result[0] = 0.0f;
+    result[1] = 0.0f;
+    result[2] = 0.0f;
+}
+
+/// Implementation of \c df::light_profile_pdf() for a light profile.
+mi::Float32 light_profile_pdf(
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const float theta_phi[2])
+{
+    return 0.0f;
+}
+
+/// Implementation of \c df::bsdf_measurement_resolution().
+void bsdf_measurement_resolution(
+    mi::Uint32 result[3],
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    mi::neuraylib::Mbsdf_part part)
+{
+    result[0] = 0;
+    result[1] = 0;
+    result[2] = 0;
+}
+
+/// Implementation of \c df::bsdf_measurement_evaluate() for an MBSDF.
+void bsdf_measurement_evaluate(
+    mi::Float32 result[3],
+    const Texture_handler_base  *self,
+    mi::Uint32 resource_idx,
+    const mi::Float32 theta_phi_in[2],
+    const mi::Float32 theta_phi_out[2],
+    mi::neuraylib::Mbsdf_part part)
+{
+    result[0] = 0.0f;
+    result[1] = 0.0f;
+    result[2] = 0.0f;
+}
+
+// Implementation of \c df::bsdf_measurement_sample() for an MBSDF.
+void bsdf_measurement_sample(
+    mi::Float32 result[3],
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const mi::Float32 theta_phi_out[2],
+    const mi::Float32 xi[3],
+    mi::neuraylib::Mbsdf_part part)
+{
+    result[0] = 0.0f;
+    result[1] = 0.0f;
+    result[2] = 0.0f;
+}
+
+/// Implementation of \c df::bsdf_measurement_pdf() for an MBSDF.
+mi::Float32 bsdf_measurement_pdf(
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const mi::Float32 theta_phi_in[2],
+    const mi::Float32 theta_phi_out[2],
+    mi::neuraylib::Mbsdf_part part)
+{
+    return 0.0f;
+}
+
+// Implementation of \c df::bsdf_measurement_albedos() for an MBSDF.
+void bsdf_measurement_albedos(
+    mi::Float32 result[4],
+    const Texture_handler_base *self,
+    mi::Uint32 resource_idx,
+    const mi::Float32 theta_phi[2])
+{
+    result[0] = 0.0f;
+    result[1] = 0.0f;
+    result[2] = 0.0f;
+    result[3] = 0.0f;
+
 }
 
 mi::neuraylib::Texture_handler_vtable tex_vtable = {
@@ -384,7 +483,15 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_texel_float4_3d,
     tex_lookup_float4_cube,
     tex_lookup_float3_cube,
-    tex_resolution_2d
+    tex_resolution_2d,
+    light_profile_evaluate,
+    light_profile_sample,
+    light_profile_pdf,
+    bsdf_measurement_resolution,
+    bsdf_measurement_evaluate,
+    bsdf_measurement_sample,
+    bsdf_measurement_pdf,
+    bsdf_measurement_albedos
 };
 
 #endif

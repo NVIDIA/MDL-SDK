@@ -109,7 +109,7 @@ void LLLexer::FP80HexToIntPair(const char *Buffer, const char *End,
 
 // UnEscapeLexed - Run through the specified buffer and change \xx codes to the
 // appropriate character.
-static void UnEscapeLexed(MISTD::string &Str) {
+static void UnEscapeLexed(std::string &Str) {
   if (Str.empty()) return;
 
   char *Buffer = &Str[0], *EndBuffer = Buffer+Str.size();
@@ -163,7 +163,7 @@ LLLexer::LLLexer(MemoryBuffer *StartBuf, SourceMgr &sm, SMDiagnostic &Err,
   CurPtr = CurBuf->getBufferStart();
 }
 
-MISTD::string LLLexer::getFilename() const {
+std::string LLLexer::getFilename() const {
   return CurBuf->getBufferIdentifier();
 }
 

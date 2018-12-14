@@ -25,7 +25,7 @@ namespace {
 
 // Definition of the complex types used in this pass.
 
-typedef MISTD::pair<BasicBlock *, Value *> BBValuePair;
+typedef std::pair<BasicBlock *, Value *> BBValuePair;
 
 typedef SmallVector<RegionNode*, 8> RNVector;
 typedef SmallVector<BasicBlock*, 8> BBVector;
@@ -280,7 +280,7 @@ void StructurizeCFG::orderNodes() {
   scc_iterator<Region *> I = scc_begin(ParentRegion),
                          E = scc_end(ParentRegion);
   for (Order.clear(); I != E; ++I) {
-    MISTD::vector<RegionNode *> &Nodes = *I;
+    std::vector<RegionNode *> &Nodes = *I;
     Order.append(Nodes.begin(), Nodes.end());
   }
 }
@@ -512,7 +512,7 @@ void StructurizeCFG::delPhiValues(BasicBlock *From, BasicBlock *To) {
     PHINode &Phi = cast<PHINode>(*I++);
     while (Phi.getBasicBlockIndex(From) != -1) {
       Value *Deleted = Phi.removeIncomingValue(From, false);
-      Map[&Phi].push_back(MISTD::make_pair(From, Deleted));
+      Map[&Phi].push_back(std::make_pair(From, Deleted));
     }
   }
 }

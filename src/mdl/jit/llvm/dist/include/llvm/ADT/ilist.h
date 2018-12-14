@@ -143,11 +143,11 @@ struct ilist_traits<const Ty> : public ilist_traits<Ty> {};
 //
 template<typename NodeTy>
 class ilist_iterator
-  : public MISTD::iterator<MISTD::bidirectional_iterator_tag, NodeTy, ptrdiff_t> {
+  : public std::iterator<std::bidirectional_iterator_tag, NodeTy, ptrdiff_t> {
 
 public:
   typedef ilist_traits<NodeTy> Traits;
-  typedef MISTD::iterator<MISTD::bidirectional_iterator_tag,
+  typedef std::iterator<std::bidirectional_iterator_tag,
                         NodeTy, ptrdiff_t> super;
 
   typedef typename super::value_type value_type;
@@ -345,8 +345,8 @@ public:
   typedef ilist_iterator<const NodeTy> const_iterator;
   typedef size_t size_type;
   typedef ptrdiff_t difference_type;
-  typedef MISTD::reverse_iterator<const_iterator>  const_reverse_iterator;
-  typedef MISTD::reverse_iterator<iterator>  reverse_iterator;
+  typedef std::reverse_iterator<const_iterator>  const_reverse_iterator;
+  typedef std::reverse_iterator<iterator>  reverse_iterator;
 
   iplist() : Head(this->provideInitialHead()) {}
   ~iplist() {
@@ -406,7 +406,7 @@ public:
 
   void swap(iplist &RHS) {
     assert(0 && "Swap does not use list traits callback correctly yet!");
-    MISTD::swap(Head, RHS.Head);
+    std::swap(Head, RHS.Head);
   }
 
   iterator insert(iterator where, NodeTy *New) {
@@ -538,7 +538,7 @@ public:
 
   size_type LLVM_ATTRIBUTE_UNUSED_RESULT size() const {
     if (Head == 0) return 0; // Don't require construction of sentinel if empty.
-    return MISTD::distance(begin(), end());
+    return std::distance(begin(), end());
   }
 
   iterator erase(iterator first, iterator last) {
@@ -711,7 +711,7 @@ struct ilist : public iplist<NodeTy> {
 
 } // End llvm namespace
 
-namespace MISTD {
+namespace std {
   // Ensure that swap uses the fast list swap...
   template<class Ty>
   void swap(llvm::iplist<Ty> &Left, llvm::iplist<Ty> &Right) {

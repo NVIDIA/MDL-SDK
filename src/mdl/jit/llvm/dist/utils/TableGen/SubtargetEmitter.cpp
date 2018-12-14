@@ -35,11 +35,11 @@ class SubtargetEmitter {
   // The SchedClassDesc table indexes into a global write resource table, write
   // latency table, and read advance table.
   struct SchedClassTables {
-    MISTD::vector<MISTD::vector<MCSchedClassDesc> > ProcSchedClasses;
-    MISTD::vector<MCWriteProcResEntry> WriteProcResources;
-    MISTD::vector<MCWriteLatencyEntry> WriteLatencies;
-    MISTD::vector<MISTD::string> WriterNames;
-    MISTD::vector<MCReadAdvanceEntry> ReadAdvanceEntries;
+    std::vector<std::vector<MCSchedClassDesc> > ProcSchedClasses;
+    std::vector<MCWriteProcResEntry> WriteProcResources;
+    std::vector<MCWriteLatencyEntry> WriteLatencies;
+    std::vector<std::string> WriterNames;
+    std::vector<MCReadAdvanceEntry> ReadAdvanceEntries;
 
     // Reserve an invalid entry at index 0
     SchedClassTables() {
@@ -60,24 +60,24 @@ class SubtargetEmitter {
 
   RecordKeeper &Records;
   CodeGenSchedModels &SchedModels;
-  MISTD::string Target;
+  std::string Target;
 
   void Enumeration(raw_ostream &OS, const char *ClassName, bool isBits);
   unsigned FeatureKeyValues(raw_ostream &OS);
   unsigned CPUKeyValues(raw_ostream &OS);
-  void FormItineraryStageString(const MISTD::string &Names,
-                                Record *ItinData, MISTD::string &ItinString,
+  void FormItineraryStageString(const std::string &Names,
+                                Record *ItinData, std::string &ItinString,
                                 unsigned &NStages);
-  void FormItineraryOperandCycleString(Record *ItinData, MISTD::string &ItinString,
+  void FormItineraryOperandCycleString(Record *ItinData, std::string &ItinString,
                                        unsigned &NOperandCycles);
-  void FormItineraryBypassString(const MISTD::string &Names,
+  void FormItineraryBypassString(const std::string &Names,
                                  Record *ItinData,
-                                 MISTD::string &ItinString, unsigned NOperandCycles);
+                                 std::string &ItinString, unsigned NOperandCycles);
   void EmitStageAndOperandCycleData(raw_ostream &OS,
-                                    MISTD::vector<MISTD::vector<InstrItinerary> >
+                                    std::vector<std::vector<InstrItinerary> >
                                       &ProcItinLists);
   void EmitItineraries(raw_ostream &OS,
-                       MISTD::vector<MISTD::vector<InstrItinerary> >
+                       std::vector<std::vector<InstrItinerary> >
                          &ProcItinLists);
   void EmitProcessorProp(raw_ostream &OS, const Record *R, const char *Name,
                          char Separator);
@@ -87,14 +87,14 @@ class SubtargetEmitter {
                              const CodeGenProcModel &ProcModel);
   Record *FindReadAdvance(const CodeGenSchedRW &SchedRead,
                           const CodeGenProcModel &ProcModel);
-  void ExpandProcResources(RecVec &PRVec, MISTD::vector<int64_t> &Cycles,
+  void ExpandProcResources(RecVec &PRVec, std::vector<int64_t> &Cycles,
                            const CodeGenProcModel &ProcModel);
   void GenSchedClassTables(const CodeGenProcModel &ProcModel,
                            SchedClassTables &SchedTables);
   void EmitSchedClassTables(SchedClassTables &SchedTables, raw_ostream &OS);
   void EmitProcessorModels(raw_ostream &OS);
   void EmitProcessorLookup(raw_ostream &OS);
-  void EmitSchedModelHelpers(MISTD::string ClassName, raw_ostream &OS);
+  void EmitSchedModelHelpers(std::string ClassName, raw_ostream &OS);
   void EmitSchedModel(raw_ostream &OS);
   void ParseFeaturesFunction(raw_ostream &OS, unsigned NumFeatures,
                              unsigned NumProcs);
@@ -115,8 +115,8 @@ void SubtargetEmitter::Enumeration(raw_ostream &OS,
                                    const char *ClassName,
                                    bool isBits) {
   // Get all records of class and sort
-  MISTD::vector<Record*> DefList = Records.getAllDerivedDefinitions(ClassName);
-  MISTD::sort(DefList.begin(), DefList.end(), LessRecord());
+  std::vector<Record*> DefList = Records.getAllDerivedDefinitions(ClassName);
+  std::sort(DefList.begin(), DefList.end(), LessRecord());
 
   unsigned N = DefList.size();
   if (N == 0)
@@ -173,13 +173,13 @@ void SubtargetEmitter::Enumeration(raw_ostream &OS,
 //
 unsigned SubtargetEmitter::FeatureKeyValues(raw_ostream &OS) {
   // Gather and sort all the features
-  MISTD::vector<Record*> FeatureList =
+  std::vector<Record*> FeatureList =
                            Records.getAllDerivedDefinitions("SubtargetFeature");
 
   if (FeatureList.empty())
     return 0;
 
-  MISTD::sort(FeatureList.begin(), FeatureList.end(), LessRecordFieldName());
+  std::sort(FeatureList.begin(), FeatureList.end(), LessRecordFieldName());
 
   // Begin feature table
   OS << "// Sorted (by key) array of values for CPU features.\n"
@@ -192,9 +192,9 @@ unsigned SubtargetEmitter::FeatureKeyValues(raw_ostream &OS) {
     // Next feature
     Record *Feature = FeatureList[i];
 
-    const MISTD::string &Name = Feature->getName();
-    const MISTD::string &CommandLineName = Feature->getValueAsString("Name");
-    const MISTD::string &Desc = Feature->getValueAsString("Desc");
+    const std::string &Name = Feature->getName();
+    const std::string &CommandLineName = Feature->getValueAsString("Name");
+    const std::string &Desc = Feature->getValueAsString("Desc");
 
     if (CommandLineName.empty()) continue;
 
@@ -204,7 +204,7 @@ unsigned SubtargetEmitter::FeatureKeyValues(raw_ostream &OS) {
        << "\"" << Desc << "\", "
        << Target << "::" << Name << ", ";
 
-    const MISTD::vector<Record*> &ImpliesList =
+    const std::vector<Record*> &ImpliesList =
       Feature->getValueAsListOfDefs("Implies");
 
     if (ImpliesList.empty()) {
@@ -237,9 +237,9 @@ unsigned SubtargetEmitter::FeatureKeyValues(raw_ostream &OS) {
 //
 unsigned SubtargetEmitter::CPUKeyValues(raw_ostream &OS) {
   // Gather and sort processor information
-  MISTD::vector<Record*> ProcessorList =
+  std::vector<Record*> ProcessorList =
                           Records.getAllDerivedDefinitions("Processor");
-  MISTD::sort(ProcessorList.begin(), ProcessorList.end(), LessRecordFieldName());
+  std::sort(ProcessorList.begin(), ProcessorList.end(), LessRecordFieldName());
 
   // Begin processor table
   OS << "// Sorted (by key) array of values for CPU subtype.\n"
@@ -251,8 +251,8 @@ unsigned SubtargetEmitter::CPUKeyValues(raw_ostream &OS) {
     // Next processor
     Record *Processor = ProcessorList[i];
 
-    const MISTD::string &Name = Processor->getValueAsString("Name");
-    const MISTD::vector<Record*> &FeatureList =
+    const std::string &Name = Processor->getValueAsString("Name");
+    const std::vector<Record*> &FeatureList =
       Processor->getValueAsListOfDefs("Features");
 
     // Emit as { "cpu", "description", f1 | f2 | ... fn },
@@ -289,12 +289,12 @@ unsigned SubtargetEmitter::CPUKeyValues(raw_ostream &OS) {
 // data initialization for the specified itinerary.  N is the number
 // of stages.
 //
-void SubtargetEmitter::FormItineraryStageString(const MISTD::string &Name,
+void SubtargetEmitter::FormItineraryStageString(const std::string &Name,
                                                 Record *ItinData,
-                                                MISTD::string &ItinString,
+                                                std::string &ItinString,
                                                 unsigned &NStages) {
   // Get states list
-  const MISTD::vector<Record*> &StageList =
+  const std::vector<Record*> &StageList =
     ItinData->getValueAsListOfDefs("Stages");
 
   // For each stage
@@ -308,7 +308,7 @@ void SubtargetEmitter::FormItineraryStageString(const MISTD::string &Name,
     ItinString += "  { " + itostr(Cycles) + ", ";
 
     // Get unit list
-    const MISTD::vector<Record*> &UnitList = Stage->getValueAsListOfDefs("Units");
+    const std::vector<Record*> &UnitList = Stage->getValueAsListOfDefs("Units");
 
     // For each unit
     for (unsigned j = 0, M = UnitList.size(); j < M;) {
@@ -335,9 +335,9 @@ void SubtargetEmitter::FormItineraryStageString(const MISTD::string &Name,
 // number of operands that has cycles specified.
 //
 void SubtargetEmitter::FormItineraryOperandCycleString(Record *ItinData,
-                         MISTD::string &ItinString, unsigned &NOperandCycles) {
+                         std::string &ItinString, unsigned &NOperandCycles) {
   // Get operand cycle list
-  const MISTD::vector<int64_t> &OperandCycleList =
+  const std::vector<int64_t> &OperandCycleList =
     ItinData->getValueAsListOfInts("OperandCycles");
 
   // For each operand cycle
@@ -351,11 +351,11 @@ void SubtargetEmitter::FormItineraryOperandCycleString(Record *ItinData,
   }
 }
 
-void SubtargetEmitter::FormItineraryBypassString(const MISTD::string &Name,
+void SubtargetEmitter::FormItineraryBypassString(const std::string &Name,
                                                  Record *ItinData,
-                                                 MISTD::string &ItinString,
+                                                 std::string &ItinString,
                                                  unsigned NOperandCycles) {
-  const MISTD::vector<Record*> &BypassList =
+  const std::vector<Record*> &BypassList =
     ItinData->getValueAsListOfDefs("Bypasses");
   unsigned N = BypassList.size();
   unsigned i = 0;
@@ -376,7 +376,7 @@ void SubtargetEmitter::FormItineraryBypassString(const MISTD::string &Name,
 //
 void SubtargetEmitter::
 EmitStageAndOperandCycleData(raw_ostream &OS,
-                             MISTD::vector<MISTD::vector<InstrItinerary> >
+                             std::vector<std::vector<InstrItinerary> >
                                &ProcItinLists) {
 
   // Multiple processor models may share an itinerary record. Emit it once.
@@ -389,11 +389,11 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
     if (!ItinsDefSet.insert(PI->ItinsDef))
       continue;
 
-    MISTD::vector<Record*> FUs = PI->ItinsDef->getValueAsListOfDefs("FU");
+    std::vector<Record*> FUs = PI->ItinsDef->getValueAsListOfDefs("FU");
     if (FUs.empty())
       continue;
 
-    const MISTD::string &Name = PI->ItinsDef->getName();
+    const std::string &Name = PI->ItinsDef->getName();
     OS << "\n// Functional units for \"" << Name << "\"\n"
        << "namespace " << Name << "FU {\n";
 
@@ -403,7 +403,7 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
 
     OS << "}\n";
 
-    MISTD::vector<Record*> BPs = PI->ItinsDef->getValueAsListOfDefs("BP");
+    std::vector<Record*> BPs = PI->ItinsDef->getValueAsListOfDefs("BP");
     if (BPs.size()) {
       OS << "\n// Pipeline forwarding pathes for itineraries \"" << Name
          << "\"\n" << "namespace " << Name << "Bypass {\n";
@@ -418,17 +418,17 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
   }
 
   // Begin stages table
-  MISTD::string StageTable = "\nextern const llvm::InstrStage " + Target +
+  std::string StageTable = "\nextern const llvm::InstrStage " + Target +
                            "Stages[] = {\n";
   StageTable += "  { 0, 0, 0, llvm::InstrStage::Required }, // No itinerary\n";
 
   // Begin operand cycle table
-  MISTD::string OperandCycleTable = "extern const unsigned " + Target +
+  std::string OperandCycleTable = "extern const unsigned " + Target +
     "OperandCycles[] = {\n";
   OperandCycleTable += "  0, // No itinerary\n";
 
   // Begin pipeline bypass table
-  MISTD::string BypassTable = "extern const unsigned " + Target +
+  std::string BypassTable = "extern const unsigned " + Target +
     "ForwardingPaths[] = {\n";
   BypassTable += " 0, // No itinerary\n";
 
@@ -436,7 +436,7 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
   // operand cycles, and pipepine bypess tables. Then add the new Itinerary
   // object with computed offsets to the ProcItinLists result.
   unsigned StageCount = 1, OperandCycleCount = 1;
-  MISTD::map<MISTD::string, unsigned> ItinStageMap, ItinOperandMap;
+  std::map<std::string, unsigned> ItinStageMap, ItinOperandMap;
   for (CodeGenSchedModels::ProcIter PI = SchedModels.procModelBegin(),
          PE = SchedModels.procModelEnd(); PI != PE; ++PI) {
     const CodeGenProcModel &ProcModel = *PI;
@@ -446,11 +446,11 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
 
     // If this processor defines no itineraries, then leave the itinerary list
     // empty.
-    MISTD::vector<InstrItinerary> &ItinList = ProcItinLists.back();
+    std::vector<InstrItinerary> &ItinList = ProcItinLists.back();
     if (!ProcModel.hasItineraries())
       continue;
 
-    const MISTD::string &Name = ProcModel.ItinsDef->getName();
+    const std::string &Name = ProcModel.ItinsDef->getName();
 
     ItinList.resize(SchedModels.numInstrSchedClasses());
     assert(ProcModel.ItinDefList.size() == ItinList.size() && "bad Itins");
@@ -462,15 +462,15 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
       Record *ItinData = ProcModel.ItinDefList[SchedClassIdx];
 
       // Get string and stage count
-      MISTD::string ItinStageString;
+      std::string ItinStageString;
       unsigned NStages = 0;
       if (ItinData)
         FormItineraryStageString(Name, ItinData, ItinStageString, NStages);
 
       // Get string and operand cycle count
-      MISTD::string ItinOperandCycleString;
+      std::string ItinOperandCycleString;
       unsigned NOperandCycles = 0;
-      MISTD::string ItinBypassString;
+      std::string ItinBypassString;
       if (ItinData) {
         FormItineraryOperandCycleString(ItinData, ItinOperandCycleString,
                                         NOperandCycles);
@@ -498,12 +498,12 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
       // Check to see if operand cycle already exists and create if it doesn't
       unsigned FindOperandCycle = 0;
       if (NOperandCycles > 0) {
-        MISTD::string ItinOperandString = ItinOperandCycleString+ItinBypassString;
+        std::string ItinOperandString = ItinOperandCycleString+ItinBypassString;
         FindOperandCycle = ItinOperandMap[ItinOperandString];
         if (FindOperandCycle == 0) {
           // Emit as  cycle, // index
           OperandCycleTable += ItinOperandCycleString + ", // ";
-          MISTD::string OperandIdxComment = itostr(OperandCycleCount);
+          std::string OperandIdxComment = itostr(OperandCycleCount);
           if (NOperandCycles > 1)
             OperandIdxComment += "-"
               + itostr(OperandCycleCount + NOperandCycles - 1);
@@ -553,13 +553,13 @@ EmitStageAndOperandCycleData(raw_ostream &OS,
 //
 void SubtargetEmitter::
 EmitItineraries(raw_ostream &OS,
-                MISTD::vector<MISTD::vector<InstrItinerary> > &ProcItinLists) {
+                std::vector<std::vector<InstrItinerary> > &ProcItinLists) {
 
   // Multiple processor models may share an itinerary record. Emit it once.
   SmallPtrSet<Record*, 8> ItinsDefSet;
 
   // For each processor's machine model
-  MISTD::vector<MISTD::vector<InstrItinerary> >::iterator
+  std::vector<std::vector<InstrItinerary> >::iterator
       ProcItinListsIter = ProcItinLists.begin();
   for (CodeGenSchedModels::ProcIter PI = SchedModels.procModelBegin(),
          PE = SchedModels.procModelEnd(); PI != PE; ++PI, ++ProcItinListsIter) {
@@ -569,11 +569,11 @@ EmitItineraries(raw_ostream &OS,
       continue;
 
     // Get processor itinerary name
-    const MISTD::string &Name = ItinsDef->getName();
+    const std::string &Name = ItinsDef->getName();
 
     // Get the itinerary list for the processor.
     assert(ProcItinListsIter != ProcItinLists.end() && "bad iterator");
-    MISTD::vector<InstrItinerary> &ItinList = *ProcItinListsIter;
+    std::vector<InstrItinerary> &ItinList = *ProcItinListsIter;
 
     OS << "\n";
     OS << "static const llvm::InstrItinerary ";
@@ -715,7 +715,7 @@ Record *SubtargetEmitter::FindWriteResources(
   // then call FindWriteResources recursively with that model here.
   if (!ResDef) {
     PrintFatalError(ProcModel.ModelDef->getLoc(),
-                  MISTD::string("Processor does not define resources for ")
+                  std::string("Processor does not define resources for ")
                   + SchedWrite.TheDef->getName());
   }
   return ResDef;
@@ -769,7 +769,7 @@ Record *SubtargetEmitter::FindReadAdvance(const CodeGenSchedRW &SchedRead,
   // then call FindReadAdvance recursively with that model here.
   if (!ResDef && SchedRead.TheDef->getName() != "ReadDefault") {
     PrintFatalError(ProcModel.ModelDef->getLoc(),
-                  MISTD::string("Processor does not define resources for ")
+                  std::string("Processor does not define resources for ")
                   + SchedRead.TheDef->getName());
   }
   return ResDef;
@@ -778,7 +778,7 @@ Record *SubtargetEmitter::FindReadAdvance(const CodeGenSchedRW &SchedRead,
 // Expand an explicit list of processor resources into a full list of implied
 // resource groups and super resources that cover them.
 void SubtargetEmitter::ExpandProcResources(RecVec &PRVec,
-                                           MISTD::vector<int64_t> &Cycles,
+                                           std::vector<int64_t> &Cycles,
                                            const CodeGenProcModel &PM) {
   // Default to 1 resource cycle.
   Cycles.resize(PRVec.size(), 1);
@@ -812,7 +812,7 @@ void SubtargetEmitter::ExpandProcResources(RecVec &PRVec,
       RecVec SuperResources = (*PRI)->getValueAsListOfDefs("Resources");
       RecIter SubI = SubResources.begin(), SubE = SubResources.end();
       for( ; SubI != SubE; ++SubI) {
-        if (MISTD::find(SuperResources.begin(), SuperResources.end(), *SubI)
+        if (std::find(SuperResources.begin(), SuperResources.end(), *SubI)
             == SuperResources.end()) {
           break;
         }
@@ -833,7 +833,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
   if (!ProcModel.hasInstrSchedModel())
     return;
 
-  MISTD::vector<MCSchedClassDesc> &SCTab = SchedTables.ProcSchedClasses.back();
+  std::vector<MCSchedClassDesc> &SCTab = SchedTables.ProcSchedClasses.back();
   for (CodeGenSchedModels::SchedClassIter SCI = SchedModels.schedClassBegin(),
          SCE = SchedModels.schedClassEnd(); SCI != SCE; ++SCI) {
     DEBUG(SCI->dump(&SchedModels));
@@ -850,14 +850,14 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
 
     // A Variant SchedClass has no resources of its own.
     bool HasVariants = false;
-    for (MISTD::vector<CodeGenSchedTransition>::const_iterator
+    for (std::vector<CodeGenSchedTransition>::const_iterator
            TI = SCI->Transitions.begin(), TE = SCI->Transitions.end();
          TI != TE; ++TI) {
       if (TI->ProcIndices[0] == 0) {
         HasVariants = true;
         break;
       }
-      IdxIter PIPos = MISTD::find(TI->ProcIndices.begin(),
+      IdxIter PIPos = std::find(TI->ProcIndices.begin(),
                                 TI->ProcIndices.end(), ProcModel.Index);
       if (PIPos != TI->ProcIndices.end()) {
         HasVariants = true;
@@ -874,7 +874,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
     // If ProcIndices contains 0, this class applies to all processors.
     assert(!SCI->ProcIndices.empty() && "expect at least one procidx");
     if (SCI->ProcIndices[0] != 0) {
-      IdxIter PIPos = MISTD::find(SCI->ProcIndices.begin(),
+      IdxIter PIPos = std::find(SCI->ProcIndices.begin(),
                                 SCI->ProcIndices.end(), ProcModel.Index);
       if (PIPos == SCI->ProcIndices.end())
         continue;
@@ -905,7 +905,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
       for (RecIter II = ProcModel.ItinRWDefs.begin(),
              IE = ProcModel.ItinRWDefs.end(); II != IE; ++II) {
         RecVec Matched = (*II)->getValueAsListOfDefs("MatchedItinClasses");
-        if (MISTD::find(Matched.begin(), Matched.end(), SCI->ItinClassDef)
+        if (std::find(Matched.begin(), Matched.end(), SCI->ItinClassDef)
             != Matched.end()) {
           SchedModels.findRWs((*II)->getValueAsListOfDefs("OperandReadWrites"),
                               Writes, Reads);
@@ -918,10 +918,10 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
       }
     }
     // Sum resources across all operand writes.
-    MISTD::vector<MCWriteProcResEntry> WriteProcResources;
-    MISTD::vector<MCWriteLatencyEntry> WriteLatencies;
-    MISTD::vector<MISTD::string> WriterNames;
-    MISTD::vector<MCReadAdvanceEntry> ReadAdvanceEntries;
+    std::vector<MCWriteProcResEntry> WriteProcResources;
+    std::vector<MCWriteLatencyEntry> WriteLatencies;
+    std::vector<std::string> WriterNames;
+    std::vector<MCReadAdvanceEntry> ReadAdvanceEntries;
     for (IdxIter WI = Writes.begin(), WE = Writes.end(); WI != WE; ++WI) {
       IdxVec WriteSeq;
       SchedModels.expandRWSeqForProc(*WI, WriteSeq, /*IsRead=*/false,
@@ -958,7 +958,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
 
         // Create an entry for each ProcResource listed in WriteRes.
         RecVec PRVec = WriteRes->getValueAsListOfDefs("ProcResources");
-        MISTD::vector<int64_t> Cycles =
+        std::vector<int64_t> Cycles =
           WriteRes->getValueAsListOfInts("ResourceCycles");
 
         ExpandProcResources(PRVec, Cycles, ProcModel);
@@ -1011,7 +1011,7 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
           WriteIDs.push_back(SchedModels.getSchedRWIdx(*VWI, /*IsRead=*/false));
         }
       }
-      MISTD::sort(WriteIDs.begin(), WriteIDs.end());
+      std::sort(WriteIDs.begin(), WriteIDs.end());
       for(IdxIter WI = WriteIDs.begin(), WE = WriteIDs.end(); WI != WE; ++WI) {
         MCReadAdvanceEntry RAEntry;
         RAEntry.UseIdx = UseIdx;
@@ -1029,12 +1029,12 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
     // compression.
     //
     // WritePrecRes entries are sorted by ProcResIdx.
-    MISTD::sort(WriteProcResources.begin(), WriteProcResources.end(),
+    std::sort(WriteProcResources.begin(), WriteProcResources.end(),
               LessWriteProcResources());
 
     SCDesc.NumWriteProcResEntries = WriteProcResources.size();
-    MISTD::vector<MCWriteProcResEntry>::iterator WPRPos =
-      MISTD::search(SchedTables.WriteProcResources.begin(),
+    std::vector<MCWriteProcResEntry>::iterator WPRPos =
+      std::search(SchedTables.WriteProcResources.begin(),
                   SchedTables.WriteProcResources.end(),
                   WriteProcResources.begin(), WriteProcResources.end());
     if (WPRPos != SchedTables.WriteProcResources.end())
@@ -1046,8 +1046,8 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
     }
     // Latency entries must remain in operand order.
     SCDesc.NumWriteLatencyEntries = WriteLatencies.size();
-    MISTD::vector<MCWriteLatencyEntry>::iterator WLPos =
-      MISTD::search(SchedTables.WriteLatencies.begin(),
+    std::vector<MCWriteLatencyEntry>::iterator WLPos =
+      std::search(SchedTables.WriteLatencies.begin(),
                   SchedTables.WriteLatencies.end(),
                   WriteLatencies.begin(), WriteLatencies.end());
     if (WLPos != SchedTables.WriteLatencies.end()) {
@@ -1055,8 +1055,8 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
       SCDesc.WriteLatencyIdx = idx;
       for (unsigned i = 0, e = WriteLatencies.size(); i < e; ++i)
         if (SchedTables.WriterNames[idx + i].find(WriterNames[i]) ==
-            MISTD::string::npos) {
-          SchedTables.WriterNames[idx + i] += MISTD::string("_") + WriterNames[i];
+            std::string::npos) {
+          SchedTables.WriterNames[idx + i] += std::string("_") + WriterNames[i];
         }
     }
     else {
@@ -1069,8 +1069,8 @@ void SubtargetEmitter::GenSchedClassTables(const CodeGenProcModel &ProcModel,
     }
     // ReadAdvanceEntries must remain in operand order.
     SCDesc.NumReadAdvanceEntries = ReadAdvanceEntries.size();
-    MISTD::vector<MCReadAdvanceEntry>::iterator RAPos =
-      MISTD::search(SchedTables.ReadAdvanceEntries.begin(),
+    std::vector<MCReadAdvanceEntry>::iterator RAPos =
+      std::search(SchedTables.ReadAdvanceEntries.begin(),
                   SchedTables.ReadAdvanceEntries.end(),
                   ReadAdvanceEntries.begin(), ReadAdvanceEntries.end());
     if (RAPos != SchedTables.ReadAdvanceEntries.end())
@@ -1141,7 +1141,7 @@ void SubtargetEmitter::EmitSchedClassTables(SchedClassTables &SchedTables,
     if (!PI->hasInstrSchedModel())
       continue;
 
-    MISTD::vector<MCSchedClassDesc> &SCTab =
+    std::vector<MCSchedClassDesc> &SCTab =
       SchedTables.ProcSchedClasses[1 + (PI - SchedModels.procModelBegin())];
 
     OS << "\n// {Name, NumMicroOps, BeginGroup, EndGroup,"
@@ -1224,9 +1224,9 @@ void SubtargetEmitter::EmitProcessorModels(raw_ostream &OS) {
 //
 void SubtargetEmitter::EmitProcessorLookup(raw_ostream &OS) {
   // Gather and sort processor information
-  MISTD::vector<Record*> ProcessorList =
+  std::vector<Record*> ProcessorList =
                           Records.getAllDerivedDefinitions("Processor");
-  MISTD::sort(ProcessorList.begin(), ProcessorList.end(), LessRecordFieldName());
+  std::sort(ProcessorList.begin(), ProcessorList.end(), LessRecordFieldName());
 
   // Begin processor table
   OS << "\n";
@@ -1239,8 +1239,8 @@ void SubtargetEmitter::EmitProcessorLookup(raw_ostream &OS) {
     // Next processor
     Record *Processor = ProcessorList[i];
 
-    const MISTD::string &Name = Processor->getValueAsString("Name");
-    const MISTD::string &ProcModelName =
+    const std::string &Name = Processor->getValueAsString("Name");
+    const std::string &ProcModelName =
       SchedModels.getModelForProc(Processor).ModelName;
 
     // Emit as { "cpu", procinit },
@@ -1270,7 +1270,7 @@ void SubtargetEmitter::EmitSchedModel(raw_ostream &OS) {
      << "#endif\n";
 
   if (SchedModels.hasItineraries()) {
-    MISTD::vector<MISTD::vector<InstrItinerary> > ProcItinLists;
+    std::vector<std::vector<InstrItinerary> > ProcItinLists;
     // Emit the stage data
     EmitStageAndOperandCycleData(OS, ProcItinLists);
     EmitItineraries(OS, ProcItinLists);
@@ -1293,15 +1293,15 @@ void SubtargetEmitter::EmitSchedModel(raw_ostream &OS) {
   OS << "#undef DBGFIELD";
 }
 
-void SubtargetEmitter::EmitSchedModelHelpers(MISTD::string ClassName,
+void SubtargetEmitter::EmitSchedModelHelpers(std::string ClassName,
                                              raw_ostream &OS) {
   OS << "unsigned " << ClassName
      << "\n::resolveSchedClass(unsigned SchedClass, const MachineInstr *MI,"
      << " const TargetSchedModel *SchedModel) const {\n";
 
-  MISTD::vector<Record*> Prologs = Records.getAllDerivedDefinitions("PredicateProlog");
-  MISTD::sort(Prologs.begin(), Prologs.end(), LessRecord());
-  for (MISTD::vector<Record*>::const_iterator
+  std::vector<Record*> Prologs = Records.getAllDerivedDefinitions("PredicateProlog");
+  std::sort(Prologs.begin(), Prologs.end(), LessRecord());
+  for (std::vector<Record*>::const_iterator
          PI = Prologs.begin(), PE = Prologs.end(); PI != PE; ++PI) {
     OS << (*PI)->getValueAsString("Code") << '\n';
   }
@@ -1319,13 +1319,13 @@ void SubtargetEmitter::EmitSchedModelHelpers(MISTD::string ClassName,
       const CodeGenSchedClass &SC = SchedModels.getSchedClass(*VCI);
       OS << "  case " << *VCI << ": // " << SC.Name << '\n';
       IdxVec ProcIndices;
-      for (MISTD::vector<CodeGenSchedTransition>::const_iterator
+      for (std::vector<CodeGenSchedTransition>::const_iterator
              TI = SC.Transitions.begin(), TE = SC.Transitions.end();
            TI != TE; ++TI) {
         IdxVec PI;
-        MISTD::set_union(TI->ProcIndices.begin(), TI->ProcIndices.end(),
+        std::set_union(TI->ProcIndices.begin(), TI->ProcIndices.end(),
                        ProcIndices.begin(), ProcIndices.end(),
-                       MISTD::back_inserter(PI));
+                       std::back_inserter(PI));
         ProcIndices.swap(PI);
       }
       for (IdxIter PI = ProcIndices.begin(), PE = ProcIndices.end();
@@ -1335,10 +1335,10 @@ void SubtargetEmitter::EmitSchedModelHelpers(MISTD::string ClassName,
           OS << "if (SchedModel->getProcessorID() == " << *PI << ") ";
         OS << "{ // " << (SchedModels.procModelBegin() + *PI)->ModelName
            << '\n';
-        for (MISTD::vector<CodeGenSchedTransition>::const_iterator
+        for (std::vector<CodeGenSchedTransition>::const_iterator
                TI = SC.Transitions.begin(), TE = SC.Transitions.end();
              TI != TE; ++TI) {
-          if (*PI != 0 && !MISTD::count(TI->ProcIndices.begin(),
+          if (*PI != 0 && !std::count(TI->ProcIndices.begin(),
                                       TI->ProcIndices.end(), *PI)) {
               continue;
           }
@@ -1374,9 +1374,9 @@ void SubtargetEmitter::EmitSchedModelHelpers(MISTD::string ClassName,
 void SubtargetEmitter::ParseFeaturesFunction(raw_ostream &OS,
                                              unsigned NumFeatures,
                                              unsigned NumProcs) {
-  MISTD::vector<Record*> Features =
+  std::vector<Record*> Features =
                        Records.getAllDerivedDefinitions("SubtargetFeature");
-  MISTD::sort(Features.begin(), Features.end(), LessRecord());
+  std::sort(Features.begin(), Features.end(), LessRecord());
 
   OS << "// ParseSubtargetFeatures - Parses features string setting specified\n"
      << "// subtarget options.\n"
@@ -1397,9 +1397,9 @@ void SubtargetEmitter::ParseFeaturesFunction(raw_ostream &OS,
   for (unsigned i = 0; i < Features.size(); i++) {
     // Next record
     Record *R = Features[i];
-    const MISTD::string &Instance = R->getName();
-    const MISTD::string &Value = R->getValueAsString("Value");
-    const MISTD::string &Attribute = R->getValueAsString("Attribute");
+    const std::string &Instance = R->getName();
+    const std::string &Value = R->getValueAsString("Value");
+    const std::string &Attribute = R->getValueAsString("Attribute");
 
     if (Value=="true" || Value=="false")
       OS << "  if ((Bits & " << Target << "::"
@@ -1490,7 +1490,7 @@ void SubtargetEmitter::run(raw_ostream &OS) {
   OS << "\n#ifdef GET_SUBTARGETINFO_HEADER\n";
   OS << "#undef GET_SUBTARGETINFO_HEADER\n";
 
-  MISTD::string ClassName = Target + "GenSubtargetInfo";
+  std::string ClassName = Target + "GenSubtargetInfo";
   OS << "namespace llvm {\n";
   OS << "class DFAPacketizer;\n";
   OS << "struct " << ClassName << " : public TargetSubtargetInfo {\n"

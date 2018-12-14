@@ -48,10 +48,10 @@ CGIOperandList::CGIOperandList(Record *R) : TheDef(R) {
     PrintFatalError(R->getName() + ": invalid input list: use 'ins'");
 
   unsigned MIOperandNo = 0;
-  MISTD::set<MISTD::string> OperandNames;
+  std::set<std::string> OperandNames;
   for (unsigned i = 0, e = InDI->getNumArgs()+OutDI->getNumArgs(); i != e; ++i){
     Init *ArgInit;
-    MISTD::string ArgName;
+    std::string ArgName;
     if (i < NumDefs) {
       ArgInit = OutDI->getArg(i);
       ArgName = OutDI->getArgName(i);
@@ -65,9 +65,9 @@ CGIOperandList::CGIOperandList(Record *R) : TheDef(R) {
       PrintFatalError("Illegal operand for the '" + R->getName() + "' instruction!");
 
     Record *Rec = Arg->getDef();
-    MISTD::string PrintMethod = "printOperand";
-    MISTD::string EncoderMethod;
-    MISTD::string OperandType = "OPERAND_UNKNOWN";
+    std::string PrintMethod = "printOperand";
+    std::string EncoderMethod;
+    std::string OperandType = "OPERAND_UNKNOWN";
     unsigned NumOps = 1;
     DagInit *MIOpInfo = 0;
     if (Rec->isSubClassOf("RegisterOperand")) {
@@ -150,17 +150,17 @@ bool CGIOperandList::hasOperandNamed(StringRef Name, unsigned &OpIdx) const {
   return false;
 }
 
-MISTD::pair<unsigned,unsigned>
-CGIOperandList::ParseOperandName(const MISTD::string &Op, bool AllowWholeOp) {
+std::pair<unsigned,unsigned>
+CGIOperandList::ParseOperandName(const std::string &Op, bool AllowWholeOp) {
   if (Op.empty() || Op[0] != '$')
     PrintFatalError(TheDef->getName() + ": Illegal operand name: '" + Op + "'");
 
-  MISTD::string OpName = Op.substr(1);
-  MISTD::string SubOpName;
+  std::string OpName = Op.substr(1);
+  std::string SubOpName;
 
   // Check to see if this is $foo.bar.
-  MISTD::string::size_type DotIdx = OpName.find_first_of(".");
-  if (DotIdx != MISTD::string::npos) {
+  std::string::size_type DotIdx = OpName.find_first_of(".");
+  if (DotIdx != std::string::npos) {
     SubOpName = OpName.substr(DotIdx+1);
     if (SubOpName.empty())
       PrintFatalError(TheDef->getName() + ": illegal empty suboperand name in '" +Op +"'");
@@ -177,7 +177,7 @@ CGIOperandList::ParseOperandName(const MISTD::string &Op, bool AllowWholeOp) {
         " whole operand part of complex operand '" + Op + "'");
 
     // Otherwise, return the operand.
-    return MISTD::make_pair(OpIdx, 0U);
+    return std::make_pair(OpIdx, 0U);
   }
 
   // Find the suboperand number involved.
@@ -188,25 +188,25 @@ CGIOperandList::ParseOperandName(const MISTD::string &Op, bool AllowWholeOp) {
   // Find the operand with the right name.
   for (unsigned i = 0, e = MIOpInfo->getNumArgs(); i != e; ++i)
     if (MIOpInfo->getArgName(i) == SubOpName)
-      return MISTD::make_pair(OpIdx, i);
+      return std::make_pair(OpIdx, i);
 
   // Otherwise, didn't find it!
   PrintFatalError(TheDef->getName() + ": unknown suboperand name in '" + Op + "'");
-  return MISTD::make_pair(0U, 0U);
+  return std::make_pair(0U, 0U);
 }
 
-static void ParseConstraint(const MISTD::string &CStr, CGIOperandList &Ops) {
+static void ParseConstraint(const std::string &CStr, CGIOperandList &Ops) {
   // EARLY_CLOBBER: @early $reg
-  MISTD::string::size_type wpos = CStr.find_first_of(" \t");
-  MISTD::string::size_type start = CStr.find_first_not_of(" \t");
-  MISTD::string Tok = CStr.substr(start, wpos - start);
+  std::string::size_type wpos = CStr.find_first_of(" \t");
+  std::string::size_type start = CStr.find_first_not_of(" \t");
+  std::string Tok = CStr.substr(start, wpos - start);
   if (Tok == "@earlyclobber") {
-    MISTD::string Name = CStr.substr(wpos+1);
+    std::string Name = CStr.substr(wpos+1);
     wpos = Name.find_first_not_of(" \t");
-    if (wpos == MISTD::string::npos)
+    if (wpos == std::string::npos)
       PrintFatalError("Illegal format for @earlyclobber constraint: '" + CStr + "'");
     Name = Name.substr(wpos);
-    MISTD::pair<unsigned,unsigned> Op = Ops.ParseOperandName(Name, false);
+    std::pair<unsigned,unsigned> Op = Ops.ParseOperandName(Name, false);
 
     // Build the string for the operand
     if (!Ops[Op.first].Constraints[Op.second].isNone())
@@ -217,28 +217,28 @@ static void ParseConstraint(const MISTD::string &CStr, CGIOperandList &Ops) {
   }
 
   // Only other constraint is "TIED_TO" for now.
-  MISTD::string::size_type pos = CStr.find_first_of('=');
-  assert(pos != MISTD::string::npos && "Unrecognized constraint");
+  std::string::size_type pos = CStr.find_first_of('=');
+  assert(pos != std::string::npos && "Unrecognized constraint");
   start = CStr.find_first_not_of(" \t");
-  MISTD::string Name = CStr.substr(start, pos - start);
+  std::string Name = CStr.substr(start, pos - start);
 
   // TIED_TO: $src1 = $dst
   wpos = Name.find_first_of(" \t");
-  if (wpos == MISTD::string::npos)
+  if (wpos == std::string::npos)
     PrintFatalError("Illegal format for tied-to constraint: '" + CStr + "'");
-  MISTD::string DestOpName = Name.substr(0, wpos);
-  MISTD::pair<unsigned,unsigned> DestOp = Ops.ParseOperandName(DestOpName, false);
+  std::string DestOpName = Name.substr(0, wpos);
+  std::pair<unsigned,unsigned> DestOp = Ops.ParseOperandName(DestOpName, false);
 
   Name = CStr.substr(pos+1);
   wpos = Name.find_first_not_of(" \t");
-  if (wpos == MISTD::string::npos)
+  if (wpos == std::string::npos)
     PrintFatalError("Illegal format for tied-to constraint: '" + CStr + "'");
 
-  MISTD::string SrcOpName = Name.substr(wpos);
-  MISTD::pair<unsigned,unsigned> SrcOp = Ops.ParseOperandName(SrcOpName, false);
+  std::string SrcOpName = Name.substr(wpos);
+  std::pair<unsigned,unsigned> SrcOp = Ops.ParseOperandName(SrcOpName, false);
   if (SrcOp > DestOp) {
-    MISTD::swap(SrcOp, DestOp);
-    MISTD::swap(SrcOpName, DestOpName);
+    std::swap(SrcOp, DestOp);
+    std::swap(SrcOpName, DestOpName);
   }
 
   unsigned FlatOpNo = Ops.getFlattenedOperandNumber(SrcOp);
@@ -250,16 +250,16 @@ static void ParseConstraint(const MISTD::string &CStr, CGIOperandList &Ops) {
     CGIOperandList::ConstraintInfo::getTied(FlatOpNo);
 }
 
-static void ParseConstraints(const MISTD::string &CStr, CGIOperandList &Ops) {
+static void ParseConstraints(const std::string &CStr, CGIOperandList &Ops) {
   if (CStr.empty()) return;
 
-  const MISTD::string delims(",");
-  MISTD::string::size_type bidx, eidx;
+  const std::string delims(",");
+  std::string::size_type bidx, eidx;
 
   bidx = CStr.find_first_not_of(delims);
-  while (bidx != MISTD::string::npos) {
+  while (bidx != std::string::npos) {
     eidx = CStr.find_first_of(delims, bidx);
-    if (eidx == MISTD::string::npos)
+    if (eidx == std::string::npos)
       eidx = CStr.length();
 
     ParseConstraint(CStr.substr(bidx, eidx - bidx), Ops);
@@ -267,15 +267,15 @@ static void ParseConstraints(const MISTD::string &CStr, CGIOperandList &Ops) {
   }
 }
 
-void CGIOperandList::ProcessDisableEncoding(MISTD::string DisableEncoding) {
+void CGIOperandList::ProcessDisableEncoding(std::string DisableEncoding) {
   while (1) {
-    MISTD::pair<StringRef, StringRef> P = getToken(DisableEncoding, " ,\t");
-    MISTD::string OpName = P.first;
+    std::pair<StringRef, StringRef> P = getToken(DisableEncoding, " ,\t");
+    std::string OpName = P.first;
     DisableEncoding = P.second;
     if (OpName.empty()) break;
 
     // Figure out which operand this is.
-    MISTD::pair<unsigned,unsigned> Op = ParseOperandName(OpName, false);
+    std::pair<unsigned,unsigned> Op = ParseOperandName(OpName, false);
 
     // Mark the operand as not-to-be encoded.
     if (Op.second >= OperandList[Op.first].DoNotEncode.size())
@@ -363,7 +363,7 @@ HasOneImplicitDefWithKnownVT(const CodeGenTarget &TargetInfo) const {
   // Check to see if the first implicit def has a resolvable type.
   Record *FirstImplicitDef = ImplicitDefs[0];
   assert(FirstImplicitDef->isSubClassOf("Register"));
-  const MISTD::vector<MVT::SimpleValueType> &RegVTs =
+  const std::vector<MVT::SimpleValueType> &RegVTs =
     TargetInfo.getRegisterVTs(FirstImplicitDef);
   if (RegVTs.size() == 1)
     return RegVTs[0];
@@ -373,9 +373,9 @@ HasOneImplicitDefWithKnownVT(const CodeGenTarget &TargetInfo) const {
 
 /// FlattenAsmStringVariants - Flatten the specified AsmString to only
 /// include text from the specified variant, returning the new string.
-MISTD::string CodeGenInstruction::
+std::string CodeGenInstruction::
 FlattenAsmStringVariants(StringRef Cur, unsigned Variant) {
-  MISTD::string Res = "";
+  std::string Res = "";
 
   for (;;) {
     // Find the start of the next variant string.
@@ -585,7 +585,7 @@ CodeGenInstAlias::CodeGenInstAlias(Record *R, CodeGenTarget &T) : TheDef(R) {
            InstOpRec->getValueAsDef("ParserMatchClass")
              ->getValueAsString("Name") != "Imm")) {
         ResultOperands.push_back(ResOp);
-        ResultInstOperandIndex.push_back(MISTD::make_pair(i, -1));
+        ResultInstOperandIndex.push_back(std::make_pair(i, -1));
         ++AliasOpNo;
 
       // Otherwise, we need to match each of the suboperands individually.
@@ -599,7 +599,7 @@ CodeGenInstAlias::CodeGenInstAlias(Record *R, CodeGenTarget &T) : TheDef(R) {
           ResultOperands.push_back(
               ResultOperand(Result->getArgName(AliasOpNo) + "." +
                             MIOI->getArgName(SubOp), SubRec));
-          ResultInstOperandIndex.push_back(MISTD::make_pair(i, SubOp));
+          ResultInstOperandIndex.push_back(std::make_pair(i, SubOp));
          }
          ++AliasOpNo;
       }
@@ -617,7 +617,7 @@ CodeGenInstAlias::CodeGenInstAlias(Record *R, CodeGenTarget &T) : TheDef(R) {
         if (tryAliasOpMatch(Result, AliasOpNo, SubRec, false,
                             R->getLoc(), T, ResOp)) {
           ResultOperands.push_back(ResOp);
-          ResultInstOperandIndex.push_back(MISTD::make_pair(i, SubOp));
+          ResultInstOperandIndex.push_back(std::make_pair(i, SubOp));
           ++AliasOpNo;
         } else {
           PrintFatalError(R->getLoc(), "result argument #" + utostr(AliasOpNo) +

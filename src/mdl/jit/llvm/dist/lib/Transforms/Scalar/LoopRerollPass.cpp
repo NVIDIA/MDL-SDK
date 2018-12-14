@@ -574,8 +574,8 @@ bool LoopReroll::findScaleFromMul(Instruction *RealIV, uint64_t &Scale,
   // We assume below that User1 is the scale multiply and User2 is the
   // increment. If this can't be true, then swap them.
   if (User1SCEV == RealIVSCEV->getPostIncExpr(*SE)) {
-    MISTD::swap(User1, User2);
-    MISTD::swap(User1SCEV, User2SCEV);
+    std::swap(User1, User2);
+    std::swap(User1SCEV, User2SCEV);
   }
 
   if (User2SCEV != RealIVSCEV->getPostIncExpr(*SE))
@@ -832,7 +832,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
   collectInLoopUserSet(L, IV, Exclude, PossibleRedSet, BaseUseSet);
 
   DenseSet<Instruction *> AllRootUses;
-  MISTD::vector<DenseSet<Instruction *> > RootUseSets(Scale-1);
+  std::vector<DenseSet<Instruction *> > RootUseSets(Scale-1);
 
   bool MatchFailed = false;
   for (unsigned i = 0; i < Scale-1 && !MatchFailed; ++i) {
@@ -872,7 +872,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
         continue;
 
       while (J2 != JE && (!RootUseSet.count(J2) ||
-             MISTD::find(Roots[i].begin(), Roots[i].end(), J2) !=
+             std::find(Roots[i].begin(), Roots[i].end(), J2) !=
                Roots[i].end())) {
         // As we iterate through the instructions, instructions that don't
         // belong to previous iterations (or the base case), must belong to
@@ -968,7 +968,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
           DenseMap<Value *, Value *>::iterator BMI = BaseMap.find(Op2);
           if (BMI != BaseMap.end())
             Op2 = BMI->second;
-          else if (MISTD::find(Roots[i].begin(), Roots[i].end(),
+          else if (std::find(Roots[i].begin(), Roots[i].end(),
                              (Instruction*) Op2) != Roots[i].end())
             Op2 = IV;
 
@@ -1002,7 +1002,7 @@ bool LoopReroll::reroll(Instruction *IV, Loop *L, BasicBlock *Header,
       }
 
       if (!MatchFailed)
-        BaseMap.insert(MISTD::pair<Value *, Value *>(J2, J1));
+        BaseMap.insert(std::pair<Value *, Value *>(J2, J1));
 
       AllRootUses.insert(J2);
       Reductions.recordPair(J1, J2, i+1);

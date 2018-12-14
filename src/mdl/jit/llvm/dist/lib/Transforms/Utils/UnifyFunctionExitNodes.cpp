@@ -49,8 +49,8 @@ bool UnifyFunctionExitNodes::runOnFunction(Function &F) {
   // Loop over all of the blocks in a function, tracking all of the blocks that
   // return.
   //
-  MISTD::vector<BasicBlock*> ReturningBlocks;
-  MISTD::vector<BasicBlock*> UnreachableBlocks;
+  std::vector<BasicBlock*> ReturningBlocks;
+  std::vector<BasicBlock*> UnreachableBlocks;
   for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
     if (isa<ReturnInst>(I->getTerminator()))
       ReturningBlocks.push_back(I);
@@ -67,7 +67,7 @@ bool UnifyFunctionExitNodes::runOnFunction(Function &F) {
                                           "UnifiedUnreachableBlock", &F);
     new UnreachableInst(F.getContext(), UnreachableBlock);
 
-    for (MISTD::vector<BasicBlock*>::iterator I = UnreachableBlocks.begin(),
+    for (std::vector<BasicBlock*>::iterator I = UnreachableBlocks.begin(),
            E = UnreachableBlocks.end(); I != E; ++I) {
       BasicBlock *BB = *I;
       BB->getInstList().pop_back();  // Remove the unreachable inst.
@@ -105,7 +105,7 @@ bool UnifyFunctionExitNodes::runOnFunction(Function &F) {
   // Loop over all of the blocks, replacing the return instruction with an
   // unconditional branch.
   //
-  for (MISTD::vector<BasicBlock*>::iterator I = ReturningBlocks.begin(),
+  for (std::vector<BasicBlock*>::iterator I = ReturningBlocks.begin(),
          E = ReturningBlocks.end(); I != E; ++I) {
     BasicBlock *BB = *I;
 

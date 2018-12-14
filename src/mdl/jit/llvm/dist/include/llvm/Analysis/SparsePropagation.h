@@ -122,14 +122,14 @@ class SparseSolver {
   DenseMap<Value*, LatticeVal> ValueState;  // The state each value is in.
   SmallPtrSet<BasicBlock*, 16> BBExecutable;   // The bbs that are executable.
   
-  MISTD::vector<Instruction*> InstWorkList;   // Worklist of insts to process.
+  std::vector<Instruction*> InstWorkList;   // Worklist of insts to process.
   
-  MISTD::vector<BasicBlock*> BBWorkList;  // The BasicBlock work list
+  std::vector<BasicBlock*> BBWorkList;  // The BasicBlock work list
   
   /// KnownFeasibleEdges - Entries in this set are edges which have already had
   /// PHI nodes retriggered.
-  typedef MISTD::pair<BasicBlock*,BasicBlock*> Edge;
-  MISTD::set<Edge> KnownFeasibleEdges;
+  typedef std::pair<BasicBlock*,BasicBlock*> Edge;
+  std::set<Edge> KnownFeasibleEdges;
 
   SparseSolver(const SparseSolver&) LLVM_DELETED_FUNCTION;
   void operator=(const SparseSolver&) LLVM_DELETED_FUNCTION;

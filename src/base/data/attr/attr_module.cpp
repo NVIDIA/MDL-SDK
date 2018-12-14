@@ -41,7 +41,7 @@
 namespace MI {
 namespace ATTR {
 
-using MISTD::string;
+using std::string;
 
 // Module registration.
 static SYSTEM::Module_registration<Attr_module_impl> s_module(SYSTEM::M_ATTR, "ATTR");
@@ -59,7 +59,7 @@ SYSTEM::Module_registration_entry* Attr_module::get_instance()
 
 
 void Attr_module::retrieve_reserved_attr_default(
-    const MISTD::string& name,
+    const std::string& name,
     STLEXT::Any& any) const
 {
     Attribute_id id = Attribute::id_lookup(name.c_str());
@@ -146,7 +146,7 @@ const Attribute_spec* Attr_module_impl::get_reserved_attr_spec(
 
 // Look up a type code given a type name.
 ATTR::Type_code Attr_module_impl::get_type_code(
-    const MISTD::string& type_name) const
+    const std::string& type_name) const
 {
     Map_name_to_code::const_iterator iter =
         m_map_name_to_code.find(type_name);

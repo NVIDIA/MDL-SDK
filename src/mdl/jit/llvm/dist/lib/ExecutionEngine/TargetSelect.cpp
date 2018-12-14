@@ -43,7 +43,7 @@ TargetMachine *EngineBuilder::selectTarget() {
 TargetMachine *EngineBuilder::selectTarget(const Triple &TargetTriple,
                               StringRef MArch,
                               StringRef MCPU,
-                              const SmallVectorImpl<MISTD::string>& MAttrs) {
+                              const SmallVectorImpl<std::string>& MAttrs) {
   Triple TheTriple(TargetTriple);
   if (TheTriple.getTriple().empty())
     TheTriple.setTriple(sys::getProcessTriple());
@@ -72,7 +72,7 @@ TargetMachine *EngineBuilder::selectTarget(const Triple &TargetTriple,
     if (Type != Triple::UnknownArch)
       TheTriple.setArch(Type);
   } else {
-    MISTD::string Error;
+    std::string Error;
     TheTarget = TargetRegistry::lookupTarget(TheTriple.getTriple(), Error);
     if (TheTarget == 0) {
       if (ErrorStr)
@@ -82,7 +82,7 @@ TargetMachine *EngineBuilder::selectTarget(const Triple &TargetTriple,
   }
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
   if (!MAttrs.empty()) {
     SubtargetFeatures Features;
     for (unsigned i = 0; i != MAttrs.size(); ++i)

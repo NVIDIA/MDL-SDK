@@ -87,21 +87,26 @@ public:
 
     /// Constructor from a function definition and a set of array instance.
     ///
-    /// \param def            the function definition
-    /// \param arr_instances  type instance for this function instance
+    /// \param def                the function definition
+    /// \param arr_instances      type instance for this function instance
+    /// \param return_derivs      if true, derivatives will be generated for the return value
     ///
     /// \note only this constructor creates a real (template) instance
     explicit Function_instance(
         IDefinition const     *def,
-        Array_instances const &arr_instances);
+        Array_instances const &arr_instances,
+        bool                   return_derivs);
 
     /// Constructor from a function definition.
     ///
-    /// \param alloc   the allocator
-    /// \param def     the function definition
+    /// \param alloc              the allocator
+    /// \param def                the function definition
+    /// \param return_derivs      if true, derivatives will be generated for the return value
+    ///                           regardless of what the derivable flag of the definition states
     explicit Function_instance(
         IAllocator        *alloc,
-        IDefinition const *def);
+        IDefinition const *def,
+        bool               return_derivs);
 
     /// Constructor from a lambda function.
     ///
@@ -146,6 +151,9 @@ public:
     /// Get the array instances.
     Array_instances const &get_array_instances() const { return m_array_instances; }
 
+    /// Get whether derivatives for the return value will be generated.
+    bool get_return_derivs() const { return m_return_derivs; }
+
     /// Map types due to function instancing.
     ///
     /// \param type  an MDL type
@@ -158,6 +166,7 @@ public:
     bool is_instantiated() const { return !m_array_instances.empty(); }
 
     /// Equal functor.
+    template<bool ignore_array_instance=false>
     class Equal {
     public:
         bool operator()(Function_instance const &a, Function_instance const &b) const {
@@ -171,24 +180,31 @@ public:
             if (n != b_ais.size())
                 return false;
 
-            for (size_t i = 0; i < n; ++i) {
-                Array_instance const &ai = a_ais[i];
-                Array_instance const &bi = b_ais[i];
+            if (a.m_return_derivs != b.m_return_derivs)
+                return false;
 
-                if (ai.get_deferred_size()  != bi.get_deferred_size() ||
-                    // Note: the immediate values might be owned by different modules, so
-                    // check there sizes. There element types are assumed to by equal,
-                    // otherwise the deferred types should be different
-                    ai.get_immediate_size() != bi.get_immediate_size())
-                {
-                    return false;
+            if (!ignore_array_instance) {
+                for (size_t i = 0; i < n; ++i) {
+                    Array_instance const &ai = a_ais[i];
+                    Array_instance const &bi = b_ais[i];
+
+                    if (ai.get_deferred_size()  != bi.get_deferred_size() ||
+                        // Note: the immediate values might be owned by different modules, so
+                        // check there sizes. There element types are assumed to by equal,
+                        // otherwise the deferred types should be different
+                        ai.get_immediate_size() != bi.get_immediate_size())
+                    {
+                        return false;
+                    }
                 }
             }
+
             return true;
         }
     };
 
     /// Hash function.
+    template<bool ignore_array_instance=false>
     class Hash {
     public:
         size_t operator()(Function_instance const &a) const {
@@ -197,18 +213,24 @@ public:
 
             size_t res = key_hasher(a.get_key());
 
-            Array_instances const &ais = a.get_array_instances();
-            for (size_t i = 0, n = ais.size(); i < n; ++i) {
-                Array_instance const &ai = ais[i];
-                res += 3 * type_size_hasher(ai.get_deferred_size())
-                    + 7u * ai.get_immediate_size();
+            if (!ignore_array_instance) {
+                Array_instances const &ais = a.get_array_instances();
+                for (size_t i = 0, n = ais.size(); i < n; ++i) {
+                    Array_instance const &ai = ais[i];
+                    res = res * 33 + 3 * type_size_hasher(ai.get_deferred_size())
+                        + 7u * ai.get_immediate_size();
+                }
             }
+
+            if (a.m_return_derivs)
+                res = (res * 33) + 196613;
+
             return res;
         }
     };
 
     bool operator==(Function_instance const &o) const {
-        Equal eq;
+        Equal<> eq;
         return eq(*this, o);
     }
 
@@ -222,6 +244,9 @@ private:
 
     /// The (array) type instances for the return type and the argument types.
     Array_instances m_array_instances;
+
+    /// If true, derivatives will be generated for the return value.
+    bool m_return_derivs;
 
     /// The kind of this function instance.
     Kind m_kind;

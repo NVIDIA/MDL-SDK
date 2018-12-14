@@ -347,7 +347,7 @@ ReprocessLoop:
       LI->removeBlock(ExitingBlock);
 
       DomTreeNode *Node = DT->getNode(ExitingBlock);
-      const MISTD::vector<DomTreeNodeBase<BasicBlock> *> &Children =
+      const std::vector<DomTreeNodeBase<BasicBlock> *> &Children =
         Node->getChildren();
       while (!Children.empty()) {
         DomTreeNode *Child = Children.front();
@@ -449,8 +449,8 @@ BasicBlock *LoopSimplify::RewriteLoopExitBlock(Loop *L, BasicBlock *Exit) {
 /// predecessors, to the specified set, if it's not already in there.  Stop
 /// predecessor traversal when we reach StopBlock.
 static void AddBlockAndPredsToSet(BasicBlock *InputBB, BasicBlock *StopBlock,
-                                  MISTD::set<BasicBlock*> &Blocks) {
-  MISTD::vector<BasicBlock *> WorkList;
+                                  std::set<BasicBlock*> &Blocks) {
+  std::vector<BasicBlock *> WorkList;
   WorkList.push_back(InputBB);
   do {
     BasicBlock *BB = WorkList.back(); WorkList.pop_back();
@@ -611,7 +611,7 @@ Loop *LoopSimplify::SeparateNestedLoop(Loop *L, LPPassManager &LPM,
 
   // Determine which blocks should stay in L and which should be moved out to
   // the Outer loop now.
-  MISTD::set<BasicBlock*> BlocksInL;
+  std::set<BasicBlock*> BlocksInL;
   for (pred_iterator PI=pred_begin(Header), E = pred_end(Header); PI!=E; ++PI) {
     BasicBlock *P = *PI;
     if (DT->dominates(Header, P))
@@ -620,7 +620,7 @@ Loop *LoopSimplify::SeparateNestedLoop(Loop *L, LPPassManager &LPM,
 
   // Scan all of the loop children of L, moving them to OuterLoop if they are
   // not part of the inner loop.
-  const MISTD::vector<Loop*> &SubLoops = L->getSubLoops();
+  const std::vector<Loop*> &SubLoops = L->getSubLoops();
   for (size_t I = 0; I != SubLoops.size(); )
     if (BlocksInL.count(SubLoops[I]->getHeader()))
       ++I;   // Loop remains in L
@@ -666,7 +666,7 @@ LoopSimplify::InsertUniqueBackedgeBlock(Loop *L, BasicBlock *Preheader) {
   assert(!Header->isLandingPad() && "Can't insert backedge to landing pad");
 
   // Figure out which basic blocks contain back-edges to the loop header.
-  MISTD::vector<BasicBlock*> BackedgeBlocks;
+  std::vector<BasicBlock*> BackedgeBlocks;
   for (pred_iterator I = pred_begin(Header), E = pred_end(Header); I != E; ++I){
     BasicBlock *P = *I;
 

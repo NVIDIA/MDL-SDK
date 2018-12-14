@@ -25,10 +25,10 @@ namespace llvm {
 
   struct CodeGenIntrinsic {
     Record *TheDef;            // The actual record defining this intrinsic.
-    MISTD::string Name;          // The name of the LLVM function "llvm.bswap.i32"
-    MISTD::string EnumName;      // The name of the enum "bswap_i32"
-    MISTD::string GCCBuiltinName;// Name of the corresponding GCC builtin, or "".
-    MISTD::string TargetPrefix;  // Target prefix, e.g. "ppc" for t-s intrinsics.
+    std::string Name;          // The name of the LLVM function "llvm.bswap.i32"
+    std::string EnumName;      // The name of the enum "bswap_i32"
+    std::string GCCBuiltinName;// Name of the corresponding GCC builtin, or "".
+    std::string TargetPrefix;  // Target prefix, e.g. "ppc" for t-s intrinsics.
 
     /// IntrinsicSignature - This structure holds the return values and
     /// parameter values of an intrinsic. If the number of return values is > 1,
@@ -41,19 +41,19 @@ namespace llvm {
       /// list is only populated when in the context of a target .td file. When
       /// building Intrinsics.td, this isn't available, because we don't know
       /// the target pointer size.
-      MISTD::vector<MVT::SimpleValueType> RetVTs;
+      std::vector<MVT::SimpleValueType> RetVTs;
 
       /// RetTypeDefs - The records for each return type.
-      MISTD::vector<Record*> RetTypeDefs;
+      std::vector<Record*> RetTypeDefs;
 
       /// ParamVTs - The MVT::SimpleValueType for each parameter type. Note that
       /// this list is only populated when in the context of a target .td file.
       /// When building Intrinsics.td, this isn't available, because we don't
       /// know the target pointer size.
-      MISTD::vector<MVT::SimpleValueType> ParamVTs;
+      std::vector<MVT::SimpleValueType> ParamVTs;
 
       /// ParamTypeDefs - The records for each parameter type.
-      MISTD::vector<Record*> ParamTypeDefs;
+      std::vector<Record*> ParamTypeDefs;
     };
 
     IntrinsicSignature IS;
@@ -81,14 +81,14 @@ namespace llvm {
       ReadOnly,
       ReadNone
     };
-    MISTD::vector<MISTD::pair<unsigned, ArgAttribute> > ArgumentAttributes;
+    std::vector<std::pair<unsigned, ArgAttribute> > ArgumentAttributes;
 
     CodeGenIntrinsic(Record *R);
   };
 
   /// LoadIntrinsics - Read all of the intrinsics defined in the specified
   /// .td file.
-  MISTD::vector<CodeGenIntrinsic> LoadIntrinsics(const RecordKeeper &RC,
+  std::vector<CodeGenIntrinsic> LoadIntrinsics(const RecordKeeper &RC,
                                                bool TargetOnly);
 }
 

@@ -82,16 +82,16 @@ namespace llvm {
   ///
   class GCFunctionInfo {
   public:
-    typedef MISTD::vector<GCPoint>::iterator iterator;
-    typedef MISTD::vector<GCRoot>::iterator roots_iterator;
-    typedef MISTD::vector<GCRoot>::const_iterator live_iterator;
+    typedef std::vector<GCPoint>::iterator iterator;
+    typedef std::vector<GCRoot>::iterator roots_iterator;
+    typedef std::vector<GCRoot>::const_iterator live_iterator;
 
   private:
     const Function &F;
     GCStrategy &S;
     uint64_t FrameSize;
-    MISTD::vector<GCRoot> Roots;
-    MISTD::vector<GCPoint> SafePoints;
+    std::vector<GCRoot> Roots;
+    std::vector<GCPoint> SafePoints;
 
     // FIXME: Liveness. A 2D BitVector, perhaps?
     //
@@ -163,14 +163,14 @@ namespace llvm {
   ///
   class GCModuleInfo : public ImmutablePass {
     typedef StringMap<GCStrategy*> strategy_map_type;
-    typedef MISTD::vector<GCStrategy*> list_type;
+    typedef std::vector<GCStrategy*> list_type;
     typedef DenseMap<const Function*,GCFunctionInfo*> finfo_map_type;
 
     strategy_map_type StrategyMap;
     list_type StrategyList;
     finfo_map_type FInfoMap;
 
-    GCStrategy *getOrCreateStrategy(const Module *M, const MISTD::string &Name);
+    GCStrategy *getOrCreateStrategy(const Module *M, const std::string &Name);
 
   public:
     typedef list_type::const_iterator iterator;

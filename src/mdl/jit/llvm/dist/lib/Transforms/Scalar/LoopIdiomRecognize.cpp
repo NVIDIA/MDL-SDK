@@ -538,7 +538,7 @@ void NclPopcountRecognize::transform(Instruction *CntInst,
     Value *Opnd0 = PopCntZext;
     Value *Opnd1 = ConstantInt::get(PopCntZext->getType(), 0);
     if (PreCond->getOperand(0) != Var)
-      MISTD::swap(Opnd0, Opnd1);
+      std::swap(Opnd0, Opnd1);
 
     ICmpInst *NewPreCond =
       cast<ICmpInst>(Builder.CreateICmp(PreCond->getPredicate(), Opnd0, Opnd1));
@@ -934,7 +934,7 @@ static Constant *getMemSetPatternValue(Value *V, const DataLayout &TD) {
   // Otherwise, we'll use an array of the constants.
   unsigned ArraySize = 16/Size;
   ArrayType *AT = ArrayType::get(V->getType(), ArraySize);
-  return ConstantArray::get(AT, MISTD::vector<Constant*>(ArraySize, C));
+  return ConstantArray::get(AT, std::vector<Constant*>(ArraySize, C));
 }
 
 
@@ -1134,7 +1134,7 @@ processLoopStoreOfLoopLoad(StoreInst *SI, unsigned StoreSize,
 
   CallInst *NewCall =
     Builder.CreateMemCpy(StoreBasePtr, LoadBasePtr, NumBytes,
-                         MISTD::min(SI->getAlignment(), LI->getAlignment()));
+                         std::min(SI->getAlignment(), LI->getAlignment()));
   NewCall->setDebugLoc(SI->getDebugLoc());
 
   DEBUG(dbgs() << "  Formed memcpy: " << *NewCall << "\n"

@@ -71,7 +71,7 @@ namespace {
     }
 
     /// A vector used to hold the indices of a single GEP instruction
-    typedef MISTD::vector<uint64_t> IndicesVector;
+    typedef std::vector<uint64_t> IndicesVector;
 
   private:
     CallGraphNode *PromoteArguments(CallGraphNode *CGN);
@@ -241,14 +241,14 @@ static bool IsPrefix(const ArgPromotion::IndicesVector &Prefix,
                      const ArgPromotion::IndicesVector &Longer) {
   if (Prefix.size() > Longer.size())
     return false;
-  return MISTD::equal(Prefix.begin(), Prefix.end(), Longer.begin());
+  return std::equal(Prefix.begin(), Prefix.end(), Longer.begin());
 }
 
 
 /// Checks if Indices, or a prefix of Indices, is in Set.
 static bool PrefixIn(const ArgPromotion::IndicesVector &Indices,
-                     MISTD::set<ArgPromotion::IndicesVector> &Set) {
-    MISTD::set<ArgPromotion::IndicesVector>::iterator Low;
+                     std::set<ArgPromotion::IndicesVector> &Set) {
+    std::set<ArgPromotion::IndicesVector>::iterator Low;
     Low = Set.upper_bound(Indices);
     if (Low != Set.begin())
       Low--;
@@ -266,8 +266,8 @@ static bool PrefixIn(const ArgPromotion::IndicesVector &Indices,
 /// already. Furthermore, any indices that Indices is itself a prefix of, are
 /// removed from Safe (since they are implicitely safe because of Indices now).
 static void MarkIndicesSafe(const ArgPromotion::IndicesVector &ToMark,
-                            MISTD::set<ArgPromotion::IndicesVector> &Safe) {
-  MISTD::set<ArgPromotion::IndicesVector>::iterator Low;
+                            std::set<ArgPromotion::IndicesVector> &Safe) {
+  std::set<ArgPromotion::IndicesVector>::iterator Low;
   Low = Safe.upper_bound(ToMark);
   // Guard against the case where Safe is empty
   if (Low != Safe.begin())
@@ -288,9 +288,9 @@ static void MarkIndicesSafe(const ArgPromotion::IndicesVector &ToMark,
   Low = Safe.insert(Low, ToMark);
   ++Low;
   // If there we're a prefix of longer index list(s), remove those
-  MISTD::set<ArgPromotion::IndicesVector>::iterator End = Safe.end();
+  std::set<ArgPromotion::IndicesVector>::iterator End = Safe.end();
   while (Low != End && IsPrefix(ToMark, *Low)) {
-    MISTD::set<ArgPromotion::IndicesVector>::iterator Remove = Low;
+    std::set<ArgPromotion::IndicesVector>::iterator Remove = Low;
     ++Low;
     Safe.erase(Remove);
   }
@@ -302,7 +302,7 @@ static void MarkIndicesSafe(const ArgPromotion::IndicesVector &ToMark,
 /// elements of the aggregate in order to avoid exploding the number of
 /// arguments passed in.
 bool ArgPromotion::isSafeToPromoteArgument(Argument *Arg, bool isByVal) const {
-  typedef MISTD::set<IndicesVector> GEPIndicesSet;
+  typedef std::set<IndicesVector> GEPIndicesSet;
 
   // Quick exit for unused arguments
   if (Arg->use_empty())
@@ -488,9 +488,9 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
   // Start by computing a new prototype for the function, which is the same as
   // the old function, but has modified arguments.
   FunctionType *FTy = F->getFunctionType();
-  MISTD::vector<Type*> Params;
+  std::vector<Type*> Params;
 
-  typedef MISTD::set<IndicesVector> ScalarizeTable;
+  typedef std::set<IndicesVector> ScalarizeTable;
 
   // ScalarizedElements - If we are promoting a pointer that has elements
   // accessed out of it, keep track of which elements are accessed so that we
@@ -499,14 +499,14 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
   // Arguments that are directly loaded will have a zero element value here, to
   // handle cases where there are both a direct load and GEP accesses.
   //
-  MISTD::map<Argument*, ScalarizeTable> ScalarizedElements;
+  std::map<Argument*, ScalarizeTable> ScalarizedElements;
 
   // OriginalLoads - Keep track of a representative load instruction from the
   // original function so that we can tell the alias analysis implementation
   // what the new GEP/Load instructions we are inserting look like.
   // We need to keep the original loads for each argument and the elements
   // of the argument that are accessed.
-  MISTD::map<MISTD::pair<Argument*, IndicesVector>, LoadInst*> OriginalLoads;
+  std::map<std::pair<Argument*, IndicesVector>, LoadInst*> OriginalLoads;
 
   // Attribute - Keep track of the parameter attributes for the arguments
   // that we are *not* promoting. For the ones that we do promote, the parameter
@@ -571,7 +571,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
         else
           // Take any load, we will use it only to update Alias Analysis
           OrigLoad = cast<LoadInst>(User->use_back());
-        OriginalLoads[MISTD::make_pair(I, Indices)] = OrigLoad;
+        OriginalLoads[std::make_pair(I, Indices)] = OrigLoad;
       }
 
       // Add a parameter to the function for each element passed in.
@@ -674,11 +674,11 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
         ScalarizeTable &ArgIndices = ScalarizedElements[I];
         // Store the Value* version of the indices in here, but declare it now
         // for reuse.
-        MISTD::vector<Value*> Ops;
+        std::vector<Value*> Ops;
         for (ScalarizeTable::iterator SI = ArgIndices.begin(),
                E = ArgIndices.end(); SI != E; ++SI) {
           Value *V = *AI;
-          LoadInst *OrigLoad = OriginalLoads[MISTD::make_pair(I, *SI)];
+          LoadInst *OrigLoad = OriginalLoads[std::make_pair(I, *SI)];
           if (!SI->empty()) {
             Ops.reserve(SI->size());
             Type *ElTy = V->getType();
@@ -848,7 +848,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
           assert(It != ArgIndices.end() && "GEP not handled??");
         }
 
-        MISTD::string NewName = I->getName();
+        std::string NewName = I->getName();
         for (unsigned i = 0, e = Operands.size(); i != e; ++i) {
             NewName += "." + utostr(Operands[i]);
         }
@@ -872,7 +872,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
     }
 
     // Increment I2 past all of the arguments added for this promoted pointer.
-    MISTD::advance(I2, ArgIndices.size());
+    std::advance(I2, ArgIndices.size());
   }
 
   // Tell the alias analysis that the old function is about to disappear.

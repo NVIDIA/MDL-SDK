@@ -39,7 +39,7 @@ MVT::SimpleValueType llvm::getValueType(Record *Rec) {
   return (MVT::SimpleValueType)Rec->getValueAsInt("Value");
 }
 
-MISTD::string llvm::getName(MVT::SimpleValueType T) {
+std::string llvm::getName(MVT::SimpleValueType T) {
   switch (T) {
   case MVT::Other:   return "UNKNOWN";
   case MVT::iPTR:    return "TLI.getPointerTy()";
@@ -48,7 +48,7 @@ MISTD::string llvm::getName(MVT::SimpleValueType T) {
   }
 }
 
-MISTD::string llvm::getEnumName(MVT::SimpleValueType T) {
+std::string llvm::getEnumName(MVT::SimpleValueType T) {
   switch (T) {
   case MVT::Other:    return "MVT::Other";
   case MVT::i1:       return "MVT::i1";
@@ -121,8 +121,8 @@ MISTD::string llvm::getEnumName(MVT::SimpleValueType T) {
 /// getQualifiedName - Return the name of the specified record, with a
 /// namespace qualifier if the record contains one.
 ///
-MISTD::string llvm::getQualifiedName(const Record *R) {
-  MISTD::string Namespace;
+std::string llvm::getQualifiedName(const Record *R) {
+  std::string Namespace;
   if (R->getValue("Namespace"))
      Namespace = R->getValueAsString("Namespace");
   if (Namespace.empty()) return R->getName();
@@ -134,7 +134,7 @@ MISTD::string llvm::getQualifiedName(const Record *R) {
 ///
 CodeGenTarget::CodeGenTarget(RecordKeeper &records)
   : Records(records), RegBank(0), SchedModels(0) {
-  MISTD::vector<Record*> Targets = Records.getAllDerivedDefinitions("Target");
+  std::vector<Record*> Targets = Records.getAllDerivedDefinitions("Target");
   if (Targets.size() == 0)
     PrintFatalError("ERROR: No 'Target' subclasses defined!");
   if (Targets.size() != 1)
@@ -147,11 +147,11 @@ CodeGenTarget::~CodeGenTarget() {
   delete SchedModels;
 }
 
-const MISTD::string &CodeGenTarget::getName() const {
+const std::string &CodeGenTarget::getName() const {
   return TargetRec->getName();
 }
 
-MISTD::string CodeGenTarget::getInstNamespace() const {
+std::string CodeGenTarget::getInstNamespace() const {
   for (inst_iterator i = inst_begin(), e = inst_end(); i != e; ++i) {
     // Make sure not to pick up "TargetOpcode" by accidentally getting
     // the namespace off the PHI instruction or something.
@@ -170,7 +170,7 @@ Record *CodeGenTarget::getInstructionSet() const {
 /// getAsmParser - Return the AssemblyParser definition for this target.
 ///
 Record *CodeGenTarget::getAsmParser() const {
-  MISTD::vector<Record*> LI = TargetRec->getValueAsListOfDefs("AssemblyParsers");
+  std::vector<Record*> LI = TargetRec->getValueAsListOfDefs("AssemblyParsers");
   if (AsmParserNum >= LI.size())
     PrintFatalError("Target does not have an AsmParser #" + utostr(AsmParserNum) + "!");
   return LI[AsmParserNum];
@@ -180,7 +180,7 @@ Record *CodeGenTarget::getAsmParser() const {
 /// this target.
 ///
 Record *CodeGenTarget::getAsmParserVariant(unsigned i) const {
-  MISTD::vector<Record*> LI =
+  std::vector<Record*> LI =
     TargetRec->getValueAsListOfDefs("AssemblyParserVariants");
   if (i >= LI.size())
     PrintFatalError("Target does not have an AsmParserVariant #" + utostr(i) + "!");
@@ -191,7 +191,7 @@ Record *CodeGenTarget::getAsmParserVariant(unsigned i) const {
 /// available for this target.
 ///
 unsigned CodeGenTarget::getAsmParserVariantCount() const {
-  MISTD::vector<Record*> LI =
+  std::vector<Record*> LI =
     TargetRec->getValueAsListOfDefs("AssemblyParserVariants");
   return LI.size();
 }
@@ -199,7 +199,7 @@ unsigned CodeGenTarget::getAsmParserVariantCount() const {
 /// getAsmWriter - Return the AssemblyWriter definition for this target.
 ///
 Record *CodeGenTarget::getAsmWriter() const {
-  MISTD::vector<Record*> LI = TargetRec->getValueAsListOfDefs("AssemblyWriters");
+  std::vector<Record*> LI = TargetRec->getValueAsListOfDefs("AssemblyWriters");
   if (AsmWriterNum >= LI.size())
     PrintFatalError("Target does not have an AsmWriter #" + utostr(AsmWriterNum) + "!");
   return LI[AsmWriterNum];
@@ -213,7 +213,7 @@ CodeGenRegBank &CodeGenTarget::getRegBank() const {
 
 void CodeGenTarget::ReadRegAltNameIndices() const {
   RegAltNameIndices = Records.getAllDerivedDefinitions("RegAltNameIndex");
-  MISTD::sort(RegAltNameIndices.begin(), RegAltNameIndices.end(), LessRecord());
+  std::sort(RegAltNameIndices.begin(), RegAltNameIndices.end(), LessRecord());
 }
 
 /// getRegisterByName - If there is a register with the specific AsmName,
@@ -226,10 +226,10 @@ const CodeGenRegister *CodeGenTarget::getRegisterByName(StringRef Name) const {
   return I->second;
 }
 
-MISTD::vector<MVT::SimpleValueType> CodeGenTarget::
+std::vector<MVT::SimpleValueType> CodeGenTarget::
 getRegisterVTs(Record *R) const {
   const CodeGenRegister *Reg = getRegBank().getReg(R);
-  MISTD::vector<MVT::SimpleValueType> Result;
+  std::vector<MVT::SimpleValueType> Result;
   ArrayRef<CodeGenRegisterClass*> RCs = getRegBank().getRegClasses();
   for (unsigned i = 0, e = RCs.size(); i != e; ++i) {
     const CodeGenRegisterClass &RC = *RCs[i];
@@ -241,7 +241,7 @@ getRegisterVTs(Record *R) const {
 
   // Remove duplicates.
   array_pod_sort(Result.begin(), Result.end());
-  Result.erase(MISTD::unique(Result.begin(), Result.end()), Result.end());
+  Result.erase(std::unique(Result.begin(), Result.end()), Result.end());
   return Result;
 }
 
@@ -253,8 +253,8 @@ void CodeGenTarget::ReadLegalValueTypes() const {
       LegalValueTypes.push_back(RCs[i]->VTs[ri]);
 
   // Remove duplicates.
-  MISTD::sort(LegalValueTypes.begin(), LegalValueTypes.end());
-  LegalValueTypes.erase(MISTD::unique(LegalValueTypes.begin(),
+  std::sort(LegalValueTypes.begin(), LegalValueTypes.end());
+  LegalValueTypes.erase(std::unique(LegalValueTypes.begin(),
                                     LegalValueTypes.end()),
                         LegalValueTypes.end());
 }
@@ -266,7 +266,7 @@ CodeGenSchedModels &CodeGenTarget::getSchedModels() const {
 }
 
 void CodeGenTarget::ReadInstructions() const {
-  MISTD::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
+  std::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
   if (Insts.size() <= 2)
     PrintFatalError("No 'Instruction' subclasses defined!");
 
@@ -284,7 +284,7 @@ GetInstByName(const char *Name,
   DenseMap<const Record*, CodeGenInstruction*>::const_iterator
     I = Insts.find(Rec);
   if (Rec == 0 || I == Insts.end())
-    PrintFatalError(MISTD::string("Could not find '") + Name + "' instruction!");
+    PrintFatalError(std::string("Could not find '") + Name + "' instruction!");
   return I->second;
 }
 
@@ -345,7 +345,7 @@ void CodeGenTarget::ComputeInstrsByEnum() const {
 
   // All of the instructions are now in random order based on the map iteration.
   // Sort them by name.
-  MISTD::sort(InstrsByEnum.begin()+EndOfPredefines, InstrsByEnum.end(),
+  std::sort(InstrsByEnum.begin()+EndOfPredefines, InstrsByEnum.end(),
             SortInstByName());
 }
 
@@ -377,7 +377,7 @@ ComplexPattern::ComplexPattern(Record *R) {
 
   // Parse the properties.
   Properties = 0;
-  MISTD::vector<Record*> PropList = R->getValueAsListOfDefs("Properties");
+  std::vector<Record*> PropList = R->getValueAsListOfDefs("Properties");
   for (unsigned i = 0, e = PropList.size(); i != e; ++i)
     if (PropList[i]->getName() == "SDNPHasChain") {
       Properties |= 1 << SDNPHasChain;
@@ -408,11 +408,11 @@ ComplexPattern::ComplexPattern(Record *R) {
 // CodeGenIntrinsic Implementation
 //===----------------------------------------------------------------------===//
 
-MISTD::vector<CodeGenIntrinsic> llvm::LoadIntrinsics(const RecordKeeper &RC,
+std::vector<CodeGenIntrinsic> llvm::LoadIntrinsics(const RecordKeeper &RC,
                                                    bool TargetOnly) {
-  MISTD::vector<Record*> I = RC.getAllDerivedDefinitions("Intrinsic");
+  std::vector<Record*> I = RC.getAllDerivedDefinitions("Intrinsic");
 
-  MISTD::vector<CodeGenIntrinsic> Result;
+  std::vector<CodeGenIntrinsic> Result;
 
   for (unsigned i = 0, e = I.size(); i != e; ++i) {
     bool isTarget = I[i]->getValueAsBit("isTarget");
@@ -424,7 +424,7 @@ MISTD::vector<CodeGenIntrinsic> llvm::LoadIntrinsics(const RecordKeeper &RC,
 
 CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   TheDef = R;
-  MISTD::string DefName = R->getName();
+  std::string DefName = R->getName();
   ModRef = ReadWriteMem;
   isOverloaded = false;
   isCommutative = false;
@@ -432,10 +432,10 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   isNoReturn = false;
 
   if (DefName.size() <= 4 ||
-      MISTD::string(DefName.begin(), DefName.begin() + 4) != "int_")
+      std::string(DefName.begin(), DefName.begin() + 4) != "int_")
     PrintFatalError("Intrinsic '" + DefName + "' does not start with 'int_'!");
 
-  EnumName = MISTD::string(DefName.begin()+4, DefName.end());
+  EnumName = std::string(DefName.begin()+4, DefName.end());
 
   if (R->getValue("GCCBuiltinName"))  // Ignore a missing GCCBuiltinName field.
     GCCBuiltinName = R->getValueAsString("GCCBuiltinName");
@@ -452,7 +452,7 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   } else {
     // Verify it starts with "llvm.".
     if (Name.size() <= 5 ||
-        MISTD::string(Name.begin(), Name.begin() + 5) != "llvm.")
+        std::string(Name.begin(), Name.begin() + 5) != "llvm.")
       PrintFatalError("Intrinsic '" + DefName + "'s name does not start with 'llvm.'!");
   }
 
@@ -460,14 +460,14 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   // "llvm.<targetprefix>.".
   if (!TargetPrefix.empty()) {
     if (Name.size() < 6+TargetPrefix.size() ||
-        MISTD::string(Name.begin() + 5, Name.begin() + 6 + TargetPrefix.size())
+        std::string(Name.begin() + 5, Name.begin() + 6 + TargetPrefix.size())
         != (TargetPrefix + "."))
       PrintFatalError("Intrinsic '" + DefName + "' does not start with 'llvm." +
         TargetPrefix + ".'!");
   }
 
   // Parse the list of return types.
-  MISTD::vector<MVT::SimpleValueType> OverloadedVTs;
+  std::vector<MVT::SimpleValueType> OverloadedVTs;
   ListInit *TypeList = R->getValueAsListInit("RetTypes");
   for (unsigned i = 0, e = TypeList->getSize(); i != e; ++i) {
     Record *TyEl = TypeList->getElementAsRecord(i);
@@ -558,17 +558,17 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
       isNoReturn = true;
     else if (Property->isSubClassOf("NoCapture")) {
       unsigned ArgNo = Property->getValueAsInt("ArgNo");
-      ArgumentAttributes.push_back(MISTD::make_pair(ArgNo, NoCapture));
+      ArgumentAttributes.push_back(std::make_pair(ArgNo, NoCapture));
     } else if (Property->isSubClassOf("ReadOnly")) {
       unsigned ArgNo = Property->getValueAsInt("ArgNo");
-      ArgumentAttributes.push_back(MISTD::make_pair(ArgNo, ReadOnly));
+      ArgumentAttributes.push_back(std::make_pair(ArgNo, ReadOnly));
     } else if (Property->isSubClassOf("ReadNone")) {
       unsigned ArgNo = Property->getValueAsInt("ArgNo");
-      ArgumentAttributes.push_back(MISTD::make_pair(ArgNo, ReadNone));
+      ArgumentAttributes.push_back(std::make_pair(ArgNo, ReadNone));
     } else
       llvm_unreachable("Unknown property!");
   }
 
   // Sort the argument attributes for later benefit.
-  MISTD::sort(ArgumentAttributes.begin(), ArgumentAttributes.end());
+  std::sort(ArgumentAttributes.begin(), ArgumentAttributes.end());
 }

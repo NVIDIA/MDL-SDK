@@ -46,6 +46,7 @@
 #include <api/api/neuray/neuray_compiled_material_impl.h>
 #include <api/api/neuray/neuray_function_call_impl.h>
 #include <api/api/neuray/neuray_transaction_impl.h>
+#include <api/api/neuray/neuray_mdl_execution_context_impl.h>
 
 #include "mdl_mdl_backend_impl.h"
 
@@ -82,6 +83,19 @@ static BACKENDS::Link_unit const *unwrap(mi::neuraylib::ILink_unit const *lu)
     return lu_impl->get_link_unit();
 }
 
+static MDL::Execution_context *unwrap_and_clear(mi::neuraylib::IMdl_execution_context *context)
+{
+    NEURAY::Mdl_execution_context_impl *context_impl =
+        static_cast<NEURAY::Mdl_execution_context_impl *>(context);
+    if (context_impl) {
+        MDL::Execution_context& wrapped_context = context_impl->get_context();
+        wrapped_context.clear_messages();
+        return &wrapped_context;
+    }
+
+    return NULL;
+}
+
 // Constructor from an LLVM backend.
 Link_unit::Link_unit(
     BACKENDS::Mdl_llvm_backend  &be,
@@ -92,25 +106,64 @@ Link_unit::Link_unit(
 
 
 // Add an MDL environment function call as a function to this link unit.
-mi::Sint32 Link_unit::add_environment(
+mi::Sint32 Link_unit::deprecated_add_environment(
     mi::neuraylib::IFunction_call const *call,
     char const                          *fname,
     mi::Float32                         mdl_meters_per_scene_unit,
     mi::Float32                         mdl_wavelength_min,
     mi::Float32                         mdl_wavelength_max)
 {
-    return m_link_unit.add_environment(
-        unwrap(call), fname, mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max);
+    MDL::Execution_context context;
+    context.set_option("mdl_meters_per_scene_unit", mdl_meters_per_scene_unit);
+    context.set_option("mdl_wavelength_min", mdl_wavelength_min);
+    context.set_option("mdl_wavelength_max", mdl_wavelength_max);
+
+    m_link_unit.add_environment(unwrap(call), fname, &context);
+    return context.get_result();
+}
+
+// Add an MDL environment function call as a function to this link unit.
+mi::Sint32 Link_unit::add_environment(
+    mi::neuraylib::IFunction_call const *call,
+    char const                          *fname,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    return m_link_unit.add_environment(unwrap(call), fname, unwrap_and_clear(context));
+}
+
+// Add an expression that is part of an MDL material instance as a function to this link unit.
+mi::Sint32 Link_unit::deprecated_add_material_expression(
+    mi::neuraylib::ICompiled_material const *material,
+    char const                              *path,
+    char const                              *fname)
+{
+    MDL::Execution_context context;
+    m_link_unit.add_material_expression(unwrap(material), path, fname, &context);
+    return context.get_result();
 }
 
 // Add an expression that is part of an MDL material instance as a function to this link unit.
 mi::Sint32 Link_unit::add_material_expression(
     mi::neuraylib::ICompiled_material const *material,
     char const                              *path,
-    char const                              *fname)
+    char const                              *fname,
+    mi::neuraylib::IMdl_execution_context   *context)
 {
-    return m_link_unit.add_material_expression(
-        unwrap(material), path, fname);
+    return m_link_unit.add_material_expression(unwrap(material), path, fname, unwrap_and_clear(context));
+}
+
+// Add an MDL distribution function to this link unit.
+mi::Sint32 Link_unit::deprecated_add_material_df(
+    mi::neuraylib::ICompiled_material const *material,
+    char const                              *path,
+    char const                              *base_fname,
+    bool                                     include_geometry_normal)
+{
+    MDL::Execution_context context;
+    context.set_option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, include_geometry_normal);
+    m_link_unit.add_material_df(
+        unwrap(material), path, base_fname, &context);
+    return context.get_result();
 }
 
 // Add an MDL distribution function to this link unit.
@@ -118,23 +171,47 @@ mi::Sint32 Link_unit::add_material_df(
     mi::neuraylib::ICompiled_material const *material,
     char const                              *path,
     char const                              *base_fname,
-    bool                                     include_geometry_normal)
+    mi::neuraylib::IMdl_execution_context   *context)
 {
     return m_link_unit.add_material_df(
-        unwrap(material), path, base_fname, include_geometry_normal);
+        unwrap(material), path, base_fname, unwrap_and_clear(context));
 }
 
-mi::Sint32 Link_unit::add_material(
-    mi::neuraylib::ICompiled_material const    *material, 
+mi::Sint32 Link_unit::deprecated_add_material(
+    mi::neuraylib::ICompiled_material const    *material,
     mi::neuraylib::Target_function_description *function_descriptions,
     mi::Size                                    description_count,
     bool                                        include_geometry_normal)
 {
+    MDL::Execution_context context;
+    context.set_option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, include_geometry_normal);
+
+    mi::Sint32 result = m_link_unit.add_material(
+        unwrap(material),
+        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        static_cast<size_t>(description_count),
+        &context);
+
+    if(result < 0) // store legacy error code
+        for(mi::Size i=0; i<description_count; ++i)
+            if (function_descriptions[i].return_code == -1) {
+                function_descriptions[i].return_code = context.get_result();
+                break;
+            }
+    return result;
+}
+
+mi::Sint32 Link_unit::add_material(
+    mi::neuraylib::ICompiled_material const    *material,
+    mi::neuraylib::Target_function_description *function_descriptions,
+    mi::Size                                    description_count,
+    mi::neuraylib::IMdl_execution_context      *context)
+{
     return m_link_unit.add_material(
-      unwrap(material), 
-      reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
-      static_cast<size_t>(description_count),
-      include_geometry_normal);
+        unwrap(material),
+        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        static_cast<size_t>(description_count),
+        unwrap_and_clear(context));
 }
 
 Mdl_llvm_backend::Mdl_llvm_backend(
@@ -157,7 +234,7 @@ mi::Sint32 Mdl_llvm_backend::set_option_binary(char const *name, const char* dat
     return m_backend.set_option_binary(name, data, size);
 }
 
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
+mi::neuraylib::ITarget_code const *Mdl_llvm_backend::deprecated_translate_environment(
     mi::neuraylib::ITransaction         *transaction,
     mi::neuraylib::IFunction_call const *function_call,
     mi::Float32                         mdl_meters_per_scene_unit,
@@ -174,21 +251,51 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         *errors = -1;
         return NULL;
     }
+    MDL::Execution_context context;
+    context.set_option("mdl_meters_per_scene_unit", mdl_meters_per_scene_unit);
+    context.set_option("mdl_wavelength_min", mdl_wavelength_min);
+    context.set_option("mdl_wavelength_max", mdl_wavelength_max);
 
     DB::Transaction *db_transaction = unwrap(transaction);
     MDL::Mdl_function_call const *db_function_call = unwrap(function_call);
 
+    mi::neuraylib::ITarget_code const *target_code = m_backend.translate_environment(
+        db_transaction,
+        db_function_call,
+        fname,
+        &context);
+    *errors = context.get_result();
+    return target_code;
+}
+
+mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
+    mi::neuraylib::ITransaction           *transaction,
+    mi::neuraylib::IFunction_call const   *function_call,
+    char const                            *fname,
+    mi::neuraylib::IMdl_execution_context *context)
+{
+    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+
+    if (transaction == NULL || function_call == NULL) {
+        if (context_impl) {
+            MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, "Invalid parameters (NULL pointer).");
+            context_impl->add_error_message(err);
+            context_impl->add_message(err);
+        }
+        return NULL;
+    }
+
+    DB::Transaction *db_transaction = unwrap(transaction);
+    MDL::Mdl_function_call const *db_function_call = unwrap(function_call);
+   
     return m_backend.translate_environment(
         db_transaction,
         db_function_call,
-        mdl_meters_per_scene_unit,
-        mdl_wavelength_min,
-        mdl_wavelength_max,
         fname,
-        errors);
+        context_impl);
 }
 
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expression(
+mi::neuraylib::ITarget_code const *Mdl_llvm_backend::deprecated_translate_material_expression(
     mi::neuraylib::ITransaction             *transaction,
     mi::neuraylib::ICompiled_material const *compiled_material,
     char const                              *path,
@@ -204,18 +311,43 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         return NULL;
     }
 
-    DB::Transaction *db_transaction = unwrap(transaction);
-    MDL::Mdl_compiled_material const *db_compiled_material = unwrap(compiled_material);
-
-    return m_backend.translate_material_expression(
-        db_transaction,
-        db_compiled_material,
+    MDL::Execution_context context;
+    mi::neuraylib::ITarget_code const *tc = m_backend.translate_material_expression(
+        unwrap(transaction),
+        unwrap(compiled_material),
         path,
         fname,
-        errors);
+        &context);
+
+    *errors = context.get_result();
+    return tc;
 }
 
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressions(
+mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expression(
+    mi::neuraylib::ITransaction             *transaction,
+    mi::neuraylib::ICompiled_material const *compiled_material,
+    char const                              *path,
+    char const                              *fname,
+    mi::neuraylib::IMdl_execution_context   *context)
+{
+  
+    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+
+    if (transaction == NULL || compiled_material == NULL) {
+        if (context_impl) {
+            MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, 
+                "Invalid parameters (NULL pointer).");
+            context_impl->add_error_message(err);
+            context_impl->add_message(err);
+        }
+        return NULL;
+    }
+
+    return m_backend.translate_material_expression(
+        unwrap(transaction), unwrap(compiled_material), path, fname, context_impl);
+}
+
+mi::neuraylib::ITarget_code const *Mdl_llvm_backend::deprecated_translate_material_expressions(
     mi::neuraylib::ITransaction             *transaction,
     mi::neuraylib::ICompiled_material const *compiled_material,
     char const * const                      paths[],
@@ -244,7 +376,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         errors);
 }
 
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expression_uniform_state(
+mi::neuraylib::ITarget_code const*
+Mdl_llvm_backend::deprecated_translate_material_expression_uniform_state(
     mi::neuraylib::ITransaction             *transaction,
     mi::neuraylib::ICompiled_material const *compiled_material,
     char const                              *path,
@@ -277,7 +410,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         errors);
 }
 
-const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
+const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deprecated_translate_material_df(
     mi::neuraylib::ITransaction* transaction,
     const mi::neuraylib::ICompiled_material* compiled_material,
     const char* path,
@@ -294,22 +427,49 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         return 0;
     }
 
-    NEURAY::Transaction_impl* transaction_impl
-        = static_cast<NEURAY::Transaction_impl*>( transaction);
-    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+    MDL::Execution_context context;
+    context.set_option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, include_geometry_normal);
 
-    const NEURAY::Compiled_material_impl* compiled_material_impl
-        = static_cast<const NEURAY::Compiled_material_impl*>( compiled_material);
-    const MDL::Mdl_compiled_material* db_compiled_material
-        = compiled_material_impl->get_db_element();
+    const mi::neuraylib::ITarget_code* tc =  m_backend.translate_material_df(
+        unwrap(transaction), unwrap(compiled_material), path, base_fname, &context);
+    *errors = context.get_result();
+    return tc;
+}
+
+const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::ICompiled_material* compiled_material,
+    const char* path,
+    const char* base_fname,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+
+    if (!transaction || !compiled_material || !path) {
+        if (context_impl) {
+            MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, "Invalid parameters (NULL pointer).");
+            context_impl->add_error_message(err);
+            context_impl->add_message(err);
+        }
+        return 0;
+    }
 
     return m_backend.translate_material_df(
-        db_transaction,
-        db_compiled_material,
-        path,
-        base_fname,
-        include_geometry_normal,
-        errors);
+        unwrap(transaction), unwrap(compiled_material), path, base_fname, context_impl);
+}
+
+const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deprecated_translate_material(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::ICompiled_material* material,
+    mi::neuraylib::Target_function_description* function_descriptions,
+    mi::Size description_count,
+    bool include_geometry_normal)
+{
+    NEURAY::Mdl_execution_context_impl context;
+    context.set_option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, include_geometry_normal);
+
+    return translate_material(
+        transaction, material, function_descriptions, description_count, &context);
 }
 
 const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
@@ -317,20 +477,22 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
     const mi::neuraylib::ICompiled_material* material,
     mi::neuraylib::Target_function_description* function_descriptions,
     mi::Size description_count,
-    bool include_geometry_normal)
+    mi::neuraylib::IMdl_execution_context* context)
 {
+    MDL::Execution_context* wrapped_context = unwrap_and_clear(context);
+
     // reuse link unit based implementation
-    mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
-        create_link_unit(transaction, NULL));
+    BACKENDS::Link_unit link_unit(m_backend, unwrap(transaction));
 
-    auto result = link_unit->add_material(
-        material, function_descriptions, description_count, include_geometry_normal);
+    if (link_unit.add_material(
+        unwrap(material),
+        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        static_cast<size_t>(description_count),
+        wrapped_context)) {
 
-    mi::base::Handle<const mi::neuraylib::ITarget_code> tc(
-        translate_link_unit(link_unit.get(), &result));
-
-    tc->retain();
-    return tc.get();
+        return m_backend.translate_link_unit(&link_unit, wrapped_context);
+    }
+    return NULL;
 }
 
 mi::Uint8 const *Mdl_llvm_backend::get_device_library(Size &size) const
@@ -338,20 +500,40 @@ mi::Uint8 const *Mdl_llvm_backend::get_device_library(Size &size) const
     return m_backend.get_device_library(size);
 }
 
-mi::neuraylib::ILink_unit *Mdl_llvm_backend::create_link_unit(
-    mi::neuraylib::ITransaction *transaction,
-    mi::Sint32                  *errors)
+mi::neuraylib::ILink_unit* Mdl_llvm_backend::deprecated_create_link_unit(
+    mi::neuraylib::ITransaction* transaction,
+    mi::Sint32* errors)
 {
     if (errors != NULL)
         *errors = 0;
     return new Link_unit(m_backend, transaction);
 }
 
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
-    mi::neuraylib::ILink_unit const *lu,
-    mi::Sint32                      *errors)
+mi::neuraylib::ILink_unit* Mdl_llvm_backend::create_link_unit(
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::IMdl_execution_context* )
 {
-    return m_backend.translate_link_unit(unwrap(lu), errors);
+    return new Link_unit(m_backend, transaction);
+}
+
+mi::neuraylib::ITarget_code const* Mdl_llvm_backend::deprecated_translate_link_unit(
+    mi::neuraylib::ILink_unit const* lu,
+    mi::Sint32* errors)
+{
+    MDL::Execution_context context;
+    const mi::neuraylib::ITarget_code* tc =
+        m_backend.translate_link_unit(unwrap(lu), &context);
+
+    if (errors)
+        *errors = context.get_result();
+    return tc;
+}
+
+mi::neuraylib::ITarget_code const* Mdl_llvm_backend::translate_link_unit(
+    mi::neuraylib::ILink_unit const* lu,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    return m_backend.translate_link_unit(unwrap(lu), unwrap_and_clear(context));
 }
 
 

@@ -91,7 +91,13 @@ endif()
 # in order to show them in CMake-Gui, even the script stops because of an error.
 option(MDL_ENABLE_CUDA_EXAMPLES "Enable examples that require CUDA." ON)
 option(MDL_ENABLE_OPENGL_EXAMPLES "Enable examples that require OpenGL." ON)
-option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ON) 
+option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ON)
+
+if(EXISTS ${MDL_BASE_FOLDER}/cmake/tests/CMakeLists.txt)
+    option(MDL_ENABLE_TESTS "Generates unit and example tests." ON)
+else()
+    set(MDL_ENABLE_TESTS OFF CACHE INTERNAL "Generates unit and example tests." FORCE)
+endif()
 
 include(${MDL_BASE_FOLDER}/cmake/find/find_cuda_ext.cmake)
 find_cuda_ext()

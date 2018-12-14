@@ -36,16 +36,16 @@ private:
 
 void CallingConvEmitter::run(raw_ostream &O) {
 
-  MISTD::vector<Record*> CCs = Records.getAllDerivedDefinitions("CallingConv");
+  std::vector<Record*> CCs = Records.getAllDerivedDefinitions("CallingConv");
   
   // Emit prototypes for all of the CC's so that they can forward ref each
   // other.
   for (unsigned i = 0, e = CCs.size(); i != e; ++i) {
     O << "static bool " << CCs[i]->getName()
       << "(unsigned ValNo, MVT ValVT,\n"
-      << MISTD::string(CCs[i]->getName().size()+13, ' ')
+      << std::string(CCs[i]->getName().size()+13, ' ')
       << "MVT LocVT, CCValAssign::LocInfo LocInfo,\n"
-      << MISTD::string(CCs[i]->getName().size()+13, ' ')
+      << std::string(CCs[i]->getName().size()+13, ' ')
       << "ISD::ArgFlagsTy ArgFlags, CCState &State);\n";
   }
   
@@ -61,9 +61,9 @@ void CallingConvEmitter::EmitCallingConv(Record *CC, raw_ostream &O) {
 
   O << "\n\nstatic bool " << CC->getName()
     << "(unsigned ValNo, MVT ValVT,\n"
-    << MISTD::string(CC->getName().size()+13, ' ')
+    << std::string(CC->getName().size()+13, ' ')
     << "MVT LocVT, CCValAssign::LocInfo LocInfo,\n"
-    << MISTD::string(CC->getName().size()+13, ' ')
+    << std::string(CC->getName().size()+13, ' ')
     << "ISD::ArgFlagsTy ArgFlags, CCState &State) {\n";
   // Emit all of the actions, in order.
   for (unsigned i = 0, e = CCActions->getSize(); i != e; ++i) {
@@ -77,7 +77,7 @@ void CallingConvEmitter::EmitCallingConv(Record *CC, raw_ostream &O) {
 
 void CallingConvEmitter::EmitAction(Record *Action,
                                     unsigned Indent, raw_ostream &O) {
-  MISTD::string IndentStr = MISTD::string(Indent, ' ');
+  std::string IndentStr = std::string(Indent, ' ');
   
   if (Action->isSubClassOf("CCPredicateAction")) {
     O << IndentStr << "if (";

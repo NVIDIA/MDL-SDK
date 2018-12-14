@@ -25,7 +25,7 @@ void MachineModuleInfoMachO::anchor() {}
 void MachineModuleInfoELF::anchor() {}
 
 static int SortSymbolPair(const void *LHS, const void *RHS) {
-  typedef MISTD::pair<MCSymbol*, MachineModuleInfoImpl::StubValueTy> PairTy;
+  typedef std::pair<MCSymbol*, MachineModuleInfoImpl::StubValueTy> PairTy;
   const MCSymbol *LHSS = ((const PairTy *)LHS)->first;
   const MCSymbol *RHSS = ((const PairTy *)RHS)->first;
   return LHSS->getName().compare(RHSS->getName());

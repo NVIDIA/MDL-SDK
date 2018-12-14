@@ -24,7 +24,7 @@ TEST(SwapByteOrder, UnsignedRoundTrip) {
   // The point of the bit twiddling of magic is to test with and without bits
   // in every byte.
   uint64_t value = 1;
-  for (MISTD::size_t i = 0; i <= sizeof(value); ++i) {
+  for (std::size_t i = 0; i <= sizeof(value); ++i) {
     uint8_t origional_uint8 = static_cast<uint8_t>(value);
     EXPECT_EQ(origional_uint8,
       sys::SwapByteOrder(sys::SwapByteOrder(origional_uint8)));
@@ -49,7 +49,7 @@ TEST(SwapByteOrder, SignedRoundTrip) {
   // The point of the bit twiddling of magic is to test with and without bits
   // in every byte.
   uint64_t value = 1;
-  for (MISTD::size_t i = 0; i <= sizeof(value); ++i) {
+  for (std::size_t i = 0; i <= sizeof(value); ++i) {
     int8_t origional_int8 = static_cast<int8_t>(value);
     EXPECT_EQ(origional_int8,
       sys::SwapByteOrder(sys::SwapByteOrder(origional_int8)));

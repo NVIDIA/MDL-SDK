@@ -39,6 +39,8 @@
 namespace mi {
 namespace mdl {
 
+#if !defined(NDEBUG) || defined(DEBUG)
+
 // Constructor.
 DAG_ir_checker::DAG_ir_checker(
     IAllocator                  *alloc,
@@ -548,6 +550,8 @@ DAG_node_factory_impl const *DAG_ir_checker::set_owner(DAG_node_factory_impl con
     }
     return res;
 }
+
+#endif
 
 } // mdl
 } // mi

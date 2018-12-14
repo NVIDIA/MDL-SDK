@@ -73,7 +73,7 @@ public:
   /// operations needed to reliably use the memory are also performed.
   ///
   /// \returns true if an error occurred, false otherwise.
-  virtual bool finalizeMemory(MISTD::string *ErrMsg = 0);
+  virtual bool finalizeMemory(std::string *ErrMsg = 0);
 
   /// \brief Invalidate instruction cache for code sections.
   ///

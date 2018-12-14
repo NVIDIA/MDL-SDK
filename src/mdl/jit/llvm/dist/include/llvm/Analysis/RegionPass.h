@@ -55,7 +55,7 @@ public:
   /// @param Banner The banner to separate different printed passes.
   ///
   /// @return The pass to print the LLVM IR in the region.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   using llvm::Pass::doInitialization;
   using llvm::Pass::doFinalization;
@@ -81,7 +81,7 @@ public:
 
 /// @brief The pass manager to schedule RegionPasses.
 class RGPassManager : public FunctionPass, public PMDataManager {
-  MISTD::deque<Region*> RQ;
+  std::deque<Region*> RQ;
   bool skipThisRegion;
   bool redoThisRegion;
   RegionInfo *RI;

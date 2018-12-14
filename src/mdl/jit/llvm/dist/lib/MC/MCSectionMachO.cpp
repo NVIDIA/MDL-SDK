@@ -177,7 +177,7 @@ static void StripSpaces(StringRef &Str) {
 /// flavored .s file.  If successful, this fills in the specified Out
 /// parameters and returns an empty string.  When an invalid section
 /// specifier is present, this returns a string indicating the problem.
-MISTD::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In.
+std::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In.
                                                   StringRef &Segment,    // Out.
                                                   StringRef &Section,    // Out.
                                                   unsigned  &TAA,        // Out.
@@ -185,7 +185,7 @@ MISTD::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In
                                                   unsigned  &StubSize) { // Out.
   TAAParsed = false;
   // Find the first comma.
-  MISTD::pair<StringRef, StringRef> Comma = Spec.split(',');
+  std::pair<StringRef, StringRef> Comma = Spec.split(',');
 
   // If there is no comma, we fail.
   if (Comma.second.empty())
@@ -256,7 +256,7 @@ MISTD::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In
   StringRef Attrs = Comma.first;
 
   // The attribute list is a '+' separated list of attributes.
-  MISTD::pair<StringRef, StringRef> Plus = Attrs.split('+');
+  std::pair<StringRef, StringRef> Plus = Attrs.split('+');
 
   while (1) {
     StringRef Attr = Plus.first;

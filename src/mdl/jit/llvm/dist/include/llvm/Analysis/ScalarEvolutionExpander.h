@@ -41,11 +41,11 @@ namespace llvm {
     const char* IVName;
 
     // InsertedExpressions caches Values for reuse, so must track RAUW.
-    MISTD::map<MISTD::pair<const SCEV *, Instruction *>, TrackingVH<Value> >
+    std::map<std::pair<const SCEV *, Instruction *>, TrackingVH<Value> >
       InsertedExpressions;
     // InsertedValues only flags inserted instructions so needs no RAUW.
-    MISTD::set<AssertingVH<Value> > InsertedValues;
-    MISTD::set<AssertingVH<Value> > InsertedPostIncValues;
+    std::set<AssertingVH<Value> > InsertedValues;
+    std::set<AssertingVH<Value> > InsertedPostIncValues;
 
     /// RelevantLoops - A memoization of the "relevant" loop for a given SCEV.
     DenseMap<const SCEV *, const Loop *> RelevantLoops;
@@ -67,7 +67,7 @@ namespace llvm {
     Instruction *IVIncInsertPos;
 
     /// Phis that complete an IV chain. Reuse
-    MISTD::set<AssertingVH<PHINode> > ChainedPhis;
+    std::set<AssertingVH<PHINode> > ChainedPhis;
 
     /// CanonicalMode - When true, expressions are expanded in "canonical"
     /// form. In particular, addrecs are expanded as arithmetic based on

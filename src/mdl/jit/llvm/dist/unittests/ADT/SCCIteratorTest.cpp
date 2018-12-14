@@ -95,7 +95,7 @@ public:
   };
 
   /// NodeType - Node index and set of children of the node.
-  typedef MISTD::pair<unsigned, NodeSubset> NodeType;
+  typedef std::pair<unsigned, NodeSubset> NodeType;
 
 private:
   /// Nodes - The list of nodes for this graph.
@@ -277,7 +277,7 @@ TEST(SCCIteratorTest, AllSmallGraphs) {
     GT::NodeSubset NodesInSomeSCC;
 
     for (scc_iterator<GT> I = scc_begin(G), E = scc_end(G); I != E; ++I) {
-      MISTD::vector<GT::NodeType*> &SCC = *I;
+      std::vector<GT::NodeType*> &SCC = *I;
 
       // Get the nodes in this SCC as a NodeSubset rather than a vector.
       GT::NodeSubset NodesInThisSCC;

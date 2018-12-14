@@ -44,10 +44,10 @@ class VectorLegalizer {
 
   // Adds a node to the translation cache
   void AddLegalizedOperand(SDValue From, SDValue To) {
-    LegalizedNodes.insert(MISTD::make_pair(From, To));
+    LegalizedNodes.insert(std::make_pair(From, To));
     // If someone requests legalization of the new node, return itself.
     if (From != To)
-      LegalizedNodes.insert(MISTD::make_pair(To, To));
+      LegalizedNodes.insert(std::make_pair(To, To));
   }
 
   // Legalizes the given node

@@ -30,8 +30,8 @@ using namespace llvm;
 /// If the passes did not compile correctly, output the command required to 
 /// recreate the failure. This returns true if a compiler error is found.
 ///
-bool BugDriver::runManyPasses(const MISTD::vector<MISTD::string> &AllPasses,
-                              MISTD::string &ErrMsg) {
+bool BugDriver::runManyPasses(const std::vector<std::string> &AllPasses,
+                              std::string &ErrMsg) {
   setPassesToRun(AllPasses);
   outs() << "Starting bug finding procedure...\n\n";
   
@@ -52,7 +52,7 @@ bool BugDriver::runManyPasses(const MISTD::vector<MISTD::string> &AllPasses,
     //
     // Step 1: Randomize the order of the optimizer passes.
     //
-    MISTD::random_shuffle(PassesToRun.begin(), PassesToRun.end());
+    std::random_shuffle(PassesToRun.begin(), PassesToRun.end());
     
     //
     // Step 2: Run optimizer passes on the program and check for success.
@@ -62,7 +62,7 @@ bool BugDriver::runManyPasses(const MISTD::vector<MISTD::string> &AllPasses,
       outs() << "-" << PassesToRun[i] << " ";
     }
     
-    MISTD::string Filename;
+    std::string Filename;
     if(runPasses(Program, PassesToRun, Filename, false)) {
       outs() << "\n";
       outs() << "Optimizer passes caused failure!\n\n";
@@ -76,7 +76,7 @@ bool BugDriver::runManyPasses(const MISTD::vector<MISTD::string> &AllPasses,
     // Step 3: Compile the optimized code.
     //
     outs() << "Running the code generator to test for a crash: ";
-    MISTD::string Error;
+    std::string Error;
     compileProgram(Program, &Error);
     if (!Error.empty()) {
       outs() << "\n*** compileProgram threw an exception: ";

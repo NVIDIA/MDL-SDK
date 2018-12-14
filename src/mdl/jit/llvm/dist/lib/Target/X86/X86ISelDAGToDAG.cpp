@@ -221,7 +221,7 @@ namespace {
     /// inline asm expressions.
     virtual bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                               char ConstraintCode,
-                                              MISTD::vector<SDValue> &OutOps);
+                                              std::vector<SDValue> &OutOps);
 
     void EmitSpecialCodeForMain(MachineBasicBlock *BB, MachineFrameInfo *MFI);
 
@@ -2322,7 +2322,7 @@ SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
     if (!foldedLoad) {
       foldedLoad = TryFoldLoad(Node, N0, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4);
       if (foldedLoad)
-        MISTD::swap(N0, N1);
+        std::swap(N0, N1);
     }
 
     SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, SrcReg,
@@ -2783,7 +2783,7 @@ SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
 
 bool X86DAGToDAGISel::
 SelectInlineAsmMemoryOperand(const SDValue &Op, char ConstraintCode,
-                             MISTD::vector<SDValue> &OutOps) {
+                             std::vector<SDValue> &OutOps) {
   SDValue Op0, Op1, Op2, Op3, Op4;
   switch (ConstraintCode) {
   case 'o':   // offsetable        ??

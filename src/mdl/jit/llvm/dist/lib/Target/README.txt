@@ -735,8 +735,8 @@ struct test {
 
 int main() {
     test t;
-    MISTD::scanf("%d", &t.val);
-    MISTD::printf("%d\n", t.val);
+    std::scanf("%d", &t.val);
+    std::printf("%d\n", t.val);
 }
 
 //===---------------------------------------------------------------------===//
@@ -1731,7 +1731,7 @@ can statically run the constructor) could mark the global const (so it gets put
 in the readonly section).  A testcase would be:
 
 #include <complex>
-using namespace MISTD;
+using namespace std;
 const complex<char> should_be_in_rodata (42,-42);
 complex<char> should_be_in_data (42,-42);
 complex<char> should_be_in_bss;
@@ -1962,7 +1962,7 @@ aggressively as malloc though.
 clang -O3 doesn't optimize this:
 
 void f1(int* begin, int* end) {
-  MISTD::fill(begin, end, 0);
+  std::fill(begin, end, 0);
 }
 
 into a memset.  This is PR8942.
@@ -1972,7 +1972,7 @@ into a memset.  This is PR8942.
 clang -O3 -fno-exceptions currently compiles this code:
 
 void f(int N) {
-  MISTD::vector<int> v(N);
+  std::vector<int> v(N);
 
   extern void sink(void*); sink(&v);
 }
@@ -1983,7 +1983,7 @@ define void @_Z1fi(i32 %N) nounwind {
 entry:
   %v2 = alloca [3 x i32*], align 8
   %v2.sub = getelementptr inbounds [3 x i32*]* %v2, i64 0, i64 0
-  %tmpcast = bitcast [3 x i32*]* %v2 to %"class.MISTD::vector"*
+  %tmpcast = bitcast [3 x i32*]* %v2 to %"class.std::vector"*
   %conv = sext i32 %N to i64
   store i32* null, i32** %v2.sub, align 8, !tbaa !0
   %tmp3.i.i.i.i.i = getelementptr inbounds [3 x i32*]* %v2, i64 0, i64 1
@@ -2075,7 +2075,7 @@ struct S {
 };
 
 void f(int N) {
-  MISTD::vector<S> v(N);
+  std::vector<S> v(N);
   extern void sink(void*); sink(&v);
 }
 

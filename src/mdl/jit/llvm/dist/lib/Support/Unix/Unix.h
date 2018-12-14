@@ -67,7 +67,7 @@
 /// If the error number can be converted to a string, it will be
 /// separated from prefix by ": ".
 static inline bool MakeErrMsg(
-  MISTD::string* ErrMsg, const MISTD::string& prefix, int errnum = -1) {
+  std::string* ErrMsg, const std::string& prefix, int errnum = -1) {
   if (!ErrMsg)
     return true;
   if (errnum == -1)

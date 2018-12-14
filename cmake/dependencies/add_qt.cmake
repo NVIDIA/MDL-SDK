@@ -18,6 +18,9 @@ else()
     string(SUBSTRING ${Qt5_DIR} 0 ${_BASE_DIR_LENGTH} Qt5_BASE_DIR)
     set(Qt5_BASE_DIR ${Qt5_BASE_DIR} CACHE INTERNAL "qt root directory for the current platform. This directory contains the bin directory for example.") 
 
+    # options depending on the target type
+    get_target_property(_TARGET_TYPE ${__TARGET_ADD_DEPENDENCY_TARGET} TYPE)
+
     # find the required packages
     find_package(Qt5 COMPONENTS ${__TARGET_ADD_DEPENDENCY_COMPONENTS} REQUIRED)
 
@@ -36,8 +39,9 @@ else()
             )
 
         # copy runtime dependencies
-        # we assume that qt is not installed locally but available, e.g., on a network drive
-        if(WINDOWS)
+        if (WINDOWS AND _TARGET_TYPE STREQUAL "EXECUTABLE")
+
+            # we assume that qt is not installed locally but available, e.g., on a network drive
             target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
                 RELATIVE  ${Qt5_BASE_DIR}/bin
                 FILES     Qt5${qt_component}$<$<CONFIG:DEBUG>:d>.dll)
@@ -82,11 +86,13 @@ else()
                 ${LINKER_AS_NEEDED}
             )
 
-        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            FILES
-                "${Qt5_BASE_DIR}/plugins/xcbglintegrations"
-                "${Qt5_BASE_DIR}/plugins/egldeviceintegrations"
-            )
+        if (_TARGET_TYPE STREQUAL "EXECUTABLE")
+            target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                FILES
+                    "${Qt5_BASE_DIR}/plugins/xcbglintegrations"
+                    "${Qt5_BASE_DIR}/plugins/egldeviceintegrations"
+                )
+        endif()
 
     elseif(MACOSX)
         target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
@@ -95,13 +101,15 @@ else()
             )
     endif()
 
-    # copy qml dependencies which are not found if qt is not installed locally
-    target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-        FILES
-            "${Qt5_BASE_DIR}/qml/QtGraphicalEffects"
-            "${Qt5_BASE_DIR}/qml/QtQuick"
-            "${Qt5_BASE_DIR}/qml/QtQuick.2"
-            "${Qt5_BASE_DIR}/plugins/platforms"
-            "${Qt5_BASE_DIR}/plugins/imageformats"
-        )
+    if (_TARGET_TYPE STREQUAL "EXECUTABLE")
+        # copy qml dependencies which are not found if qt is not installed locally
+        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+            FILES
+                "${Qt5_BASE_DIR}/qml/QtGraphicalEffects"
+                "${Qt5_BASE_DIR}/qml/QtQuick"
+                "${Qt5_BASE_DIR}/qml/QtQuick.2"
+                "${Qt5_BASE_DIR}/plugins/platforms"
+                "${Qt5_BASE_DIR}/plugins/imageformats"
+            )
+    endif()
 endif()

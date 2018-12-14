@@ -204,16 +204,16 @@ bool StackProtector::RequiresStackProtector() {
             if (CI->getLimitedValue(SSPBufferSize) >= SSPBufferSize) {
               // A call to alloca with size >= SSPBufferSize requires
               // stack protectors.
-              Layout.insert(MISTD::make_pair(AI, SSPLK_LargeArray));
+              Layout.insert(std::make_pair(AI, SSPLK_LargeArray));
               NeedsProtector = true;
             } else if (Strong) {
               // Require protectors for all alloca calls in strong mode.
-              Layout.insert(MISTD::make_pair(AI, SSPLK_SmallArray));
+              Layout.insert(std::make_pair(AI, SSPLK_SmallArray));
               NeedsProtector = true;
             }
           } else {
             // A call to alloca with a variable size requires protectors.
-            Layout.insert(MISTD::make_pair(AI, SSPLK_LargeArray));
+            Layout.insert(std::make_pair(AI, SSPLK_LargeArray));
             NeedsProtector = true;
           }
           continue;
@@ -221,7 +221,7 @@ bool StackProtector::RequiresStackProtector() {
 
         bool IsLarge = false;
         if (ContainsProtectableArray(AI->getAllocatedType(), IsLarge, Strong)) {
-          Layout.insert(MISTD::make_pair(AI, IsLarge ? SSPLK_LargeArray
+          Layout.insert(std::make_pair(AI, IsLarge ? SSPLK_LargeArray
                                                    : SSPLK_SmallArray));
           NeedsProtector = true;
           continue;
@@ -229,7 +229,7 @@ bool StackProtector::RequiresStackProtector() {
 
         if (Strong && HasAddressTaken(AI)) {
           ++NumAddrTaken;
-          Layout.insert(MISTD::make_pair(AI, SSPLK_AddrOf));
+          Layout.insert(std::make_pair(AI, SSPLK_AddrOf));
           NeedsProtector = true;
         }
       }

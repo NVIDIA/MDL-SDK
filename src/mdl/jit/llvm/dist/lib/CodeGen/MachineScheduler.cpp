@@ -549,7 +549,7 @@ void ScheduleDAGMI::initRegPressure() {
   // Cache the list of excess pressure sets in this region. This will also track
   // the max pressure in the scheduled code for these sets.
   RegionCriticalPSets.clear();
-  const MISTD::vector<unsigned> &RegionPressure =
+  const std::vector<unsigned> &RegionPressure =
     RPTracker.getPressure().MaxSetPressure;
   for (unsigned i = 0, e = RegionPressure.size(); i < e; ++i) {
     unsigned Limit = RegClassInfo->getRegPressureSetLimit(i);
@@ -569,7 +569,7 @@ void ScheduleDAGMI::initRegPressure() {
 
 void ScheduleDAGMI::
 updateScheduledPressure(const SUnit *SU,
-                        const MISTD::vector<unsigned> &NewMaxPressure) {
+                        const std::vector<unsigned> &NewMaxPressure) {
   const PressureDiff &PDiff = getPressureDiff(SU);
   unsigned CritIdx = 0, CritEnd = RegionCriticalPSets.size();
   for (PressureDiff::const_iterator I = PDiff.begin(), E = PDiff.end();
@@ -732,7 +732,7 @@ void ScheduleDAGMI::computeDFSResult() {
 
 void ScheduleDAGMI::findRootsAndBiasEdges(SmallVectorImpl<SUnit*> &TopRoots,
                                           SmallVectorImpl<SUnit*> &BotRoots) {
-  for (MISTD::vector<SUnit>::iterator
+  for (std::vector<SUnit>::iterator
          I = SUnits.begin(), E = SUnits.end(); I != E; ++I) {
     SUnit *SU = &(*I);
     assert(!SU->isBoundaryNode() && "Boundary node should not be in SUnits");
@@ -948,9 +948,9 @@ void ScheduleDAGMI::placeDebugValues() {
     RegionBegin = FirstDbgValue;
   }
 
-  for (MISTD::vector<MISTD::pair<MachineInstr *, MachineInstr *> >::iterator
+  for (std::vector<std::pair<MachineInstr *, MachineInstr *> >::iterator
          DI = DbgValues.end(), DE = DbgValues.begin(); DI != DE; --DI) {
-    MISTD::pair<MachineInstr *, MachineInstr *> P = *prior(DI);
+    std::pair<MachineInstr *, MachineInstr *> P = *prior(DI);
     MachineInstr *DbgValue = P.first;
     MachineBasicBlock::iterator OrigPrevMI = P.second;
     if (&*RegionBegin == DbgValue)
@@ -1025,7 +1025,7 @@ void LoadClusterMutation::clusterNeighboringLoads(ArrayRef<SUnit*> Loads,
   }
   if (LoadRecords.size() < 2)
     return;
-  MISTD::sort(LoadRecords.begin(), LoadRecords.end(), LoadInfoLess);
+  std::sort(LoadRecords.begin(), LoadRecords.end(), LoadInfoLess);
   unsigned ClusterLength = 1;
   for (unsigned Idx = 0, End = LoadRecords.size(); Idx < (End - 1); ++Idx) {
     if (LoadRecords[Idx].BaseReg != LoadRecords[Idx+1].BaseReg) {
@@ -1079,8 +1079,8 @@ void LoadClusterMutation::apply(ScheduleDAGMI *DAG) {
     // Check if this chain-like pred has been seen
     // before. ChainPredID==MaxNodeID for loads at the top of the schedule.
     unsigned NumChains = StoreChainDependents.size();
-    MISTD::pair<DenseMap<unsigned, unsigned>::iterator, bool> Result =
-      StoreChainIDs.insert(MISTD::make_pair(ChainPredID, NumChains));
+    std::pair<DenseMap<unsigned, unsigned>::iterator, bool> Result =
+      StoreChainIDs.insert(std::make_pair(ChainPredID, NumChains));
     if (Result.second)
       StoreChainDependents.resize(NumChains + 1);
     StoreChainDependents[Result.first->second].push_back(SU);
@@ -1556,7 +1556,7 @@ public:
     /// instructions. This is the larger of the critical path within the zone
     /// and the number of cycles required to issue the instructions.
     unsigned getScheduledLatency() const {
-      return MISTD::max(ExpectedLatency, CurrCycle);
+      return std::max(ExpectedLatency, CurrCycle);
     }
 
     unsigned getUnscheduledLatency(SUnit *SU) const {
@@ -1579,7 +1579,7 @@ public:
     /// micro-ops that are ready to execute by getExecutedCount. Notice the
     /// feedback loop.
     unsigned getExecutedCount() const {
-      return MISTD::max(CurrCycle * SchedModel->getLatencyFactor(),
+      return std::max(CurrCycle * SchedModel->getLatencyFactor(),
                       MaxExecutedResCount);
     }
 
@@ -1683,7 +1683,7 @@ init(ScheduleDAGMI *DAG, const TargetSchedModel *SchedModel) {
   if (!SchedModel->hasInstrSchedModel())
     return;
   RemainingCounts.resize(SchedModel->getNumProcResourceKinds());
-  for (MISTD::vector<SUnit>::iterator
+  for (std::vector<SUnit>::iterator
          I = DAG->SUnits.begin(), E = DAG->SUnits.end(); I != E; ++I) {
     const MCSchedClassDesc *SC = DAG->getSchedClass(&*I);
     RemIssueCount += SchedModel->getNumMicroOps(I->getInstr(), SC)
@@ -1786,7 +1786,7 @@ void GenericScheduler::releaseTopNode(SUnit *SU) {
     unsigned PredReadyCycle = I->getSUnit()->TopReadyCycle;
     unsigned Latency = I->getLatency();
 #ifndef NDEBUG
-    Top.MaxObservedLatency = MISTD::max(Latency, Top.MaxObservedLatency);
+    Top.MaxObservedLatency = std::max(Latency, Top.MaxObservedLatency);
 #endif
     if (SU->TopReadyCycle < PredReadyCycle + Latency)
       SU->TopReadyCycle = PredReadyCycle + Latency;
@@ -1807,7 +1807,7 @@ void GenericScheduler::releaseBottomNode(SUnit *SU) {
     unsigned SuccReadyCycle = I->getSUnit()->BotReadyCycle;
     unsigned Latency = I->getLatency();
 #ifndef NDEBUG
-    Bot.MaxObservedLatency = MISTD::max(Latency, Bot.MaxObservedLatency);
+    Bot.MaxObservedLatency = std::max(Latency, Bot.MaxObservedLatency);
 #endif
     if (SU->BotReadyCycle < SuccReadyCycle + Latency)
       SU->BotReadyCycle = SuccReadyCycle + Latency;
@@ -1830,7 +1830,7 @@ void GenericScheduler::checkAcyclicLatency() {
 
   // Scaled number of cycles per loop iteration.
   unsigned IterCount =
-    MISTD::max(Rem.CyclicCritPath * SchedModel->getLatencyFactor(),
+    std::max(Rem.CyclicCritPath * SchedModel->getLatencyFactor(),
              Rem.RemIssueCount);
   // Scaled acyclic critical path.
   unsigned AcyclicCount = Rem.CriticalPath * SchedModel->getLatencyFactor();
@@ -1856,7 +1856,7 @@ void GenericScheduler::registerRoots() {
   Rem.CriticalPath = DAG->ExitSU.getDepth();
 
   // Some roots may not feed into ExitSU. Check all of them in case.
-  for (MISTD::vector<SUnit*>::const_iterator
+  for (std::vector<SUnit*>::const_iterator
          I = Bot.Available.begin(), E = Bot.Available.end(); I != E; ++I) {
     if ((*I)->getDepth() > Rem.CriticalPath)
       Rem.CriticalPath = (*I)->getDepth();
@@ -1966,8 +1966,8 @@ void GenericScheduler::SchedBoundary::setPolicy(CandPolicy &Policy,
   //
   // RemainingLatency is the greater of independent and dependent latency.
   unsigned RemLatency = DependentLatency;
-  RemLatency = MISTD::max(RemLatency, findMaxLatency(Available.elements()));
-  RemLatency = MISTD::max(RemLatency, findMaxLatency(Pending.elements()));
+  RemLatency = std::max(RemLatency, findMaxLatency(Available.elements()));
+  RemLatency = std::max(RemLatency, findMaxLatency(Pending.elements()));
 
   // Compute the critical resource outside the zone.
   unsigned OtherCritIdx;
@@ -2371,7 +2371,7 @@ static bool tryPressure(const PressureChange &TryP,
   }
   // If the candidates are decreasing pressure, reverse priority.
   if (TryP.getUnitInc() < 0)
-    MISTD::swap(TryRank, CandRank);
+    std::swap(TryRank, CandRank);
   return tryGreater(TryRank, CandRank, TryCand, Cand, Reason);
 }
 
@@ -2816,13 +2816,13 @@ void GenericScheduler::reschedulePhysRegCopies(SUnit *SU, bool isTop) {
 /// them here. See comments in biasPhysRegCopy.
 void GenericScheduler::schedNode(SUnit *SU, bool IsTopNode) {
   if (IsTopNode) {
-    SU->TopReadyCycle = MISTD::max(SU->TopReadyCycle, Top.CurrCycle);
+    SU->TopReadyCycle = std::max(SU->TopReadyCycle, Top.CurrCycle);
     Top.bumpNode(SU);
     if (SU->hasPhysRegUses)
       reschedulePhysRegCopies(SU, true);
   }
   else {
-    SU->BotReadyCycle = MISTD::max(SU->BotReadyCycle, Bot.CurrCycle);
+    SU->BotReadyCycle = std::max(SU->BotReadyCycle, Bot.CurrCycle);
     Bot.bumpNode(SU);
     if (SU->hasPhysRegDefs)
       reschedulePhysRegCopies(SU, false);
@@ -2892,7 +2892,7 @@ class ILPScheduler : public MachineSchedStrategy {
   ScheduleDAGMI *DAG;
   ILPOrder Cmp;
 
-  MISTD::vector<SUnit*> ReadyQ;
+  std::vector<SUnit*> ReadyQ;
 public:
   ILPScheduler(bool MaximizeILP): DAG(0), Cmp(MaximizeILP) {}
 
@@ -2906,7 +2906,7 @@ public:
 
   virtual void registerRoots() {
     // Restore the heap in ReadyQ with the updated DFS results.
-    MISTD::make_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
+    std::make_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
   }
 
   /// Implement MachineSchedStrategy interface.
@@ -2915,7 +2915,7 @@ public:
   /// Callback to select the highest priority node from the ready Q.
   virtual SUnit *pickNode(bool &IsTopNode) {
     if (ReadyQ.empty()) return NULL;
-    MISTD::pop_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
+    std::pop_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
     SUnit *SU = ReadyQ.back();
     ReadyQ.pop_back();
     IsTopNode = false;
@@ -2930,7 +2930,7 @@ public:
 
   /// \brief Scheduler callback to notify that a new subtree is scheduled.
   virtual void scheduleTree(unsigned SubtreeID) {
-    MISTD::make_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
+    std::make_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
   }
 
   /// Callback after a node is scheduled. Mark a newly scheduled tree, notify
@@ -2943,7 +2943,7 @@ public:
 
   virtual void releaseBottomNode(SUnit *SU) {
     ReadyQ.push_back(SU);
-    MISTD::push_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
+    std::push_heap(ReadyQ.begin(), ReadyQ.end(), Cmp);
   }
 };
 } // namespace
@@ -2985,10 +2985,10 @@ class InstructionShuffler : public MachineSchedStrategy {
   // Using a less-than relation (SUnitOrder<false>) for the TopQ priority
   // gives nodes with a higher number higher priority causing the latest
   // instructions to be scheduled first.
-  PriorityQueue<SUnit*, MISTD::vector<SUnit*>, SUnitOrder<false> >
+  PriorityQueue<SUnit*, std::vector<SUnit*>, SUnitOrder<false> >
     TopQ;
   // When scheduling bottom-up, use greater-than as the queue priority.
-  PriorityQueue<SUnit*, MISTD::vector<SUnit*>, SUnitOrder<true> >
+  PriorityQueue<SUnit*, std::vector<SUnit*>, SUnitOrder<true> >
     BottomQ;
 public:
   InstructionShuffler(bool alternate, bool topdown)
@@ -3063,7 +3063,7 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
 
   DOTGraphTraits (bool isSimple=false) : DefaultDOTGraphTraits(isSimple) {}
 
-  static MISTD::string getGraphName(const ScheduleDAG *G) {
+  static std::string getGraphName(const ScheduleDAG *G) {
     return G->MF.getName();
   }
 
@@ -3082,7 +3082,7 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
 
   /// If you want to override the dot attributes printed for a particular
   /// edge, override this method.
-  static MISTD::string getEdgeAttributes(const SUnit *Node,
+  static std::string getEdgeAttributes(const SUnit *Node,
                                        SUnitIterator EI,
                                        const ScheduleDAG *Graph) {
     if (EI.isArtificialDep())
@@ -3092,8 +3092,8 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
     return "";
   }
 
-  static MISTD::string getNodeLabel(const SUnit *SU, const ScheduleDAG *G) {
-    MISTD::string Str;
+  static std::string getNodeLabel(const SUnit *SU, const ScheduleDAG *G) {
+    std::string Str;
     raw_string_ostream SS(Str);
     const SchedDFSResult *DFS =
       static_cast<const ScheduleDAGMI*>(G)->getDFSResult();
@@ -3102,13 +3102,13 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
       SS << " I:" << DFS->getNumInstrs(SU);
     return SS.str();
   }
-  static MISTD::string getNodeDescription(const SUnit *SU, const ScheduleDAG *G) {
+  static std::string getNodeDescription(const SUnit *SU, const ScheduleDAG *G) {
     return G->getGraphNodeLabel(SU);
   }
 
-  static MISTD::string getNodeAttributes(const SUnit *N,
+  static std::string getNodeAttributes(const SUnit *N,
                                        const ScheduleDAG *Graph) {
-    MISTD::string Str("shape=Mrecord");
+    std::string Str("shape=Mrecord");
     const SchedDFSResult *DFS =
       static_cast<const ScheduleDAGMI*>(Graph)->getDFSResult();
     if (DFS) {

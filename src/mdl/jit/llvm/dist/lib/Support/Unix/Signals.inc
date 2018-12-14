@@ -46,8 +46,8 @@ static SmartMutex<true> SignalsMutex;
 /// InterruptFunction - The function to call if ctrl-c is pressed.
 static void (*InterruptFunction)() = 0;
 
-static MISTD::vector<MISTD::string> FilesToRemove;
-static MISTD::vector<MISTD::pair<void(*)(void*), void*> > CallBacksToRun;
+static std::vector<std::string> FilesToRemove;
+static std::vector<std::pair<void(*)(void*), void*> > CallBacksToRun;
 
 // IntSigs - Signals that represent requested termination. There's no bug
 // or failure, or if there is, it's not our direct responsibility. For whatever
@@ -105,8 +105,8 @@ static void RegisterHandlers() {
   // If the handlers are already registered, we're done.
   if (NumRegisteredSignals != 0) return;
 
-  MISTD::for_each(IntSigs, IntSigsEnd, RegisterHandler);
-  MISTD::for_each(KillSigs, KillSigsEnd, RegisterHandler);
+  std::for_each(IntSigs, IntSigsEnd, RegisterHandler);
+  std::for_each(KillSigs, KillSigsEnd, RegisterHandler);
 }
 
 static void UnregisterHandlers() {
@@ -126,7 +126,7 @@ static void RemoveFilesToRemove() {
   // We avoid iterators in case of debug iterators that allocate or release
   // memory.
   for (unsigned i = 0, e = FilesToRemove.size(); i != e; ++i) {
-    // We rely on a MISTD::string implementation for which repeated calls to
+    // We rely on a std::string implementation for which repeated calls to
     // 'c_str()' don't allocate memory. We pre-call 'c_str()' on all of these
     // strings to try to ensure this is safe.
     const char *path = FilesToRemove[i].c_str();
@@ -165,7 +165,7 @@ static RETSIGTYPE SignalHandler(int Sig) {
   SignalsMutex.acquire();
   RemoveFilesToRemove();
 
-  if (MISTD::find(IntSigs, IntSigsEnd, Sig) != IntSigsEnd) {
+  if (std::find(IntSigs, IntSigsEnd, Sig) != IntSigsEnd) {
     if (InterruptFunction) {
       void (*IF)() = InterruptFunction;
       SignalsMutex.release();
@@ -210,12 +210,12 @@ void llvm::sys::SetInterruptFunction(void (*IF)()) {
 
 // RemoveFileOnSignal - The public API
 bool llvm::sys::RemoveFileOnSignal(StringRef Filename,
-                                   MISTD::string* ErrMsg) {
+                                   std::string* ErrMsg) {
   SignalsMutex.acquire();
-  MISTD::string *OldPtr = FilesToRemove.empty() ? 0 : &FilesToRemove[0];
+  std::string *OldPtr = FilesToRemove.empty() ? 0 : &FilesToRemove[0];
   FilesToRemove.push_back(Filename);
 
-  // We want to call 'c_str()' on every MISTD::string in this vector so that if
+  // We want to call 'c_str()' on every std::string in this vector so that if
   // the underlying implementation requires a re-allocation, it happens here
   // rather than inside of the signal handler. If we see the vector grow, we
   // have to call it on every entry. If it remains in place, we only need to
@@ -235,9 +235,9 @@ bool llvm::sys::RemoveFileOnSignal(StringRef Filename,
 // DontRemoveFileOnSignal - The public API
 void llvm::sys::DontRemoveFileOnSignal(StringRef Filename) {
   SignalsMutex.acquire();
-  MISTD::vector<MISTD::string>::reverse_iterator RI =
-    MISTD::find(FilesToRemove.rbegin(), FilesToRemove.rend(), Filename);
-  MISTD::vector<MISTD::string>::iterator I = FilesToRemove.end();
+  std::vector<std::string>::reverse_iterator RI =
+    std::find(FilesToRemove.rbegin(), FilesToRemove.rend(), Filename);
+  std::vector<std::string>::iterator I = FilesToRemove.end();
   if (RI != FilesToRemove.rend())
     I = FilesToRemove.erase(RI.base()-1);
 
@@ -245,7 +245,7 @@ void llvm::sys::DontRemoveFileOnSignal(StringRef Filename) {
   // the erase. These elements, in a C++98 implementation where c_str()
   // requires a reallocation on the first call may have had the call to c_str()
   // made on insertion become invalid by being copied down an element.
-  for (MISTD::vector<MISTD::string>::iterator E = FilesToRemove.end(); I != E; ++I)
+  for (std::vector<std::string>::iterator E = FilesToRemove.end(); I != E; ++I)
     I->c_str();
 
   SignalsMutex.release();
@@ -255,7 +255,7 @@ void llvm::sys::DontRemoveFileOnSignal(StringRef Filename) {
 /// to the process.  The handler can have a cookie passed to it to identify
 /// what instance of the handler it is.
 void llvm::sys::AddSignalHandler(void (*FnPtr)(void *), void *Cookie) {
-  CallBacksToRun.push_back(MISTD::make_pair(FnPtr, Cookie));
+  CallBacksToRun.push_back(std::make_pair(FnPtr, Cookie));
   RegisterHandlers();
 }
 

@@ -88,8 +88,8 @@ PHINode::PHINode(const PHINode &PN)
   : Instruction(PN.getType(), Instruction::PHI,
                 allocHungoffUses(PN.getNumOperands()), PN.getNumOperands()),
     ReservedSpace(PN.getNumOperands()) {
-  MISTD::copy(PN.op_begin(), PN.op_end(), op_begin());
-  MISTD::copy(PN.block_begin(), PN.block_end(), block_begin());
+  std::copy(PN.op_begin(), PN.op_end(), op_begin());
+  std::copy(PN.block_begin(), PN.block_end(), block_begin());
   SubclassOptionalData = PN.SubclassOptionalData;
 }
 
@@ -119,8 +119,8 @@ Value *PHINode::removeIncomingValue(unsigned Idx, bool DeletePHIIfEmpty) {
   // FIXME: we could just swap with the end of the list, then erase.  However,
   // clients might not expect this to happen.  The code as it is thrashes the
   // use/def lists, which is kinda lame.
-  MISTD::copy(op_begin() + Idx + 1, op_end(), op_begin() + Idx);
-  MISTD::copy(block_begin() + Idx + 1, block_end(), block_begin() + Idx);
+  std::copy(op_begin() + Idx + 1, op_end(), op_begin() + Idx);
+  std::copy(block_begin() + Idx + 1, block_end(), block_begin() + Idx);
 
   // Nuke the last value.
   Op<-1>().set(0);
@@ -150,8 +150,8 @@ void PHINode::growOperands() {
   ReservedSpace = NumOps;
   OperandList = allocHungoffUses(ReservedSpace);
 
-  MISTD::copy(OldOps, OldOps + e, op_begin());
-  MISTD::copy(OldBlocks, OldBlocks + e, block_begin());
+  std::copy(OldOps, OldOps + e, op_begin());
+  std::copy(OldBlocks, OldBlocks + e, block_begin());
 
   Use::zap(OldOps, OldOps + e, true);
 }
@@ -281,7 +281,7 @@ void CallInst::init(Value *Func, ArrayRef<Value *> Args, const Twine &NameStr) {
            "Calling a function with a bad signature!");
 #endif
 
-  MISTD::copy(Args.begin(), Args.end(), op_begin());
+  std::copy(Args.begin(), Args.end(), op_begin());
   setName(NameStr);
 }
 
@@ -327,7 +327,7 @@ CallInst::CallInst(const CallInst &CI)
   setTailCall(CI.isTailCall());
   setCallingConv(CI.getCallingConv());
     
-  MISTD::copy(CI.op_begin(), CI.op_end(), op_begin());
+  std::copy(CI.op_begin(), CI.op_end(), op_begin());
   SubclassOptionalData = CI.SubclassOptionalData;
 }
 
@@ -549,7 +549,7 @@ void InvokeInst::init(Value *Fn, BasicBlock *IfNormal, BasicBlock *IfException,
            "Invoking a function with a bad signature!");
 #endif
 
-  MISTD::copy(Args.begin(), Args.end(), op_begin());
+  std::copy(Args.begin(), Args.end(), op_begin());
   setName(NameStr);
 }
 
@@ -560,7 +560,7 @@ InvokeInst::InvokeInst(const InvokeInst &II)
                    II.getNumOperands()) {
   setAttributes(II.getAttributes());
   setCallingConv(II.getCallingConv());
-  MISTD::copy(II.op_begin(), II.op_end(), op_begin());
+  std::copy(II.op_begin(), II.op_end(), op_begin());
   SubclassOptionalData = II.SubclassOptionalData;
 }
 
@@ -1333,7 +1333,7 @@ void GetElementPtrInst::init(Value *Ptr, ArrayRef<Value *> IdxList,
                              const Twine &Name) {
   assert(NumOperands == 1 + IdxList.size() && "NumOperands not initialized?");
   OperandList[0] = Ptr;
-  MISTD::copy(IdxList.begin(), IdxList.end(), op_begin() + 1);
+  std::copy(IdxList.begin(), IdxList.end(), op_begin() + 1);
   setName(Name);
 }
 
@@ -1342,7 +1342,7 @@ GetElementPtrInst::GetElementPtrInst(const GetElementPtrInst &GEPI)
                 OperandTraits<GetElementPtrInst>::op_end(this)
                 - GEPI.getNumOperands(),
                 GEPI.getNumOperands()) {
-  MISTD::copy(GEPI.op_begin(), GEPI.op_end(), op_begin());
+  std::copy(GEPI.op_begin(), GEPI.op_end(), op_begin());
   SubclassOptionalData = GEPI.SubclassOptionalData;
 }
 

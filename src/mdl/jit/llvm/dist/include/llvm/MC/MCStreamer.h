@@ -38,7 +38,7 @@ class Twine;
 class raw_ostream;
 class formatted_raw_ostream;
 
-typedef MISTD::pair<const MCSection *, const MCExpr *> MCSectionSubPair;
+typedef std::pair<const MCSection *, const MCExpr *> MCSectionSubPair;
 
 /// Target specific streamer interface. This is used so that targets can
 /// implement support for target specific assembly directives.
@@ -115,12 +115,12 @@ class MCStreamer {
   bool EmitEHFrame;
   bool EmitDebugFrame;
 
-  MISTD::vector<MCDwarfFrameInfo> FrameInfos;
+  std::vector<MCDwarfFrameInfo> FrameInfos;
   MCDwarfFrameInfo *getCurrentFrameInfo();
   MCSymbol *EmitCFICommon();
   void EnsureValidFrame();
 
-  MISTD::vector<MCWin64EHUnwindInfo *> W64UnwindInfos;
+  std::vector<MCWin64EHUnwindInfo *> W64UnwindInfos;
   MCWin64EHUnwindInfo *CurrentW64UnwindInfo;
   void setCurrentW64UnwindInfo(MCWin64EHUnwindInfo *Frame);
   void EnsureValidW64UnwindInfo();
@@ -133,7 +133,7 @@ class MCStreamer {
 
   /// SectionStack - This is stack of current and previous section
   /// values saved by PushSection.
-  SmallVector<MISTD::pair<MCSectionSubPair, MCSectionSubPair>, 4> SectionStack;
+  SmallVector<std::pair<MCSectionSubPair, MCSectionSubPair>, 4> SectionStack;
 
   bool AutoInitSections;
 
@@ -251,7 +251,7 @@ public:
   /// section stack.
   void PushSection() {
     SectionStack.push_back(
-        MISTD::make_pair(getCurrentSection(), getPreviousSection()));
+        std::make_pair(getCurrentSection(), getPreviousSection()));
   }
 
   /// popSection - Restore the current and previous section from
@@ -345,7 +345,7 @@ public:
 
   /// EmitLinkerOptions - Emit the given list @p Options of strings as linker
   /// options into the output.
-  virtual void EmitLinkerOptions(ArrayRef<MISTD::string> Kind) {}
+  virtual void EmitLinkerOptions(ArrayRef<std::string> Kind) {}
 
   /// EmitDataRegion - Note in the output the specified region @p Kind.
   virtual void EmitDataRegion(MCDataRegionType Kind) {}

@@ -34,8 +34,8 @@ struct OprofileNativeFunction {
   }
 };
 
-typedef MISTD::list<OprofileNativeFunction> NativeFunctionList;
-typedef MISTD::list<debug_line_info> NativeDebugList;
+typedef std::list<OprofileNativeFunction> NativeFunctionList;
+typedef std::list<debug_line_info> NativeDebugList;
 NativeFunctionList NativeFunctions;
 
 NativeCodeMap ReportedDebugFuncs;
@@ -94,7 +94,7 @@ int write_debug_line_info(op_agent_t agent,
   for(NativeDebugList::iterator i = NativeInfo.begin();
       i != NativeInfo.end();
       ++i) {
-    locs.push_back(MISTD::make_pair(MISTD::string(i->filename), i->lineno));
+    locs.push_back(std::make_pair(std::string(i->filename), i->lineno));
   }
   ReportedDebugFuncs[addr] = locs;
 

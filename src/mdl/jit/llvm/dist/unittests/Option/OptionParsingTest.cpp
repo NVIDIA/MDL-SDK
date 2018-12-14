@@ -83,19 +83,19 @@ TEST(Option, OptionParsing) {
   EXPECT_EQ(AL->getLastArgValue(OPT_B), "hi");
   EXPECT_EQ(AL->getLastArgValue(OPT_C), "bye");
   EXPECT_EQ(AL->getLastArgValue(OPT_D), "adena");
-  MISTD::vector<MISTD::string> Es = AL->getAllArgValues(OPT_E);
+  std::vector<std::string> Es = AL->getAllArgValues(OPT_E);
   EXPECT_EQ(Es[0], "apple");
   EXPECT_EQ(Es[1], "bloom");
   EXPECT_EQ(AL->getLastArgValue(OPT_F), "42");
-  MISTD::vector<MISTD::string> Gs = AL->getAllArgValues(OPT_G);
+  std::vector<std::string> Gs = AL->getAllArgValues(OPT_G);
   EXPECT_EQ(Gs[0], "chuu");
   EXPECT_EQ(Gs[1], "2");
 
   // Check the help text.
-  MISTD::string Help;
+  std::string Help;
   raw_string_ostream RSO(Help);
   T.PrintHelp(RSO, "test", "title!");
-  EXPECT_NE(Help.find("-A"), MISTD::string::npos);
+  EXPECT_NE(Help.find("-A"), std::string::npos);
 
   // Test aliases.
   arg_iterator Cs = AL->filtered_begin(OPT_C);

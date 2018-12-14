@@ -153,7 +153,7 @@ namespace {
 
     /// BBAnalysis - Results of if-conversion feasibility analysis indexed by
     /// basic block number.
-    MISTD::vector<BBInfo> BBAnalysis;
+    std::vector<BBInfo> BBAnalysis;
     TargetSchedModel SchedModel;
 
     const TargetLoweringBase *TLI;
@@ -192,10 +192,10 @@ namespace {
                       unsigned &Dups1, unsigned &Dups2) const;
     void ScanInstructions(BBInfo &BBI);
     BBInfo &AnalyzeBlock(MachineBasicBlock *BB,
-                         MISTD::vector<IfcvtToken*> &Tokens);
+                         std::vector<IfcvtToken*> &Tokens);
     bool FeasibilityAnalysis(BBInfo &BBI, SmallVectorImpl<MachineOperand> &Cond,
                              bool isTriangle = false, bool RevBranch = false);
-    void AnalyzeBlocks(MachineFunction &MF, MISTD::vector<IfcvtToken*> &Tokens);
+    void AnalyzeBlocks(MachineFunction &MF, std::vector<IfcvtToken*> &Tokens);
     void InvalidatePreds(MachineBasicBlock *BB);
     void RemoveExtraEdges(BBInfo &BBI);
     bool IfConvertSimple(BBInfo &BBI, IfcvtKind Kind);
@@ -302,7 +302,7 @@ bool IfConverter::runOnMachineFunction(MachineFunction &MF) {
   MF.RenumberBlocks();
   BBAnalysis.resize(MF.getNumBlockIDs());
 
-  MISTD::vector<IfcvtToken*> Tokens;
+  std::vector<IfcvtToken*> Tokens;
   MadeChange = false;
   unsigned NumIfCvts = NumSimple + NumSimpleFalse + NumTriangle +
     NumTriangleRev + NumTriangleFalse + NumTriangleFRev + NumDiamonds;
@@ -448,7 +448,7 @@ bool IfConverter::ReverseBranchCondition(BBInfo &BBI) {
   if (!TII->ReverseBranchCondition(BBI.BrCond)) {
     TII->RemoveBranch(*BBI.BB);
     TII->InsertBranch(*BBI.BB, BBI.FalseBB, BBI.TrueBB, BBI.BrCond, dl);
-    MISTD::swap(BBI.TrueBB, BBI.FalseBB);
+    std::swap(BBI.TrueBB, BBI.FalseBB);
     return true;
   }
   return false;
@@ -705,7 +705,7 @@ void IfConverter::ScanInstructions(BBInfo &BBI) {
 
     // FIXME: Make use of PredDefs? e.g. ADDC, SUBC sets predicates but are
     // still potentially predicable.
-    MISTD::vector<MachineOperand> PredDefs;
+    std::vector<MachineOperand> PredDefs;
     if (TII->DefinesPredicate(I, PredDefs))
       BBI.ClobbersPred = true;
 
@@ -753,7 +753,7 @@ bool IfConverter::FeasibilityAnalysis(BBInfo &BBI,
 /// the specified block. Record its successors and whether it looks like an
 /// if-conversion candidate.
 IfConverter::BBInfo &IfConverter::AnalyzeBlock(MachineBasicBlock *BB,
-                                             MISTD::vector<IfcvtToken*> &Tokens) {
+                                             std::vector<IfcvtToken*> &Tokens) {
   BBInfo &BBI = BBAnalysis[BB->getNumber()];
 
   if (BBI.IsAnalyzed || BBI.IsBeingAnalyzed)
@@ -906,14 +906,14 @@ IfConverter::BBInfo &IfConverter::AnalyzeBlock(MachineBasicBlock *BB,
 /// AnalyzeBlocks - Analyze all blocks and find entries for all if-conversion
 /// candidates.
 void IfConverter::AnalyzeBlocks(MachineFunction &MF,
-                                MISTD::vector<IfcvtToken*> &Tokens) {
+                                std::vector<IfcvtToken*> &Tokens) {
   for (MachineFunction::iterator I = MF.begin(), E = MF.end(); I != E; ++I) {
     MachineBasicBlock *BB = I;
     AnalyzeBlock(BB, Tokens);
   }
 
   // Sort to favor more complex ifcvt scheme.
-  MISTD::stable_sort(Tokens.begin(), Tokens.end(), IfcvtTokenCmp);
+  std::stable_sort(Tokens.begin(), Tokens.end(), IfcvtTokenCmp);
 }
 
 /// canFallThroughTo - Returns true either if ToBB is the next block after BB or
@@ -1028,7 +1028,7 @@ bool IfConverter::IfConvertSimple(BBInfo &BBI, IfcvtKind Kind) {
 
   SmallVector<MachineOperand, 4> Cond(BBI.BrCond.begin(), BBI.BrCond.end());
   if (Kind == ICSimpleFalse)
-    MISTD::swap(CvtBBI, NextBBI);
+    std::swap(CvtBBI, NextBBI);
 
   if (CvtBBI->IsDone ||
       (CvtBBI->CannotBeCopied && CvtBBI->BB->pred_size() > 1)) {
@@ -1115,7 +1115,7 @@ bool IfConverter::IfConvertTriangle(BBInfo &BBI, IfcvtKind Kind) {
 
   SmallVector<MachineOperand, 4> Cond(BBI.BrCond.begin(), BBI.BrCond.end());
   if (Kind == ICTriangleFalse || Kind == ICTriangleFRev)
-    MISTD::swap(CvtBBI, NextBBI);
+    std::swap(CvtBBI, NextBBI);
 
   if (CvtBBI->IsDone ||
       (CvtBBI->CannotBeCopied && CvtBBI->BB->pred_size() > 1)) {
@@ -1274,8 +1274,8 @@ bool IfConverter::IfConvertDiamond(BBInfo &BBI, IfcvtKind Kind,
       DoSwap = true;
   }
   if (DoSwap) {
-    MISTD::swap(BBI1, BBI2);
-    MISTD::swap(Cond1, Cond2);
+    std::swap(BBI1, BBI2);
+    std::swap(Cond1, Cond2);
   }
 
   // Remove the conditional branch from entry to the blocks.
@@ -1509,7 +1509,7 @@ void IfConverter::PredicateBlock(BBInfo &BBI,
     UpdatePredRedefs(I, Redefs, TRI);
   }
 
-  MISTD::copy(Cond.begin(), Cond.end(), MISTD::back_inserter(BBI.Predicate));
+  std::copy(Cond.begin(), Cond.end(), std::back_inserter(BBI.Predicate));
 
   BBI.IsAnalyzed = false;
   BBI.NonPredSize = 0;
@@ -1560,7 +1560,7 @@ void IfConverter::CopyAndPredicateBlock(BBInfo &ToBBI, BBInfo &FromBBI,
   }
 
   if (!IgnoreBr) {
-    MISTD::vector<MachineBasicBlock *> Succs(FromBBI.BB->succ_begin(),
+    std::vector<MachineBasicBlock *> Succs(FromBBI.BB->succ_begin(),
                                            FromBBI.BB->succ_end());
     MachineBasicBlock *NBB = getNextBlock(FromBBI.BB);
     MachineBasicBlock *FallThrough = FromBBI.HasFallThrough ? NBB : NULL;
@@ -1574,9 +1574,9 @@ void IfConverter::CopyAndPredicateBlock(BBInfo &ToBBI, BBInfo &FromBBI,
     }
   }
 
-  MISTD::copy(FromBBI.Predicate.begin(), FromBBI.Predicate.end(),
-            MISTD::back_inserter(ToBBI.Predicate));
-  MISTD::copy(Cond.begin(), Cond.end(), MISTD::back_inserter(ToBBI.Predicate));
+  std::copy(FromBBI.Predicate.begin(), FromBBI.Predicate.end(),
+            std::back_inserter(ToBBI.Predicate));
+  std::copy(Cond.begin(), Cond.end(), std::back_inserter(ToBBI.Predicate));
 
   ToBBI.ClobbersPred |= FromBBI.ClobbersPred;
   ToBBI.IsAnalyzed = false;
@@ -1596,7 +1596,7 @@ void IfConverter::MergeBlocks(BBInfo &ToBBI, BBInfo &FromBBI, bool AddEdges) {
   ToBBI.BB->splice(ToBBI.BB->end(),
                    FromBBI.BB, FromBBI.BB->begin(), FromBBI.BB->end());
 
-  MISTD::vector<MachineBasicBlock *> Succs(FromBBI.BB->succ_begin(),
+  std::vector<MachineBasicBlock *> Succs(FromBBI.BB->succ_begin(),
                                          FromBBI.BB->succ_end());
   MachineBasicBlock *NBB = getNextBlock(FromBBI.BB);
   MachineBasicBlock *FallThrough = FromBBI.HasFallThrough ? NBB : NULL;
@@ -1615,8 +1615,8 @@ void IfConverter::MergeBlocks(BBInfo &ToBBI, BBInfo &FromBBI, bool AddEdges) {
   if (NBB && !FromBBI.BB->isSuccessor(NBB))
     FromBBI.BB->addSuccessor(NBB);
 
-  MISTD::copy(FromBBI.Predicate.begin(), FromBBI.Predicate.end(),
-            MISTD::back_inserter(ToBBI.Predicate));
+  std::copy(FromBBI.Predicate.begin(), FromBBI.Predicate.end(),
+            std::back_inserter(ToBBI.Predicate));
   FromBBI.Predicate.clear();
 
   ToBBI.NonPredSize += FromBBI.NonPredSize;

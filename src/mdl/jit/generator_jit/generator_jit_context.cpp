@@ -83,7 +83,6 @@ Function_context::Function_context(
 , m_di_function()
 , m_dilb_stack(DILB_stack::container_type(alloc))
 , m_accesible_parameters(alloc)
-, m_tex_loookup_call_mode(code_gen.get_tex_lookup_call_mode())
 {
     // fill the array type map
     Function_instance::Array_instances const &ais(func_inst.get_array_instances());
@@ -216,7 +215,6 @@ Function_context::Function_context(
  , m_di_function()
  , m_dilb_stack(DILB_stack::container_type(alloc))
  , m_accesible_parameters(alloc)
- , m_tex_loookup_call_mode(code_gen.get_tex_lookup_call_mode())
 {
     // set fast-math flags
     llvm::FastMathFlags FMF;
@@ -364,7 +362,7 @@ llvm::Value *Function_context::get_exec_ctx_parameter()
 }
 
 // Get the state parameter of the current function.
-llvm::Value *Function_context::get_state_parameter()
+llvm::Value *Function_context::get_state_parameter(llvm::Value *exec_ctx)
 {
     MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_STATE);
 
@@ -373,14 +371,15 @@ llvm::Value *Function_context::get_state_parameter()
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        llvm::Value *exec_ctx = arg_it;
+        if (exec_ctx == NULL)
+            exec_ctx = arg_it;
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 0u));
     }
     return arg_it;
 }
 
 // Get the resource_data parameter of the current function.
-llvm::Value *Function_context::get_resource_data_parameter()
+llvm::Value *Function_context::get_resource_data_parameter(llvm::Value *exec_ctx)
 {
     MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_RES);
 
@@ -389,7 +388,8 @@ llvm::Value *Function_context::get_resource_data_parameter()
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        llvm::Value *exec_ctx = arg_it;
+        if (exec_ctx == NULL)
+            exec_ctx = arg_it;
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 1u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -399,7 +399,7 @@ llvm::Value *Function_context::get_resource_data_parameter()
 }
 
 // Get the exc_state parameter of the current function.
-llvm::Value *Function_context::get_exc_state_parameter()
+llvm::Value *Function_context::get_exc_state_parameter(llvm::Value *exec_ctx)
 {
     MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_EXC);
 
@@ -408,7 +408,8 @@ llvm::Value *Function_context::get_exc_state_parameter()
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        llvm::Value *exec_ctx = arg_it;
+        if (exec_ctx == NULL)
+            exec_ctx = arg_it;
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 2u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -421,7 +422,7 @@ llvm::Value *Function_context::get_exc_state_parameter()
 }
 
 // Get the cap_args parameter of the current function.
-llvm::Value *Function_context::get_cap_args_parameter()
+llvm::Value *Function_context::get_cap_args_parameter(llvm::Value *exec_ctx)
 {
     MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_CAP_ARGS);
 
@@ -430,7 +431,8 @@ llvm::Value *Function_context::get_cap_args_parameter()
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        llvm::Value *exec_ctx = arg_it;
+        if (exec_ctx == NULL)
+            exec_ctx = arg_it;
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 3u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -446,7 +448,7 @@ llvm::Value *Function_context::get_cap_args_parameter()
 }
 
 // Get the lambda_results parameter of the current function.
-llvm::Value *Function_context::get_lambda_results_parameter()
+llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ctx)
 {
     if (m_lambda_results_override)
         return m_lambda_results_override;
@@ -458,7 +460,8 @@ llvm::Value *Function_context::get_lambda_results_parameter()
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        llvm::Value *exec_ctx = arg_it;
+        if (exec_ctx == NULL)
+            exec_ctx = arg_it;
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 4u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -639,7 +642,12 @@ LLVM_context_data *Function_context::get_context_data(
     // but instantiate the type
     IType const *var_type = def->get_type();
 
-    llvm::Type *var_tp = m_code_gen.lookup_type(var_type, instantiate_type_size(var_type));
+    llvm::Type *var_tp;
+    if (m_code_gen.is_deriv_var(def))
+        var_tp = m_code_gen.m_type_mapper.lookup_deriv_type(
+            var_type, instantiate_type_size(var_type));
+    else
+        var_tp = m_code_gen.lookup_type(var_type, instantiate_type_size(var_type));
     LLVM_context_data *ctx = m_arena_builder.create<LLVM_context_data>(
         this, var_tp, def->get_symbol()->get_name());
 
@@ -1142,6 +1150,100 @@ llvm::Constant *Function_context::get_shuffle(llvm::ArrayRef<int> values)
 }
 
 
+// Creates a single LLVM addition instruction (integer OR FP).
+llvm::Value *Function_context::create_add(
+    llvm::Type  *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
+        llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
+        llvm::Type *e_tp = a_tp->getElementType();
+
+        bool l_is_array = lhs->getType() == a_tp;
+        bool r_is_array = rhs->getType() == a_tp;
+
+        unsigned idxes[1];
+        for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
+            idxes[0] = i;
+
+            llvm::Value *l = lhs;
+            if (l_is_array) {
+                l = m_ir_builder.CreateExtractValue(lhs, idxes);
+            }
+
+            llvm::Value *r = rhs;
+            if (r_is_array) {
+                r = m_ir_builder.CreateExtractValue(rhs, idxes);
+            }
+
+            llvm::Value *elem = create_add(e_tp, l, r);
+
+            res = m_ir_builder.CreateInsertValue(res, elem, idxes);
+        }
+        return res;
+    } else {
+        if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(res_type)) {
+            if (lhs->getType() != v_tp) {
+                lhs = create_vector_splat(v_tp, lhs);
+            }
+            if (rhs->getType() != v_tp) {
+                rhs = create_vector_splat(v_tp, rhs);
+            }
+        }
+        llvm::Value *res = res_type->isIntOrIntVectorTy() ?
+            m_ir_builder.CreateAdd(lhs, rhs) : m_ir_builder.CreateFAdd(lhs, rhs);
+        return res;
+    }
+}
+
+// Creates a single LLVM subtraction instruction (integer OR FP).
+llvm::Value *Function_context::create_sub(
+    llvm::Type  *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
+        llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
+        llvm::Type *e_tp = a_tp->getElementType();
+
+        bool l_is_array = lhs->getType() == a_tp;
+        bool r_is_array = rhs->getType() == a_tp;
+
+        unsigned idxes[1];
+        for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
+            idxes[0] = i;
+
+            llvm::Value *l = lhs;
+            if (l_is_array) {
+                l = m_ir_builder.CreateExtractValue(lhs, idxes);
+            }
+
+            llvm::Value *r = rhs;
+            if (r_is_array) {
+                r = m_ir_builder.CreateExtractValue(rhs, idxes);
+            }
+
+            llvm::Value *elem = create_sub(e_tp, l, r);
+
+            res = m_ir_builder.CreateInsertValue(res, elem, idxes);
+        }
+        return res;
+    } else {
+        if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(res_type)) {
+            if (lhs->getType() != v_tp) {
+                lhs = create_vector_splat(v_tp, lhs);
+            }
+            if (rhs->getType() != v_tp) {
+                rhs = create_vector_splat(v_tp, rhs);
+            }
+        }
+        llvm::Value *res = res_type->isIntOrIntVectorTy() ?
+            m_ir_builder.CreateSub(lhs, rhs) : m_ir_builder.CreateFSub(lhs, rhs);
+        return res;
+    }
+}
+
 // Creates a single LLVM multiplication instruction (integer OR FP).
 llvm::Value *Function_context::create_mul(
     llvm::Type  *res_type,
@@ -1189,6 +1291,339 @@ llvm::Value *Function_context::create_mul(
     }
 }
 
+// Creates LLVM code for a vector by state matrix multiplication.
+llvm::Value *Function_context::create_mul_state_V3xM(
+    llvm::Type  *res_type,
+    llvm::Value *lhs_V,
+    llvm::Value *rhs_M,
+    bool ignore_translation,
+    bool transposed)
+{
+    // non-transposed:
+    // res.x = lhs_V.x * rhs_M[0].x + lhs_V.y * rhs_M[0].y + lhs_V.z * rhs_M[0].z + rhs_M[0].w
+    // res.y = lhs_V.x * rhs_M[1].x + lhs_V.y * rhs_M[1].y + lhs_V.z * rhs_M[1].z + rhs_M[1].w
+    // res.z = lhs_V.x * rhs_M[2].x + lhs_V.y * rhs_M[2].y + lhs_V.z * rhs_M[2].z + rhs_M[2].w
+    //
+    // transposed:
+    // res.x = lhs_V.x * rhs_M[0].x + lhs_V.y * rhs_M[1].x + lhs_V.z * rhs_M[2].x
+    // res.y = lhs_V.x * rhs_M[0].y + lhs_V.y * rhs_M[1].y + lhs_V.z * rhs_M[2].y
+    // res.z = lhs_V.x * rhs_M[0].z + lhs_V.y * rhs_M[1].z + lhs_V.z * rhs_M[2].z
+    //
+    // If ignore_translation is true, the rhs_M[*].w part is ignored.
+    // For the transposed case, ignore_translation must always be set, because the last row of the
+    // state matrices is always implied to be (0, 0, 0, 1) and does not need to be provided.
+
+    if (llvm::isa<llvm::ArrayType>(res_type)) {
+        llvm::Value *res = llvm::ConstantAggregateZero::get(res_type);
+
+        if (transposed) {
+            MDL_ASSERT(ignore_translation && "using translation component not supported for "
+                "transposed matrices");
+
+            for (int i = 2; i >= 0; --i) {
+                unsigned idxes[] = { unsigned(i) };
+
+                llvm::Value *idx = get_constant(i);
+                llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                llvm::Value *row = m_ir_builder.CreateLoad(ptr);
+                llvm::Value *v   = m_ir_builder.CreateExtractValue(lhs_V, idxes);
+
+                for (unsigned j = 0; j < 3; ++j) {
+                    unsigned comp[] = { j };
+                    llvm::Value *c = m_ir_builder.CreateExtractValue(row, comp);
+                    llvm::Value *t = m_ir_builder.CreateFMul(v, c);
+                    c = m_ir_builder.CreateExtractValue(res, comp);
+                    t = m_ir_builder.CreateFAdd(t, c);
+                    res = m_ir_builder.CreateInsertValue(res, t, comp);
+                }
+            }
+        } else {
+            llvm::Value *row[3];
+            unsigned w[] = { 3 };
+            for (int i = 0; i < 3; ++i) {
+                unsigned idxes[] = { unsigned(i) };
+                llvm::Value *idx = get_constant(i);
+                llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                row[i] = m_ir_builder.CreateLoad(ptr);
+
+                // use translation component? -> initialize result with it
+                if (!ignore_translation) {
+                    llvm::Value *v = m_ir_builder.CreateExtractValue(row[i], w);
+                    res = m_ir_builder.CreateInsertValue(res, v, idxes);
+                }
+            }
+
+            for (int i = 2; i >= 0; --i) {
+                unsigned idxes[] = { unsigned(i) };
+
+                llvm::Value *v = m_ir_builder.CreateExtractValue(lhs_V, idxes);
+                for (unsigned j = 0; j < 3; ++j) {
+                    unsigned comp[] = { j };
+                    llvm::Value *c = m_ir_builder.CreateExtractValue(row[j], idxes);
+                    llvm::Value *t = m_ir_builder.CreateFMul(v, c);
+                    c = m_ir_builder.CreateExtractValue(res, comp);
+                    t = m_ir_builder.CreateFAdd(t, c);
+                    res = m_ir_builder.CreateInsertValue(res, t, comp);
+                }
+            }
+        }
+
+        return res;
+    } else {
+        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_type);
+        llvm::Value      *res  = llvm::ConstantAggregateZero::get(res_type);
+
+        llvm::Value *idx, *ptr, *v;
+
+        if (transposed) {
+            MDL_ASSERT(ignore_translation && "using translation component not supported for "
+                "transposed matrices");
+
+            for (int i = 2; i >= 0; --i) {
+                llvm::Value *row;
+                idx = get_constant(i);
+                ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                row = load_and_convert(v_tp, ptr);
+                v   = m_ir_builder.CreateExtractElement(lhs_V, idx);
+                v   = create_vector_splat(v_tp, v);
+                v   = m_ir_builder.CreateFMul(v, row);
+                res = m_ir_builder.CreateFAdd(res, v);
+            }
+        } else {
+            llvm::Value *row[3];
+            unsigned w[] = { 3 };
+            for (int i = 0; i < 3; ++i) {
+                idx    = get_constant(i);
+                ptr    = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                row[i] = m_ir_builder.CreateLoad(ptr);
+
+                // use translation component? -> initialize result with it
+                if (!ignore_translation) {
+                    v      = m_ir_builder.CreateExtractValue(row[i], w);
+                    res    = m_ir_builder.CreateInsertElement(res, v, idx);
+                }
+            }
+
+            for (int i = 2; i >= 0; --i) {
+                unsigned idxes[] = { unsigned(i) };
+                llvm::Value *t = llvm::Constant::getNullValue(v_tp);
+
+                v   = m_ir_builder.CreateExtractValue(row[0], idxes);
+                idx = get_constant(0);
+                t   = m_ir_builder.CreateInsertElement(t, v, idx);
+
+                v   = m_ir_builder.CreateExtractValue(row[1], idxes);
+                idx = get_constant(1);
+                t   = m_ir_builder.CreateInsertElement(t, v, idx);
+
+                v   = m_ir_builder.CreateExtractValue(row[2], idxes);
+                idx = get_constant(2);
+                t   = m_ir_builder.CreateInsertElement(t, v, idx);
+
+                idx = get_constant(i);
+                v   = m_ir_builder.CreateExtractElement(lhs_V, idx);
+                v   = create_vector_splat(v_tp, v);
+                v   = m_ir_builder.CreateFMul(v, t);
+                res = m_ir_builder.CreateFAdd(res, v);
+            }
+        }
+
+        return res;
+    }
+}
+
+// Creates LLVM code for a matrix by dual vector multiplication.
+llvm::Value *Function_context::create_deriv_mul_state_V3xM(
+    llvm::Type *res_type,
+    llvm::Value *lhs_V,
+    llvm::Value *rhs_M,
+    bool ignore_translation,
+    bool transposed)
+{
+    llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_type);
+
+    // The vector is treated as float4(lhs_V, 1).
+    // So for dx and dy we always ignore the translation, as dx and dy of 1 is 0.
+
+    llvm::Value *val = create_mul_state_V3xM(
+        elem_type, get_dual_val(lhs_V), rhs_M, ignore_translation, transposed);
+    llvm::Value *dx  = create_mul_state_V3xM(
+        elem_type, get_dual_dx (lhs_V), rhs_M, /*ignore_translation=*/ true, transposed);
+    llvm::Value *dy  = create_mul_state_V3xM(
+        elem_type, get_dual_dy (lhs_V), rhs_M, /*ignore_translation=*/ true, transposed);
+
+    llvm::Value *res = get_dual(val, dx, dy);
+    return res;
+}
+
+// Creates a single LLVM FP division instruction.
+llvm::Value *Function_context::create_fdiv(
+    llvm::Type  *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
+        llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
+        llvm::Type *e_tp = a_tp->getElementType();
+
+        bool l_is_array = lhs->getType() == a_tp;
+        bool r_is_array = rhs->getType() == a_tp;
+
+        unsigned idxes[1];
+        for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
+            idxes[0] = i;
+
+            llvm::Value *l = lhs;
+            if (l_is_array) {
+                l = m_ir_builder.CreateExtractValue(lhs, idxes);
+            }
+
+            llvm::Value *r = rhs;
+            if (r_is_array) {
+                r = m_ir_builder.CreateExtractValue(rhs, idxes);
+            }
+
+            llvm::Value *elem = create_fdiv(e_tp, l, r);
+
+            res = m_ir_builder.CreateInsertValue(res, elem, idxes);
+        }
+        return res;
+    } else {
+        if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(res_type)) {
+            if (lhs->getType() != v_tp) {
+                lhs = create_vector_splat(v_tp, lhs);
+            }
+            if (rhs->getType() != v_tp) {
+                rhs = create_vector_splat(v_tp, rhs);
+            }
+        }
+        llvm::Value *res = m_ir_builder.CreateFDiv(lhs, rhs);
+        return res;
+    }
+}
+
+// Creates addition instructions of two dual values.
+llvm::Value *Function_context::create_deriv_add(
+    llvm::Type *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    // (a + bx + cy) + (d + ex + fy) = (a + d) + (b + e)x + (c + f)y
+    llvm::Value *val = create_add(
+        res_type,
+        get_dual_val(lhs),
+        get_dual_val(rhs));
+    llvm::Value *dx = create_add(
+        res_type,
+        get_dual_dx(lhs),
+        get_dual_dx(rhs));
+    llvm::Value *dy = create_add(
+        res_type,
+        get_dual_dy(lhs),
+        get_dual_dy(rhs));
+
+    return get_dual(val, dx, dy);
+}
+
+// Creates subtraction instructions of two dual values.
+llvm::Value *Function_context::create_deriv_sub(
+    llvm::Type *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    // (a + bx + cy) - (d + ex + fy) = (a - d) + (b - e)x + (c - f)y
+    llvm::Value *val = create_sub(
+        res_type,
+        get_dual_val(lhs),
+        get_dual_val(rhs));
+    llvm::Value *dx = create_sub(
+        res_type,
+        get_dual_dx(lhs),
+        get_dual_dx(rhs));
+    llvm::Value *dy = create_sub(
+        res_type,
+        get_dual_dy(lhs),
+        get_dual_dy(rhs));
+
+    return get_dual(val, dx, dy);
+}
+
+// Creates multiplication instructions of two dual values.
+llvm::Value *Function_context::create_deriv_mul(
+    llvm::Type *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    // (a + bx + cy)(d + ex + fy) = ad + (ae + bd)x + (af + cd)y
+    llvm::Value *lhs_val = get_dual_val(lhs);
+    llvm::Value *rhs_val = get_dual_val(rhs);
+
+    llvm::Value *val = create_mul(res_type, lhs_val, rhs_val);
+    llvm::Value *dx = create_add(
+        res_type,
+        create_mul(res_type, lhs_val, get_dual_dx(rhs)),
+        create_mul(res_type, rhs_val, get_dual_dx(lhs)));
+    llvm::Value *dy = create_add(
+        res_type,
+        create_mul(res_type, lhs_val, get_dual_dy(rhs)),
+        create_mul(res_type, rhs_val, get_dual_dy(lhs)));
+
+    return get_dual(val, dx, dy);
+}
+
+// Creates division instructions of two dual values.
+llvm::Value *Function_context::create_deriv_fdiv(
+    llvm::Type *res_type,
+    llvm::Value *lhs,
+    llvm::Value *rhs)
+{
+    // (l / r)' = (l' * r - r' * l) / r^2
+    llvm::Value *lhs_val = get_dual_val(lhs);
+    llvm::Value *rhs_val = get_dual_val(rhs);
+    llvm::Value *rhs_square = create_mul(res_type, rhs_val, rhs_val);
+
+    llvm::Value *val = create_fdiv(res_type, lhs_val, rhs_val);
+    llvm::Value *dx = create_fdiv(
+        res_type,
+        create_sub(
+            res_type,
+            create_mul(res_type, get_dual_dx(lhs), rhs_val),
+            create_mul(res_type, get_dual_dx(rhs), lhs_val)),
+        rhs_square);
+    llvm::Value *dy = create_fdiv(
+        res_type,
+        create_sub(
+            res_type,
+            create_mul(res_type, get_dual_dy(lhs), rhs_val),
+            create_mul(res_type, get_dual_dy(rhs), lhs_val)),
+        rhs_square);
+
+    return get_dual(val, dx, dy);
+}
+
+// Creates a cross product on non-dual vectors.
+llvm::Value *Function_context::create_cross(llvm::Value *lhs, llvm::Value *rhs)
+{
+    static int const yzx[] = { 1, 2, 0 };
+    llvm::Value *shuffle_yzx = get_shuffle(yzx);
+
+    static int zxy[] = { 2, 0, 1 };
+    llvm::Value *shuffle_zxy = get_shuffle(zxy);
+
+    llvm::Value *undef = llvm::UndefValue::get(lhs->getType());
+    llvm::Value *lhs_yzx = m_ir_builder.CreateShuffleVector(lhs, undef, shuffle_yzx);
+    llvm::Value *rhs_zxy = m_ir_builder.CreateShuffleVector(rhs, undef, shuffle_zxy);
+
+    llvm::Value *tmp1 = m_ir_builder.CreateFMul(lhs_yzx, rhs_zxy);
+
+    llvm::Value *lhs_zxy = m_ir_builder.CreateShuffleVector(lhs, undef, shuffle_zxy);
+    llvm::Value *rhs_yzx = m_ir_builder.CreateShuffleVector(rhs, undef, shuffle_yzx);
+
+    llvm::Value *tmp2 = m_ir_builder.CreateFMul(lhs_zxy, rhs_yzx);
+
+    return m_ir_builder.CreateFSub(tmp1, tmp2);
+}
+
 // Creates a splat vector from a scalar value.
 llvm::Value *Function_context::create_vector_splat(llvm::VectorType *res_type, llvm::Value *v)
 {
@@ -1199,6 +1634,71 @@ llvm::Value *Function_context::create_vector_splat(llvm::VectorType *res_type, l
         res = m_ir_builder.CreateInsertElement(res, v, idx);
     }
     return res;
+}
+
+// Creates a splat value from a scalar value.
+llvm::Value *Function_context::create_splat(llvm::Type *res_type, llvm::Value *v)
+{
+    if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(res_type))
+        return create_vector_splat(v_tp, v);
+    else if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
+        llvm::Value *res = llvm::ConstantAggregateZero::get(arr_tp);
+
+        for (unsigned i = 0, n = unsigned(arr_tp->getNumElements()); i < n; ++i) {
+            unsigned idxes[1] = { i };
+
+            res = m_ir_builder.CreateInsertValue(res, v, idxes);
+        }
+        return res;
+    } else {
+        MDL_ASSERT(!"Invalid result type for create_splat()");
+        return llvm::UndefValue::get(res_type);
+    }
+}
+
+// Get the number of elements for a vector or an array.
+unsigned Function_context::get_num_elements(llvm::Value *val)
+{
+    if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(val->getType()))
+        return v_tp->getNumElements();
+    else
+        return unsigned(llvm::cast<llvm::ArrayType>(val->getType())->getNumElements());
+}
+
+// Creates a ExtractValue or ExtractElement instruction.
+llvm::Value *Function_context::create_extract(llvm::Value *val, unsigned index)
+{
+    if (llvm::isa<llvm::VectorType>(val->getType())) {
+        return m_ir_builder.CreateExtractElement(val, get_constant(int(index)));
+    } else {
+        return m_ir_builder.CreateExtractValue(val, { index });
+    }
+}
+
+// Extracts a value from a compound value, also supporting derivative values.
+llvm::Value *Function_context::create_extract_allow_deriv(llvm::Value *val, unsigned index)
+{
+    if (m_type_mapper.is_deriv_type(val->getType())) {
+        llvm::Value *res_val = create_extract(get_dual_val(val), index);
+        llvm::Value *res_dx  = create_extract(get_dual_dx(val), index);
+        llvm::Value *res_dy  = create_extract(get_dual_dy(val), index);
+        return get_dual(res_val, res_dx, res_dy);
+    }
+
+    return create_extract(val, index);
+}
+
+// Creates an InsertValue or InsertElement instruction.
+llvm::Value *Function_context::create_insert(
+    llvm::Value *agg_value,
+    llvm::Value *val,
+    unsigned index)
+{
+    if (llvm::isa<llvm::VectorType>(agg_value->getType())) {
+        return m_ir_builder.CreateInsertElement(agg_value, val, get_constant(int(index)));
+    } else {
+        return m_ir_builder.CreateInsertValue(agg_value, val, { index });
+    }
 }
 
 // Create a weighted conditional branch.
@@ -1275,6 +1775,24 @@ void Function_context::create_bounds_check_with_exception(
         }
         m_ir_builder.SetInsertPoint(ok_bb);
     }
+}
+
+// Selects the given value if the index is smaller than the bound value.
+// Otherwise selects the out-of-bounds value.
+llvm::Value *Function_context::create_select_if_in_bounds(
+    llvm::Value        *index,
+    llvm::Value        *bound,
+    llvm::Value        *val,
+    llvm::Value        *out_of_bounds_val)
+{
+    // convert int index to size_t
+    llvm::Value *uindex   = index;
+    llvm::Type  *bound_tp = bound->getType();
+    if (index->getType() != bound_tp)
+        uindex = m_ir_builder.CreateSExt(index, bound_tp);
+
+    llvm::Value *cmp = m_ir_builder.CreateICmpULT(uindex, bound);
+    return m_ir_builder.CreateSelect(cmp, val, out_of_bounds_val);
 }
 
 // Creates a div-by-zero check using an exception.
@@ -1591,6 +2109,84 @@ void Function_context::set_deferred_size(llvm::Value *arr_desc_ptr, llvm::Value 
     m_ir_builder.CreateStore(size, size_adr);
 }
 
+// Returns true, if the given LLVM type is a derivative type.
+bool Function_context::is_deriv_type(llvm::Type *type)
+{
+    return m_type_mapper.is_deriv_type(type);
+}
+
+// Get the base value LLVM type of a derivative LLVM type.
+llvm::Type *Function_context::get_deriv_base_type(llvm::Type *type)
+{
+    return m_type_mapper.get_deriv_base_type(type);
+}
+
+// Get a dual value.
+llvm::Value *Function_context::get_dual(llvm::Value *val, llvm::Value *dx, llvm::Value *dy)
+{
+    llvm::Type *dual_type = m_type_mapper.lookup_deriv_type(val->getType());
+    llvm::Value *agg = llvm::UndefValue::get(dual_type);
+
+    agg = m_ir_builder.CreateInsertValue(agg, val, { 0 });
+    agg = m_ir_builder.CreateInsertValue(agg, dx,  { 1 });
+    agg = m_ir_builder.CreateInsertValue(agg, dy,  { 2 });
+
+    return agg;
+}
+
+// Get a dual value with dx and dy set to zero.
+llvm::Value *Function_context::get_dual(llvm::Value *val)
+{
+    llvm::Value *zero = llvm::Constant::getNullValue(val->getType());
+    return get_dual(val, zero, zero);
+}
+
+// Get a component of the dual value.
+llvm::Value *Function_context::get_dual_comp(llvm::Value *dual, unsigned int comp_index)
+{
+    return m_ir_builder.CreateExtractValue(dual, { comp_index });
+}
+
+// Get the value of the dual value.
+llvm::Value *Function_context::get_dual_val(llvm::Value *dual)
+{
+    if (m_type_mapper.is_deriv_type(dual->getType()))
+        return m_ir_builder.CreateExtractValue(dual, { 0 }, "val");
+    return dual;
+}
+
+// Get the pointer to the value component of a dual value.
+llvm::Value *Function_context::get_dual_val_ptr(llvm::Value *dual_ptr)
+{
+    return create_simple_gep_in_bounds(dual_ptr, 0u);
+}
+
+// Get the dx component of the dual value.
+llvm::Value *Function_context::get_dual_dx(llvm::Value *dual)
+{
+    if (m_type_mapper.is_deriv_type(dual->getType()))
+        return m_ir_builder.CreateExtractValue(dual, { 1 }, "dx");
+    return llvm::Constant::getNullValue(dual->getType());
+}
+
+// Get the dy component of the dual value.
+llvm::Value *Function_context::get_dual_dy(llvm::Value *dual)
+{
+    if (m_type_mapper.is_deriv_type(dual->getType()))
+        return m_ir_builder.CreateExtractValue(dual, { 2 }, "dy");
+    return llvm::Constant::getNullValue(dual->getType());
+}
+
+// Extract a dual component from a dual compound value.
+llvm::Value *Function_context::extract_dual(llvm::Value *compound_val, unsigned int index)
+{
+    llvm::Value *val = create_extract(get_dual_val(compound_val), index);
+    llvm::Value *dx = create_extract(get_dual_dx(compound_val), index);
+    llvm::Value *dy = create_extract(get_dual_dy(compound_val), index);
+
+    return get_dual(val, dx, dy);
+}
+
 // Get a pointer type from a base type.
 llvm::PointerType *Function_context::get_ptr(llvm::Type *type)
 {
@@ -1644,6 +2240,18 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 res = m_ir_builder.CreateInsertElement(res, v, get_constant(int(i)));
             }
             return res;
+        } else if (llvm::isa<llvm::StructType>(src_type) && llvm::isa<llvm::StructType>(dst_type) &&
+                src_type->getStructNumElements() == dst_type->getStructNumElements()) {
+            // converting derivative values between array and vector representations
+            llvm::Value *res = llvm::UndefValue::get(dst_type);
+            for (unsigned i = 0, n = src_type->getStructNumElements(); i < n; ++i) {
+                llvm::Value *src_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(ptr, 0, i);
+                unsigned idxs[] = { i };
+                llvm::Value *cur_elem = load_and_convert(
+                    dst_type->getStructElementType(i), src_elem_ptr);
+                res = m_ir_builder.CreateInsertValue(res, cur_elem, idxs);
+            }
+            return res;
         } else if (src_type->isAggregateType() && dst_type->isAggregateType()) {
             // as the types are different, one is a struct and one is an array.
             // The struct type could have any custom alignment, so load them by elements.
@@ -1663,25 +2271,74 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             }
             return res;
         } else if (llvm::isa<llvm::VectorType>(src_type) && dst_type->isAggregateType()) {
-            // we only check the type of the first element of the struct...
-            MDL_ASSERT(
-                src_type->getVectorNumElements() == get_aggregate_num_elements(dst_type) &&
-                src_type->getVectorElementType() == get_aggregate_first_type(dst_type));
+            // special case: float3x3 vector to float3x3 struct (same for double)
+            if (src_type->getVectorNumElements() == 9 &&
+                dst_type->isStructTy())
+            {
+                MDL_ASSERT(
+                    get_aggregate_num_elements(dst_type) == 3 &&
+                    get_aggregate_num_elements(get_aggregate_first_type(dst_type)) == 3 &&
+                    src_type->getVectorElementType() ==
+                        get_aggregate_first_type(get_aggregate_first_type(dst_type)));
 
-            llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
-            llvm::Value *res = llvm::UndefValue::get(dst_type);
+                llvm::Value *a = m_ir_builder.CreateLoad(ptr);
+                llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
-                unsigned idxs[] = { i };
-                llvm::Value *v   = m_ir_builder.CreateExtractElement(a, get_constant(int(i)));
-                res = m_ir_builder.CreateInsertValue(res, v, idxs);
+                for (unsigned i = 0; i < 3; ++i) {
+                    for (unsigned j = 0; j < 3; ++j)
+                    {
+                        unsigned idxs[] = { i, j };
+                        llvm::Value *v = m_ir_builder.CreateExtractElement(
+                            a, get_constant(int(i * 3 + j)));
+                        res = m_ir_builder.CreateInsertValue(res, v, idxs);
+                    }
+                }
+                return res;
+            } else {
+                // we only check the type of the first element of the struct...
+                MDL_ASSERT(
+                    src_type->getVectorNumElements() == get_aggregate_num_elements(dst_type) &&
+                    src_type->getVectorElementType() == get_aggregate_first_type(dst_type));
+
+                llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
+                llvm::Value *res = llvm::UndefValue::get(dst_type);
+
+                for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
+                    unsigned idxs[] = { i };
+                    llvm::Value *v   = m_ir_builder.CreateExtractElement(a, get_constant(int(i)));
+                    res = m_ir_builder.CreateInsertValue(res, v, idxs);
+                }
+                return res;
             }
-            return res;
         } else if (llvm::isa<llvm::IntegerType>(src_type) &&
                 dst_type == llvm::IntegerType::get(m_llvm_context, 1)) {
             // convert from integer to 1-bit bool
             llvm::Value *val = m_ir_builder.CreateLoad(ptr);
             return m_ir_builder.CreateICmpNE(val, llvm::ConstantInt::getNullValue(src_type));
+        }
+        else if (src_type == m_type_mapper.get_float2_type() &&
+                 dst_type == llvm::IntegerType::get(m_llvm_context, 64))
+        {
+            // convert from float2 to integer 64
+            // (generated by Clang for float2 returns, assumes win32-x64 calling convention)
+            llvm::Value *val = m_ir_builder.CreateLoad(ptr);
+            llvm::Value *x = m_ir_builder.CreateExtractElement(val, get_constant((int) 0));
+            llvm::Value *y = m_ir_builder.CreateExtractElement(val, get_constant((int) 1));
+
+            llvm::Type *int_type = m_type_mapper.get_int_type();
+            llvm::Value *x_casted = m_ir_builder.CreateBitCast(x, int_type);
+            llvm::Value *y_casted = m_ir_builder.CreateBitCast(y, int_type);
+
+            x_casted = m_ir_builder.CreateZExt(
+                x_casted, llvm::IntegerType::get(m_llvm_context, 64));
+            y_casted = m_ir_builder.CreateZExt(
+                y_casted, llvm::IntegerType::get(m_llvm_context, 64));
+
+            llvm::Value *res = m_ir_builder.CreateOr(
+                x_casted,
+                m_ir_builder.CreateShl(y_casted, 32));
+
+            return res;
         } else {
             // try casting the pointer
             MDL_ASSERT(
@@ -1730,6 +2387,17 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
                 res = m_ir_builder.CreateInsertValue(res, v, idxs);
             }
             value = res;
+        } else if (llvm::isa<llvm::StructType>(src_type) && llvm::isa<llvm::StructType>(dst_type) &&
+                src_type->getStructNumElements() == dst_type->getStructNumElements()) {
+            // converting derivative values between array and vector representations
+            llvm::StoreInst *last_store = NULL;
+            for (unsigned i = 0, n = src_type->getStructNumElements(); i < n; ++i) {
+                llvm::Value *dst_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(ptr, 0, i);
+                unsigned idxs[] = { i };
+                llvm::Value *src_elem = m_ir_builder.CreateExtractValue(value, idxs);
+                last_store = convert_and_store(src_elem, dst_elem_ptr);
+            }
+            return last_store;
         } else if (src_type->isAggregateType() && dst_type->isAggregateType()) {
             // as the types are different, one is a struct and one is an array.
             // The struct type could have any custom alignment, so load them by elements.
@@ -1806,6 +2474,16 @@ llvm::Type *Function_context::get_return_type() const
     return m_function->getReturnType();
 }
 
+// Get the real non-derivative return type of the function (i.e. does NOT return void for sret
+// functions, for derivative return types returns the type of the value component).
+llvm::Type *Function_context::get_non_deriv_return_type() const
+{
+    llvm::Type *type = get_return_type();
+    if (m_type_mapper.is_deriv_type(type))
+        return type->getStructElementType(0);
+    return type;
+}
+
 // Map type sizes due to function instancing.
 int Function_context::instantiate_type_size(
     mi::mdl::IType const *type) const
@@ -1849,6 +2527,8 @@ llvm::Value *Function_context::get_tex_lookup_func(
 
 #define ARGS4(a,b,c,d)           "(" #a ", " #b ", " #c ", " #d ")"
 #define ARGS5(a,b,c,d,e)         "(" #a ", " #b ", " #c ", " #d ", " #e ")"
+#define ARGS6(a,b,c,d,e,f)       "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ")"
+#define ARGS7(a,b,c,d,e,f,g,h)   "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ")"
 #define ARGS8(a,b,c,d,e,f,g,h)   "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ")"
 #define ARGSX(a,b,c,d,e,f,g,h,i,j) \
     "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ", " #i ", " #j ")"
@@ -1866,12 +2546,34 @@ llvm::Value *Function_context::get_tex_lookup_func(
         float const crop_u[2], \
         float const crop_v[2])
 
+#define ARGS_lookup_deriv_float4_2d \
+    ARGS8( \
+        float result[4], \
+        Core_tex_handler const *self, \
+        unsigned texture_idx, \
+        tct_deriv_float2 const *coord, \
+        tex_wrap_mode const wrap_u, \
+        tex_wrap_mode const wrap_v, \
+        float const crop_u[2], \
+        float const crop_v[2])
+
 #define ARGS_lookup_float3_2d \
     ARGS8( \
         float result[3], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
         float const coord[2], \
+        tex_wrap_mode const wrap_u, \
+        tex_wrap_mode const wrap_v, \
+        float const crop_u[2], \
+        float const crop_v[2])
+
+#define ARGS_lookup_deriv_float3_2d \
+    ARGS8( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        unsigned texture_idx, \
+        tct_deriv_float2 const *coord, \
         tex_wrap_mode const wrap_u, \
         tex_wrap_mode const wrap_v, \
         float const crop_u[2], \
@@ -1923,20 +2625,111 @@ llvm::Value *Function_context::get_tex_lookup_func(
 #define ARGS_resolution_2d \
     ARGS4(int result[2], Core_tex_handler const *self, unsigned texture_idx, int const uv_tile[2])
 
-    static struct {
+#define ARGS_mbsdf_resolution \
+    ARGS4(int result[3], Core_tex_handler const *self, unsigned texture_idx, int part)
+
+#define ARGS_mbsdf_evaluate \
+    ARGS6( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi_in[2], \
+        float const theta_phi_out[2], \
+        int part)
+
+#define ARGS_mbsdf_sample \
+    ARGS6( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi_out[2], \
+        float const xi[3], \
+        int part)
+
+#define ARGS_mbsdf_pdf \
+    ARGS6( \
+        float *result, \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi_in[2], \
+        float const theta_phi_out[2], \
+        int part)
+
+#define ARGS_mbsdf_albedos \
+    ARGS4( \
+        float result[4], \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi[2])
+
+#define ARGS_light_profile_evaluate \
+    ARGS4( \
+        float *result, \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi[2])
+
+#define ARGS_light_profile_sample \
+    ARGS4( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const xi[3])
+
+#define ARGS_light_profile_pdf \
+    ARGS4( \
+        float *result, \
+        Core_tex_handler const *self, \
+        unsigned resource_idx, \
+        float const theta_phi[2])
+
+    typedef struct {
         const char *name;
         const char *optix_typename;
-    } names[] = {
-        { "tex_lookup_float4_2d",   OCP(ARGS_lookup_float4_2d) },
-        { "tex_lookup_float3_2d",   OCP(ARGS_lookup_float3_2d) },
-        { "tex_texel_float4_2d",    OCP(ARGS_texel_2d) },
-        { "tex_lookup_float4_3d",   OCP(ARGS_lookup_float4_3d) },
-        { "tex_lookup_float3_3d",   OCP(ARGS_lookup_float3_3d) },
-        { "tex_texel_float4_3d",    OCP(ARGS_texel_3d) },
-        { "tex_lookup_float4_cube", OCP(ARGS_lookup_float4_cube) },
-        { "tex_lookup_float3_cube", OCP(ARGS_lookup_float3_cube) },
-        { "tex_resolution_2d",      OCP(ARGS_resolution_2d) }
+    } Runtime_functions;
+
+    static Runtime_functions names_nonderiv[] = {
+        { "tex_lookup_float4_2d",               OCP(ARGS_lookup_float4_2d) },
+        { "tex_lookup_float3_2d",               OCP(ARGS_lookup_float3_2d) },
+        { "tex_texel_float4_2d",                OCP(ARGS_texel_2d) },
+        { "tex_lookup_float4_3d",               OCP(ARGS_lookup_float4_3d) },
+        { "tex_lookup_float3_3d",               OCP(ARGS_lookup_float3_3d) },
+        { "tex_texel_float4_3d",                OCP(ARGS_texel_3d) },
+        { "tex_lookup_float4_cube",             OCP(ARGS_lookup_float4_cube) },
+        { "tex_lookup_float3_cube",             OCP(ARGS_lookup_float3_cube) },
+        { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
+        { "df_bsdf_measurement_resolution",     OCP(ARGS_mbsdf_resolution) },
+        { "df_bsdf_measurement_evaluate",       OCP(ARGS_mbsdf_evaluate) },
+        { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
+        { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
+        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
+        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
+        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
+        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) }
     };
+
+    static Runtime_functions names_deriv[] = {
+        { "tex_lookup_deriv_float4_2d",         OCP(ARGS_lookup_deriv_float4_2d) },
+        { "tex_lookup_deriv_float3_2d",         OCP(ARGS_lookup_deriv_float3_2d) },
+        { "tex_texel_float4_2d",                OCP(ARGS_texel_2d) },
+        { "tex_lookup_float4_3d",               OCP(ARGS_lookup_float4_3d) },
+        { "tex_lookup_float3_3d",               OCP(ARGS_lookup_float3_3d) },
+        { "tex_texel_float4_3d",                OCP(ARGS_texel_3d) },
+        { "tex_lookup_float4_cube",             OCP(ARGS_lookup_float4_cube) },
+        { "tex_lookup_float3_cube",             OCP(ARGS_lookup_float3_cube) },
+        { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
+        { "df_bsdf_measurement_resolution",     OCP(ARGS_mbsdf_resolution) },
+        { "df_bsdf_measurement_evaluate",       OCP(ARGS_mbsdf_evaluate) },
+        { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
+        { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
+        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
+        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
+        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
+        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) }
+    };
+
+    Runtime_functions *names = m_code_gen.is_texruntime_with_derivs()
+        ? names_deriv : names_nonderiv;
 
 #undef ARGS_resolution_2d
 #undef ARGS_lookup_float3_cube
@@ -1947,12 +2740,24 @@ llvm::Value *Function_context::get_tex_lookup_func(
 #undef ARGS_texel_2d
 #undef ARGS_lookup_float3_2d
 #undef ARGS_lookup_float4_2d
+#undef ARGS_mbsdf_resolution
+#undef ARGS_mbsdf_lookup_float
+#undef ARGS_mbsdf_lookup_float3
+#undef ARGS_mbsdf_sample
+#undef ARGS_mbsdf_pdf
+#undef ARGS_mbsdf_albedos
+#undef ARGS_light_profile_evaluate
+#undef ARGS_light_profile_sample
+#undef ARGS_light_profile_pdf
 #undef OCP
 #undef ARGSX
 #undef ARGS8
+#undef ARGS7
+#undef ARGS6
+#undef ARGS5
 #undef ARGS4
 
-    switch (m_tex_loookup_call_mode) {
+    switch (m_code_gen.get_tex_lookup_call_mode()) {
     case TLCM_VTABLE:
         {
             // get the vtable from this

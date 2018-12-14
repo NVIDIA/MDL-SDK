@@ -13,7 +13,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/system_error.h"
-#include <utility> // for MISTD::pair
+#include <utility> // for std::pair
 
 namespace llvm {
 
@@ -45,13 +45,13 @@ private:
   SmallString<128> LockFileName;
   SmallString<128> UniqueLockFileName;
 
-  Optional<MISTD::pair<MISTD::string, int> > Owner;
+  Optional<std::pair<std::string, int> > Owner;
   Optional<error_code> Error;
 
   LockFileManager(const LockFileManager &) LLVM_DELETED_FUNCTION;
   LockFileManager &operator=(const LockFileManager &) LLVM_DELETED_FUNCTION;
 
-  static Optional<MISTD::pair<MISTD::string, int> >
+  static Optional<std::pair<std::string, int> >
   readLockFile(StringRef LockFileName);
 
   static bool processStillExecuting(StringRef Hostname, int PID);

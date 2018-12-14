@@ -159,7 +159,7 @@ public:
   /// \brief Return metadata for a TBAA struct node in the type DAG
   /// with the given name, a list of pairs (offset, field type in the type DAG).
   MDNode *createTBAAStructTypeNode(StringRef Name,
-             ArrayRef<MISTD::pair<MDNode*, uint64_t> > Fields) {
+             ArrayRef<std::pair<MDNode*, uint64_t> > Fields) {
     SmallVector<Value *, 4> Ops(Fields.size() * 2 + 1);
     Type *Int64 = IntegerType::get(Context, 64);
     Ops[0] = createString(Name);

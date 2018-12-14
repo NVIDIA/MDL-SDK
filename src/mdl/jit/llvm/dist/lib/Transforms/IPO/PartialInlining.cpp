@@ -109,7 +109,7 @@ Function* PartialInliner::unswitchFunction(Function* F) {
   newEntryBlock->getTerminator()->replaceUsesOfWith(preReturn, newReturnBlock);
   
   // Gather up the blocks that we're going to extract.
-  MISTD::vector<BasicBlock*> toExtract;
+  std::vector<BasicBlock*> toExtract;
   toExtract.push_back(newNonReturnBlock);
   for (Function::iterator FI = duplicateFunction->begin(),
        FE = duplicateFunction->end(); FI != FE; ++FI)
@@ -128,9 +128,9 @@ Function* PartialInliner::unswitchFunction(Function* F) {
   InlineFunctionInfo IFI;
   
   // Inline the top-level if test into all callers.
-  MISTD::vector<User*> Users(duplicateFunction->use_begin(), 
+  std::vector<User*> Users(duplicateFunction->use_begin(), 
                            duplicateFunction->use_end());
-  for (MISTD::vector<User*>::iterator UI = Users.begin(), UE = Users.end();
+  for (std::vector<User*>::iterator UI = Users.begin(), UE = Users.end();
        UI != UE; ++UI)
     if (CallInst *CI = dyn_cast<CallInst>(*UI))
       InlineFunction(CI, IFI);
@@ -148,7 +148,7 @@ Function* PartialInliner::unswitchFunction(Function* F) {
 }
 
 bool PartialInliner::runOnModule(Module& M) {
-  MISTD::vector<Function*> worklist;
+  std::vector<Function*> worklist;
   worklist.reserve(M.size());
   for (Module::iterator FI = M.begin(), FE = M.end(); FI != FE; ++FI)
     if (!FI->use_empty() && !FI->isDeclaration())

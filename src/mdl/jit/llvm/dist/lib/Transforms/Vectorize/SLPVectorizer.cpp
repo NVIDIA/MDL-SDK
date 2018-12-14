@@ -166,7 +166,7 @@ static unsigned getSameOpcode(ArrayRef<Value *> VL) {
 /// \returns \p I after propagating metadata from \p VL.
 static Instruction *propagateMetadata(Instruction *I, ArrayRef<Value *> VL) {
   Instruction *I0 = cast<Instruction>(VL[0]);
-  SmallVector<MISTD::pair<unsigned, MDNode *>, 4> Metadata;
+  SmallVector<std::pair<unsigned, MDNode *>, 4> Metadata;
   I0->getAllMetadataOtherThanDebugLoc(Metadata);
 
   for (unsigned i = 0, n = Metadata.size(); i != n; ++i) {
@@ -451,7 +451,7 @@ private:
     /// \returns true if the scalars in VL are equal to this entry.
     bool isSame(ArrayRef<Value *> VL) const {
       assert(VL.size() == Scalars.size() && "Invalid size");
-      return MISTD::equal(VL.begin(), VL.end(), Scalars.begin());
+      return std::equal(VL.begin(), VL.end(), Scalars.begin());
     }
 
     /// A vector of scalars.
@@ -489,7 +489,7 @@ private:
 
   /// -- Vectorization State --
   /// Holds all of the tree entries.
-  MISTD::vector<TreeEntry> VectorizableTree;
+  std::vector<TreeEntry> VectorizableTree;
 
   /// Maps a specific scalar to its tree entry.
   SmallDenseMap<Value*, int> ScalarToTreeEntry;
@@ -577,7 +577,7 @@ void BoUpSLP::buildTree(ArrayRef<Value *> Roots, ValueSet *Rdx) {
           continue;
 
         // Ignore uses that are part of the reduction.
-        if (Rdx && MISTD::find(Rdx->begin(), Rdx->end(), UserInst) != Rdx->end())
+        if (Rdx && std::find(Rdx->begin(), Rdx->end(), UserInst) != Rdx->end())
           continue;
 
         DEBUG(dbgs() << "SLP: Need to extract:" << **User << " from lane " <<
@@ -1241,7 +1241,7 @@ int BoUpSLP::getLastIndex(ArrayRef<Value *> VL) {
 
   int MaxIdx = BN.getIndex(BB->getFirstNonPHI());
   for (unsigned i = 0, e = VL.size(); i < e; ++i)
-    MaxIdx = MISTD::max(MaxIdx, BN.getIndex(cast<Instruction>(VL[i])));
+    MaxIdx = std::max(MaxIdx, BN.getIndex(cast<Instruction>(VL[i])));
   return MaxIdx;
 }
 
@@ -1252,7 +1252,7 @@ Instruction *BoUpSLP::getLastInstruction(ArrayRef<Value *> VL) {
 
   int MaxIdx = BN.getIndex(cast<Instruction>(VL[0]));
   for (unsigned i = 1, e = VL.size(); i < e; ++i)
-    MaxIdx = MISTD::max(MaxIdx, BN.getIndex(cast<Instruction>(VL[i])));
+    MaxIdx = std::max(MaxIdx, BN.getIndex(cast<Instruction>(VL[i])));
   Instruction *I = BN.getInstruction(MaxIdx);
   assert(I && "bad location");
   return I;
@@ -1571,7 +1571,7 @@ Value *BoUpSLP::vectorizeTree() {
 
     // Skip users that we already RAUW. This happens when one instruction
     // has multiple uses of the same value.
-    if (MISTD::find(Scalar->use_begin(), Scalar->use_end(), User) ==
+    if (std::find(Scalar->use_begin(), Scalar->use_end(), User) ==
         Scalar->use_end())
       continue;
     assert(ScalarToTreeEntry.count(Scalar) && "Invalid scalar");
@@ -1706,7 +1706,7 @@ void BoUpSLP::optimizeGatherSequence() {
   // Sort blocks by domination. This ensures we visit a block after all blocks
   // dominating it are visited.
   SmallVector<BasicBlock *, 8> CSEWorkList(CSEBlocks.begin(), CSEBlocks.end());
-  MISTD::stable_sort(CSEWorkList.begin(), CSEWorkList.end(), DTCmp(DT));
+  std::stable_sort(CSEWorkList.begin(), CSEWorkList.end(), DTCmp(DT));
 
   // Perform O(N^2) search over the gather sequences and merge identical
   // instructions. TODO: We can further optimize this scan if we split the
@@ -1738,7 +1738,7 @@ void BoUpSLP::optimizeGatherSequence() {
         }
       }
       if (In) {
-        assert(MISTD::find(Visited.begin(), Visited.end(), In) == Visited.end());
+        assert(std::find(Visited.begin(), Visited.end(), In) == Visited.end());
         Visited.push_back(In);
       }
     }
@@ -2209,7 +2209,7 @@ public:
   bool matchAssociativeReduction(PHINode *Phi, BinaryOperator *B,
                                  DataLayout *DL) {
     assert((!Phi ||
-            MISTD::find(Phi->op_begin(), Phi->op_end(), B) != Phi->op_end()) &&
+            std::find(Phi->op_begin(), Phi->op_end(), B) != Phi->op_end()) &&
            "Thi phi needs to use the binary operator");
 
     // We could have a initial reductions that is not an add.
@@ -2248,8 +2248,8 @@ public:
 
     // Post order traverse the reduction tree starting at B. We only handle true
     // trees containing only binary operators.
-    SmallVector<MISTD::pair<BinaryOperator *, unsigned>, 32> Stack;
-    Stack.push_back(MISTD::make_pair(B, 0));
+    SmallVector<std::pair<BinaryOperator *, unsigned>, 32> Stack;
+    Stack.push_back(std::make_pair(B, 0));
     while (!Stack.empty()) {
       BinaryOperator *TreeN = Stack.back().first;
       unsigned EdgeToVist = Stack.back().second++;
@@ -2289,7 +2289,7 @@ public:
       Value *NextV = TreeN->getOperand(EdgeToVist);
       BinaryOperator *Next = dyn_cast<BinaryOperator>(NextV);
       if (Next)
-        Stack.push_back(MISTD::make_pair(Next, 0));
+        Stack.push_back(std::make_pair(Next, 0));
       else if (NextV != Phi)
         return false;
     }
@@ -2486,7 +2486,7 @@ bool SLPVectorizer::vectorizeChainsInBlock(BasicBlock *BB, BoUpSLP &R) {
     }
 
     // Sort by type.
-    MISTD::stable_sort(Incoming.begin(), Incoming.end(), PhiTypeSorterFunc);
+    std::stable_sort(Incoming.begin(), Incoming.end(), PhiTypeSorterFunc);
 
     // Try to vectorize elements base on their type.
     for (SmallVector<Value *, 4>::iterator IncIt = Incoming.begin(),
@@ -2641,7 +2641,7 @@ bool SLPVectorizer::vectorizeStoreChains(BoUpSLP &R) {
 
     // Process the stores in chunks of 16.
     for (unsigned CI = 0, CE = it->second.size(); CI < CE; CI+=16) {
-      unsigned Len = MISTD::min<unsigned>(CE - CI, 16);
+      unsigned Len = std::min<unsigned>(CE - CI, 16);
       ArrayRef<StoreInst *> Chunk(&it->second[CI], Len);
       Changed |= vectorizeStores(Chunk, -SLPCostThreshold, R);
     }

@@ -158,10 +158,10 @@ class Type : public SERIAL::Serializable
     MI_INLINE Type* get_child();
     /// Retrieve the pointer to the enum collection.
     /// \return pointer to enum collection
-    MI_INLINE MISTD::vector<MISTD::pair<int, MISTD::string> >** set_enum();
+    MI_INLINE std::vector<std::pair<int, std::string> >** set_enum();
     /// Retrieve the pointer to the enum collection.
     /// \return pointer to enum collection, might be 0
-    MI_INLINE MISTD::vector<MISTD::pair<int, MISTD::string> >* get_enum() const;
+    MI_INLINE std::vector<std::pair<int, std::string> >* get_enum() const;
     //@}
 
     /// @name Type's data setters
@@ -336,7 +336,7 @@ class Type : public SERIAL::Serializable
     /// Create a recursive type description.
     /// Useful for type mismatch messages etc.
     /// \return a string containing a recursive type description
-    MISTD::string print() const;
+    std::string print() const;
 
 
     /// @name Serialization utilities.
@@ -396,10 +396,10 @@ class Type : public SERIAL::Serializable
     /// Set the identifying type-describing string.
     /// \param str the identifying type-describing string
     void set_type_name(
-        const MISTD::string& str);
+        const std::string& str);
     /// Retrieve the identifying type-describing string.
     /// \return the identifying type-describing string
-    const MISTD::string& get_type_name() const { return m_type_name; }
+    const std::string& get_type_name() const { return m_type_name; }
     //@}
 
   private:
@@ -421,7 +421,7 @@ class Type : public SERIAL::Serializable
     /// The table of all supported types with their type infos.
     static const Typeinfo m_typeinfo[];
 
-    MISTD::string m_name;				///< field name, must be defined
+    std::string m_name;				///< field name, must be defined
     Uint8 m_typecode;					///< primitive Type_code: bool, int, ...
     bool m_const;					///< immutable value, can hardwire in shd
     bool m_spare;					///< not used
@@ -429,9 +429,9 @@ class Type : public SERIAL::Serializable
     Type* m_next;					///< if part of struct, next member
     union {
     Type* m_child;					///< if TYPE_STRUCT, list of members
-    MISTD::vector<MISTD::pair<int, MISTD::string> >* m_enum;
+    std::vector<std::pair<int, std::string> >* m_enum;
     };
-    MISTD::string m_type_name;                          ///< the unique name of the type
+    std::string m_type_name;                          ///< the unique name of the type
 
     /// Implementation of the deep copy.
     /// \param other the other \c Type
@@ -439,13 +439,13 @@ class Type : public SERIAL::Serializable
         const Type& other);
     /// Helper to copy the enum values.
     void create_enum(
-        MISTD::vector<MISTD::pair<int, MISTD::string> >* enum_values);
+        std::vector<std::pair<int, std::string> >* enum_values);
 };
 
 /// Utility helper. Comparing two enum collections.
 bool compare_enum_collections(
-    const MISTD::vector<MISTD::pair<int, MISTD::string> >& one,
-    const MISTD::vector<MISTD::pair<int, MISTD::string> >& other);
+    const std::vector<std::pair<int, std::string> >& one,
+    const std::vector<std::pair<int, std::string> >& other);
 
 //==================================================================================================
 

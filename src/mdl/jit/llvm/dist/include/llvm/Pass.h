@@ -127,7 +127,7 @@ public:
   /// createPrinterPass - Get a Pass appropriate to print the IR this
   /// pass operates on (Module, Function or MachineFunction).
   virtual Pass *createPrinterPass(raw_ostream &O,
-                                  const MISTD::string &Banner) const = 0;
+                                  const std::string &Banner) const = 0;
 
   /// Each pass is responsible for assigning a pass manager to itself.
   /// PMS is the stack of available pass manager.
@@ -235,7 +235,7 @@ public:
 class ModulePass : public Pass {
 public:
   /// createPrinterPass - Get a module printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   /// runOnModule - Virtual method overriden by subclasses to process the module
   /// being operated on.
@@ -295,7 +295,7 @@ public:
   explicit FunctionPass(char &pid) : Pass(PT_Function, pid) {}
 
   /// createPrinterPass - Get a function printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   /// runOnFunction - Virtual method overriden by subclasses to do the
   /// per-function processing of the pass.
@@ -326,7 +326,7 @@ public:
   explicit BasicBlockPass(char &pid) : Pass(PT_BasicBlock, pid) {}
 
   /// createPrinterPass - Get a basic block printer pass.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   using llvm::Pass::doInitialization;
   using llvm::Pass::doFinalization;

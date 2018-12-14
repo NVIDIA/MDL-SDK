@@ -894,9 +894,9 @@ Value *InstCombiner::FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
     ShouldSwap = LHSCst->getValue().ugt(RHSCst->getValue());
 
   if (ShouldSwap) {
-    MISTD::swap(LHS, RHS);
-    MISTD::swap(LHSCst, RHSCst);
-    MISTD::swap(LHSCC, RHSCC);
+    std::swap(LHS, RHS);
+    std::swap(LHSCst, RHSCst);
+    std::swap(LHSCC, RHSCC);
   }
 
   // At this point, we know we have two icmp instructions
@@ -936,7 +936,7 @@ Value *InstCombiner::FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
       // Special case to get the ordering right when the values wrap around
       // zero.
       if (LHSCst->getValue() == 0 && RHSCst->getValue().isAllOnesValue())
-        MISTD::swap(LHSCst, RHSCst);
+        std::swap(LHSCst, RHSCst);
       if (LHSCst == SubOne(RHSCst)){// (X != 13 & X != 14) -> X-13 >u 1
         Constant *AddCST = ConstantExpr::getNeg(LHSCst);
         Value *Add = Builder->CreateAdd(Val, AddCST, Val->getName()+".off");
@@ -1049,7 +1049,7 @@ Value *InstCombiner::FoldAndOfFCmps(FCmpInst *LHS, FCmpInst *RHS) {
   if (Op0LHS == Op1RHS && Op0RHS == Op1LHS) {
     // Swap RHS operands to match LHS.
     Op1CC = FCmpInst::getSwappedPredicate(Op1CC);
-    MISTD::swap(Op1LHS, Op1RHS);
+    std::swap(Op1LHS, Op1RHS);
   }
 
   if (Op0LHS == Op1LHS && Op0RHS == Op1RHS) {
@@ -1071,9 +1071,9 @@ Value *InstCombiner::FoldAndOfFCmps(FCmpInst *LHS, FCmpInst *RHS) {
     if (Op0Pred == 0 && Op1Pred == 0 && Op0Ordered != Op1Ordered)
         return ConstantInt::get(CmpInst::makeCmpResultType(LHS->getType()), 0);
     if (Op1Pred == 0) {
-      MISTD::swap(LHS, RHS);
-      MISTD::swap(Op0Pred, Op1Pred);
-      MISTD::swap(Op0Ordered, Op1Ordered);
+      std::swap(LHS, RHS);
+      std::swap(Op0Pred, Op1Pred);
+      std::swap(Op0Ordered, Op1Ordered);
     }
     if (Op0Pred == 0) {
       // uno && ueq -> uno && (uno || eq) -> uno
@@ -1255,7 +1255,7 @@ Instruction *InstCombiner::visitAnd(BinaryOperator &I) {
       if (tmpOp1->hasOneUse() &&
           match(tmpOp1, m_Xor(m_Value(A), m_Value(B)))) {
         if (B == tmpOp0) {
-          MISTD::swap(A, B);
+          std::swap(A, B);
         }
         // Notice that the patten (A&(~B)) is actually (A&(-1^B)), so if
         // A is originally -1 (or a vector of -1 and undefs), then we enter
@@ -1339,7 +1339,7 @@ Instruction *InstCombiner::visitAnd(BinaryOperator &I) {
     // Canonicalize SExt or Not to the LHS
     if (match(Op1, m_SExt(m_Value())) ||
         match(Op1, m_Not(m_Value()))) {
-      MISTD::swap(Op0, Op1);
+      std::swap(Op0, Op1);
       OpsSwapped = true;
     }
 
@@ -1358,7 +1358,7 @@ Instruction *InstCombiner::visitAnd(BinaryOperator &I) {
     }
 
     if (OpsSwapped)
-      MISTD::swap(Op0, Op1);
+      std::swap(Op0, Op1);
   }
 
   return Changed ? &I : 0;
@@ -1688,9 +1688,9 @@ Value *InstCombiner::FoldOrOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
     ShouldSwap = LHSCst->getValue().ugt(RHSCst->getValue());
 
   if (ShouldSwap) {
-    MISTD::swap(LHS, RHS);
-    MISTD::swap(LHSCst, RHSCst);
-    MISTD::swap(LHSCC, RHSCC);
+    std::swap(LHS, RHS);
+    std::swap(LHSCst, RHSCst);
+    std::swap(LHSCC, RHSCC);
   }
 
   // At this point, we know we have two icmp instructions
@@ -1859,7 +1859,7 @@ Value *InstCombiner::FoldOrOfFCmps(FCmpInst *LHS, FCmpInst *RHS) {
   if (Op0LHS == Op1RHS && Op0RHS == Op1LHS) {
     // Swap RHS operands to match LHS.
     Op1CC = FCmpInst::getSwappedPredicate(Op1CC);
-    MISTD::swap(Op1LHS, Op1RHS);
+    std::swap(Op1LHS, Op1RHS);
   }
   if (Op0LHS == Op1LHS && Op0RHS == Op1RHS) {
     // Simplify (fcmp cc0 x, y) | (fcmp cc1 x, y).
@@ -2122,7 +2122,7 @@ Instruction *InstCombiner::visitOr(BinaryOperator &I) {
   // Canonicalize xor to the RHS.
   bool SwappedForXor = false;
   if (match(Op0, m_Xor(m_Value(), m_Value()))) {
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
     SwappedForXor = true;
   }
 
@@ -2161,7 +2161,7 @@ Instruction *InstCombiner::visitOr(BinaryOperator &I) {
       }
 
   if (SwappedForXor)
-    MISTD::swap(Op0, Op1);
+    std::swap(Op0, Op1);
 
   if (ICmpInst *RHS = dyn_cast<ICmpInst>(I.getOperand(1)))
     if (ICmpInst *LHS = dyn_cast<ICmpInst>(I.getOperand(0)))
@@ -2404,20 +2404,20 @@ Instruction *InstCombiner::visitXor(BinaryOperator &I) {
       if (A == Op0) {              // B^(B|A) == (A|B)^B
         Op1I->swapOperands();
         I.swapOperands();
-        MISTD::swap(Op0, Op1);
+        std::swap(Op0, Op1);
       } else if (B == Op0) {       // B^(A|B) == (A|B)^B
         I.swapOperands();     // Simplified below.
-        MISTD::swap(Op0, Op1);
+        std::swap(Op0, Op1);
       }
     } else if (match(Op1I, m_And(m_Value(A), m_Value(B))) &&
                Op1I->hasOneUse()){
       if (A == Op0) {                                      // A^(A&B) -> A^(B&A)
         Op1I->swapOperands();
-        MISTD::swap(A, B);
+        std::swap(A, B);
       }
       if (B == Op0) {                                      // A^(B&A) -> (B&A)^A
         I.swapOperands();     // Simplified below.
-        MISTD::swap(Op0, Op1);
+        std::swap(Op0, Op1);
       }
     }
   }
@@ -2428,13 +2428,13 @@ Instruction *InstCombiner::visitXor(BinaryOperator &I) {
     if (match(Op0I, m_Or(m_Value(A), m_Value(B))) &&
         Op0I->hasOneUse()) {
       if (A == Op1)                                  // (B|A)^B == (A|B)^B
-        MISTD::swap(A, B);
+        std::swap(A, B);
       if (B == Op1)                                  // (A|B)^B == A & ~B
         return BinaryOperator::CreateAnd(A, Builder->CreateNot(Op1));
     } else if (match(Op0I, m_And(m_Value(A), m_Value(B))) &&
                Op0I->hasOneUse()){
       if (A == Op1)                                        // (A&B)^A -> (B&A)^A
-        MISTD::swap(A, B);
+        std::swap(A, B);
       if (B == Op1 &&                                      // (B&A)^A == ~B & A
           !isa<ConstantInt>(Op1)) {  // Canonical form is (B&C)^C
         return BinaryOperator::CreateAnd(Builder->CreateNot(A), Op1);

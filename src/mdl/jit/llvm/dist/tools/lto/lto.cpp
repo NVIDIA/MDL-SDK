@@ -34,7 +34,7 @@ DisableGVNLoadPRE("disable-gvn-loadpre", cl::init(false),
 
 // Holds most recent error string.
 // *** Not thread safe ***
-static MISTD::string sLastErrorString;
+static std::string sLastErrorString;
 
 // Holds the initialization state of the LTO module.
 // *** Not thread safe ***

@@ -237,7 +237,7 @@ const char *LLVMGetRelocationTypeName(LLVMRelocationIteratorRef RI) {
     report_fatal_error(ec.message());
 
   char *str = static_cast<char*>(malloc(ret.size()));
-  MISTD::copy(ret.begin(), ret.end(), str);
+  std::copy(ret.begin(), ret.end(), str);
   return str;
 }
 
@@ -248,7 +248,7 @@ const char *LLVMGetRelocationValueString(LLVMRelocationIteratorRef RI) {
     report_fatal_error(ec.message());
 
   char *str = static_cast<char*>(malloc(ret.size()));
-  MISTD::copy(ret.begin(), ret.end(), str);
+  std::copy(ret.begin(), ret.end(), str);
   return str;
 }
 

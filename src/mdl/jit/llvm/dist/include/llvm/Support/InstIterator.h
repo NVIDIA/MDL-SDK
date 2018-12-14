@@ -37,7 +37,7 @@ class InstIterator {
   _BB_i_t BB;       // BasicBlocksType::iterator
   _BI_t   BI;       // BasicBlock::iterator
 public:
-  typedef MISTD::bidirectional_iterator_tag iterator_category;
+  typedef std::bidirectional_iterator_tag iterator_category;
   typedef IIty                            value_type;
   typedef signed                        difference_type;
   typedef IIty*                           pointer;

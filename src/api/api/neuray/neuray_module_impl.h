@@ -102,9 +102,6 @@ public:
     const char* get_resource_mdl_file_path(mi::Size index) const;
 
     const char* get_resource_name(mi::Size index) const;
-
-    // methods of IInterface
-
 };
 
 } // namespace NEURAY
@@ -112,4 +109,3 @@ public:
 } // namespace MI
 
 #endif // API_API_NEURAY_MODULE_IMPL_H
-

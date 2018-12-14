@@ -41,6 +41,7 @@ namespace MI {
 
 namespace MDL {
 
+class Execution_context;
 class IExpression;
 class IExpression_factory;
 class IExpression_list;
@@ -64,6 +65,7 @@ public:
 
     /// Constructor.
     Mdl_material_instance(
+        DB::Tag module_tag,
         DB::Tag definition_tag,
         mi::Uint32 material_index,
         IExpression_list* arguments,
@@ -102,21 +104,18 @@ public:
     Mdl_compiled_material* create_compiled_material(
         DB::Transaction* transaction,
         bool class_compilation,
-        mi::Float32 mdl_meters_per_scene_unit,
-        mi::Float32 mdl_wavelength_min,
-        mi::Float32 mdl_wavelength_max,
-        mi::Sint32* errors = 0) const;
+        Execution_context* context) const;
 
     // internal methods
 
     /// Indicates whether the material instance is immutable.
-    bool is_immutable() { return m_immutable; }
+    bool is_immutable() const { return m_immutable; }
 
     /// Makes the material instance mutable.
     ///
     /// This method may only be set to \c true by the MDL integration itself, not by external
     /// callers.
-    void make_mutable() { m_immutable = false; }
+    void make_mutable(DB::Transaction* transaction);
 
     /// Creates a DAG material instance for this DB material instance (used by the DB compiled
     /// material instance and an utility function).
@@ -144,10 +143,7 @@ public:
         DB::Transaction* transaction,
         bool use_temporaries,
         bool class_compilation,
-        mi::Float32 mdl_meters_per_scene_unit,
-        mi::Float32 mdl_wavelength_min,
-        mi::Float32 mdl_wavelength_max,
-        mi::Sint32* errors = 0) const;
+        Execution_context* context) const;
 
     /// Returns the MDL type of an parameter.
     ///
@@ -198,6 +194,7 @@ private:
     // Members marked with (*) are duplicated from the corresponding material definition to avoid
     // frequent DB accesses.
 
+    DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding material definition.
     mi::Uint32 m_material_index;                 ///< The index in the corresponding module. (*)
     std::string m_definition_name;               ///< The MDL name of the material definition. (*)

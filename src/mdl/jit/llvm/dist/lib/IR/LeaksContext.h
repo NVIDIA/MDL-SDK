@@ -62,7 +62,7 @@ struct LeakDetectorImpl {
       Ts.erase(o);
   }
 
-  bool hasGarbage(const MISTD::string& Message) {
+  bool hasGarbage(const std::string& Message) {
     addGarbage(0); // Flush the Cache
 
     assert(Cache == 0 && "No value should be cached anymore!");

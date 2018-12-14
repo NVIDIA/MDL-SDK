@@ -29,15 +29,15 @@
 namespace llvm {
 #if LLVM_HAS_CXX11_TYPETRAITS && LLVM_HAS_RVALUE_REFERENCES
 template<class T, class V>
-typename MISTD::enable_if< MISTD::is_constructible<T, V>::value
-                       , typename MISTD::remove_reference<V>::type>::type &&
+typename std::enable_if< std::is_constructible<T, V>::value
+                       , typename std::remove_reference<V>::type>::type &&
  moveIfMoveConstructible(V &Val) {
-  return MISTD::move(Val);
+  return std::move(Val);
 }
 
 template<class T, class V>
-typename MISTD::enable_if< !MISTD::is_constructible<T, V>::value
-                       , typename MISTD::remove_reference<V>::type>::type &
+typename std::enable_if< !std::is_constructible<T, V>::value
+                       , typename std::remove_reference<V>::type>::type &
 moveIfMoveConstructible(V &Val) {
   return Val;
 }
@@ -85,7 +85,7 @@ public:
 /// value. Accessing the value when there is an error has undefined behavior.
 ///
 /// When T is a reference type the behaivor is slightly different. The reference
-/// is held in a MISTD::reference_wrapper<MISTD::remove_reference<T>::type>, and
+/// is held in a std::reference_wrapper<std::remove_reference<T>::type>, and
 /// there is special handling to make operator -> work as if T was not a
 /// reference.
 ///
@@ -146,22 +146,22 @@ public:
 
 #if LLVM_HAS_RVALUE_REFERENCES
   ErrorOr(ErrorOr &&Other) {
-    moveConstruct(MISTD::move(Other));
+    moveConstruct(std::move(Other));
   }
 
   template <class OtherT>
   ErrorOr(ErrorOr<OtherT> &&Other) {
-    moveConstruct(MISTD::move(Other));
+    moveConstruct(std::move(Other));
   }
 
   ErrorOr &operator =(ErrorOr &&Other) {
-    moveAssign(MISTD::move(Other));
+    moveAssign(std::move(Other));
     return *this;
   }
 
   template <class OtherT>
   ErrorOr &operator =(ErrorOr<OtherT> &&Other) {
-    moveAssign(MISTD::move(Other));
+    moveAssign(std::move(Other));
     return *this;
   }
 #endif
@@ -230,7 +230,7 @@ private:
     if (!Other.HasError) {
       // Get the other value.
       HasError = false;
-      new (get()) storage_type(MISTD::move(*Other.get()));
+      new (get()) storage_type(std::move(*Other.get()));
     } else {
       // Get other's error.
       HasError = true;
@@ -244,7 +244,7 @@ private:
       return;
 
     this->~ErrorOr();
-    new (this) ErrorOr(MISTD::move(Other));
+    new (this) ErrorOr(std::move(Other));
   }
 #endif
 

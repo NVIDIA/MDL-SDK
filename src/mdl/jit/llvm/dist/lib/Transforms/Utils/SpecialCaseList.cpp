@@ -52,7 +52,7 @@ struct SpecialCaseList::Entry {
 SpecialCaseList::SpecialCaseList() : Entries() {}
 
 SpecialCaseList *SpecialCaseList::create(
-    const StringRef Path, MISTD::string &Error) {
+    const StringRef Path, std::string &Error) {
   if (Path.empty())
     return new SpecialCaseList();
   OwningPtr<MemoryBuffer> File;
@@ -64,7 +64,7 @@ SpecialCaseList *SpecialCaseList::create(
 }
 
 SpecialCaseList *SpecialCaseList::create(
-    const MemoryBuffer *MB, MISTD::string &Error) {
+    const MemoryBuffer *MB, std::string &Error) {
   OwningPtr<SpecialCaseList> SCL(new SpecialCaseList());
   if (!SCL->parse(MB, Error))
     return 0;
@@ -72,17 +72,17 @@ SpecialCaseList *SpecialCaseList::create(
 }
 
 SpecialCaseList *SpecialCaseList::createOrDie(const StringRef Path) {
-  MISTD::string Error;
+  std::string Error;
   if (SpecialCaseList *SCL = create(Path, Error))
     return SCL;
   report_fatal_error(Error);
 }
 
-bool SpecialCaseList::parse(const MemoryBuffer *MB, MISTD::string &Error) {
+bool SpecialCaseList::parse(const MemoryBuffer *MB, std::string &Error) {
   // Iterate through each line in the blacklist file.
   SmallVector<StringRef, 16> Lines;
   SplitString(MB->getBuffer(), Lines, "\n\r");
-  StringMap<StringMap<MISTD::string> > Regexps;
+  StringMap<StringMap<std::string> > Regexps;
   assert(Entries.empty() &&
          "parse() should be called on an empty SpecialCaseList");
   int LineNo = 1;
@@ -92,7 +92,7 @@ bool SpecialCaseList::parse(const MemoryBuffer *MB, MISTD::string &Error) {
     if (I->empty() || I->startswith("#"))
       continue;
     // Get our prefix and unparsed regexp.
-    MISTD::pair<StringRef, StringRef> SplitLine = I->split(":");
+    std::pair<StringRef, StringRef> SplitLine = I->split(":");
     StringRef Prefix = SplitLine.first;
     if (SplitLine.second.empty()) {
       // Missing ':' in the line.
@@ -101,8 +101,8 @@ bool SpecialCaseList::parse(const MemoryBuffer *MB, MISTD::string &Error) {
       return false;
     }
 
-    MISTD::pair<StringRef, StringRef> SplitRegexp = SplitLine.second.split("=");
-    MISTD::string Regexp = SplitRegexp.first;
+    std::pair<StringRef, StringRef> SplitRegexp = SplitLine.second.split("=");
+    std::string Regexp = SplitRegexp.first;
     StringRef Category = SplitRegexp.second;
 
     // Backwards compatibility.
@@ -124,14 +124,14 @@ bool SpecialCaseList::parse(const MemoryBuffer *MB, MISTD::string &Error) {
     }
 
     // Replace * with .*
-    for (size_t pos = 0; (pos = Regexp.find("*", pos)) != MISTD::string::npos;
+    for (size_t pos = 0; (pos = Regexp.find("*", pos)) != std::string::npos;
          pos += strlen(".*")) {
       Regexp.replace(pos, strlen("*"), ".*");
     }
 
     // Check that the regexp is valid.
     Regex CheckRE(Regexp);
-    MISTD::string REError;
+    std::string REError;
     if (!CheckRE.isValid(REError)) {
       Error = (Twine("Malformed regex in line ") + Twine(LineNo) + ": '" +
                SplitLine.second + "': " + REError).str();
@@ -145,10 +145,10 @@ bool SpecialCaseList::parse(const MemoryBuffer *MB, MISTD::string &Error) {
   }
 
   // Iterate through each of the prefixes, and create Regexs for them.
-  for (StringMap<StringMap<MISTD::string> >::const_iterator I = Regexps.begin(),
+  for (StringMap<StringMap<std::string> >::const_iterator I = Regexps.begin(),
                                                           E = Regexps.end();
        I != E; ++I) {
-    for (StringMap<MISTD::string>::const_iterator II = I->second.begin(),
+    for (StringMap<std::string>::const_iterator II = I->second.begin(),
                                                 IE = I->second.end();
          II != IE; ++II) {
       Entries[I->getKey()][II->getKey()].RegEx = new Regex(II->getValue());

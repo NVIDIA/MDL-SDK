@@ -35,9 +35,9 @@ class TrivialModuleBuilder {
 protected:
   LLVMContext Context;
   IRBuilder<> Builder;
-  MISTD::string BuilderTriple;
+  std::string BuilderTriple;
 
-  TrivialModuleBuilder(const MISTD::string &Triple)
+  TrivialModuleBuilder(const std::string &Triple)
     : Builder(Context), BuilderTriple(Triple) {}
 
   Module *createEmptyModule(StringRef Name = StringRef()) {
@@ -320,7 +320,7 @@ protected:
     assert(M != 0 && "a non-null Module must be provided to create MCJIT");
 
     EngineBuilder EB(M);
-    MISTD::string Error;
+    std::string Error;
     TheJIT.reset(EB.setEngineKind(EngineKind::JIT)
                  .setUseMCJIT(true) /* can this be folded into the EngineKind enum? */
                  .setMCJITMemoryManager(MM)
@@ -341,7 +341,7 @@ protected:
   Reloc::Model RelocModel;
   CodeModel::Model CodeModel;
   StringRef MArch;
-  SmallVector<MISTD::string, 1> MAttrs;
+  SmallVector<std::string, 1> MAttrs;
   OwningPtr<ExecutionEngine> TheJIT;
   RTDyldMemoryManager *MM;
 

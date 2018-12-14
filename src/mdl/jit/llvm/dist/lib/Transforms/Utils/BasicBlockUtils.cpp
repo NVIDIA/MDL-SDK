@@ -283,13 +283,13 @@ BasicBlock *llvm::SplitBlock(BasicBlock *Old, Instruction *SplitPt, Pass *P) {
   if (DominatorTree *DT = P->getAnalysisIfAvailable<DominatorTree>()) {
     // Old dominates New. New node dominates all other nodes dominated by Old.
     if (DomTreeNode *OldNode = DT->getNode(Old)) {
-      MISTD::vector<DomTreeNode *> Children;
+      std::vector<DomTreeNode *> Children;
       for (DomTreeNode::iterator I = OldNode->begin(), E = OldNode->end();
            I != E; ++I)
         Children.push_back(*I);
 
       DomTreeNode *NewNode = DT->addNewBlock(New,Old);
-      for (MISTD::vector<DomTreeNode *>::iterator I = Children.begin(),
+      for (std::vector<DomTreeNode *>::iterator I = Children.begin(),
              E = Children.end(); I != E; ++I)
         DT->changeImmediateDominator(*I, NewNode);
     }
@@ -718,8 +718,8 @@ Value *llvm::GetIfCondition(BasicBlock *BB, BasicBlock *&IfTrue,
     if (Pred1Br->isConditional())
       return 0;
 
-    MISTD::swap(Pred1, Pred2);
-    MISTD::swap(Pred1Br, Pred2Br);
+    std::swap(Pred1, Pred2);
+    std::swap(Pred1Br, Pred2Br);
   }
 
   if (Pred1Br->isConditional()) {

@@ -89,31 +89,31 @@ template<class GraphT,
   class SetType = llvm::SmallPtrSet<typename GraphTraits<GraphT>::NodeType*, 8>,
   bool ExtStorage = false,
   class GT = GraphTraits<GraphT> >
-class po_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
+class po_iterator : public std::iterator<std::forward_iterator_tag,
                                          typename GT::NodeType, ptrdiff_t>,
                     public po_iterator_storage<SetType, ExtStorage> {
-  typedef MISTD::iterator<MISTD::forward_iterator_tag,
+  typedef std::iterator<std::forward_iterator_tag,
                         typename GT::NodeType, ptrdiff_t> super;
   typedef typename GT::NodeType          NodeType;
   typedef typename GT::ChildIteratorType ChildItTy;
 
   // VisitStack - Used to maintain the ordering.  Top = current block
   // First element is basic block pointer, second is the 'next child' to visit
-  MISTD::vector<MISTD::pair<NodeType *, ChildItTy> > VisitStack;
+  std::vector<std::pair<NodeType *, ChildItTy> > VisitStack;
 
   void traverseChild() {
     while (VisitStack.back().second != GT::child_end(VisitStack.back().first)) {
       NodeType *BB = *VisitStack.back().second++;
       if (this->insertEdge(VisitStack.back().first, BB)) {
         // If the block is not visited...
-        VisitStack.push_back(MISTD::make_pair(BB, GT::child_begin(BB)));
+        VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
       }
     }
   }
 
   inline po_iterator(NodeType *BB) {
     this->insertEdge((NodeType*)0, BB);
-    VisitStack.push_back(MISTD::make_pair(BB, GT::child_begin(BB)));
+    VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
     traverseChild();
   }
   inline po_iterator() {} // End is when stack is empty.
@@ -121,7 +121,7 @@ class po_iterator : public MISTD::iterator<MISTD::forward_iterator_tag,
   inline po_iterator(NodeType *BB, SetType &S) :
     po_iterator_storage<SetType, ExtStorage>(S) {
     if (this->insertEdge((NodeType*)0, BB)) {
-      VisitStack.push_back(MISTD::make_pair(BB, GT::child_begin(BB)));
+      VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
       traverseChild();
     }
   }
@@ -178,7 +178,7 @@ template <class T>
 po_iterator<T> po_end  (T G) { return po_iterator<T>::end(G); }
 
 // Provide global definitions of external postorder iterators...
-template<class T, class SetType=MISTD::set<typename GraphTraits<T>::NodeType*> >
+template<class T, class SetType=std::set<typename GraphTraits<T>::NodeType*> >
 struct po_ext_iterator : public po_iterator<T, SetType, true> {
   po_ext_iterator(const po_iterator<T, SetType, true> &V) :
   po_iterator<T, SetType, true>(V) {}
@@ -196,7 +196,7 @@ po_ext_iterator<T, SetType> po_ext_end(T G, SetType &S) {
 
 // Provide global definitions of inverse post order iterators...
 template <class T,
-          class SetType = MISTD::set<typename GraphTraits<T>::NodeType*>,
+          class SetType = std::set<typename GraphTraits<T>::NodeType*>,
           bool External = false>
 struct ipo_iterator : public po_iterator<Inverse<T>, SetType, External > {
   ipo_iterator(const po_iterator<Inverse<T>, SetType, External> &V) :
@@ -215,7 +215,7 @@ ipo_iterator<T> ipo_end(T G){
 
 // Provide global definitions of external inverse postorder iterators...
 template <class T,
-          class SetType = MISTD::set<typename GraphTraits<T>::NodeType*> >
+          class SetType = std::set<typename GraphTraits<T>::NodeType*> >
 struct ipo_ext_iterator : public ipo_iterator<T, SetType, true> {
   ipo_ext_iterator(const ipo_iterator<T, SetType, true> &V) :
     ipo_iterator<T, SetType, true>(V) {}
@@ -259,12 +259,12 @@ ipo_ext_iterator<T, SetType> ipo_ext_end(T G, SetType &S) {
 template<class GraphT, class GT = GraphTraits<GraphT> >
 class ReversePostOrderTraversal {
   typedef typename GT::NodeType NodeType;
-  MISTD::vector<NodeType*> Blocks;       // Block list in normal PO order
+  std::vector<NodeType*> Blocks;       // Block list in normal PO order
   inline void Initialize(NodeType *BB) {
-    MISTD::copy(po_begin(BB), po_end(BB), MISTD::back_inserter(Blocks));
+    std::copy(po_begin(BB), po_end(BB), std::back_inserter(Blocks));
   }
 public:
-  typedef typename MISTD::vector<NodeType*>::reverse_iterator rpo_iterator;
+  typedef typename std::vector<NodeType*>::reverse_iterator rpo_iterator;
 
   inline ReversePostOrderTraversal(GraphT G) {
     Initialize(GT::getEntryNode(G));

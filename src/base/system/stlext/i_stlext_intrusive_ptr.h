@@ -31,7 +31,7 @@
 #ifndef BASE_SYSTEM_STLEXT_INTRUSIVE_PTR_H
 #define BASE_SYSTEM_STLEXT_INTRUSIVE_PTR_H
 
-#include <algorithm>        // MISTD::swap()
+#include <algorithm>        // std::swap()
 #include "i_stlext_concepts.h"                  // Abstract_interface
 #include "i_stlext_atomic_counter.h"            // Atomic_counter
 
@@ -188,7 +188,7 @@ public:
     operator unspecified_bool_type() const { return is_valid() ? &Intrusive_ptr<T>::is_valid : 0; }
 
     /// \brief Reset an \c Intrusive_ptr to a new object.
-    void swap(Intrusive_ptr & other) { MISTD::swap(m_ptr, other.m_ptr); }
+    void swap(Intrusive_ptr & other) { std::swap(m_ptr, other.m_ptr); }
 
     /// \brief Reset an existing object, dropping any former contents.
     void reset(pointer ptr = 0) { Intrusive_ptr(ptr).swap(*this); }
@@ -224,9 +224,9 @@ private:
 
 }} // MI::STLEXT
 
-namespace MISTD
+namespace std
 {
-    /// \brief Overload standard \c MISTD::swap().
+    /// \brief Overload standard \c std::swap().
     template<class T>
     inline void swap(MI::STLEXT::Intrusive_ptr<T> & a, MI::STLEXT::Intrusive_ptr<T> & b)
     {

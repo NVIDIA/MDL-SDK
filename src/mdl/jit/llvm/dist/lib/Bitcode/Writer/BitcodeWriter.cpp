@@ -246,7 +246,7 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
 
 static void WriteAttributeGroupTable(const ValueEnumerator &VE,
                                      BitstreamWriter &Stream) {
-  const MISTD::vector<AttributeSet> &AttrGrps = VE.getAttributeGroups();
+  const std::vector<AttributeSet> &AttrGrps = VE.getAttributeGroups();
   if (AttrGrps.empty()) return;
 
   Stream.EnterSubblock(bitc::PARAMATTR_GROUP_BLOCK_ID, 3);
@@ -294,7 +294,7 @@ static void WriteAttributeGroupTable(const ValueEnumerator &VE,
 
 static void WriteAttributeTable(const ValueEnumerator &VE,
                                 BitstreamWriter &Stream) {
-  const MISTD::vector<AttributeSet> &Attrs = VE.getAttributes();
+  const std::vector<AttributeSet> &Attrs = VE.getAttributes();
   if (Attrs.empty()) return;
 
   Stream.EnterSubblock(bitc::PARAMATTR_BLOCK_ID, 3);
@@ -531,14 +531,14 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
 
   // Emit information about sections and GC, computing how many there are. Also
   // compute the maximum alignment value.
-  MISTD::map<MISTD::string, unsigned> SectionMap;
-  MISTD::map<MISTD::string, unsigned> GCMap;
+  std::map<std::string, unsigned> SectionMap;
+  std::map<std::string, unsigned> GCMap;
   unsigned MaxAlignment = 0;
   unsigned MaxGlobalType = 0;
   for (Module::const_global_iterator GV = M->global_begin(),E = M->global_end();
        GV != E; ++GV) {
-    MaxAlignment = MISTD::max(MaxAlignment, GV->getAlignment());
-    MaxGlobalType = MISTD::max(MaxGlobalType, VE.getTypeID(GV->getType()));
+    MaxAlignment = std::max(MaxAlignment, GV->getAlignment());
+    MaxGlobalType = std::max(MaxGlobalType, VE.getTypeID(GV->getType()));
     if (GV->hasSection()) {
       // Give section names unique ID's.
       unsigned &Entry = SectionMap[GV->getSection()];
@@ -550,7 +550,7 @@ static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
     }
   }
   for (Module::const_iterator F = M->begin(), E = M->end(); F != E; ++F) {
-    MaxAlignment = MISTD::max(MaxAlignment, F->getAlignment());
+    MaxAlignment = std::max(MaxAlignment, F->getAlignment());
     if (F->hasSection()) {
       // Give section names unique ID's.
       unsigned &Entry = SectionMap[F->getSection()];
@@ -809,7 +809,7 @@ static void WriteMetadataAttachment(const Function &F,
 
   // Write metadata attachments
   // METADATA_ATTACHMENT - [m x [value, [n x [id, mdnode]]]
-  SmallVector<MISTD::pair<unsigned, MDNode*>, 4> MDs;
+  SmallVector<std::pair<unsigned, MDNode*>, 4> MDs;
 
   for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
     for (BasicBlock::const_iterator I = BB->begin(), E = BB->end();
@@ -925,13 +925,13 @@ static void WriteConstants(unsigned FirstVal, unsigned LastVal,
                        unsigned(IA->getDialect()&1) << 2);
 
       // Add the asm string.
-      const MISTD::string &AsmStr = IA->getAsmString();
+      const std::string &AsmStr = IA->getAsmString();
       Record.push_back(AsmStr.size());
       for (unsigned i = 0, e = AsmStr.size(); i != e; ++i)
         Record.push_back(AsmStr[i]);
 
       // Add the constraint string.
-      const MISTD::string &ConstraintStr = IA->getConstraintString();
+      const std::string &ConstraintStr = IA->getConstraintString();
       Record.push_back(ConstraintStr.size());
       for (unsigned i = 0, e = ConstraintStr.size(); i != e; ++i)
         Record.push_back(ConstraintStr[i]);
@@ -1795,7 +1795,7 @@ static void WriteUseList(const Value *V, const ValueEnumerator &VE,
     return;
 
   // Make a copy of the in-memory use-list for sorting.
-  unsigned UseListSize = MISTD::distance(V->use_begin(), V->use_end());
+  unsigned UseListSize = std::distance(V->use_begin(), V->use_end());
   SmallVector<const User*, 8> UseList;
   UseList.reserve(UseListSize);
   for (Value::const_use_iterator I = V->use_begin(), E = V->use_end();
@@ -1805,7 +1805,7 @@ static void WriteUseList(const Value *V, const ValueEnumerator &VE,
   }
 
   // Sort the copy based on the order read by the BitcodeReader.
-  MISTD::sort(UseList.begin(), UseList.end(), bitcodereader_order);
+  std::sort(UseList.begin(), UseList.end(), bitcodereader_order);
 
   // TODO: Generate a diff between the BitcodeWriter in-memory use-list and the
   // sorted list (i.e., the expected BitcodeReader in-memory use-list).

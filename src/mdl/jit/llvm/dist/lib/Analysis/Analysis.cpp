@@ -72,7 +72,7 @@ void LLVMInitializeAnalysis(LLVMPassRegistryRef R) {
 
 LLVMBool LLVMVerifyModule(LLVMModuleRef M, LLVMVerifierFailureAction Action,
                           char **OutMessages) {
-  MISTD::string Messages;
+  std::string Messages;
 
   LLVMBool Result = verifyModule(*unwrap(M),
                             static_cast<VerifierFailureAction>(Action),

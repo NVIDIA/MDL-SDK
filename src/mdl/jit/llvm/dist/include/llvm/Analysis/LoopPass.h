@@ -32,7 +32,7 @@ public:
 
   /// getPrinterPass - Get a pass to print the function corresponding
   /// to a Loop.
-  Pass *createPrinterPass(raw_ostream &O, const MISTD::string &Banner) const;
+  Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const;
 
   // runOnLoop - This method should be implemented by the subclass to perform
   // whatever action is necessary for the specified Loop.
@@ -148,7 +148,7 @@ public:
   void deleteSimpleAnalysisValue(Value *V, Loop *L);
 
 private:
-  MISTD::deque<Loop *> LQ;
+  std::deque<Loop *> LQ;
   bool skipThisLoop;
   bool redoThisLoop;
   LoopInfo *LI;

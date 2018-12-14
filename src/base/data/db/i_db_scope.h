@@ -93,7 +93,7 @@ class Scope
     virtual Scope *create_child(
 	Privacy_level level,
         bool is_temporary = false,
-	const MISTD::string& name = "")= 0;
+	const std::string& name = "")= 0;
 
     /// Get the id of a scope. This needs to be in the interface because for some applications the
     /// id of a scope needs to be stored in database elements.
@@ -104,7 +104,7 @@ class Scope
     /// Get the name of a scope. An unnamed scope returns the empty string.
     ///
     /// \return				The name of the scope.
-    virtual const MISTD::string& get_name() const = 0;
+    virtual const std::string& get_name() const = 0;
 
     /// Get the direct parent of this scope
     ///

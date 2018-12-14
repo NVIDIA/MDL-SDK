@@ -50,17 +50,17 @@ protected:
   bool ArchSupportsMCJIT() {
     Triple Host(HostTriple);
     // If ARCH is not supported, bail
-    if (MISTD::find(SupportedArchs.begin(), SupportedArchs.end(), Host.getArch())
+    if (std::find(SupportedArchs.begin(), SupportedArchs.end(), Host.getArch())
         == SupportedArchs.end())
       return false;
 
     // If ARCH is supported and has no specific sub-arch support
-    if (MISTD::find(HasSubArchs.begin(), HasSubArchs.end(), Host.getArch())
+    if (std::find(HasSubArchs.begin(), HasSubArchs.end(), Host.getArch())
         == HasSubArchs.end())
       return true;
 
     // If ARCH has sub-arch support, find it
-    SmallVectorImpl<MISTD::string>::const_iterator I = SupportedSubArchs.begin();
+    SmallVectorImpl<std::string>::const_iterator I = SupportedSubArchs.begin();
     for(; I != SupportedSubArchs.end(); ++I)
       if (Host.getArchName().startswith(I->c_str()))
         return true;
@@ -71,17 +71,17 @@ protected:
   /// Returns true if the host OS is known to support MCJIT
   bool OSSupportsMCJIT() {
     Triple Host(HostTriple);
-    if (MISTD::find(UnsupportedOSs.begin(), UnsupportedOSs.end(), Host.getOS())
+    if (std::find(UnsupportedOSs.begin(), UnsupportedOSs.end(), Host.getOS())
         == UnsupportedOSs.end()) {
       return true;
     }
     return false;
   }
 
-  MISTD::string HostTriple;
+  std::string HostTriple;
   SmallVector<Triple::ArchType, 4> SupportedArchs;
   SmallVector<Triple::ArchType, 1> HasSubArchs;
-  SmallVector<MISTD::string, 2> SupportedSubArchs; // We need to own the memory
+  SmallVector<std::string, 2> SupportedSubArchs; // We need to own the memory
   SmallVector<Triple::OSType, 4> UnsupportedOSs;
 };
 

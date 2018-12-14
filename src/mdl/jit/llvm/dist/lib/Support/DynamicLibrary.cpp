@@ -54,7 +54,7 @@ using namespace llvm::sys;
 static DenseSet<void *> *OpenedHandles = 0;
 
 DynamicLibrary DynamicLibrary::getPermanentLibrary(const char *filename,
-                                                   MISTD::string *errMsg) {
+                                                   std::string *errMsg) {
   SmartScopedLock<true> lock(*SymbolsMutex);
 
   void *handle = dlopen(filename, RTLD_LAZY|RTLD_GLOBAL);
@@ -93,7 +93,7 @@ using namespace llvm;
 using namespace llvm::sys;
 
 DynamicLibrary DynamicLibrary::getPermanentLibrary(const char *filename,
-                                                   MISTD::string *errMsg) {
+                                                   std::string *errMsg) {
   if (errMsg) *errMsg = "dlopen() not supported on this platform";
   return DynamicLibrary();
 }

@@ -27,7 +27,7 @@ RemoteTarget *RemoteTarget::createRemoteTarget() {
   return new RemoteTarget;
 }
 
-RemoteTarget *RemoteTarget::createExternalRemoteTarget(MISTD::string &ChildName) {
+RemoteTarget *RemoteTarget::createExternalRemoteTarget(std::string &ChildName) {
 #ifdef LLVM_ON_UNIX
   return new RemoteTargetExternal(ChildName);
 #else

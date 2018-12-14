@@ -56,6 +56,6 @@ static int cmpRel(const ELFRelocationEntry *AP, const ELFRelocationEntry *BP) {
 
 void
 MCELFObjectTargetWriter::sortRelocs(const MCAssembler &Asm,
-                                    MISTD::vector<ELFRelocationEntry> &Relocs) {
+                                    std::vector<ELFRelocationEntry> &Relocs) {
   array_pod_sort(Relocs.begin(), Relocs.end(), cmpRel);
 }

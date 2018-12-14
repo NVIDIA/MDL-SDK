@@ -71,18 +71,18 @@ inline unsigned alignOf() { return AlignOf<T>::Alignment; }
 #ifndef _MSC_VER
 
 #if __has_feature(cxx_alignas)
-template<MISTD::size_t Alignment, MISTD::size_t Size>
+template<std::size_t Alignment, std::size_t Size>
 struct AlignedCharArray {
   alignas(Alignment) char buffer[Size];
 };
 
 #elif defined(__GNUC__) || defined(__IBM_ATTRIBUTES)
 /// \brief Create a type with an aligned char buffer.
-template<MISTD::size_t Alignment, MISTD::size_t Size>
+template<std::size_t Alignment, std::size_t Size>
 struct AlignedCharArray;
 
 #define LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT(x) \
-  template<MISTD::size_t Size> \
+  template<std::size_t Size> \
   struct AlignedCharArray<x, Size> { \
     __attribute__((aligned(x))) char buffer[Size]; \
   };
@@ -105,7 +105,7 @@ LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT(128)
 #else // _MSC_VER
 
 /// \brief Create a type with an aligned char buffer.
-template<MISTD::size_t Alignment, MISTD::size_t Size>
+template<std::size_t Alignment, std::size_t Size>
 struct AlignedCharArray;
 
 // We provide special variations of this template for the most common
@@ -116,7 +116,7 @@ struct AlignedCharArray;
 // MSVC warns on the existence of the declspec despite the union member forcing
 // proper alignment.
 
-template<MISTD::size_t Size>
+template<std::size_t Size>
 struct AlignedCharArray<1, Size> {
   union {
     char aligned;
@@ -124,7 +124,7 @@ struct AlignedCharArray<1, Size> {
   };
 };
 
-template<MISTD::size_t Size>
+template<std::size_t Size>
 struct AlignedCharArray<2, Size> {
   union {
     short aligned;
@@ -132,7 +132,7 @@ struct AlignedCharArray<2, Size> {
   };
 };
 
-template<MISTD::size_t Size>
+template<std::size_t Size>
 struct AlignedCharArray<4, Size> {
   union {
     int aligned;
@@ -140,7 +140,7 @@ struct AlignedCharArray<4, Size> {
   };
 };
 
-template<MISTD::size_t Size>
+template<std::size_t Size>
 struct AlignedCharArray<8, Size> {
   union {
     double aligned;
@@ -153,7 +153,7 @@ struct AlignedCharArray<8, Size> {
 // can't pass them by-value as function arguments on MSVC.
 
 #define LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT(x) \
-  template<MISTD::size_t Size> \
+  template<std::size_t Size> \
   struct AlignedCharArray<x, Size> { \
     __declspec(align(x)) char buffer[Size]; \
   };

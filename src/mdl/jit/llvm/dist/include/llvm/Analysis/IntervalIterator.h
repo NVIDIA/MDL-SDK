@@ -78,7 +78,7 @@ inline void addNodeToInterval(Interval *Int, BasicBlock *BB) {
 //
 inline void addNodeToInterval(Interval *Int, Interval *I) {
   // Add all of the nodes in I as new nodes in Int.
-  MISTD::copy(I->Nodes.begin(), I->Nodes.end(), MISTD::back_inserter(Int->Nodes));
+  std::copy(I->Nodes.begin(), I->Nodes.end(), std::back_inserter(Int->Nodes));
 }
 
 
@@ -88,14 +88,14 @@ inline void addNodeToInterval(Interval *Int, Interval *I) {
 template<class NodeTy, class OrigContainer_t, class GT = GraphTraits<NodeTy*>,
          class IGT = GraphTraits<Inverse<NodeTy*> > >
 class IntervalIterator {
-  MISTD::vector<MISTD::pair<Interval*, typename Interval::succ_iterator> > IntStack;
-  MISTD::set<BasicBlock*> Visited;
+  std::vector<std::pair<Interval*, typename Interval::succ_iterator> > IntStack;
+  std::set<BasicBlock*> Visited;
   OrigContainer_t *OrigContainer;
   bool IOwnMem;     // If True, delete intervals when done with them
                     // See file header for conditions of use
 public:
   typedef IntervalIterator<NodeTy, OrigContainer_t> _Self;
-  typedef MISTD::forward_iterator_tag iterator_category;
+  typedef std::forward_iterator_tag iterator_category;
 
   IntervalIterator() {} // End iterator, empty stack
   IntervalIterator(Function *M, bool OwnMemory) : IOwnMem(OwnMemory) {
@@ -175,7 +175,7 @@ private:
            E = GT::child_end(Node); I != E; ++I)
       ProcessNode(Int, getSourceGraphNode(OrigContainer, *I));
 
-    IntStack.push_back(MISTD::make_pair(Int, succ_begin(Int)));
+    IntStack.push_back(std::make_pair(Int, succ_begin(Int)));
     return true;
   }
 
@@ -218,7 +218,7 @@ private:
 
       if (Int->isSuccessor(NodeHeader)) {
         // If we were in the successor list from before... remove from succ list
-        Int->Successors.erase(MISTD::remove(Int->Successors.begin(),
+        Int->Successors.erase(std::remove(Int->Successors.begin(),
                                           Int->Successors.end(), NodeHeader),
                               Int->Successors.end());
       }

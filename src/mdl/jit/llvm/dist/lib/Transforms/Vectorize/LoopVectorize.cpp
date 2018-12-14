@@ -183,7 +183,7 @@ protected:
 
   // When we if-convert we need create edge masks. We have to cache values so
   // that we don't end up with exponential recursion/IR.
-  typedef DenseMap<MISTD::pair<BasicBlock*, BasicBlock*>,
+  typedef DenseMap<std::pair<BasicBlock*, BasicBlock*>,
                    VectorParts> EdgeMaskCache;
 
   /// Add code that checks at runtime if the accessed arrays overlap.
@@ -289,9 +289,9 @@ protected:
     /// elements.
     unsigned UF;
 
-    /// Map storage. We use MISTD::map and not DenseMap because insertions to a
+    /// Map storage. We use std::map and not DenseMap because insertions to a
     /// dense map invalidates its iterators.
-    MISTD::map<Value *, VectorParts> MapStorage;
+    std::map<Value *, VectorParts> MapStorage;
   };
 
   /// The original loop.
@@ -1080,7 +1080,7 @@ static unsigned getGEPInductionOperand(DataLayout *DL,
   while (LastOperand > 1 && match(Gep->getOperand(LastOperand), m_Zero())) {
     // Find the type we're currently indexing into.
     gep_type_iterator GEPTI = gep_type_begin(Gep);
-    MISTD::advance(GEPTI, LastOperand - 1);
+    std::advance(GEPTI, LastOperand - 1);
 
     // If it's a type with the same allocation size as the result of the GEP we
     // can peel off the zero index.
@@ -2279,7 +2279,7 @@ InnerLoopVectorizer::vectorizeLoop(LoopVectorizationLegality *Legal) {
           ShuffleMask[j] = Builder.getInt32(i/2 + j);
 
         // Fill the rest of the mask with undef.
-        MISTD::fill(&ShuffleMask[i/2], ShuffleMask.end(),
+        std::fill(&ShuffleMask[i/2], ShuffleMask.end(),
                   UndefValue::get(Builder.getInt32Ty()));
 
         Value *Shuf =
@@ -2352,11 +2352,11 @@ void InnerLoopVectorizer::fixLCSSAPHIs() {
 
 InnerLoopVectorizer::VectorParts
 InnerLoopVectorizer::createEdgeMask(BasicBlock *Src, BasicBlock *Dst) {
-  assert(MISTD::find(pred_begin(Dst), pred_end(Dst), Src) != pred_end(Dst) &&
+  assert(std::find(pred_begin(Dst), pred_end(Dst), Src) != pred_end(Dst) &&
          "Invalid edge");
 
   // Look for cached value.
-  MISTD::pair<BasicBlock*, BasicBlock*> Edge(Src, Dst);
+  std::pair<BasicBlock*, BasicBlock*> Edge(Src, Dst);
   EdgeMaskCache::iterator ECEntryIt = MaskCache.find(Edge);
   if (ECEntryIt != MaskCache.end())
     return ECEntryIt->second;
@@ -3120,7 +3120,7 @@ bool LoopVectorizationLegality::canVectorizeInstrs() {
 void LoopVectorizationLegality::collectLoopUniforms() {
   // We now know that the loop is vectorizable!
   // Collect variables that will remain uniform after vectorization.
-  MISTD::vector<Value*> Worklist;
+  std::vector<Value*> Worklist;
   BasicBlock *Latch = TheLoop->getLoopLatch();
 
   // Start with the conditional branch and walk up the block.
@@ -3510,7 +3510,7 @@ private:
   const Loop *InnermostLoop;
 
   /// \brief Maps access locations (ptr, read/write) to program order.
-  DenseMap<MemAccessInfo, MISTD::vector<unsigned> > Accesses;
+  DenseMap<MemAccessInfo, std::vector<unsigned> > Accesses;
 
   /// \brief Memory access instructions in program order.
   SmallVector<Instruction *, 16> InstMap;
@@ -3697,11 +3697,11 @@ bool MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
   if (StrideAPtr < 0) {
     //Src = BScev;
     //Sink = AScev;
-    MISTD::swap(APtr, BPtr);
-    MISTD::swap(Src, Sink);
-    MISTD::swap(AIsWrite, BIsWrite);
-    MISTD::swap(AIdx, BIdx);
-    MISTD::swap(StrideAPtr, StrideBPtr);
+    std::swap(APtr, BPtr);
+    std::swap(Src, Sink);
+    std::swap(AIsWrite, BIsWrite);
+    std::swap(AIdx, BIdx);
+    std::swap(StrideAPtr, StrideBPtr);
   }
 
   const SCEV *Dist = SE->getMinusSCEV(Sink, Src);
@@ -3814,9 +3814,9 @@ MemoryDepChecker::areDepsSafe(AccessAnalysis::DepCandidates &AccessSets,
       EquivalenceClasses<MemAccessInfo>::member_iterator OI = llvm::next(AI);
       while (OI != AE) {
         // Check every accessing instruction pair in program order.
-        for (MISTD::vector<unsigned>::iterator I1 = Accesses[*AI].begin(),
+        for (std::vector<unsigned>::iterator I1 = Accesses[*AI].begin(),
              I1E = Accesses[*AI].end(); I1 != I1E; ++I1)
-          for (MISTD::vector<unsigned>::iterator I2 = Accesses[*OI].begin(),
+          for (std::vector<unsigned>::iterator I2 = Accesses[*OI].begin(),
                I2E = Accesses[*OI].end(); I2 != I2E; ++I2) {
             if (*I1 < *I2 && isDependent(*AI, *I1, *OI, *I2))
               return false;
@@ -4184,7 +4184,7 @@ bool LoopVectorizationLegality::AddReductionVar(PHINode *Phi,
         // The instruction used by an outside user must be the last instruction
         // before we feed back to the reduction phi. Otherwise, we loose VF-1
         // operations on the value.
-        if (MISTD::find(Phi->op_begin(), Phi->op_end(), Cur) == Phi->op_end())
+        if (std::find(Phi->op_begin(), Phi->op_end(), Cur) == Phi->op_end())
          return false;
 
         ExitInstruction = Cur;
@@ -4534,7 +4534,7 @@ unsigned LoopVectorizationCostModel::getWidestType() {
       if (T->isPointerTy() && !isConsecutiveLoadOrStore(it))
         continue;
 
-      MaxWidth = MISTD::max(MaxWidth,
+      MaxWidth = std::max(MaxWidth,
                           (unsigned)DL->getTypeSizeInBits(T->getScalarType()));
     }
   }
@@ -4587,8 +4587,8 @@ LoopVectorizationCostModel::selectUnrollFactor(bool OptForSize,
   LoopVectorizationCostModel::RegisterUsage R = calculateRegisterUsage();
   // We divide by these constants so assume that we have at least one
   // instruction that uses at least one register.
-  R.MaxLocalUsers = MISTD::max(R.MaxLocalUsers, 1U);
-  R.NumInstructions = MISTD::max(R.NumInstructions, 1U);
+  R.MaxLocalUsers = std::max(R.MaxLocalUsers, 1U);
+  R.NumInstructions = std::max(R.NumInstructions, 1U);
 
   // We calculate the unroll factor using the following formula.
   // Subtract the number of loop invariants from the number of available
@@ -4638,7 +4638,7 @@ LoopVectorizationCostModel::selectUnrollFactor(bool OptForSize,
   if (LoopCost < SmallLoopCost) {
     DEBUG(dbgs() << "LV: Unrolling to reduce branch cost.\n");
     unsigned NewUF = SmallLoopCost / (LoopCost + 1);
-    return MISTD::min(NewUF, UF);
+    return std::min(NewUF, UF);
   }
 
   DEBUG(dbgs() << "LV: Not Unrolling.\n");
@@ -4739,7 +4739,7 @@ LoopVectorizationCostModel::calculateRegisterUsage() {
       OpenIntervals.erase(List[j]);
 
     // Count the number of live interals.
-    MaxUsage = MISTD::max(MaxUsage, OpenIntervals.size());
+    MaxUsage = std::max(MaxUsage, OpenIntervals.size());
 
     DEBUG(dbgs() << "LV(REG): At #" << i << " Interval # " <<
           OpenIntervals.size() << '\n');

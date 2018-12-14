@@ -61,8 +61,7 @@ bool Type_utilities::is_valid_attribute_type( const std::string& type_name)
     return is_valid_simple_attribute_type( type_name)
         || is_valid_enum_attribute_type( type_name)
         || is_valid_array_attribute_type( type_name)
-        || is_valid_structure_attribute_type( type_name)
-        || is_valid_attachable_attribute_type( type_name);
+        || is_valid_structure_attribute_type( type_name);
 }
 
 bool Type_utilities::is_valid_simple_attribute_type( const std::string& type_name)
@@ -97,8 +96,7 @@ bool Type_utilities::is_valid_array_attribute_type( const std::string& type_name
     // nested arrays are not supported
     return is_valid_simple_attribute_type( element_type_name)
         || is_valid_enum_attribute_type( element_type_name)
-        || is_valid_structure_attribute_type( element_type_name)
-        || is_valid_attachable_attribute_type( element_type_name);
+        || is_valid_structure_attribute_type( element_type_name);
 }
 
 bool Type_utilities::is_valid_structure_attribute_type( const std::string& type_name)
@@ -125,15 +123,6 @@ bool Type_utilities::is_valid_enum_attribute_type( const std::string& type_name)
     return decl.is_valid_interface();
 }
 
-bool Type_utilities::is_valid_attachable_attribute_type( const std::string& type_name)
-{
-    if( type_name.substr( 0, 11) != "Attachable<")
-        return false;
-    if( type_name[type_name.size()-1] != '>')
-        return false;
-    return is_valid_attribute_type( type_name.substr( 11, type_name.size()-12));
-}
-
 ATTR::Type_code Type_utilities::convert_attribute_type_name_to_type_code(
     const std::string& type_name)
 {
@@ -143,8 +132,6 @@ ATTR::Type_code Type_utilities::convert_attribute_type_name_to_type_code(
         return ATTR::TYPE_ARRAY;
     if( is_valid_structure_attribute_type( type_name))
         return ATTR::TYPE_STRUCT;
-    if( is_valid_attachable_attribute_type( type_name))
-        return ATTR::TYPE_ATTACHABLE;
     if( !is_valid_simple_attribute_type( type_name))
         return ATTR::TYPE_UNDEF;
     ATTR::Type_code type_code = convert_type_name_to_type_code( type_name);
@@ -158,7 +145,6 @@ const char* Type_utilities::convert_type_code_to_attribute_type_name( ATTR::Type
     ASSERT( M_NEURAY_API, type_code != ATTR::TYPE_ENUM);
     ASSERT( M_NEURAY_API, type_code != ATTR::TYPE_ARRAY);
     ASSERT( M_NEURAY_API, type_code != ATTR::TYPE_STRUCT);
-    ASSERT( M_NEURAY_API, type_code != ATTR::TYPE_ATTACHABLE);
 
     const char* type_name = convert_type_code_to_type_name( type_code);
     if( !type_name || !is_valid_attribute_type( type_name))
@@ -190,13 +176,6 @@ mi::Size Type_utilities::get_attribute_array_length( const std::string& type_nam
     return *length_likely.get_ptr();
 }
 
-std::string Type_utilities::get_attribute_attachable_value_type_name(
-    const std::string& type_name)
-{
-    ASSERT( M_NEURAY_API, is_valid_attachable_attribute_type( type_name));
-    return type_name.substr( 11, type_name.size() - 12);
-}
-
 
 std::string Type_utilities::strip_array( const std::string& type_name, mi::Size& length)
 {
@@ -223,15 +202,6 @@ std::string Type_utilities::strip_array( const std::string& type_name, mi::Size&
 
     // extract element type name
     return type_name.substr( 0, left_bracket);
-}
-
-std::string Type_utilities::strip_attachable( const std::string& type_name)
-{
-    if( type_name.substr( 0, 11) != "Attachable<")
-        return "";
-    if( type_name[type_name.size()-1] != '>')
-        return "";
-    return type_name.substr( 11, type_name.size() - 12);
 }
 
 std::string Type_utilities::strip_map( const std::string& type_name)
@@ -302,13 +272,6 @@ bool Type_utilities::compatible_types(
         return compatible_types( lhs_array_element, rhs_array_element, relaxed_array_check);
     }
 
-    // compare attachables
-    const std::string& lhs_attachable_value = strip_attachable( lhs);
-    if( !lhs_attachable_value.empty()) {
-        const std::string& rhs_attachable_value = strip_attachable( rhs);
-        return compatible_types( lhs_attachable_value, rhs_attachable_value, relaxed_array_check);
-    }
-
     // compare maps
     const std::string& lhs_map_value = strip_map( lhs);
     if( !lhs_map_value.empty()) {
@@ -355,16 +318,14 @@ ATTR::Type_code Type_utilities::convert_type_name_to_type_code( const std::strin
     if( !s_initialized)
         init();
 
-#if 0
-    // Disabled here because it still needed by the legacy MDL API.
     if(    type_name == "Ref<Texture>"
         || type_name == "Ref<Lightprofile>"
         || type_name == "Ref<Bsdf_measurement>") {
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Using attributes of type \"%s\" is deprecated. Use type \"Ref\" instead.",
+        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+            "Using attributes of type \"%s\" is no longer supported. Use type \"Ref\" instead.",
             type_name.c_str());
+        return ATTR::TYPE_UNDEF;
     }
-#endif
 
     Map_name_code::const_iterator it = s_map_name_code.find( type_name);
     if( it == s_map_name_code.end())
@@ -388,16 +349,14 @@ const char* Type_utilities::convert_type_code_to_type_name( ATTR::Type_code type
     if( it == s_map_code_name.end())
         return 0;
 
-#if 0
-    // Disabled here because it still needed by the legacy MDL API.
     if(    type_code == ATTR::TYPE_TEXTURE
         || type_code == ATTR::TYPE_LIGHTPROFILE
         || type_code == ATTR::TYPE_BSDF_MEASUREMENT) {
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Using attributes of type \"%s\" is deprecated. Use type \"Ref\" instead.",
             it->second.c_str());
+        return 0;
     }
-#endif
 
     return it->second.c_str();
 }
@@ -515,11 +474,6 @@ void Type_utilities::init()
     register_mapping( "Color",                 ATTR::TYPE_COLOR);
     register_mapping( "Spectrum",              ATTR::TYPE_SPECTRUM);
     register_mapping( "Color3",                ATTR::TYPE_RGB_FP);
-
-    // deprecated
-    register_mapping( "Ref<Texture>",          ATTR::TYPE_TEXTURE);
-    register_mapping( "Ref<Lightprofile>",     ATTR::TYPE_LIGHTPROFILE);
-    register_mapping( "Ref<Bsdf_measurement>", ATTR::TYPE_BSDF_MEASUREMENT);
 
     ASSERT( M_NEURAY_API, !s_initialized);
     s_initialized = true;

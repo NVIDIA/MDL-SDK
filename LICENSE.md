@@ -63,23 +63,27 @@ licenses, and/or restrictions:
 * zlib:   [src/base/lib/zlib/README](src/base/lib/zlib/README)
 * Coco/R: [src/mdl/compiler/coco/LICENSE](src/mdl/compiler/coco/LICENSE) (1)
 * tinyxml2: 
+  [src/base/lib/tinyxml2/tinyxml2.h](src/base/lib/tinyxml2/tinyxml2.h)
+  [src/base/lib/tinyxml2/tinyxml2.cpp](src/base/lib/tinyxml2/tinyxml2.cpp)
   [examples/thirdparty/tinyxml2/include/tinyxml2.h](examples/thirdparty/tinyxml2/include/tinyxml2.h)
-  [examples/thirdparty/tinyxml2/src/tinyxml2.cpp](examples/thirdparty/tinyxml2/src/tinyxml2.cpp) (2)
+  [examples/thirdparty/tinyxml2/src/tinyxml2.cpp](examples/thirdparty/tinyxml2/src/tinyxml2.cpp)
 * Dear ImGui with stb: [examples/thirdparty/imgui](examples/thirdparty/imgui) (2)
 
 The documentation uses the following web fonts, CSS, and JavaScript frameworks with 
 additional or alternate copyrights, licenses, and/or restrictions:
 
 * jQuery v3.2.1: [doc/js/jquery/jquery-3.2.1.min.js](doc/js/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
+* jQuery UI v1.12.1: [doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt)
 * normalize.css v1.1.3: [doc/core_definitions/kt_css/normalize.css](doc/core_definitions/kt_css/normalize.css),
   [doc/base_module/kt_css/normalize.css](doc/base_module/kt_css/normalize.css)
 * Libre Baskerville: [doc/css/librebaskerville/LICENSE-LibreBaskerville.txt](doc/css/librebaskerville/LICENSE-LibreBaskerville.txt)
 * Source Sans Pro: [doc/css/sourcesanspro/LICENSE-SourceSansPro.txt](doc/css/sourcesanspro/LICENSE-SourceSansPro.txt)
+* Source Code Pro: [doc/css/sourcecodepro/LICENSE-SourceCodePro.txt](doc/css/sourcecodepro/LICENSE-SourceCodePro.txt)
 
 **Notes**
 
 (1) Coco/R is only used for code generation in the build process and is not
     integrated by itself in the MDL SDK binaries.
 
-(2) tinyxml2, Dear ImgUi and stb are only used in the examples and are not 
-    integrated by themselves in the MDL SDK binaries.
+(2) Dear ImgUi and stb are only used in the examples and are not integrated 
+    by themselves in the MDL SDK binaries.

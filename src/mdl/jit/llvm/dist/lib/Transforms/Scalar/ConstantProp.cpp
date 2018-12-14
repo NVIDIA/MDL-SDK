@@ -62,7 +62,7 @@ FunctionPass *llvm::createConstantPropagationPass() {
 
 bool ConstantPropagation::runOnFunction(Function &F) {
   // Initialize the worklist to all of the instructions ready to process...
-  MISTD::set<Instruction*> WorkList;
+  std::set<Instruction*> WorkList;
   for(inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ++i) {
       WorkList.insert(&*i);
   }

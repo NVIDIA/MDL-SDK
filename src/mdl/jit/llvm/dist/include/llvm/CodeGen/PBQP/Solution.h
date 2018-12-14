@@ -26,7 +26,7 @@ namespace PBQP {
   class Solution {
   private:
 
-    typedef MISTD::map<Graph::NodeId, unsigned> SelectionsMap;
+    typedef std::map<Graph::NodeId, unsigned> SelectionsMap;
     SelectionsMap selections;
 
     unsigned r0Reductions, r1Reductions, r2Reductions, rNReductions;

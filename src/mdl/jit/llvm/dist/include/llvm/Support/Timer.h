@@ -79,7 +79,7 @@ public:
 ///
 class Timer {
   TimeRecord Time;
-  MISTD::string Name;      // The name of this time variable.
+  std::string Name;      // The name of this time variable.
   bool Started;          // Has this time variable ever been started?
   TimerGroup *TG;        // The TimerGroup this Timer is in.
   
@@ -101,7 +101,7 @@ public:
   void init(StringRef N);
   void init(StringRef N, TimerGroup &tg);
   
-  const MISTD::string &getName() const { return Name; }
+  const std::string &getName() const { return Name; }
   bool isInitialized() const { return TG != 0; }
   
   /// startTimer - Start the timer running.  Time between calls to
@@ -159,9 +159,9 @@ struct NamedRegionTimer : public TimeRegion {
 /// TimerGroup can be specified for a newly created timer in its constructor.
 ///
 class TimerGroup {
-  MISTD::string Name;
+  std::string Name;
   Timer *FirstTimer;   // First timer in the group.
-  MISTD::vector<MISTD::pair<TimeRecord, MISTD::string> > TimersToPrint;
+  std::vector<std::pair<TimeRecord, std::string> > TimersToPrint;
   
   TimerGroup **Prev, *Next; // Doubly linked list of TimerGroup's.
   TimerGroup(const TimerGroup &TG) LLVM_DELETED_FUNCTION;

@@ -220,10 +220,10 @@ StringRef ArgList::getLastArgValue(OptSpecifier Id,
   return Default;
 }
 
-MISTD::vector<MISTD::string> ArgList::getAllArgValues(OptSpecifier Id) const {
+std::vector<std::string> ArgList::getAllArgValues(OptSpecifier Id) const {
   SmallVector<const char *, 16> Values;
   AddAllArgValues(Values, Id);
-  return MISTD::vector<MISTD::string>(Values.begin(), Values.end());
+  return std::vector<std::string>(Values.begin(), Values.end());
 }
 
 void ArgList::AddLastArg(ArgStringList &Output, OptSpecifier Id) const {

@@ -76,10 +76,10 @@ namespace {
     }
 
     virtual bool runOnFunction(Function &F) {
-      MISTD::string Filename = "cfg." + F.getName().str() + ".dot";
+      std::string Filename = "cfg." + F.getName().str() + ".dot";
       errs() << "Writing '" << Filename << "'...";
       
-      MISTD::string ErrorInfo;
+      std::string ErrorInfo;
       raw_fd_ostream File(Filename.c_str(), ErrorInfo);
 
       if (ErrorInfo.empty())
@@ -110,10 +110,10 @@ namespace {
     }
     
     virtual bool runOnFunction(Function &F) {
-      MISTD::string Filename = "cfg." + F.getName().str() + ".dot";
+      std::string Filename = "cfg." + F.getName().str() + ".dot";
       errs() << "Writing '" << Filename << "'...";
 
-      MISTD::string ErrorInfo;
+      std::string ErrorInfo;
       raw_fd_ostream File(Filename.c_str(), ErrorInfo);
       
       if (ErrorInfo.empty())

@@ -44,7 +44,6 @@
 #include <mi/neuraylib/factory.h>
 #include <mi/neuraylib/iallocator.h>
 #include <mi/neuraylib/iarray.h>
-#include <mi/neuraylib/iattachable.h>
 #include <mi/neuraylib/iattribute_container.h>
 #include <mi/neuraylib/iattribute_set.h>
 #include <mi/neuraylib/ibbox.h>
@@ -73,14 +72,16 @@
 #include <mi/neuraylib/imaterial_instance.h>
 #include <mi/neuraylib/imatrix.h>
 #include <mi/neuraylib/imdl_archive_api.h>
+#include <mi/neuraylib/imdl_compatibility_api.h>
 #include <mi/neuraylib/imdl_compiler.h>
+#include <mi/neuraylib/imdl_execution_context.h>
 #include <mi/neuraylib/imdl_discovery_api.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/imdl_factory.h>
+#include <mi/neuraylib/imdl_i18n_configuration.h>
 #include <mi/neuraylib/imodule.h>
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/inumber.h>
-#include <mi/neuraylib/iparameter.h>
 #include <mi/neuraylib/ipointer.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/ireader_writer_base.h>

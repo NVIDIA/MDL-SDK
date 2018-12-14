@@ -50,7 +50,7 @@ Stmt_info &Stmt_info_data::get_stmt_info(IStatement const *stmt)
 {
     Stmt_map::iterator it = m_stmt_map.find(stmt);
     if (it == m_stmt_map.end()) {
-        it = m_stmt_map.insert(MISTD::make_pair(stmt, Stmt_info())).first;
+        it = m_stmt_map.insert(std::make_pair(stmt, Stmt_info())).first;
     }
     return it->second;
 }
@@ -71,7 +71,7 @@ Expr_info &Stmt_info_data::get_expr_info(IExpression const *expr)
 {
     Expr_map::iterator it = m_expr_map.find(expr);
     if (it == m_expr_map.end()) {
-        it = m_expr_map.insert(MISTD::make_pair(expr, Expr_info())).first;
+        it = m_expr_map.insert(std::make_pair(expr, Expr_info())).first;
     }
     return it->second;
 }

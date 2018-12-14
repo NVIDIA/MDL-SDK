@@ -143,7 +143,7 @@ public:
 /// suitable manager.
 class PMStack {
 public:
-  typedef MISTD::vector<PMDataManager *>::const_reverse_iterator iterator;
+  typedef std::vector<PMDataManager *>::const_reverse_iterator iterator;
   iterator begin() const { return S.rbegin(); }
   iterator end() const { return S.rend(); }
 
@@ -155,7 +155,7 @@ public:
   void dump() const;
 
 private:
-  MISTD::vector<PMDataManager *> S;
+  std::vector<PMDataManager *> S;
 };
 
 

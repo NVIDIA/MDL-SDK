@@ -75,8 +75,8 @@ namespace {
         return F == O.F && Idx == O.Idx && IsArg == O.IsArg;
       }
 
-      MISTD::string getDescription() const {
-        return MISTD::string((IsArg ? "Argument #" : "Return value #"))
+      std::string getDescription() const {
+        return std::string((IsArg ? "Argument #" : "Return value #"))
                + utostr(Idx) + " of function " + F->getName().str();
       }
     };
@@ -97,7 +97,7 @@ namespace {
       return RetOrArg(F, Idx, true);
     }
 
-    typedef MISTD::multimap<RetOrArg, RetOrArg> UseMap;
+    typedef std::multimap<RetOrArg, RetOrArg> UseMap;
     /// This maps a return value or argument to any MaybeLive return values or
     /// arguments it uses. This allows the MaybeLive values to be marked live
     /// when any of its users is marked live.
@@ -114,8 +114,8 @@ namespace {
     ///    directly to F.
     UseMap Uses;
 
-    typedef MISTD::set<RetOrArg> LiveSet;
-    typedef MISTD::set<const Function*> LiveFuncSet;
+    typedef std::set<RetOrArg> LiveSet;
+    typedef std::set<const Function*> LiveFuncSet;
 
     /// This set contains all values that have been determined to be live.
     LiveSet LiveValues;
@@ -250,7 +250,7 @@ bool DAE::DeleteDeadVarargs(Function &Fn) {
   // the old function, but doesn't have isVarArg set.
   FunctionType *FTy = Fn.getFunctionType();
 
-  MISTD::vector<Type*> Params(FTy->param_begin(), FTy->param_end());
+  std::vector<Type*> Params(FTy->param_begin(), FTy->param_end());
   FunctionType *NFTy = FunctionType::get(FTy->getReturnType(),
                                                 Params, false);
   unsigned NumArgs = Params.size();
@@ -264,7 +264,7 @@ bool DAE::DeleteDeadVarargs(Function &Fn) {
   // Loop over all of the callers of the function, transforming the call sites
   // to pass in a smaller number of arguments into the new function.
   //
-  MISTD::vector<Value*> Args;
+  std::vector<Value*> Args;
   for (Value::use_iterator I = Fn.use_begin(), E = Fn.use_end(); I != E; ) {
     CallSite CS(*I++);
     if (!CS)
@@ -662,7 +662,7 @@ void DAE::MarkValue(const RetOrArg &RA, Liveness L,
       // marked live whenever one of the uses becomes live.
       for (UseVector::const_iterator UI = MaybeLiveUses.begin(),
            UE = MaybeLiveUses.end(); UI != UE; ++UI)
-        Uses.insert(MISTD::make_pair(*UI, RA));
+        Uses.insert(std::make_pair(*UI, RA));
       break;
     }
   }
@@ -727,7 +727,7 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
   // Start by computing a new prototype for the function, which is the same as
   // the old function, but has fewer arguments and a different return type.
   FunctionType *FTy = F->getFunctionType();
-  MISTD::vector<Type*> Params;
+  std::vector<Type*> Params;
 
   // Keep track of if we have a live 'returned' argument
   bool HasLiveReturnedArg = false;
@@ -772,7 +772,7 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
 
   // -1 means unused, other numbers are the new index
   SmallVector<int, 5> NewRetIdxs(RetCount, -1);
-  MISTD::vector<Type*> RetTypes;
+  std::vector<Type*> RetTypes;
 
   // If there is a function with a live 'returned' argument but a dead return
   // value, then there are two possible actions:
@@ -889,7 +889,7 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
   // Loop over all of the callers of the function, transforming the call sites
   // to pass in a smaller number of arguments into the new function.
   //
-  MISTD::vector<Value*> Args;
+  std::vector<Value*> Args;
   while (!F->use_empty()) {
     CallSite CS(F->use_back());
     Instruction *Call = CS.getInstruction();

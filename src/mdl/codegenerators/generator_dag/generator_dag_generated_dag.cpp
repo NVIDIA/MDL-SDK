@@ -1316,6 +1316,7 @@ private:
     IModule const         *m_let_owner;
 };
 
+
 } // anonymous
 
 // Compile a material.
@@ -1325,6 +1326,7 @@ void Generated_code_dag::compile_material(
 {
     IDefinition const *material_def = m_node->get_definition();
     MDL_ASSERT(material_def != NULL);
+
 
     IModule const *module = dag_builder.tos_module();
 
@@ -1365,6 +1367,7 @@ void Generated_code_dag::compile_material(
         // a real material or a clone
         IDefinition const *orig_mat_def = module->get_original_definition(material_def);
         mi::base::Handle<IModule const> orig_module(module->get_owner_module(material_def));
+
 
         IDeclaration_function const *mat_decl =
             cast<IDeclaration_function>(orig_mat_def->get_declaration());
@@ -3004,8 +3007,8 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
         snprintf(buffer, sizeof(buffer), "_%04u", idx++);
 
 
-        MISTD::string material_name(code_dag->get_material_name(m_material_index));
-        MISTD::replace(material_name.begin(), material_name.end(), ':', '_');
+        std::string material_name(code_dag->get_material_name(m_material_index));
+        std::replace(material_name.begin(), material_name.end(), ':', '_');
 
         material_name += buffer;
 
@@ -4057,6 +4060,12 @@ Generated_code_dag::Material_instance::get_properties() const
     return m_properties;
 }
 
+// Get the internal space.
+char const *Generated_code_dag::Material_instance::get_internal_space() const
+{
+    return m_node_factory.get_internal_space();
+}
+
 // Creates a new error message.
 void Generated_code_dag::Material_instance::error(
     int code, Err_location const &loc, char const *msg)
@@ -4833,30 +4842,76 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
     case DAG_node::EK_CALL:
         {
             DAG_call const *call  = cast<DAG_call>(node);
-            IAllocator     *alloc = get_allocator();
 
-            int argument_count = call->get_argument_count();
-            Dag_vector arguments(alloc);
+            int n_args = call->get_argument_count();
+            VLA<DAG_call::Call_argument> args(get_allocator(), n_args);
+            for (int i = 0; i < n_args; ++i) {
+                char const *param_name = call->get_parameter_name(i);
 
-            for (int i = 0; i < argument_count; ++i) {
-                Param_scope scope(*this, call->get_parameter_name(i), i);
-                arguments.push_back(instantiate_dag_arguments(call->get_argument(i)));
+                Param_scope scope(*this, param_name, i);
+
+                args[i].arg        = instantiate_dag_arguments(call->get_argument(i));
+                args[i].param_name = param_name;
             }
 
-            VLA<DAG_call::Call_argument> args(get_allocator(), argument_count);
-            for (int i = 0; i < argument_count; ++i) {
-                args[i].arg        = arguments[i];
-                args[i].param_name = call->get_parameter_name(i);
-            }
-            IType const *ret_type = call->get_type();
-            ret_type = m_type_factory.import(ret_type);
-            res = m_node_factory.create_call(
-                call->get_name(), call->get_semantic(),
-                args.data(), args.size(), ret_type);
+            string signature(call->get_name(), get_allocator());
+            res = NULL;
 
-            if (DAG_call const *n_call = as<DAG_call>(res)) {
-                // still a call, check if it depends on the object
-                analyze_call(n_call);
+            if (m_node_factory.is_inline_allowed()) {
+                // basically this means we are inside an argument, see the parameter case
+                mi::base::Handle<IModule const> mod(m_resolver.get_owner_module(signature.c_str()));
+
+                Module const *module = impl_cast<Module>(mod.get());
+                IDefinition const *def =
+                    module->find_signature(signature.c_str(), /*only_exported=*/true);
+                if (def != NULL) {
+                    if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
+                        // If this is an alias (imported/exported), then replace it by its
+                        // original name. This does not help much, BUT the neuray material
+                        // converter supports only the "original" names
+                        // modify the signature to point to the original one
+                        char const *old_mod_name = module->get_name();
+                        size_t l = strlen(old_mod_name);
+                        MDL_ASSERT(strncmp(signature.c_str(), old_mod_name, l) == 0);
+
+                        char const *orig_module = module->get_owner_module_name(def);
+                        signature = orig_module + signature.substr(l);
+                    }
+                }
+
+                if (call->get_semantic() == IDefinition::DS_UNKNOWN) {
+                    IDefinition const *def = NULL;
+                    if (mod.is_valid_interface()) {
+                        // beware, use old signature here, we retrieve the def again
+                        def = module->find_signature(call->get_name(), /*only_exported=*/false);
+
+                        if (def != NULL) {
+                            // try to inline it
+                            Module_scope module_scope(m_dag_builder, mod.get());
+
+                            res = m_dag_builder.try_inline(def, args.data(), n_args);
+
+                            // must be analyzed when was inlined; do this here by analyzing the
+                            // inlined function
+                            if (res != NULL) {
+                                analyze_function_ast(module, def);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (res == NULL) {
+                IType const *ret_type = call->get_type();
+                ret_type = m_type_factory.import(ret_type);
+                res = m_node_factory.create_call(
+                    signature.c_str(), call->get_semantic(),
+                    args.data(), args.size(), ret_type);
+
+                if (DAG_call const *n_call = as<DAG_call>(res)) {
+                    // still a call, check if it depends on the object
+                    analyze_call(n_call);
+                }
             }
         }
         break;
@@ -5038,6 +5093,12 @@ DAG_node const *Generated_code_dag::get_module_annotation(
         return NULL;
     }
     return m_module_annotations[annotation_index];
+}
+
+// Get the internal space.
+char const *Generated_code_dag::get_internal_space() const
+{
+    return m_internal_space.c_str();
 }
 
 // Serialize this code DAG.

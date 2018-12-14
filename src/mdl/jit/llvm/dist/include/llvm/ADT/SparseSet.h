@@ -198,10 +198,10 @@ public:
   ///
   iterator findIndex(unsigned Idx) {
     assert(Idx < Universe && "Key out of range");
-    assert(MISTD::numeric_limits<SparseT>::is_integer &&
-           !MISTD::numeric_limits<SparseT>::is_signed &&
+    assert(std::numeric_limits<SparseT>::is_integer &&
+           !std::numeric_limits<SparseT>::is_signed &&
            "SparseT must be an unsigned integer type");
-    const unsigned Stride = MISTD::numeric_limits<SparseT>::max() + 1u;
+    const unsigned Stride = std::numeric_limits<SparseT>::max() + 1u;
     for (unsigned i = Sparse[Idx], e = size(); i < e; i += Stride) {
       const unsigned FoundIdx = ValIndexOf(Dense[i]);
       assert(FoundIdx < Universe && "Invalid key in set. Did object mutate?");
@@ -243,14 +243,14 @@ public:
   ///
   /// Insertion invalidates all iterators.
   ///
-  MISTD::pair<iterator, bool> insert(const ValueT &Val) {
+  std::pair<iterator, bool> insert(const ValueT &Val) {
     unsigned Idx = ValIndexOf(Val);
     iterator I = findIndex(Idx);
     if (I != end())
-      return MISTD::make_pair(I, false);
+      return std::make_pair(I, false);
     Sparse[Idx] = size();
     Dense.push_back(Val);
-    return MISTD::make_pair(end() - 1, true);
+    return std::make_pair(end() - 1, true);
   }
 
   /// array subscript - If an element already exists with this key, return it.
@@ -272,7 +272,7 @@ public:
   ///     else
   ///       ++I;
   ///
-  /// Note that end() changes when elements are erased, unlike MISTD::list.
+  /// Note that end() changes when elements are erased, unlike std::list.
   ///
   iterator erase(iterator I) {
     assert(unsigned(I - begin()) < size() && "Invalid iterator");
@@ -283,7 +283,7 @@ public:
       Sparse[BackIdx] = I - begin();
     }
     // This depends on SmallVector::pop_back() not invalidating iterators.
-    // MISTD::vector::pop_back() doesn't give that guarantee.
+    // std::vector::pop_back() doesn't give that guarantee.
     Dense.pop_back();
     return I;
   }

@@ -490,6 +490,9 @@ protected:
     /// If true, compile in strict mode.
     bool m_strict_mode;
 
+    /// If true, compile with experimental MDL features.
+    bool m_enable_experimental_features;
+
 
     typedef map<size_t, size_t>::Type Module_2_file_id_map;
 
@@ -1788,6 +1791,9 @@ private:
     /// If set, we are visiting an annotation on the current module.
     bool m_is_module_annotation;
 
+    /// If set, we are visiting an annotation on a return type.
+    bool m_is_return_annotation;
+
     /// If true, the current module has the array assignment.
     bool m_has_array_assignment;
 
@@ -2434,6 +2440,11 @@ void dump_ast(IModule const *module);
 ///
 /// \param module  the module to dump
 void dump_def_tab(IModule const *module);
+
+/// Debug helper: Dump the AST of a declaration.
+///
+/// \param decl  the declaration to dump
+void dump_ast(IDeclaration const *decl);
 
 /// Debug helper: Dump the AST of a compilation unit.
 ///

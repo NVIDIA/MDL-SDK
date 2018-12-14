@@ -169,7 +169,7 @@ typedef struct _Unwind_Exception OurUnwindException;
 // general
 //
 
-static MISTD::map<MISTD::string, llvm::Value*> namedValues;
+static std::map<std::string, llvm::Value*> namedValues;
 
 int64_t ourBaseFromUnwindOffset;
 
@@ -179,8 +179,8 @@ const unsigned char ourBaseExcpClassChars[] =
 
 static uint64_t ourBaseExceptionClass = 0;
 
-static MISTD::vector<MISTD::string> ourTypeInfoNames;
-static MISTD::map<int, MISTD::string> ourTypeInfoNamesIndex;
+static std::vector<std::string> ourTypeInfoNames;
+static std::map<int, std::string> ourTypeInfoNamesIndex;
 
 static llvm::StructType *ourTypeInfoType;
 static llvm::StructType *ourCaughtResultType;
@@ -191,8 +191,8 @@ static llvm::ConstantInt *ourExceptionNotThrownState;
 static llvm::ConstantInt *ourExceptionThrownState;
 static llvm::ConstantInt *ourExceptionCaughtState;
 
-typedef MISTD::vector<MISTD::string> ArgNames;
-typedef MISTD::vector<llvm::Type*> ArgTypes;
+typedef std::vector<std::string> ArgNames;
+typedef std::vector<llvm::Type*> ArgTypes;
 
 //
 // Code Generation Utilities
@@ -214,7 +214,7 @@ llvm::Function *createFunction(llvm::Module &module,
                                llvm::Type *retType,
                                const ArgTypes &theArgTypes,
                                const ArgNames &theArgNames,
-                               const MISTD::string &functName,
+                               const std::string &functName,
                                llvm::GlobalValue::LinkageTypes linkage,
                                bool declarationOnly,
                                bool isVarArg) {
@@ -247,7 +247,7 @@ llvm::Function *createFunction(llvm::Module &module,
 /// @param initWith optional constant initialization value
 /// @returns AllocaInst instance
 static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function &function,
-                                                const MISTD::string &varName,
+                                                const std::string &varName,
                                                 llvm::Type *type,
                                                 llvm::Constant *initWith = 0) {
   llvm::BasicBlock &block = function.getEntryBlock();
@@ -901,7 +901,7 @@ uint64_t genClass(const unsigned char classChars[], size_t classCharsSize)
 void generateStringPrint(llvm::LLVMContext &context,
                          llvm::Module &module,
                          llvm::IRBuilder<> &builder,
-                         MISTD::string toPrint,
+                         std::string toPrint,
                          bool useGlobal = true) {
   llvm::Function *printFunct = module.getFunction("printStr");
 
@@ -947,7 +947,7 @@ void generateIntegerPrint(llvm::LLVMContext &context,
                           llvm::IRBuilder<> &builder,
                           llvm::Function &printFunct,
                           llvm::Value &toPrint,
-                          MISTD::string format,
+                          std::string format,
                           bool useGlobal = true) {
   llvm::Constant *stringConstant =
     llvm::ConstantDataArray::getString(context, format);
@@ -998,8 +998,8 @@ static llvm::BasicBlock *createFinallyBlock(llvm::LLVMContext &context,
                                             llvm::Module &module,
                                             llvm::IRBuilder<> &builder,
                                             llvm::Function &toAddTo,
-                                            MISTD::string &blockName,
-                                            MISTD::string &functionId,
+                                            std::string &blockName,
+                                            std::string &functionId,
                                             llvm::BasicBlock &terminatorBlock,
                                             llvm::BasicBlock &unwindResumeBlock,
                                             llvm::Value **exceptionCaughtFlag,
@@ -1038,7 +1038,7 @@ static llvm::BasicBlock *createFinallyBlock(llvm::LLVMContext &context,
 
   builder.SetInsertPoint(ret);
 
-  MISTD::ostringstream bufferToPrint;
+  std::ostringstream bufferToPrint;
   bufferToPrint << "Gen: Executing finally block "
     << blockName << " in " << functionId << "\n";
   generateStringPrint(context,
@@ -1074,8 +1074,8 @@ static llvm::BasicBlock *createCatchBlock(llvm::LLVMContext &context,
                                           llvm::Module &module,
                                           llvm::IRBuilder<> &builder,
                                           llvm::Function &toAddTo,
-                                          MISTD::string &blockName,
-                                          MISTD::string &functionId,
+                                          std::string &blockName,
+                                          std::string &functionId,
                                           llvm::BasicBlock &terminatorBlock,
                                           llvm::Value &exceptionCaughtFlag) {
 
@@ -1085,12 +1085,12 @@ static llvm::BasicBlock *createCatchBlock(llvm::LLVMContext &context,
 
   builder.SetInsertPoint(ret);
 
-  MISTD::ostringstream bufferToPrint;
+  std::ostringstream bufferToPrint;
   bufferToPrint << "Gen: Executing catch block "
   << blockName
   << " in "
   << functionId
-  << MISTD::endl;
+  << std::endl;
   generateStringPrint(context,
                       module,
                       builder,
@@ -1127,7 +1127,7 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
                                              llvm::IRBuilder<> &builder,
                                              llvm::FunctionPassManager &fpm,
                                              llvm::Function &toInvoke,
-                                             MISTD::string ourId,
+                                             std::string ourId,
                                              unsigned numExceptionsToCatch,
                                              unsigned exceptionTypesToCatch[]) {
 
@@ -1180,8 +1180,8 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
   // Clean up block which delete exception if needed
   llvm::BasicBlock *endBlock = llvm::BasicBlock::Create(context, "end", ret);
 
-  MISTD::string nextName;
-  MISTD::vector<llvm::BasicBlock*> catchBlocks(numExceptionsToCatch);
+  std::string nextName;
+  std::vector<llvm::BasicBlock*> catchBlocks(numExceptionsToCatch);
   llvm::Value *exceptionCaughtFlag = NULL;
   llvm::Value *exceptionStorage = NULL;
   llvm::Value *caughtResultStorage = NULL;
@@ -1219,7 +1219,7 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
 
   builder.SetInsertPoint(entryBlock);
 
-  MISTD::vector<llvm::Value*> args;
+  std::vector<llvm::Value*> args;
   args.push_back(namedValues["exceptTypeToThrow"]);
   builder.CreateInvoke(&toInvoke,
                        normalBlock,
@@ -1393,7 +1393,7 @@ static
 llvm::Function *createThrowExceptionFunction(llvm::Module &module,
                                              llvm::IRBuilder<> &builder,
                                              llvm::FunctionPassManager &fpm,
-                                             MISTD::string ourId,
+                                             std::string ourId,
                                              int32_t nativeThrowType,
                                              llvm::Function &nativeThrowFunct) {
   llvm::LLVMContext &context = module.getContext();
@@ -1511,7 +1511,7 @@ static void createStandardUtilityFunctions(unsigned numTypeInfos,
 llvm::Function *createUnwindExceptionTest(llvm::Module &module,
                                           llvm::IRBuilder<> &builder,
                                           llvm::FunctionPassManager &fpm,
-                                          MISTD::string nativeThrowFunctName) {
+                                          std::string nativeThrowFunctName) {
   // Number of type infos to generate
   unsigned numTypeInfos = 6;
 
@@ -1564,17 +1564,17 @@ llvm::Function *createUnwindExceptionTest(llvm::Module &module,
 
 namespace {
 /// Represents our foreign exceptions
-class OurCppRunException : public MISTD::runtime_error {
+class OurCppRunException : public std::runtime_error {
 public:
-  OurCppRunException(const MISTD::string reason) :
-  MISTD::runtime_error(reason) {}
+  OurCppRunException(const std::string reason) :
+  std::runtime_error(reason) {}
 
   OurCppRunException (const OurCppRunException &toCopy) :
-  MISTD::runtime_error(toCopy) {}
+  std::runtime_error(toCopy) {}
 
   OurCppRunException &operator = (const OurCppRunException &toCopy) {
     return(reinterpret_cast<OurCppRunException&>(
-                                 MISTD::runtime_error::operator=(toCopy)));
+                                 std::runtime_error::operator=(toCopy)));
   }
 
   virtual ~OurCppRunException (void) throw () {}
@@ -1711,9 +1711,9 @@ static void createStandardUtilityFunctions(unsigned numTypeInfos,
 
   // Type infos
 
-  MISTD::string baseStr = "typeInfo", typeInfoName;
-  MISTD::ostringstream typeInfoNameBuilder;
-  MISTD::vector<llvm::Constant*> structVals;
+  std::string baseStr = "typeInfo", typeInfoName;
+  std::ostringstream typeInfoNameBuilder;
+  std::vector<llvm::Constant*> structVals;
 
   llvm::Constant *nextStruct;
 

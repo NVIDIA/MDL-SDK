@@ -134,19 +134,6 @@ public:
     ///                    \c false otherwise.
     static bool is_valid_structure_attribute_type( const std::string& type_name);
 
-    /// Returns whether an API type name indicates a valid attachable attribute type.
-    ///
-    /// A valid attachable attribute type name is "Attachable<T>" where T is valid attribute type
-    /// name.
-    ///
-    /// \note Since structure and enum declarations can be unregistered, an attribute type name can
-    ///       suddenly become invalid.
-    ///
-    /// \param type_name   A valid API type name.
-    /// \return            \true if \p type_name is a supported attachable attribute type,
-    ///                    \c false otherwise.
-    static bool is_valid_attachable_attribute_type( const std::string& type_name);
-
     /// Converts a API attribute type name into an ATTR type code.
     ///
     /// \param type_name   A valid API attribute type name.
@@ -158,9 +145,8 @@ public:
 
     /// Converts an ATTR type code into an API attribute type name.
     ///
-    /// ATTR::TYPE_ENUM, ATTR::TYPE_ARRAY, ATTR::TYPE_STRUCT, and ATTR::TYPE_ATTACHABLE are not
-    /// handled (because they do not contain enough information to convert it into an API attribute
-    /// type name).
+    /// ATTR::TYPE_ENUM, ATTR::TYPE_ARRAY, and ATTR::TYPE_STRUCT are not handled (because they do
+    /// not contain enough information to convert it into an API attribute type name).
     ///
     /// \param type_code   An ATTR type code.
     /// \return            The corresponding API attribute type name, or \c NULL in case of errors.
@@ -180,13 +166,6 @@ public:
     /// \pre is_valid_array_attribute_type() returns \c true
     static mi::Size get_attribute_array_length( const std::string& type_name);
 
-    /// Returns the value type name of an attribute attachable type name.
-    ///
-    /// The element type name is not checked for validity.
-    ///
-    /// \pre is_valid_attachable_attribute_type() returns \c true
-    static std::string get_attribute_attachable_value_type_name( const std::string& type_name);
-
     //@}
     /// \name General types
     //@{
@@ -196,10 +175,6 @@ public:
     /// The length of the array is stored in \p length (only in case of success, zero for dynamic
     /// arrays).
     static std::string strip_array( const std::string& type_name, mi::Size& length);
-
-    /// Returns the value type name of an attachable type name, or the empty string in case of
-    /// failure.
-    static std::string strip_attachable( const std::string& type_name);
 
     /// Returns the value type name of a map type name, or the empty string in case of failure.
     static std::string strip_map( const std::string& type_name);

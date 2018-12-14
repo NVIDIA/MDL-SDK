@@ -23,7 +23,7 @@ namespace llvm {
 /// only the first element (the key) is used by isEqual and isLess.
 template <typename T, typename S>
 struct ImutKeyValueInfo {
-  typedef const MISTD::pair<T,S> value_type;
+  typedef const std::pair<T,S> value_type;
   typedef const value_type& value_type_ref;
   typedef const T   key_type;
   typedef const T&  key_type_ref;
@@ -108,7 +108,7 @@ public:
     ImmutableMap getEmptyMap() { return ImmutableMap(F.getEmptyTree()); }
 
     ImmutableMap add(ImmutableMap Old, key_type_ref K, data_type_ref D) {
-      TreeTy *T = F.add(Old.Root, MISTD::pair<key_type,data_type>(K,D));
+      TreeTy *T = F.add(Old.Root, std::pair<key_type,data_type>(K,D));
       return ImmutableMap(Canonicalize ? F.getCanonicalTree(T): T);
     }
 
@@ -215,7 +215,7 @@ public:
     typedef typename ImmutableMap<KeyT,ValT,ValInfo>::value_type value_type;
     typedef typename ImmutableMap<KeyT,ValT,ValInfo>::value_type_ref reference;
     typedef typename iterator::value_type *pointer;
-    typedef MISTD::bidirectional_iterator_tag iterator_category;
+    typedef std::bidirectional_iterator_tag iterator_category;
 
     typename iterator::reference operator*() const { return itr->getValue(); }
     typename iterator::pointer   operator->() const { return &itr->getValue(); }
@@ -340,7 +340,7 @@ public:
   }
 
   ImmutableMapRef add(key_type_ref K, data_type_ref D) const {
-    TreeTy *NewT = Factory->add(Root, MISTD::pair<key_type, data_type>(K, D));
+    TreeTy *NewT = Factory->add(Root, std::pair<key_type, data_type>(K, D));
     return ImmutableMapRef(NewT, Factory);
   }
 

@@ -38,7 +38,7 @@ public:
 
   FunctionPass *createMachinePostDominatorTreePass();
 
-  const MISTD::vector<MachineBasicBlock *> &getRoots() const {
+  const std::vector<MachineBasicBlock *> &getRoots() const {
     return DT->getRoots();
   }
 

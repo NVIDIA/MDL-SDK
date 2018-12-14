@@ -361,7 +361,7 @@ namespace llvm {
   /// the given stream as a debugging tool.
   MachineFunctionPass *
   createMachineFunctionPrinterPass(raw_ostream &OS,
-                                   const MISTD::string &Banner ="");
+                                   const std::string &Banner ="");
 
   /// MachineLoopInfo - This pass is a loop analysis pass.
   extern char &MachineLoopInfoID;

@@ -90,7 +90,7 @@ EmitCopyFromReg(SDNode *Node, unsigned ResNo, bool IsClone, bool IsCloned,
     SDValue Op(Node, ResNo);
     if (IsClone)
       VRBaseMap.erase(Op);
-    bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, SrcReg)).second;
+    bool isNew = VRBaseMap.insert(std::make_pair(Op, SrcReg)).second;
     (void)isNew; // Silence compiler warning.
     assert(isNew && "Node emitted out of order - early");
     return;
@@ -181,7 +181,7 @@ EmitCopyFromReg(SDNode *Node, unsigned ResNo, bool IsClone, bool IsCloned,
   SDValue Op(Node, ResNo);
   if (IsClone)
     VRBaseMap.erase(Op);
-  bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, VRBase)).second;
+  bool isNew = VRBaseMap.insert(std::make_pair(Op, VRBase)).second;
   (void)isNew; // Silence compiler warning.
   assert(isNew && "Node emitted out of order - early");
 }
@@ -262,7 +262,7 @@ void InstrEmitter::CreateVirtualRegisters(SDNode *Node,
     SDValue Op(Node, i);
     if (IsClone)
       VRBaseMap.erase(Op);
-    bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, VRBase)).second;
+    bool isNew = VRBaseMap.insert(std::make_pair(Op, VRBase)).second;
     (void)isNew; // Silence compiler warning.
     assert(isNew && "Node emitted out of order - early");
   }
@@ -563,7 +563,7 @@ void InstrEmitter::EmitSubregNode(SDNode *Node,
     llvm_unreachable("Node is not insert_subreg, extract_subreg, or subreg_to_reg");
 
   SDValue Op(Node, 0);
-  bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, VRBase)).second;
+  bool isNew = VRBaseMap.insert(std::make_pair(Op, VRBase)).second;
   (void)isNew; // Silence compiler warning.
   assert(isNew && "Node emitted out of order - early");
 }
@@ -586,7 +586,7 @@ InstrEmitter::EmitCopyToRegClassNode(SDNode *Node,
     NewVReg).addReg(VReg);
 
   SDValue Op(Node, 0);
-  bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, NewVReg)).second;
+  bool isNew = VRBaseMap.insert(std::make_pair(Op, NewVReg)).second;
   (void)isNew; // Silence compiler warning.
   assert(isNew && "Node emitted out of order - early");
 }
@@ -628,7 +628,7 @@ void InstrEmitter::EmitRegSequence(SDNode *Node,
 
   MBB->insert(InsertPos, MIB);
   SDValue Op(Node, 0);
-  bool isNew = VRBaseMap.insert(MISTD::make_pair(Op, NewVReg)).second;
+  bool isNew = VRBaseMap.insert(std::make_pair(Op, NewVReg)).second;
   (void)isNew; // Silence compiler warning.
   assert(isNew && "Node emitted out of order - early");
 }

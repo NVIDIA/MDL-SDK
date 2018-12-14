@@ -95,7 +95,7 @@ void Input::nextDocument() {
 }
 
 bool Input::mapTag(StringRef Tag, bool Default) {
-  MISTD::string foundTag = CurrentNode->_node->getVerbatimTag();
+  std::string foundTag = CurrentNode->_node->getVerbatimTag();
   if (foundTag.empty()) {
     // If no tag found and 'Tag' is the default, say it was found.
     return Default;
@@ -255,7 +255,7 @@ bool Input::bitSetMatch(const char *Str, bool) {
     return false;
   if (SequenceHNode *SQ = dyn_cast<SequenceHNode>(CurrentNode)) {
     unsigned Index = 0;
-    for (MISTD::vector<HNode *>::iterator i = SQ->Entries.begin(),
+    for (std::vector<HNode *>::iterator i = SQ->Entries.begin(),
          End = SQ->Entries.end(); i != End; ++i) {
       if (ScalarHNode *SN = dyn_cast<ScalarHNode>(*i)) {
         if (SN->value().equals(Str)) {
@@ -380,7 +380,7 @@ Input::MapHNode::~MapHNode() {
 }
 
 Input::SequenceHNode::~SequenceHNode() {
-  for (MISTD::vector<HNode*>::iterator i = Entries.begin(), End = Entries.end();
+  for (std::vector<HNode*>::iterator i = Entries.begin(), End = Entries.end();
                                                                 i != End; ++i) {
     delete *i;
   }

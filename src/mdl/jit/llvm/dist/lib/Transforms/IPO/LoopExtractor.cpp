@@ -155,7 +155,7 @@ Pass *llvm::createSingleLoopExtractorPass() {
 
 // BlockFile - A file which contains a list of blocks that should not be
 // extracted.
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 BlockFile("extract-blocks-file", cl::value_desc("filename"),
           cl::desc("A file containing list of basic blocks to not extract"),
           cl::Hidden);
@@ -168,8 +168,8 @@ namespace {
     void LoadFile(const char *Filename);
     void SplitLandingPadPreds(Function *F);
 
-    MISTD::vector<BasicBlock*> BlocksToNotExtract;
-    MISTD::vector<MISTD::pair<MISTD::string, MISTD::string> > BlocksToNotExtractByName;
+    std::vector<BasicBlock*> BlocksToNotExtract;
+    std::vector<std::pair<std::string, std::string> > BlocksToNotExtractByName;
   public:
     static char ID; // Pass identification, replacement for typeid
     BlockExtractorPass() : ModulePass(ID) {
@@ -195,19 +195,19 @@ ModulePass *llvm::createBlockExtractorPass() {
 
 void BlockExtractorPass::LoadFile(const char *Filename) {
   // Load the BlockFile...
-  MISTD::ifstream In(Filename);
+  std::ifstream In(Filename);
   if (!In.good()) {
     errs() << "WARNING: BlockExtractor couldn't load file '" << Filename
            << "'!\n";
     return;
   }
   while (In) {
-    MISTD::string FunctionName, BlockName;
+    std::string FunctionName, BlockName;
     In >> FunctionName;
     In >> BlockName;
     if (!BlockName.empty())
       BlocksToNotExtractByName.push_back(
-          MISTD::make_pair(FunctionName, BlockName));
+          std::make_pair(FunctionName, BlockName));
   }
 }
 
@@ -243,7 +243,7 @@ void BlockExtractorPass::SplitLandingPadPreds(Function *F) {
 }
 
 bool BlockExtractorPass::runOnModule(Module &M) {
-  MISTD::set<BasicBlock*> TranslatedBlocksToNotExtract;
+  std::set<BasicBlock*> TranslatedBlocksToNotExtract;
   for (unsigned i = 0, e = BlocksToNotExtract.size(); i != e; ++i) {
     BasicBlock *BB = BlocksToNotExtract[i];
     Function *F = BB->getParent();
@@ -254,7 +254,7 @@ bool BlockExtractorPass::runOnModule(Module &M) {
 
     // Figure out which index the basic block is in its function.
     Function::iterator BBI = MF->begin();
-    MISTD::advance(BBI, MISTD::distance(F->begin(), Function::iterator(BB)));
+    std::advance(BBI, std::distance(F->begin(), Function::iterator(BB)));
     TranslatedBlocksToNotExtract.insert(BBI);
   }
 
@@ -263,8 +263,8 @@ bool BlockExtractorPass::runOnModule(Module &M) {
     // every Function. Fortunately, this is always empty except when used by
     // bugpoint in which case correctness is more important than performance.
 
-    MISTD::string &FuncName  = BlocksToNotExtractByName.back().first;
-    MISTD::string &BlockName = BlocksToNotExtractByName.back().second;
+    std::string &FuncName  = BlocksToNotExtractByName.back().first;
+    std::string &BlockName = BlocksToNotExtractByName.back().second;
 
     for (Module::iterator FI = M.begin(), FE = M.end(); FI != FE; ++FI) {
       Function &F = *FI;
@@ -283,7 +283,7 @@ bool BlockExtractorPass::runOnModule(Module &M) {
 
   // Now that we know which blocks to not extract, figure out which ones we WANT
   // to extract.
-  MISTD::vector<BasicBlock*> BlocksToExtract;
+  std::vector<BasicBlock*> BlocksToExtract;
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     SplitLandingPadPreds(&*F);
     for (Function::iterator BB = F->begin(), E = F->end(); BB != E; ++BB)

@@ -122,7 +122,7 @@ void IntelJITEventListener::NotifyFunctionEmitted(
                                       reinterpret_cast<uint64_t>(FnStart),
                                       FnSize);
 
-  MISTD::vector<LineNumberInfo> LineInfo;
+  std::vector<LineNumberInfo> LineInfo;
 
   if (!Details.LineStarts.empty()) {
     // Now convert the line number information from the address/DebugLoc
@@ -146,7 +146,7 @@ void IntelJITEventListener::NotifyFunctionEmitted(
       LineInfo.push_back(FirstLine);
     }
 
-    for (MISTD::vector<EmittedFunctionDetails::LineStart>::const_iterator I =
+    for (std::vector<EmittedFunctionDetails::LineStart>::const_iterator I =
           Details.LineStarts.begin(), E = Details.LineStarts.end();
           I != E; ++I) {
       // This implementation ignores the DebugLoc filename because the Intel
@@ -199,8 +199,8 @@ void IntelJITEventListener::NotifyObjectEmitted(const ObjectImage &Obj) {
                                E = Obj.end_symbols();
                         I != E && !ec;
                         I.increment(ec)) {
-    MISTD::vector<LineNumberInfo> LineInfo;
-    MISTD::string SourceFileName;
+    std::vector<LineNumberInfo> LineInfo;
+    std::string SourceFileName;
 
     object::SymbolRef::Type SymType;
     if (I->getType(SymType)) continue;

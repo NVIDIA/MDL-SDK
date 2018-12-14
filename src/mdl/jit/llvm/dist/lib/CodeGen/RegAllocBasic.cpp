@@ -65,7 +65,7 @@ class RABasic : public MachineFunctionPass, public RegAllocBase
 
   // state
   OwningPtr<Spiller> SpillerInstance;
-  MISTD::priority_queue<LiveInterval*, MISTD::vector<LiveInterval*>,
+  std::priority_queue<LiveInterval*, std::vector<LiveInterval*>,
                       CompSpillWeight> Queue;
 
   // Scratch space.  Allocated here to avoid repeated malloc calls in

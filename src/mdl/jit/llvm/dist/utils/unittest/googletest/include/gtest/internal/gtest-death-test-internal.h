@@ -161,10 +161,10 @@ GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
 #  define GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, death_test) \
   try { \
     GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement); \
-  } catch (const ::MISTD::exception& gtest_exception) { \
+  } catch (const ::std::exception& gtest_exception) { \
     fprintf(\
         stderr, \
-        "\n%s: Caught MISTD::exception-derived exception escaping the " \
+        "\n%s: Caught std::exception-derived exception escaping the " \
         "death test statement. Exception message: %s\n", \
         ::testing::internal::FormatFileLocation(__FILE__, __LINE__).c_str(), \
         gtest_exception.what()); \

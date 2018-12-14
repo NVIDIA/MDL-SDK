@@ -77,7 +77,7 @@ public:
 private:
     mi::base::Handle<LINK::ILibrary> m_library;
     mi::base::Plugin*                m_plugin;
-    MISTD::string                    m_path;
+    std::string                    m_path;
 };
 
 /// Implementation of the Plug_module interface
@@ -111,7 +111,7 @@ private:
     mi::base::Lock m_lock;
 
     /// The loaded plugins. Needs #m_lock.
-    MISTD::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > m_plugins;
+    std::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > m_plugins;
 
     /// The LINK module.
     SYSTEM::Access_module<LINK::Link_module> m_link_module;

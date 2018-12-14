@@ -75,9 +75,9 @@ struct isPodLike {
 #endif
 };
 
-// MISTD::pair's are pod-like if their elements are.
+// std::pair's are pod-like if their elements are.
 template<typename T, typename U>
-struct isPodLike<MISTD::pair<T, U> > {
+struct isPodLike<std::pair<T, U> > {
   static const bool value = isPodLike<T>::value && isPodLike<U>::value;
 };
   

@@ -146,7 +146,7 @@ bool Directory::close()
 //
 
 
-MISTD::string Directory::read(
+std::string Directory::read(
     bool		nodot)		// ignore files beginning with '.'
 {
     ASSERT(M_DISK, m_dp_wrapper->m_dp != 0);
@@ -154,7 +154,7 @@ MISTD::string Directory::read(
     for (;;) {
         struct dirent *entry = readdir(m_dp_wrapper->m_dp);
         if ((m_eof = (0==entry)))			// eof: return false
-            return MISTD::string();
+            return std::string();
         if (!(nodot && entry->d_name[0] == '.'))	// not a rejected dot
             return entry->d_name;
     }
@@ -231,7 +231,7 @@ bool Directory::open(
     if ( m_dir->m_opened && !close() )
         return false;
 
-    MISTD::string new_path(path? path : "");
+    std::string new_path(path? path : "");
 
     // if we find a '*', just leave things as they are
     // note that this will likely not work for a 'c:/users/*/log' call
@@ -334,7 +334,7 @@ bool Directory::read_next_file()
     if (m_dir->m_first_file) {
         ASSERT(M_DISK, m_path.c_str());
         // to be on the save side we interpret each path as UTF-8 and use the Unicode functionality
-        MISTD::wstring path = STRING::utf8_to_wchar(m_path.c_str());
+        std::wstring path = STRING::utf8_to_wchar(m_path.c_str());
         m_dir->m_first_handle = ::FindFirstFileW(path.c_str(), &m_dir->m_find_data);
 
         if (m_dir->m_first_handle != INVALID_HANDLE_VALUE) {
@@ -373,7 +373,7 @@ bool Directory::read_next_file()
 // Note that if a file is successfully read, the const char * returned is still
 // owned by *this*, so caller should take care if something is done with *this*
 // (including deleting but also closing the dir may affect the returned char *)
-MISTD::string Directory::read(
+std::string Directory::read(
     bool nodot)                                 // ignore files beginning with '.'
 {
     ASSERT(M_DISK, m_dir->m_opened);
@@ -389,7 +389,7 @@ MISTD::string Directory::read(
             return STRING::wchar_to_utf8(m_dir->m_find_data.cFileName);
         }
     }
-    return MISTD::string();
+    return std::string();
 }
 
 
@@ -417,7 +417,7 @@ bool Directory::exists(
 {
     if (!path || *path == '\0')  return false;
 
-    MISTD::string newpath(path);
+    std::string newpath(path);
     char *new_path = &newpath[0];
 
     // let's strip off any trailing *'s, forward- or back-slashes

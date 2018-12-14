@@ -27,11 +27,11 @@ class CodeGenTarget;
 class CodeGenSchedModels;
 class CodeGenInstruction;
 
-typedef MISTD::vector<Record*> RecVec;
-typedef MISTD::vector<Record*>::const_iterator RecIter;
+typedef std::vector<Record*> RecVec;
+typedef std::vector<Record*>::const_iterator RecIter;
 
-typedef MISTD::vector<unsigned> IdxVec;
-typedef MISTD::vector<unsigned>::const_iterator IdxIter;
+typedef std::vector<unsigned> IdxVec;
+typedef std::vector<unsigned>::const_iterator IdxIter;
 
 void splitSchedReadWrites(const RecVec &RWDefs,
                           RecVec &WriteDefs, RecVec &ReadDefs);
@@ -45,7 +45,7 @@ void splitSchedReadWrites(const RecVec &RWDefs,
 /// or a sequence of writes on one operand.
 struct CodeGenSchedRW {
   unsigned Index;
-  MISTD::string Name;
+  std::string Name;
   Record *TheDef;
   bool IsRead;
   bool IsAlias;
@@ -73,7 +73,7 @@ struct CodeGenSchedRW {
   }
 
   CodeGenSchedRW(unsigned Idx, bool Read, const IdxVec &Seq,
-                 const MISTD::string &Name)
+                 const std::string &Name)
     : Index(Idx), Name(Name), TheDef(0), IsRead(Read), IsAlias(false),
       HasVariants(false), IsVariadic(false), IsSequence(true), Sequence(Seq) {
     assert(Sequence.size() > 1 && "implied sequence needs >1 RWs");
@@ -126,7 +126,7 @@ struct CodeGenSchedTransition {
 /// that mapped the itinerary class to the variant Writes or Reads.
 struct CodeGenSchedClass {
   unsigned Index;
-  MISTD::string Name;
+  std::string Name;
   Record *ItinClassDef;
 
   IdxVec Writes;
@@ -134,7 +134,7 @@ struct CodeGenSchedClass {
   // Sorted list of ProcIdx, where ProcIdx==0 implies any processor.
   IdxVec ProcIndices;
 
-  MISTD::vector<CodeGenSchedTransition> Transitions;
+  std::vector<CodeGenSchedTransition> Transitions;
 
   // InstRW records associated with this class. These records may refer to an
   // Instruction no longer mapped to this class by InstrClassMap. These
@@ -173,7 +173,7 @@ struct CodeGenSchedClass {
 // ItinDefList orders this processor's InstrItinData records by SchedClass idx.
 struct CodeGenProcModel {
   unsigned Index;
-  MISTD::string ModelName;
+  std::string ModelName;
   Record *ModelDef;
   Record *ItinsDef;
 
@@ -196,7 +196,7 @@ struct CodeGenProcModel {
   RecVec ProcResourceDefs;
   RecVec ProcResGroupDefs;
 
-  CodeGenProcModel(unsigned Idx, const MISTD::string &Name, Record *MDef,
+  CodeGenProcModel(unsigned Idx, const std::string &Name, Record *MDef,
                    Record *IDef) :
     Index(Idx), ModelName(Name), ModelDef(MDef), ItinsDef(IDef) {}
 
@@ -224,18 +224,18 @@ class CodeGenSchedModels {
   SetTheory Sets;
 
   // List of unique processor models.
-  MISTD::vector<CodeGenProcModel> ProcModels;
+  std::vector<CodeGenProcModel> ProcModels;
 
   // Map Processor's MachineModel or ProcItin to a CodeGenProcModel index.
   typedef DenseMap<Record*, unsigned> ProcModelMapTy;
   ProcModelMapTy ProcModelMap;
 
   // Per-operand SchedReadWrite types.
-  MISTD::vector<CodeGenSchedRW> SchedWrites;
-  MISTD::vector<CodeGenSchedRW> SchedReads;
+  std::vector<CodeGenSchedRW> SchedWrites;
+  std::vector<CodeGenSchedRW> SchedReads;
 
   // List of unique SchedClasses.
-  MISTD::vector<CodeGenSchedClass> SchedClasses;
+  std::vector<CodeGenSchedClass> SchedClasses;
 
   // Any inferred SchedClass has an index greater than NumInstrSchedClassses.
   unsigned NumInstrSchedClasses;
@@ -276,7 +276,7 @@ public:
   }
 
   // Iterate over the unique processor models.
-  typedef MISTD::vector<CodeGenProcModel>::const_iterator ProcIter;
+  typedef std::vector<CodeGenProcModel>::const_iterator ProcIter;
   ProcIter procModelBegin() const { return ProcModels.begin(); }
   ProcIter procModelEnd() const { return ProcModels.end(); }
 
@@ -329,7 +329,7 @@ public:
   // for NoItinerary.
   unsigned getSchedClassIdx(const CodeGenInstruction &Inst) const;
 
-  typedef MISTD::vector<CodeGenSchedClass>::const_iterator SchedClassIter;
+  typedef std::vector<CodeGenSchedClass>::const_iterator SchedClassIter;
   SchedClassIter schedClassBegin() const { return SchedClasses.begin(); }
   SchedClassIter schedClassEnd() const { return SchedClasses.end(); }
 
@@ -361,15 +361,15 @@ private:
 
   void collectSchedRW();
 
-  MISTD::string genRWName(const IdxVec& Seq, bool IsRead);
+  std::string genRWName(const IdxVec& Seq, bool IsRead);
   unsigned findRWForSequence(const IdxVec &Seq, bool IsRead);
 
   void collectSchedClasses();
 
-  MISTD::string createSchedClassName(Record *ItinClassDef,
+  std::string createSchedClassName(Record *ItinClassDef,
                                    const IdxVec &OperWrites,
                                    const IdxVec &OperReads);
-  MISTD::string createSchedClassName(const RecVec &InstDefs);
+  std::string createSchedClassName(const RecVec &InstDefs);
   void createInstRWClass(Record *InstRWDef);
 
   void collectProcItins();

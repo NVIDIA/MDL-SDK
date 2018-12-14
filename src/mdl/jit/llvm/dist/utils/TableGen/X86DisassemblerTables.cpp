@@ -412,7 +412,7 @@ void DisassemblerTables::emitModRMDecision(raw_ostream &o1, raw_ostream &o2,
     return;
   }
 
-  MISTD::vector<unsigned> ModRMDecision;
+  std::vector<unsigned> ModRMDecision;
 
   switch (dt) {
     default:
@@ -449,7 +449,7 @@ void DisassemblerTables::emitModRMDecision(raw_ostream &o1, raw_ostream &o2,
     ModRMTableNum += ModRMDecision.size();
     o1 << "/* Table" << EntryNumber << " */\n";
     i1++;
-    for (MISTD::vector<unsigned>::const_iterator I = ModRMDecision.begin(),
+    for (std::vector<unsigned>::const_iterator I = ModRMDecision.begin(),
            E = ModRMDecision.end(); I != E; ++I) {
       o1.indent(i1 * 2) << format("0x%hx", *I) << ", /* "
                         << InstructionSpecifiers[*I].name << " */\n";
@@ -558,8 +558,8 @@ void DisassemblerTables::emitInstructionInfo(raw_ostream &o,
   o << "static const struct OperandSpecifier x86OperandSets[]["
     << X86_MAX_OPERANDS << "] = {\n";
 
-  typedef MISTD::vector<MISTD::pair<const char *, const char *> > OperandListTy;
-  MISTD::map<OperandListTy, unsigned> OperandSets;
+  typedef std::vector<std::pair<const char *, const char *> > OperandListTy;
+  std::map<OperandListTy, unsigned> OperandSets;
 
   unsigned OperandSetNum = 0;
   for (unsigned Index = 0; Index < NumInstructions; ++Index) {
@@ -573,7 +573,7 @@ void DisassemblerTables::emitInstructionInfo(raw_ostream &o,
       const char *Type =
         stringForOperandType((OperandType)InstructionSpecifiers[Index]
                              .operands[OperandIndex].type);
-      OperandList.push_back(MISTD::make_pair(Encoding, Type));
+      OperandList.push_back(std::make_pair(Encoding, Type));
     }
     unsigned &N = OperandSets[OperandList];
     if (N != 0) continue;
@@ -615,7 +615,7 @@ void DisassemblerTables::emitInstructionInfo(raw_ostream &o,
       const char *Type =
         stringForOperandType((OperandType)InstructionSpecifiers[index]
                              .operands[OperandIndex].type);
-      OperandList.push_back(MISTD::make_pair(Encoding, Type));
+      OperandList.push_back(std::make_pair(Encoding, Type));
     }
     o.indent(i * 2) << (OperandSets[OperandList] - 1) << ",\n";
 
@@ -745,8 +745,8 @@ void DisassemblerTables::emit(raw_ostream &o) const {
   unsigned i1 = 0;
   unsigned i2 = 0;
 
-  MISTD::string s1;
-  MISTD::string s2;
+  std::string s1;
+  std::string s2;
 
   raw_string_ostream o1(s1);
   raw_string_ostream o2(s2);
@@ -761,7 +761,7 @@ void DisassemblerTables::emit(raw_ostream &o) const {
 
   o << "static const InstrUID modRMTable[] = {\n";
   i1++;
-  MISTD::vector<unsigned> EmptyTable(1, 0);
+  std::vector<unsigned> EmptyTable(1, 0);
   ModRMTable[EmptyTable] = ModRMTableNum;
   ModRMTableNum += EmptyTable.size();
   o1 << "/* EmptyTable */\n";

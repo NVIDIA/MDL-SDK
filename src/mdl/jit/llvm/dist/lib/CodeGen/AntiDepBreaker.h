@@ -30,7 +30,7 @@ namespace llvm {
 /// anti-dependencies.
 class AntiDepBreaker {
 public:
-  typedef MISTD::vector<MISTD::pair<MachineInstr *, MachineInstr *> > 
+  typedef std::vector<std::pair<MachineInstr *, MachineInstr *> > 
     DbgValueVector;
 
   virtual ~AntiDepBreaker();
@@ -42,7 +42,7 @@ public:
   /// basic-block region and break them by renaming registers. Return
   /// the number of anti-dependencies broken.
   ///
-  virtual unsigned BreakAntiDependencies(const MISTD::vector<SUnit>& SUnits,
+  virtual unsigned BreakAntiDependencies(const std::vector<SUnit>& SUnits,
                                          MachineBasicBlock::iterator Begin,
                                          MachineBasicBlock::iterator End,
                                          unsigned InsertPosIndex,

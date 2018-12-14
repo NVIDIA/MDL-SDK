@@ -63,7 +63,7 @@ namespace {
       // simply avoid always having the same function names, and we need to
       // remain deterministic.
       unsigned int randSeed = 0;
-      for (MISTD::string::const_iterator I = M.getModuleIdentifier().begin(),
+      for (std::string::const_iterator I = M.getModuleIdentifier().begin(),
            E = M.getModuleIdentifier().end(); I != E; ++I)
         randSeed += *I;
 

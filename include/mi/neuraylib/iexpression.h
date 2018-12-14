@@ -441,13 +441,15 @@ public:
     /// Clones the given expression.
     ///
     /// Note that referenced DB elements, e.g., resources in constant expressions, or function calls
-    /// and material instances in call expressions, are not copied, but shared.
+    /// and material instances in call expressions, are not copied, but shared. Function calls and
+    /// material instances that serve as default arguments, are copied, though.
     virtual IExpression* clone( const IExpression* expr) const = 0;
 
     /// Clones the given expression.
     ///
     /// Note that referenced DB elements, e.g., resources in constant expressions, or function calls
-    /// and material instances in call expressions, are not copied, but shared.
+    /// and material instances in call expressions, are not copied, but shared. Function calls and
+    /// material instances that serve as default arguments, are copied, though.
     template <class T>
     T* clone( const T* expr) const
     {

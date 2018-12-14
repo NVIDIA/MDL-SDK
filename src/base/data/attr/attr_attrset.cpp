@@ -133,7 +133,7 @@ Attribute_set::Attribute_set(
 void Attribute_set::swap(
     Attribute_set	&other)		// the other
 {
-    using MISTD::swap;
+    using std::swap;
     swap(m_attrs, other.m_attrs);
 }
 
@@ -247,7 +247,7 @@ bool Attribute_set::attach(
 
     // the actual attachment happens here (won't accept const here)
     bool result = m_attrs.insert(
-        MISTD::make_pair(attr->get_id(), attr)).second;
+        std::make_pair(attr->get_id(), attr)).second;
     ASSERT(M_ATTR, result || other);
 
     // return success
@@ -297,7 +297,7 @@ void Attribute_set::deep_copy(
 
             // I do not use attach() here to avoid the useless error checking.
             // It is useless here since we start with an empty m_attrs.
-            m_attrs.insert(MISTD::make_pair(new_attr->get_id(), new_attr));
+            m_attrs.insert(std::make_pair(new_attr->get_id(), new_attr));
         }
     }
 }
@@ -458,7 +458,7 @@ void get_references(
 const SERIAL::Serializable *Attribute_set::serialize(
     SERIAL::Serializer	*serializer) const	// functions for byte streams
 {
-    ASSERT(M_ATTR, m_attrs.size() <= MISTD::numeric_limits<Uint32>::max());
+    ASSERT(M_ATTR, m_attrs.size() <= std::numeric_limits<Uint32>::max());
     Uint32 size = Uint32(m_attrs.size());
     serializer->write(size);
 
@@ -485,7 +485,7 @@ SERIAL::Serializable *Attribute_set::deserialize(
     for (Uint32 i=0; i < size; ++i) {
         Attribute *attr = (Attribute *)deser->deserialize();
         m_attrs.insert(
-            MISTD::make_pair(
+            std::make_pair(
                 attr->get_id(),boost::shared_ptr<Attribute>(attr)));
     }
     return this+1;
@@ -828,7 +828,7 @@ void print_type_value(
             typ.get_name());
         for (size_t i=0; i<array_size; ++i) {
             DB::Tag tag(*ptr);
-            MISTD::string name;
+            std::string name;
             if (tag)
                 name = transaction->tag_to_name(tag);
             else

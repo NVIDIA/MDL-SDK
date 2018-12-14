@@ -51,6 +51,13 @@ enum Tex_wrap_mode {
     wrap_clip            = 3
 };
 
+/// MBSDFs can consist of two parts, which can be selected using this enumeration.
+enum Mbsdf_part
+{
+    mbsdf_data_reflection = 0,
+    mbsdf_data_transmission = 1
+};
+
 } // stdlib
 } // mdl
 } // mi

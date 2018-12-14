@@ -45,12 +45,12 @@ Y("ocaml", "ocaml 3.10-compatible collector");
 void llvm::linkOcamlGCPrinter() { }
 
 static void EmitCamlGlobal(const Module &M, AsmPrinter &AP, const char *Id) {
-  const MISTD::string &MId = M.getModuleIdentifier();
+  const std::string &MId = M.getModuleIdentifier();
 
-  MISTD::string SymName;
+  std::string SymName;
   SymName += "caml";
   size_t Letter = SymName.size();
-  SymName.append(MId.begin(), MISTD::find(MId.begin(), MId.end(), '.'));
+  SymName.append(MId.begin(), std::find(MId.begin(), MId.end(), '.'));
   SymName += "__";
   SymName += Id;
 

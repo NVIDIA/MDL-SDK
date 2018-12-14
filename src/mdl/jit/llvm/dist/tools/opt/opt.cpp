@@ -57,11 +57,11 @@ PassList(cl::desc("Optimizations available:"));
 
 // Other command line options...
 //
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input bitcode file>"),
     cl::init("-"), cl::value_desc("filename"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
@@ -127,7 +127,7 @@ static cl::opt<bool>
 OptLevelO3("O3",
            cl::desc("Optimization level 3. Similar to clang -O3"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 TargetTriple("mtriple", cl::desc("Override target triple for module"));
 
 static cl::opt<bool>
@@ -167,7 +167,7 @@ static cl::opt<bool>
 PrintBreakpoints("print-breakpoints-for-testing",
                  cl::desc("Print select breakpoints location for testing"));
 
-static cl::opt<MISTD::string>
+static cl::opt<std::string>
 DefaultDataLayout("default-data-layout",
           cl::desc("data layout string to use if not specified by module"),
           cl::value_desc("layout-string"), cl::init(""));
@@ -179,11 +179,11 @@ struct CallGraphSCCPassPrinter : public CallGraphSCCPass {
   static char ID;
   const PassInfo *PassToPrint;
   raw_ostream &Out;
-  MISTD::string PassName;
+  std::string PassName;
 
   CallGraphSCCPassPrinter(const PassInfo *PI, raw_ostream &out) :
     CallGraphSCCPass(ID), PassToPrint(PI), Out(out) {
-      MISTD::string PassToPrintName =  PassToPrint->getPassName();
+      std::string PassToPrintName =  PassToPrint->getPassName();
       PassName = "CallGraphSCCPass Printer: " + PassToPrintName;
     }
 
@@ -215,11 +215,11 @@ struct ModulePassPrinter : public ModulePass {
   static char ID;
   const PassInfo *PassToPrint;
   raw_ostream &Out;
-  MISTD::string PassName;
+  std::string PassName;
 
   ModulePassPrinter(const PassInfo *PI, raw_ostream &out)
     : ModulePass(ID), PassToPrint(PI), Out(out) {
-      MISTD::string PassToPrintName =  PassToPrint->getPassName();
+      std::string PassToPrintName =  PassToPrint->getPassName();
       PassName = "ModulePass Printer: " + PassToPrintName;
     }
 
@@ -245,11 +245,11 @@ struct FunctionPassPrinter : public FunctionPass {
   const PassInfo *PassToPrint;
   raw_ostream &Out;
   static char ID;
-  MISTD::string PassName;
+  std::string PassName;
 
   FunctionPassPrinter(const PassInfo *PI, raw_ostream &out)
     : FunctionPass(ID), PassToPrint(PI), Out(out) {
-      MISTD::string PassToPrintName =  PassToPrint->getPassName();
+      std::string PassToPrintName =  PassToPrint->getPassName();
       PassName = "FunctionPass Printer: " + PassToPrintName;
     }
 
@@ -278,11 +278,11 @@ struct LoopPassPrinter : public LoopPass {
   static char ID;
   const PassInfo *PassToPrint;
   raw_ostream &Out;
-  MISTD::string PassName;
+  std::string PassName;
 
   LoopPassPrinter(const PassInfo *PI, raw_ostream &out) :
     LoopPass(ID), PassToPrint(PI), Out(out) {
-      MISTD::string PassToPrintName =  PassToPrint->getPassName();
+      std::string PassToPrintName =  PassToPrint->getPassName();
       PassName = "LoopPass Printer: " + PassToPrintName;
     }
 
@@ -311,11 +311,11 @@ struct RegionPassPrinter : public RegionPass {
   static char ID;
   const PassInfo *PassToPrint;
   raw_ostream &Out;
-  MISTD::string PassName;
+  std::string PassName;
 
   RegionPassPrinter(const PassInfo *PI, raw_ostream &out) : RegionPass(ID),
     PassToPrint(PI), Out(out) {
-    MISTD::string PassToPrintName =  PassToPrint->getPassName();
+    std::string PassToPrintName =  PassToPrint->getPassName();
     PassName = "RegionPass Printer: " + PassToPrintName;
   }
 
@@ -345,11 +345,11 @@ struct BasicBlockPassPrinter : public BasicBlockPass {
   const PassInfo *PassToPrint;
   raw_ostream &Out;
   static char ID;
-  MISTD::string PassName;
+  std::string PassName;
 
   BasicBlockPassPrinter(const PassInfo *PI, raw_ostream &out)
     : BasicBlockPass(ID), PassToPrint(PI), Out(out) {
-      MISTD::string PassToPrintName =  PassToPrint->getPassName();
+      std::string PassToPrintName =  PassToPrint->getPassName();
       PassName = "BasicBlockPass Printer: " + PassToPrintName;
     }
 
@@ -383,7 +383,7 @@ struct BreakpointPrinter : public ModulePass {
     : ModulePass(ID), Out(out) {
     }
 
-  void getContextName(DIDescriptor Context, MISTD::string &N) {
+  void getContextName(DIDescriptor Context, std::string &N) {
     if (Context.isNameSpace()) {
       DINameSpace NS(Context);
       if (!NS.getName().empty()) {
@@ -408,7 +408,7 @@ struct BreakpointPrinter : public ModulePass {
     StringSet<> Processed;
     if (NamedMDNode *NMD = M.getNamedMetadata("llvm.dbg.sp"))
       for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i) {
-        MISTD::string Name;
+        std::string Name;
         DISubprogram SP(NMD->getOperand(i));
         assert((!SP || SP.isSubprogram()) &&
           "A MDNode in llvm.dbg.sp should be null or a DISubprogram.");
@@ -550,7 +550,7 @@ CodeGenOpt::Level GetCodeGenOptLevel() {
 
 // Returns the TargetMachine instance or zero if no triple is provided.
 static TargetMachine* GetTargetMachine(Triple TheTriple) {
-  MISTD::string Error;
+  std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(MArch, TheTriple,
                                                          Error);
   // Some modules don't specify a triple, and this is okay.
@@ -559,7 +559,7 @@ static TargetMachine* GetTargetMachine(Triple TheTriple) {
   }
 
   // Package up features to be passed to target/subtarget
-  MISTD::string FeaturesStr;
+  std::string FeaturesStr;
   if (MAttrs.size()) {
     SubtargetFeatures Features;
     for (unsigned i = 0; i != MAttrs.size(); ++i)
@@ -640,7 +640,7 @@ int main(int argc, char **argv) {
     if (OutputFilename.empty())
       OutputFilename = "-";
 
-    MISTD::string ErrorInfo;
+    std::string ErrorInfo;
     Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
                                    sys::fs::F_Binary));
     if (!ErrorInfo.empty()) {
@@ -671,7 +671,7 @@ int main(int argc, char **argv) {
 
   // Add an appropriate DataLayout instance for this module.
   DataLayout *TD = 0;
-  const MISTD::string &ModuleDataLayout = M.get()->getDataLayout();
+  const std::string &ModuleDataLayout = M.get()->getDataLayout();
   if (!ModuleDataLayout.empty())
     TD = new DataLayout(ModuleDataLayout);
   else if (!DefaultDataLayout.empty())
@@ -706,7 +706,7 @@ int main(int argc, char **argv) {
       if (OutputFilename.empty())
         OutputFilename = "-";
 
-      MISTD::string ErrorInfo;
+      std::string ErrorInfo;
       Out.reset(new tool_output_file(OutputFilename.c_str(), ErrorInfo,
                                      sys::fs::F_Binary));
       if (!ErrorInfo.empty()) {
