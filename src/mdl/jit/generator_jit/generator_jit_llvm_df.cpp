@@ -1085,17 +1085,6 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
             Function_instance inst(alloc, &lambda);
             Function_context context(alloc, *this, inst, func, flags);
 
-            llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
-
-            for (size_t i = 0, n = lambda.get_parameter_count(); i < n; ++i, ++arg_it) {
-                mi::mdl::IType const       *p_type = lambda.get_parameter_type(i);
-                bool                       by_ref  = is_passed_by_reference(p_type);
-                LLVM_context_data          *p_data;
-
-                // lambda parameters will never be written
-                p_data = context.create_context_data(i, arg_it, by_ref);
-            }
-
             // translate function body
             Expression_result res = translate_node(context, lambda.get_body(), resolver);
             context.create_return(res.as_value(context));
@@ -1137,17 +1126,6 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         func->setName(base_name + get_dist_func_state_suffix());
 
         Function_context context(alloc, *this, inst, func, flags);
-
-        llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
-
-        for (size_t j = 0, n = root_lambda->get_parameter_count(); j < n; ++j, ++arg_it) {
-            mi::mdl::IType const       *p_type = root_lambda->get_parameter_type(j);
-            bool                       by_ref = is_passed_by_reference(p_type);
-            LLVM_context_data          *p_data;
-
-            // lambda parameters will never be written
-            p_data = context.create_context_data(j, arg_it, by_ref);
-        }
 
         if (i == DFSTATE_INIT) {
             // translate the init function
@@ -2483,7 +2461,9 @@ void LLVM_code_generator::handle_df_array_parameter(
 
     MDL_ASSERT(arg->get_kind() == DAG_node::EK_CALL);
     DAG_call const *arg_call = mi::mdl::cast<DAG_call>(arg);
-    int elem_count = arg_call->get_argument_count();
+    IType_array const *arg_type = mi::mdl::cast<IType_array>(arg_call->get_type());
+    MDL_ASSERT(arg_type->is_immediate_sized() && "array type must be instantiated");
+    int elem_count = arg_type->get_size();
 
     // is it an array size parameter? -> replace by the number of elements
     if (elem_type == m_type_mapper.get_int_type()) {
@@ -2498,30 +2478,46 @@ void LLVM_code_generator::handle_df_array_parameter(
         // make sure the color array is initialized at the beginning of the body
         ctx.move_to_body_start();
 
-        // create local color array
-        llvm::ArrayType *color_array_type = llvm::ArrayType::get(m_float3_struct_type, elem_count);
-        llvm::Value *color_array = ctx.create_local(color_array_type, "colors");
+        llvm::ArrayType *color_array_type = llvm::ArrayType::get(
+            m_float3_struct_type, elem_count);
+        llvm::Value *color_array;
 
-        for (int i = 0; i < elem_count; ++i) {
-            // the i-th element should have been rewritten to a lambda call
-            DAG_node const *color_node = arg_call->get_argument(i);
-            MDL_ASSERT(color_node->get_kind() == DAG_node::EK_CALL);
-            DAG_call const *color_call = mi::mdl::cast<DAG_call>(color_node);
-            MDL_ASSERT(color_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
+        if (arg_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA) {
+            // the whole array is calculated by a lambda function
 
             // read precalculated lambda result
-            size_t lambda_index = strtoul(color_call->get_name(), NULL, 10);
-            Expression_result color_res = translate_precalculated_lambda(
-                ctx, lambda_index, m_float3_struct_type);
+            size_t lambda_index = strtoul(arg_call->get_name(), NULL, 10);
+            Expression_result array_res = translate_precalculated_lambda(
+                ctx, lambda_index, color_array_type);
+            color_array = array_res.as_ptr(ctx);
+        } else {
+            // only single elements of the array a lambda functions
 
-            // store result in colors array
-            llvm::Value *idxs[] = {
-                llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type()),
-                llvm::ConstantInt::get(m_type_mapper.get_int_type(), i)
-            };
-            ctx->CreateStore(color_res.as_value(ctx),
-                ctx->CreateGEP(color_array, idxs, "colors_elem"));
+            // create local color array
+            color_array = ctx.create_local(color_array_type, "colors");
+
+            for (int i = 0; i < elem_count; ++i) {
+                // the i-th element should have been rewritten to a lambda call
+                DAG_node const *color_node = arg_call->get_argument(i);
+                MDL_ASSERT(color_node->get_kind() == DAG_node::EK_CALL);
+                DAG_call const *color_call = mi::mdl::cast<DAG_call>(color_node);
+                MDL_ASSERT(color_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
+
+                // read precalculated lambda result
+                size_t lambda_index = strtoul(color_call->get_name(), NULL, 10);
+                Expression_result color_res = translate_precalculated_lambda(
+                    ctx, lambda_index, m_float3_struct_type);
+
+                // store result in colors array
+                llvm::Value *idxs[] = {
+                    llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type()),
+                    llvm::ConstantInt::get(m_type_mapper.get_int_type(), i)
+                };
+                ctx->CreateStore(color_res.as_value(ctx),
+                    ctx->CreateGEP(color_array, idxs, "colors_elem"));
+            }
         }
+
         llvm::Value *casted_array = ctx->CreateBitCast(
             color_array, m_float3_struct_type->getPointerTo());
         inst->replaceAllUsesWith(casted_array);

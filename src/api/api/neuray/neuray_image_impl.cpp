@@ -273,7 +273,11 @@ mi::Sint32 Image_impl::reset_reader( mi::IArray* reader_array, const char* image
 
 const char* Image_impl::get_filename(mi::Uint32 uvtile_id) const
 {
-    const std::string& filename = get_db_element()->get_filename(uvtile_id);
+    const DBIMAGE::Image *image = get_db_element();
+    const std::string& filename = image->is_file_based()
+        ? image->get_filename(uvtile_id)
+        : image->get_resolved_container_membername(uvtile_id);
+
     return filename.empty() ? 0 : filename.c_str();
 }
 

@@ -35,6 +35,7 @@
 #include "base/lib/libzip/zip.h"
 
 #include "compilercore_file_resolution.h"
+#include "compilercore_file_utils.h"
 #include "compilercore_assert.h"
 #include "compilercore_mdl.h"
 #include "compilercore_messages.h"
@@ -47,636 +48,47 @@
 #include "compilercore_file_utils.h"
 #include "compilercore_manifest.h"
 #include "compilercore_archiver.h"
+#include "compilercore_encapsulator.h"
 
 namespace mi {
 namespace mdl {
 
-class MDL_archive_file;
-
 typedef Store<Position const *> Position_store;
 
-/// Helper class for file from an archive.
-class MDL_archive_file {
-    friend class Allocator_builder;
-    friend class MDL_archive;
+// Get the FILE handle if this object represents an ordinary file.
+FILE *File_handle::get_file() { return u.fp; }
 
-public:
-    /// Close a file inside an archive.
-    void close()
-    {
-        Allocator_builder builder(m_alloc);
-        builder.destroy(this);
-    }
+// Get the archive if this object represents a file inside a MDL archive.
+MDL_zip_container *File_handle::get_container() { return m_container; }
 
-    /// Read from a file inside an archive.
-    ///
-    /// \param buffer  destination buffer
-    /// \param len     number of bytes to read
-    ///
-    /// \return number of bytes read
-    zip_int64_t read(void *buffer, zip_uint64_t len)
-    {
-        if (m_f == NULL) {
-            // happens, if reopen failed
-            return -1;
-        }
+// Get the compressed file handle if this object represents a file inside a MDL archive.
+MDL_zip_container_file *File_handle::get_container_file() { return u.z_fp; }
 
-        zip_int64_t res = zip_fread(m_f, buffer, len);
-
-        if (res > 0)
-            m_ofs += res;
-        return res;
-    }
-
-    /// Seek inside a file inside an archive.
-    ///
-    /// \param offset   seek offset
-    /// \param origin   the origin for this seek operation, SEEK_CUR, SEEK_SET, or SEEK_END
-    zip_int64_t seek(zip_int64_t offset, int origin)
-    {
-        if (m_have_seek_tell) {
-            return zip_fseek(m_f, offset, origin);
-        }
-        if (m_f == NULL) {
-            // happens, if reopen failed
-            return -1;
-        }
-
-        zip_uint64_t nofs = 0;
-
-        switch (origin) {
-        case SEEK_CUR:
-            if (offset < 0 && zip_uint64_t(-offset) > m_ofs)
-                nofs = 0;
-            else
-                nofs = m_ofs + offset;
-            break;
-        case SEEK_SET:
-            if (offset < 0)
-                nofs = 0;
-            else
-                nofs = offset;
-            break;
-        case SEEK_END:
-            if (offset < 0 && zip_uint64_t(-offset) > m_file_len)
-                nofs = 0;
-            else
-                nofs = m_file_len + offset;
-            break;
-        }
-
-        if (nofs > m_file_len)
-            nofs = m_file_len;
-
-        if (nofs < m_file_len) {
-            // seek backwards, reopen
-            zip_fclose(m_f);
-
-            m_f   = zip_fopen_index(m_za, m_index, 0);
-            m_ofs = 0;
-
-            if (m_f == NULL)
-                return -1;
-        }
-
-        while (m_ofs < nofs) {
-            zip_uint64_t n = nofs - m_ofs;
-
-            if (n > sizeof(g_trash))
-                n = sizeof(g_trash);
-
-            if (read(g_trash, n) <= 0) {
-                // prevent endless loop
-                return -1;
-            }
-        }
-        return 0;
-    }
-
-    /// Get the current file position.
-    zip_int64_t tell()
-    {
-        if (m_have_seek_tell) {
-            return zip_ftell(m_f);
-        }
-        if (m_f == NULL) {
-            // happens, if reopen failed
-            return -1;
-        }
-
-        return m_ofs;
-    }
-
-private:
-    /// Opens a file inside an archive.
-    ///
-    /// \param alloc  the allocator
-    /// \param za     the archiv handle
-    /// \param name   the name inside the archive (full path using '/' as separator)
-    static MDL_archive_file *open(
-        IAllocator *alloc,
-        zip_t      *za,
-        char const *name)
-    {
-        zip_int64_t index = zip_name_locate(za, name, 0);
-        if (index < 0) {
-            return NULL;
-        }
-        zip_file_t *f = zip_fopen_index(za, index, 0);
-        if (f == NULL) {
-            return NULL;
-        }
-
-        zip_uint64_t file_len = 0;
-        zip_stat_t st;
-        bool forbid_seek = false;
-        if (zip_stat_index(za, index, 0, &st) == 0) {
-            if (st.valid & ZIP_STAT_SIZE)
-                file_len = st.size;
-            if (st.valid & ZIP_STAT_COMP_METHOD) {
-                if (st.comp_method != ZIP_CM_STORE)
-                    forbid_seek = true;
-            } else {
-                // unknown compression
-                forbid_seek = true;
-            }
-            if (st.valid & ZIP_STAT_ENCRYPTION_METHOD) {
-                if (st.encryption_method != ZIP_EM_NONE)
-                    forbid_seek = true;
-            }
-        } else {
-            forbid_seek = true;
-        }
-
-        Allocator_builder builder(alloc);
-
-        return builder.create<MDL_archive_file>(alloc, za, f, index, file_len, forbid_seek);
-    }
-
-    /// Constructor.
-    ///
-    /// \param alloc    the allocator
-    /// \param za       the archiv handle
-    /// \param f        the zip file handle
-    /// \param index    the associated index of the file inside the archive
-    /// \param no_seek  if true, seek operation is not possible
-    MDL_archive_file(
-        IAllocator  *alloc,
-        zip_t       * za,
-        zip_file_t  *f,
-        zip_uint64_t index,
-        zip_uint64_t file_len,
-        bool         no_seek)
-     : m_alloc(alloc)
-     , m_za(za)
-     , m_f(f)
-     , m_index(index)
-     , m_ofs(0)
-     , m_file_len(file_len)
-     , m_have_seek_tell(!no_seek)
-    {
-    }
-
-    /// Destructor.
-    ~MDL_archive_file()
-    {
-        if (m_f != NULL)
-            zip_fclose(m_f);
-    }
-
-private:
-    /// The allocator to be used.
-    IAllocator   *m_alloc;
-
-    /// The archive handle.
-    zip_t        *m_za;
-
-    /// The file handle.
-    zip_file_t   *m_f;
-
-    /// The index of the file inside the archive.
-    zip_uint64_t m_index;
-
-    /// Current file offset.
-    zip_uint64_t m_ofs;
-
-    /// Length of the file.
-    zip_uint64_t m_file_len;
-
-    /// True, if the file is stored uncompressed.
-    bool         m_have_seek_tell;
-
-    /// Buffer for simulated seek.
-    static char g_trash[1024];
-};
-
-// ------------------------------------------------------------------------
-
-// Trash buffer.
-char MDL_archive_file::g_trash[1024];
-
-/// Translate libzip errors into archiv error codes.
-///
-/// \param ze  a libzip error code
-static Archiv_error_code translate_zip_error(zip_error_t const &ze)
+// Open a file handle.
+File_handle *File_handle::open(
+    IAllocator                     *alloc,
+    char const                     *name,
+    MDL_zip_container_error_code  &err)
 {
-    switch (ze.zip_err) {
-    case ZIP_ER_MULTIDISK:
-        /* N Multi-disk zip archives not supported */
-        return EC_INVALID_ARCHIVE;
+    Allocator_builder builder(alloc);
+    char const *p = NULL;
+    err = EC_OK;
 
-    case ZIP_ER_RENAME:
-        /* S Renaming temporary file failed */
-        return EC_RENAME_ERROR;
-
-    case ZIP_ER_CLOSE:
-        /* S Closing zip archive failed */
-    case ZIP_ER_SEEK:
-        /* S Seek error */
-    case ZIP_ER_READ:
-        /* S Read error */
-    case ZIP_ER_WRITE:
-        /* S Write error */
-        return EC_IO_ERROR;
-
-    case ZIP_ER_CRC:
-        /* N CRC error */
-        return EC_CRC_ERROR;
-
-    case ZIP_ER_ZIPCLOSED:
-        /* N Containing zip archive was closed */
-        return EC_INTERNAL_ERROR;
-
-    case ZIP_ER_NOENT:
-        /* N No such file */
-        return EC_ARC_NOT_EXIST;
-
-    case ZIP_ER_EXISTS:
-        /* N File already exists */
-        return EC_INTERNAL_ERROR; // no write operation here
-
-    case ZIP_ER_OPEN:
-        /* S Can't open file */
-        return EC_ARC_OPEN_FAILED;
-
-    case ZIP_ER_TMPOPEN:
-        /* S Failure to create temporary file */
-        return EC_INTERNAL_ERROR; // no write operation here
-
-    case ZIP_ER_ZLIB:
-        /* Z Zlib error */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_MEMORY:
-        /* N Malloc failure */
-        return EC_MEMORY_ALLOCATION;
-
-    case ZIP_ER_COMPNOTSUPP:
-        /* N Compression method not supported */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_EOF:
-        /* N Premature end of file */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_NOZIP:
-        /* N Not a zip archive */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_INCONS:
-        /* N Zip archive inconsistent */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_REMOVE:
-        /* S Can't remove file */
-        return EC_INTERNAL_ERROR; // no write operation here
-
-    case ZIP_ER_ENCRNOTSUPP:
-        /* N Encryption method not supported */
-        return EC_INVALID_ARCHIVE;
-
-    case ZIP_ER_RDONLY:
-        /* N Read-only archive */
-        return EC_INTERNAL_ERROR; // no write operation here
-
-    case ZIP_ER_NOPASSWD:
-        /* N No password provided */
-    case ZIP_ER_WRONGPASSWD:
-        /* N Wrong password provided */
-        return EC_INVALID_PASSWORD;
-
-    case ZIP_ER_CHANGED:
-        /* N Entry has been changed */
-    case ZIP_ER_INTERNAL:
-        /* N Internal error */
-    case ZIP_ER_INVAL:
-        /* N Invalid argument */
-    case ZIP_ER_DELETED:
-        /* N Entry has been deleted */
-    case ZIP_ER_OPNOTSUPP:
-        /* N Operation not supported */
-    case ZIP_ER_INUSE:
-        /* N Resource still in use */
-    case ZIP_ER_TELL:
-        /* S Tell error */
-        return EC_INTERNAL_ERROR;
-
-    default:
-        return EC_INTERNAL_ERROR;
-    }
-}
-
-
-/// Helper class for an archive.
-class MDL_archive {
-    friend class Allocator_builder;
-
-public:
-    /// Open an MDL archive.
-    ///
-    /// \param[in]  alloc          the allocator
-    /// \param[in]  path           the UTF8 encoded archive path
-    /// \param[out] err            error code
-    /// \param[in]  with_manifest  load and check the manifest
-    static MDL_archive *open(
-        IAllocator        *alloc,
-        char const        *path,
-        Archiv_error_code &err,
-        bool               with_manifest = true)
-    {
-        err = EC_OK;
-        FILE *fp = fopen_utf8(alloc, path, "rb");
-        if (fp == NULL) {
-            err = (errno == ENOENT) ? EC_ARC_NOT_EXIST : EC_ARC_OPEN_FAILED;
-            return NULL;
-        }
-
-        size_t len = file_length(fp);
-
-        if (len < 8) {
-            err = EC_INVALID_ARCHIVE;
-            fclose(fp);
-            return NULL;
-        }
-
-        unsigned char header[8];
-
-        if (fread(header, 8, 1, fp) != 1) {
-            err = EC_IO_ERROR;
-            fclose(fp);
-            return NULL;
-        }
-
-        if (header[0] != 0x4D ||
-            header[1] != 0x44 ||
-            header[2] != 0x52 ||
-            header[3] != 0x00 ||
-            header[4] != 0x00 ||
-            header[5] != 0x01 ||
-            header[6] != 0x00 ||
-            header[7] != 0x00)
-        {
-            // not valid MDL archive header
-            err = EC_INVALID_ARCHIVE;
-            fclose(fp);
-            return NULL;
-        }
-
-        zip_error_t error;
-        zip_error_init(&error);
-
-        zip_source_t *zs = zip_source_filep_create(fp, 8, len - 8, &error);
-        if (zs == NULL) {
-            err = translate_zip_error(error);
-            return NULL;
-        }
-
-        zip_t *za = zip_open_from_source(zs, ZIP_RDONLY, &error);
-        if (za == NULL) {
-            err = translate_zip_error(error);
-            return NULL;
-        }
-
-        zip_int64_t manifest_idx = zip_name_locate(za, "MANIFEST", ZIP_FL_ENC_UTF_8);
-        if (manifest_idx != 0) {
-            // MANIFEST must be the first entry in an archive
-            zip_close(za);
-            err = EC_INVALID_ARCHIVE;
-            return NULL;
-        }
-
-        zip_stat_t st;
-        if (zip_stat_index(za, manifest_idx, ZIP_FL_ENC_UTF_8, &st) < 0) {
-            zip_close(za);
-            err = EC_INVALID_ARCHIVE;
-            return NULL;
-        }
-        if ((st.valid & ZIP_STAT_COMP_METHOD) == 0 || st.comp_method != ZIP_CM_STORE) {
-            // MANIFEST is not stored uncompressed
-            zip_close(za);
-            err = EC_INVALID_ARCHIVE;
-            return NULL;
-        }
-
-        Allocator_builder builder(alloc);
-        MDL_archive *archiv = builder.create<MDL_archive>(alloc, path, za, with_manifest);
-
-        if (with_manifest) {
-            mi::base::Handle<Manifest const> m(archiv->get_manifest());
-            if (!m.is_valid_interface()) {
-                // MANIFEST missing or parse error occurred
-                builder.destroy(archiv);
-                err = EC_INVALID_ARCHIVE;
-                return NULL;
-            }
-        }
-        return archiv;
-    }
-
-    /// Close an MDL archive.
-    void close()
-    {
-        zip_close(m_za);
-
-        Allocator_builder builder(m_alloc);
-        return builder.destroy(this);
-    }
-
-    /// Get the number of files inside an archive.
-    int get_num_entries()
-    {
-        return zip_get_num_files(m_za);
-    }
-
-    /// Get the i'th file name inside an archive.
-    char const *get_entry_name(int i)
-    {
-        return zip_get_name(m_za, i, ZIP_FL_ENC_STRICT);
-    }
-
-    /// Check if the given file name exists in the archive.
-    bool contains(
-        char const *file_name) const
-    {
-        // ZIP uses '/'
-        string forward(file_name, m_alloc);
-        forward = convert_os_separators_to_slashes(forward);
-        return zip_name_locate(m_za, forward.c_str(), ZIP_FL_ENC_STRICT) != -1;
-    }
-
-    /// Check if the given file mask exists in the archive.
-    bool contains_mask(
-        char const *file_mask) const
-    {
-        // ZIP uses '/'
-        string forward(file_mask, m_alloc);
-        forward = convert_os_separators_to_slashes(forward);
-        for (int i = 0, n = zip_get_num_files(m_za); i < n; ++i) {
-            char const *file_name = zip_get_name(m_za, i, ZIP_FL_ENC_STRICT);
-
-            if (utf8_match(forward.c_str(), file_name))
-                return true;
-        }
-        return false;
-    }
-
-    /// Open a read_only file from an archive
-    MDL_archive_file *file_open(char const *name) const
-    {
-        // ZIP uses '/'
-        string zip_name(name, m_alloc);
-        zip_name = convert_os_separators_to_slashes(zip_name);
-        return MDL_archive_file::open(m_alloc, m_za, zip_name.c_str());
-    }
-
-    /// Get the archive name.
-    char const *get_archive_name() const { return m_archive_name.c_str(); }
-
-    /// Get the allocator.
-    IAllocator *get_allocator() const { return m_alloc; }
-
-    /// Get the manifest of this archive.
-    /// If the manifest was not loaded with open, already, it will be loaded now.
-    Manifest const *get_manifest()
-    {
-        Manifest const *m = m_manifest.get();
-        if (m == NULL) {
-            m_manifest = parse_manifest();
-            m = m_manifest.get();
-        }
-        if (m != NULL)
-            m->retain();
-        return m;
-    }
-
-private:
-    // Get the length of a file from the file pointer.
-    static size_t file_length(FILE *fp)
-    {
-#if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX)
-        size_t curr = ftello(fp);
-        fseeko(fp, 0, SEEK_END);
-        size_t len = ftello(fp);
-        fseeko(fp, curr, SEEK_SET);
-        return len;
-#elif defined(MI_PLATFORM_WINDOWS)
-        size_t curr = _ftelli64(fp);
-        _fseeki64(fp, 0, SEEK_END);
-        size_t len = _ftelli64(fp);
-        _fseeki64(fp, curr, SEEK_SET);
-        return len;
-#else
-        size_t curr = ftell(fp);
-        fseek(fp, 0, SEEK_END);
-        size_t len = ftell(fp);
-        fseek(fp, curr, SEEK_SET);
-        return len;
-#endif
-    }
-
-    /// Get the manifest.
-    Manifest *parse_manifest();
-
-private:
-    /// Constructor.
-    MDL_archive(
-        IAllocator *alloc,
-        char const *archive_name,
-        zip_t      *za,
-        bool        with_manifest)
-    : m_alloc(alloc)
-    , m_archive_name(archive_name, alloc)
-    , m_za(za)
-    , m_manifest(with_manifest ? parse_manifest() : NULL)
-    {
-    }
-
-    // non copyable
-    MDL_archive(MDL_archive const &) MDL_DELETED_FUNCTION;
-    MDL_archive &operator=(MDL_archive const &) MDL_DELETED_FUNCTION;
-
-private:
-    /// The allocator.
-    IAllocator *m_alloc;
-
-    /// The name of the archive.
-    string m_archive_name;
-
-    /// The zip archive handle.
-    zip_t *m_za;
-
-    /// The manifest of this archive.
-    mi::base::Handle<Manifest const> m_manifest;
-};
-
-/// Helper class to transparently handle files on file system and inside archives.
-class File_handle {
-    friend class Allocator_builder;
-public:
-    /// Returns true if this handle represents an archive.
-    bool is_archive() const { return m_archive != NULL; }
-
-    /// Get the FILE handle if this object represents an ordinary file.
-    FILE *get_file() { return u.fp; }
-
-    /// Get the archive if this object represents a file inside a MDL archive.
-    MDL_archive *get_archive() { return m_archive; }
-
-    /// Get the compressed file handle if this object represents a file inside a MDL archive.
-    MDL_archive_file *get_archive_file() { return u.z_fp; }
-
-    /// Open a file handle.
-    ///
-    /// \param[in]  alloc  the allocator
-    /// \param[in]  name   a file name (might describe a file inside an archive)
-    /// \param[out] err    error code
-    static File_handle *open(
-        IAllocator        *alloc,
-        char const        *name,
-        Archiv_error_code &err)
-    {
-        Allocator_builder builder(alloc);
-
-        const char *p = name;
-
-        err = EC_OK;
-        p = strstr(p, ".mdr:");
-        if (p == NULL) {
-            // must be a file
-            if (FILE *fp = fopen_utf8(alloc, name, "rb")) {
-                return builder.create<File_handle>(alloc, fp);
-            }
-            err = EC_FILE_OPEN_FAILED;
-            return NULL;
-        }
-
+    // handle archives
+    p = strstr(name, ".mdr:");
+    if (p != NULL) {
         string root_name(name, p + 4, alloc);
         p += 5;
 
         // check if the root is an archive itself
-        if (MDL_archive *archive = MDL_archive::open(alloc, root_name.c_str(), err)) {
-            if (MDL_archive_file *fp = archive->file_open(p)) {
-                return builder.create<File_handle>(alloc, archive, /*owns_archive=*/true, fp);
+        if (MDL_zip_container_archive *archive = MDL_zip_container_archive::open(
+            alloc,
+            root_name.c_str(),
+            err))
+        {
+            if (MDL_zip_container_file *fp = archive->file_open(p)) {
+                return builder.create<File_handle>(
+                    alloc, File_handle::FH_ARCHIVE, archive, /*owns_archive=*/true, fp);
             }
             archive->close();
 
@@ -687,122 +99,120 @@ public:
         return NULL;
     }
 
-    /// Close a file handle.
-    static void close(File_handle *h)
-    {
-        if (h != NULL) {
-            Allocator_builder builder(h->m_alloc);
+    // handle MDLe
+    p = strstr(name, ".mdle:");
+    if (p != NULL) {
+        string root_name(name, p + 5, alloc);
+        p += 6;
 
-            builder.destroy(h);
-        }
-    }
+        // check if the root is an capsule itself
+        if (MDL_zip_container_mdle *capsule = MDL_zip_container_mdle::open(
+            alloc,
+            root_name.c_str(),
+            (MDL_zip_container_error_code&) err))
+        {
+            if (MDL_zip_container_file *fp = capsule->file_open(p)) {
+                return builder.create<File_handle>(
+                    alloc, File_handle::FH_MDLE, capsule, /*owns_archive=*/true, fp);
+            }
+            capsule->close();
 
-    /// Get the manifest.
-    Manifest const *get_manifest()
-    {
-        if (!is_archive())
+            // not in the EMDL
+            err = EC_NOT_FOUND;
             return NULL;
-        return m_archive->get_manifest();
-    }
-
-private:
-    /// Constructor from a FILE handle.
-    ///
-    /// \param alloc  the allocator
-    /// \param fp     a FILE pointer, takes ownership
-    explicit File_handle(
-        IAllocator *alloc,
-        FILE       *fp)
-    : m_alloc(alloc)
-    , m_archive(NULL)
-    , m_owns_archive(false)
-    {
-        u.fp = fp;
-    }
-
-    /// Constructor from archive file.
-    ///
-    /// \param alloc        the allocator
-    /// \param archiv       a MDL archive pointer, takes ownership
-    /// \param owns_archive true if this File_handle owns the archive (will be closed then)
-    /// \param fp           a MDL compressed file pointer, takes ownership
-    File_handle(
-        IAllocator       *alloc,
-        MDL_archive      *archive,
-        bool             owns_archive,
-        MDL_archive_file *fp)
-    : m_alloc(alloc)
-    , m_archive(archive)
-    , m_owns_archive(owns_archive)
-    {
-        u.z_fp = fp;
-    }
-
-    /// Constructor from another File_handle archive.
-    ///
-    /// \param alloc   the allocator
-    /// \param fh      another archive file handle
-    /// \param fp      a MDL compressed file pointer, takes ownership
-    File_handle(
-        File_handle      *fh,
-        MDL_archive_file *fp)
-    : m_alloc(fh->m_alloc)
-    , m_archive(fh->m_archive)
-    , m_owns_archive(false)
-    {
-        MDL_ASSERT(fh->is_archive());
-        u.z_fp = fp;
-    }
-
-    /// Destructor.
-    ~File_handle()
-    {
-        if (is_archive()) {
-            u.z_fp->close();
-            if (m_owns_archive)
-                m_archive->close();
-        } else {
-            fclose(u.fp);
         }
+        return NULL;
     }
 
-private:
-    /// Current allocator.
-    IAllocator *m_alloc;
+    // must be a file then
+    if (FILE *fp = fopen_utf8(alloc, name, "rb")) {
+        return builder.create<File_handle>(alloc, fp);
+    }
+    err = EC_FILE_OPEN_FAILED;
+    return NULL;
+}
 
-    /// If non-null, this is an archive.
-    MDL_archive *m_archive;
+// Close a file handle.
+void File_handle::close(File_handle *h)
+{
+    if (h != NULL) {
+        Allocator_builder builder(h->m_alloc);
 
-    union {
-        FILE             *fp;
-        MDL_archive_file *z_fp;
-    } u;
+        builder.destroy(h);
+    }
+}
 
-    /// If true, this file handle has ownership on the MDL archiv.
-    bool m_owns_archive;
-};
+// Constructor from a FILE handle.
+File_handle::File_handle(
+    IAllocator *alloc,
+    FILE       *fp)
+: m_alloc(alloc)
+, m_kind(FH_FILE)
+, m_container(NULL)
+, m_owns_container(false)
+{
+    u.fp = fp;
+}
+
+// Constructor from archive file.
+File_handle::File_handle(
+    IAllocator             *alloc,
+    Kind                    kind,
+    MDL_zip_container      *archive,
+    bool                    owns_archive,
+    MDL_zip_container_file *fp)
+: m_alloc(alloc)
+, m_kind(kind)
+, m_container(archive)
+, m_owns_container(owns_archive)
+{
+    u.z_fp = fp;
+}
+
+// Constructor from another File_handle archive.
+File_handle::File_handle(
+    File_handle            *fh,
+    Kind                    kind,
+    MDL_zip_container_file *fp)
+: m_alloc(fh->m_alloc)
+, m_kind(kind)
+, m_container(fh->m_container)
+, m_owns_container(false)
+{
+    MDL_ASSERT(fh->get_kind() != FH_FILE);
+    u.z_fp = fp;
+}
+
+// Destructor.
+File_handle::~File_handle()
+{
+    if (m_kind != FH_FILE) {
+        u.z_fp->close();
+        if (m_owns_container)
+            m_container->close();
+    } else {
+        fclose(u.fp);
+    }
+}
 
 // ------------------------------------------------------------------------
 
 /// Implementation of a resource reader from a file.
-class File_resource_reader : public Allocator_interface_implement<IMDL_resource_reader>
-{
-    typedef Allocator_interface_implement<IMDL_resource_reader> Base;
-public:
-    /// Read a memory block from the resource.
-    ///
-    /// \param ptr   Pointer to a block of memory with a size of size bytes
-    /// \param size  Number of bytes to read
-    ///
-    /// \returns    The total number of bytes successfully read.
-    Uint64 read(void *ptr, Uint64 size) MDL_FINAL
-    {
-        return fread(ptr, 1, size, m_file->get_file());
-    }
 
-    /// Get the current position.
-    Uint64 tell() MDL_FINAL
-    {
+// Read a memory block from the resource.
+Uint64 File_resource_reader::read(void *ptr, Uint64 size)
+{
+    if (m_file->get_kind() == File_handle::FH_FILE) {
+        return fread(ptr, 1, size, m_file->get_file());
+    } else {
+        return m_file->get_container_file()->read(ptr, size);
+    }
+}
+
+// Get the current position.
+Uint64 File_resource_reader::tell()
+{
+    if (m_file->get_kind() == File_handle::FH_FILE) {
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX)
         return ftello(m_file->get_file());
 #elif defined(MI_PLATFORM_WINDOWS)
@@ -810,16 +220,15 @@ public:
 #else
         return ftell(m_file->get_file());
 #endif
+    } else {
+        return m_file->get_container_file()->tell();
     }
+}
 
-    /// Reposition stream position indicator.
-    ///
-    /// \param offset  Number of bytes to offset from origin
-    /// \param origin  Position used as reference for the offset
-    ///
-    /// \return true on success
-    bool seek(Sint64 offset, Position origin) MDL_FINAL
-    {
+// Reposition stream position indicator.
+bool File_resource_reader::seek(Sint64 offset, Position origin)
+{
+    if (m_file->get_kind() == File_handle::FH_FILE) {
 #if defined(MI_PLATFORM_LINUX) || defined(MI_PLATFORM_MACOSX)
         return fseeko(m_file->get_file(), off_t(offset), origin) == 0;
 #elif defined(MI_PLATFORM_WINDOWS)
@@ -827,62 +236,50 @@ public:
 #else
         return fseek(m_file->get_file(), long(offset), origin) == 0;
 #endif
+    } else {
+        switch (origin) {
+        case MDL_SEEK_CUR:
+            return m_file->get_container_file()->seek(offset, SEEK_CUR) == 0;
+        case MDL_SEEK_END:
+            return m_file->get_container_file()->seek(offset, SEEK_END) == 0;
+        case MDL_SEEK_SET:
+            return m_file->get_container_file()->seek(offset, SEEK_SET) == 0;
+        }
     }
+    assert(false);
+    return false;
+}
 
-    /// Get the UTF8 encoded name of the resource on which this reader operates.
-    /// \returns    The name of the resource or NULL.
-    char const *get_filename() const MDL_FINAL
-    {
-        return m_file_name.empty() ? NULL : m_file_name.c_str();
-    }
+// Get the UTF8 encoded name of the resource on which this reader operates.
+char const *File_resource_reader::get_filename() const
+{
+    return m_file_name.empty() ? NULL : m_file_name.c_str();
+}
 
-    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
-    /// \returns    The absolute MDL url of the resource or NULL.
-    char const *get_mdl_url() const MDL_FINAL
-    {
-        return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
-    }
+// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
+char const *File_resource_reader::get_mdl_url() const
+{
+    return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
+}
 
-    /// Constructor.
-    ///
-    /// \param alloc             the allocator
-    /// \param f                 the file handle
-    /// \param filename          the file name
-    /// \param mdl_url           the MDL url
-    ///                          if this object is destroyed
-    explicit File_resource_reader(
-        IAllocator  *alloc,
-        File_handle *f,
-        char const  *filename,
-        char const  *mdl_url)
-    : Base(alloc)
-    , m_file(f)
-    , m_file_name(filename, alloc)
-    , m_mdl_url(mdl_url, alloc)
-    {
-    }
+// Constructor.
+File_resource_reader::File_resource_reader(
+    IAllocator  *alloc,
+    File_handle *f,
+    char const  *filename,
+    char const  *mdl_url)
+: Base(alloc)
+, m_file(f)
+, m_file_name(filename, alloc)
+, m_mdl_url(mdl_url, alloc)
+{
+}
 
-private:
-    // non copyable
-    File_resource_reader(File_resource_reader const &) MDL_DELETED_FUNCTION;
-    File_resource_reader &operator=(File_resource_reader const &) MDL_DELETED_FUNCTION;
-
-private:
-    ~File_resource_reader() MDL_FINAL
-    {
-        File_handle::close(m_file);
-    }
-
-private:
-    /// The file handle.
-    File_handle *m_file;
-
-    /// The filename.
-    string m_file_name;
-
-    /// The absolute MDl url.
-    string m_mdl_url;
-};
+// Destructor.
+File_resource_reader::~File_resource_reader()
+{
+    File_handle::close(m_file);
+}
 
 namespace {
 
@@ -966,7 +363,7 @@ public:
     int read_char() MDL_FINAL
     {
         unsigned char buf;
-        if (m_file->get_archive_file()->read(&buf, 1) != 1)
+        if (m_file->get_container_file()->read(&buf, 1) != 1)
             return -1;
         return int(buf);
     }
@@ -997,6 +394,56 @@ private:
 
     /// The archive manifest.
     mi::base::Handle<Manifest const> m_manifest;
+};
+
+
+/// Implementation of the IMdle_input_stream interface using mdle I/O.
+class Mdle_input_stream : public Allocator_interface_implement<IMdle_input_stream>
+{
+    typedef Allocator_interface_implement<IMdle_input_stream> Base;
+public:
+    /// Constructor.
+    explicit Mdle_input_stream(
+        IAllocator     *alloc,
+        File_handle    *f,
+        char const     *filename)
+    : Base(alloc)
+    , m_file(f)
+    , m_filename(filename, alloc)
+    {
+    }
+
+protected:
+    /// Destructor.
+    ~Mdle_input_stream() MDL_FINAL
+    {
+        File_handle::close(m_file);
+    }
+
+public:
+    /// Read a character from the input stream.
+    /// \returns    The code of the character read, or -1 on the end of the stream.
+    int read_char() MDL_FINAL
+    {
+        unsigned char buf;
+        if (m_file->get_container_file()->read(&buf, 1) != 1)
+            return -1;
+        return int(buf);
+    }
+
+    /// Get the name of the file on which this input stream operates.
+    /// \returns    The name of the file or null if the stream does not operate on a file.
+    char const *get_filename() MDL_FINAL
+    {
+        return m_filename.empty() ? NULL : m_filename.c_str();
+    }
+
+private:
+    /// The file handle.
+    File_handle *m_file;
+
+    /// The filename.
+    string m_filename;
 };
 
 } // anonymous
@@ -1114,6 +561,22 @@ string File_resolver::to_url(
 string File_resolver::to_module_name(
     char const *input_url) const
 {
+    // handle MDLe
+    string input_url_str(input_url, m_alloc);
+    size_t l = input_url_str.size();
+    if (l > 5 &&
+        input_url_str[l - 5] == '.' &&
+        input_url_str[l - 4] == 'm' &&
+        input_url_str[l - 3] == 'd' &&
+        input_url_str[l - 2] == 'l' &&
+        input_url_str[l - 1] == 'e') {
+
+        string input_name("::", m_alloc);
+        input_name.append(convert_os_separators_to_slashes(input_url_str));
+        return input_name;
+    }
+
+    // handle MDL
     string input_name(m_alloc);
     for (;;) {
         char const *p = strchr(input_url, '/');
@@ -1188,12 +651,14 @@ bool File_resolver::archive_contains(
 {
     bool res = false;
 
-    Archiv_error_code err;
-    if (MDL_archive *archive = MDL_archive::open(m_alloc, archive_name, err, false)) {
+    MDL_zip_container_error_code err = EC_OK;
+    if (MDL_zip_container_archive *archive = MDL_zip_container_archive::open(
+        m_alloc, archive_name, err, false))
+    {
         res = archive->contains(file_name);
         archive->close();
     } else {
-        if (err == EC_INVALID_ARCHIVE) {
+        if (err == EC_OK) {
             warning(
                 INVALID_MDL_ARCHIVE_DETECTED,
                 *m_pos,
@@ -1210,12 +675,14 @@ bool File_resolver::archive_contains_mask(
 {
     bool res = false;
 
-    Archiv_error_code err;
-    if (MDL_archive *archive = MDL_archive::open(m_alloc, archive_name, err, false)) {
+    MDL_zip_container_error_code err = EC_OK;
+    if (MDL_zip_container_archive *archive = MDL_zip_container_archive::open(
+        m_alloc, archive_name, err, false))
+    {
         res = archive->contains_mask(file_mask);
         archive->close();
     } else {
-        if (err == EC_INVALID_ARCHIVE) {
+        if (err == EC_OK) {
             warning(
                 INVALID_MDL_ARCHIVE_DETECTED,
                 *m_pos,
@@ -1265,13 +732,13 @@ void File_resolver::split_module_file_system_path(
     string const &module_name,
     size_t       module_nesting_level,
     string       &current_working_directory,
-    bool         &cwd_is_archive,
+    bool         &cwd_is_container,
     string       &current_search_path,
-    bool         &csp_is_archive,
+    bool         &csp_is_container,
     string       &current_module_path)
 {
-    cwd_is_archive = false;
-    csp_is_archive = false;
+    cwd_is_container = false;
+    csp_is_container = false;
     // special case for string-based modules (not in spec)
     if (module_file_system_path.empty()) {
         current_working_directory.clear();
@@ -1287,44 +754,57 @@ void File_resolver::split_module_file_system_path(
     // regular case for file-based modules (as in spec)
     char sep = os_separator();
 
-    size_t archive_pos = module_file_system_path.find(".mdr:");
-    if (archive_pos != string::npos) {
+    size_t container_pos = module_file_system_path.find(".mdr:");
+    File_handle::Kind container_kind = File_handle::FH_ARCHIVE;
+
+    if (container_pos == string::npos) {
+        container_pos = module_file_system_path.find(".mdle:");
+        container_kind = File_handle::FH_MDLE;
+    }
+
+    if (container_pos != string::npos) {
+
         // inside an archive
-        archive_pos += 4; // add ".mdr"
-        string simple_path = module_file_system_path.substr(archive_pos + 1);
+        if( container_kind == File_handle::FH_ARCHIVE)
+            container_pos += 4; // add ".mdr"
+                // inside an archive
+        else if (container_kind == File_handle::FH_MDLE)
+            container_pos += 5; // add ".mdle"
+
+        string simple_path = module_file_system_path.substr(container_pos + 1);
 
         size_t last_sep = simple_path.find_last_of(sep);
         if (last_sep != string::npos) {
             current_working_directory =
-                module_file_system_path.substr(0, archive_pos + 1) +
+                module_file_system_path.substr(0, container_pos + 1) +
                 simple_path.substr(0, last_sep);
         } else {
             // only the archive
-            current_working_directory = module_file_system_path.substr(0, archive_pos);
-            cwd_is_archive = true;
+            current_working_directory = module_file_system_path.substr(0, container_pos);
+            cwd_is_container = true;
         }
 
         // points now to ':'
-        ++archive_pos;
+        ++container_pos;
     } else {
         size_t last_sep = module_file_system_path.find_last_of(sep);
         MDL_ASSERT(last_sep != string::npos);
         current_working_directory = module_file_system_path.substr(0, last_sep);
 
-        archive_pos = 0;
+        container_pos = 0;
     }
 
     current_search_path = current_working_directory;
     size_t strip_dotdot = 0;
     while (module_nesting_level-- > 0) {
         size_t last_sep = current_search_path.find_last_of(sep);
-        MDL_ASSERT(last_sep != std::string::npos);
-        if (last_sep < archive_pos) {
+        MDL_ASSERT(last_sep != string::npos);
+        if (last_sep < container_pos) {
             // do NOT remove the archive name, thread its ':' like '/'
-            last_sep = archive_pos - 1;
+            last_sep = container_pos - 1;
             // should never try to go out!
             MDL_ASSERT(module_nesting_level == 0);
-            archive_pos = 0;
+            container_pos = 0;
             strip_dotdot = 1;
         } else {
             strip_dotdot = 0;
@@ -1332,7 +812,7 @@ void File_resolver::split_module_file_system_path(
         current_search_path = current_search_path.substr(0, last_sep);
     }
 
-    csp_is_archive = strip_dotdot != 0;
+    csp_is_container = strip_dotdot != 0;
     current_module_path = convert_os_separators_to_slashes(
         current_working_directory.substr(current_search_path.size() + strip_dotdot));
     if (strip_dotdot)
@@ -2029,8 +1509,10 @@ string File_resolver::search_mdl_path(
 bool File_resolver::file_exists(
     char const *fname) const
 {
-    char const *p = strstr(fname, ".mdr:");
-    if (p == NULL) {
+    char const *p_archive = strstr(fname, ".mdr:");
+    char const *p_mdle = (p_archive == NULL) ? strstr(fname, ".mdle:") : NULL;
+
+    if (p_archive == NULL && p_mdle == NULL) {
         // not inside an archive
         string dname(m_alloc);
 
@@ -2042,13 +1524,28 @@ bool File_resolver::file_exists(
 
         return has_file_utf8(m_alloc, dname.c_str(), fname);
     }
-    string archive_name(fname, p + 4, m_alloc);
-    char const *a_fname = p + 5;
 
-    Archiv_error_code err;
-    if (MDL_archive *archiv = MDL_archive::open(m_alloc, archive_name.c_str(), err, false)) {
-        bool res = archiv->contains_mask(a_fname);
-        archiv->close();
+    // open container, mdr or mdle
+    char const *container_file_name = NULL;
+    MDL_zip_container *container = NULL;
+    MDL_zip_container_error_code err = EC_OK;
+
+    if (p_archive != NULL) {
+        string container_name = string(fname, p_archive + 4, m_alloc);
+        container_file_name = p_archive + 5;
+        container = MDL_zip_container_archive::open(m_alloc, container_name.c_str(), err, false);
+    }
+
+    if(p_mdle != NULL) {
+        string container_name = string(fname, p_mdle + 5, m_alloc);
+        container_file_name = p_mdle + 6;
+        container = MDL_zip_container_mdle::open(m_alloc, container_name.c_str(), err);
+    }
+
+    // check if there is a corresponding file
+    if (container) {
+        bool res = container->contains_mask(container_file_name);
+        container->close();
         return res;
     }
     return false;
@@ -2082,10 +1579,37 @@ string File_resolver::resolve_filename(
     string module_file_system_path_str(
         owner_is_string_module ? "" : module_file_system_path, m_alloc);
 
+    // check if this is an mdle or a resource inside one
+    bool is_mdle = false;
+    if (is_resource && module_name != NULL) {
+        string module_name_str(module_name, m_alloc);
+        size_t l = module_name_str.size();
+        if(l > 5 &&
+           module_name_str[l - 5] == '.' &&
+           module_name_str[l - 4] == 'm' &&
+           module_name_str[l - 3] == 'd' &&
+           module_name_str[l - 2] == 'l' &&
+           module_name_str[l - 1] == 'e') {
+
+           is_mdle = true;
+        }
+    } else {
+        size_t l = url.size();
+        if (l > 5 &&
+            url[l - 5] == '.' &&
+            url[l - 4] == 'm' &&
+            url[l - 3] == 'd' &&
+            url[l - 2] == 'l' &&
+            url[l - 1] == 'e') {
+
+            is_mdle = true;
+        }
+    }
+
     // Step 0: compute terms defined in MDL spec
     string directory_path(m_alloc);
     string file_name(m_alloc);
-    split_file_path( url, directory_path, file_name);
+    split_file_path(url, directory_path, file_name);
 
     string current_working_directory(m_alloc);
     bool cwd_is_archive = false;
@@ -2226,14 +1750,38 @@ string File_resolver::resolve_filename(
         }
     }
 
-    // Step 2: consider search paths
-    string resolved_file_system_location = consider_search_paths(
-        canonical_file_mask, is_resource, file_path, udim_mode);
-    if (resolved_file_system_location.empty()) {
-        if (is_resource) {
+
+    string resolved_file_system_location(m_alloc);
+    // Step 2.1 check for MDLe existence
+    if (is_mdle) {
+
+        string file(m_alloc);
+        if (is_resource)
+        {
+            file = simplify_path(url_mask, os_separator());
+            if(!is_url_absolute(file.c_str())) {
+                file =
+                    #if defined(MI_PLATFORM_WINDOWS)
+                        "/" +
+                    #endif
+                    current_working_directory + ':' + file;
+            }
+            file = convert_slashes_to_os_separators(file);
+
+            #if defined(MI_PLATFORM_WINDOWS)
+                file = file.substr(1);
+            #endif
+        } else {
+            file = string(file_path, m_alloc);;
+            file = convert_slashes_to_os_separators(file);
+        }
+
+        if (!file_exists(file.c_str())) {
+
             string module_for_error_msg(m_alloc);
 
-            if (m_pos->get_start_line() == 0) {
+            if (m_pos->get_start_line() == 0)
+            {
                 if (!module_file_system_path_str.empty())
                     module_for_error_msg = module_file_system_path_str;
                 else if (module_name != NULL)
@@ -2244,12 +1792,51 @@ string File_resolver::resolve_filename(
                 UNABLE_TO_RESOLVE,
                 *m_pos,
                 Error_params(m_alloc)
-                    .add(file_path)
-                    .add_module_origin(module_for_error_msg.c_str()));
+                .add(file.c_str())
+                .add_module_origin(module_for_error_msg.c_str()));
+            return string(m_alloc);
         }
-        return string(m_alloc);
-    }
 
+        resolved_file_system_location = file.c_str();
+
+    // Step 2: consider search paths
+    } else {
+        resolved_file_system_location = consider_search_paths(
+            canonical_file_mask, is_resource, file_path, udim_mode);
+
+        // the referenced resource is part of an MDLE
+        // Note, this is invalid for mdl modules in the search paths!
+        if(resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
+            #if defined(MI_PLATFORM_WINDOWS)
+                size_t offset = 1;
+            #else
+                size_t offset = 0;
+            #endif
+            if (file_exists(file_path + offset))
+                resolved_file_system_location = file_path + offset;
+        }
+
+        if (resolved_file_system_location.empty()) {
+            if (is_resource) {
+                string module_for_error_msg(m_alloc);
+
+                if (m_pos->get_start_line() == 0) {
+                    if (!module_file_system_path_str.empty())
+                        module_for_error_msg = module_file_system_path_str;
+                    else if (module_name != NULL)
+                        module_for_error_msg = module_name;
+                }
+
+                error(
+                    UNABLE_TO_RESOLVE,
+                    *m_pos,
+                    Error_params(m_alloc)
+                        .add(file_path)
+                        .add_module_origin(module_for_error_msg.c_str()));
+            }
+            return string(m_alloc);
+        }
+    }
     // Step 3: consistency checks
     if (!check_consistency(
         resolved_file_system_location,
@@ -2281,19 +1868,19 @@ void File_resolver::mark_resource_search(char const *file_name)
 }
 
 // Map a file error.
-void File_resolver::handle_file_error(Archiv_error_code err)
+void File_resolver::handle_file_error(MDL_zip_container_error_code err)
 {
     // FIXME
     switch (err) {
     case EC_OK:
         return;
-    case EC_ARC_NOT_EXIST:
+    case EC_CONTAINER_NOT_EXIST:
         return;
-    case EC_ARC_OPEN_FAILED:
+    case EC_CONTAINER_OPEN_FAILED:
         return;
     case EC_FILE_OPEN_FAILED:
         return;
-    case EC_INVALID_ARCHIVE:
+    case EC_INVALID_CONTAINER:
         return;
     case EC_NOT_FOUND:
         return;
@@ -2306,6 +1893,10 @@ void File_resolver::handle_file_error(Archiv_error_code err)
     case EC_MEMORY_ALLOCATION:
         return;
     case EC_RENAME_ERROR:
+        return;
+    case EC_INVALID_HEADER:
+        return;
+    case EC_INVALID_HEADER_VERSION:
         return;
     case EC_INTERNAL_ERROR:
         return;
@@ -2322,7 +1913,31 @@ string File_resolver::resolve_import(
 {
     mark_module_search(import_name);
 
-    string import_file(to_url(import_name) + ".mdl");
+    // detect MDLe
+    bool is_mdle = false;
+    string import_file = to_url(import_name);
+    size_t l = import_file.length();
+    if (l > 5 &&
+        import_file[l - 5] == '.' &&
+        import_file[l - 4] == 'm' &&
+        import_file[l - 3] == 'd' &&
+        import_file[l - 2] == 'l' &&
+        import_file[l - 1] == 'e') {
+
+        // knowing that MDLE paths are absolute, the leading slashed need to be removed
+        if(import_name[0] == ':' && import_name[1] == ':') {
+            #if defined(MI_PLATFORM_WINDOWS)
+                import_file = import_file.substr(2);
+            #else
+                import_file = import_file.substr(1);
+            #endif
+        }
+        is_mdle = true;
+
+    // no MDLe
+    } else {
+        import_file.append(".mdl");
+    }
 
     if (owner_name != NULL && owner_name[0] == '\0')
         owner_name = NULL;
@@ -2342,6 +1957,13 @@ string File_resolver::resolve_import(
     MDL_ASSERT(udim_mode == NO_UDIM && "only resources should return a file mask");
     if (canonical_file_name.empty()) {
         return string(m_alloc);
+    }
+
+
+    if(is_mdle) {
+        string absolute_name = to_module_name(canonical_file_name.c_str());
+        MDL_ASSERT(absolute_name.substr(absolute_name.size() - 5) == ".mdle");
+        return absolute_name;
     }
 
     string absolute_name = to_module_name(canonical_file_name.c_str());
@@ -2391,15 +2013,26 @@ IInput_stream *File_resolver::open(
     MDL_ASSERT(module_name != NULL && module_name[0] == ':' && module_name[1] == ':');
 
     string canonical_file_path = to_url(module_name);
-    canonical_file_path += ".mdl";
+    string resolved_file_path(m_alloc);
 
-    UDIM_mode udim_mode = NO_UDIM;
-    string resolved_file_path = consider_search_paths(
-        canonical_file_path, /*is_resource=*/false, module_name, udim_mode);
-    MDL_ASSERT(udim_mode == NO_UDIM && "resolved modules should not be file masks");
-    if (resolved_file_path.empty()) {
-        MDL_ASSERT(!"open called on nonexisting module");
-        return NULL;
+    if (canonical_file_path.size() > 5 &&
+        canonical_file_path.substr(canonical_file_path.size() - 5) == ".mdle") {
+#ifdef MI_PLATFORM_WINDOWS
+            resolved_file_path = string(canonical_file_path.c_str() + 2, m_alloc);
+#else
+            resolved_file_path = string(canonical_file_path.c_str() + 1, m_alloc);
+#endif
+        resolved_file_path.append(":main.mdl");
+    } else {
+        canonical_file_path += ".mdl";
+        UDIM_mode udim_mode = NO_UDIM;
+        resolved_file_path = consider_search_paths(
+            canonical_file_path, /*is_resource=*/false, module_name, udim_mode);
+        MDL_ASSERT(udim_mode == NO_UDIM && "resolved modules should not be file masks");
+        if (resolved_file_path.empty()) {
+            MDL_ASSERT(!"open called on non-existing module");
+            return NULL;
+        }
     }
 
     if (strcmp(module_name, m_repl_module_name.c_str()) == 0) {
@@ -2407,7 +2040,7 @@ IInput_stream *File_resolver::open(
         resolved_file_path = m_repl_file_name;
     }
 
-    Archiv_error_code err;
+    MDL_zip_container_error_code err = EC_OK;
     File_handle *file = File_handle::open(m_alloc, resolved_file_path.c_str(), err);
     if (file == NULL) {
         handle_file_error(err);
@@ -2416,13 +2049,29 @@ IInput_stream *File_resolver::open(
 
     Allocator_builder builder(m_alloc);
 
-    if (file->is_archive()) {
-        mi::base::Handle<Manifest const> manifest(file->get_manifest());
-        return builder.create<Archive_input_stream>(
-            m_alloc, file, resolved_file_path.c_str(), manifest.get());
-    } else {
+    switch (file->get_kind())
+    {
+    case File_handle::FH_FILE:
         return builder.create<Simple_file_input_stream>(
             m_alloc, file, resolved_file_path.c_str());
+
+    case File_handle::FH_ARCHIVE:
+        {
+            MDL_zip_container_archive* archive = static_cast<MDL_zip_container_archive*>(
+                file->get_container());
+            mi::base::Handle<Manifest const> manifest(archive->get_manifest());
+            return builder.create<Archive_input_stream>(
+                m_alloc, file, resolved_file_path.c_str(), manifest.get());
+        }
+
+    case File_handle::FH_MDLE:
+        {
+            return builder.create<Mdle_input_stream>(
+                m_alloc, file, resolved_file_path.c_str());
+        }
+
+    default:
+        return NULL;
     }
 }
 
@@ -2443,233 +2092,97 @@ bool File_resolver::exists(
 
 // --------------------------------------------------------------------------
 
-/// Implementation of a resource reader from a file.
-class Archive_resource_reader : public Allocator_interface_implement<IMDL_resource_reader>
+// Read a memory block from the resource.
+Uint64 Buffered_archive_resource_reader::read(void *ptr, Uint64 size)
 {
-    typedef Allocator_interface_implement<IMDL_resource_reader> Base;
-public:
-    /// Read a memory block from the resource.
-    ///
-    /// \param ptr   Pointer to a block of memory with a size of size bytes
-    /// \param size  Number of bytes to read
-    ///
-    /// \returns    The total number of bytes successfully read.
-    Uint64 read(void *ptr, Uint64 size) MDL_FINAL
-    {
-        return m_file->get_archive_file()->read(ptr, size);
+    // first, empty the buffer
+    size_t prefix_size = m_buf_size - m_curr_pos;
+    if (prefix_size > 0) {
+        // buffer is not empty
+        if (size_t(size) < prefix_size) {
+            prefix_size = size_t(size);
+        }
+        memcpy(ptr, m_buffer + m_curr_pos, prefix_size);
+        m_curr_pos += prefix_size;
+    }
+    size -= prefix_size;
+
+    if (size == 0)
+        return prefix_size;
+
+    // can we read a big chunk?
+    if (size > sizeof(m_buffer)) {
+        return m_file->get_container_file()->read((char *)ptr + prefix_size, size) + prefix_size;
     }
 
-    /// Get the current position.
-    Uint64 tell() MDL_FINAL
-    {
-        return m_file->get_archive_file()->tell();
+    // fill the buffer
+    m_curr_pos = 0;
+    zip_int64_t read_bytes = m_file->get_container_file()->read(m_buffer, sizeof(m_buffer));
+    if (read_bytes < 0) {
+        return prefix_size > 0 ? prefix_size : read_bytes;
     }
+    m_buf_size = size_t(read_bytes);
 
-    /// Reposition stream position indicator.
-    ///
-    /// \param offset  Number of bytes to offset from origin
-    /// \param origin  Position used as reference for the offset
-    ///
-    /// \return true on success
-    bool seek(Sint64 offset, Position origin) MDL_FINAL
-    {
-        return m_file->get_archive_file()->seek(offset, origin) != 0;
+    size_t suffix_size = m_buf_size - m_curr_pos;
+    if (suffix_size > 0) {
+        // buffer is not empty
+        if (size_t(size) < suffix_size) {
+            suffix_size = size_t(size);
+        }
+        memcpy((char *)ptr + prefix_size, m_buffer, suffix_size);
+        m_curr_pos += suffix_size;
     }
+    return prefix_size + suffix_size;
+}
 
-    /// Get the UTF8 encoded name of the resource on which this reader operates.
-    /// \returns    The name of the resource or NULL.
-    char const *get_filename() const MDL_FINAL
-    {
-        return m_file_name.empty() ? NULL : m_file_name.c_str();
-    }
-
-    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
-    /// \returns    The absolute MDL url of the resource or NULL.
-    char const *get_mdl_url() const MDL_FINAL
-    {
-        return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
-    }
-
-    /// Constructor.
-    ///
-    /// \param alloc             the allocator
-    /// \param f                 the file handle
-    /// \param filename          the file name
-    /// \param mdl_url           the MDL url
-    explicit Archive_resource_reader(
-        IAllocator  *alloc,
-        File_handle *f,
-        char const  *filename,
-        char const  *mdl_url)
-    : Base(alloc)
-    , m_file(f)
-    , m_file_name(filename, alloc)
-    , m_mdl_url(mdl_url, alloc)
-    {
-    }
-
-private:
-    // non copyable
-    Archive_resource_reader(Archive_resource_reader const &) MDL_DELETED_FUNCTION;
-    Archive_resource_reader &operator=(Archive_resource_reader const &) MDL_DELETED_FUNCTION;
-
-private:
-    ~Archive_resource_reader() MDL_FINAL
-    {
-        File_handle::close(m_file);
-    }
-
-private:
-    /// The File handle.
-    File_handle *m_file;
-
-    /// The filename.
-    string m_file_name;
-
-    /// The absolute MDL url.
-    string m_mdl_url;
-};
-
-/// Implementation of a resource reader from a file.
-class Buffered_archive_resource_reader : public Allocator_interface_implement<IMDL_resource_reader>
+// Get the current position.
+Uint64 Buffered_archive_resource_reader::tell()
 {
-    typedef Allocator_interface_implement<IMDL_resource_reader> Base;
-public:
-    /// Read a memory block from the resource.
-    ///
-    /// \param ptr   Pointer to a block of memory with a size of size bytes
-    /// \param size  Number of bytes to read
-    ///
-    /// \returns    The total number of bytes successfully read.
-    Uint64 read(void *ptr, Uint64 size) MDL_FINAL
-    {
-        // first, empty the buffer
-        size_t prefix_size = m_buf_size - m_curr_pos;
-        if (prefix_size > 0) {
-            // buffer is not empty
-            if (size_t(size) < prefix_size) {
-                prefix_size = size_t(size);
-            }
-            memcpy(ptr, m_buffer + m_curr_pos, prefix_size);
-            m_curr_pos += prefix_size;
-        }
-        size -= prefix_size;
+    return m_file->get_container_file()->tell()- (m_buf_size - m_curr_pos);
+}
 
-        if (size == 0)
-            return prefix_size;
+// Reposition stream position indicator.
+bool Buffered_archive_resource_reader::seek(Sint64 offset, Position origin)
+{
+    // drop buffer
+    m_curr_pos = m_buf_size = 0;
 
-        // can we read a big chunk?
-        if (size > sizeof(m_buffer)) {
-            return m_file->get_archive_file()->read((char *)ptr + prefix_size, size) + prefix_size;
-        }
+    // now seek
+    return m_file->get_container_file()->seek(offset, origin) != 0;
+}
 
-        // fill the buffer
-        m_curr_pos = 0;
-        zip_int64_t read_bytes = m_file->get_archive_file()->read(m_buffer, sizeof(m_buffer));
-        if (read_bytes < 0) {
-            return prefix_size > 0 ? prefix_size : read_bytes;
-        }
-        m_buf_size = size_t(read_bytes);
+// Get the UTF8 encoded name of the resource on which this reader operates.
+char const *Buffered_archive_resource_reader::get_filename() const
+{
+    return m_file_name.empty() ? NULL : m_file_name.c_str();
+}
 
-        size_t suffix_size = m_buf_size - m_curr_pos;
-        if (suffix_size > 0) {
-            // buffer is not empty
-            if (size_t(size) < suffix_size) {
-                suffix_size = size_t(size);
-            }
-            memcpy((char *)ptr + prefix_size, m_buffer, suffix_size);
-            m_curr_pos += suffix_size;
-        }
-        return prefix_size + suffix_size;
-    }
+// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
+char const *Buffered_archive_resource_reader::get_mdl_url() const
+{
+    return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
+}
 
-    /// Get the current position.
-    Uint64 tell() MDL_FINAL
-    {
-        return m_file->get_archive_file()->tell()- (m_buf_size - m_curr_pos);
-    }
+// Constructor.
+Buffered_archive_resource_reader::Buffered_archive_resource_reader(
+    IAllocator  *alloc,
+    File_handle *f,
+    char const  *filename,
+    char const  *mdl_url)
+: Base(alloc)
+, m_file(f)
+, m_file_name(filename, alloc)
+, m_mdl_url(mdl_url, alloc)
+, m_curr_pos(0u)
+, m_buf_size(0u)
+{
+}
 
-    /// Reposition stream position indicator.
-    ///
-    /// \param offset  Number of bytes to offset from origin
-    /// \param origin  Position used as reference for the offset
-    ///
-    /// \return true on success
-    bool seek(Sint64 offset, Position origin) MDL_FINAL
-    {
-        // drop buffer
-        m_curr_pos = m_buf_size = 0;
-
-        // now seek
-        return m_file->get_archive_file()->seek(offset, origin) != 0;
-    }
-
-    /// Get the UTF8 encoded name of the resource on which this reader operates.
-    /// \returns    The name of the resource or NULL.
-    char const *get_filename() const MDL_FINAL
-    {
-        return m_file_name.empty() ? NULL : m_file_name.c_str();
-    }
-
-    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
-    /// \returns    The absolute MDL url of the resource or NULL.
-    char const *get_mdl_url() const MDL_FINAL
-    {
-        return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
-    }
-
-    /// Constructor.
-    ///
-    /// \param alloc             the allocator
-    /// \param f                 the file handle
-    /// \param filename          the file name
-    /// \param mdl_url           the MDL url
-    explicit Buffered_archive_resource_reader(
-        IAllocator  *alloc,
-        File_handle *f,
-        char const  *filename,
-        char const  *mdl_url)
-    : Base(alloc)
-    , m_file(f)
-    , m_file_name(filename, alloc)
-    , m_mdl_url(mdl_url, alloc)
-    , m_curr_pos(0u)
-    , m_buf_size(0u)
-    {
-    }
-
-private:
-    // non copyable
-    Buffered_archive_resource_reader(
-        Buffered_archive_resource_reader const &) MDL_DELETED_FUNCTION;
-    Buffered_archive_resource_reader &operator=(
-        Buffered_archive_resource_reader const &) MDL_DELETED_FUNCTION;
-
-private:
-    ~Buffered_archive_resource_reader() MDL_FINAL
-    {
-        File_handle::close(m_file);
-    }
-
-private:
-    /// Buffer for buffered input.
-    unsigned char m_buffer[1024];
-
-    /// The File handle.
-    File_handle *m_file;
-
-    /// The filename.
-    string m_file_name;
-
-    /// The absolute MDL url.
-    string m_mdl_url;
-
-    /// Current position inside the buffer if used.
-    size_t m_curr_pos;
-
-    /// Size of the current buffer if used.
-    size_t m_buf_size;
-};
+// Destructor.
+Buffered_archive_resource_reader::~Buffered_archive_resource_reader()
+{
+    File_handle::close(m_file);
+}
 
 // --------------------------------------------------------------------------
 
@@ -2706,14 +2219,25 @@ MDL_resource_set *MDL_resource_set::from_mask(
     File_resolver::UDIM_mode udim_mode)
 {
     char const *p = strstr(file_mask, ".mdr:");
-    if (p == NULL) {
-        return from_mask_file(alloc, url, file_mask, udim_mode);
+    if (p != NULL)
+    {
+        string container_name(file_mask, p + 4, alloc);
+        p += 5;
+        return from_mask_container(
+            alloc, url, container_name.c_str(), File_handle::FH_ARCHIVE, p, udim_mode);
     }
 
-    string arc_name(file_mask, p + 4, alloc);
-    p += 5;
+    p = strstr(file_mask, ".mdle:");
+    if (p != NULL)
+    {
+        string container_name(file_mask, p + 5, alloc);
+        p += 6;
+        return from_mask_container(
+            alloc, url, container_name.c_str(), File_handle::FH_MDLE, p, udim_mode);
+    }
 
-    return from_mask_archive(alloc, url, arc_name.c_str(), p, udim_mode);
+    return from_mask_file(alloc, url, file_mask, udim_mode);
+
 }
 
 // Create a resource set from a file mask describing files on disk.
@@ -2799,15 +2323,28 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
 }
 
 // Create a resource set from a file mask describing files on an archive.
-MDL_resource_set *MDL_resource_set::from_mask_archive(
+MDL_resource_set *MDL_resource_set::from_mask_container(
     IAllocator               *alloc,
     char const               *url,
-    char const               *arc_name,
+    char const               *container_name,
+    File_handle::Kind        container_kind,
     char const               *file_mask,
     File_resolver::UDIM_mode udim_mode)
 {
-    Archiv_error_code err;
-    if (MDL_archive *archiv = MDL_archive::open(alloc, arc_name, err)) {
+    MDL_zip_container_error_code err = EC_OK;
+    MDL_zip_container* container = NULL;
+    switch (container_kind) {
+    case File_handle::FH_ARCHIVE:
+        container = MDL_zip_container_archive::open(alloc, container_name, err);
+        break;
+    case File_handle::FH_MDLE:
+        container = MDL_zip_container_mdle::open(alloc, container_name, err);
+        break;
+    default:
+        break;
+    }
+
+    if (container != NULL) {
         char const *p = NULL;
         char const *q = NULL;
 
@@ -2847,10 +2384,10 @@ MDL_resource_set *MDL_resource_set::from_mask_archive(
         string forward(file_mask, alloc);
         forward = convert_os_separators_to_slashes(forward);
 
-        string archive_name(arc_name, alloc);
+        string container_name_str(container_name, alloc);
 
-        for (int i = 0, n = archiv->get_num_entries(); i < n; ++i) {
-            char const *file_name = archiv->get_entry_name(i);
+        for (int i = 0, n = container->get_num_entries(); i < n; ++i) {
+            char const *file_name = container->get_entry_name(i);
 
             if (utf8_match(forward.c_str(), file_name)) {
                 string purl(url, alloc);
@@ -2865,11 +2402,11 @@ MDL_resource_set *MDL_resource_set::from_mask_archive(
                 string fname(file_name, alloc);
                 fname = convert_slashes_to_os_separators(fname);
 
-                parse_u_v(s, fname.c_str(), ofs, purl.c_str(), archive_name, ':', udim_mode);
+                parse_u_v(s, fname.c_str(), ofs, purl.c_str(), container_name_str, ':', udim_mode);
             }
         }
 
-        archiv->close();
+        container->close();
         return s;
     }
     return NULL;
@@ -3007,7 +2544,7 @@ bool MDL_resource_set::get_udim_mapping(size_t i, int &u, int &v) const
 IMDL_resource_reader *MDL_resource_set::open_reader(size_t i) const
 {
     if (i < m_entries.size()) {
-        Archiv_error_code err;
+        MDL_zip_container_error_code err = EC_OK;
         IMDL_resource_reader *res = open_resource_file(
             get_allocator(),
             m_entries[i].url,
@@ -3120,7 +2657,7 @@ IMDL_resource_reader *Entity_resolver::open_resource(
     if (udim_mode != File_resolver::NO_UDIM || resolved_file_path.empty())
         return NULL;
 
-    Archiv_error_code err;
+    MDL_zip_container_error_code err = EC_OK;
     IMDL_resource_reader *res = open_resource_file(
         get_allocator(),
         abs_file_name.c_str(),
@@ -3150,10 +2687,10 @@ Messages const &Entity_resolver::access_messages() const
 
 // Open a resource file read-only.
 IMDL_resource_reader *open_resource_file(
-    IAllocator        *alloc,
-    const char        *abs_mdl_path,
-    char const        *resource_path,
-    Archiv_error_code &err)
+    IAllocator                     *alloc,
+    const char                     *abs_mdl_path,
+    char const                     *resource_path,
+    MDL_zip_container_error_code  &err)
 {
     File_handle *file = File_handle::open(alloc, resource_path, err);
     if (file == NULL) {
@@ -3162,46 +2699,13 @@ IMDL_resource_reader *open_resource_file(
 
     Allocator_builder builder(alloc);
 
-    if (file->is_archive()) {
-        return builder.create<Archive_resource_reader>(
-            alloc, file, resource_path, abs_mdl_path);
-    } else {
+    if (file->get_kind() == File_handle::FH_FILE) {
         return builder.create<File_resource_reader>(
             alloc, file, resource_path, abs_mdl_path);
+    } else {
+        return builder.create<MDL_zip_resource_reader>(
+            alloc, file, resource_path, abs_mdl_path);
     }
-}
-
-// Get the manifest.
-Manifest *MDL_archive::parse_manifest()
-{
-    if (MDL_archive_file *fp = file_open("MANIFEST")) {
-        Allocator_builder builder(m_alloc);
-
-        File_handle *manifest_fp =
-            builder.create<File_handle>(get_allocator(), this, /*owns_archive=*/false, fp);
-
-        mi::base::Handle<Buffered_archive_resource_reader> reader(
-            builder.create<Buffered_archive_resource_reader>(
-            m_alloc,
-            manifest_fp,
-            "MANIFEST",
-            /*mdl_url=*/""));
-
-        Manifest *manifest = Archive_tool::parse_manifest(m_alloc, reader.get());
-        if (manifest != NULL) {
-            string arc_name(get_archive_name(), m_alloc);
-            size_t pos = arc_name.rfind(os_separator());
-            if (pos == string::npos)
-                pos = 0;
-            else
-                pos += 1;
-            size_t e = arc_name.length() - 4; // skip ".mdr"
-            arc_name = arc_name.substr(pos, e - pos);
-            manifest->set_archive_name(arc_name.c_str());
-        }
-        return manifest;
-    }
-    return NULL;
 }
 
 }  // mdl

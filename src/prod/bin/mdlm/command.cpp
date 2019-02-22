@@ -32,6 +32,7 @@
 #include "errors.h"
 #include "version.h"
 #include "search_path.h"
+#include <base/util/string_utils/i_string_utils.h>
 #include <map>
 #include <iostream>
 using namespace mdlm;
@@ -49,6 +50,7 @@ namespace mdlm
 {
     extern mi::neuraylib::INeuray * neuray(); //Application::theApp().neuray(
     extern void report(const std::string & msg); //Application::theApp().report(
+    extern bool freeimage_available(); //Application::theApp().freeimage_available(
 }
 
 int Command::execute()
@@ -682,21 +684,36 @@ int Install::execute()
     bool do_install = true;
 
     // Check possible conflicts with installed packages, modules, archives
+    // In all MDL search paths, including target folder
     if (do_install)
     {
-        if (new_archive.conflict(m_mdl_directory))
+        // Build list of MDL folders
+        Search_path sp(mdlm::neuray());
+        sp.snapshot();
+        if (!sp.find_module_path(m_mdl_directory))
         {
-            Util::log_warning("Archive conflict detected");
-            Util::log_warning("\tArchive: " + Util::normalize(m_archive));
-            Util::log_warning("\tInstall path: " + Util::normalize(m_mdl_directory));
-            do_install = false;
+            sp.add_module_path(m_mdl_directory);
+            sp.snapshot();
+        }
+        const std::vector<std::string> & paths(sp.paths());
+        for(auto & p : paths)
+        { 
+            if (new_archive.conflict(p))
+            {
+                Util::log_warning("Archive conflict detected");
+                Util::log_warning("\tArchive: " + Util::normalize(m_archive));
+                Util::log_warning("\tInstall path: " + Util::normalize(m_mdl_directory));
+                do_install = false;
 
-            mdlm::report("Conflict found in target directory");
+                mdlm::report("Conflict found in directory: " + p);
+                break;
+            }
+            else
+            {
+                Util::log_info("Archive conflict test passed against directory: " + p);
+            }
         }
-        else
-        {
-            Util::log_info("Archive conflict test passed");
-        }
+        sp.restore_snapshot();
     }
 
     // Check conflicts with same installed archive in any MDL search root
@@ -898,6 +915,179 @@ int Extract::execute()
     return SUCCESS;
 }
 
+Create_mdle::Create_mdle(const std::string & prototype, const std::string & mdle)
+    : m_prototype(prototype)
+    , m_mdle(mdle)
+{
+}
+
+int Create_mdle::add_user_file(const std::string& source_path, const std::string& target_path)
+{
+    m_user_files.push_back({source_path, target_path});
+    return SUCCESS;
+}
+
+int Create_mdle::execute()
+{
+    // parse module and material name
+    size_t p = m_prototype.rfind("::");
+    if (p == 0 || p == std::string::npos || m_prototype[0] != ':' || m_prototype[1] != ':')
+    {
+        Util::log_error("Invalid material name '" + m_mdle + "' "
+                        "A full qualified name with leading '::' is expected.");
+        return -1;
+    }
+
+    // check if target file name was set
+    if (m_mdle.empty())
+    {
+        Util::log_error("Target MDLE file not specified.");
+        return -1;
+    }
+
+    // some user (debug) feedback
+    Util::log_report("Creating MDLE: " + m_mdle + "\n"
+                     "         from: " + m_prototype);
+
+    if (m_user_files.size() > 0)
+    {
+        for(size_t i = 0; i < m_user_files.size(); ++i)
+            Util::log_report("    user file: " + m_user_files[i].first + " -> " + m_user_files[i].second);
+    }
+
+    mi::base::Handle<mi::neuraylib::IMdle_api> mdle_api(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IMdle_api>());
+
+    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IMdl_compiler>());
+
+    // Load the FreeImage plugin.
+    if(!mdlm::freeimage_available())
+    {
+        Util::log_error("failed to load nv_freeimage plugin.");
+        return -1;
+    }
+
+    mi::base::Handle<mi::neuraylib::IDatabase> database(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IDatabase>());
+
+    mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
+    mi::base::Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
+
+    int return_value = UNSPECIFIED_FAILURE;
+    for(;;)
+    {
+        mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+            mdlm::neuray()->get_api_component<mi::neuraylib::IMdl_factory>());
+
+        mi::base::Handle < mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+
+        // force experimental to true for now
+        context->set_option("experimental", true);
+
+        std::string module_name = m_prototype.substr(0, p);
+        std::string material_name = m_prototype.substr(p + 2);
+
+        // load module
+        mdl_compiler->load_module(transaction.get(), module_name.c_str(), context.get());
+        if (context->get_error_messages_count() > 0)
+            break;
+
+        // check if the material is available
+        std::string db_name = "mdl" + m_prototype;
+
+        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
+            transaction->access<mi::neuraylib::IMaterial_definition>(db_name.c_str()));
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>(db_name.c_str()));
+        if (!material_definition && !function_definition)
+        {
+            Util::log_error("failed to find the selected material/function: '" + material_name + "' "
+                            "in module: '" + module_name + "'.");
+            break;
+        }
+
+        // setup the export to mdle
+        mi::base::Handle<mi::IStructure> data(transaction->create<mi::IStructure>("Mdle_data"));
+
+        mi::base::Handle<mi::IString> prototype(data->get_value<mi::IString>("prototype_name"));
+        prototype->set_c_str(db_name.c_str());
+
+        // keep the thumbnail (since defaults can't be change here)
+        std::string thumbnail_path("");
+        if(material_definition) 
+        {
+            const char* p = material_definition->get_thumbnail();
+            thumbnail_path = p ? p : "";
+        } 
+        else if (function_definition) 
+        {
+            const char* p = function_definition->get_thumbnail();
+            thumbnail_path = p ? p : "";
+        }
+
+        if (!thumbnail_path.empty()) {
+            mi::base::Handle<mi::IString> thumbnail(data->get_value<mi::IString>("thumbnail_path"));
+            thumbnail->set_c_str(thumbnail_path.c_str());
+        }
+
+        // add user files
+        if (!m_user_files.empty())
+        {
+            size_t n = m_user_files.size();
+            std::string array_type = MI::STRING::formatted_string("Mdle_user_file[%d]", n);
+            mi::base::Handle<mi::IArray> user_file_array(transaction->create<mi::IArray>(array_type.c_str()));
+            for (mi::Size i = 0; i < n; ++i)
+            {
+                mi::base::Handle<mi::IStructure> user_file(transaction->create<mi::IStructure>("Mdle_user_file"));
+                mi::base::Handle<mi::IString> source_path(user_file->get_value<mi::IString>("source_path"));
+                source_path->set_c_str(m_user_files[i].first.c_str());
+                mi::base::Handle<mi::IString> target_path(user_file->get_value<mi::IString>("target_path"));
+                target_path->set_c_str(m_user_files[i].second.c_str());
+                user_file_array->set_element(i, user_file.get());
+            }
+            data->set_value("user_files", user_file_array.get());
+        }
+
+        // create the mdle
+        mdle_api->export_mdle(transaction.get(), m_mdle.c_str(), data.get(), context.get());
+        if (context->get_error_messages_count() > 0)
+            break;
+
+        return_value = SUCCESS;
+        break;
+    }
+    transaction->commit();
+    return return_value;
+}
+
+Check_mdle::Check_mdle(const std::string& mdle)
+    : m_mdle(mdle)
+{
+}
+
+int Check_mdle::execute()
+{
+    // check if target file name was set
+    if (m_mdle.empty())
+    {
+        Util::log_error("Target MDLE file not specified.");
+        return -1;
+    }
+
+    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IMdl_factory>());
+
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+        mdl_factory->create_execution_context());
+
+    mi::base::Handle<mi::neuraylib::IMdle_api> mdle_api(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IMdle_api>());
+
+    return mdle_api->validate_mdle(m_mdle.c_str(), context.get());
+}
+
 int Help::execute()
 {
     MDLM_option_parser parser;
@@ -1062,6 +1252,34 @@ Command * Command_factory::build_command(const Option_set & option)
             else if (it->id() == MDLM_option_parser::REMOVE)
             {
                 Util::log_warning("Command not implemented...");
+            }
+            else if (it->id() == MDLM_option_parser::CREATE_MDLE)
+            {
+                Create_mdle* create = new Create_mdle(it->value()[0], it->value()[1]);
+                Option_parser* command_options = it->get_options();
+                if (command_options)
+                {
+                    Option_set add_user_file;
+                    if (command_options->is_set(MDLM_option_parser::CREATE_MDLE_ADD_USER_FILE, add_user_file))
+                    {
+                        Option opt;
+                        Option_set_type::iterator it;
+                        for (it = add_user_file.begin(); it < add_user_file.end(); it++)
+                        {
+                            opt = (*it);
+                            if (it->value().size() == 2)
+                            {
+                                create->add_user_file(it->value()[0], it->value()[1]);
+                            }
+                        }
+                    }
+                }
+                return create;
+            }
+
+            else if (it->id() == MDLM_option_parser::CHECK_MDLE)
+            {
+                return new Check_mdle(it->value()[0]);
             }
         }
     }

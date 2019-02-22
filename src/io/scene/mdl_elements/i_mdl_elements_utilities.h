@@ -50,7 +50,7 @@ namespace mi { namespace mdl { class IMDL_resource_reader; } }
 namespace MI {
 
 namespace DB { class Transaction; }
-namespace IMAGE { class IMdr_callback; }
+namespace IMAGE { class IMdl_container_callback; }
 
 namespace MDL {
 
@@ -156,6 +156,12 @@ private:
 };
 
 // **********  Misc utility functions **************************************************************
+
+/// Converts an MDL name into the name of the corresponding DB element.
+///
+/// The conversion simply adds the prefix "mdl". If \p name does not start with \c "::"
+/// (for example builtins) it also inserts \c "::".
+std::string add_mdl_db_prefix(const std::string& name);
 
 /// Returns the DB element name used for the array constructor.
 const char* get_array_constructor_db_name();
@@ -352,8 +358,8 @@ void report_messages(const mi::mdl::Messages& in_messages, Execution_context* co
 /// Wraps an MDL resource reader as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* reader);
 
-/// Creates an instance of an implementation of IMAGE::IMdr_callback.
-IMAGE::IMdr_callback* create_mdr_callback();
+/// Creates an instance of an implementation of IMAGE::IMdl_container_callback.
+IMAGE::IMdl_container_callback* create_mdl_container_callback();
 
 
 // **********  Resource-related attributes *********************************************************

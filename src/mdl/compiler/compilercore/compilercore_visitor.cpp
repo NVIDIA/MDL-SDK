@@ -98,17 +98,37 @@ void Module_visitor::visit(ISimple_name const *sname)
     do_simple_name(sname);
 }
 
-bool Module_visitor::pre_visit(IDeclaration_invalid *decl) { return true; }
-void Module_visitor::post_visit(IDeclaration_invalid *decl) {}
+// ----------------------- declarations -----------------------
+bool Module_visitor::pre_visit(IDeclaration *decl) { return true; }
+void Module_visitor::post_visit(IDeclaration *decl) {}
 
-bool Module_visitor::pre_visit(IDeclaration_import *decl) { return true; }
-void Module_visitor::post_visit(IDeclaration_import *decl) {}
+bool Module_visitor::pre_visit(IDeclaration_invalid *decl) {
+    return pre_visit(static_cast<IDeclaration *>(decl));
+}
+void Module_visitor::post_visit(IDeclaration_invalid *decl) {
+    post_visit(static_cast<IDeclaration *>(decl));
+}
 
-bool Module_visitor::pre_visit(IDeclaration_annotation *anno) { return true; }
-void Module_visitor::post_visit(IDeclaration_annotation *anno) {}
+bool Module_visitor::pre_visit(IDeclaration_import *decl) {
+    return pre_visit(static_cast<IDeclaration *>(decl));
+}
+void Module_visitor::post_visit(IDeclaration_import *decl) {
+    post_visit(static_cast<IDeclaration *>(decl));
+}
 
-bool Module_visitor::pre_visit(IDeclaration_constant *con) { return true; }
-void Module_visitor::post_visit(IDeclaration_constant *con) {}
+bool Module_visitor::pre_visit(IDeclaration_annotation *anno) {
+    return pre_visit(static_cast<IDeclaration *>(anno));
+}
+void Module_visitor::post_visit(IDeclaration_annotation *anno) {
+    post_visit(static_cast<IDeclaration *>(anno));
+}
+
+bool Module_visitor::pre_visit(IDeclaration_constant *con) {
+    return pre_visit(static_cast<IDeclaration *>(con));
+}
+void Module_visitor::post_visit(IDeclaration_constant *con) {
+    post_visit(static_cast<IDeclaration *>(con));
+}
 
 bool Module_visitor::pre_visit(ISimple_name *name) { return true; }
 void Module_visitor::post_visit(ISimple_name *name) {}

@@ -37,11 +37,53 @@
 #include "compilercore_messages.h"
 #include "compilercore_options.h"
 #include "compilercore_manifest.h"
+#include "compilercore_zip_utils.h"
 
 namespace mi {
 namespace mdl {
 
 class IMDL_resource_reader;
+
+class MDL_zip_container_archive : public MDL_zip_container
+{
+    friend class Allocator_builder;
+
+public:
+    /// Open a container file.
+    ///
+    /// \param[in]  alloc                   the allocator
+    /// \param[in]  path                    the UTF8 encoded archive path
+    /// \param[out] err                     error code
+    /// \param[in]  with_manifest  load and check the manifest
+    static MDL_zip_container_archive *open(
+        IAllocator                     *alloc,
+        char const                     *path,
+        MDL_zip_container_error_code  &err,
+        bool                            with_manifest = true);
+
+    /// Destructor
+    virtual ~MDL_zip_container_archive();
+
+    /// Get the manifest of this archive.
+    /// If the manifest was not loaded with open, already, it will be loaded now.
+    Manifest const *get_manifest();
+
+private:
+    /// Constructor.
+    explicit MDL_zip_container_archive(
+        IAllocator  *alloc,
+        char const  *path,
+        zip_t       *za,
+        bool         with_manifest);
+
+    /// Get the manifest.
+    Manifest *parse_manifest();
+
+    /// The manifest of this archive.
+    mi::base::Handle<Manifest const> m_manifest;
+};
+
+
 
 /// Implementation of the IArchiv Interface.
 class Archive : public Allocator_interface_implement<IArchive>

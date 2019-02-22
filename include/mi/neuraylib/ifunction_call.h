@@ -170,6 +170,15 @@ public:
     ///                           is effectively varying since the function definition itself is
     ///                           varying.
     virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
+
+    /// Indicates, if this function call acts as a default argument of a material or function
+    /// definition.
+    ///
+    /// Defaults are immutable, their arguments cannot be changed and they cannot be used
+    /// in call expressions.
+    ///
+    /// \return true, if this function call is a default, false otherwise.
+    virtual bool is_default() const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

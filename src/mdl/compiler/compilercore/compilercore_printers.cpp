@@ -1307,7 +1307,7 @@ void Printer::print(IExpression const *expr, int priority)
 
             IExpression const *rhs = b->get_right_argument();
             // no need to put the rhs in parenthesis for the index operator
-            print(rhs, op == IExpression_binary::OK_ARRAY_INDEX ? 0 : op_priority);
+            print(rhs, op == IExpression_binary::OK_ARRAY_INDEX ? 0 : op_priority + 1);
 
             if (postfix != NULL)
                 print(postfix);

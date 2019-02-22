@@ -1134,7 +1134,7 @@ IType_enum *Type_factory::create_enum(ISymbol const *name)
         return NULL;
 
     // import the name
-    name = m_symtab->get_symbol(name->get_name());
+    name = m_symtab->get_user_type_symbol(name->get_name());
     IType_enum *e_type = m_builder.create<Type_enum>(m_id, m_builder.get_arena(), name);
 
     // register this enum type, so we can "import" it
@@ -1455,7 +1455,7 @@ IType_struct *Type_factory::create_struct(ISymbol const *name)
         return NULL;
 
     // import the name
-    name = m_symtab->get_symbol(name->get_name());
+    name = m_symtab->get_user_type_symbol(name->get_name());
     IType_struct *s_type = m_builder.create<Type_struct>(m_id, m_builder.get_arena(), name);
 
     // register this struct type, so we can "import" it

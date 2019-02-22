@@ -103,6 +103,8 @@ public:
     mi::neuraylib::ICompiled_material* create_compiled_material(
         mi::Uint32 flags,
         mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
+    bool is_default() const NEURAY_FINAL;
 };
 
 } // namespace NEURAY

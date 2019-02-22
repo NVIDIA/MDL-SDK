@@ -1,9 +1,32 @@
-//*****************************************************************************
-// Copyright 2018 NVIDIA Corporation. All rights reserved.
-//*****************************************************************************
+/***************************************************************************************************
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ **************************************************************************************************/
 /// \file options.h
 ///
-//*****************************************************************************
 
 #include "options.h"
 #include "application.h"
@@ -325,7 +348,7 @@ void Option_parser::output_usage(ostream & ostr) const
     // <------------------------------ maxline ------------------------------------------>
     // <---col 1--><------------------ col 2 -------------------------------------------->
     // Usage: mdlm [-h | --help][-v | --verbosity <level>][-q | --quiet][-n | --nostdpath]
-    //             [[-p | --search - path <path>]][…]
+    //             [[-p | --search - path <path>]][ï¿½]
     //             <command>[<args>]
     //
     // col 1 + col 2 < maxline
@@ -475,6 +498,21 @@ MDLM_option_parser::MDLM_option_parser()
         option.add_help_string("Install archive in the given destination directory");
         option.add_help_string("Only install if it is safe to do so");
         option.add_help_string("Check possible conflicts with installed packages, modules, archives");
+        option.add_help_string("");
+        option.add_help_string("If an old archive is found at a higher priority path:");
+        option.add_help_string("New and old archives have compatible versions: No install, error");
+        option.add_help_string("New and old archives have same versions: No install, warning");
+        option.add_help_string("New and old archives have incompatible versions: No install, warning");
+        option.add_help_string("");
+        option.add_help_string("If an old archive is found in the destination path:");
+        option.add_help_string("New and old archives have compatible versions: Install");
+        option.add_help_string("New and old archives have same versions: No install, warning");
+        option.add_help_string("New and old archives have incompatible versions: No install, warning");
+        option.add_help_string("");
+        option.add_help_string("If an old archive is found at a lower priority path:");
+        option.add_help_string("New and old archives have compatible versions: No install, warning");
+        option.add_help_string("New and old archives have same versions: No install, warning");
+        option.add_help_string("New and old archives have incompatible versions: No install, warning");
         option.set_command_string(
             "install [<options>] <archive> <SYSTEM | USER | directory>");
         m_known_options.push_back(option);
@@ -566,6 +604,38 @@ MDLM_option_parser::MDLM_option_parser()
         option.add_option(force);
         option.add_help_string("Unpack the given archive into directory");
         option.set_command_string("extract <archive> <directory>");
+        m_known_options.push_back(option);
+    }
+
+    // MDLE Commands
+    {
+        Option user_file = Option(CREATE_MDLE_ADD_USER_FILE);
+        user_file.set_number_of_parameters(2);
+        user_file.add_name("--file");
+        user_file.set_can_appear_mulitple_times(true);
+        user_file.set_parameter_helper_string("<source file path> <target path in the mdle>");
+        user_file.add_help_string("add an additional user file to the mdle");
+
+        option = Option(CREATE_MDLE);
+        option.set_number_of_parameters(2);
+        option.add_name("create-mdle");
+        option.set_is_command(true);
+        option.add_option(user_file);
+        option.add_help_string(
+            "Create an MDLE from a qualified material. "
+            "Additional files can be added using the '--file' option");
+        option.set_command_string("create-mdle [<options>] <qualified material name> <mdle path>");
+        m_known_options.push_back(option);
+    }
+
+    {
+        option = Option(CHECK_MDLE);
+        option.set_number_of_parameters(1);
+        option.add_name("check-mdle");
+        option.set_is_command(true);
+        option.add_help_string(
+            "Checks the integrity of an MDLE file. ");
+        option.set_command_string("check-mdle <mdle path>");
         m_known_options.push_back(option);
     }
 }

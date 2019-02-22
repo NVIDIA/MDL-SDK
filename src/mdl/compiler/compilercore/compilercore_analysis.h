@@ -65,6 +65,8 @@ class Messages_impl;
 class Err_location;
 class Thread_context;
 
+struct Resource_table_key;
+
 ///
 /// A base class for all semantic analysis passes.
 ///
@@ -695,10 +697,12 @@ class NT_analysis : public Analysis, ICallgraph_visitor {
             IAllocator           *alloc,
             char const           *url,
             char const           *filename,
+            int                  resource_tag,
             IType_resource const *type,
             bool const            exists)
         : m_url(url, alloc)
         , m_filename(filename, alloc)
+        , m_res_tag(resource_tag)
         , m_type(type)
         , m_exists(exists)
         {
@@ -707,6 +711,7 @@ class NT_analysis : public Analysis, ICallgraph_visitor {
     private:
         string               m_url;
         string               m_filename;
+        int                  m_res_tag;
         IType_resource const *m_type;
         bool                 m_exists;
     };
@@ -1549,26 +1554,46 @@ private:
 
     /// Check restriction on the given file path.
     ///
-    /// \param sval  a string value representing a file path
+    /// \param path  a file path
     /// \param pos   the position of the value inside the current module
-    void check_file_path(IValue_string const *sval, Position const &pos);
+    void check_file_path(char const *path, Position const &pos);
 
     /// Handle resource constructors.
     ///
     /// \param call_expr  a call representing an resource constructor call
     void handle_resource_constructor(IExpression_call *call_expr);
 
+    /// Process a resource url.
+    ///
+    /// \param val       a string or resource value representing the URL
+    /// \param lit       the owning literal expression of the value
+    /// \param res_type  the resource type of the resource
+    void handle_resource_url(
+        IValue const         *val,
+        IExpression_literal  *lit,
+        IType_resource const *res_type);
+
     /// Add a new resource entry.
     ///
-    /// \param url         an absolute MDL url
-    /// \param file_name   the OS specific file name of the url
-    /// \param type        the type of the resource
-    /// \param exists      if FALSE, the resource does not exists
+    /// \param url           an absolute MDL url
+    /// \param file_name     the OS specific file name of the url
+    /// \param resource_tag  if non-NULL, the TAG of a in-memory resource
+    /// \param type          the type of the resource
+    /// \param exists        if FALSE, the resource does not exists
     void add_resource_entry(
         char const           *url,
         char const           *file_name,
+        int                  resource_tag,
         IType_resource const *type,
         bool                 exists);
+
+    /// Copy the given messages to the current module message.
+    ///
+    /// \param messages         the messages
+    /// \param map_err_to_warn  if true, map errors to warnings
+    void copy_messages_to_module(
+        Messages_impl const &messages,
+        bool                map_err_to_warn);
 
     /// Try to import a symbol from a given module.
     ///
@@ -1715,6 +1740,8 @@ private:
 
     void post_visit(IExpression_invalid *inv_expr) MDL_OVERRIDE;
 
+    void post_visit(IExpression_literal *lit) MDL_OVERRIDE;
+
     void post_visit(IExpression_reference *ref) MDL_OVERRIDE;
 
     void post_visit(IExpression_unary *un_expr) MDL_OVERRIDE;
@@ -1738,12 +1765,13 @@ private:
     void post_visit(IAnnotation_block *anno) MDL_OVERRIDE;
 
 public:
-    /// Constructor
+    /// Constructor.
     explicit NT_analysis(
         MDL              *compiler,
         Module           &module,
         Thread_context   &ctx,
-        IModule_cache    *cache);
+        IModule_cache    *cache,
+        bool             resolve_resources);
 
 private:
     /// The currently processed "preset-overload".
@@ -1797,6 +1825,9 @@ private:
     /// If true, the current module has the array assignment.
     bool m_has_array_assignment;
 
+    /// If true, resolve resources and generate errors if resources are missing.
+    bool m_resolve_resources;
+
 
     /// The current module cache.
     IModule_cache *m_module_cache;
@@ -1848,10 +1879,38 @@ private:
     /// If the current analyzed module had a semantic version, its Position.
     Position const *m_sema_version_pos;
 
-    typedef map<string, Resource_entry>::Type Resource_table;
+    typedef map<Resource_table_key, Resource_entry>::Type Resource_table;
 
     /// Resource entries of the current module.
     Resource_table m_resource_entries;
+};
+
+struct Resource_table_key
+{
+    const string key_string;
+    const int key_tag;
+
+    Resource_table_key(string key_string, int key_tag)
+        : key_string(key_string)
+        , key_tag(key_tag)
+    {
+    }
+
+    bool operator==(const Resource_table_key& other) const 
+    {
+        if (key_tag != 0 && key_tag == other.key_tag)
+            return true;
+
+        return key_string == other.key_string;
+    }
+
+    bool operator<(const Resource_table_key& other) const
+    {
+        if (key_tag != 0 && key_tag != other.key_tag)
+            return key_tag < other.key_tag;
+
+        return key_string < other.key_string;
+    }
 };
 
 ///
@@ -2311,6 +2370,11 @@ private:
     /// \param suffix  name suffix for dumped file name
     void dump_dg(char const *suffix);
 
+    /// Process a function given by its definition.
+    ///
+    /// \param def  a function definition
+    void process_function(Definition const *def);
+
     bool pre_visit(IDeclaration_function *decl) MDL_FINAL;
     void post_visit(IDeclaration_function *decl) MDL_FINAL;
 
@@ -2400,6 +2464,42 @@ private:
     };
 
     friend class AT_visitor;
+};
+
+/// Checks for generated AST errors, especially if the AST is a tree, not a DAG.
+class AST_checker : protected Module_visitor
+{
+    typedef Module_visitor Base;
+
+public:
+    /// Checker, asserts on failure.
+    static bool check_module(IModule const *module);
+
+private:
+    void post_visit(IStatement *stmt) MDL_FINAL;
+    void post_visit(IExpression *expr) MDL_FINAL;
+    void post_visit(IDeclaration *decl) MDL_FINAL;
+
+private:
+    /// Constructor.
+    explicit AST_checker(IAllocator *alloc);
+
+private:
+    typedef ptr_hash_set<IStatement const>::Type    Stmt_set;
+    typedef ptr_hash_set<IExpression const>::Type   Expr_set;
+    typedef ptr_hash_set<IDeclaration const>::Type  Decl_set;
+
+    /// Set of all visited statements.
+    Stmt_set m_stmts;
+
+    /// Set of all visited expressions.
+    Expr_set m_exprs;
+
+    /// Set of all visited declarations.
+    Decl_set m_decls;
+
+    /// Set to true, if errors was found.
+    bool m_errors;
 };
 
 /// Returns true for error definitions.

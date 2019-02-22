@@ -261,6 +261,15 @@ public:
     virtual ICompiled_material* create_compiled_material(
         Uint32 flags,
         IMdl_execution_context* context = 0) const = 0;
+
+    /// Indicates, if this material instance acts as a default argument of a material or
+    /// function definition.
+    ///
+    /// Defaults are immutable, their arguments cannot be changed and they cannot be used
+    /// in call expressions.
+    ///
+    /// \return true, if this material instance is a default, false otherwise.
+    virtual bool is_default() const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

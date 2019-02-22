@@ -57,6 +57,7 @@ QHash<int, QByteArray> VM_sel_element::roleNames()
         {DisplayNameRole, "elementDisplayName"},
         {AuthorRole, "elementAuthor"},
         {DescriptionRole, "elementDescription"},
+        {KeywordsRole, "elementKeywords"},
         {LocatedInArchiveRole, "elementLocatedInArchive"},
         {ModuleHintRole, "elementModuleHint"},
         {ThumbnailRole, "elementThumbnail"},
@@ -105,6 +106,7 @@ QVariant VM_sel_element::data(int role) const
         case VM_sel_element::DisplayNameRole: return get_display_name();
         case VM_sel_element::AuthorRole: return get_author();
         case VM_sel_element::DescriptionRole: return get_description();
+        case VM_sel_element::KeywordsRole: return get_keywords();
         case VM_sel_element::LocatedInArchiveRole: return get_located_in_archive();
         case VM_sel_element::ModuleHintRole: return get_module_hint();
         case VM_sel_element::ThumbnailRole: return get_thumbnail();
@@ -129,6 +131,11 @@ QString VM_sel_element::get_module_name() const
 QString VM_sel_element::get_display_name() const
 {
     return query_cache_string(m_cache_element, "DisplayName");
+}
+
+QString VM_sel_element::get_keywords() const
+{
+    return query_cache_string(m_cache_element, "Keywords");
 }
 
 QString VM_sel_element::get_author() const
@@ -165,6 +172,10 @@ QString VM_sel_element::get_module_hint() const
     QString desc = get_description();
     if (!desc.isEmpty())
         result += "<br><b>Description:</b><br>" + desc + "<br>";
+
+    QString keywords = get_keywords();
+    if (!keywords.isEmpty())
+        result += "<br><b>Keywords:</b><br>" + keywords + "<br>";
 
     result += "<br><b>Current search filter rank:</b><br>" 
             + QString::number(get_search_ranking(), 10, 3) + "<br>";

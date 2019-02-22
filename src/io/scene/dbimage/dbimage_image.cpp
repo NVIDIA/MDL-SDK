@@ -206,7 +206,7 @@ mi::Sint32 Image::reset_reader( mi::neuraylib::IReader* reader, const char* imag
 
     m_original_filename.clear();
     m_mdl_file_path.clear();
-    m_resolved_archive_filename.clear();
+    m_resolved_container_filename.clear();
 
     return 0;
 }
@@ -264,7 +264,7 @@ mi::Sint32 Image::reset(
     m_is_uvtile = image_set->is_uvtile();
     m_original_filename = set_str( image_set->get_original_filename());
     m_mdl_file_path = set_str( image_set->get_mdl_file_path());
-    m_resolved_archive_filename = set_str( image_set->get_archive_filename());
+    m_resolved_container_filename = set_str( image_set->get_container_filename());
 
     m_uv_to_index = temp_indices;
     m_uvtiles.resize( number_of_tiles);
@@ -273,8 +273,11 @@ mi::Sint32 Image::reset(
     {
         m_uvtiles[ i].m_resolved_filename = set_str( image_set->get_resolved_filename( i));
         m_uvtiles[ i].m_mdl_file_path = set_str( image_set->get_mdl_url( i));
-        m_uvtiles[ i].m_resolved_archive_membername =
-            set_str( image_set->get_archive_membername( i));
+        m_uvtiles[ i].m_container_membername =
+            set_str( image_set->get_container_membername( i));
+        if (!m_uvtiles[i].m_container_membername.empty())
+            m_uvtiles[i].m_resolved_container_membername =
+            m_resolved_container_filename + ":" + m_uvtiles[i].m_container_membername;
 
         mi::Sint32 u=0, v=0;
         image_set->get_uv_mapping(i, u, v);
@@ -297,13 +300,14 @@ void Image::set_mipmap( IMAGE::IMipmap* mipmap)
     m_uvtiles.resize(1);
     m_uvtiles[0].m_mipmap = make_handle_dup( mipmap);
     m_uvtiles[0].m_mdl_file_path.clear();
-    m_uvtiles[0].m_resolved_archive_membername.clear();
+    m_uvtiles[0].m_container_membername.clear();
+    m_uvtiles[0].m_resolved_container_membername.clear();
     m_uvtiles[0].m_resolved_filename.clear();
 
     m_uv_to_index.reset();
     m_original_filename.clear();
     m_mdl_file_path.clear();
-    m_resolved_archive_filename.clear();
+    m_resolved_container_filename.clear();
 }
 
 IMAGE::IMipmap* Image::get_mipmap()
@@ -316,11 +320,12 @@ IMAGE::IMipmap* Image::get_mipmap()
         return NULL;
 
     m_uvtiles[0].m_resolved_filename.clear();
-    m_uvtiles[0].m_resolved_archive_membername.clear();
+    m_uvtiles[0].m_container_membername.clear();
+    m_uvtiles[0].m_resolved_container_membername.clear();
     m_uvtiles[0].m_mdl_file_path.clear();
     m_original_filename.clear();
     m_mdl_file_path.clear();
-    m_resolved_archive_filename.clear();
+    m_resolved_container_filename.clear();
 
     m_uvtiles[0].m_mipmap->retain();
     return m_uvtiles[0].m_mipmap.get();
@@ -341,11 +346,19 @@ const std::string& Image::get_filename(mi::Uint32 uvtile_id) const
     return m_uvtiles[uvtile_id].m_resolved_filename;
 }
 
-const std::string& Image::get_archive_membername(mi::Uint32 uvtile_id) const
+const std::string& Image::get_container_membername(mi::Uint32 uvtile_id) const
 {
     if(uvtile_id > m_uvtiles.size())
         return empty_str;
-    return m_uvtiles[uvtile_id].m_resolved_archive_membername;
+    return m_uvtiles[uvtile_id].m_container_membername;
+}
+
+
+const std::string& Image::get_resolved_container_membername(mi::Uint32 uvtile_id) const
+{
+    if (uvtile_id > m_uvtiles.size())
+        return empty_str;
+    return m_uvtiles[uvtile_id].m_resolved_container_membername;
 }
 
 const std::string& Image::get_original_filename() const
@@ -403,7 +416,7 @@ const SERIAL::Serializable* Image::serialize( SERIAL::Serializer* serializer) co
 
     serializer->write( serializer->is_remote() ? "" : m_original_filename);
     serializer->write( serializer->is_remote() ? "" : m_mdl_file_path);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_archive_filename);
+    serializer->write( serializer->is_remote() ? "" : m_resolved_container_filename);
     serializer->write( HAL::Ospath::sep());
 
     serializer->write( m_is_uvtile);
@@ -412,7 +425,8 @@ const SERIAL::Serializable* Image::serialize( SERIAL::Serializer* serializer) co
     for(std::vector<Uvtile>::const_iterator it = m_uvtiles.begin(); it<m_uvtiles.end(); ++it)
     {
         serializer->write( serializer->is_remote() ? "" : it->m_resolved_filename);
-        serializer->write( serializer->is_remote() ? "" : it->m_resolved_archive_membername);
+        serializer->write( serializer->is_remote() ? "" : it->m_container_membername);
+        serializer->write( serializer->is_remote() ? "" : it->m_resolved_container_membername);
         serializer->write( serializer->is_remote() ? "" : it->m_mdl_file_path);
         serializer->write( it->m_u);
         serializer->write( it->m_v);
@@ -437,7 +451,7 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
 
     deserializer->read( &m_original_filename);
     deserializer->read( &m_mdl_file_path);
-    deserializer->read( &m_resolved_archive_filename);
+    deserializer->read( &m_resolved_container_filename);
     std::string serializer_sep;
     deserializer->read( &serializer_sep);
     bool convert_path =  serializer_sep != HAL::Ospath::sep();
@@ -448,12 +462,12 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
         m_original_filename
             = HAL::Ospath::convert_to_platform_specific_path( m_original_filename);
 
-        m_resolved_archive_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_archive_filename);
+        m_resolved_container_filename
+            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
     }
-    if( !( m_resolved_archive_filename.empty() ||
-        DISK::is_file( m_resolved_archive_filename.c_str())))
-        m_resolved_archive_filename.clear();
+    if( !( m_resolved_container_filename.empty() ||
+        DISK::is_file( m_resolved_container_filename.c_str())))
+        m_resolved_container_filename.clear();
 
     deserializer->read(&m_is_uvtile);
     size_t s;
@@ -466,7 +480,8 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
     for( std::vector<Uvtile>::iterator it = m_uvtiles.begin(); it<m_uvtiles.end(); ++it)
     {
         deserializer->read( &it->m_resolved_filename);
-        deserializer->read( &it->m_resolved_archive_membername);
+        deserializer->read( &it->m_container_membername);
+        deserializer->read( &it->m_resolved_container_membername);
         deserializer->read( &it->m_mdl_file_path);
         deserializer->read( &it->m_u);
         deserializer->read( &it->m_v);
@@ -478,9 +493,12 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
             {
                 it->m_resolved_filename = HAL::Ospath::convert_to_platform_specific_path(
                     it->m_resolved_filename);
-                it->m_resolved_archive_membername = m_resolved_archive_filename.empty() ? "" :
+                it->m_container_membername = m_resolved_container_filename.empty() ? "" :
                     HAL::Ospath::convert_to_platform_specific_path(
-                        it->m_resolved_archive_membername);
+                        it->m_container_membername);
+
+                it->m_resolved_container_membername = m_resolved_container_filename.empty() ? "" :
+                    m_resolved_container_filename + ":" + it->m_container_membername;
             }
             // Re-resolve filename if it is not meaningful for this host. If unsuccessful,
             // clear value(no error since we no longer require all resources to be present
@@ -517,7 +535,7 @@ void Image::dump() const
 
     s << "Original filename: " << m_original_filename << std::endl;
     s << "Absolute MDL file path: " << m_mdl_file_path << std::endl;
-    s << "Resolved archive filename: " << m_resolved_archive_filename << std::endl;
+    s << "Resolved container filename: " << m_resolved_container_filename << std::endl;
 
     s << "Number of mip maps: " << m_uvtiles.size() << std::endl;
     s << "Is uv-tile-set: " << (m_is_uvtile ? "true" : "false") << std::endl;
@@ -527,7 +545,7 @@ void Image::dump() const
         s << "UV-tile " << it - m_uvtiles.begin() << ":" << std::endl;
         s << "u = " << it->m_u << ", v = " << it->m_v << std::endl;
         s << "Resolved filename: " << it->m_resolved_filename << std::endl;
-        s << "Resolved archive membername: " << it->m_resolved_archive_membername << std::endl;
+        s << "Resolved container membername: " << it->m_resolved_container_membername << std::endl;
         s << "MDL file url: " << it->m_mdl_file_path << std::endl;
 
         s << "Miplevel: " << it->m_mipmap->get_nlevels() << std::endl;
@@ -548,14 +566,15 @@ size_t Image::get_size() const
     for( std::vector<Uvtile>::const_iterator it = m_uvtiles.begin(); it<m_uvtiles.end(); ++it)
     {
         s += dynamic_memory_consumption( it->m_resolved_filename);
-        s += dynamic_memory_consumption( it->m_resolved_archive_membername);
+        s += dynamic_memory_consumption( it->m_container_membername);
+        s += dynamic_memory_consumption( it->m_resolved_container_membername);
         s += dynamic_memory_consumption( it->m_mdl_file_path);
         s +=it->m_mipmap->get_size();
     }
     return sizeof( *this)
         + dynamic_memory_consumption( m_original_filename)
         + dynamic_memory_consumption( m_mdl_file_path)
-        + dynamic_memory_consumption( m_resolved_archive_filename)
+        + dynamic_memory_consumption( m_resolved_container_filename)
         + s;
 }
 
@@ -815,7 +834,7 @@ bool Image::Uv_to_index::set(mi::Sint32 u, mi::Sint32 v, mi::Uint32 index)
     return true;
 }
 
-char const* Image_set::get_archive_filename() const
+char const* Image_set::get_container_filename() const
 {
     return NULL;
 }
@@ -840,7 +859,7 @@ char const* Image_set::get_resolved_filename(mi::Size i) const
     return NULL;
 }
 
-char const* Image_set::get_archive_membername(mi::Size i) const
+char const* Image_set::get_container_membername(mi::Size i) const
 {
     return NULL;
 }
@@ -860,7 +879,7 @@ bool Image_set::is_uvtile() const
     return true; 
 }
 
-bool Image_set::is_mdl_archive() const 
+bool Image_set::is_mdl_container() const
 { 
     return false; 
 }
@@ -877,21 +896,21 @@ MI::IMAGE::IMipmap* Image_set::create_mipmap(mi::Size i) const
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
 
-    // mdl archive based
-    if( is_mdl_archive())
+    // mdl container based
+    if( is_mdl_container())
     {
         mi::base::Handle<mi::neuraylib::IReader> reader(
             open_reader( i));
         if( !reader)
             return NULL;
 
-        ASSERT( M_SCENE, get_archive_filename());
-        ASSERT( M_SCENE, get_archive_membername(i));
+        ASSERT( M_SCENE, get_container_filename());
+        ASSERT( M_SCENE, get_container_membername(i));
 
         return image_module->create_mipmap(
             reader.get(),
-            get_archive_filename(),
-            get_archive_membername( i),
+            get_container_filename(),
+            get_container_membername( i),
             /*tile_width*/ 0, /*tile_height*/ 0, /*only_first_level*/ true);
     }
 

@@ -38,6 +38,7 @@
 
 #include <sstream>
 #include <mi/neuraylib/ibsdf_isotropic_data.h>
+#include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/iexport_result.h>
 #include <mi/neuraylib/istring.h>
@@ -94,7 +95,8 @@ Resource_callback::~Resource_callback()
 
 const char* Resource_callback::get_resource_name(
     const mi::mdl::IValue_resource* resource,
-    bool supports_strict_relative_path)
+    bool supports_strict_relative_path,
+    BufferCallback* buffer_callback)
 {
     // Resources in modules loaded from disk or string most likely do not have a valid tag in AST
     // representation (only in the DAG representation). There is not much we can do in such a case:
@@ -112,14 +114,21 @@ const char* Resource_callback::get_resource_name(
 
     using mi::mdl::is;
     if( is<mi::mdl::IValue_texture>( resource))
-        return handle_texture( tag, supports_strict_relative_path);
+        return handle_texture( tag, supports_strict_relative_path, buffer_callback);
     if( is<mi::mdl::IValue_light_profile>( resource))
-        return handle_light_profile( tag, supports_strict_relative_path);
+        return handle_light_profile( tag, supports_strict_relative_path, buffer_callback);
     if( is<mi::mdl::IValue_bsdf_measurement>( resource))
-        return handle_bsdf_measurement( tag, supports_strict_relative_path);
+        return handle_bsdf_measurement( tag, supports_strict_relative_path, buffer_callback);
 
     ASSERT( M_NEURAY_API, false);
     return 0;
+}
+
+const char* Resource_callback::get_resource_name(
+    const mi::mdl::IValue_resource* resource,
+    bool supports_strict_relative_path)
+{
+    return get_resource_name(resource, supports_strict_relative_path, NULL);
 }
 
 namespace
@@ -136,11 +145,12 @@ const char* get_uvtile_marker(const std::string& str)
     return "";
 }
 
-}
-
+} // anonymous
 
 const char* Resource_callback::handle_texture(
-    DB::Tag texture_tag, bool supports_strict_relative_path)
+    DB::Tag texture_tag, 
+    bool supports_strict_relative_path,
+    BufferCallback* buffer_callback)
 {
     SERIAL::Class_id class_id = m_transaction->get_class_id( texture_tag);
     if( class_id != TEXTURE::Texture::id) {
@@ -163,26 +173,31 @@ const char* Resource_callback::handle_texture(
    
     bool is_uvtile = image->is_uvtile();
     // File-based images
-    if( image->is_file_based()) {
+    if( image->is_file_based())
+    {
 
         const std::string& filename = image->get_filename();
 
         std::string uvtile_marker;
-        if (is_uvtile) {
+        if (is_uvtile)
+        {
             uvtile_marker = get_uvtile_marker(
-                image->get_original_filename().empty() 
-                ? image->get_mdl_file_path() 
+                image->get_original_filename().empty()
+                ? image->get_mdl_file_path()
                 : image->get_original_filename());
             ASSERT(M_NEURAY_API, !uvtile_marker.empty());
         }
 
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
-        if( !m_bundle_resources) {
+        if( !m_bundle_resources)
+        {
             const std::string& file_path = MDL::DETAIL::unresolve_resource_filename(
                 filename.c_str(), m_module_filename_c_str, &m_module_name[3]);
-            if( !file_path.empty()) {
-                if (is_uvtile) {
+            if( !file_path.empty())
+            {
+                if( is_uvtile)
+                {
                     mi::base::Handle<const mi::IString> new_fn(
                         Impexp_utilities::uvtile_string_to_marker(file_path, uvtile_marker));
                     m_file_paths[texture_tag] = new_fn->get_c_str();
@@ -195,44 +210,57 @@ const char* Resource_callback::handle_texture(
         }
 
         // Fail if we need to export the resource, but no module URI is given (string-based export).
-        if( m_module_uri.empty()) {
-            add_error_string_based( 6011, "file-based", "image", image_tag);
+        if( m_module_uri.empty())
+        {
+            add_error_string_based(6011, "file-based", "image", image_tag);
             return 0;
         }
 
         // Otherwise copy the file(s)
         std::string new_filename;
-       
-        if(is_uvtile) {
-            std::string basename, extension;
-            HAL::Ospath::splitext(filename, basename, extension);
 
-            std::vector<std::string> uvtile_filenames;
-            generate_uvtile_filenames(
-                image.get_ptr(), uvtile_marker.c_str(), extension.c_str(), uvtile_filenames);
+        // to a buffer
+        if( buffer_callback) {
+            new_filename = export_canvases(image.get_ptr(), uvtile_marker.c_str(), buffer_callback);
+            if (new_filename.empty()) {
+                add_error_export_failed(6013, "file-based-to-buffer", "image", image_tag);
+                return 0;
+            }
+        }
+        else
+        {
+            // next to the exported module
+            if( is_uvtile) {
+                std::string basename, extension;
+                HAL::Ospath::splitext(filename, basename, extension);
 
-            for (mi::Uint32 i = 0; i < image->get_uvtile_length(); ++i) {
-                bool result = DISK::file_copy(
-                    image->get_filename(i).c_str(), uvtile_filenames[i].c_str());
+                std::vector<std::string> uvtile_filenames;
+                generate_uvtile_filenames(
+                    image.get_ptr(), uvtile_marker.c_str(), extension.c_str(), uvtile_filenames);
+
+                for (mi::Uint32 i = 0; i < image->get_uvtile_length(); ++i) {
+                    bool result = DISK::file_copy(
+                        image->get_filename(i).c_str(), uvtile_filenames[i].c_str());
+                    if (!result) {
+                        add_error_export_failed(6013, "file-based", "image", image_tag);
+                        return 0;
+                    }
+                }
+
+                mi::base::Handle<const mi::IString> new_fn(
+                    Impexp_utilities::uvtile_string_to_marker(uvtile_filenames[0], uvtile_marker));
+                new_filename = new_fn->get_c_str();
+            }
+            else
+            {
+                std::string basename, extension;
+                HAL::Ospath::splitext(filename, basename, extension);
+                new_filename = get_new_resource_filename(extension.c_str(), filename.c_str());
+                bool result = DISK::file_copy(filename.c_str(), new_filename.c_str());
                 if (!result) {
                     add_error_export_failed(6013, "file-based", "image", image_tag);
                     return 0;
                 }
-            }
-
-            mi::base::Handle<const mi::IString> new_fn(
-                Impexp_utilities::uvtile_string_to_marker(uvtile_filenames[0], uvtile_marker));
-            new_filename = new_fn->get_c_str();
-        }
-        else
-        {
-            std::string basename, extension;
-            HAL::Ospath::splitext(filename, basename, extension);
-            new_filename = get_new_resource_filename(extension.c_str(), filename.c_str());
-            bool result = DISK::file_copy(filename.c_str(), new_filename.c_str());
-            if (!result) {
-                add_error_export_failed(6013, "file-based", "image", image_tag);
-                return 0;
             }
         }
 
@@ -240,10 +268,10 @@ const char* Resource_callback::handle_texture(
         return m_file_paths[texture_tag].c_str();
 
     // Archive-based images
-    } else if( image->is_archive_based()) {
+    } else if( image->is_container_based()) {
 
-        const std::string& archive_filename = image->get_archive_filename();
-        const std::string& archive_membername = image->get_archive_membername();
+        const std::string& container_filename = image->get_container_filename();
+        const std::string& container_membername = image->get_container_membername();
 
         std::string uvtile_marker;
         if (is_uvtile) {
@@ -255,7 +283,7 @@ const char* Resource_callback::handle_texture(
         // paths.
         if( !m_bundle_resources) {
             const std::string& file_path = MDL::DETAIL::unresolve_resource_filename(
-                archive_filename.c_str(), archive_membername.c_str(), m_module_filename_c_str,
+                container_filename.c_str(), container_membername.c_str(), m_module_filename_c_str,
                 &m_module_name[3]);
             if( !file_path.empty()) {
                 if (is_uvtile) {
@@ -271,14 +299,15 @@ const char* Resource_callback::handle_texture(
 
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
-            add_error_string_based( 6015, "archive-based", "image", image_tag);
+            add_error_string_based( 6015, "container-based", "image", image_tag);
             return 0;
         }
 
         // Export canvas(es) with a generated filename and return that filename.
-        std::string new_filename = export_canvases(image.get_ptr(), uvtile_marker.c_str());
+        std::string new_filename = export_canvases(
+            image.get_ptr(), uvtile_marker.c_str(), buffer_callback);
         if (new_filename.empty()) {
-            add_error_string_based(6016, "archive-based", "image", image_tag);
+            add_error_string_based(6016, "container-based", "image", image_tag);
             return 0;
         }
 
@@ -296,7 +325,7 @@ const char* Resource_callback::handle_texture(
         }
 
         // Export canvas(es) with a generated filename and return that filename.
-        std::string new_filename = export_canvases(image.get_ptr(), "<UVTILE0>");
+        std::string new_filename = export_canvases(image.get_ptr(), "<UVTILE0>", buffer_callback);
         if (new_filename.empty()) {
             add_error_string_based(6014, "memory-based", "image", image_tag);
             return 0;
@@ -308,7 +337,9 @@ const char* Resource_callback::handle_texture(
 }
 
 const char* Resource_callback::handle_light_profile(
-    DB::Tag tag, bool supports_strict_relative_path)
+    DB::Tag tag, 
+    bool supports_strict_relative_path,
+    BufferCallback* buffer_callback)
 {
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != LIGHTPROFILE::Lightprofile::id) {
@@ -341,31 +372,43 @@ const char* Resource_callback::handle_light_profile(
         }
 
         // Otherwise copy the file.
-        std::string basename, extension;
-        HAL::Ospath::splitext( filename, basename, extension);
-        const std::string& new_filename
-            = get_new_resource_filename( extension.c_str(), filename.c_str());
-        bool result = DISK::file_copy( filename.c_str(), new_filename.c_str());
+        std::string new_filename = "";
+        // to a buffer
+        if (buffer_callback) {
+            new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
+            if (new_filename.empty()) {
+                add_error_export_failed(6013, "file-based-to-buffer", "light profile", tag);
+                return 0;
+            }
+        }
+        else 
+        {
+            // Otherwise copy the file.
+            std::string basename, extension;
+            HAL::Ospath::splitext(filename, basename, extension);
+            new_filename = get_new_resource_filename(extension.c_str(), filename.c_str());
+            bool result = DISK::file_copy(filename.c_str(), new_filename.c_str());
 
-        if( !result) {
-            add_error_export_failed( 6013, "file-based", "light profile", tag);
-            return 0;
+            if (!result) {
+                add_error_export_failed(6013, "file-based", "light profile", tag);
+                return 0;
+            }
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
         return m_file_paths[tag].c_str();
 
     // Archive-based light profiles
-    } else if( lp->is_archive_based()) {
+    } else if( lp->is_container_based()) {
 
-        const std::string& archive_filename = lp->get_archive_filename();
-        const std::string& archive_membername = lp->get_archive_membername();
+        const std::string& container_filename = lp->get_container_filename();
+        const std::string& container_membername = lp->get_container_membername();
 
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
             const std::string& file_path = MDL::DETAIL::unresolve_resource_filename(
-                archive_filename.c_str(), archive_membername.c_str(), m_module_filename_c_str,
+                container_filename.c_str(), container_membername.c_str(), m_module_filename_c_str,
                 &m_module_name[3]);
             if( !file_path.empty()) {
                 m_file_paths[tag] = file_path;
@@ -375,16 +418,14 @@ const char* Resource_callback::handle_light_profile(
 
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
-            add_error_string_based( 6015, "archive-based", "light profile", tag);
+            add_error_string_based( 6015, "container-based", "light profile", tag);
             return 0;
         }
 
         // Export light profile with a generated filename and return that filename.
-        const std::string new_filename = get_new_resource_filename( ".ies", /*old_filename*/ 0);
-        bool result = LIGHTPROFILE::export_to_file( lp.get_ptr(), new_filename.c_str());
-
-        if( !result) {
-            add_error_export_failed( 6016, "archive-based", "light profile", tag);
+        const std::string new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
+        if (new_filename.empty()) {
+            add_error_export_failed( 6016, "container-based", "light profile", tag);
             return 0;
         }
 
@@ -401,11 +442,9 @@ const char* Resource_callback::handle_light_profile(
         }
 
         // Export light profile with a generated filename and return that filename.
-        const std::string new_filename = get_new_resource_filename( ".ies", /*old_filename*/ 0);
-        bool result = LIGHTPROFILE::export_to_file( lp.get_ptr(), new_filename.c_str());
-
-        if( !result) {
-            add_error_export_failed( 6014, "memory-based", "light profile", tag);
+        const std::string new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
+        if (new_filename.empty()) {
+            add_error_export_failed(6014, "memory-based", "light profile", tag);
             return 0;
         }
 
@@ -415,7 +454,9 @@ const char* Resource_callback::handle_light_profile(
 }
 
 const char* Resource_callback::handle_bsdf_measurement(
-    DB::Tag tag, bool supports_strict_relative_path)
+    DB::Tag tag, 
+    bool supports_strict_relative_path,
+    BufferCallback* buffer_callback)
 {
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != BSDFM::Bsdf_measurement::id) {
@@ -448,31 +489,45 @@ const char* Resource_callback::handle_bsdf_measurement(
         }
 
         // Otherwise copy the file.
-        std::string basename, extension;
-        HAL::Ospath::splitext( filename, basename, extension);
-        const std::string& new_filename
-            = get_new_resource_filename( extension.c_str(), filename.c_str());
-        bool result = DISK::file_copy( filename.c_str(), new_filename.c_str());
+        std::string new_filename = "";
+        // to a buffer
+        if (buffer_callback) {
+            new_filename = export_bsdf_measurement(bsdfm.get_ptr(), buffer_callback);
+            if (new_filename.empty())
+            {
+                add_error_export_failed(6013, "file-based-to-buffer", "BSDF measurement", tag);
+                return 0;
+            }
+        }
+        else
+        {
+            // Otherwise copy the file.
+            std::string basename, extension;
+            HAL::Ospath::splitext( filename, basename, extension);
+            new_filename
+                = get_new_resource_filename( extension.c_str(), filename.c_str());
+            bool result = DISK::file_copy( filename.c_str(), new_filename.c_str());
 
-        if( !result) {
-            add_error_export_failed( 6013, "file-based", "BSDF measurement", tag);
-            return 0;
+            if( !result) {
+                add_error_export_failed( 6013, "file-based", "BSDF measurement", tag);
+                return 0;
+            }
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
         return m_file_paths[tag].c_str();
 
     // Archive-based BSDF measurements
-    } else if( bsdfm->is_archive_based()) {
+    } else if( bsdfm->is_container_based()) {
 
-        const std::string& archive_filename = bsdfm->get_archive_filename();
-        const std::string& archive_membername = bsdfm->get_archive_membername();
+        const std::string& container_filename = bsdfm->get_container_filename();
+        const std::string& container_membername = bsdfm->get_container_membername();
 
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
             const std::string& file_path = MDL::DETAIL::unresolve_resource_filename(
-                archive_filename.c_str(), archive_membername.c_str(), m_module_filename_c_str,
+                container_filename.c_str(), container_membername.c_str(), m_module_filename_c_str,
                 &m_module_name[3]);
             if( !file_path.empty()) {
                 m_file_paths[tag] = file_path;
@@ -482,21 +537,15 @@ const char* Resource_callback::handle_bsdf_measurement(
 
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
-            add_error_string_based( 6011, "archive-based", "BSDF measurement", tag);
+            add_error_string_based( 6011, "container-based", "BSDF measurement", tag);
             return 0;
         }
 
         // Export BSDF measurement with a generated filename and return that filename.
-        mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> reflection(
-            bsdfm->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
-        mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> transmission(
-            bsdfm->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
-        const std::string new_filename = get_new_resource_filename( ".mbsdf", /*old_filename*/ 0);
-        bool result = BSDFM::export_to_file(
-            reflection.get(), transmission.get(), new_filename.c_str());
-
-        if( !result) {
-            add_error_export_failed( 6013, "archive-based", "BSDF measurement", tag);
+        const std::string new_filename = export_bsdf_measurement(bsdfm.get_ptr(), buffer_callback);
+        if (new_filename.empty())
+        {
+            add_error_export_failed(6013, "memory-based", "BSDF measurement", tag);
             return 0;
         }
 
@@ -532,9 +581,14 @@ const char* Resource_callback::handle_bsdf_measurement(
 }
 
 std::string Resource_callback::export_canvases(
-    const DBIMAGE::Image* image, const char* uvtile_marker)
+    const DBIMAGE::Image* image, 
+    const char* uvtile_marker,
+    BufferCallback* buffer_callback)
 {
     std::string new_filename;
+    std::string old_filename = image->get_filename();
+    if (old_filename.empty()) old_filename = image->get_original_filename();
+
     if (image->is_uvtile())
     {
         mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(0));
@@ -550,7 +604,24 @@ std::string Resource_callback::export_canvases(
             mipmap = image->get_mipmap(i);
             canvas = mipmap->get_level(0);
 
-            bool result = m_image_module->export_canvas(canvas.get(), uvtile_filenames[i].c_str());
+            bool result = false;
+            if (buffer_callback)
+            {
+                // allow custom output streams
+                mi::base::Handle<mi::neuraylib::IBuffer> buffer(
+                    m_image_module->create_buffer_from_canvas(
+                    canvas.get(), extension + 1, canvas->get_type()));
+
+                if (buffer)
+                {
+                    uvtile_filenames[i] = (*buffer_callback)(buffer.get(), uvtile_filenames[i].c_str());
+                    result = !uvtile_filenames[i].empty();
+                }
+            } else {
+                // write to file by default
+                result = m_image_module->export_canvas(canvas.get(), uvtile_filenames[i].c_str());
+            }
+                
             if (!result) {
                 return "";
             }
@@ -565,15 +636,96 @@ std::string Resource_callback::export_canvases(
         mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap());
         mi::base::Handle<const mi::neuraylib::ICanvas> canvas(mipmap->get_level(0));
         const char* extension = get_extension(canvas->get_type());
-        new_filename
-            = get_new_resource_filename(extension, /*old_filename*/ 0);
-        bool result = m_image_module->export_canvas(canvas.get(), new_filename.c_str());
+        new_filename = get_new_resource_filename(
+            extension, old_filename.empty() ? NULL : old_filename.c_str());
+
+        bool result = false;
+        if (buffer_callback)
+        {
+            // allow custom output streams
+            mi::base::Handle<mi::neuraylib::IBuffer> buffer(
+                m_image_module->create_buffer_from_canvas(
+                canvas.get(), extension + 1, canvas->get_type()));
+
+            if (buffer)
+            {
+                new_filename = (*buffer_callback)(buffer.get(), new_filename.c_str());
+                result = !new_filename.empty();
+            }
+
+        } else {
+            // write to file by default
+            result = m_image_module->export_canvas(canvas.get(), new_filename.c_str());
+        }
 
         if (!result) {
             return "";
         }
     }
     return new_filename;
+}
+
+// Exports the profile th disk using a generic filename.
+std::string Resource_callback::export_light_profile(
+    const LIGHTPROFILE::Lightprofile* profile,
+    BufferCallback* buffer_callback)
+{
+    std::string old_filename = profile->get_filename();
+    if (old_filename.empty()) old_filename = profile->get_original_filename();
+    std::string new_filename = get_new_resource_filename(
+        ".ies", old_filename.empty() ? NULL : old_filename.c_str());
+
+    bool result = false;
+    if (buffer_callback) {
+        // allow custom output streams
+        mi::base::Handle<mi::neuraylib::IBuffer> buffer(
+            MI::LIGHTPROFILE::create_buffer_from_lightprofile(profile));
+
+        if (buffer) {
+            new_filename = (*buffer_callback)(buffer.get(), new_filename.c_str());
+            result = !new_filename.empty();
+        }
+
+    } else {
+        // write to file by default
+        result = MI::LIGHTPROFILE::export_to_file(profile, new_filename.c_str());
+    }
+
+    return result ? new_filename : "";
+}
+
+// Exports the measured BSDF th disk using a generic filename or to a buffer.
+std::string Resource_callback::export_bsdf_measurement(
+    const BSDFM::Bsdf_measurement* measurement,
+    BufferCallback* buffer_callback)
+{
+    std::string old_filename = measurement->get_filename();
+    if (old_filename.empty()) old_filename = measurement->get_original_filename();
+    std::string new_filename = get_new_resource_filename(
+        ".mbsdf", old_filename.empty() ? NULL : old_filename.c_str());
+
+    mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> refl(
+        measurement->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
+    mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> trans(
+        measurement->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
+
+    bool result = false;
+    if (buffer_callback) {
+        // allow custom output streams
+        mi::base::Handle<mi::neuraylib::IBuffer> buffer(
+            MI::BSDFM::create_buffer_from_bsdf_measurement(refl.get(), trans.get()));
+
+        if (buffer) {
+            new_filename = (*buffer_callback)(buffer.get(), new_filename.c_str());
+            result = !new_filename.empty();
+        }
+
+    } else {
+        // write to file by default
+        result = MI::BSDFM::export_to_file(refl.get(), trans.get(), new_filename.c_str());
+    }
+
+    return result ? new_filename : "";
 }
 
 void Resource_callback::generate_uvtile_filenames(
@@ -626,7 +778,9 @@ std::string Resource_callback::get_new_resource_filename(
     std::string s;
 
     if( old_filename) {
-        s = m_path_prefix + "_" + strip_directories( old_filename);
+        std::string old_root, old_ext;
+        MI::HAL::Ospath::splitext(strip_directories(old_filename), old_root, old_ext);
+        s = m_path_prefix + "_" + old_root + extension;
         if( !DISK::is_file( s.c_str()))
             return s;
     }
@@ -642,6 +796,10 @@ std::string Resource_callback::get_new_resource_filename(
 std::string Resource_callback::make_relative(
     const std::string& filename, bool supports_strict_relative_path)
 {
+    // filename is already strict relative
+    if (supports_strict_relative_path && filename[0] == '.' && filename[1] == '/')
+        return filename;
+
     ASSERT( M_NEURAY_API, filename.substr( 0, m_path_prefix.size()) == m_path_prefix);
 
     std::string tmp = strip_directories( filename);
@@ -671,26 +829,30 @@ const char* Resource_callback::get_extension( const char* pixel_type)
 
 void Resource_callback::add_error_export_failed(
     mi::Uint32 error_number,
-    const char* file_archive_or_memory_based,
+    const char* file_container_or_memory_based,
     const char* resource_type,
     DB::Tag resource)
 {
+    if (!m_result) return;
+
     std::stringstream s;
     const char* name = m_transaction->tag_to_name( resource);
-    s << "Export of " << file_archive_or_memory_based << " " << resource_type << "\"" << name
+    s << "Export of " << file_container_or_memory_based << " " << resource_type << "\"" << name
       << "\" failed.";
     m_result->message_push_back( error_number, mi::base::MESSAGE_SEVERITY_ERROR, s.str().c_str());
 }
 
 void Resource_callback::add_error_string_based(
     mi::Uint32 error_number,
-    const char* file_archive_or_memory_based,
+    const char* file_container_or_memory_based,
     const char* resource_type,
     DB::Tag resource)
 {
+    if (!m_result) return;
+
     std::stringstream s;
     const char* name = m_transaction->tag_to_name( resource);
-    s << "Export of " << file_archive_or_memory_based << " " << resource_type << "\"" << name
+    s << "Export of " << file_container_or_memory_based << " " << resource_type << "\"" << name
       << "\" is not supported in string-based exports of MDL modules.";
     m_result->message_push_back( error_number, mi::base::MESSAGE_SEVERITY_ERROR, s.str().c_str());
 }
@@ -700,6 +862,8 @@ void Resource_callback::add_error_resource_type(
     const char* resource_type,
     DB::Tag resource)
 {
+    if (!m_result) return;
+
     std::stringstream s;
     const char* name = m_transaction->tag_to_name( resource);
     s << "Incorrect type for " << resource_type << " resource \"" << name << "\".";

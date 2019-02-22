@@ -2193,22 +2193,24 @@ llvm::PointerType *Function_context::get_ptr(llvm::Type *type)
     return m_type_mapper.get_ptr(type);
 }
 
-// Get the number of elements of an aggregate type (struct or array).
-static unsigned get_aggregate_num_elements(llvm::Type const *type)
+// Get the number of elements of a struct, array or vector type.
+static unsigned get_type_num_elements(llvm::Type const *type)
 {
-    if (llvm::isa<llvm::ArrayType>(type))
-        return unsigned(type->getArrayNumElements());
+    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type))
+        return unsigned(at->getNumElements());
+    if (llvm::VectorType const *vt = llvm::dyn_cast<llvm::VectorType>(type))
+        return unsigned(vt->getNumElements());
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructNumElements();
 }
 
 #ifdef ENABLE_ASSERT   // the function is currently only used within an assertion
 
-// Get the type of the first element of an aggregate type (struct or array).
-static llvm::Type *get_aggregate_first_type(llvm::Type const *type)
+// Get the type of the first element a struct, array or vector type.
+static llvm::Type *get_type_first_type(llvm::Type const *type)
 {
-    if (llvm::isa<llvm::ArrayType>(type))
-        return type->getArrayElementType();
+    if (llvm::SequentialType const *ct = llvm::dyn_cast<llvm::SequentialType>(type))
+        return ct->getElementType();
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructElementType(0);
 }
@@ -2228,7 +2230,7 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
         if (src_type->isAggregateType() && llvm::isa<llvm::VectorType>(dst_type)) {
             // vector types could have a higher natural alignment, so load them by elements
             MDL_ASSERT(
-                get_aggregate_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
+                get_type_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
             );
 
             llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
@@ -2252,19 +2254,46 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 res = m_ir_builder.CreateInsertValue(res, cur_elem, idxs);
             }
             return res;
+        } else if (llvm::isa<llvm::ArrayType>(src_type) && llvm::isa<llvm::ArrayType>(dst_type)) {
+            // as the types are different, one could be an array of structs.
+            // The struct type could have any custom alignment, so load them by elements.
+
+            // we only check the type of the first element of the first aggregate in the arrays...
+            MDL_ASSERT(
+                get_type_num_elements(src_type) == get_type_num_elements(dst_type) &&
+                get_type_num_elements(get_type_first_type(src_type)) ==
+                    get_type_num_elements(get_type_first_type(dst_type)) &&
+                get_type_first_type(get_type_first_type(src_type)) ==
+                    get_type_first_type(get_type_first_type(dst_type)));
+
+            llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
+            llvm::Value *res = llvm::UndefValue::get(dst_type);
+            llvm::Type  *res_arr_elem_type = res->getType()->getArrayElementType();
+            unsigned elem_size = get_type_num_elements(res_arr_elem_type);
+
+            for (unsigned i = 0, n_arr = get_type_num_elements(dst_type); i < n_arr; ++i) {
+                llvm::Value *src_arr_elem = create_extract(a, i);
+                llvm::Value *dst_arr_elem = llvm::UndefValue::get(res_arr_elem_type);
+                for (unsigned j = 0; j < elem_size; ++j) {
+                    llvm::Value *v = create_extract(src_arr_elem, j);
+                    dst_arr_elem = create_insert(dst_arr_elem, v, j);
+                }
+                res = create_insert(res, dst_arr_elem, i);
+            }
+            return res;
         } else if (src_type->isAggregateType() && dst_type->isAggregateType()) {
             // as the types are different, one is a struct and one is an array.
             // The struct type could have any custom alignment, so load them by elements.
 
             // we only check the type of the first element of the struct...
             MDL_ASSERT(
-                get_aggregate_num_elements(src_type) == get_aggregate_num_elements(dst_type) &&
-                get_aggregate_first_type(src_type) == get_aggregate_first_type(dst_type));
+                get_type_num_elements(src_type) == get_type_num_elements(dst_type) &&
+                get_type_first_type(src_type) == get_type_first_type(dst_type));
 
             llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
             llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
+            for (unsigned i = 0, n = get_type_num_elements(dst_type); i < n; ++i) {
                 unsigned idxs[] = { i };
                 llvm::Value *v   = m_ir_builder.CreateExtractValue(a, idxs);
                 res = m_ir_builder.CreateInsertValue(res, v, idxs);
@@ -2276,10 +2305,10 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 dst_type->isStructTy())
             {
                 MDL_ASSERT(
-                    get_aggregate_num_elements(dst_type) == 3 &&
-                    get_aggregate_num_elements(get_aggregate_first_type(dst_type)) == 3 &&
+                    get_type_num_elements(dst_type) == 3 &&
+                    get_type_num_elements(get_type_first_type(dst_type)) == 3 &&
                     src_type->getVectorElementType() ==
-                        get_aggregate_first_type(get_aggregate_first_type(dst_type)));
+                        get_type_first_type(get_type_first_type(dst_type)));
 
                 llvm::Value *a = m_ir_builder.CreateLoad(ptr);
                 llvm::Value *res = llvm::UndefValue::get(dst_type);
@@ -2297,13 +2326,13 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             } else {
                 // we only check the type of the first element of the struct...
                 MDL_ASSERT(
-                    src_type->getVectorNumElements() == get_aggregate_num_elements(dst_type) &&
-                    src_type->getVectorElementType() == get_aggregate_first_type(dst_type));
+                    src_type->getVectorNumElements() == get_type_num_elements(dst_type) &&
+                    src_type->getVectorElementType() == get_type_first_type(dst_type));
 
                 llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
                 llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-                for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
+                for (unsigned i = 0, n = get_type_num_elements(dst_type); i < n; ++i) {
                     unsigned idxs[] = { i };
                     llvm::Value *v   = m_ir_builder.CreateExtractElement(a, get_constant(int(i)));
                     res = m_ir_builder.CreateInsertValue(res, v, idxs);
@@ -2375,13 +2404,13 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
 
         if (llvm::isa<llvm::VectorType>(src_type) && dst_type->isAggregateType()) {
             MDL_ASSERT(
-                uint64_t(src_type->getVectorNumElements()) >= get_aggregate_num_elements(dst_type)
+                uint64_t(src_type->getVectorNumElements()) >= get_type_num_elements(dst_type)
             );
 
             llvm::Value *a   = value;
             llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
+            for (unsigned i = 0, n = get_type_num_elements(dst_type); i < n; ++i) {
                 unsigned idxs[] = { i };
                 llvm::Value *v   = m_ir_builder.CreateExtractElement(a, get_constant(int(i)));
                 res = m_ir_builder.CreateInsertValue(res, v, idxs);
@@ -2404,14 +2433,14 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
 
             // we only check the type of the first element of the struct...
             MDL_ASSERT(
-                get_aggregate_num_elements(src_type) == get_aggregate_num_elements(dst_type) &&
-                get_aggregate_first_type(src_type) == get_aggregate_first_type(dst_type)
+                get_type_num_elements(src_type) == get_type_num_elements(dst_type) &&
+                get_type_first_type(src_type) == get_type_first_type(dst_type)
             );
 
             llvm::Value *a   = value;
             llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = get_aggregate_num_elements(dst_type); i < n; ++i) {
+            for (unsigned i = 0, n = get_type_num_elements(dst_type); i < n; ++i) {
                 unsigned idxs[] = { i };
                 llvm::Value *v   = m_ir_builder.CreateExtractValue(a, idxs);
                 res = m_ir_builder.CreateInsertValue(res, v, idxs);
@@ -2425,7 +2454,7 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
         } else {
             MDL_ASSERT(
                 src_type->isAggregateType() && llvm::isa<llvm::VectorType>(dst_type) &&
-                get_aggregate_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
+                get_type_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
             );
 
             llvm::Value *a   = value;

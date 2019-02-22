@@ -95,8 +95,7 @@ void load_module( mi::neuraylib::INeuray* neuray)
         mi::base::Handle < mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
 
-        // Load the module "example". There is no need to configure any module search paths since
-        // the current directory is by default in the search path.
+        // Load the module "tutorials".
         check_success( mdl_compiler->load_module(
             transaction.get(), "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
         print_messages( context.get());

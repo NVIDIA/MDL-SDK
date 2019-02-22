@@ -38,6 +38,7 @@
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
+#include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
@@ -70,8 +71,8 @@ Bsdf_measurement::Bsdf_measurement( const Bsdf_measurement& other)
     m_transmission = other.m_transmission;
     m_original_filename = other.m_original_filename;
     m_resolved_filename = other.m_resolved_filename;
-    m_resolved_archive_filename = other.m_resolved_archive_filename;
-    m_resolved_archive_membername = other.m_resolved_archive_membername;
+    m_resolved_container_filename = other.m_resolved_container_filename;
+    m_resolved_container_membername = other.m_resolved_container_membername;
     m_mdl_file_path = other.m_mdl_file_path;
 }
 
@@ -112,8 +113,8 @@ mi::Sint32 Bsdf_measurement::reset_file( const std::string& original_filename)
 
     m_original_filename = original_filename;
     m_resolved_filename = resolved_filename;
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
 
     std::ostringstream s;
@@ -138,8 +139,8 @@ mi::Sint32 Bsdf_measurement::reset_reader( mi::neuraylib::IReader* reader)
 
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
 
     std::ostringstream s;
@@ -165,8 +166,8 @@ mi::Sint32 Bsdf_measurement::reset_file_mdl(
 
     m_original_filename.clear();
     m_resolved_filename = resolved_filename;
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path = mdl_file_path;
 
     std::ostringstream s;
@@ -178,16 +179,16 @@ mi::Sint32 Bsdf_measurement::reset_file_mdl(
     return 0;
 }
 
-mi::Sint32 Bsdf_measurement::reset_archive_mdl(
+mi::Sint32 Bsdf_measurement::reset_container_mdl(
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path)
 {
     mi::neuraylib::IBsdf_isotropic_data* reflection = 0;
     mi::neuraylib::IBsdf_isotropic_data* transmission = 0;
     bool success = import_from_reader(
-        reader, archive_filename, archive_membername, reflection, transmission);
+        reader, container_filename, container_membername, reflection, transmission);
     if( !success)
         return -3;
 
@@ -196,13 +197,13 @@ mi::Sint32 Bsdf_measurement::reset_archive_mdl(
 
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename = archive_filename;
-    m_resolved_archive_membername = archive_membername;
+    m_resolved_container_filename = container_filename;
+    m_resolved_container_membername = container_membername;
     m_mdl_file_path = mdl_file_path;
 
     std::ostringstream s;
-    s << "Loading BSDF measurement \"" << archive_membername
-      << "\" in \"" << archive_filename
+    s << "Loading BSDF measurement \"" << container_membername
+      << "\" in \"" << container_filename
       << "\", reflection: " << dump_data( m_reflection.get())
       << ", transmission: " << dump_data( m_transmission.get());
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO, "%s", s.str().c_str());
@@ -214,8 +215,8 @@ void Bsdf_measurement::set_reflection( const mi::neuraylib::IBsdf_isotropic_data
 {
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
     m_reflection = make_handle_dup( bsdf_data);
 }
@@ -232,8 +233,8 @@ void Bsdf_measurement::set_transmission( const mi::neuraylib::IBsdf_isotropic_da
 {
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
     m_transmission = make_handle_dup( bsdf_data);
 }
@@ -276,8 +277,8 @@ const SERIAL::Serializable* Bsdf_measurement::serialize( SERIAL::Serializer* ser
 
     serializer->write( serializer->is_remote() ? "" : m_original_filename);
     serializer->write( serializer->is_remote() ? "" : m_resolved_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_archive_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_archive_membername);
+    serializer->write( serializer->is_remote() ? "" : m_resolved_container_filename);
+    serializer->write( serializer->is_remote() ? "" : m_resolved_container_membername);
     serializer->write( serializer->is_remote() ? "" : m_mdl_file_path);
     serializer->write( HAL::Ospath::sep());
 
@@ -293,8 +294,8 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
 
     deserializer->read( &m_original_filename);
     deserializer->read( &m_resolved_filename);
-    deserializer->read( &m_resolved_archive_filename);
-    deserializer->read( &m_resolved_archive_membername);
+    deserializer->read( &m_resolved_container_filename);
+    deserializer->read( &m_resolved_container_membername);
     deserializer->read( &m_mdl_file_path);
     std::string serializer_sep;
     deserializer->read( &serializer_sep);
@@ -323,20 +324,20 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
         }
     }
 
-    // Adjust m_resolved_archive_filename and m_resolved_archive_membername for this host.
-    if( !m_resolved_archive_filename.empty()) {
+    // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
+    if( !m_resolved_container_filename.empty()) {
 
-        m_resolved_archive_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_archive_filename);
-        m_resolved_archive_membername
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_archive_membername);
-        if( !DISK::is_file( m_resolved_archive_filename.c_str())) {
-            m_resolved_archive_filename.clear();
-            m_resolved_archive_membername.clear();
+        m_resolved_container_filename
+            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
+        m_resolved_container_membername
+            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_membername);
+        if( !DISK::is_file( m_resolved_container_filename.c_str())) {
+            m_resolved_container_filename.clear();
+            m_resolved_container_membername.clear();
         }
 
     } else
-        ASSERT( M_SCENE, m_resolved_archive_membername.empty());
+        ASSERT( M_SCENE, m_resolved_container_membername.empty());
 
     return this + 1;
 }
@@ -347,8 +348,8 @@ void Bsdf_measurement::dump() const
 
     s << "Original filename: " << m_original_filename << std::endl;
     s << "Resolved filename: " << m_resolved_filename << std::endl;
-    s << "Resolved archive filename: " << m_resolved_archive_filename << std::endl;
-    s << "Resolved archive membername: " << m_resolved_archive_membername << std::endl;
+    s << "Resolved container filename: " << m_resolved_container_filename << std::endl;
+    s << "Resolved container membername: " << m_resolved_container_membername << std::endl;
     s << "MDL file path: " << m_mdl_file_path << std::endl;
 
     s << "Reflection: " << dump_data( m_reflection.get()) << std::endl;
@@ -362,8 +363,8 @@ size_t Bsdf_measurement::get_size() const
     size_t result = sizeof( *this)
         + dynamic_memory_consumption( m_original_filename)
         + dynamic_memory_consumption( m_resolved_filename)
-        + dynamic_memory_consumption( m_resolved_archive_filename)
-        + dynamic_memory_consumption( m_resolved_archive_membername)
+        + dynamic_memory_consumption( m_resolved_container_filename)
+        + dynamic_memory_consumption( m_resolved_container_membername)
         + dynamic_memory_consumption( m_mdl_file_path);
 
     // For memory-based BSDF measurements we do not include the actual data here since it is not
@@ -624,13 +625,13 @@ bool import_from_reader(
 
 bool import_from_reader(
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     mi::neuraylib::IBsdf_isotropic_data*& reflection,
     mi::neuraylib::IBsdf_isotropic_data*& transmission)
 {
     std::string root, extension;
-    HAL::Ospath::splitext( archive_membername, root, extension);
+    HAL::Ospath::splitext(container_membername, root, extension);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
     if( extension != "mbsdf")
@@ -641,46 +642,82 @@ bool import_from_reader(
 
 namespace {
 
-void export_to_file( DISK::File& file, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
+bool export_to_file(mi::neuraylib::IWriter* writer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
 {
     mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
     mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
     mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
     mi::Uint32 type_uint32        = type == mi::neuraylib::BSDF_SCALAR ? 0 : 1;
 
-    file.write( reinterpret_cast<const char*>( &type_uint32), 4);
-    file.write( reinterpret_cast<const char*>( &resolution_theta), 4);
-    file.write( reinterpret_cast<const char*>( &resolution_phi), 4);
+    if (!writer->write(reinterpret_cast<const char*>(&type_uint32), 4)) return false;
+    if(!writer->write( reinterpret_cast<const char*>( &resolution_theta), 4)) return false;
+    if(!writer->write( reinterpret_cast<const char*>( &resolution_phi), 4)) return false;
 
     mi::Size size = resolution_theta * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     mi::base::Handle<const mi::neuraylib::IBsdf_buffer> buffer( bsdf_data->get_bsdf_buffer());
     const mi::Float32* data = buffer->get_data();
-    file.write( reinterpret_cast<const char*>( data), size * sizeof( mi::Float32));
+    if(!writer->write( reinterpret_cast<const char*>( data), size * sizeof( mi::Float32))) 
+        return false;
+
+    return true;
 }
 
-} // namespace
+} // anonymous
+
+/// Exports the BSDF data to a buffer.
+///
+/// \param reflection     The BSDF data to export for the reflection. Can be \p NULL.
+/// \param transmission   The BSDF data to export for the transmission. Can be \p NULL.
+/// \return               The buffer in case of success, NULL otherwise.
+mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
+    const mi::neuraylib::IBsdf_isotropic_data* reflection,
+    const mi::neuraylib::IBsdf_isotropic_data* transmission)
+{
+    MI::DISK::Memory_writer_impl writer;
+
+    bool success = true;
+    success &= writer.writeline(magic_header);
+
+    if (reflection) {
+        success &= writer.writeline(magic_reflection);
+        success &= export_to_file(&writer, reflection);
+    }
+
+    if (transmission) {
+        success &= writer.writeline(magic_transmission);
+        success &= export_to_file(&writer, transmission);
+    }
+
+    mi::neuraylib::IBuffer* buffer = writer.get_buffer();
+    return buffer;
+}
 
 bool export_to_file(
     const mi::neuraylib::IBsdf_isotropic_data* reflection,
     const mi::neuraylib::IBsdf_isotropic_data* transmission,
     const std::string& filename)
 {
-    DISK::File file;
-    if( !file.open( filename, DISK::IFile::M_WRITE))
+    MI::DISK::File_writer_impl writer;
+    if (!writer.open(filename.c_str()))
         return false;
 
-    file.writeline( magic_header);
-    if( reflection) {
-        file.writeline( magic_reflection);
-        export_to_file( file, reflection);
+    bool success = true;
+    success &= writer.writeline(magic_header);
+
+    if (reflection) {
+        success &= writer.writeline(magic_reflection);
+        success &= export_to_file(&writer, reflection);
     }
-    if( transmission) {
-        file.writeline( magic_transmission);
-        export_to_file( file, transmission);
+
+    if (transmission) {
+        success &= writer.writeline(magic_transmission);
+        success &= export_to_file(&writer, transmission);
     }
-    return true;
+
+    writer.close();
+    return success;
 }
 
 DB::Tag load_mdl_bsdf_measurement(
@@ -714,8 +751,8 @@ DB::Tag load_mdl_bsdf_measurement(
 DB::Tag load_mdl_bsdf_measurement(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path,
     bool shared)
 {
@@ -723,7 +760,7 @@ DB::Tag load_mdl_bsdf_measurement(
         return DB::Tag( 0);
 
     std::string db_name = shared ? "MI_default_" : "";
-    db_name += "bsdf_measurement_" + archive_filename + "_" + archive_membername;
+    db_name += "bsdf_measurement_" + container_filename + "_" + container_membername;
     if( !shared)
         db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
 
@@ -732,13 +769,13 @@ DB::Tag load_mdl_bsdf_measurement(
         return tag;
 
     Bsdf_measurement* bsdfm = new Bsdf_measurement();
-    mi::Sint32 result = bsdfm->reset_archive_mdl(
-        reader, archive_filename, archive_membername, mdl_file_path);
+    mi::Sint32 result = bsdfm->reset_container_mdl(
+        reader, container_filename, container_membername, mdl_file_path);
     ASSERT( M_BSDF_MEASUREMENT, result == 0 || result == -3);
     if( result == -3)
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,
             "File format error or invalid filename extension in default BSDF measurement \"%s\" "
-            "in \"%s\".", archive_membername.c_str(), archive_filename.c_str());
+            "in \"%s\".", container_membername.c_str(), container_filename.c_str());
 
     tag = transaction->store_for_reference_counting(
         bsdfm, db_name.c_str(), transaction->get_scope()->get_level());

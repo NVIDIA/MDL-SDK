@@ -31,6 +31,7 @@
 <div align="right">
     [\link mi_neuray_example_discovery Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdle Next\endlink]
 </div>
 
 This example demonstrates how a material selection dialogue that emphasizes the package and module
@@ -212,6 +213,7 @@ configured search paths.
 <div align="right">
     [\link mi_neuray_example_discovery Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdle Next\endlink]
 </div>
 
 */

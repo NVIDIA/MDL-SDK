@@ -595,12 +595,13 @@ static bool is_finite(DAG_node const *node)
 string DAG_node_factory_impl::get_field_name(
     char const *call_name) const
 {
-    char const *p = strchr(call_name, '.');
-    if (p != NULL) {
-        ++p;
-        if (char const *n = strchr(p, '('))
-            return string(p, n - p, get_allocator());
-        return string(p, get_allocator());
+    const char* p = strstr(call_name, ".mdle::");
+    const char* dot = strchr(p ? (p + 7) : call_name, '.');
+    if (dot != NULL) {
+        ++dot;
+        if (char const *n = strchr(dot, '('))
+            return string(dot, n - dot, get_allocator());
+        return string(dot, get_allocator());
     }
     return string("", get_allocator());
 }

@@ -43,13 +43,20 @@
 #include <boost/core/noncopyable.hpp>
 #include <base/data/db/i_db_tag.h>
 
-namespace mi { namespace neuraylib { class IExport_result_ext; } }
+namespace mi { 
+    namespace neuraylib { 
+        class IExport_result_ext;
+        class IBuffer;
+    } 
+}
 
 namespace MI {
 
+namespace BSDFM { class Bsdf_measurement; }
 namespace DB { class Transaction; }
 namespace IMAGE { class Image_module; }
 namespace DBIMAGE { class Image; }
+namespace LIGHTPROFILE { class Lightprofile; }
 
 namespace NEURAY {
 
@@ -57,6 +64,15 @@ class Resource_callback
   : public mi::mdl::IMDL_exporter_resource_callback, public boost::noncopyable
 {
 public:
+
+    /// Allows to provide a custom output stream
+    /// \param  buffer                  resource content, ready to be written to a file
+    /// \param  suggested_file_name     the filename that would be used internally
+    ///
+    /// \return the new file name or an empty string the indicate an error
+    typedef std::function<
+        std::string(mi::neuraylib::IBuffer* buffer, const char* suggested_file_name)> BufferCallback;
+
     Resource_callback(
         DB::Transaction* transaction,
         const char* module_name,
@@ -70,13 +86,31 @@ public:
         const mi::mdl::IValue_resource* resource,
         bool supports_strict_relative_path);
 
+    /// if a callback is provided, exports are written to the provided streams instead of
+    /// to file next to the module
+    const char* get_resource_name(
+        const mi::mdl::IValue_resource* resource,
+        bool supports_strict_relative_path,
+        BufferCallback* buffer_callback);
+
 private:
     /// Returns the file path for a texture.
-    const char* handle_texture( DB::Tag tag, bool supports_strict_relative_path);
+    const char* handle_texture(
+        DB::Tag tag, 
+        bool supports_strict_relative_path,
+        BufferCallback* buffer_callback);
+
     /// Returns the file path for a light profile.
-    const char* handle_light_profile( DB::Tag tag, bool supports_strict_relative_path);
+    const char* handle_light_profile(
+        DB::Tag tag, 
+        bool supports_strict_relative_path,
+        BufferCallback* buffer_callback);
+
     /// Returns the file path for a BSDF measurement.
-    const char* handle_bsdf_measurement( DB::Tag tag, bool supports_strict_relative_path);
+    const char* handle_bsdf_measurement(
+        DB::Tag tag, 
+        bool supports_strict_relative_path,
+        BufferCallback* buffer_callback);
 
     /// Generates unique uv-tile filenames for the given sequence
     void generate_uvtile_filenames(
@@ -85,10 +119,23 @@ private:
         const char* extension,
         std::vector<std::string>& filenames);
 
-    /// Exports all canvases of the given image to disk using a generic filename.
+    /// Exports all canvases of the given image to disk using a generic filename or to a buffer.
     /// In case of an uvtile/udim-sequence, the filenames follow the convention
     /// given in \p uvtile_marker.
-    std::string export_canvases(const DBIMAGE::Image* image, const char* uvtile_marker);
+    std::string export_canvases(
+        const DBIMAGE::Image* image, 
+        const char* uvtile_marker,
+        BufferCallback* buffer_callback);
+
+    /// Exports the profile th disk using a generic filename or to a buffer.
+    std::string export_light_profile(
+        const LIGHTPROFILE::Lightprofile* profile,
+        BufferCallback* buffer_callback);
+
+    /// Exports the measured BSDF th disk using a generic filename or to a buffer.
+    std::string export_bsdf_measurement(
+        const BSDFM::Bsdf_measurement* measurement,
+        BufferCallback* buffer_callback);
 
     /// Generates a filename for resources with the given extension or based on other filename.
     ///
@@ -119,14 +166,14 @@ private:
     /// Adds an error message for failed export operations of resources.
     void add_error_export_failed(
         mi::Uint32 error_number,
-        const char* file_archive_or_memory_based,
+        const char* file_container_or_memory_based,
         const char* resource_type,
         DB::Tag resource);
 
     /// Adds an error message for unfulfillable export operations in string-based exports.
     void add_error_string_based(
         mi::Uint32 error_number,
-        const char* file_archive_or_memory_based,
+        const char* file_container_or_memory_based,
         const char* resource_type,
         DB::Tag resource);
 
@@ -168,6 +215,7 @@ private:
 
     /// Access to the IMAGE module.
     SYSTEM::Access_module<IMAGE::Image_module> m_image_module;
+
 };
 
 } // namespace NEURAY

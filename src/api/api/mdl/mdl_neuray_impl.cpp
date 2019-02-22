@@ -58,8 +58,9 @@
 #include "neuray_mdl_i18n_configuration_impl.h"
 #include "neuray_mdl_discovery_api_impl.h"
 #include "neuray_mdl_evaluator_api_impl.h"
-
 #include "neuray_mdl_factory_impl.h"
+#include "neuray_mdle_api_impl.h"
+
 #include "neuray_version_impl.h"
 #include "mdl_mdl_compiler_impl.h"
 
@@ -107,7 +108,7 @@ Neuray_impl::Neuray_impl()
     m_mdl_evaluator_api_impl = new NEURAY::Mdl_evaluator_api_impl( this);
     m_mdl_archive_api_impl = new NEURAY::Mdl_archive_api_impl( this);
     m_mdl_compatibility_api_impl = new NEURAY::Mdl_compatibility_api_impl( this);
-
+    m_mdle_api_impl = new NEURAY::Mdle_api_impl( this);
     // Register API components that are always available,
     // other API components are registered in start()
     register_api_component<mi::neuraylib::IDebug_configuration>( m_debug_configuration_impl);
@@ -153,6 +154,7 @@ Neuray_impl::~Neuray_impl()
     ref_count = m_mdl_discovery_api_impl->release();        CHECK_RESULT;
     ref_count = m_mdl_evaluator_api_impl->release();        CHECK_RESULT;
     ref_count = m_mdl_factory_impl->release();              CHECK_RESULT;
+    ref_count = m_mdle_api_impl->release();                 CHECK_RESULT;
     ref_count = m_image_api_impl->release();                CHECK_RESULT;
     ref_count = m_debug_configuration_impl->release();      CHECK_RESULT;
     ref_count = m_database_impl->release();                 CHECK_RESULT;
@@ -212,8 +214,8 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     result = m_mdl_compatibility_api_impl->start(); CHECK_RESULT;
     result = m_mdl_discovery_api_impl->start();     CHECK_RESULT;
     result = m_mdl_evaluator_api_impl->start();     CHECK_RESULT;
-    result = m_mdl_i18n_configuration_impl->start(); CHECK_RESULT;
-
+    result = m_mdl_i18n_configuration_impl->start();CHECK_RESULT;
+    result = m_mdle_api_impl->start();              CHECK_RESULT;
 #undef CHECK_RESULT
 
     register_api_component<mi::neuraylib::IDatabase>( m_database_impl);
@@ -223,12 +225,13 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     register_api_component<mi::neuraylib::IMdl_compatibility_api>( m_mdl_compatibility_api_impl);
     register_api_component<mi::neuraylib::IMdl_discovery_api>(m_mdl_discovery_api_impl);
     register_api_component<mi::neuraylib::IMdl_evaluator_api>(m_mdl_evaluator_api_impl);
-
+    register_api_component<mi::neuraylib::IMdle_api>(m_mdle_api_impl);
+    
     NEURAY::Class_registration::register_structure_declarations( m_class_factory);
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    mi::base::Handle<IMAGE::IMdr_callback> callback( MDL::create_mdr_callback());
-    image_module->set_mdr_callback( callback.get());
+    mi::base::Handle<IMAGE::IMdl_container_callback> callback( MDL::create_mdl_container_callback());
+    image_module->set_mdl_container_callback( callback.get());
 
     m_status = STARTED;
 
@@ -243,10 +246,11 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     m_status = SHUTTINGDOWN;
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    image_module->set_mdr_callback( 0);
+    image_module->set_mdl_container_callback( 0);
 
     NEURAY::Class_registration::unregister_structure_declarations( m_class_factory);
 
+    unregister_api_component<mi::neuraylib::IMdle_api>();
     unregister_api_component<mi::neuraylib::IMdl_evaluator_api>();
     unregister_api_component<mi::neuraylib::IMdl_archive_api>();
     unregister_api_component<mi::neuraylib::IMdl_compatibility_api>();
@@ -264,6 +268,8 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     result = m_mdl_archive_api_impl->shutdown();        CHECK_RESULT;
     result = m_mdl_compatibility_api_impl->shutdown();  CHECK_RESULT;
     result = m_mdl_discovery_api_impl->shutdown();      CHECK_RESULT;
+    result = m_mdle_api_impl->shutdown();               CHECK_RESULT;
+    
     result = m_mdl_compiler_impl->shutdown();           CHECK_RESULT;
     result = m_image_api_impl->shutdown();              CHECK_RESULT;
     result = m_database_impl->shutdown();               CHECK_RESULT;

@@ -63,10 +63,20 @@ public:
     /// \param ref   the expression to clone
     virtual IExpression *clone_expr_reference(IExpression_reference const *ref) = 0;
 
+    /// Clone a call expression.
+    ///
+    /// \param call  the expression to clone
+    virtual IExpression *clone_expr_call(IExpression_call const *call) = 0;
+
     /// Clone a literal.
     ///
     /// \param lit  the literal to clone
     virtual IExpression *clone_literal(IExpression_literal const *lit) = 0;
+
+    /// Clone a qualified name.
+    ///
+    /// \param name  the name to clone
+    virtual IQualified_name *clone_name(IQualified_name const *qname) = 0;
 };
 
 /// Implementation of the semantic version.
@@ -639,7 +649,46 @@ public:
     /// Clone the given qualified name.
     ///
     /// \param qname  the qualified name
-    IQualified_name *clone_name(IQualified_name const *qname);
+    /// \param modifier   an optional clone modifier, may be NULL
+    IQualified_name *clone_name(
+        IQualified_name const *qname,
+        IClone_modifier       *modifier);
+
+    /// Clone the given parameter.
+    ///
+    /// \param param      the parameter to clone
+    /// \param clone_init if true, the init expression is cloned
+    /// \param clone_anno if true, the annotations are cloned
+    /// \param modifier   an optional clone modifier, may be NULL
+    IParameter const *clone_param(
+        IParameter const   *param,
+        bool               clone_init,
+        bool               clone_anno,
+        IClone_modifier    *modifier);
+
+    /// Clone the given variable declaration.
+    ///
+    /// \param decl       the variable declaration to clone
+    /// \param modifier   an optional clone modifier, may be NULL
+    IDeclaration *clone_decl(
+        IDeclaration_variable const *decl,
+        IClone_modifier             *modifier);
+
+    /// Clone the given annotation block.
+    ///
+    /// \param anno_block the annotation block to clone
+    /// \param modifier   an optional clone modifier, may be NULL
+    IAnnotation_block *clone_annotation_block(
+        IAnnotation_block const *anno_block,
+        IClone_modifier         *modifier);
+
+    /// Clone the given annotation.
+    ///
+    /// \param anno       the annotation to clone
+    /// \param modifier   an optional clone modifier, may be NULL
+    IAnnotation *clone_annotation(
+        IAnnotation const *anno,
+        IClone_modifier   *modifier);
 
     /// Get the first constructor of a given type.
     /// The type must exists in this module, or NULL will be returned.
@@ -851,6 +900,47 @@ public:
         char const           *file_name,
         IType_resource const *type,
         bool                 exists);
+
+
+    /// Possible MDL version promotion rules.
+    enum Promotion_rules {
+        PR_NO_CHANGE                    = 0x00,
+        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x01, ///< add a spread param to spot_edf()
+        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x02, ///< add a multiplier param to measured_edf()
+        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x04, ///< add a tangent_u param to measured_edf()
+        PR_FRESNEL_LAYER_TO_COLOR       = 0x08, ///< convert fresnel_layer() to color_*()
+        PR_WIDTH_HEIGTH_ADD_UV_TILE     = 0x10, ///< add an uv_tile param to width()/height()
+        PR_TEXEL_ADD_UV_TILE            = 0x20, ///< add an uv_tile param to texel_*()
+        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x40, ///< add roundness param to rounded_corner_normal
+    };
+
+    /// Alters one call argument according to the given promotion rules.
+    /// 
+    /// \param call         the call to alter
+    /// \param arg          the argument at current parameter index
+    /// \param param_index  index of the current parameter
+    /// \param rules        the set of transformation rules to be applied
+    /// 
+    /// \return The index of the parameter that was modified, e.g. inserted.
+    int promote_call_arguments(
+        IExpression_call *call,
+        IArgument const  *arg,
+        int              param_index,
+        unsigned         rules);
+
+    /// Analyze the module.
+    ///
+    /// \param cache              if non-NULL, a cache of already loaded modules
+    /// \param ctx                the thread context
+    /// \param resolve_resources  if true, the compiler will resolve all referenced resourced
+    ///
+    /// \returns      True if the module is valid and false otherwise.
+    ///
+    /// This runs the MDL compiler's semantical analysis on this module.
+    bool analyze(
+        IModule_cache   *cache,
+        IThread_context *ctx,
+        bool            resolve_resources);
 
 private:
     class Import_entry {

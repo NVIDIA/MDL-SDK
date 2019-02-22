@@ -769,6 +769,9 @@ public:
             if (ref->is_array_constructor()) {
                 // array constructor: fold all of its arguments
                 IType_array const *a_type = as<IType_array>(get_type());
+                if (a_type == NULL)
+                    return factory->create_bad();
+
                 int n = a_type->get_size();
 
                 Module const *mod = impl_cast<Module>(module);

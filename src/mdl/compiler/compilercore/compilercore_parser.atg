@@ -60,7 +60,7 @@ COMPILER mdl
     IDeclaration_factory *m_declaration_factory;
 
     IAnnotation_factory *m_annotation_factory;
-    
+
     void set_imdl(IAllocator *alloc, MDL *imdl)
     {
         m_alloc = alloc;
@@ -352,7 +352,7 @@ COMPILER mdl
         }
         return false;
     }
-    
+
     // Check if the next two tokens are '[' and ']
     bool is_array_constructor()
     {
@@ -364,7 +364,7 @@ COMPILER mdl
         }
         return false;
     }
-    
+
     // Check if the next three tokens are '(', '*', and ')'.
     bool is_clone()
     {
@@ -431,7 +431,7 @@ COMPILER mdl
     {
         IType_name *type_name = prefix;
         IQualified_name *qualified_name;
-                
+
         if (type_name) {
             qualified_name = type_name->get_qualified_name();
         } else {
@@ -995,7 +995,7 @@ TOKENS
         = DIGIT { DIGIT } '.' DIGIT { DIGIT } CONTEXT(NOT_EXP).
 
     FLOATING_LITERAL
-        = 
+        =
         ( (   DIGIT { DIGIT } '.'
             | '.' DIGIT { DIGIT }
             | DIGIT { DIGIT } ['.' { DIGIT }] ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
@@ -1092,15 +1092,15 @@ TOKENS
     COLOR = "color" .
 
     STRING = "string" .
-    
+
     BSDF = "bsdf" .
-    
+
     EDF = "edf" .
-    
+
     VDF = "vdf" .
-    
+
     LIGHT_PROFILE = "light_profile" .
-    
+
     TEXTURE_2D = "texture_2d" .
 
     TEXTURE_3D = "texture_3d" .
@@ -1616,7 +1616,7 @@ argument_list<Argument_owner &arg_owner>
     .
 
 import<IDeclaration const *&declaration>
-    = 
+    =
         "import"
                                                 (.
                                                     IQualified_name *qual_name = NULL;
@@ -1628,7 +1628,7 @@ import<IDeclaration const *&declaration>
                                                                             t->col);
                                                 .)
         qualified_import<qual_name>             (. import->add_name(qual_name); .)
-                                                       
+
         {
             WEAK ','
             qualified_import<qual_name>         (. import->add_name(qual_name); .)
@@ -2041,7 +2041,7 @@ variable_declaration<bool exported, IDeclaration const *&declaration>
                                                     declaration = variable_declaration;
                                                 .)
     .
-    
+
 function_declaration<bool exported, IDeclaration const *&declaration>
     =
                                                 (.
@@ -3131,7 +3131,7 @@ expression<IExpression const *&exp>
     assignment_expression<exp>                  (. exp = check_expr(exp); .)
         { ','                                   (. IExpression const *right = NULL; .)
             assignment_expression<right>
-                                                (. 
+                                                (.
                                                     right = check_expr(right);
                                                     exp = create_binary(
                                                                 IExpression_binary::OK_SEQUENCE,

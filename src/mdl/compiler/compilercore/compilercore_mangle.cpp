@@ -225,8 +225,44 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
     //           ::= <substitution>
     if (prefix == NULL)
         return;
+
+    // skip leading "::"
     if (prefix[0] == ':' && prefix[1] == ':')
         prefix += 2;
+
+    // if the prefix starts with a '/', it is a file name (MDLe) that needs encoding
+    if (prefix[0] == '/') {
+
+        // process characters one by one
+        for (; prefix[0] != '\0';) {
+
+            char utf8_char = prefix[0];
+        
+            if ((utf8_char > 0x2f && utf8_char < 0x3a) ||   // digits
+                (utf8_char > 0x40 && utf8_char < 0x5b) ||   // capital letters
+                (utf8_char > 0x60 && utf8_char < 0x7b) ||   // small letters
+                utf8_char == '_'){                          // C-conform characters
+
+                m_out.append(utf8_char);
+            } else {
+                // encode ASCII characters
+                m_out.append("U2"); // extend this if more than ASCII is required
+                char buf[3];
+                snprintf(buf, sizeof(buf), "%02x", utf8_char);
+                m_out.append(buf);
+            }
+
+            // continue with the next character
+            prefix += 1;
+
+            // skip "::" in the end
+            if (prefix[0] == ':' && prefix[1] == ':' && prefix[2] == '\0')
+                prefix += 2;
+        }
+        return;
+    }
+
+    // handle mdl paths
     for (;prefix[0] != '\0';) {
         unsigned l = 0;
         while (prefix[l] != ':' && prefix[l] != '\0') ++l;

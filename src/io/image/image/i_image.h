@@ -100,7 +100,7 @@ namespace SERIAL { class Serializer; class Deserializer; }
 
 namespace IMAGE {
 
-class IMdr_callback;
+class IMdl_container_callback;
 class IMipmap;
 
 /// Public interface of the IMAGE module.
@@ -581,16 +581,16 @@ public:
     ///                    \p extension, or \c NULL in case of failure.
     virtual mi::neuraylib::IImage_plugin* find_plugin_for_export( const char* extension) const = 0;
 
-    /// Sets the callback to support lazy loading of images in MDL archives.
+    /// Sets the callback to support lazy loading of images in MDL archives and MDLe.
     ///
     /// Pass \c NULL to clear the callback. Not thread-safe. Resetting during runtime causes errors
     /// for not yet loaded tiles.
-    virtual void set_mdr_callback( IMdr_callback* mdr_callback) = 0;
+    virtual void set_mdl_container_callback( IMdl_container_callback* mdl_container_callback) = 0;
 
-    /// Returns the callback to support lazy loading of images in MDL archives.
+    /// Returns the callback to support lazy loading of images in MDL archives and MDLe.
     ///
     /// ... or \c NULL if no callback is set.
-    virtual IMdr_callback* get_mdr_callback() const = 0;
+    virtual IMdl_container_callback* get_mdl_container_callback() const = 0;
 
     /// Creates the next miplevel from the given canvas.
     ///
@@ -611,12 +611,12 @@ public:
 
 };
 
-/// Callback to support lazy loading of images in MDL archives.
-class IMdr_callback : public
+/// Callback to support lazy loading of images in MDL archives and MDLe
+class IMdl_container_callback : public
     mi::base::Interface_declare<0x039d55cf,0xd57f,0x4ef8,0x8e,0xb4,0xc7,0x2b,0x9e,0x77,0x02,0x96>
 {
 public:
-    /// Returns a reader for a file in an MDL archive, or \c NULL in case of failure.
+    /// Returns a reader for a file in an MDL archive, MDLe, or \c NULL in case of failure.
     virtual mi::neuraylib::IReader* get_reader(
         const char* archive_filename, const char* member_filename) = 0;
 };

@@ -85,6 +85,7 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
     mi::neuraylib::ITransaction       *transaction,
     mi::neuraylib::IImage_api         *image_api,
     std::vector<mi::base::Handle<const mi::neuraylib::ITarget_code> > const &target_codes,
+    std::vector<size_t> const         &arg_block_indices,
     Options                           &options,
     mi::Uint32                         num_samples)
 {
@@ -102,7 +103,7 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
     Material_gpu_context material_gpu_context(options.enable_derivatives);
     for (size_t i = 0, num_target_codes = target_codes.size(); i < num_target_codes; ++i) {
         if (!material_gpu_context.prepare_target_code_data(
-                transaction, image_api, target_codes[i].get()))
+                transaction, image_api, target_codes[i].get(), arg_block_indices))
             return nullptr;
     }
     CUdeviceptr device_tc_data_list = material_gpu_context.get_device_target_code_data_list();
@@ -289,6 +290,7 @@ int main(int argc, char* argv[])
                     transaction.get(),
                     image_api.get(),
                     target_codes,
+                    mc.get_argument_block_indices(),
                     options,
                     options.no_aa ? 1 : 8));
             uninit_cuda(cuda_context);

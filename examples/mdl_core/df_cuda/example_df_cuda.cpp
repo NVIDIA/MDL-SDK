@@ -1237,7 +1237,7 @@ static void render_scene(
                 // If any material argument changed, update the target argument block on the device
                 if (changed) {
                     material_gpu_context.update_device_argument_block(
-                        material_bundle[kernel_params.current_material].compiled_material_index);
+                        material_bundle[kernel_params.current_material].argument_block_index);
                     kernel_params.iteration_start = 0;
                 }
 
@@ -1397,7 +1397,8 @@ Df_cuda_material create_cuda_material(
     // used here to alter the materials parameter set
     mat.compiled_material_index = static_cast<unsigned int>(compiled_material_index);
 
-    // not used at the moment in this example but allows more flexible implementations
+    // Note: the same argument_block_index is filled into all function descriptions of a
+    //       material, if any function uses it
     mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
 
     // identify the BSDF function by target_code_index (i'th link unit)

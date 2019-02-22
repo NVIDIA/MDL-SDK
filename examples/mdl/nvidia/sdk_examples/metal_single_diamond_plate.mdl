@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -98,42 +98,42 @@ export material single_diamond_plate(
     uniform float metal_roughness = 0.0
     [[
         anno::display_name("Metal Roughness"),
-        anno::description("The the overal roughness of the metal"),
+        anno::description("The overall roughness of the metal"),
         anno::in_group("Appearance")
     ]],
 
     uniform float2 texture_translate  =  float2 ( 0.f, 0.0f)
     [[
         anno::display_name("Translate"),
-        anno::description("Controls the position of the texture."),
+        anno::description("Controls the position of the texture"),
         anno::in_group("Transform")
     ]],
 
     uniform float texture_rotate =  0.f
     [[
         anno::display_name("Rotate"),
-        anno::description("Rotates angle of the texture in degrees."),
+        anno::description("Rotate angle of the texture in degrees"),
         anno::in_group("Transform")
     ]],
 
     uniform float2 texture_scale =  float2 ( 1.f, 1.0f)
     [[
         anno::display_name("Scale"),
-        anno::description("Larger numbers increase the size."),
+        anno::description("Larger numbers increase the size"),
         anno::in_group("Transform")
     ]],
 
     uniform int uv_space_index = 0
     [[
         anno::display_name("UV Space Index"),
-        anno::description("UV space index."),
+        anno::description("UV Space Index"),
         anno::hard_range(0,3),
         anno::in_group("Advanced")
     ]]
 
 ) [[
     anno::copyright_notice (
-    "Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved."),
+    "Copyright (c) 2019 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Metal Diamond Plate")
 ]]  = let {

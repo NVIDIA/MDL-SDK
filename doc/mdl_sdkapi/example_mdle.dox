@@ -1,0 +1,167 @@
+/******************************************************************************
+ * Copyright 2018 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_mdle Example for Integrating the MDL encapsulated format
+
+<div align="right">
+    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+This example illustrates the export of materials to the MDL encapsulated format as 
+well as loading a material from an MDLE.
+
+\section example_mdle_new New Topics
+
+  - Creating an MDLE from an existing material
+  - Changing default values for parameters
+  - Adding a thumbnail image and additional user files
+  - Checking the file integrity of an existing MDLE
+  - Loading an MDLE module and getting the main material/function
+
+\section example_mdle_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Creating an MDLE
+    </b></dt>
+    <dd><br>
+        Core of the creation process is the #mi::neuraylib::IMdle_api and the \c Mdle_data structure.
+        A new instance of this structure is created using an #mi::neuraylib::ITransaction:
+\code{.unparsed}
+
+mi::base::Handle<mi::IStructure> data(transaction->create<mi::IStructure>("Mdle_data"));
+
+\endcode
+        The fields of the structure describe the content of the MDLE to create.
+        This includes the future main material or function which is specified by passing the database  
+        name of an existing #mi::neuraylib::IMaterial_definition, #mi::neuraylib::IMaterial_instance, 
+        #mi::neuraylib::IFunction_definition, or #mi::neuraylib::IFunction_call to the \c 
+        prototype_name field.
+\code{.unparsed}
+
+// get access to the prototype_name field
+mi::base::Handle<mi::IString> prototype(data->get_value<mi::IString>("prototype_name"));
+// set a material definition
+prototype->set_c_str("mdl::nvidia::sdk_examples::tutorials::example_mod_rough");
+
+\endcode
+        Depending on the selected prototype, different default parameters are generated for the
+        future main material/function. In case a definition is provided, the default values of the 
+        definitions are copied. In case of an material instance or a function call, the arguments 
+        that have been applied during the instanciation are used instead. To override these defaults, 
+        a new #mi::neuraylib::IExpression_list is created and new expressions are added for the 
+        parameters to override. Finally, the created list is set to the \c defaults field of  
+        the \c Mdle_data structure. 
+\code{.unparsed}
+
+// create a new set of named parameters
+mi::base::Handle<mi::neuraylib::IExpression_list> defaults(expression_factory->create_expression_list());
+// set a new tint value
+mi::base::Handle<mi::neuraylib::IValue_color> tint_value(value_factory->create_color(0.25f, 0.5f, 0.75f));
+mi::base::Handle<mi::neuraylib::IExpression_constant> tint_expr(expression_factory->create_constant(tint_value.get()));
+defaults->add_expression("tint", tint_expr.get());
+// pass the defaults the Mdle_data structure
+data->set_value("defaults", defaults.get());
+
+\endcode
+        Note, that all parameters need to be set to create an MDLE.
+        This allows a drag-and-drop workflow and out-of-the-box usage without further setup.
+
+        Optionally, a thumbnail can be added to the MDLE. Since there is a high chance of changed
+        default parameters, existing thumbnail images are not added automatically. Instead, the
+        path to the correct thumbnail needs to be added manually. This path can either be relative 
+        to a search path or a file system path.
+\code{.unparsed}
+
+// get access to the thumbnail_path field
+mi::base::Handle<mi::IString> thumbnail(data->get_value<mi::IString>("thumbnail_path"));
+// set the image path
+thumbnail->set_c_str("/nvidia/sdk_examples/resources/example_thumbnail.png");
+
+\endcode
+        Besides the thumbnail arbitrary user files can be added using an array of \c Mdle_user_file 
+        structures. Each of those has a \c source_path field to select the file to add. Again, this
+        can either be relative to a search path or a file system path. The second field, 
+        \c target_path, specifies the path in the created MDLE relative to the root. 
+
+        To trigger the actual MDLE export, the \c Mdle_data structure, along with a target file path, 
+        is passed to #mi::neuraylib::IMdle_api::export_mdle provided by the MDLE API component:
+\code{.unparsed}
+
+// get the MDLE api component
+mi::base::Handle<mi::neuraylib::IMdle_api> mdle_api(neuray->get_api_component<mi::neuraylib::IMdle_api>());
+// export the material
+const char* mdle_file_name = "example_material_blue.mdle";
+mdle_api->export_mdle(transaction.get(), mdle_file_name, data.get(), context.get());
+// ... check context for errors and warnings
+
+\endcode
+        Analogously, functions can be exported to MDLE, too. Note, that the database name of functions
+        consists of the function name itself followed by its parameter list. 
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Checking the integrity of existing MDLE files
+    </b></dt>
+    <dd><br>
+        Each file in an MDLE is stored along with a MD5 hash and the MDLE itself has a 8 byte header
+        that contains the letters \c MDLE and a version number. Both, header and hashes can be
+        checked using the #mi::neuraylib::IMdle_api::validate_mdle function of the MDLE API component.
+\code{.unparsed}
+
+// get the MDLE api component
+mi::base::Handle<mi::neuraylib::IMdle_api> mdle_api(neuray->get_api_component<mi::neuraylib::IMdle_api>());
+// export the material
+std::string mdle_path = get_working_directory() + "/example_material_blue.mdle";
+mi::Sint32 res = mdle_api->validate_mdle(mdle_path.c_str(), context.get());
+
+\endcode
+        The return value as well as the \c context can be checked in order to see whether the file is valid.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Loading and MDLE material or function
+    </b></dt>
+    <dd><br>
+        In order to simplify the integration of MDLE into existing systems, an MDLE file is loaded 
+        like any other MDL module. Therefore the absolute file path to the MDLE is passed instead of
+        a qualified module name.
+\code{.unparsed}
+
+std::string mdle_path = get_working_directory() + "/example_material_blue.mdle";
+mdl_compiler->load_module(transaction.get(), mdle_path.c_str(), context.get());
+// ... check context for errors and warnings
+
+\endcode
+        After successfully loading the module, the main function is available in the database.
+        To identify MDLE elements, there is an \c mdle prefix instead of the usual \c mdl.
+        The prefix is followed by the normalized MDLE file path (using forward slashes and a leading 
+        slash), followed by the material/function name. Note, that function names again have their
+        parameter list appended. 
+        The sample contains helper functions to construct these database names:
+\code{.unparsed}
+
+std::string db_name_mat = mdle_to_db_name(mdle_path);
+std::string db_name_func = mdle_to_db_name_with_signature(transaction.get(), mdle_path);
+
+\endcode
+        From that point, the functions and materials can be used as any other MDL function or material.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_mdle Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/mdle/example_mdle.cpp</tt>
+
+\include mdle/example_mdle.cpp
+
+<div align="right">
+    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

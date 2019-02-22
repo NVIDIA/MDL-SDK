@@ -73,7 +73,7 @@
     </trans-unit>
     <trans-unit id="14" approved="yes">
       <source xml:space="preserve">Allows texturing using image files of various file formats</source>
-      <target xml:space="preserve">Erzeugt eine Bitmap-Textur aus diversen Dateiformaten</target>
+      <target xml:space="preserve">Erzeugt eine Bitmap Textur aus diversen Dateiformaten</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="15" approved="yes">
@@ -88,7 +88,7 @@
     </trans-unit>
     <trans-unit id="17" approved="yes">
       <source xml:space="preserve">Scalar mode</source>
-      <target xml:space="preserve">Skalarmodus</target>
+      <target xml:space="preserve">Skalar-Modus</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="18" approved="yes">
@@ -153,12 +153,12 @@
     </trans-unit>
     <trans-unit id="30" approved="yes">
       <source xml:space="preserve">Selects a specific UV space</source>
-      <target xml:space="preserve">Markiert einen spezifischen UV Abstand</target>
+      <target xml:space="preserve">Markiert einen spezifischen UV-Abstand</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="31" approved="yes">
       <source xml:space="preserve">UV space index</source>
-      <target xml:space="preserve">UV Index</target>
+      <target xml:space="preserve">UV-Index</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="32" approved="yes">
@@ -183,12 +183,12 @@
     </trans-unit>
     <trans-unit id="36" approved="yes">
       <source xml:space="preserve">If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used</source>
-      <target xml:space="preserve">Bei Deaktivierung wird der UV Bereich benutzt. Bei Aktivierung wird eine dreidimensionale Texturierung im Objekt-Raum vollzogen. Wird der Objekt Raum applikationsseitig nicht unterstützt, wird der Welt-Raum verwendet</target>
+      <target xml:space="preserve">Bei Deaktivierung wird der UV-Bereich benutzt. Bei Aktivierung wird eine dreidimensionale Texturierung im Objekt-Raum vollzogen. Wird der Objekt-Raum applikationsseitig nicht unterstützt, wird der Welt-Raum verwendet</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="37" approved="yes">
       <source xml:space="preserve">Use object space</source>
-      <target xml:space="preserve">Objekt Raum benutzen</target>
+      <target xml:space="preserve">Objekt-Raum benutzen</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="38" approved="yes">
@@ -228,7 +228,7 @@
     </trans-unit>
     <trans-unit id="45" approved="yes">
       <source xml:space="preserve">Only applies if &quot;Use object space&quot; is off. Selects a specific UV space</source>
-      <target xml:space="preserve">Markiert einen bestimmten UV Bereich. Dies hat nur einen Effekt wenn die Objekt-Raum Benutung deaktiviert ist</target>
+      <target xml:space="preserve">Markiert einen bestimmten UV-Bereich. Dies hat nur einen Effekt wenn die Objekt-Raum Benutung deaktiviert ist</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="46" approved="yes">
@@ -238,7 +238,7 @@
     </trans-unit>
     <trans-unit id="47" approved="yes">
       <source xml:space="preserve">Bump strength</source>
-      <target xml:space="preserve">Bump Stärke</target>
+      <target xml:space="preserve">Bump-Stärke</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="48" approved="yes">
@@ -313,22 +313,22 @@
     </trans-unit>
     <trans-unit id="62" approved="yes">
       <source xml:space="preserve">Progressive u scale</source>
-      <target xml:space="preserve">Fortlaufende Skalierung in u-Richtung</target>
+      <target xml:space="preserve">Fortlaufende Skalierung in U-Richtung</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="63" approved="yes">
       <source xml:space="preserve">If multiple levels are used, &quot;level_progressive_u_scale&quot; specifies an additional scaling factor in the &quot;u&quot; direction</source>
-      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der u-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in u-Richtung</target>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der U-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in U-Richtung</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="64" approved="yes">
       <source xml:space="preserve">Progressive v offset</source>
-      <target xml:space="preserve">Fortlaufende Verschiebung in v-Richtung</target>
+      <target xml:space="preserve">Fortlaufende Verschiebung in V-Richtung</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="65" approved="yes">
       <source xml:space="preserve">If multiple levels are used, &quot;level_progressive_v_motion&quot; specifies an offset for subsequent levels in the &quot;v&quot; direction</source>
-      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der v-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in v-Richtung</target>
+      <target xml:space="preserve">Werden mehrere Ebenen benutzt, spezifiziert der V-Skalierungs-Wert einen zusätzlichen Skalierungs-Faktor in V-Richtung</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="66" approved="yes">
@@ -353,7 +353,7 @@
     </trans-unit>
     <trans-unit id="70" approved="yes">
       <source xml:space="preserve">Bump mode</source>
-      <target xml:space="preserve">Bump Modus</target>
+      <target xml:space="preserve">Bump-Modus</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="71" approved="yes">
@@ -368,7 +368,7 @@
     </trans-unit>
     <trans-unit id="73" approved="yes">
       <source xml:space="preserve">Normalmap texture</source>
-      <target xml:space="preserve">Normalen Map Textur</target>
+      <target xml:space="preserve">Normalen-Map Textur</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="74" approved="yes">
@@ -378,12 +378,12 @@
     </trans-unit>
     <trans-unit id="75" approved="yes">
       <source xml:space="preserve">Normalmap file</source>
-      <target xml:space="preserve">Normalen Map Datei</target>
+      <target xml:space="preserve">Normalen-Map Datei</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="76" approved="yes">
       <source xml:space="preserve">Normalmap parameters</source>
-      <target xml:space="preserve">Normalen Map Parameter</target>
+      <target xml:space="preserve">Normalen-Map Parameter</target>
       <note from="translator">::anno::in_group(string)</note>
     </trans-unit>
     <trans-unit id="77" approved="yes">
@@ -428,7 +428,7 @@
     </trans-unit>
     <trans-unit id="85" approved="yes">
       <source xml:space="preserve">Attach bump or normal maps here</source>
-      <target xml:space="preserve">Bump oder Normalen Maps hinzufügen</target>
+      <target xml:space="preserve">Bump- oder Normalen-Maps hinzufügen</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="86" approved="yes">
@@ -613,7 +613,7 @@
     </trans-unit>
     <trans-unit id="122" approved="yes">
       <source xml:space="preserve">Controls the amount of reflection</source>
-      <target xml:space="preserve">Definiert dieReflktionsstärke </target>
+      <target xml:space="preserve">Definiert die Reflektions-Stärke </target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="123" approved="yes">
@@ -668,7 +668,7 @@
     </trans-unit>
     <trans-unit id="133" approved="yes">
       <source xml:space="preserve">If the material is not &quot;Thin walled&quot;, &quot;Volume color&quot; will be reached at &quot;Volume reference distance&quot;(m)</source>
-      <target xml:space="preserve">Wenn das mMaterial nicht dünnwandig ist, wird die Volumenfarbe  bei Referenz Distanz erreicht</target>
+      <target xml:space="preserve">Wenn das Material nicht dünnwandig ist, wird die Volumenfarbe bei Referenz-Distanz erreicht</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="134" approved="yes">
@@ -683,12 +683,12 @@
     </trans-unit>
     <trans-unit id="136" approved="yes">
       <source xml:space="preserve">Volume reference distance</source>
-      <target xml:space="preserve">Referenzdistanz der Volumen</target>
+      <target xml:space="preserve">Referenz-Distanz der Volumen</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="137" approved="yes">
       <source xml:space="preserve">If the material is not &quot;Thin walled&quot;, &quot;Volume color&quot; will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
-      <target xml:space="preserve">Wenn das mMaterial nicht dünnwandig ist, wird die Volumenfarbe  bei Referenz Distanz erreicht. Geben sie eine typische Objektdicke an</target>
+      <target xml:space="preserve">Wenn das Material nicht dünnwandig ist, wird die Volumenfarbe  bei Referenz-Distanz erreicht. Geben sie eine typische Objektdicke an</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="138" approved="yes">
@@ -708,7 +708,7 @@
     </trans-unit>
     <trans-unit id="141" approved="yes">
       <source xml:space="preserve">Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass</source>
-      <target xml:space="preserve">Dünnwandige Materialien haben keine Refraktion und keinen Volumen Effekt. Geeignet für Seifenblasen oder Fensterglas</target>
+      <target xml:space="preserve">Dünnwandige Materialien haben keine Refraktion und keinen Volumen-Effekt. Geeignet für Seifenblasen oder Fensterglas</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="142" approved="yes">
@@ -753,7 +753,7 @@
     </trans-unit>
     <trans-unit id="150" approved="yes">
       <source xml:space="preserve">The color of the volume of the material</source>
-      <target xml:space="preserve">Die Volumenfarbe</target>
+      <target xml:space="preserve">Volumen-Farbe</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="151" approved="yes">
@@ -763,7 +763,7 @@
     </trans-unit>
     <trans-unit id="152" approved="yes">
       <source xml:space="preserve">Fraction of the incoming light that should be visible on the backside</source>
-      <target xml:space="preserve">Teil des einfallenden Lichtes das die Rückseite beleuchtet</target>
+      <target xml:space="preserve">Teil des einfallenden Lichts, das die Rückseite beleuchtet</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="153" approved="yes">
@@ -778,7 +778,7 @@
     </trans-unit>
     <trans-unit id="155" approved="yes">
       <source xml:space="preserve">Colors the light entering the volume. Think stained glass</source>
-      <target xml:space="preserve">Farbe des Lichtes an der Objekt-Oberfläche (z.B. Buntglas)</target>
+      <target xml:space="preserve">Farbe des Lichts an der Objekt-Oberfläche (z.B. Buntglas)</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="156" approved="yes">
@@ -808,12 +808,12 @@
     </trans-unit>
     <trans-unit id="161" approved="yes">
       <source xml:space="preserve">A subsurface scattering material</source>
-      <target xml:space="preserve">Ein lichtdurchlässiges Material mit Streueffekten in Volumen</target>
+      <target xml:space="preserve">Ein lichtdurchlässiges Material mit Streueffekten im Volumen</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="162" approved="yes">
       <source xml:space="preserve">The color of the volume at &quot;Volume reference distance&quot;</source>
-      <target xml:space="preserve">Die Volumenfarbe bei Referenzdistanz</target>
+      <target xml:space="preserve">Die Volumen-Farbe bei Referenzdistanz</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="163" approved="yes">
@@ -833,7 +833,7 @@
     </trans-unit>
     <trans-unit id="166" approved="yes">
       <source xml:space="preserve">&quot;Volume color&quot; and &quot;Volume scattering&quot; will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
-      <target xml:space="preserve">Volumenfarbe und Volumenstreuung werden bei dieser Entfernung erreicht. Geben Sie eine typische Objektdicke an</target>
+      <target xml:space="preserve">Volumen-Farbe und Volumen-Streuung werden bei dieser Entfernung erreicht. Geben Sie eine typische Objektdicke an</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="167" approved="yes">
@@ -853,7 +853,7 @@
     </trans-unit>
     <trans-unit id="170" approved="yes">
       <source xml:space="preserve">The material the blend is based on</source>
-      <target xml:space="preserve">Basis-Material für Überblendungenl</target>
+      <target xml:space="preserve">Basis-Material für Überblendungen</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="171" approved="yes">
@@ -878,12 +878,12 @@
     </trans-unit>
     <trans-unit id="175" approved="yes">
       <source xml:space="preserve">Apply clear coat to an existing material</source>
-      <target xml:space="preserve">Das Material mit Klarlack überzogen</target>
+      <target xml:space="preserve">Das Material mit Klarlack überziehen</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="176" approved="yes">
       <source xml:space="preserve">The material that will get a clear coating applied</source>
-      <target xml:space="preserve">Das Material, welches mit Klarlack überzogen werden soll</target>
+      <target xml:space="preserve">Das Material, das mit Klarlack überzogen werden soll</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="177" approved="yes">
@@ -978,7 +978,7 @@
     </trans-unit>
     <trans-unit id="195" approved="yes">
       <source xml:space="preserve">Apply a cover of dust</source>
-      <target xml:space="preserve">Staubschicht Aufbringen</target>
+      <target xml:space="preserve">Staub-Schicht Aufbringen</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="196" approved="yes">
@@ -988,7 +988,7 @@
     </trans-unit>
     <trans-unit id="197" approved="yes">
       <source xml:space="preserve">Dust color</source>
-      <target xml:space="preserve">Staubfarbe</target>
+      <target xml:space="preserve">Staub-Farbe</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="198" approved="yes">
@@ -998,7 +998,7 @@
     </trans-unit>
     <trans-unit id="199" approved="yes">
       <source xml:space="preserve">Dust density</source>
-      <target xml:space="preserve">Staubdichte</target>
+      <target xml:space="preserve">Staub-Dichte</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="200" approved="yes">
@@ -1008,7 +1008,7 @@
     </trans-unit>
     <trans-unit id="201" approved="yes">
       <source xml:space="preserve">Dust amount</source>
-      <target xml:space="preserve">Staubhöhe</target>
+      <target xml:space="preserve">Staub-Höhe</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="202" approved="yes">
@@ -1223,7 +1223,7 @@
     </trans-unit>
     <trans-unit id="244" approved="yes">
       <source xml:space="preserve">Sticker bumps</source>
-      <target xml:space="preserve">Aufkleber Bump Map</target>
+      <target xml:space="preserve">Aufkleber Bump-Map</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="245" approved="yes">
@@ -1243,17 +1243,17 @@
     </trans-unit>
     <trans-unit id="248" approved="yes">
       <source xml:space="preserve">Add global bumpmap</source>
-      <target xml:space="preserve">Globale Bump Map Hinzufügen</target>
+      <target xml:space="preserve">Globale Bump-Map Hinzufügen</target>
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="249" approved="yes">
       <source xml:space="preserve">Adds global bumpmap to existing materials. Local bump map of the base material is preserved</source>
-      <target xml:space="preserve">Eine Bump Map hinzufügen zur Simulation von Oberflächenunebenheiten</target>
+      <target xml:space="preserve">Eine Bump-Map hinzufügen zur Simulation von Oberflächenunebenheiten</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="250" approved="yes">
       <source xml:space="preserve">The material that will get a bump map</source>
-      <target xml:space="preserve">Das Material, welches eine Bump Map bekommt</target>
+      <target xml:space="preserve">Das Material, welches eine Bump-Map bekommt</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="251" approved="yes">
@@ -1263,7 +1263,7 @@
     </trans-unit>
     <trans-unit id="252" approved="yes">
       <source xml:space="preserve">An additional global bump map for the material. Local bump map of the base material is preserved</source>
-      <target xml:space="preserve">Eine zusätzliche globale Bump Map für das Material. Lokale Bump Maps bleiben erhalten</target>
+      <target xml:space="preserve">Eine zusätzliche globale Bump-Map für das Material. Lokale Bump-Maps bleiben erhalten</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="253" approved="yes">
@@ -1313,7 +1313,7 @@
     </trans-unit>
     <trans-unit id="262" approved="yes">
       <source xml:space="preserve">The color of the Light</source>
-      <target xml:space="preserve">Die Farbe des Lichtes</target>
+      <target xml:space="preserve">Die Farbe des Lichts</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="263" approved="yes">
@@ -1363,7 +1363,7 @@
     </trans-unit>
     <trans-unit id="272" approved="yes">
       <source xml:space="preserve">The color temperature of the Light in Kelvin</source>
-      <target xml:space="preserve">Die Farbtemperatur des Lichtes in Kelvin</target>
+      <target xml:space="preserve">Die Farbtemperatur des Lichts in Kelvin</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="273" approved="yes">
@@ -1413,7 +1413,7 @@
     </trans-unit>
     <trans-unit id="282" approved="yes">
       <source xml:space="preserve">data to describe the distribution of the light</source>
-      <target xml:space="preserve">Datensatz zur Beschreibung der Verteilung des Lichtes</target>
+      <target xml:space="preserve">Datensatz zur Beschreibung der Verteilung des Lichts</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
   </body></file>

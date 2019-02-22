@@ -371,7 +371,7 @@ void sleep_seconds( mi::Float32 seconds)
 #define snprintf _snprintf
 #endif
 
-
+// get the current working directory.
 std::string get_working_directory()
 {
     char current_path[FILENAME_MAX];
@@ -516,6 +516,53 @@ std::vector<std::string> get_mdl_user_space_search_paths()
         result.emplace_back(home + "/Documents/mdl");
     #endif
     return result;
+}
+
+// construct the database name of the main material of an MDLE given an full MDLE file path.
+// This is especially useful for materials, as their database name contains no arguments
+// For functions, consider 'mdle_to_db_name_with_signature' which also requires an transaction
+std::string mdle_to_db_name(const std::string& mdle_path)
+{
+    // the database name begins with 'mdle::'
+    std::string main_db_name = "mdle::";
+
+    // and the full path of the mdle file with a leading '/'
+    #if defined(MI_PLATFORM_WINDOWS)
+        main_db_name.append("/");
+    #endif
+    main_db_name.append(mdle_path);
+    
+    // there is only one material/function to load, which is 'main'
+    main_db_name.append("::main");
+
+    // the database name uses forward slashes
+    std::replace(main_db_name.begin(), main_db_name.end(), '\\', '/');
+    return main_db_name;
+}
+
+// construct the database name of the main function of an MDLE given an full MDLE file path.
+// This requires the module to be load in order to get the complete function signature.
+std::string mdle_to_db_name_with_signature(
+    mi::neuraylib::ITransaction* transaction,
+    const std::string& mdle_path)
+{
+    std::string db_name = mdle_to_db_name(mdle_path);
+    std::string db_module = db_name.substr(0, db_name.length() - 6);
+
+    // get the (loaded) module
+    mi::base::Handle<const mi::neuraylib::IModule> m(
+        transaction->access<mi::neuraylib::IModule>(db_module.c_str()));
+    if (!m) 
+        return "";
+
+    // there should only be one main method
+    mi::base::Handle<const mi::IArray> overloads(m->get_function_overloads(db_name.c_str()));
+    if (overloads->get_length() != 1) 
+        return "";
+    
+    mi::base::Handle<const mi::IString> value(overloads->get_element<const mi::IString>(0));
+    db_name = value->get_c_str();
+    return db_name;
 }
 
 #endif // MI_EXAMPLE_SHARED_H

@@ -1441,17 +1441,22 @@ BSDF_INLINE void measured_sample(
         math::atan2(outgoing.z, outgoing.x));
 
 
+    // x - albedo reflectance for outgoing_polar (maximum in case of color channels)
+    // y - albedo reflectance for globally over all directions (maximum in case of color channels)
+    // z - albedo transmittance for outgoing_polar (maximum in case of color channels)
+    // w - albedo transmittance for globally over all directions (maximum in case of color channels)
     float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
+
+    // disable the not selected parts
     if (mode == scatter_mode::scatter_reflect) max_albedos.z = 0.0f;
     if (mode == scatter_mode::scatter_transmit) max_albedos.x = 0.0f;
 
-    const float2 inv_max_albedo = make_float2(1.0f / max_albedos.y, 1.0f / max_albedos.w);
+    // scale based on the global albedo
     float scale = math::max(0.0f, multiplier);
-
     if (mode == scatter_mode::scatter_reflect || mode == scatter_mode::scatter_reflect_transmit)
-        scale = math::min(scale, inv_max_albedo.x);
+        scale = math::min(scale, 1.0f / max_albedos.y);
     if (mode == scatter_mode::scatter_transmit || mode == scatter_mode::scatter_reflect_transmit)
-        scale = math::min(scale, inv_max_albedo.y);
+        scale = math::min(scale, 1.0f / max_albedos.w);
 
     const float sum = max_albedos.x + max_albedos.z;
     if (sum == 0.0f || scale == 0.0f)
@@ -1585,6 +1590,10 @@ BSDF_INLINE void measured_evaluate(
         return;
     }
 
+    // x - albedo reflectance for outgoing_polar (maximum in case of color channels)
+    // y - albedo reflectance for globally over all directions (maximum in case of color channels)
+    // z - albedo transmittance for outgoing_polar (maximum in case of color channels)
+    // w - albedo transmittance for globally over all directions (maximum in case of color channels)
     const float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
     const float sum = max_albedos.x + max_albedos.z;
     Mbsdf_part selected_part;
@@ -1605,13 +1614,12 @@ BSDF_INLINE void measured_evaluate(
         return;
     }
 
-    float2 inv_max_albedo = make_float2(1.0f / max_albedos.y, 1.0f / max_albedos.w);
+    // scale based on the global albedo
     float scale = math::max(0.0f, multiplier);
-
     if (mode == scatter_mode::scatter_reflect || mode == scatter_mode::scatter_reflect_transmit)
-        scale = math::min(scale, inv_max_albedo.x);
+        scale = math::min(scale, 1.0f / max_albedos.y);
     if (mode == scatter_mode::scatter_transmit || mode == scatter_mode::scatter_reflect_transmit)
-        scale = math::min(scale, inv_max_albedo.y);
+        scale = math::min(scale, 1.0f / max_albedos.w);
 
     data->pdf = prob * state->bsdf_measurement_pdf(
         measurement_id,
@@ -1699,6 +1707,10 @@ BSDF_INLINE void measured_pdf(
         return;
     }
 
+    // x - albedo reflectance for outgoing_polar (maximum in case of color channels)
+    // y - albedo reflectance for globally over all directions (maximum in case of color channels)
+    // z - albedo transmittance for outgoing_polar (maximum in case of color channels)
+    // w - albedo transmittance for globally over all directions (maximum in case of color channels)
     const float4 max_albedos = state->bsdf_measurement_albedos(measurement_id, outgoing_polar);
     const float sum = max_albedos.x + max_albedos.z;
     Mbsdf_part selected_part;

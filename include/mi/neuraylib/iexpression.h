@@ -170,6 +170,8 @@ public:
     ///                - -3: The DB element has not the correct type.
     ///                - -4: The return type of the DB element does not match the type of this
     ///                      expression.
+    ///                - -5: The material instance or function call referenced by "name" is
+    ///                      a parameter default and therefore cannot be used in a call.
     virtual Sint32 set_call( const char* name) = 0;
 };
 

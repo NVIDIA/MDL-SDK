@@ -33,6 +33,7 @@
 #include <mi/math/function.h>
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
+#include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_assert.h>
@@ -42,6 +43,7 @@
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/util/registry/i_config_registry.h>
+#include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h>
 
@@ -118,8 +120,8 @@ mi::Sint32 Lightprofile::reset_file(
 
     m_original_filename = original_filename;
     m_resolved_filename = resolved_filename;
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
 
     return 0;
@@ -139,8 +141,8 @@ mi::Sint32 Lightprofile::reset_reader(
 
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_mdl_file_path.clear();
 
     return 0;
@@ -164,8 +166,8 @@ mi::Sint32 Lightprofile::reset_file_mdl(
     if( result != 0)
         return result;
 
-    m_resolved_archive_filename.clear();
-    m_resolved_archive_membername.clear();
+    m_resolved_container_filename.clear();
+    m_resolved_container_membername.clear();
     m_original_filename.clear();
     m_resolved_filename = resolved_filename;
     m_mdl_file_path = mdl_file_path;
@@ -173,10 +175,10 @@ mi::Sint32 Lightprofile::reset_file_mdl(
     return 0;
 }
 
-mi::Sint32 Lightprofile::reset_archive_mdl(
+mi::Sint32 Lightprofile::reset_container_mdl(
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path,
     mi::Uint32 resolution_phi,
     mi::Uint32 resolution_theta,
@@ -184,9 +186,9 @@ mi::Sint32 Lightprofile::reset_archive_mdl(
     mi::Uint32 flags)
 {
     // compute filename for log messages
-    std::string filename = archive_membername;
+    std::string filename = container_membername;
     filename += "\" in \"";
-    filename +=  archive_filename;
+    filename +=  container_filename;
 
     mi::Sint32 result = reset_file_shared(
         reader, filename, resolution_phi, resolution_theta, degree, flags);
@@ -195,8 +197,8 @@ mi::Sint32 Lightprofile::reset_archive_mdl(
 
     m_original_filename.clear();
     m_resolved_filename.clear();
-    m_resolved_archive_filename = archive_filename;
-    m_resolved_archive_membername = archive_membername;
+    m_resolved_container_filename = container_filename;
+    m_resolved_container_membername = container_membername;
     m_mdl_file_path = mdl_file_path;
 
     return 0;
@@ -401,8 +403,8 @@ const SERIAL::Serializable* Lightprofile::serialize( SERIAL::Serializer* seriali
 
     serializer->write( serializer->is_remote() ? "" : m_original_filename);
     serializer->write( serializer->is_remote() ? "" : m_resolved_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_archive_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_archive_membername);
+    serializer->write( serializer->is_remote() ? "" : m_resolved_container_filename);
+    serializer->write( serializer->is_remote() ? "" : m_resolved_container_membername);
     serializer->write( serializer->is_remote() ? "" : m_mdl_file_path);
     serializer->write( HAL::Ospath::sep());
 
@@ -427,8 +429,8 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
 
     deserializer->read( &m_original_filename);
     deserializer->read( &m_resolved_filename);
-    deserializer->read( &m_resolved_archive_filename);
-    deserializer->read( &m_resolved_archive_membername);
+    deserializer->read( &m_resolved_container_filename);
+    deserializer->read( &m_resolved_container_membername);
     deserializer->read( &m_mdl_file_path);
     std::string serializer_sep;
     deserializer->read( &serializer_sep);
@@ -468,20 +470,20 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
         }
     }
 
-    // Adjust m_resolved_archive_filename and m_resolved_archive_membername for this host.
-    if( !m_resolved_archive_filename.empty()) {
+    // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
+    if( !m_resolved_container_filename.empty()) {
 
-        m_resolved_archive_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_archive_filename);
-        m_resolved_archive_membername
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_archive_membername);
-        if( !DISK::is_file( m_resolved_archive_filename.c_str())) {
-            m_resolved_archive_filename.clear();
-            m_resolved_archive_membername.clear();
+        m_resolved_container_filename
+            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
+        m_resolved_container_membername
+            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_membername);
+        if( !DISK::is_file( m_resolved_container_filename.c_str())) {
+            m_resolved_container_filename.clear();
+            m_resolved_container_membername.clear();
         }
 
     } else
-        ASSERT( M_SCENE, m_resolved_archive_membername.empty());
+        ASSERT( M_SCENE, m_resolved_container_membername.empty());
 
     return this + 1;
 }
@@ -492,8 +494,8 @@ void Lightprofile::dump() const
 
     s << "Original filename: " << m_original_filename << std::endl;
     s << "Resolved filename: " << m_resolved_filename << std::endl;
-    s << "Resolved archive filename: " << m_resolved_archive_filename << std::endl;
-    s << "Resolved archive membername: " << m_resolved_archive_membername << std::endl;
+    s << "Resolved container filename: " << m_resolved_container_filename << std::endl;
+    s << "Resolved container membername: " << m_resolved_container_membername << std::endl;
     s << "MDL file path: " << m_mdl_file_path << std::endl;
 
     s << "Phi resolution: " << m_resolution_phi
@@ -516,8 +518,8 @@ size_t Lightprofile::get_size() const
     return sizeof( *this)
         + dynamic_memory_consumption( m_original_filename)
         + dynamic_memory_consumption( m_resolved_filename)
-        + dynamic_memory_consumption( m_resolved_archive_filename)
-        + dynamic_memory_consumption( m_resolved_archive_membername)
+        + dynamic_memory_consumption( m_resolved_container_filename)
+        + dynamic_memory_consumption( m_resolved_container_membername)
         + dynamic_memory_consumption( m_mdl_file_path)
         + dynamic_memory_consumption( m_data);
 }
@@ -543,20 +545,18 @@ mi::Float32 Lightprofile::get_power() const
     return m_power;
 }
 
-namespace { float round_3_digits( float x) { return mi::math::round( x*1000.0f)/1000.0f; } }
+namespace 
+{ 
+float round_3_digits( float x) { return mi::math::round( x*1000.0f)/1000.0f; } 
 
-bool export_to_file(
-    const Lightprofile* lightprofile, const std::string& filename)
+bool export_to_writer(const Lightprofile* lightprofile, mi::neuraylib::IWriter* writer)
 {
+
     mi::Uint32 resolution_phi   = lightprofile->get_resolution_phi();
     mi::Uint32 resolution_theta = lightprofile->get_resolution_theta();
 
     // reject default-constructed instances
     if( resolution_phi == 0)
-        return false;
-
-    DISK::File file;
-    if( !file.open( filename, DISK::IFile::M_WRITE))
         return false;
 
     mi::Float32 first_phi = round_3_digits( mi::math::degrees( lightprofile->get_phi( 0)));
@@ -582,21 +582,22 @@ bool export_to_file(
         return false;
 
     // version
-    if( !file.writeline( "IESNA91\r\n"))
+    if( !writer->writeline( "IESNA91\r\n"))
         return false;
 
-    if (!file.writeline( "TILT=NONE\r\n"))
+    if( !writer->writeline( "TILT=NONE\r\n"))
         return false;
 
     // number of lamps, lumens, candela multiplier, resolution theta, resolution phi,
     // photometric type, units type, width, length, height
-    if( file.printf( "1 0 %g %u %u %u 1 0 0 0\r\n",
-        lightprofile->get_candela_multiplier(), resolution_theta, resolution_phi,
-        type_c ? 1 : 2) < 0)
+    std::string line;
+    line = MI::STRING::formatted_string( "1 0 %g %u %u %u 1 0 0 0\r\n",
+        lightprofile->get_candela_multiplier(), resolution_theta, resolution_phi, type_c ? 1 : 2);
+    if( line.empty() || !writer->writeline( line.c_str()))
         return false;
 
     // ballast factor, ballast lamp factor, input watts
-    if( file.printf( "1 1 0\r\n") < 0)
+    if( !writer->writeline( "1 1 0\r\n"))
         return false;
 
     // theta values
@@ -604,13 +605,16 @@ bool export_to_file(
         mi::Float32 theta = static_cast<mi::Float32>( type_c
             ? mi::math::degrees( M_PI - lightprofile->get_theta( resolution_theta-1-j))
             : mi::math::degrees( lightprofile->get_theta( j) - M_PI/2.0f));
-        if( file.printf( "%g ", round_3_digits( theta)) < 0)
+
+        line = MI::STRING::formatted_string("%g ", round_3_digits( theta));
+        if( line.empty() || !writer->writeline( line.c_str()))
             return false;
-        if( (j+1)%14 == 0 && j+1 < resolution_theta)
-            if( file.printf( "\r\n") < 0)
+
+        if( (j + 1) % 14 == 0 && j + 1 < resolution_theta)
+            if( !writer->writeline( "\r\n"))
                 return false;
     }
-    if( file.printf( "\r\n") < 0)
+    if( !writer->writeline("\r\n"))
         return false;
 
     // phi values
@@ -618,13 +622,16 @@ bool export_to_file(
         mi::Float32 phi = sampling
             ? i * 360.0f / (resolution_phi-1)
             : 360.0f - mi::math::degrees( lightprofile->get_phi( resolution_phi-1-i));
-        if( file.printf( "%g ", round_3_digits( phi)) < 0)
+
+        line = MI::STRING::formatted_string("%g ", round_3_digits( phi));
+        if( line.empty() || !writer->writeline(line.c_str()))
             return false;
-        if( (i+1)%14 == 0 && i+1 < resolution_phi)
-            if( file.printf( "\r\n") < 0)
+
+        if( (i + 1) % 14 == 0 && i + 1 < resolution_phi)
+            if( !writer->writeline( "\r\n"))
                 return false;
     }
-    if( file.printf( "\r\n") < 0)
+    if( !writer->writeline( "\r\n"))
         return false;
 
     // candela values
@@ -640,17 +647,47 @@ bool export_to_file(
                  value = lightprofile->get_data( resolution_phi-1-i, resolution_theta-1-j);
              else
                  value = lightprofile->get_data( resolution_phi-1-i, j);
-             if( file.printf( "%f ", value) < 0)
-                 return false;
-             if( (j+1)%14 == 0 && j+1 < resolution_theta)
-                 if( file.printf( "\r\n") < 0)
-                      return false;
+
+            line = MI::STRING::formatted_string("%f ", value);
+            if( line.empty() || !writer->writeline(line.c_str()))
+                return false;
+
+             if( (j + 1) % 14 == 0 && j + 1 < resolution_theta)
+                if( !writer->writeline( "\r\n"))
+                    return false;
         }
-        if( file.printf( "\r\n") < 0)
+        if( !writer->writeline( "\r\n"))
             return false;
     }
 
     return true;
+}
+
+} // anonymous
+
+
+// Exports the light profile to a file.
+bool export_to_file(const Lightprofile* lightprofile, const std::string& filename)
+{
+    MI::DISK::File_writer_impl writer;
+    if (!writer.open(filename.c_str()))
+        return false;
+
+    bool success = export_to_writer(lightprofile, &writer);
+    writer.close();
+    return success;
+}
+
+// Exports the light profile to a buffer.
+mi::neuraylib::IBuffer* create_buffer_from_lightprofile(const Lightprofile* lightprofile)
+{
+    MI::DISK::Memory_writer_impl writer;
+    
+    if(!export_to_writer(lightprofile, &writer))
+       return nullptr;
+
+    mi::neuraylib::IBuffer* buffer = writer.get_buffer();
+    return buffer;
 }
 
 DB::Tag load_mdl_lightprofile(
@@ -684,8 +721,8 @@ DB::Tag load_mdl_lightprofile(
 DB::Tag load_mdl_lightprofile(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path,
     bool shared)
 {
@@ -693,7 +730,7 @@ DB::Tag load_mdl_lightprofile(
         return DB::Tag( 0);
 
     std::string db_name = shared ? "MI_default_" : "";
-    db_name += "lightprofile_" + archive_filename + "_" + archive_membername;
+    db_name += "lightprofile_" + container_filename + "_" + container_membername;
     if( !shared)
         db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
 
@@ -702,13 +739,13 @@ DB::Tag load_mdl_lightprofile(
         return tag;
 
     Lightprofile* lp = new Lightprofile();
-    mi::Sint32 result = lp->reset_archive_mdl(
-        reader, archive_filename, archive_membername, mdl_file_path);
+    mi::Sint32 result = lp->reset_container_mdl(
+        reader, container_filename, container_membername, mdl_file_path);
     ASSERT( M_LIGHTPROFILE, result == 0 || result == -4);
     if( result == -4)
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,
             "File format error in default light profile \"%s\" in \"%s\".",
-            archive_membername.c_str(), archive_filename.c_str());
+            container_membername.c_str(), container_filename.c_str());
 
     tag = transaction->store_for_reference_counting(
         lp, db_name.c_str(), transaction->get_scope()->get_level());

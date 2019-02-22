@@ -1,5 +1,5 @@
-#**************************************************************************************************
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+#*****************************************************************************
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -24,7 +24,8 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#*************************************************************************************************/
+#*****************************************************************************
+
 cmake_minimum_required(VERSION 3.9.6 FATAL_ERROR)
 
 # policies
@@ -157,7 +158,9 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/compilation)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/discovery)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_native)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/generate_mdl_identifier)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/instantiation)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/mdle)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/modules)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/start_shutdown)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/traversal)
@@ -181,4 +184,9 @@ if(MDL_BUILD_CORE_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/execution_cuda)
     endif()
 endif()
+
+# add tests with the POST option; there require all regular targets to be defined already
+foreach(_TEST_POST ${MDL_TEST_LIST_POST})
+    add_subdirectory(${_TEST_POST})
+endforeach()
 

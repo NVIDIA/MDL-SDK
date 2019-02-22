@@ -589,12 +589,14 @@ public:
         mi::mdl::IGenerated_code_executable  *code,
         mi::mdl::ILink_unit                  *link_unit,
         Resource_collection const            &res_col,
-        std::vector<Material_instance>        mat_instances,
-        std::vector<Argument_block>           arg_blocks)
+        std::vector<Material_instance> const &mat_instances,
+        std::vector<size_t> const            &arg_block_indexes,
+        std::vector<Argument_block> const    &arg_blocks)
     : m_code(code, mi::base::DUP_INTERFACE)
     , m_link_unit(link_unit, mi::base::DUP_INTERFACE)
     , m_res_col(res_col)
     , m_mat_instances(mat_instances)
+    , m_arg_block_indexes(arg_block_indexes)
     , m_arg_blocks(arg_blocks)
     {
         size_t code_size = 0;
@@ -676,6 +678,11 @@ public:
             return std::string();  // not supported
     }
 
+    /// Get the list of argument block indices per material.
+    std::vector<size_t> const &get_argument_block_indices() const {
+        return m_arg_block_indexes;
+    }
+
     /// Get the number of argument blocks.
     size_t get_argument_block_count() const {
         return m_arg_blocks.size();
@@ -734,6 +741,7 @@ private:
     mi::base::Handle<mi::mdl::ILink_unit const>                  m_link_unit;
     Resource_collection const                                   &m_res_col;
     std::vector<Material_instance>                               m_mat_instances;
+    std::vector<size_t>                                          m_arg_block_indexes;
     std::vector<Argument_block>                                  m_arg_blocks;
     std::string                                                  m_source_code;
 };
@@ -1291,18 +1299,8 @@ bool Material_gpu_context::prepare_target_code_data(Ptx_code const *target_code)
             mi::base::make_handle(target_code->get_argument_block_layout(i)));
     }
 
-    // Collect all target argument block indices of the distribution functions.
-    for (size_t i = 0, num = target_code->get_callable_function_count(); i < num; ++i) {
-        mi::mdl::ILink_unit::Function_kind kind =
-            target_code->get_callable_function_kind(i);
-        mi::mdl::ILink_unit::Distribution_kind df_kind =
-            target_code->get_callable_function_df_kind(i);
-        if (kind != mi::mdl::ILink_unit::FK_DF_INIT ||
-                df_kind != mi::mdl::ILink_unit::DK_BSDF)
-            continue;
-
-        m_bsdf_arg_block_indices.push_back(
-            target_code->get_callable_function_argument_block_index(i));
+    for (size_t arg_block_index : target_code->get_argument_block_indices()) {
+        m_bsdf_arg_block_indices.push_back(arg_block_index);
     }
 
     return true;
@@ -1515,6 +1513,7 @@ Ptx_code *Material_ptx_compiler::generate_cuda_ptx()
         m_link_unit.get(),
         m_res_col,
         m_mat_instances,
+        m_arg_block_indexes,
         m_arg_blocks);
 }
 
@@ -1800,8 +1799,7 @@ bool Material_ptx_compiler::add_material(
         }
     }
 
-    if (arg_block_index != ~0)
-        m_arg_block_indexes.push_back(arg_block_index);
+    m_arg_block_indexes.push_back(arg_block_index);
 
     // pass out the block index
     for (size_t i = 0; i < description_count; ++i)

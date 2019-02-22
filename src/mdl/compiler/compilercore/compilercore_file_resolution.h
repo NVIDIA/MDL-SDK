@@ -36,10 +36,12 @@
 
 #include "compilercore_allocator.h"
 #include "compilercore_messages.h"
+#include "compilercore_zip_utils.h"
 
 namespace mi {
 namespace mdl {
 
+class Manifest;
 class MDL;
 class Messages_impl;
 class Module;
@@ -52,22 +54,6 @@ class IValue_resource;
 class Error_params;
 class Type_factory;
 class Value_factory;
-
-/// Error codes possible with some archive operations.
-enum Archiv_error_code {
-    EC_OK,                  ///< No error.
-    EC_ARC_NOT_EXIST,       ///< An archive does not exists.
-    EC_ARC_OPEN_FAILED,     ///< An archive could not be opened.
-    EC_FILE_OPEN_FAILED,    ///< An file could not be opened.
-    EC_INVALID_ARCHIVE,     ///< An archive is invalid.
-    EC_NOT_FOUND,           ///< A file was not found (inside an archive).
-    EC_IO_ERROR,            ///< Some I/O error occurred.
-    EC_CRC_ERROR,           ///< A CRC error occurred.
-    EC_INVALID_PASSWORD,    ///< Invalid password.
-    EC_MEMORY_ALLOCATION,   ///< Memory allocation failed.
-    EC_RENAME_ERROR,        ///< Rename operation failed.
-    EC_INTERNAL_ERROR,      ///< Internal archiver error.
-};
 
 #define UDIM_MARI_MARKER    "<UDIM>"
 #define UDIM_ZBRUSH_MARKER  "<UVTILE0>"
@@ -283,11 +269,11 @@ private:
     ///                                         string-based modules).
     /// \param module_nesting_level             The nesting level of the importing MDL module.
     /// \param[out] current_working_directory   The computed current working directory (OS).
-    /// \param[out] cwd_is_archive              True, if the \c current_working_directory names an
-    ///                                         archive.
+    /// \param[out] cwd_is_container            True, if the \c current_working_directory names a
+    ///                                         container.
     /// \param[out] current_search_path         The computed search path (OS).
-    /// \param[out] csp_is_archive              True, if the \c current_search_path names an
-    ///                                         archive.
+    /// \param[out] csp_is_container            True, if the \c current_search_path names a
+    ///                                         container.
     /// \param[out] current_module_path         The computed module path (SLASH).
     ///                                         Either empty or begins with a slash.
     void split_module_file_system_path(
@@ -295,9 +281,9 @@ private:
         string const &module_name,
         size_t       module_nesting_level,
         string       &current_working_directory,
-        bool         &cwd_is_archive,
+        bool         &cwd_is_container,
         string       &current_search_path,
-        bool         &csp_is_archive,
+        bool         &csp_is_container,
         string       &current_module_path);
 
     /// Normalizes a file path given by its directory path and file name.
@@ -312,7 +298,7 @@ private:
     /// \param module_file_system_path     The module file system path (OS).
     /// \param current_working_directory   The current working directory split from the module file
     ///                                    system path (OS).
-    /// \param cwd_is_archive              True, if the \c current_working_directory is an archive.
+    /// \param cwd_is_container            True, if the \c current_working_directory is a container.
     /// \param current_module_path         The current module path split from the module file system
     ///                                    path (SLASH).
     /// \return                            The normalized (canonical) file path, or \c "" in case of
@@ -325,7 +311,7 @@ private:
         size_t       nesting_level,
         string const &module_file_system_path,
         string const &current_working_directory,
-        bool         cwd_is_archive,
+        bool         cwd_is_container,
         string const &current_module_path);
 
     bool is_builtin(string const &canonical_file_path) const;
@@ -451,7 +437,7 @@ private:
     void mark_resource_search(char const *file_name);
 
     /// Map a file error.
-    void handle_file_error(Archiv_error_code err);
+    void handle_file_error(MDL_zip_container_error_code err);
 
 private:
     /// The memory allocator.
@@ -507,6 +493,107 @@ private:
     /// True if we are resolving a resource, false if we are resolving a module.
     bool m_resolving_resource;
 };
+
+
+//-------------------------------------------------------------------------------------------------
+
+/// Helper class to transparently handle files on file system and inside archives.
+class File_handle
+{
+    friend class Allocator_builder;
+public:
+
+    enum Kind
+    {
+        FH_FILE,
+        FH_ARCHIVE,
+        FH_MDLE,
+    };
+
+    /// Check if this is a handle to normal file or if it is in an archive or mdle.
+    Kind get_kind() const { return m_kind; }
+
+    /// Get the FILE handle if this object represents an ordinary file.
+    FILE *get_file();
+
+    /// Get the container if this object represents a file inside a MDL container.
+    MDL_zip_container *get_container();
+
+    /// Get the compressed file handle if this object represents a file inside a MDL container.
+    MDL_zip_container_file *get_container_file();
+
+    /// Open a file handle.
+    ///
+    /// \param[in]  alloc  the allocator
+    /// \param[in]  name   a file name (might describe a file inside an container)
+    /// \param[out] err    error code
+    static File_handle *open(
+        IAllocator                     *alloc,
+        char const                     *name,
+        MDL_zip_container_error_code   &err);
+
+    /// Close a file handle.
+    static void close(File_handle *h);
+
+private:
+    /// Constructor from a FILE handle.
+    ///
+    /// \param alloc        the allocator
+    /// \param fp           a FILE pointer, takes ownership
+    explicit File_handle(
+        IAllocator *alloc,
+        FILE       *fp);
+
+    /// Constructor from container file.
+    ///
+    /// \param alloc            the allocator
+    /// \param kind             kind of this file
+    /// \param container        a MDL container pointer, takes ownership
+    /// \param owns_container   true if this File_handle owns the container (will be closed then)
+    /// \param fp               a MDL container file pointer, takes ownership
+    File_handle(
+        IAllocator             *alloc,
+        Kind                    kind,
+        MDL_zip_container      *container,
+        bool                    owns_container,
+        MDL_zip_container_file *fp);
+
+
+    /// Constructor from another File_handle container.
+    ///
+    /// \param alloc        the allocator
+    /// \param kind         kind of this file
+    /// \param fh           another container file handle
+    /// \param fp           a MDL compressed file pointer, takes ownership
+    File_handle(
+        File_handle            *fh,
+        Kind                    kind,
+        MDL_zip_container_file *fp);
+
+    /// Destructor.
+    ~File_handle();
+
+private:
+    /// Current allocator.
+    IAllocator *m_alloc;
+
+    /// The kind this file.
+    Kind m_kind;
+
+    /// If non-null, this is an container.
+    MDL_zip_container *m_container;
+
+    union
+    {
+        FILE                   *fp;
+        MDL_zip_container_file *z_fp;
+    } u;
+
+    /// If true, this file handle has ownership on the MDL container.
+    bool m_owns_container;
+};
+
+
 
 /// Implementation of the IMDL_resource_set interface.
 class MDL_resource_set : public Allocator_interface_implement<IMDL_resource_set>
@@ -590,17 +677,19 @@ private:
         char                     sep,
         File_resolver::UDIM_mode udim_mode);
 
-    /// Create a resource set from a file mask describing files on an archive.
+    /// Create a resource set from a file mask describing files on a container.
     ///
-    /// \param alloc      the allocator
-    /// \param url        the absolute MDL url
-    /// \param arc_name   the archive name
-    /// \param filename   the file name
-    /// \param udim_mode  the UDIM mode
-    static MDL_resource_set *from_mask_archive(
+    /// \param alloc            the allocator
+    /// \param url              the absolute MDL url
+    /// \param arc_name         the container name
+    /// \param container_kind   the kind of container
+    /// \param filename         the file name
+    /// \param udim_mode        the UDIM mode
+    static MDL_resource_set *from_mask_container(
         IAllocator               *alloc,
         char const               *url,
-        char const               *arc_name,
+        char const               *container_name,
+        File_handle::Kind        container_kind,
         char const               *file_mask,
         File_resolver::UDIM_mode udim_mode);
 
@@ -651,6 +740,148 @@ private:
     /// True if this is a UDIM set.
     bool m_is_udim_set;
 };
+
+// ------------------------------------------------------------------------
+
+/// Implementation of a resource reader from a file.
+class File_resource_reader : public Allocator_interface_implement<IMDL_resource_reader>
+{
+    typedef Allocator_interface_implement<IMDL_resource_reader> Base;
+public:
+    /// Read a memory block from the resource.
+    ///
+    /// \param ptr   Pointer to a block of memory with a size of size bytes
+    /// \param size  Number of bytes to read
+    ///
+    /// \returns    The total number of bytes successfully read.
+    Uint64 read(void *ptr, Uint64 size) MDL_FINAL;
+
+    /// Get the current position.
+    Uint64 tell() MDL_FINAL;
+
+    /// Reposition stream position indicator.
+    ///
+    /// \param offset  Number of bytes to offset from origin
+    /// \param origin  Position used as reference for the offset
+    ///
+    /// \return true on success
+    bool seek(Sint64 offset, Position origin) MDL_FINAL;
+
+    /// Get the UTF8 encoded name of the resource on which this reader operates.
+    /// \returns    The name of the resource or NULL.
+    char const *get_filename() const MDL_FINAL;
+
+    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
+    /// \returns    The absolute MDL url of the resource or NULL.
+    char const *get_mdl_url() const MDL_FINAL;
+
+    /// Constructor.
+    ///
+    /// \param alloc             the allocator
+    /// \param f                 the file handle
+    /// \param filename          the file name
+    /// \param mdl_url           the MDL url
+    ///                          if this object is destroyed
+    explicit File_resource_reader(
+        IAllocator  *alloc,
+        File_handle *f,
+        char const  *filename,
+        char const  *mdl_url);
+private:
+    // non copyable
+    File_resource_reader(File_resource_reader const &) MDL_DELETED_FUNCTION;
+    File_resource_reader &operator=(File_resource_reader const &) MDL_DELETED_FUNCTION;
+
+private:
+    ~File_resource_reader() MDL_FINAL;
+
+private:
+    /// The file handle.
+    File_handle *m_file;
+
+    /// The filename.
+    string m_file_name;
+
+    /// The absolute MDl url.
+    string m_mdl_url;
+};
+
+//-------------------------------------------------------------------------------------------------
+
+/// Implementation of a resource reader from a file.
+class Buffered_archive_resource_reader : public Allocator_interface_implement<IMDL_resource_reader>
+{
+    typedef Allocator_interface_implement<IMDL_resource_reader> Base;
+public:
+    /// Read a memory block from the resource.
+    ///
+    /// \param ptr   Pointer to a block of memory with a size of size bytes
+    /// \param size  Number of bytes to read
+    ///
+    /// \returns    The total number of bytes successfully read.
+    Uint64 read(void *ptr, Uint64 size) MDL_FINAL;
+
+    /// Get the current position.
+    Uint64 tell() MDL_FINAL;
+
+    /// Reposition stream position indicator.
+    ///
+    /// \param offset  Number of bytes to offset from origin
+    /// \param origin  Position used as reference for the offset
+    ///
+    /// \return true on success
+    bool seek(Sint64 offset, Position origin) MDL_FINAL;
+
+    /// Get the UTF8 encoded name of the resource on which this reader operates.
+    /// \returns    The name of the resource or NULL.
+    char const *get_filename() const MDL_FINAL;
+
+    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
+    /// \returns    The absolute MDL url of the resource or NULL.
+    char const *get_mdl_url() const MDL_FINAL;
+    /// Constructor.
+    ///
+    /// \param alloc             the allocator
+    /// \param f                 the file handle
+    /// \param filename          the file name
+    /// \param mdl_url           the MDL url
+    explicit Buffered_archive_resource_reader(
+        IAllocator  *alloc,
+        File_handle *f,
+        char const  *filename,
+        char const  *mdl_url);
+
+private:
+    // non copyable
+    Buffered_archive_resource_reader(
+        Buffered_archive_resource_reader const &) MDL_DELETED_FUNCTION;
+    Buffered_archive_resource_reader &operator=(
+        Buffered_archive_resource_reader const &) MDL_DELETED_FUNCTION;
+
+private:
+    ~Buffered_archive_resource_reader() MDL_FINAL;
+
+private:
+    /// Buffer for buffered input.
+    unsigned char m_buffer[1024];
+
+    /// The File handle.
+    File_handle *m_file;
+
+    /// The filename.
+    string m_file_name;
+
+    /// The absolute MDL url.
+    string m_mdl_url;
+
+    /// Current position inside the buffer if used.
+    size_t m_curr_pos;
+
+    /// Size of the current buffer if used.
+    size_t m_buf_size;
+};
+
+//-------------------------------------------------------------------------------------------------
 
 /// Implementation of the IEntity_resolver interface.
 class Entity_resolver : public Allocator_interface_implement<IEntity_resolver>
@@ -739,10 +970,10 @@ private:
 /// \param[in]  resource_path  the resource file path on file system
 /// \param[out] err            error code
 IMDL_resource_reader *open_resource_file(
-    IAllocator        *alloc,
-    const char        *abs_mdl_path,
-    char const        *resource_path,
-    Archiv_error_code &err);
+    IAllocator                     *alloc,
+    const char                     *abs_mdl_path,
+    char const                     *resource_path,
+    MDL_zip_container_error_code  &err);
 
 /// Retarget a (relative path) resource url from one package to be accessible from another
 /// package.

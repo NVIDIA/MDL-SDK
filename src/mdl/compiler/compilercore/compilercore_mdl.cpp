@@ -37,6 +37,7 @@
 #include "compilercore_mdl.h"
 #include "compilercore_allocator.h"
 #include "compilercore_debug_tools.h"
+#include "compilercore_encapsulator.h"
 #include "compilercore_factories.h"
 #include "compilercore_malloc_allocator.h"
 #include "compilercore_modules.h"
@@ -53,6 +54,7 @@
 #include "compilercore_tools.h"
 #include "compilercore_archiver.h"
 #include "compilercore_comparator.h"
+#include "compilercore_module_transformer.h"
 #include "compilercore_mdl.h"
 
 #include "mdl_module.h"
@@ -996,12 +998,20 @@ Module *MDL::load_module(
     parser.set_module(module, get_compiler_bool_option(ctx, option_experimental_features, false));
     parser.Parse();
 
-    mi::base::Handle<IArchive_input_stream> ias(s->get_interface<IArchive_input_stream>());
-    if (ias.is_valid_interface()) {
-        mi::base::Handle<IArchive_manifest const> manifest(ias->get_manifest());
+    // module in archive
+    mi::base::Handle<IArchive_input_stream> iarchvice_s(s->get_interface<IArchive_input_stream>());
+    if (iarchvice_s.is_valid_interface()) {
+        mi::base::Handle<IArchive_manifest const> manifest(iarchvice_s->get_manifest());
 
         if (manifest.is_valid_interface()) {
             module->set_archive_info(manifest.get());
+        }
+
+    // module in mdle
+    } else {
+        mi::base::Handle<IMdle_input_stream> imdle_s(s->get_interface<IMdle_input_stream>());
+        if (imdle_s.is_valid_interface()) {
+            // module->set_mdle_info();
         }
     }
 
@@ -1624,24 +1634,46 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
 #define FORBIDDEN(name, n) if (strcmp(p + n, name + n) == 0) return false
 
     switch (p[0]) {
+    case 'a':
+        FORBIDDEN("annotation", 1);
+        FORBIDDEN("auto", 1);
+        break;
     case 'b':
         if (p[1] == 'o') {
             FORBIDDEN("bool",  2);
             FORBIDDEN("bool2", 2);
             FORBIDDEN("bool3", 2);
+        } else if (p[1] == 'r') {
+            FORBIDDEN("break", 2);
         } else if (p[1] == 's') {
             FORBIDDEN("bsdf",             2);
             FORBIDDEN("bsdf_measurement", 2); // MDL 1.1+
         }
         break;
     case 'c':
-        FORBIDDEN("color", 1);
+        if (p[1] == 'a') {
+            FORBIDDEN("case",  2);
+            FORBIDDEN("catch", 2);
+        } else if (p[1] == 'h') {
+            FORBIDDEN("char", 2);
+        } else if (p[1] == 'l') {
+            FORBIDDEN("class", 2);
+        } else if (p[1] == 'o') {
+            FORBIDDEN("color",       2);
+            FORBIDDEN("const",       2);
+            FORBIDDEN("const_class", 2);
+        }
         break;
     case 'd':
-        if (p[1] == 'o') {
+        if (p[1] == 'e') {
+            FORBIDDEN("delete", 2);
+        } else if (p[1] == 'o') {
+            if (p[2] != '\0')
+                return false;
             FORBIDDEN("double",    2);
             FORBIDDEN("double2",   2);
             FORBIDDEN("double3",   2);
+            FORBIDDEN("double4",   2);
             FORBIDDEN("double2x2", 2);
             FORBIDDEN("double2x3", 2);
             FORBIDDEN("double2x4", 2);
@@ -1651,11 +1683,22 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
             FORBIDDEN("double4x2", 2);
             FORBIDDEN("double4x3", 2);
             FORBIDDEN("double4x4", 2);
+        } else if (p[1] == 'y') {
+            FORBIDDEN("dynamic_cast", 2);
         }
         break;
     case 'e':
-        FORBIDDEN("edf", 1);
-        FORBIDDEN("export", 1);
+        if (p[1] == 'x') {
+            FORBIDDEN("export",   2);
+            FORBIDDEN("explicit", 2);
+            FORBIDDEN("extern",   2);
+            FORBIDDEN("external", 2);
+        } else {
+            FORBIDDEN("edf",  1);
+            FORBIDDEN("else", 1);
+            FORBIDDEN("enum", 1);
+           
+        }
         break;
     case 'f':
         if (p[1] == 'a') {
@@ -1664,6 +1707,7 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
             FORBIDDEN("float",    2);
             FORBIDDEN("float2",   2);
             FORBIDDEN("float3",   2);
+            FORBIDDEN("float4",   2);
             FORBIDDEN("float2x2", 2);
             FORBIDDEN("float2x3", 2);
             FORBIDDEN("float2x4", 2);
@@ -1673,22 +1717,59 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
             FORBIDDEN("float4x2", 2);
             FORBIDDEN("float4x3", 2);
             FORBIDDEN("float4x4", 2);
+        } else if (p[1] == 'o') {
+            FORBIDDEN("for",     2);
+            FORBIDDEN("foreach", 2);
+        } else if (p[1] == 'r') {
+            FORBIDDEN("friend", 2);
+        }
+        break;
+    case 'g':
+        FORBIDDEN("goto",  1);
+        FORBIDDEN("graph", 1);
+        break;
+    case 'h':
+        if (p[1] == 'a') {
+            FORBIDDEN("half",    2);
+            FORBIDDEN("half2",   2);
+            FORBIDDEN("half3",   2);
+            FORBIDDEN("half4",   2);
+            FORBIDDEN("half2",   2);
+            FORBIDDEN("half2x2", 2);
+            FORBIDDEN("half2x3", 2);
+            FORBIDDEN("half2x4", 2);
+            FORBIDDEN("half3x2", 2);
+            FORBIDDEN("half3x3", 2);
+            FORBIDDEN("half3x4", 2);
+            FORBIDDEN("half4x2", 2);
+            FORBIDDEN("half4x3", 2);
+            FORBIDDEN("half4x4", 2);
         }
         break;
     case 'i':
-        if (p[1] == 'm') {
+        if (p[1] == 'f') {
+            return p[2] != '\0';
+        } else if (p[1] == 'm') {
             FORBIDDEN("import", 2);
         } else if (p[1] == 'n') {
+            if (p[2] == '\0')
+                return false;
+            FORBIDDEN("inline",                     2);
+            FORBIDDEN("inout",                      2);
             FORBIDDEN("int",                        2);
             FORBIDDEN("int2",                       2);
             FORBIDDEN("int3",                       2);
+            FORBIDDEN("int4",                       2);
             FORBIDDEN("intensity_mode",             2); // MDL 1.1+
             FORBIDDEN("intensity_power",            2); // MDL 1.1+
             FORBIDDEN("intensity_radiant_exitance", 2); // MDL 1.1+
         }
         break;
     case 'l':
+        FORBIDDEN("lambda",        1);
+        FORBIDDEN("let",           1);
         FORBIDDEN("light_profile", 1);
+        FORBIDDEN("long",          1);
         break;
     case 'm':
         if (p[1] == 'a') {
@@ -1698,29 +1779,100 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
             FORBIDDEN("material_surface",  2);
             FORBIDDEN("material_volume",   2);
         }
+        else {
+            FORBIDDEN("mdl",     1);
+            FORBIDDEN("module",  1);
+            FORBIDDEN("mutable", 1);
+        }
+        break;
+    case 'n':
+        if (p[1] == 'a') {
+            FORBIDDEN("namespace", 2);
+            FORBIDDEN("native",    2);
+        } else {
+            FORBIDDEN("new", 1);
+        }
+        break;
+    case 'o':
+        FORBIDDEN("operator", 1);
+        FORBIDDEN("out",      1);
+        break;
+    case 'p':
+        if (p[1] == 'r') {
+            FORBIDDEN("private",   2);
+            FORBIDDEN("protected", 2);
+        } else {
+            FORBIDDEN("package",    1);
+            FORBIDDEN("phenomenon", 1);
+            FORBIDDEN("public",     1);
+        }
+        break;
+    case 'r':
+        if (p[1] == 'e') {
+            FORBIDDEN("return",           2);
+            FORBIDDEN("reinterpret_cast", 2);
+        }
         break;
     case 's':
-        FORBIDDEN("string", 1);
+        if (p[1] == 'a') {
+            FORBIDDEN("sampler", 2);
+        } else if (p[1] == 'h') {
+            FORBIDDEN("shader", 2);
+            FORBIDDEN("short",  2);
+        } else if (p[1] == 'i') {
+            FORBIDDEN("signed", 2);
+            FORBIDDEN("sizeof", 2);
+        } else if (p[1] == 't') {
+            FORBIDDEN("static",      2);
+            FORBIDDEN("static_cast", 2);
+            FORBIDDEN("string",      2);
+            FORBIDDEN("struct",      2);
+        }
+        else {
+            FORBIDDEN("switch",  1);
+        }
         break;
     case 't':
         if (p[1] == 'e') {
+            FORBIDDEN("technique",    2);
+            FORBIDDEN("template",     2);
             FORBIDDEN("texture_2d",   2);
             FORBIDDEN("texture_3d",   2);
             FORBIDDEN("texture_cube", 2);
             FORBIDDEN("texture_ptex", 2);
+        } else if (p[1] == 'h') {
+            FORBIDDEN("this",  2);
+            FORBIDDEN("throw", 2);
         } else if (p[1] == 'r') {
             FORBIDDEN("true", 2);
+            FORBIDDEN("try",  2);
+        } else if (p[1] == 'y') {
+            FORBIDDEN("typedef",  2);
+            FORBIDDEN("typeid",   2);
+            FORBIDDEN("typename", 2);
         }
         break;
     case 'u':
-        FORBIDDEN("uniform", 1);
-        FORBIDDEN("using", 1);
+        if (p[1] == 'n') {
+            FORBIDDEN("uniform",  2);
+            FORBIDDEN("union",    2);
+            FORBIDDEN("unsigned", 2);
+        } else {
+            FORBIDDEN("using", 1);
+        }
         break;
     case 'v':
-        FORBIDDEN("varying", 1);
-        FORBIDDEN("vdf", 1);
+        FORBIDDEN("varying",  1);
+        FORBIDDEN("vdf",      1);
+        FORBIDDEN("virtual",  1);
+        FORBIDDEN("void",     1);
+        FORBIDDEN("volatile", 1);
         break;
-    }
+    case 'w':
+        FORBIDDEN("wchar_t", 1);
+        FORBIDDEN("while",   1);
+        break;
+   }
 #undef FORBIDDEN
 
     return true;
@@ -1739,6 +1891,12 @@ IArchive_tool *MDL::create_archive_tool()
     return m_builder.create<Archive_tool>(get_allocator(), this);
 }
 
+// Create an MDL encapsulate tool using this compiler.
+IEncapsulate_tool *MDL::create_encapsulate_tool()
+{
+    return m_builder.create<Encapsulate_tool>(get_allocator(), this);
+}
+
 // Create an MDL comparator tool using this compiler.
 IMDL_comparator *MDL::create_mdl_comparator()
 {
@@ -1752,6 +1910,12 @@ IMDL_comparator *MDL::create_mdl_comparator()
     compiler->install_search_path(sp.get());
 
     return m_builder.create<MDL_comparator>(get_allocator(), compiler.get());
+}
+
+// Create an MDL module transformer using this compiler.
+IMDL_module_transformer *MDL::create_module_transformer()
+{
+    return m_builder.create<MDL_module_transformer>(get_allocator(), this);
 }
 
 // Check if the compiler supports a requested MDL version.

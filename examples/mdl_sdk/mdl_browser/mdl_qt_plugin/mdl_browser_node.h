@@ -121,7 +121,7 @@ public:
     // get the search path this module was in
     std::string get_module_search_path() const;
 
-    // get the number of shodows this module has
+    // get the number of shadows this module has
     mi::Size get_module_shadow_count() const;
 
     // get the search path of a shadow of this module

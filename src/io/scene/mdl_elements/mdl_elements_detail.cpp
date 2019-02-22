@@ -38,6 +38,7 @@
 #include <mi/base/config.h>
 #include <mi/base/atom.h>
 #include <mi/mdl/mdl_archiver.h>
+#include <mi/mdl/mdl_encapsulator.h>
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_streams.h>
@@ -60,29 +61,54 @@ namespace MDL {
 
 namespace DETAIL {
 
-bool is_archive_member( const char* filename)
+bool is_container_member( const char* filename)
 {
-    return filename && strstr( filename, ".mdr:") != 0;
+    return filename && (strstr(filename, ".mdr:") != 0 || strstr(filename, ".mdle:") != 0);
 }
 
-std::string get_archive_filename( const char* filename)
+
+std::string get_container_filename( const char* filename)
 {
     if( !filename)
         return "";
+
+    // archive
     const char* pos = strstr( filename, ".mdr:");
+    size_t offset = 4;
+
+    // MDLe
+    if ( pos == NULL) {
+        pos = strstr( filename, ".mdle:");
+        offset = 5;
+    }
+
+    // none
     if( !pos)
         return "";
-    return std::string( filename, pos+4);
+
+    return std::string( filename, pos + offset);
 }
 
-std::string get_archive_membername( const char* filename)
+std::string get_container_membername( const char* filename)
 {
     if( !filename)
         return "";
+
+    // archive
     const char* pos = strstr( filename, ".mdr:");
+    size_t offset = 5;
+
+    // MDLe
+    if ( pos == NULL) {
+        pos = strstr(filename, ".mdle:");
+        offset = 6;
+    }
+
+    // none
     if( !pos)
         return "";
-    return std::string( pos+5);
+
+    return std::string( pos + offset);
 }
 
 namespace {
@@ -201,7 +227,7 @@ std::string unresolve_resource_filename(
     std::string resolved_filename = resolve_resource_filename(
         file_path.c_str(), module_filename, module_name);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
-    if( is_archive_member( resolved_filename.c_str()))
+    if( is_container_member( resolved_filename.c_str()))
         return "";
     if( resolved_filename != norm_filename)
         return "";
@@ -212,14 +238,14 @@ std::string unresolve_resource_filename(
 }
 
 std::string unresolve_resource_filename(
-    const char* archive_filename,
-    const char* archive_membername,
+    const char* container_filename,
+    const char* container_membername,
     const char* module_filename,
     const char* module_name)
 {
     ASSERT( M_SCENE, !module_filename || DISK::is_path_absolute( module_filename));
 
-    std::string norm_filename = HAL::Ospath::normpath_v2( archive_filename);
+    std::string norm_filename = HAL::Ospath::normpath_v2(container_filename);
     std::string shortened_filename;
     bool norm_filename_absolute = DISK::is_path_absolute( norm_filename);
 
@@ -245,15 +271,15 @@ std::string unresolve_resource_filename(
         return "";
 
     // construct MDL file path corresponding to shortened file name
-    std::string file_path = "/" + convert_os_separators_to_slashes( archive_membername);
+    std::string file_path = "/" + convert_os_separators_to_slashes(container_membername);
 
     // return failure if re-resolving of file path yields a different filename
     std::string resolved_filename = resolve_resource_filename(
         file_path.c_str(), module_filename, module_name);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
-    if( !is_archive_member( resolved_filename.c_str()))
+    if( !is_container_member( resolved_filename.c_str()))
         return "";
-    resolved_filename = get_archive_filename( resolved_filename.c_str());
+    resolved_filename = get_container_filename( resolved_filename.c_str());
     if( resolved_filename != norm_filename)
         return "";
 
@@ -341,7 +367,7 @@ DB::Tag mdl_texture_to_tag(
     ASSERT( M_SCENE, first_filename);
 
     DB::Tag tag;
-    Mdl_image_set image_set( res_set.get(), file_path, get_archive_filename( first_filename));
+    Mdl_image_set image_set( res_set.get(), file_path, get_container_filename( first_filename));
 
     tag = TEXTURE::load_mdl_texture(
         transaction, &image_set, shared, gamma);
@@ -399,16 +425,16 @@ DB::Tag mdl_light_profile_to_tag(
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
 
-    if( is_archive_member( resolved_filename)) {
+    if( is_container_member( resolved_filename)) {
 
-        // Imported resource is in an archive
-        const std::string& archive_filename = get_archive_filename( resolved_filename);
-        const std::string& member_filename  = get_archive_membername( resolved_filename);
+        // Imported resource is in an container
+        const std::string& container_filename = get_container_filename( resolved_filename);
+        const std::string& member_filename  = get_container_membername( resolved_filename);
 
         File_reader_impl wrapped_reader( reader.get());
         tag = LIGHTPROFILE::load_mdl_lightprofile(
             transaction, &wrapped_reader,
-            archive_filename, member_filename, absolute_mdl_file_path, shared);
+            container_filename, member_filename, absolute_mdl_file_path, shared);
 
     } else {
 
@@ -469,16 +495,16 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
 
-    if( is_archive_member( resolved_filename)) {
+    if( is_container_member( resolved_filename)) {
 
-        // Imported resource is in an archive
-        const std::string& archive_filename = get_archive_filename( resolved_filename);
-        const std::string& member_filename  = get_archive_membername( resolved_filename);
+        // Imported resource is in an container
+        const std::string& container_filename = get_container_filename( resolved_filename);
+        const std::string& member_filename  = get_container_membername( resolved_filename);
 
         File_reader_impl wrapped_reader( reader.get());
         tag = BSDFM::load_mdl_bsdf_measurement(
             transaction, &wrapped_reader,
-            archive_filename, member_filename, absolute_mdl_file_path, shared);
+            container_filename, member_filename, absolute_mdl_file_path, shared);
 
     } else {
 
@@ -668,30 +694,42 @@ bool File_reader_impl::readline( char* buffer, mi::Sint32 size)
     return true;
 }
 
-mi::neuraylib::IReader* Mdr_callback::get_reader(
-    const char* archive_filename, const char* member_filename)
+mi::neuraylib::IReader* Mdl_container_callback::get_reader(
+    const char* container_filename, const char* member_filename)
 {
-    ASSERT( M_SCENE, archive_filename && member_filename);
+    ASSERT( M_SCENE, container_filename && member_filename);
 
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
-    mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
-    mi::base::Handle<mi::mdl::IInput_stream> file(
-        archive_tool->get_file_content( archive_filename, member_filename));
-    if( !file)
+    mi::base::Handle<mi::mdl::IInput_stream> input_stream(NULL);
+
+    std::string container_filename_str = container_filename;
+    if (container_filename_str.rfind(".mdr") != std::string::npos)
+    {
+        mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
+        input_stream = archive_tool->get_file_content(container_filename, member_filename);
+    }
+    else if (container_filename_str.rfind(".mdle") != std::string::npos)
+    {
+        mi::base::Handle<mi::mdl::IEncapsulate_tool> mdle_tool(mdl->create_encapsulate_tool());
+        input_stream = mdle_tool->get_file_content(container_filename, member_filename);
+    }
+
+    if (!input_stream)
         return 0;
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access(
-        file->get_interface<mi::mdl::IMDL_resource_reader>());
+        input_stream->get_interface<mi::mdl::IMDL_resource_reader>());
+
     ASSERT( M_SCENE, file_random_access.get());
     return new File_reader_impl( file_random_access.get());
 }
 
 Mdl_image_set::Mdl_image_set(
-    mi::mdl::IMDL_resource_set* set, const std::string& file_name, const std::string& archive_name)
+    mi::mdl::IMDL_resource_set* set, const std::string& file_name, const std::string& container_name)
     : m_resource_set( set, mi::base::DUP_INTERFACE)
-    , m_archive_name( archive_name)
-    , m_is_archive( !archive_name.empty())
+    , m_container_name(container_name)
+    , m_is_container( !container_name.empty())
 {
     ASSERT( M_SCENE, set->get_mdl_url(0));
 
@@ -727,9 +765,9 @@ char const* Mdl_image_set::get_mdl_file_path() const
     return m_mdl_file_path.empty() ? NULL : m_mdl_file_path.c_str();
 }
 
-char const * Mdl_image_set::get_archive_filename() const
+char const * Mdl_image_set::get_container_filename() const
 {
-    return m_archive_name.empty() ? NULL : m_archive_name.c_str();
+    return m_container_name.empty() ? NULL : m_container_name.c_str();
 }
 
 char const * Mdl_image_set::get_mdl_url(mi::Size i) const
@@ -739,17 +777,23 @@ char const * Mdl_image_set::get_mdl_url(mi::Size i) const
 
 char const * Mdl_image_set::get_resolved_filename(mi::Size i) const
 {
-    return m_is_archive ? NULL : m_resource_set->get_filename( i);
+    return m_is_container ? NULL : m_resource_set->get_filename( i);
 }
 
-char const * Mdl_image_set::get_archive_membername(mi::Size i) const
+char const * Mdl_image_set::get_container_membername(mi::Size i) const
 {
-    if(m_is_archive)
+    if(m_is_container)
     {
         char const* p = strstr( m_resource_set->get_filename( i), ".mdr:");
-        if( !p)
-            return NULL;
-        return p+5;
+        size_t offset = 5;
+
+        if( p == NULL) {
+            p = strstr( m_resource_set->get_filename(i), ".mdle:");
+            offset = 6;
+        }
+
+        if( p)
+            return p + offset;
     }
     return NULL;
 }
@@ -774,9 +818,9 @@ bool Mdl_image_set::is_uvtile() const
     return m_resource_set->get_udim_mapping( 0, u, v);
 }
 
-bool Mdl_image_set::is_mdl_archive() const
+bool Mdl_image_set::is_mdl_container() const
 {
-    return m_is_archive;
+    return m_is_container;
 }
 
 std::string lookup_thumbnail(
@@ -834,24 +878,24 @@ std::string lookup_thumbnail(
     const char* ext[] = {"png", "jpg", "jpeg", "PNG", "JPG", "JPEG", NULL};
 
     std::string file_base;
-    std::string archive_path;
+    std::string container_path;
 
     mi::Size p_mdr = module_filename.find(".mdr:");
     mi::Size p_mdl = module_filename.find(".mdl");
 
-    // located in archive?
+    // located in container?
     if( p_mdr != std::string::npos)
     {
-        archive_path = module_filename.substr( 0, p_mdr + 4);
+        container_path = module_filename.substr( 0, p_mdr + 4);
         file_base = module_filename.substr( p_mdr + 5, p_mdl - p_mdr - 5) + "." + def_name + ".";
 
         // check for supported file types
         for( int i = 0; ext[i] != NULL; ++i) {
             std::string file_name = file_base + ext[i];
             mi::base::Handle<mi::mdl::IInput_stream> file(
-                archive_tool->get_file_content( archive_path.c_str(), file_name.c_str()));
+                archive_tool->get_file_content(container_path.c_str(), file_name.c_str()));
             if( file)
-                return archive_path + ":" + file_name;
+                return container_path + ":" + file_name;
         }
     }
     else

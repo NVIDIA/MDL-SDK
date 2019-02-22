@@ -347,8 +347,17 @@ public:
     /// Create an MDL archive tool using this compiler.
     IArchive_tool *create_archive_tool() MDL_FINAL;
 
+    // Create an MDL encapsulate tool using this compiler.
+    IEncapsulate_tool *create_encapsulate_tool() MDL_FINAL;
+
     /// Create an MDL comparator tool using this compiler.
     IMDL_comparator *create_mdl_comparator() MDL_FINAL;
+
+    /// Create an MDL module transformer using this compiler.
+    ///
+    /// The module transformer operates on modules, transforming them into semantically equivalent
+    /// modules.
+    IMDL_module_transformer *create_module_transformer() MDL_FINAL;
 
     // ------------------- non interface methods ---------------------------
 

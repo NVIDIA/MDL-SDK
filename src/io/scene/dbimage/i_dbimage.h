@@ -72,9 +72,9 @@ public:
     /// \returns true if a mapping is available, false otherwise
     virtual bool get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const = 0;
 
-    /// Get the archive filename of this image set.
-    /// Returns an empty string if the set is not archive-based.
-    virtual char const * get_archive_filename() const;
+    /// Get the container filename of this image set.
+    /// Returns an empty string if the set is not container-based.
+    virtual char const * get_container_filename() const;
 
     /// Get the original filename of this image set.
     /// Returns an empty string if the set does not have one.
@@ -96,16 +96,16 @@ public:
     /// \param i  the index
     ///
     /// \returns the i'th file name of the set or NULL if the index is out of range
-    ///          returns an empty string if the image set is mdl archive or memory-based
+    ///          returns an empty string if the image set is mdl container or memory-based
     virtual char const *get_resolved_filename(mi::Size i) const;
 
-    /// Get the i'th mdl archive member name of the ordered set.
+    /// Get the i'th mdl container member name of the ordered set.
     ///
     /// \param i  the index
     ///
     /// \returns the i'th file name of the set or NULL if the index is out of range.
 
-    virtual char const *get_archive_membername(mi::Size i) const;
+    virtual char const *get_container_membername(mi::Size i) const;
 
     /// Opens a reader for the i'th entry.
     ///
@@ -124,8 +124,8 @@ public:
     /// Returns true if the image set represents a texture atlas mapping
     virtual bool is_uvtile() const;
 
-    /// Returns true if the image set is contained in an mdl archive
-    virtual bool is_mdl_archive() const;
+    /// Returns true if the image set is contained in an mdl archive or an mdle.
+    virtual bool is_mdl_container() const;
 
     /// Returns the image format of the reader based image set
     virtual const char* get_image_format() const;
@@ -274,17 +274,27 @@ public:
     /// Indicates whether this mipmap is file-based.
     bool is_file_based() const { return !m_uvtiles[0].m_resolved_filename.empty(); }
 
-    /// Indicates whether this mipmap is archive-based.
-    bool is_archive_based() const { return !m_resolved_archive_filename.empty(); }
+    /// Indicates whether this mipmap is container-based.
+    bool is_container_based() const { return !m_resolved_container_filename.empty(); }
 
     /// Indicates whether this mipmap is memory-based.
-    bool is_memory_based() const { return !is_file_based() && !is_archive_based(); }
+    bool is_memory_based() const
+    { 
+        return !is_file_based() && !is_container_based();
+    }
 
-    /// Returns the archive file name for archive-based mipmaps, and \c NULL otherwise.
-    const std::string& get_archive_filename() const { return m_resolved_archive_filename; }
+    /// Returns the container file name for container-based mipmaps, and \c NULL otherwise.
+    const std::string& get_container_filename() const
+    {
+        return m_resolved_container_filename;
+    }
 
-    /// Returns the archive member name for archive-based mipmaps, and \c NULL otherwise.
-    const std::string& get_archive_membername( mi::Uint32 uvtile_id = 0) const ;
+    /// Returns the container member name for container-based mipmaps, and \c NULL otherwise.
+    const std::string& get_container_membername( mi::Uint32 uvtile_id = 0) const ;
+
+    /// Returns the resolved file name for container-based mipmaps (including the container name),
+    /// and \c NULL otherwise.
+    const std::string& get_resolved_container_membername(mi::Uint32 uvtile_id = 0) const;
 
     /// Returns the number of uvtiles of this image
     mi::Size get_uvtile_length() const;
@@ -337,10 +347,15 @@ private:
         /// The absolute MDL file path of a specific tile
         std::string m_mdl_file_path;
 
-        /// The archive member that contains the data of this DB element.
+        /// The container member that contains the data of this DB element.
         ///
-        /// Non-empty exactly for archive-based images.
-        std::string m_resolved_archive_membername;
+        /// Non-empty exactly for container-based images.
+        std::string m_container_membername;
+
+        /// The resolved container file name (including the container name) for this image.
+        ///
+        /// Non-empty exactly for container-based images.
+        std::string m_resolved_container_membername;
 
         /// The mipmap referenced by this tile
         mi::base::Handle<IMAGE::IMipmap> m_mipmap;
@@ -448,10 +463,10 @@ private:
     /// Non-empty for mdl resource images
     std::string m_mdl_file_path;
 
-    /// The archive that contains the data of this DB element
+    /// The container that contains the data of this DB element
     ///
-    /// Non-empty exactly for archive-based light images.
-    std::string m_resolved_archive_filename;
+    /// Non-empty exactly for container-based light images.
+    std::string m_resolved_container_filename;
 
     bool m_is_uvtile;
 };

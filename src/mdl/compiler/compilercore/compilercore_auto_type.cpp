@@ -781,10 +781,7 @@ void AT_analysis::AT_visitor::visit_cg_node(Call_node *node, ICallgraph_visitor:
                 // it's from another module.
                 return;
             }
-            if (IDeclaration const *decl = def->get_declaration()) {
-                // found a function in the current module that is defined there, visit it
-                m_ana.visit(decl);
-            }
+            m_ana.process_function(def);
         }
     }
 }
@@ -890,24 +887,6 @@ void AT_analysis::set_control_dependence_uplink(size_t node_id)
     n->set_control_uplink(ctrl_id);
 }
 
-/// Sets a return type qualifier into the declaration (and its prototype if exists) AST.
-///
-/// \param decl  a function declaration
-/// \param def   its definition
-/// \param qual  the qualifier to set
-static void set_return_type_qualifier(
-    IDeclaration_function *decl,
-    Definition const      *def,
-    Qualifier             qual)
-{
-    const_cast<IType_name *>(decl->get_return_type_name())->set_qualifier(qual);
-    IDeclaration_function const *proto_type =
-        cast<IDeclaration_function>(def->get_prototype_declaration());
-    if (proto_type != NULL) {
-        const_cast<IType_name *>(proto_type->get_return_type_name())->set_qualifier(qual);
-    }
-}
-
 /// Sets a function qualifier into the declaration (and its prototype if exists) AST.
 ///
 /// \param decl  a function declaration
@@ -980,9 +959,6 @@ void AT_analysis::check_auto_types(IDeclaration_function *decl)
                 /*FALLTHROUGH*/
             case Dependence_graph::AT_UNIFORM:
                 // return value will be uniform
-                if (ret_mod == IType::MK_NONE) {
-                    set_return_type_qualifier(decl, def, FQ_UNIFORM);
-                }
                 /*FALLTHROUGH*/
             case Dependence_graph::AT_PARAM:
                 if (!m_has_varying_call) {
@@ -997,9 +973,6 @@ void AT_analysis::check_auto_types(IDeclaration_function *decl)
                 // function calls either a varying function OR the return value is varying
                 const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_VARYING);
                 set_function_qualifier(decl, def, FQ_VARYING);
-                if (ret_mod == IType::MK_NONE) {
-                    set_return_type_qualifier(decl, def, FQ_VARYING);
-                }
                 break;
             }
         } else if (is_uniform) {
@@ -1031,18 +1004,28 @@ void AT_analysis::check_auto_types(IDeclaration_function *decl)
     at_checker.process(decl);
 }
 
+// Process a function given by its definition.
+void AT_analysis::process_function(Definition const *def)
+{
+    if (IDeclaration const *decl = def->get_declaration()) {
+        // found a function in the current module that is defined there, visit it
+
+        Flag_store has_varying_call(m_has_varying_call, false);
+        Flag_store is_uniform(m_curr_func_is_uniform, def->has_flag(Definition::DEF_IS_UNIFORM));
+
+        visit(decl);
+    }
+}
+
 // start of a function
 bool AT_analysis::pre_visit(IDeclaration_function *decl)
 {
     Definition const *fkt_def = impl_cast<Definition>(decl->get_definition());
-    
+
     if (is_error(fkt_def)) {
         // something really bad here, even the type is broken. stop traversal.
         return false;
     }
-
-    m_has_varying_call     = false;
-    m_curr_func_is_uniform = fkt_def->has_flag(Definition::DEF_IS_UNIFORM);
 
     // create the dependence graph and enter it
     m_dg = m_builder.create<Dependence_graph>(&m_arena, fkt_def->get_sym()->get_name());

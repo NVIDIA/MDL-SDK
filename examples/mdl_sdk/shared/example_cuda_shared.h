@@ -419,9 +419,10 @@ public:
 
     // Prepare the needed data of the given target code.
     bool prepare_target_code_data(
-        mi::neuraylib::ITransaction       *transaction,
-        mi::neuraylib::IImage_api         *image_api,
-        mi::neuraylib::ITarget_code const *target_code);
+        mi::neuraylib::ITransaction          *transaction,
+        mi::neuraylib::IImage_api            *image_api,
+        mi::neuraylib::ITarget_code const    *target_code,
+        std::vector<size_t> const            &arg_block_indices);
 
     // Get a device pointer to the target code data list.
     CUdeviceptr get_device_target_code_data_list();
@@ -1140,9 +1141,10 @@ bool Material_gpu_context::prepare_lightprofile(
 
 // Prepare the needed target code data of the given target code.
 bool Material_gpu_context::prepare_target_code_data(
-    mi::neuraylib::ITransaction       *transaction,
-    mi::neuraylib::IImage_api         *image_api,
-    mi::neuraylib::ITarget_code const *target_code)
+    mi::neuraylib::ITransaction          *transaction,
+    mi::neuraylib::IImage_api            *image_api,
+    mi::neuraylib::ITarget_code const    *target_code,
+    std::vector<size_t> const            &arg_block_indices)
 {
     // Target code data list may not have been retrieved already
     check_success(m_device_target_code_data_list.get() == 0);
@@ -1177,14 +1179,12 @@ bool Material_gpu_context::prepare_target_code_data(
     // Copy MBSDFs to GPU if the code has more than just the invalid mbsdf
     CUdeviceptr device_mbsdfs = 0;
     mi::Size num_mbsdfs = target_code->get_bsdf_measurement_count();
-    if (num_mbsdfs > 1)
-    {
+    if (num_mbsdfs > 1) {
         std::vector<Mbsdf> mbsdfs;
 
         // Loop over all mbsdfs skipping the first mbsdf,
         // which is always the invalid mbsdf
-        for (mi::Size i = 1; i < num_mbsdfs; ++i)
-        {
+        for (mi::Size i = 1; i < num_mbsdfs; ++i) {
             if (!prepare_mbsdf(
                 transaction, target_code, i, mbsdfs))
                 return false;
@@ -1197,14 +1197,12 @@ bool Material_gpu_context::prepare_target_code_data(
     // Copy light profiles to GPU if the code has more than just the invalid light profile
     CUdeviceptr device_lightprofiles = 0;
     mi::Size num_lightprofiles = target_code->get_light_profile_count();
-    if (num_lightprofiles > 1)
-    {
+    if (num_lightprofiles > 1) {
         std::vector<Lightprofile> lightprofiles;
 
         // Loop over all profiles skipping the first profile,
         // which is always the invalid profile
-        for (mi::Size i = 1; i < num_lightprofiles; ++i)
-        {
+        for (mi::Size i = 1; i < num_lightprofiles; ++i) {
             if (!prepare_lightprofile(
                 transaction, target_code, i, lightprofiles))
                 return false;
@@ -1230,18 +1228,8 @@ bool Material_gpu_context::prepare_target_code_data(
             mi::base::make_handle(target_code->get_argument_block_layout(i)));
     }
 
-    // Collect all target argument block indices of the BSDFs.
-    for (mi::Size i = 0, num = target_code->get_callable_function_count(); i < num; ++i) {
-        mi::neuraylib::ITarget_code::Function_kind kind =
-            target_code->get_callable_function_kind(i);
-        mi::neuraylib::ITarget_code::Distribution_kind df_kind =
-            target_code->get_callable_function_distribution_kind(i);
-        if (kind != mi::neuraylib::ITarget_code::FK_DF_INIT ||
-                df_kind != mi::neuraylib::ITarget_code::DK_BSDF)
-            continue;
-
-        m_bsdf_arg_block_indices.push_back(
-            size_t(target_code->get_callable_function_argument_block_index(i)));
+    for (size_t arg_block_index : arg_block_indices) {
+        m_bsdf_arg_block_indices.push_back(arg_block_index);
     }
 
     return true;
@@ -1276,10 +1264,15 @@ public:
         unsigned num_texture_results,
         bool enable_derivatives);
 
-    // Helper function to extract the module name from a fully-qualified material name.
+    // Helper function that checks if the provided name describes an MDLe element.
+    static bool is_mdle_name(const std::string& name);
+
+    // Helper function to extract the module name from a fully-qualified material name or a
+    // fully-qualified MDLE material name.
     static std::string get_module_name(const std::string& material_name);
 
-    // Helper function to extract the material name from a fully-qualified material name.
+    // Helper function to extract the material name from a fully-qualified material name or a
+    // fully-qualified MDLE material name.
     static std::string get_material_name(const std::string& material_name);
 
     // Return the list of all material names in the given MDL module.
@@ -1321,19 +1314,29 @@ public:
     // Generates CUDA PTX target code for the current link unit.
     mi::base::Handle<const mi::neuraylib::ITarget_code> generate_cuda_ptx();
 
+    typedef std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> >
+        Material_definition_list;
+
     // Get the list of used material definitions.
     // There will be one entry per add_* call.
-    std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> >
-        &get_material_defs()
+    Material_definition_list const &get_material_defs()
     {
         return m_material_defs;
     }
 
+    typedef std::vector<mi::base::Handle<mi::neuraylib::ICompiled_material const> >
+        Compiled_material_list;
+
     // Get the list of compiled materials.
     // There will be one entry per add_* call.
-    std::vector<mi::base::Handle<mi::neuraylib::ICompiled_material> > &get_compiled_materials()
+    Compiled_material_list const &get_compiled_materials()
     {
         return m_compiled_materials;
+    }
+
+    /// Get the list of argument block indices per material.
+    std::vector<size_t> const &get_argument_block_indices() const {
+        return m_arg_block_indexes;
     }
 
 private:
@@ -1352,10 +1355,11 @@ private:
     mi::base::Handle<mi::neuraylib::ITransaction>  m_transaction;
 
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> m_context;
-    mi::base::Handle<mi::neuraylib::ILink_unit> m_link_unit;
+    mi::base::Handle<mi::neuraylib::ILink_unit>             m_link_unit;
 
-    std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> > m_material_defs;
-    std::vector<mi::base::Handle<mi::neuraylib::ICompiled_material> > m_compiled_materials;
+    Material_definition_list  m_material_defs;
+    Compiled_material_list    m_compiled_materials;
+    std::vector<size_t>       m_arg_block_indexes;
 };
 
 // Constructor.
@@ -1395,15 +1399,45 @@ Material_compiler::Material_compiler(
         to_string(num_texture_results).c_str()) == 0);
 
 
+    // force experimental to true for now
+    m_context->set_option("experimental", true); 
+
     // After we set the options, we can create the link unit
     m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, m_context.get()));
+}
+
+bool Material_compiler::is_mdle_name(const std::string& name)
+{
+    size_t l = name.length();
+    if (l > 5 &&
+        name[l - 5] == '.' &&
+        name[l - 4] == 'm' &&
+        name[l - 3] == 'd' &&
+        name[l - 2] == 'l' &&
+        name[l - 1] == 'e') 
+        return true;
+
+    return name.find(".mdle:") != std::string::npos;
 }
 
 // Helper function to extract the module name from a fully-qualified material name.
 std::string Material_compiler::get_module_name(const std::string& material_name)
 {
-    size_t p = material_name.rfind("::");
-    return material_name.substr(0, p);
+    std::string module_name = material_name;
+
+    if (is_mdle_name(module_name)) {
+        // for MDLE, the module name is not supposed to have a leading "::", strip it gracefully.
+        if (module_name[0] == ':' && module_name[1] == ':')
+            module_name = module_name.substr(2);
+        std::replace(module_name.begin(), module_name.end(), '\\', '/');
+    }
+   
+    // strip away the material name
+    size_t p = module_name.rfind("::");
+    if (p != std::string::npos)
+        module_name = module_name.substr(0, p);
+
+    return module_name;
 }
 
 // Helper function to extract the material name from a fully-qualified material name.
@@ -1418,6 +1452,7 @@ std::string Material_compiler::get_material_name(const std::string& material_nam
 // Return the list of all material names in the given MDL module.
 std::vector<std::string> Material_compiler::get_material_names(const std::string& module_name)
 {
+    check_success(!is_mdle_name(module_name));
     check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str()) >= 0);
 
     const char *prefix = (module_name.find("::") == 0) ? "mdl" : "mdl::";
@@ -1437,16 +1472,30 @@ std::vector<std::string> Material_compiler::get_material_names(const std::string
 mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
     const std::string& material_name)
 {
+    std::string module_name;
+    std::string material_db_name;
+
+    if (is_mdle_name(material_name)) {
+        module_name = material_name;
+        // unify path
+        std::replace(module_name.begin(), module_name.end(), '\\', '/');
+        material_db_name = mdle_to_db_name(module_name);
+    }
+    else {
+        // strip away the material name
+        size_t p = material_name.rfind("::");
+        module_name = material_name.substr(0, p);
+        
+        const char *prefix = (material_name.find("::") == 0) ? "mdl" : "mdl::";
+        material_db_name = prefix + material_name;
+    }
+
     // Load mdl module.
-    std::string module_name = get_module_name(material_name);
     check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str(), m_context.get()) >= 0);
     print_messages(m_context.get());
 
     // Create a material instance from the material definition
     // with the default arguments.
-    const char *prefix = (material_name.find("::") == 0) ? "mdl" : "mdl::";
-
-    std::string material_db_name = prefix + material_name;
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
         m_transaction->access<mi::neuraylib::IMaterial_definition>(
             material_db_name.c_str()));
@@ -1506,16 +1555,11 @@ bool Material_compiler::add_material_subexpr(
     const char* fname,
     bool class_compilation)
 {
-    // Load the given module and create a material instance
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        create_material_instance(material_name.c_str()));
-
-    // Compile the material instance in instance compilation mode
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        compile_material_instance(material_instance.get(), class_compilation));
-
-    m_link_unit->add_material_expression(compiled_material.get(), path, fname, m_context.get());
-    return print_messages(m_context.get());
+    mi::neuraylib::Target_function_description desc;
+    desc.path = path;
+    desc.base_fname = fname;
+    add_material(material_name, &desc, 1, class_compilation);
+    return desc.return_code == 0;
 }
 
 // Add a distribution function of a given material to the link unit.
@@ -1527,16 +1571,11 @@ bool Material_compiler::add_material_df(
     const char* base_fname,
     bool class_compilation)
 {
-    // Load the given module and create a material instance
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        create_material_instance(material_name.c_str()));
-
-    // Compile the material instance in instance compilation mode
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        compile_material_instance(material_instance.get(), class_compilation));
-
-    m_link_unit->add_material_df(compiled_material.get(), path, base_fname, m_context.get());
-    return print_messages(m_context.get());
+    mi::neuraylib::Target_function_description desc;
+    desc.path = path;
+    desc.base_fname = base_fname;
+    add_material(material_name, &desc, 1, class_compilation);
+    return desc.return_code == 0;
 }
 
 // Add (multiple) MDL distribution function and expressions of a material to this link unit.
@@ -1552,6 +1591,9 @@ bool Material_compiler::add_material(
     mi::Size description_count,
     bool class_compilation)
 {
+    if (description_count == 0)
+        return false;
+
     // Load the given module and create a material instance
     mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
         create_material_instance(material_name.c_str()));
@@ -1563,13 +1605,12 @@ bool Material_compiler::add_material(
     m_link_unit->add_material(
         compiled_material.get(), function_descriptions, description_count,
         m_context.get());
-    bool res = print_messages(m_context.get());
 
-    if (res)
-        for (size_t i = 0; i < description_count; ++i)
-            function_descriptions[i].argument_block_index++;  // 1-based in the example
+    // Note: the same argument_block_index is filled into all function descriptions of a
+    //       material, if any function uses it
+    m_arg_block_indexes.push_back(function_descriptions[0].argument_block_index);
 
-    return res;
+    return print_messages(m_context.get());
 }
 
 

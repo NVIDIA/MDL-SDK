@@ -1436,7 +1436,7 @@ llvm::ConstantFoldCall(Function *F, ArrayRef<Constant *> Operands,
           if (V >= -0.0)
             return ConstantFoldFP(sqrt, V, Ty);
           else // Undefined
-            return Constant::getNullValue(Ty);
+            return 0;
         }
         break;
       case 's':

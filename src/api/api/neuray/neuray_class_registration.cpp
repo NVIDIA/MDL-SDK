@@ -316,6 +316,19 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     decl->add_member( "Interface",  "reader");
     factory->register_structure_decl( "Uvtile_reader", decl.get());
 
+    decl = factory->create_type_instance<mi::IStructure_decl>(0, "Structure_decl", 0, 0);
+    decl->add_member("String", "prototype_name");
+    decl->add_member("Interface", "defaults");
+    decl->add_member("Interface", "annotations");
+    decl->add_member("String", "thumbnail_path");
+    decl->add_member("Interface", "user_files");
+    factory->register_structure_decl("Mdle_data", decl.get());
+
+    decl = factory->create_type_instance<mi::IStructure_decl>(0, "Structure_decl", 0, 0);
+    decl->add_member("String", "source_path");
+    decl->add_member("String", "target_path");
+    factory->register_structure_decl("Mdle_user_file", decl.get());
+
 
 }
 
@@ -329,6 +342,8 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
     factory->unregister_structure_decl( "Variant_data");
     factory->unregister_structure_decl( "Uvtile");
     factory->unregister_structure_decl( "Uvtile_reader");
+    factory->unregister_structure_decl("Mdle_data");
+    factory->unregister_structure_decl("User_file");
 }
 
 bool Class_registration::is_predefined_structure_declaration( const char* name)
@@ -347,6 +362,10 @@ bool Class_registration::is_predefined_structure_declaration( const char* name)
     if( strcmp( name, "Uvtile") == 0)
         return true;
     if( strcmp( name, "Uvtile_reader") == 0)
+        return true;
+    if (strcmp(name, "Mdle_data") == 0)
+        return true;
+    if (strcmp(name, "User_file") == 0)
         return true;
 
     return false;

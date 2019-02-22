@@ -65,6 +65,14 @@ public:
     virtual IArchive_manifest const *get_manifest() const = 0;
 };
 
+
+/// The interface of an input stream from an mdle.
+class IMdle_input_stream : public
+    mi::base::Interface_declare<0x67e4a0f9,0xeee2,0x4987,0xa2,0x84,0xb8,0x2e,0xb7,0xf4,0x6a,0x92,
+    IInput_stream>
+{
+};
+
 /// The interface of an output stream.
 class IOutput_stream : public
     mi::base::Interface_declare<0x1a7c81ca,0xf7f8,0x4db7,0x94,0xe2,0x22,0xcc,0x14,0xd4,0x1f,0xbe,

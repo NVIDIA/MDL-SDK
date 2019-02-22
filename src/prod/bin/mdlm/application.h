@@ -70,6 +70,8 @@ namespace mdlm
         mi::base::Handle<mi::base::ILogger> m_logger;
         std::string m_name;
         mi::neuraylib::Neuray_factory * m_factory;
+        bool m_freeimage_loaded;
+
         Application(const Application&);//prevent copy ctor
         // Setup the application options from the command line arguments
         mi::Sint32 setup_options(int argc, char *argv[]);
@@ -112,6 +114,9 @@ namespace mdlm
         /// Utility routines for logging messages
         /// This can be disbaled using option quiet mode
         void report(const std::string & msg) const;
+
+        // Check if freeimage is available
+        bool freeimage_available() const { return m_freeimage_loaded; }
     };
 
 } // namespace mdlm

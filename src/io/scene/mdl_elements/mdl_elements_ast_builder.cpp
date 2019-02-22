@@ -387,11 +387,10 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
 mi::mdl::ISymbol const *Mdl_ast_builder::get_field_sym(
     std::string const &def)
 {
-    size_t pos = def.rfind('.');
-    if (pos != std::string::npos) {
-        std::string f_name(def.substr(pos + 1));
-
-        return m_st.get_symbol(f_name.c_str());
+    const char* p = strstr(def.c_str(), ".mdle::");
+    const char* dot = strchr(p ? (p + 7) : def.c_str(), '.');
+    if (dot != NULL) {
+        return m_st.get_symbol(dot + 1);
     }
     return NULL;
 }
@@ -492,7 +491,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                     // add multiplier
                     if (named_args) {
                         arg = m_ef.create_named_argument(
-                            to_simple_name("tangent_u"),
+                            to_simple_name("multiplier"),
                             m_ef.create_literal(m_vf.create_float(1.0f)));
                     } else {
                         arg = m_ef.create_positional_argument(
@@ -503,7 +502,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 } else if (j == 4) {
                     // add tangent_u
                     if (named_args) {
-                        arg = m_ef.create_named_argument(to_simple_name("multiplier"), tu_call);
+                        arg = m_ef.create_named_argument(to_simple_name("tangent_u"), tu_call);
                     } else {
                         arg = m_ef.create_positional_argument(tu_call);
                     }
@@ -543,7 +542,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 if (j == 4) {
                     // add tangent_u
                     if (named_args) {
-                        arg = m_ef.create_named_argument(to_simple_name("multiplier"), tu_call);
+                        arg = m_ef.create_named_argument(to_simple_name("tangent_u"), tu_call);
                     } else {
                         arg = m_ef.create_positional_argument(tu_call);
                     }
@@ -1320,16 +1319,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
 
             // create arg0: url
             {
-                mi::mdl::ISymbol const      *sym   = m_st.create_symbol(url.c_str());
-                mi::mdl::ISimple_name const *sname = m_nf.create_simple_name(sym);
-                mi::mdl::IQualified_name    *qname = m_nf.create_qualified_name();
+                mi::mdl::IValue const *s = m_vf.create_string(url.c_str());
+                mi::mdl::IExpression  *lit = m_ef.create_literal(s);
 
-                qname->add_component(sname);
-
-                mi::mdl::IType_name *tn = m_nf.create_type_name(qname);
-                mi::mdl::IExpression_reference *ref  = m_ef.create_reference(tn);
-
-                call->add_argument(m_ef.create_positional_argument(ref));
+                call->add_argument(m_ef.create_positional_argument(lit));
             }
             return call;
         }

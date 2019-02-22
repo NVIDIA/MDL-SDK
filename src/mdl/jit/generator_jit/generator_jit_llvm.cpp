@@ -731,7 +731,19 @@ public:
     {
         if (m_call->get_semantic() == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
             char const *call_name = m_call->get_name();
-            char const *p = strchr(call_name, '.');
+
+            char const *s = call_name;
+            if (call_name[0] == ':' && call_name[1] == ':' && call_name[2] =='/') {
+                // found an MDLE prefix, skip it
+                s = strchr(s, '.');
+                if (s != NULL && strncmp(".mdle::", s, 4) == 0) {
+                    s += 7;
+                } else {
+                    s = call_name;
+                }
+            }
+
+            char const *p = strchr(s, '.');
 
             if (p != NULL) {
                 string f_name(alloc);
@@ -4405,16 +4417,22 @@ Expression_result LLVM_code_generator::translate_binary(
             int index = def->get_field_index();
 
             llvm::Value *v;
-            llvm::Value *compound_value = translate_expression_value(ctx, lhs, return_derivs);
-            llvm::Type  *compound_tp    = compound_value->getType();
+            Expression_result  compound    = translate_expression(ctx, lhs, return_derivs);
+            llvm::Type        *compound_tp = compound.get_value_type();
             if (llvm::isa<llvm::VectorType>(compound_tp)) {
                 // extracting a vector component
-                v = ctx->CreateExtractElement(compound_value, ctx.get_constant(index));
+                v = ctx->CreateExtractElement(compound.as_value(ctx), ctx.get_constant(index));
             } else if (m_type_mapper.is_deriv_type(compound_tp)) {
-                v = ctx.extract_dual(compound_value, unsigned(index));
+                v = ctx.extract_dual(compound.as_value(ctx), unsigned(index));
             } else {
                 // default aggregate extract
-                v = ctx->CreateExtractValue(compound_value, index);
+                if (!compound.is_value()) {
+                    // avoid value copy by returning a pointer
+                    v = ctx.create_simple_gep_in_bounds(compound.as_ptr(ctx), index);
+                    return Expression_result::ptr(v);
+                }
+
+                v = ctx->CreateExtractValue(compound.as_value(ctx), index);
             }
             return Expression_result::value(v);
         }

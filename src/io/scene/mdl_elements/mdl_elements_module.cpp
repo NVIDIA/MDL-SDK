@@ -49,11 +49,14 @@
 #include <mi/mdl/mdl_thread_context.h>
 #include <mi/neuraylib/istring.h>
 #include <base/system/main/access_module.h>
+#include <base/util/string_utils/i_string_utils.h>
 #include <boost/core/ignore_unused.hpp>
 #include <base/lib/log/i_log_logger.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
+#include <base/hal/disk/disk.h>
+#include <base/hal/hal/i_hal_ospath.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <io/scene/scene/i_scene_journal_types.h>
@@ -177,6 +180,16 @@ private:
     Mdl_material_instance const &m_inst;
 };
 
+/// Checks, if the given module name has an .mdle extension.
+bool is_mdle(const std::string& module_name)
+{
+    size_t n = module_name.length();
+    if (n > 5) {
+        return STRING::to_lower(module_name.substr(n - 5)) == ".mdle";
+    }
+    return false;
+}
+
 }  // anonymous
 
 mi::Sint32 Mdl_module::create_module(
@@ -192,12 +205,46 @@ mi::Sint32 Mdl_module::create_module(
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
 
-    // Reject invalid module names (in particular, names containing slashes and backslashes).
-    if( !is_valid_module_name( module_name, mdl.get()))
-        return -1;
+    // check if the module is an mdle
+    std::string module_name_str = module_name;
+    std::string db_module_name;
+    std::string module_name_to_load;
+    if (is_mdle(module_name_str)) {
+
+        // make path absolute
+        if (!DISK::is_path_absolute( module_name_str.c_str())) {
+            module_name_str = HAL::Ospath::join(DISK::get_cwd(), module_name_str);
+        }
+
+        // check if the file exists
+        if (!DISK::is_file( module_name_str.c_str())) {
+            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DISK,
+                "MDLe file \"%s\" does not exist.", module_name_str.c_str());
+            return -1;
+        }
+
+        // use the absolute path when creating the mi::mdl::IModule
+        module_name = module_name_str.c_str();
+
+        // add prefix and insert a leading slash if there is none
+        // use forward slashes in the database name
+        db_module_name = (module_name_str[0] == '/' ? "mdle::" : "mdle::/")
+                       + HAL::Ospath::convert_to_forward_slashes(module_name_str);
+
+        module_name_to_load = HAL::Ospath::convert_to_platform_specific_path(module_name);
+
+    // otherwise we check for valid mdl identifiers
+    } else {
+    
+        // Reject invalid module names (in particular, names containing slashes and backslashes).
+        if (!is_valid_module_name(module_name, mdl.get()))
+            return -1;
+
+        db_module_name = add_mdl_db_prefix(module_name);
+        module_name_to_load = module_name;
+    }
 
     // Check whether the module exists already in the DB.
-    std::string db_module_name = add_mdl_db_prefix( module_name);
     DB::Tag db_module_tag = transaction->name_to_tag( db_module_name.c_str());
     if( db_module_tag) {
         if( transaction->get_class_id( db_module_tag) != Mdl_module::id) {
@@ -214,7 +261,7 @@ mi::Sint32 Mdl_module::create_module(
         context->get_option<bool>(MDL_CTX_OPTION_EXPERIMENTAL) ? "true" : "false");
 
     mi::base::Handle<const mi::mdl::IModule> module(
-        mdl->load_module( ctx.get(), module_name, &module_cache));
+        mdl->load_module( ctx.get(), module_name_to_load.c_str(), &module_cache));
     if( !module.is_valid_interface()) {
         report_messages(ctx->access_messages(), context);
         return -2;
@@ -1516,10 +1563,10 @@ mi::Sint32 Mdl_module::create_module_internal(
         if( !module_filename)
             LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
                 "Loading module \"%s\".", module_name);
-        else if( DETAIL::is_archive_member( module_filename)) {
-            const std::string& archive_filename = DETAIL::get_archive_filename( module_filename);
+        else if( DETAIL::is_container_member( module_filename)) {
+            const std::string& container_filename = DETAIL::get_container_filename( module_filename);
             LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
-                "Loading module \"%s\" from \"%s\".", module_name, archive_filename.c_str());
+                "Loading module \"%s\" from \"%s\".", module_name, container_filename.c_str());
         } else
             LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
                 "Loading module \"%s\" from \"%s\".", module_name, module_filename);
@@ -1702,8 +1749,8 @@ Mdl_module::Mdl_module(
     m_code_dag = make_handle_dup( code_dag);
     m_name = module->get_name();
     m_file_name = module->get_filename();
-    m_api_file_name = DETAIL::is_archive_member( m_file_name.c_str())
-        ? DETAIL::get_archive_filename( m_file_name.c_str()) : m_file_name;
+    m_api_file_name = DETAIL::is_container_member( m_file_name.c_str())
+        ? DETAIL::get_container_filename( m_file_name.c_str()) : m_file_name;
 
     m_imports = imports;
     m_functions = functions;

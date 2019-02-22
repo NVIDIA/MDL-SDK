@@ -27,8 +27,8 @@
  *****************************************************************************/
 /// \file mi/mdl/mdl_archiver.h
 /// \brief Interfaces for handling MDL archives
-#ifndef MDL_MDL_ARCHIEVER_H
-#define MDL_MDL_ARCHIEVER_H 1
+#ifndef MDL_ARCHIEVER_H
+#define MDL_ARCHIEVER_H 1
 
 #include <mi/base/iinterface.h>
 #include <mi/base/interface_declare.h>
@@ -382,4 +382,4 @@ public:
  *     file extentions that should be stored uncompressed inside an MDL archive.
  *     Default: ".ies,.mbsdf,.txt,.html"
  */
-#endif // MDL_MDL_ARCHIEVER_H
+#endif // MDL_ARCHIEVER_H

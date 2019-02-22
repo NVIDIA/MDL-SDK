@@ -114,7 +114,20 @@ public:
         char c = m_curr[0];
 
         if (c == '\0') {
-            return TT_EOF;
+            return TT_EOF; \
+        } else if (c == '/') {
+            unsigned index = 0;
+            do {
+                NEXT_CHAR;
+                if (c == '\0')
+                    return TT_ERROR;
+                if (c == index[".mdle::"])
+                    ++index;
+                else
+                    index = 0;
+            } while (index < 6);
+            // found an MDLE file path
+            return TT_ID;
         } else if (c == ':') {
             if (m_curr[1] == ':') {
                 if (m_scope_is_token) {
@@ -126,6 +139,23 @@ public:
                     // scope is part of an identifier
                     m_len = 1;
                     ++m_curr;
+                    NEXT_CHAR;
+                    if (c == '/') {
+                        unsigned index = 0;
+                        do {
+                            NEXT_CHAR;
+                            if (c == '\0')
+                                return TT_ERROR;
+                            if (c == index[".mdle::"])
+                                ++index;
+                            else
+                                index = 0;
+                        } while (index < 6);
+                        // found an MDLE file path
+                        m_len += 2;
+                        m_curr += 2;
+                        // continue with normal ID
+                    }
                     do {
                         NEXT_CHAR;
                         if (c == ':' && m_curr[1] == ':') {
@@ -560,8 +590,9 @@ bool Module::set_version(MDL *compiler, int major, int minor, bool enable_experi
 
 // Analyze the module.
 bool Module::analyze(
-    IModule_cache  *cache,
-    IThread_context *context)
+    IModule_cache   *cache,
+    IThread_context *context,
+    bool            resolve_resources)
 {
     mi::base::Handle<Thread_context> hctx;
 
@@ -573,7 +604,7 @@ bool Module::analyze(
         ctx  = hctx.get();
     }
 
-    NT_analysis nt_analysis(m_compiler, *this, *ctx, cache);
+    NT_analysis nt_analysis(m_compiler, *this, *ctx, cache, resolve_resources);
     nt_analysis.run();
 
     Sema_analysis sema_analysis(m_compiler, *this, *ctx);
@@ -599,6 +630,14 @@ bool Module::analyze(
     drop_import_entries();
 
     return m_is_valid;
+}
+
+// Analyze the module (interface version).
+bool Module::analyze(
+    IModule_cache   *cache,
+    IThread_context *context)
+{
+    return analyze(cache, context, /*resolve_resources=*/true);
 }
 
 // Check if the module has been analyzed.
@@ -1814,6 +1853,86 @@ void Module::allocate_initializers(Definition *def, size_t num)
     def->m_parameter_inits = init;
 }
 
+// Clone the given parameter.
+IParameter const *Module::clone_param(
+    IParameter const *param,
+    bool             clone_init,
+    bool             clone_anno,
+    IClone_modifier  *modifier)
+{
+    IType_name *tn = clone_name(param->get_type_name(), modifier);
+    ISimple_name const *sn = clone_name(param->get_name());
+
+    IExpression *new_init = NULL;
+    if (clone_init)
+        if (IExpression const *init_expr = param->get_init_expr()) {
+            new_init = clone_expr(init_expr, modifier);
+        }
+    IAnnotation_block *new_annos = NULL;
+    if (clone_anno)
+        new_annos = clone_annotation_block(param->get_annotations(), modifier);
+
+    return m_decl_factory.create_parameter(tn, sn, new_init, new_annos);
+}
+
+// Clone the given variable declaration.
+IDeclaration *Module::clone_decl(
+    IDeclaration_variable const *decl,
+    IClone_modifier             *modifier)
+{
+    IType_name const *tn = clone_name(decl->get_type_name(), modifier);
+    IDeclaration_variable *new_decl = m_decl_factory.create_variable(tn);
+
+    for (int i = 0, n = decl->get_variable_count(); i < n; ++i) {
+        IExpression *new_init = NULL;
+        if (IExpression const *init_expr = decl->get_variable_init(i)) {
+            new_init = clone_expr(init_expr, modifier);
+        }
+        ISimple_name const *new_name  = clone_name(decl->get_variable_name(i));
+        IAnnotation_block  *new_annos = clone_annotation_block(decl->get_annotations(i), modifier);
+        new_decl->add_variable(new_name, new_init, new_annos);
+    }
+    return new_decl;
+}
+
+// Clone the given annotation block.
+IAnnotation_block *Module::clone_annotation_block(
+    IAnnotation_block const *anno_block,
+    IClone_modifier         *modifier)
+{
+    if (!anno_block) return NULL;
+
+    IAnnotation_block *new_block = m_anno_factory.create_annotation_block();
+    for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
+
+        IAnnotation const *anno = anno_block->get_annotation(i);
+        IDefinition const *def = anno->get_name()->get_definition();
+
+        if (def->get_semantics() == IDefinition::DS_VERSION_NUMBER_ANNOTATION &&
+            m_mdl_version >= IMDL::MDL_VERSION_1_3) {
+                continue; // skip
+        }
+        IAnnotation *new_anno = clone_annotation(anno_block->get_annotation(i), modifier);
+        new_block->add_annotation(new_anno);
+    }
+    return new_block;
+}
+
+// Clone the given annotation.
+IAnnotation *Module::clone_annotation(
+    IAnnotation const *anno,
+    IClone_modifier   *modifier)
+{
+    IQualified_name const *new_name = clone_name(anno->get_name(), modifier);
+    IAnnotation *new_anno = m_anno_factory.create_annotation(new_name);
+    for (int i = 0, n = anno->get_argument_count(); i < n; ++i) {
+        IArgument const *arg = anno->get_argument(i);
+        IArgument const *new_arg = clone_arg(arg, modifier);
+        new_anno->add_argument(new_arg);
+    }
+    return new_anno;
+}
+
 // Clone the given expression.
 IExpression *Module::clone_expr(
     IExpression const *expr,
@@ -1876,26 +1995,29 @@ IExpression *Module::clone_expr(
     case IExpression::EK_CALL:
         {
             IExpression_call const *c_expr = cast<IExpression_call>(expr);
-            IExpression const *ref = clone_expr(c_expr->get_reference(), modifier);
-            IExpression_call *call = m_expr_factory.create_call(ref);
+            if (modifier)
+                res = modifier->clone_expr_call(c_expr);
+            else {
+                IExpression const *ref = clone_expr(c_expr->get_reference(), modifier);
+                IExpression_call *call = m_expr_factory.create_call(ref);
 
-            for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
-                IArgument const *arg = clone_arg(c_expr->get_argument(i), modifier);
-                call->add_argument(arg);
+                for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+                    IArgument const *arg = clone_arg(c_expr->get_argument(i), modifier);
+                    call->add_argument(arg);
+                }
+                res = call;
             }
-            res = call;
             break;
         }
     case IExpression::EK_LET:
         {
             IExpression_let const *l_expr = cast<IExpression_let>(expr);
-            IExpression const *exp = clone_expr(l_expr->get_expression(), modifier);
-            IExpression_let *let = m_expr_factory.create_let(exp);
+            IExpression const     *exp = clone_expr(l_expr->get_expression(), modifier);
+            IExpression_let       *let = m_expr_factory.create_let(exp);
 
             for (int i = 0, n = l_expr->get_declaration_count(); i < n; ++i) {
-                // FIXME: clone the declaration
-                MDL_ASSERT(!"cloning of declaration not implemented");
-                IDeclaration const *decl = l_expr->get_declaration(i);
+                IDeclaration const *decl =
+                    clone_decl(cast<IDeclaration_variable>(l_expr->get_declaration(i)), modifier);
                 let->add_declaration(decl);
             }
             res = let;
@@ -1958,7 +2080,7 @@ IType_name *Module::clone_name(
     IType_name const *type_name,
     IClone_modifier  *modifier)
 {
-    IQualified_name *qname = clone_name(type_name->get_qualified_name());
+    IQualified_name *qname = clone_name(type_name->get_qualified_name(), modifier);
     IType_name      *res   = m_name_factory.create_type_name(qname);
 
     if (type_name->is_absolute())
@@ -1995,8 +2117,13 @@ ISimple_name const *Module::clone_name(ISimple_name const *sname)
 }
 
 // Clone the given qualified name.
-IQualified_name *Module::clone_name(IQualified_name const *qname)
+IQualified_name *Module::clone_name(
+    IQualified_name const *qname,
+    IClone_modifier       *modifier)
 {
+    if (modifier)
+        return modifier->clone_name(qname);
+
     IQualified_name *res = m_name_factory.create_qualified_name();
 
     for (int i = 0, n = qname->get_component_count(); i < n; ++i) {
@@ -3751,6 +3878,152 @@ void Module::add_resource_entry(
             exists));
 }
 
+// Alters one call argument according to the given promotion rules.
+int Module::promote_call_arguments(
+    IExpression_call *call,
+    IArgument const  *arg,
+    int              param_index,
+    unsigned         rules)
+{
+    if (rules & PR_SPOT_EDF_ADD_SPREAD_PARAM) {
+        if (param_index == 0) {
+            // add M_PI as 1. argument
+            IValue_float const  *v = m_value_factory.create_float(M_PIf);
+            IExpression const   *e = m_expr_factory.create_literal(v);
+            arg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PC_MEASURED_EDF_ADD_MULTIPLIER) {
+        if (param_index == 0) {
+            // add 1.0 as 1. argument
+            IValue_float const  *v = m_value_factory.create_float(1.0);
+            IExpression const   *e = m_expr_factory.create_literal(v);
+            arg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_MEASURED_EDF_ADD_TANGENT_U) {
+        if (param_index == 3) {
+            // add state::tangent_u(0) as 4. argument
+
+            ISymbol const *sym_state = m_sym_tab.get_symbol("state");
+            ISymbol const *sym_tanu = m_sym_tab.get_symbol("texture_tangent_u");
+
+            ISimple_name *sn_state = m_name_factory.create_simple_name(sym_state);
+            ISimple_name *sn_tanu = m_name_factory.create_simple_name(sym_tanu);
+
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn_state);
+            qn->add_component(sn_tanu);
+            qn->set_absolute();
+
+            IType_name *tn = m_name_factory.create_type_name(qn);
+
+            IExpression_reference *ref = m_expr_factory.create_reference(tn);
+            IExpression_call      *tu_call = m_expr_factory.create_call(ref);
+
+            IValue_int const  *v = m_value_factory.create_int(0);
+            IExpression const *e = m_expr_factory.create_literal(v);
+            IArgument const   *a = m_expr_factory.create_positional_argument(e);
+
+            tu_call->add_argument(a);
+
+            arg = m_expr_factory.create_positional_argument(tu_call);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_FRESNEL_LAYER_TO_COLOR) {
+        if (param_index == 1) {
+            // wrap the 1. argument by a color constructor
+            ISymbol const *sym_color = m_sym_tab.get_symbol("color");
+
+            ISimple_name *sn_color = m_name_factory.create_simple_name(sym_color);
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn_color);
+
+            IType_name *tn = m_name_factory.create_type_name(qn);
+
+            IExpression_reference *ref = m_expr_factory.create_reference(tn);
+            IExpression_call      *color_call = m_expr_factory.create_call(ref);
+
+            IExpression const *e = arg->get_argument_expr();
+            IArgument const   *a = m_expr_factory.create_positional_argument(e);
+
+            color_call->add_argument(a);
+
+            const_cast<IArgument *>(arg)->set_argument_expr(color_call);
+            return param_index;
+        }
+    }
+    if (rules & PR_WIDTH_HEIGTH_ADD_UV_TILE) {
+        if (param_index == 0) {
+            // add int2(0) as 1. argument
+            ISymbol const *sym_int2 = m_sym_tab.get_symbol("int2");
+
+            ISimple_name *sn_int2 = m_name_factory.create_simple_name(sym_int2);
+
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn_int2);
+
+            IType_name *tn = m_name_factory.create_type_name(qn);
+
+            IExpression_reference *ref = m_expr_factory.create_reference(tn);
+            IExpression_call      *int2_call = m_expr_factory.create_call(ref);
+
+            IValue_int const  *v = m_value_factory.create_int(0);
+            IExpression const *e = m_expr_factory.create_literal(v);
+            IArgument const   *a = m_expr_factory.create_positional_argument(e);
+
+            int2_call->add_argument(a);
+
+            arg = m_expr_factory.create_positional_argument(int2_call);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_TEXEL_ADD_UV_TILE) {
+        if (param_index == 1) {
+            // add int2(0) as 2. argument
+            ISymbol const *sym_int2 = m_sym_tab.get_symbol("int2");
+
+            ISimple_name *sn_int2 = m_name_factory.create_simple_name(sym_int2);
+
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn_int2);
+
+            IType_name *tn = m_name_factory.create_type_name(qn);
+
+            IExpression_reference *ref = m_expr_factory.create_reference(tn);
+            IExpression_call      *int2_call = m_expr_factory.create_call(ref);
+
+            IValue_int const  *v = m_value_factory.create_int(0);
+            IExpression const *e = m_expr_factory.create_literal(v);
+            IArgument const   *a = m_expr_factory.create_positional_argument(e);
+
+            int2_call->add_argument(a);
+
+            arg = m_expr_factory.create_positional_argument(int2_call);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_ROUNDED_CORNER_ADD_ROUNDNESS) {
+        if (param_index == 1) {
+            // add roundness as 2. argument
+            IValue_float const  *v = m_value_factory.create_float(1.0f);
+            IExpression const   *e = m_expr_factory.create_literal(v);
+            arg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(arg);
+            return param_index + 1;
+        }
+    }
+    return param_index;
+}
+
 namespace {
 
 /// Helper class to enumerate referenced resources.
@@ -4083,22 +4356,17 @@ static IArgument const *promote_argument(
     return arg;
 }
 
-enum Promotion_changes {
-    PC_NO_CHANGE,
-    PC_SPOT_EDF_ADD_SPREAD_PARAM    = 0x01,
-    PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x02,
-    PC_MEASURED_EDF_ADD_TANGENT_U   = 0x04,
-    PC_FRESNEL_LAYER_TO_COLOR       = 0x08,
-    PC_WIDTH_HEIGTH_ADD_UV_TILE     = 0x10,
-    PC_TEXEL_ADD_UV_TILE            = 0x20,
-};
-
+///< Promote a given function call to the version of a given module.
+///
+/// \param[in]  mod    the destination module
+/// \param[in]  tn     the type name of the call reference
+/// \param[out] rules  the promotion rule set that must be applied to the call arguments
 static IType_name const *promote_name(
     Module           &mod,
     IType_name const *tn,
-    unsigned         &change)
+    unsigned         &rules)
 {
-    change = PC_NO_CHANGE;
+    rules = Module::PR_NO_CHANGE;
     if (tn->is_array())
         return tn;
 
@@ -4175,23 +4443,32 @@ static IType_name const *promote_name(
                     if (minor == 0) {
                         // all functions deprecated after MDL 1.0
                         if (n == "spot_edf") {
-                            change = PC_SPOT_EDF_ADD_SPREAD_PARAM;
+                            rules = Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
                         } else if (n == "measured_edf") {
                             if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1))
-                                change |= PC_MEASURED_EDF_ADD_MULTIPLIER;
+                                rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
                             if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2))
-                                change |= PC_MEASURED_EDF_ADD_TANGENT_U;
+                                rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
                         }
                     } else if (minor == 1) {
                         // all functions deprecated after MDL 1.1
                         if (n == "measured_edf") {
-                            change = PC_MEASURED_EDF_ADD_TANGENT_U;
+                            rules = Module::PR_MEASURED_EDF_ADD_TANGENT_U;
                         }
                     } else if (minor == 3) {
                         // all functions deprecated after MDL 1.3
                         if (n == "fresnel_layer") {
-                            change = PC_FRESNEL_LAYER_TO_COLOR;
+                            rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
                             n = "color_fresnel_layer";
+                        }
+                    }
+                }
+            } else if (strcmp(package->get_name(), "state") == 0) {
+                if (major == 1) {
+                    if (minor == 2) {
+                        // all functions deprecated after MDL 1.2
+                        if (n == "rounded_corner_normal") {
+                            rules = Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
                         }
                     }
                 }
@@ -4200,19 +4477,19 @@ static IType_name const *promote_name(
                     if (minor == 3) {
                         // all functions deprecated after MDL 1.3
                         if (n == "width") {
-                            change = PC_WIDTH_HEIGTH_ADD_UV_TILE;
+                            rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
                         } else if (n == "height") {
-                            change = PC_WIDTH_HEIGTH_ADD_UV_TILE;
+                            rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
                         } else if (n == "texel_float") {
-                            change = PC_TEXEL_ADD_UV_TILE;
+                            rules = Module::PR_TEXEL_ADD_UV_TILE;
                         } else if (n == "texel_float2") {
-                            change = PC_TEXEL_ADD_UV_TILE;
+                            rules = Module::PR_TEXEL_ADD_UV_TILE;
                         } else if (n == "texel_float3") {
-                            change = PC_TEXEL_ADD_UV_TILE;
+                            rules = Module::PR_TEXEL_ADD_UV_TILE;
                         } else if (n == "texel_float4") {
-                            change = PC_TEXEL_ADD_UV_TILE;
+                            rules = Module::PR_TEXEL_ADD_UV_TILE;
                         } else if (n == "texel_color") {
-                            change = PC_TEXEL_ADD_UV_TILE;
+                            rules = Module::PR_TEXEL_ADD_UV_TILE;
                         }
                     }
                 }
@@ -4295,11 +4572,11 @@ static IExpression const *promote_expr(
             IExpression_call const *c_expr = cast<IExpression_call>(expr);
             IExpression const *r           = c_expr->get_reference();
 
-            unsigned change = PC_NO_CHANGE;
+            unsigned rules = Module::PR_NO_CHANGE;
             if (IExpression_reference const *ref = as<IExpression_reference>(r)) {
                 IType_name const *tn = ref->get_name();
 
-                tn = promote_name(mod, tn, change);
+                tn = promote_name(mod, tn, rules);
 
                 r = mod.get_expression_factory()->create_reference(tn);
             }
@@ -4310,150 +4587,7 @@ static IExpression const *promote_expr(
                 IArgument const *arg = promote_argument(mod, c_expr->get_argument(i));
                 call->add_argument(arg);
 
-                if (change & PC_SPOT_EDF_ADD_SPREAD_PARAM) {
-                    if (j == 0) {
-                        // add M_PI as 1. argument
-                        IExpression_factory &ef = *mod.get_expression_factory();
-                        IValue_float const  *v  = mod.get_value_factory()->create_float(M_PIf);
-                        IExpression const   *e  = ef.create_literal(v);
-                        arg = ef.create_positional_argument(e);
-                        call->add_argument(arg);
-                        ++j;
-                    }
-                }
-                if (change & PC_MEASURED_EDF_ADD_MULTIPLIER) {
-                    if (j == 0) {
-                        // add 1.0 as 1. argument
-                        IExpression_factory &ef = *mod.get_expression_factory();
-                        IValue_float const  *v  = mod.get_value_factory()->create_float(1.0);
-                        IExpression const   *e  = ef.create_literal(v);
-                        arg = ef.create_positional_argument(e);
-                        call->add_argument(arg);
-                        ++j;
-                    }
-                }
-                if (change & PC_MEASURED_EDF_ADD_TANGENT_U) {
-                    if (j == 3) {
-                        // add state::tangent_u(0) as 4. argument
-                        Symbol_table &st = mod.get_symbol_table();
-
-                        ISymbol const *sym_state = st.get_symbol("state");
-                        ISymbol const *sym_tanu  = st.get_symbol("tangent_u");
-
-                        Name_factory &nf = *mod.get_name_factory();
-
-                        ISimple_name *sn_state = nf.create_simple_name(sym_state);
-                        ISimple_name *sn_tanu = nf.create_simple_name(sym_tanu);
-
-                        IQualified_name *qn = nf.create_qualified_name();
-                        qn->add_component(sn_state);
-                        qn->add_component(sn_tanu);
-                        qn->set_absolute();
-
-                        IType_name *tn = nf.create_type_name(qn);
-
-                        IExpression_factory &ef = *mod.get_expression_factory();
-
-                        IExpression_reference *ref     = ef.create_reference(tn);
-                        IExpression_call      *tu_call = ef.create_call(ref);
-
-                        IValue_int const  *v = mod.get_value_factory()->create_int(0);
-                        IExpression const *e = ef.create_literal(v);
-                        IArgument const   *a = ef.create_positional_argument(e);
-
-                        tu_call->add_argument(a);
-
-                        arg = ef.create_positional_argument(tu_call);
-                        call->add_argument(arg);
-                        ++j;
-                    }
-                }
-                if (change & PC_FRESNEL_LAYER_TO_COLOR) {
-                    if (j == 1) {
-                        // wrap the 1. argument by a color constructor
-                        ISymbol const *sym_color = mod.get_symbol_table().get_symbol("color");
-
-                        Name_factory &nf = *mod.get_name_factory();
-
-                        ISimple_name *sn_color = nf.create_simple_name(sym_color);
-                        IQualified_name *qn = nf.create_qualified_name();
-                        qn->add_component(sn_color);
-
-                        IType_name *tn = nf.create_type_name(qn);
-
-                        IExpression_factory &ef = *mod.get_expression_factory();
-
-                        IExpression_reference *ref        = ef.create_reference(tn);
-                        IExpression_call      *color_call = ef.create_call(ref);
-
-                        IExpression const *e = arg->get_argument_expr();
-                        IArgument const   *a = ef.create_positional_argument(e);
-
-                        color_call->add_argument(a);
-
-                        const_cast<IArgument *>(arg)->set_argument_expr(color_call);
-                    }
-                }
-                if (change & PC_WIDTH_HEIGTH_ADD_UV_TILE) {
-                    if (j == 0) {
-                        // add int2(0) as 1. argument
-                        ISymbol const *sym_int2 = mod.get_symbol_table().get_symbol("int2");
-
-                        Name_factory &nf = *mod.get_name_factory();
-
-                        ISimple_name *sn_int2 = nf.create_simple_name(sym_int2);
-
-                        IQualified_name *qn = nf.create_qualified_name();
-                        qn->add_component(sn_int2);
-
-                        IType_name *tn = nf.create_type_name(qn);
-
-                        IExpression_factory &ef = *mod.get_expression_factory();
-
-                        IExpression_reference *ref = ef.create_reference(tn);
-                        IExpression_call      *int2_call = ef.create_call(ref);
-
-                        IValue_int const  *v = mod.get_value_factory()->create_int(0);
-                        IExpression const *e = ef.create_literal(v);
-                        IArgument const   *a = ef.create_positional_argument(e);
-
-                        int2_call->add_argument(a);
-
-                        arg = ef.create_positional_argument(int2_call);
-                        call->add_argument(arg);
-                        ++j;
-                    }
-                }
-                if (change & PC_TEXEL_ADD_UV_TILE) {
-                    if (j == 1) {
-                        // add int2(0) as 2. argument
-                        ISymbol const *sym_int2 = mod.get_symbol_table().get_symbol("int2");
-
-                        Name_factory &nf = *mod.get_name_factory();
-
-                        ISimple_name *sn_int2 = nf.create_simple_name(sym_int2);
-
-                        IQualified_name *qn = nf.create_qualified_name();
-                        qn->add_component(sn_int2);
-
-                        IType_name *tn = nf.create_type_name(qn);
-
-                        IExpression_factory &ef = *mod.get_expression_factory();
-
-                        IExpression_reference *ref = ef.create_reference(tn);
-                        IExpression_call      *int2_call = ef.create_call(ref);
-
-                        IValue_int const  *v = mod.get_value_factory()->create_int(0);
-                        IExpression const *e = ef.create_literal(v);
-                        IArgument const   *a = ef.create_positional_argument(e);
-
-                        int2_call->add_argument(a);
-
-                        arg = ef.create_positional_argument(int2_call);
-                        call->add_argument(arg);
-                        ++j;
-                    }
-                }
+                j = mod.promote_call_arguments(call, arg, j, rules);
             }
             call->set_type(expr->get_type());
             return call;

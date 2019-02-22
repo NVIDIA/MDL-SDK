@@ -173,6 +173,25 @@ public:
     /// not explicitly overwritten expression is needed.
     virtual void post_visit(IExpression *expr);
 
+    /// Default pre visitor for declarations.
+    ///
+    /// \param decl  the declaration
+    ///
+    /// \return true  if the children should be visited
+    ///         false if the children should NOT be visited
+    ///
+    /// Overwrite this method if some general processing for every
+    /// not explicitly overwritten declaration is needed.
+    virtual bool pre_visit(IDeclaration *decl);
+
+    /// Default post visitor for declarations.
+    ///
+    /// \param decl  the declaration
+    ///
+    /// Overwrite this method if some general processing for every
+    /// not explicitly overwritten declaration is needed.
+    virtual void post_visit(IDeclaration *decl);
+
     virtual bool pre_visit(IDeclaration_invalid *decl);
     virtual void post_visit(IDeclaration_invalid *decl);
 

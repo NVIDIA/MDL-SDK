@@ -577,6 +577,7 @@ public:
         PK_FLOAT3,
         PK_COLOR,
         PK_BOOL,
+        PK_INT,
         PK_ENUM,
         PK_STRING,
         PK_TEXTURE,
@@ -911,13 +912,14 @@ static bool handle_resource(
 // Progressively render scene
 static void render_scene(
     const Options &options,
-    mi::base::Handle<mi::neuraylib::ITransaction>                              transaction,
-    mi::base::Handle<mi::neuraylib::IImage_api>                                image_api,
-    mi::base::Handle<mi::neuraylib::IMdl_compiler>                             mdl_compiler,
-    mi::base::Handle<mi::neuraylib::ITarget_code const>                        target_code,
-    std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> > &material_defs,
-    std::vector<mi::base::Handle<mi::neuraylib::ICompiled_material> >         &compiled_materials,
-    std::vector<Df_cuda_material>                                             &material_bundle)
+    mi::base::Handle<mi::neuraylib::ITransaction>         transaction,
+    mi::base::Handle<mi::neuraylib::IImage_api>           image_api,
+    mi::base::Handle<mi::neuraylib::IMdl_compiler>        mdl_compiler,
+    mi::base::Handle<mi::neuraylib::ITarget_code const>   target_code,
+    Material_compiler::Material_definition_list const    &material_defs,
+    Material_compiler::Compiled_material_list const      &compiled_materials,
+    std::vector<size_t> const                            &arg_block_indices,
+    std::vector<Df_cuda_material> const                  &material_bundle)
 {
     Window_context window_context;
     memset(&window_context, 0, sizeof(Window_context));
@@ -1041,7 +1043,7 @@ static void render_scene(
         // Prepare the needed data of all target codes for the GPU
         Material_gpu_context material_gpu_context(options.enable_derivatives);
         if (!material_gpu_context.prepare_target_code_data(
-                transaction.get(), image_api.get(), target_code.get()))
+                transaction.get(), image_api.get(), target_code.get(), arg_block_indices))
             terminate();
         kernel_params.tc_data = reinterpret_cast<Target_code_data *>(
             material_gpu_context.get_device_target_code_data_list());
@@ -1058,7 +1060,7 @@ static void render_scene(
         std::vector<Material_info> mat_infos;
         for (size_t i = 0, num_mats = compiled_materials.size(); i < num_mats; ++i) {
             // Get the compiled material and the parameter annotations
-            mi::neuraylib::ICompiled_material *cur_mat = compiled_materials[i].get();
+            mi::neuraylib::ICompiled_material const *cur_mat = compiled_materials[i].get();
             mi::neuraylib::IMaterial_definition const *cur_def = material_defs[i].get();
             mi::base::Handle<mi::neuraylib::IAnnotation_list const> anno_list(
                 cur_def->get_parameter_annotations());
@@ -1092,6 +1094,9 @@ static void render_scene(
                     break;
                 case mi::neuraylib::IValue::VK_BOOL:
                     param_kind = Param_info::PK_BOOL;
+                    break;
+                case mi::neuraylib::IValue::VK_INT:
+                    param_kind = Param_info::PK_INT;
                     break;
                 case mi::neuraylib::IValue::VK_VECTOR:
                     {
@@ -1324,6 +1329,13 @@ static void render_scene(
                             param.display_name(),
                             &param.data<bool>());
                         break;
+                    case Param_info::PK_INT:
+                        changed |= ImGui::SliderInt(
+                            param.display_name(),
+                            &param.data<int>(),
+                            int(param.range_min()),
+                            int(param.range_max()));
+                        break;
                     case Param_info::PK_ENUM:
                         {
                             int value = param.data<int>();
@@ -1410,7 +1422,7 @@ static void render_scene(
                 // If any material argument changed, update the target argument block on the device
                 if (changed) {
                     material_gpu_context.update_device_argument_block(
-                        material_bundle[kernel_params.current_material].compiled_material_index);
+                        material_bundle[kernel_params.current_material].argument_block_index);
                     kernel_params.iteration_start = 0;
                 }
 
@@ -1571,7 +1583,8 @@ Df_cuda_material create_cuda_material(
     // used here to alter the materials parameter set
     mat.compiled_material_index = static_cast<unsigned int>(compiled_material_index);
 
-    // not used at the moment in this example but allows more flexible implementations
+    // Note: the same argument_block_index is filled into all function descriptions of a
+    //       material, if any function uses it
     mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
 
     // identify the BSDF function by target_code_index (i'th link unit)
@@ -1595,7 +1608,7 @@ Df_cuda_material create_cuda_material(
 static void usage(const char *name)
 {
     std::cout
-        << "usage: " << name << " [options] [<material_name1> ...]\n"
+        << "usage: " << name << " [options] [<material_name1|full_mdle_path1> ...]\n"
         << "-h                          print this text\n"
         << "--nogl                      don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
@@ -1622,7 +1635,8 @@ static void usage(const char *name)
         << "--noaa                      disable pixel oversampling\n"
         << "-d                          enable use of derivatives\n"
         << "\n"
-        << "Note: material names can end with an '*' as a wildcard\n";
+        << "Note: material names can end with an '*' as a wildcard\n"
+        << "      and alternatively, full MDLE file paths can be passed as material name\n";
 
     exit(EXIT_FAILURE);
 }
@@ -1754,7 +1768,6 @@ int main(int argc, char* argv[])
             std::vector<std::string> used_material_names;
             for (size_t i = 0; i < options.material_names.size(); ++i) {
                 std::string material_name(options.material_names[i]);
-                if (!starts_with(material_name, "::")) material_name = "::" + material_name;
 
                 // Is this a material name pattern?
                 if (material_name.size() > 1 && material_name.back() == '*') {
@@ -1823,6 +1836,7 @@ int main(int argc, char* argv[])
                 target_code,
                 mc.get_material_defs(),
                 mc.get_compiled_materials(),
+                mc.get_argument_block_indices(),
                 material_bundle);
         }
 

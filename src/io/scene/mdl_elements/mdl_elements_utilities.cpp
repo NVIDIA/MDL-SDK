@@ -840,8 +840,16 @@ const IValue* lookup_sub_value(
         mi::base::Handle<const IValue_struct> value_struct(
             value_compound->get_interface<IValue_struct>());
         const mi::mdl::IType* tail_type = get_field_type( type_struct, head.c_str());
+        if( type && !tail_type) {
+            if( sub_type) *sub_type = 0;
+            return 0;
+        }
         ASSERT( M_SCENE, tail_type || !type);
         const IValue* tail_value = value_struct->get_field( head.c_str());
+        if( !tail_value) {
+            if( sub_type) *sub_type = 0;
+            return 0;
+        }
         return lookup_sub_value( tail_type, tail_value, tail.c_str(), sub_type);
     }
 
@@ -856,8 +864,16 @@ const IValue* lookup_sub_value(
     ASSERT( M_SCENE, type_compound || !type);
     const mi::mdl::IType* tail_type
         = type_compound ? type_compound->get_compound_type( static_cast<mi::Uint32>( index)) : 0;
+    if( type && !tail_type) {
+        if( sub_type) *sub_type = 0;
+        return 0;
+    }
     ASSERT( M_SCENE, tail_type || !type);
     const IValue* tail_value = value_compound->get_value( index);
+    if( !tail_value) {
+        if( sub_type) *sub_type = 0;
+        return 0;
+    }
     return lookup_sub_value( tail_type, tail_value, tail.c_str(), sub_type);
 }
 
@@ -905,6 +921,10 @@ const IExpression* lookup_sub_expression(
             mi::base::Handle<const IValue> value( expr_constant->get_value());
             mi::base::Handle<const IValue> result(
                 lookup_sub_value( type, value.get(), path, sub_type));
+            if (!result) {
+                if (sub_type) *sub_type = 0;
+                return 0;
+            }
             return ef->create_constant( const_cast<IValue*>( result.get()));
         }
 
@@ -2628,7 +2648,7 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
     }
 
     DB::Access<DBIMAGE::Image> image( image_tag, transaction);
-    const std::string& resource_name = image->get_original_filename();
+    const std::string& resource_name = image->get_mdl_file_path();
 
     // try to convert gamma value into the MDL constant
     mi::Float32 gamma_override = texture->get_gamma();
@@ -2641,7 +2661,7 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
         gamma = mi::mdl::IValue_texture::gamma_default;
 
     mi::Uint32 hash
-        = get_hash( image->get_mdl_file_path(), gamma_override, tag_version, image_tag_version);
+        = get_hash( resource_name, gamma_override, tag_version, image_tag_version);
     return vf->create_texture( mdl_type, resource_name.c_str(), gamma, tag.get_uint(), hash);
 }
 
@@ -2869,7 +2889,8 @@ const mi::mdl::IExpression_reference* get_field_reference(
 {
     mi::mdl::IName_factory &nf = *module->get_name_factory();
 
-    const char* dot = strchr( signature, '.');
+    const char* p = strstr( signature, ".mdle::");
+    const char* dot = strchr( p ? (p + 7) : signature, '.');
     ASSERT( M_SCENE, dot);
     const char* end = strchr( dot, '(');
 
@@ -3489,6 +3510,9 @@ IExpression* deep_copy(
 
                 std::string copy_name_prefix
                     = add_mdl_db_prefix( copy->get_mdl_function_definition());
+                size_t index = copy_name_prefix.find("("); // strip signature
+                if (index != std::string::npos)
+                    copy_name_prefix = copy_name_prefix.substr(0, index);
                 std::string copy_name
                     = DETAIL::generate_unique_db_name( transaction, copy_name_prefix.c_str());
                 DB::Tag copy_tag = transaction->store_for_reference_counting(
@@ -3552,10 +3576,13 @@ IExpression* deep_copy(
 
 /// Prefix of DB elements for MDL modules/definitions.
 static const char* mdl_db_prefix = "mdl";
+static const char* mdle_db_prefix = "mdle";
 
 std::string add_mdl_db_prefix( const std::string& name)
 {
-    std::string result( mdl_db_prefix);
+    // handle mdle
+    std::string result = name.find(".mdle") == std::string::npos ? mdl_db_prefix : mdle_db_prefix;
+
     if( name.substr( 0, 2) != "::")
         result += "::";
     result += name;
@@ -4172,9 +4199,9 @@ mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* reader)
     return new DETAIL::File_reader_impl( reader);
 }
 
-IMAGE::IMdr_callback* create_mdr_callback()
+IMAGE::IMdl_container_callback* create_mdl_container_callback()
 {
-    return new DETAIL::Mdr_callback();
+    return new DETAIL::Mdl_container_callback();
 }
 
 // ********** Name_importer ************************************************************************

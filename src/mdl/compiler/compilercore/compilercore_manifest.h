@@ -45,6 +45,7 @@ namespace mi {
 namespace mdl {
 
 class MDL;
+class MDL_zip_container_archive;
 
 /// An export entry.
 class Export_entry : public IArchive_manifest_export {
@@ -185,7 +186,7 @@ class Manifest : public Allocator_interface_implement<IArchive_manifest> {
     typedef Allocator_interface_implement<IArchive_manifest> Base;
     friend class Archive;
     friend class File_handle;
-    friend class MDL_archive;
+    friend class MDL_zip_container_archive;
 public:
     /// Acquires a const interface.
     ///

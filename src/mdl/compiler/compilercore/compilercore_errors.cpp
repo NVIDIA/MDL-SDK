@@ -635,10 +635,58 @@ char const *get_error_template(
             return "Archive '$0' would be empty";
         case EXTRA_FILES_IGNORED:
             return "File/directory '$1' in directory '$0' will be ignored";
+        case MDR_INVALID_HEADER:
+            return "Header of MDL archive '$0' is invalid";
+        case MDR_INVALID_HEADER_VERSION:
+            return "Header version of MDL archive'$0' is invalid";
 
         // ------------------------------------------------------------- //
         case INTERNAL_ARCHIVER_ERROR:
             return "internal archiver error: $.";
+        }
+    } else if (msg_class == 'E') {
+        Encapsulator_error err = Encapsulator_error(code);
+        switch (err) {
+        case MDLE_FILE_ALREADY_EXIST:
+            return "MDLE '$0' already exist";
+        case MDLE_FILE_DOES_NOT_EXIST:
+            return "MDLE '$0' does not exist";
+        case MDLE_CANT_OPEN_FILE:
+            return "Cannot open MDLE '$0'";
+        case MDLE_MEMORY_ALLOCATION:
+            return "Required memory could not be allocated";
+        case MDLE_RENAME_FAILED:
+            return "Renaming temporary file failed";
+        case MDLE_IO_ERROR:
+            return "Input/Output error accessing MDLE '$0'";
+        case MDLE_CRC_ERROR:
+            return "Broken MDLE '$0': CRC error";
+        case MDLE_FAILED_TO_OPEN_TEMPFILE:
+            return "Failure to create temporary file";
+        case MDLE_INVALID_MDLE:
+            return "'$0' is an invalid MDLE";
+        case MDLE_INVALID_PASSWORD:
+            return "MDLE could not be opened: invalid password";
+        case MDLE_DOES_NOT_CONTAIN_ENTRY:
+            return "MDLE '$0' does not contain '$1'";
+        case MDLE_INVALID_NAME:
+            return "Invalid MDLE name '$0'";
+        case MDLE_INVALID_USER_FILE:
+            return "User defined file '$1' for MDLE '$0' is invalid";
+        case MDLE_INVALID_RESOURCE:
+            return "Resource file defined file '$0' is invalid";
+        case MDLE_CONTENT_FILE_INTEGRITY_FAIL:
+            return "File '$1' in MDLE '$0' failed the MD5 check";
+        case MDLE_INVALID_HEADER:
+            return "Header of MDLE file '$0' is invalid";
+        case MDLE_INVALID_HEADER_VERSION:
+            return "Header version of MDLE file '$0' is invalid";
+        case MDLE_FAILED_TO_ADD_ZIP_COMMENT:
+            return "Filed to add zip comment to MDLE file '$0'";
+
+        // ------------------------------------------------------------- //
+        case MDLE_INTERNAL_ERROR:
+            return "internal MDLE error: $.";
         }
     } else if (msg_class == 'J') {
         Jit_backend_error err = Jit_backend_error(code);
@@ -667,6 +715,18 @@ char const *get_error_template(
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:
             return "internal JIT backend error: $.";
+        }
+    } else if (msg_class == 'T') {
+        Transformer_error err = Transformer_error(code);
+        switch (err) {
+        case SOURCE_MODULE_INVALID:
+            return "invalid source modules cannot be inlined";
+        case INLINING_MODULE_FAILED:
+            return "The module $0 could not be inlined.";
+
+        // ------------------------------------------------------------- //
+        case INTERNAL_TRANSFORMER_ERROR:
+            return "internal module transformer error: $.";
         }
     } else if (msg_class == 'V') {
         Comparator_error err = Comparator_error(code);

@@ -80,6 +80,7 @@ public:
         DisplayNameRole,
         AuthorRole,
         DescriptionRole,
+        KeywordsRole,
         LocatedInArchiveRole,
         ModuleHintRole,
         ThumbnailRole,
@@ -108,6 +109,10 @@ public:
     // display name specified in the annotation
     Q_PROPERTY(QString elementDisplayName       READ get_display_name)
         QString get_display_name() const;
+
+    // comma separated list of keywords specified in the annotation
+    Q_PROPERTY(QString elementKeywords          READ get_keywords)
+        QString get_keywords() const;
 
     // author specified in the annotation
     Q_PROPERTY(QString elementAuthor            READ get_author)

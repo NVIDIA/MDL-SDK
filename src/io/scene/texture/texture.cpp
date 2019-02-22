@@ -185,9 +185,9 @@ MI::DB::Tag load_mdl_texture(
     if(image_set->get_length() == 0)
         return DB::Tag( 0);
 
-    std::string resolved_filename = image_set->is_mdl_archive() ?
-        image_set->get_archive_filename() + std::string("_") +
-        image_set->get_archive_membername(0) : image_set->get_resolved_filename(0);
+    std::string resolved_filename = image_set->is_mdl_container() ?
+        image_set->get_container_filename() + std::string("_") +
+        image_set->get_container_membername(0) : image_set->get_resolved_filename(0);
 
     std::string db_texture_name = shared ? "MI_default_" : "";
     db_texture_name += "texture_" + resolved_filename + "_" + 

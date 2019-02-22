@@ -51,6 +51,7 @@ is running.
 \endif
   <tr><td>#mi::neuraylib::IMdl_evaluator_api       </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IMdl_factory             </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdle_api                </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IVersion                 </td><td>yes</td></tr>
 </table>
 

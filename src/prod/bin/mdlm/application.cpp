@@ -69,6 +69,12 @@ namespace mdlm
     {
         return Application::theApp().report(msg);
     }
+
+    // Check if freeimage is available
+    bool freeimage_available()
+    { 
+        return Application::theApp().freeimage_available(); 
+    }
 }
 
 /// Configure the MDL SDK with module search paths and load necessary plugins.
@@ -115,6 +121,7 @@ void configuration(INeuray* neuray, ILogger* logger, Application::Options* optio
             , Errors::ERR_MODULE_PATH_FAILURE
             , path.c_str()
         );
+        Util::log_verbose("Added directory to MDL path: " + path);
     }
 
 #if defined(DEBUG)
@@ -134,7 +141,7 @@ Application & Application::theApp()
 }
 
 Application::Application()
-    : m_command(NULL), m_factory(NULL)
+    : m_command(NULL), m_factory(NULL), m_freeimage_loaded(false)
 {
 }
 
@@ -249,6 +256,12 @@ mi::Sint32 Application::initialize(int argc, char *argv[])
 
     // Configure the MDL SDK library
     configuration(neuray(), m_logger.get(), &m_options);
+
+    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
+        mdlm::neuray()->get_api_component<mi::neuraylib::IMdl_compiler>());
+
+    // Load the FreeImage plugin.
+    m_freeimage_loaded = mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0;
 
     // Start the MDL SDK
     return neuray()->start();

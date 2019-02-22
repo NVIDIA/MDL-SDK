@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -276,11 +276,11 @@ export material example_df(
     ]],
     Options add_checker = Checker,
     color emission_intensity = color(0.25f,0.5f,0.75f),
-
     uniform float emission_intensity_scale = 0.5f
     [[
         anno::hard_range(0.0f, 10.0f)
     ]],
+    uniform string emission_usage = "full",
     uniform texture_2d tex = "resources/example.png"
 )
 = let {
@@ -288,7 +288,10 @@ export material example_df(
     float2 tex_coord = float2(tex_coord3.x, tex_coord3.y) * tex_coord_scale;
     color tex_value = tex::lookup_color(tex, tex_coord);
     checker_value cval = add_checker != None ? checker(tex_coord * checker_scale, roughness, anisotropy) : checker_value();
-    color scaled_intensity = emission_intensity * emission_intensity_scale;
+    color scaled_intensity =
+        emission_usage == "full" ? emission_intensity * emission_intensity_scale :
+        emission_usage == "half" ? 0.5 * emission_intensity * emission_intensity_scale :
+        color(0);
 }
 in material(
     surface: material_surface(
@@ -382,14 +385,28 @@ export material example_edf(
     )
 );
 
+
+// A simple texture modulated material.
+export material example_mod_rough(color tint = color(1.0), float roughness = 0)
+= let {
+    uniform texture_2d tex = texture_2d("resources/example_roughness.png", ::tex::gamma_linear);
+    float3 tex_coord = state::texture_coordinate(0);
+    float mod_roughness = roughness * tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y)).x;
+    bsdf tmp = df::diffuse_reflection_bsdf(tint, mod_roughness);
+} in material(
+    surface: material_surface(scattering: tmp),
+    backface: material_surface(scattering: tmp)
+);
+
 // simple measured material
 export material example_measured_bsdf(
     uniform df::scatter_mode mode = df::scatter_reflect_transmit,
+    uniform bsdf_measurement mbsdf = bsdf_measurement("resources/example_modules.mbsdf"),
     uniform float multiplier = 1.0
 ) = material (
     surface: material_surface(
         scattering: df::measured_bsdf(
-            measurement: bsdf_measurement("resources/example_modules.mbsdf"),
+            measurement: mbsdf,
             multiplier: multiplier,
             mode: mode
         )
@@ -419,3 +436,36 @@ export material example_measured_edf(
         )
     )
 );
+
+// sample material with some parameters for testing the mdle example
+export material example_texture_lookup_bsdf(
+    uniform texture_2d tex = texture_2d("resources/example.png", ::tex::gamma_default),
+    uniform texture_2d tex2 = texture_2d("resources/example.png", ::tex::gamma_default)
+) [[
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("aaa"),
+    anno::hidden(),
+    anno::description("test material")
+]] = let {
+    float3 tex_coord = state::texture_coordinate(0);
+} in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: color(tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y))) * color(tex::lookup_float3(tex2, float2(tex_coord.x, tex_coord.y)))
+        )
+    )
+);
+
+// A function with a single parameter with default.
+export int fd_1(int param0 = 42) { return param0; }
+
+// A function which has another function as default.
+export int fd_default_call( int param0 = fd_1()) { return param0; }
+
+// An auto-uniform function.
+export color fd_auto_uniform() { return color(); }
+
+// An auto-varying function.
+export color fd_auto_varying() { return color(state::normal()); }
+
+

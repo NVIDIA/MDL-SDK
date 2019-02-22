@@ -1019,18 +1019,18 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_export(
     return queue.top();
 }
 
-void Image_module_impl::set_mdr_callback( IMdr_callback* mdr_callback)
+void Image_module_impl::set_mdl_container_callback( IMdl_container_callback* mdl_container_callback)
 {
-    m_mdr_callback = make_handle_dup( mdr_callback);
+    m_mdl_container_callback = make_handle_dup( mdl_container_callback);
 }
 
-IMdr_callback* Image_module_impl::get_mdr_callback() const
+IMdl_container_callback* Image_module_impl::get_mdl_container_callback() const
 {
-    if( !m_mdr_callback)
+    if( !m_mdl_container_callback)
         return 0;
 
-    m_mdr_callback->retain();
-    return m_mdr_callback.get();
+    m_mdl_container_callback->retain();
+    return m_mdl_container_callback.get();
 }
 
 void Image_module_impl::dump() const

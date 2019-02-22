@@ -362,7 +362,7 @@ void Dag_hasher::visit(DAG_call *call)
     m_hasher.update('C');
     IDefinition::Semantics sema = call->get_semantic();
 
-    if (sema != IDefinition::DS_UNKNOWN) {
+    if (sema != IDefinition::DS_UNKNOWN && sema != IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
         // semantic is enough
         m_hasher.update(sema);
     } else {

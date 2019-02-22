@@ -1,3 +1,31 @@
+#*****************************************************************************
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#*****************************************************************************
+
 set(LINKER_START_GROUP      "$<$<CXX_COMPILER_ID:GNU>:-Wl,--start-group>")
 set(LINKER_END_GROUP        "$<$<CXX_COMPILER_ID:GNU>:-Wl,--end-group>")
 set(LINKER_WHOLE_ARCHIVE    "$<$<CXX_COMPILER_ID:GNU>:-Wl,--whole-archive>")
@@ -721,6 +749,50 @@ endfunction()
 
 
 # -------------------------------------------------------------------------------------------------
+# function that adds content files to the project that are copied to the output dir
+#
+function(TARGET_ADD_CONTENT)
+    set(options)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs FILES)
+    cmake_parse_arguments(TARGET_ADD_CONTENT "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    # dependency file
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/depends)
+    set(_DEP ${CMAKE_CURRENT_BINARY_DIR}/depends/content.d)
+
+    # add to project
+    target_sources(${TARGET_ADD_CONTENT_TARGET}
+        PRIVATE
+            ${TARGET_ADD_CONTENT_FILES}
+            ${_DEP}
+        )
+
+    # do not compile and set group (visual studio)
+    set_source_files_properties(${TARGET_ADD_CONTENT_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    source_group("content" FILES ${TARGET_ADD_CONTENT_FILES} ${_DEP})
+
+    # collect files
+    foreach(_FILE ${TARGET_ADD_CONTENT_FILES})
+        if(MDL_LOG_FILE_DEPENDENCIES)
+            MESSAGE(STATUS "- content to copy:   ${_FILE}")
+        endif()
+        list(APPEND _COPY_COMMAND COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE} $<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/${_FILE})
+        list(APPEND _COPY_COMMAND COMMAND ${CMAKE_COMMAND} -E echo "copy content file: ${_FILE}")
+        list(APPEND _COPY_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE})
+    endforeach()
+
+    # copy command
+    add_custom_command(
+        OUTPUT ${_DEP}
+        ${_COPY_COMMAND}
+        COMMAND ${CMAKE_COMMAND} -E touch ${_DEP}
+        DEPENDS ${_COPY_DEPENDS}
+        VERBATIM
+        )
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
 # Add a path to the visual studio environment variables for the debugger.
 # requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' to actually create the user settings file.
 function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
@@ -798,11 +870,27 @@ if(MDL_ENABLE_TESTS)
         PROJECT_LABEL   "check"
         FOLDER          "tests"
         )
+
+     set(MDL_TEST_LIST_POST "" CACHE INTERNAL "list of test directories to add after regular targets are defined")
 endif()
 
 # add tests to individual targets when defined in a corresponding sub-directory
 function(ADD_TESTS)
-    if(MDL_ENABLE_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-        add_subdirectory(tests)
+    set(options POST)
+    set(oneValueArgs)
+    set(multiValueArgs)
+    cmake_parse_arguments(ADD_TESTS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    if(MDL_ENABLE_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+        # postpone the test until all regular targets are created
+        if(ADD_TESTS_POST)
+            if(MDL_TEST_LIST_POST STREQUAL "") # first element
+                set(MDL_TEST_LIST_POST "${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
+            else()
+                set(MDL_TEST_LIST_POST "${MDL_TEST_LIST_POST};${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
+            endif()
+        else()
+            add_subdirectory(tests)
+        endif()
     endif()
 endfunction()

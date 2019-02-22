@@ -243,6 +243,57 @@ namespace mdlm
         int execute() override;
     };
 
+    /// Create mdle command
+    /// 
+    class Create_mdle : public Command
+    {
+    public:
+        typedef enum {
+              UNSPECIFIED_FAILURE = -1
+            , SUCCESS = 0
+
+        } RETURN_CODE;
+    protected:
+        std::string m_prototype;
+        std::string m_mdle;
+        std::vector<std::pair<std::string, std::string>> m_user_files;
+    public:
+        Create_mdle(const std::string& prototype, const std::string& mdle);
+
+        /// \return
+        ///		- SUCCESS: Success
+        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        int execute() override;
+
+        /// \return
+        ///		- SUCCESS: Success
+        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        /// add a user file to the MDLE 
+        int add_user_file(const std::string& source_path, const std::string& target_path);
+    };
+
+
+    /// Check mdle command
+    /// 
+    class Check_mdle : public Command
+    {
+    public:
+        typedef enum
+        {
+            UNSPECIFIED_FAILURE = -1
+            , SUCCESS = 0
+
+        } RETURN_CODE;
+    protected:
+        std::string m_mdle;
+    public:
+        Check_mdle(const std::string& mdle);
+
+        /// \return
+        ///		- SUCCESS: Success
+        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        int execute() override;
+    };
     /// Help command
     /// 
     class Help : public Command

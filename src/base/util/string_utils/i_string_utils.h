@@ -160,6 +160,33 @@ int compare_case_insensitive(
     const char* s2,
     size_t n);
     
+
+/// create a formated string.
+/// \param  format  printf-like format string
+/// \param  args    arguments to insert into the format string
+/// \return the formated string
+template <typename... Args>
+std::string formatted_string(const char *format, Args ... args)
+{
+    // get string size + 1 for null terminator to allocate a string of correct size
+    int size = 1 + snprintf(nullptr, 0, format, std::forward<Args>(args)...);
+
+    std::string s;
+    s.resize(size);
+    snprintf(&s[0], size, format, std::forward<Args>(args)...);
+    return s.substr(0, size - 1);
+}
+
+/// create a formated string.
+/// \param  format  printf-like format string
+/// \param  args    arguments to insert into the format string
+/// \return the formated string
+template <typename... Args>
+std::string formatted_string(const std::string& format, Args ... args)
+{
+    return formatted_string(format.c_str(), std::forward<Args>(args)...);
+}
+
 }
 }
 

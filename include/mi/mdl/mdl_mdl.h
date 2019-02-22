@@ -45,6 +45,7 @@ namespace base { class IAllocator; }
 namespace mdl {
 
 class IArchive_tool;
+class IEncapsulate_tool;
 class IInput_stream;
 class IModule;
 class IModule_cache;
@@ -60,6 +61,7 @@ class ISerializer;
 class IDeserializer;
 class IMDL_comparator;
 class IMDL_exporter;
+class IMDL_module_transformer;
 
 /// An interface handling MDL search paths.
 ///
@@ -467,10 +469,21 @@ public:
     /// The archive tool is used to create and unpack MDL archives.
     virtual IArchive_tool *create_archive_tool() = 0;
 
+    /// Create an MDL encapsulate tool using this compiler.
+    ///
+    /// The encapsulate tool stored a pre-processed module with all resources in an MDLe file.
+    virtual IEncapsulate_tool *create_encapsulate_tool() = 0;
+
     /// Create an MDL comparator tool using this compiler.
     ///
     /// The comparator tool is used to compare MDL modules and archives for "compatibility".
     virtual IMDL_comparator *create_mdl_comparator() = 0;
+
+    /// Create an MDL module transformer using this compiler.
+    ///
+    /// The module transformer operates on modules, transforming them into semantically equivalent
+    /// modules.
+    virtual IMDL_module_transformer *create_module_transformer() = 0;
 };
 
 

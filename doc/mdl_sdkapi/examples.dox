@@ -86,6 +86,9 @@ Section for a description of how the example programs can be compiled.
 
 - \subpage mi_neuray_example_mdl_browser <br>
   Example for a material selection dialogue.
+  
+- \subpage mi_neuray_example_mdle <br>
+  Export and load materials or functions using the MDL encapsulated format.
 
 \subpage mi_neuray_example_topics
 

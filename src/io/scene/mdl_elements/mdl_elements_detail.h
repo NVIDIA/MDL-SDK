@@ -60,18 +60,18 @@ using mi::mdl::as;
 
 namespace DETAIL {
 
-/// Indicates whether the given filename refers to a file in an MDL archive.
+/// Indicates whether the given filename refers to a file in an MDL archive ore MDLe.
 ///
 /// Such files are recognized by the \c ".mdr:" substring.
-bool is_archive_member( const char* filename);
+bool is_container_member( const char* filename);
 
-/// Returns the filename of the archive if #is_archive_member() returns \c true, and the empty
+/// Returns the filename of the container if #is_container_member() returns \c true, and the empty
 /// string otherwise.
-std::string get_archive_filename( const char* filename);
+std::string get_container_filename( const char* filename);
 
-/// Returns the filename of the archive member if #is_archive_member() returns \c true, and the
+/// Returns the filename of the container member if #is_container_member() returns \c true, and the
 /// empty string otherwise.
-std::string get_archive_membername( const char* filename);
+std::string get_container_membername( const char* filename);
 
 /// Searches a thumbnail image for the given mdl definition by considering both the 
 /// "thumbnail"-annotation and the 'module_name.definition_name.ext' convention.
@@ -441,11 +441,11 @@ private:
     mi::base::Handle<mi::mdl::IMDL_resource_reader> m_reader;
 };
 
-/// Implementation of IMAGE::IMdr_callback using mi::mdl::IArchive_tool::get_file_content().
-class Mdr_callback : public mi::base::Interface_implement<IMAGE::IMdr_callback>
+/// Implementation of IMAGE::IMdl_container_callback.
+class Mdl_container_callback : public mi::base::Interface_implement<IMAGE::IMdl_container_callback>
 {
 public:
-    mi::neuraylib::IReader* get_reader( const char* archive_filename, const char* member_filename);
+    mi::neuraylib::IReader* get_reader( const char* container_filename, const char* member_filename);
 };
 
 class Mdl_image_set : public MI::DBIMAGE::Image_set
@@ -455,19 +455,19 @@ public:
     Mdl_image_set(
         mi::mdl::IMDL_resource_set* set, 
         const std::string& file_name,
-        const std::string& archive_name = "");
+        const std::string& container_name = "");
 
     mi::Size get_length() const;
 
     char const * get_mdl_file_path() const;
 
-    char const * get_archive_filename() const;
+    char const * get_container_filename() const;
 
     char const *get_mdl_url(mi::Size i) const;
 
     char const *get_resolved_filename(mi::Size i) const;
 
-    char const *get_archive_membername(mi::Size i) const;
+    char const *get_container_membername(mi::Size i) const;
 
     bool get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const;
 
@@ -475,16 +475,16 @@ public:
 
     bool is_uvtile() const;
 
-    bool is_mdl_archive() const;
+    bool is_mdl_container() const;
 
 private:
 
     mi::base::Handle<mi::mdl::IMDL_resource_set> m_resource_set;
 
     std::string m_mdl_file_path;
-    std::string m_archive_name;
+    std::string m_container_name;
 
-    bool m_is_archive;
+    bool m_is_container;
 };
 
 } // namespace DETAIL

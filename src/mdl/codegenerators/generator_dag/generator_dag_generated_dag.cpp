@@ -3273,6 +3273,12 @@ void Generated_code_dag::Material_instance::dump_instance_dag(char const *name) 
     string fname(name, get_allocator());
     fname += "_DAG.gv";
 
+    for (size_t i = 0, n = fname.size(); i < n; ++i) {
+        char c = fname[i];
+        if (c == ':' || c == '/' || c == '\\')
+            fname[i] = '_';
+    }
+
     if (FILE *f = fopen(fname.c_str(), "w")) {
         Allocator_builder builder(get_allocator());
 
@@ -5683,7 +5689,8 @@ void Generated_code_dag::dump_material_dag(
     fname += "_DAG.gv";
 
     for (size_t i = 0, n = fname.size(); i < n; ++i) {
-        if (fname[i] == ':')
+        char c = fname[i];
+        if (c == ':' || c == '/' || c == '\\')
             fname[i] = '_';
     }
 

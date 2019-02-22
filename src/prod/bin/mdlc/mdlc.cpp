@@ -52,6 +52,7 @@
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/mdl/mdl_module_transformer.h>
 
 
 #include <string>
@@ -88,6 +89,7 @@ using mi::mdl::IGenerated_code_executable;
 using mi::mdl::IOutput_stream;
 using mi::mdl::IInput_stream;
 using mi::mdl::IThread_context;
+using mi::mdl::IMDL_module_transformer;
 
 
 using namespace std;
@@ -117,6 +119,7 @@ Mdlc::Mdlc(char const *program_name)
 , m_backend_options()
 , m_target_lang(TL_NONE)
 , m_input_modules()
+, m_inline(false)
 {
 }
 
@@ -186,6 +189,9 @@ void Mdlc::usage()
         "\t\tworld\n"
         "  --show-positions\n"
         "\tShow source code position in target output.\n"
+        "  --inline\n"
+        "  -i\n"
+        "\tInlines the given module(if target is set to MDL).\n"
         "  --help\n"
         "  -?"
         "\tThis help.\n",
@@ -209,8 +215,10 @@ int Mdlc::run(int argc, char *argv[])
         /*11*/ { "backend",                mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
         /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /*15*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
-        /*16*/ { NULL,                     0,                             NULL, 0 }
+        /*15*/{ "inline",                  mi::getopt::NO_ARGUMENT,       NULL, 'i' },
+        /*16*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+       
+        /*17*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
@@ -226,7 +234,7 @@ int Mdlc::run(int argc, char *argv[])
 
 
     while (
-        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvp:Ct:d:B:?", long_options, &longidx)) != -1
+        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:?", long_options, &longidx)) != -1
     ) {
         switch (c) {
         case 'O':
@@ -328,6 +336,9 @@ int Mdlc::run(int argc, char *argv[])
         case '?':
             usage();
             return EXIT_SUCCESS;
+        case 'i':
+            m_inline = true;
+            break;
         case '\0':
             switch (longidx) {
             case 2:
@@ -520,7 +531,27 @@ bool Mdlc::backend(IModule const *module)
     case TL_NONE:
         break;
     case TL_MDL:
-        print_generated_code(module);
+        if (m_inline) {
+            mi::base::Handle<IMDL_module_transformer> transformer(
+                m_imdl->create_module_transformer());
+            mi::base::Handle<IModule const> inlined_module(
+                transformer->inline_imports(module));
+            if (inlined_module.is_valid_interface()) {
+                print_generated_code(inlined_module.get());
+            } else {
+                fprintf(
+                    stderr,
+                    "%s error: failed to inline module %s\n",
+                    m_program, module->get_name());
+
+                Messages const &msgs = transformer->access_messages();
+                print_messages(msgs, printer.get());
+
+                return false;
+            }
+        } else {
+            print_generated_code(module);
+        }
         break;
     case TL_DAG:
         if (module->is_valid()) {

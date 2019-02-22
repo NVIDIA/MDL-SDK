@@ -303,12 +303,6 @@ IExpression* deep_copy(
     const IExpression* expr,
     const std::vector<mi::base::Handle<const IExpression> >& context);
 
-/// Converts an MDL name into the name of the corresponding DB element.
-///
-/// The conversion simply adds the prefix "mdl". If \p name does not start with \c "::"
-/// (for example builtins) it also inserts \c "::".
-std::string add_mdl_db_prefix( const std::string& name);
-
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
 /// Uses the MDL file path if not empty, and the tag version otherwise.

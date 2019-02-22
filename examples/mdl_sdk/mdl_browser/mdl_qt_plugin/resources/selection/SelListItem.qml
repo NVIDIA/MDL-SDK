@@ -124,7 +124,7 @@ SelItemBase {
 
         Text {
             id: id_description
-            visible: (elementDescription !== "")
+            visible: (elementDescription !== "" || elementKeywords !== "")
 
             anchors.left: parent.left
             anchors.right: parent.right
@@ -133,7 +133,7 @@ SelItemBase {
             anchors.bottom: parent.bottom
 
             color: id_control.infoColor
-            text: elementDescription
+            text: ((elementKeywords !== "") ? ("Keywords: [" + elementKeywords + "]<br>") : "") + elementDescription
             wrapMode: "WordWrap"
             elide: "ElideRight"
             font.pointSize: 10

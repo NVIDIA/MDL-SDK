@@ -193,9 +193,9 @@ public:
 
     mi::neuraylib::IImage_plugin* find_plugin_for_export( const char* extension) const;
 
-    void set_mdr_callback( IMdr_callback* mdr_callback);
+    void set_mdl_container_callback( IMdl_container_callback* mdl_container_callback);
 
-    IMdr_callback* get_mdr_callback() const;
+    IMdl_container_callback* get_mdl_container_callback() const;
 
     mi::neuraylib::ICanvas* create_miplevel(
         const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const;
@@ -249,7 +249,7 @@ private:
     Plugin_vector m_plugins;
 
     /// Callback to support lazy loading of images in MDL archives.
-    mi::base::Handle<IMdr_callback> m_mdr_callback;
+    mi::base::Handle<IMdl_container_callback> m_mdl_container_callback;
 };
 
 } // namespace IMAGE

@@ -335,7 +335,34 @@ enum Archiver_error {
     INVALID_MDL_ARCHIVE_NAME,
     EMPTY_ARCHIVE_CONTENT,
     EXTRA_FILES_IGNORED,
+    MDR_INVALID_HEADER,
+    MDR_INVALID_HEADER_VERSION,
+
     INTERNAL_ARCHIVER_ERROR = 999,
+};
+
+/// Encapsulate tool errors.
+enum Encapsulator_error {
+    MDLE_FILE_ALREADY_EXIST = 100,
+    MDLE_FILE_DOES_NOT_EXIST,
+    MDLE_CANT_OPEN_FILE,
+    MDLE_MEMORY_ALLOCATION,
+    MDLE_RENAME_FAILED,
+    MDLE_IO_ERROR,
+    MDLE_CRC_ERROR,
+    MDLE_FAILED_TO_OPEN_TEMPFILE,
+    MDLE_INVALID_MDLE,
+    MDLE_INVALID_PASSWORD,
+    MDLE_DOES_NOT_CONTAIN_ENTRY,
+    MDLE_INVALID_NAME,
+    MDLE_INVALID_USER_FILE,
+    MDLE_INVALID_RESOURCE,
+    MDLE_CONTENT_FILE_INTEGRITY_FAIL,
+    MDLE_INVALID_HEADER,
+    MDLE_INVALID_HEADER_VERSION,
+    MDLE_FAILED_TO_ADD_ZIP_COMMENT,
+
+    MDLE_INTERNAL_ERROR = 999,
 };
 
 /// JIT backend errors.
@@ -386,11 +413,19 @@ enum Comparator_error {
     INTERNAL_COMPARATOR_ERROR = 999,
 };
 
+/// Module_transformer errors.
+enum Transformer_error {
+    SOURCE_MODULE_INVALID,
+    INLINING_MODULE_FAILED,
+
+    INTERNAL_TRANSFORMER_ERROR = 999
+};
+
 /// Get the error template for the given code.
 ///
 /// \param code       the error code
 /// \param msg_class  the message class for the error
-const char *get_error_template(
+char const *get_error_template(
     int  code,
     char msg_class);
 

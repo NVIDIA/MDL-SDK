@@ -1,3 +1,31 @@
+#*****************************************************************************
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#*****************************************************************************
+
 # name of the target and the resulting library
 set(PROJECT_NAME mdl-compiler-compilercore)
 
@@ -17,6 +45,16 @@ set(_GENERATED_SOURCES
     ${_GENERATED_DIR}/compilercore_intrinsic_eval.i
     )
 
+# scripts/files used to generate the sources above
+set(_GENERATOR_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/compilercore_parser.atg
+    ${CMAKE_CURRENT_SOURCE_DIR}/Scanner.frame 
+    ${CMAKE_CURRENT_SOURCE_DIR}/Parser.frame 
+    ${CMAKE_CURRENT_SOURCE_DIR}/Copyright.frame
+    ${CMAKE_CURRENT_SOURCE_DIR}/generate_stdmodule.py 
+    ${CMAKE_CURRENT_SOURCE_DIR}/gen_intrinsic_eval.py
+    )
+
 # collect sources
 set(PROJECT_HEADERS 
     "compilercore_allocator.h"
@@ -30,12 +68,13 @@ set(PROJECT_HEADERS
     "compilercore_call_graph.h"
     "compilercore_cc_conf.h"
     "compilercore_checker.h"
-	"compilercore_comparator.h"
+    "compilercore_comparator.h"
     "compilercore_cstring_hash.h"
     "compilercore_debug_tools.h"
     "compilercore_def_table.h"
     "compilercore_dependency_graph.h"
     "compilercore_dynamic_memory.h"
+    "compilercore_encapsulator.h"
     "compilercore_errors.h"
     "compilercore_factories.h"
     "compilercore_fatal.h"
@@ -51,6 +90,7 @@ set(PROJECT_HEADERS
     "compilercore_memory_arena.h"
     "compilercore_messages.h"
     "compilercore_modules.h"
+    "compilercore_module_transformer.h"
     "compilercore_names.h"
     "compilercore_optimizer.h"
     "compilercore_options.h"
@@ -69,6 +109,7 @@ set(PROJECT_HEADERS
     "compilercore_type_cache.h"
     "compilercore_visitor.h"
     "compilercore_wchar_support.h"
+    "compilercore_zip_utils.h"
     )
 
 set(PROJECT_SOURCES 
@@ -80,11 +121,12 @@ set(PROJECT_SOURCES
     "compilercore_builder.cpp"
     "compilercore_call_graph.cpp"
     "compilercore_checker.cpp"
-	"compilercore_comparator.cpp"
+    "compilercore_comparator.cpp"
     "compilercore_debug_tools.cpp"
     "compilercore_declarations.cpp"
     "compilercore_def_table.cpp"
     "compilercore_dependency_graph.cpp"
+    "compilercore_encapsulator.cpp"
     "compilercore_errors.cpp"
     "compilercore_expressions.cpp"
     "compilercore_fatal.cpp"
@@ -99,6 +141,7 @@ set(PROJECT_SOURCES
     "compilercore_malloc_allocator.cpp"
     "compilercore_memory_arena.cpp"
     "compilercore_modules.cpp"
+    "compilercore_module_transformer.cpp"
     "compilercore_names.cpp"
     "compilercore_overload.cpp"
     "compilercore_positions.cpp"
@@ -115,12 +158,18 @@ set(PROJECT_SOURCES
     "compilercore_values.cpp"
     "compilercore_visitor.cpp"
     "compilercore_wchar_support.cpp"
+    "compilercore_zip_utils.cpp"
     ${_GENERATED_SOURCES}
+    ${_GENERATOR_FILES}
     ${PROJECT_HEADERS}
     )
 
-# mark files as generated to disable the check for existance during configure
+# mark files as generated to disable the check for existence during configure
 set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
+
+# add the generator files to the solution
+set_source_files_properties(${_GENERATOR_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+source_group("generator" FILES ${_GENERATOR_FILES})
 
 # create target from template
 create_from_base_preset(
@@ -151,6 +200,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
     COMMAND ${coco_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/compilercore_parser.atg -no_misplaced_resolver -frames . -trace FX -o ${_GENERATED_DIR}
     DEPENDS 
+        ${CMAKE_CURRENT_SOURCE_DIR}/compilercore_parser.atg
         ${CMAKE_CURRENT_SOURCE_DIR}/Scanner.frame 
         ${CMAKE_CURRENT_SOURCE_DIR}/Parser.frame 
         ${CMAKE_CURRENT_SOURCE_DIR}/Copyright.frame

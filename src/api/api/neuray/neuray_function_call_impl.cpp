@@ -181,6 +181,11 @@ mi::Sint32 Function_call_impl::set_argument(
     return result;
 }
 
+bool Function_call_impl::is_default() const
+{
+    return get_db_element()->is_immutable();
+}
+
 } // namespace NEURAY
 
 } // namespace MI

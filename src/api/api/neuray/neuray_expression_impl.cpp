@@ -200,9 +200,16 @@ mi::Sint32 Expression_call::set_call( const char* name)
     mi::base::Handle<const MDL::IType> actual_type;
     if( class_id == MDL::Mdl_function_call::id) {
         DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+        if (call->is_immutable())
+            return -5; // prevent user-calls to default functions
         actual_type = call->get_return_type();
-    } else if( class_id == MDL::Mdl_material_instance::id)
+    }
+    else if( class_id == MDL::Mdl_material_instance::id) {
+        DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
+        if (m->is_immutable())
+            return -5; // prevent user-calls to default materials
         actual_type = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
+        }
     else
         return -3;
 

@@ -54,6 +54,7 @@
 #include "compilercore_assert.h"
 #include "compilercore_positions.h"
 #include "compilercore_file_resolution.h"
+#include "compilercore_file_utils.h"
 
 #ifdef WIN_NT
 #define strcasecmp(s1, s2) _stricmp(s1, s2)
@@ -1056,6 +1057,29 @@ public:
         return m_dst.clone_expr(lit, NULL);
     }
 
+    /// Clone a call.
+    ///
+    /// \param call the expression to clone
+    IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL
+    {
+        IExpression const *ref = m_dst.clone_expr(c_expr->get_reference(), this);
+        IExpression_call *call = m_dst.get_expression_factory()->create_call(ref);
+
+        for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+            IArgument const *arg = m_dst.clone_arg(c_expr->get_argument(i), this);
+            call->add_argument(arg);
+        }
+        return call;
+    }
+
+    /// Clone a qualified name.
+    ///
+    /// \param name  the name to clone
+    IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL
+    {
+        return m_dst.clone_name(qname, NULL);
+    }
+
 private:
     /// The name and typer analysis for building the call graph.
     NT_analysis &m_ana;
@@ -1122,12 +1146,36 @@ public:
         return m_mod.clone_expr(ref, NULL);
     }
 
+    /// Clone a call expression.
+    ///
+    /// \param call  the expression to clone
+    IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL
+    {
+        // just clone it
+        IExpression const *ref = m_mod.clone_expr(c_expr->get_reference(), this);
+        IExpression_call *call = m_mod.get_expression_factory()->create_call(ref);
+
+        for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+            IArgument const *arg = m_mod.clone_arg(c_expr->get_argument(i), this);
+            call->add_argument(arg);
+        }
+        return call;
+    }
+
     /// Clone a literal.
     ///
     /// \param lit  the literal to clone
     IExpression *clone_literal(IExpression_literal const *lit) MDL_FINAL
     {
         return m_mod.clone_expr(lit, NULL);
+    }
+
+    /// Clone a qualified name.
+    ///
+    /// \param name  the name to clone
+    IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL
+    {
+        return m_mod.clone_name(qname, NULL);
     }
 
 private:
@@ -2410,7 +2458,8 @@ NT_analysis::NT_analysis(
     MDL              *compiler,
     Module           &module,
     Thread_context   &ctx,
-    IModule_cache    *cache)
+    IModule_cache    *cache,
+    bool             resolve_resources)
 : Analysis(compiler, module, ctx)
 , m_preset_overload(NULL)
 , m_is_stdlib(module.is_stdlib())
@@ -2430,6 +2479,7 @@ NT_analysis::NT_analysis(
 , m_is_module_annotation(false)
 , m_is_return_annotation(false)
 , m_has_array_assignment(module.get_mdl_version() >= IMDL::MDL_VERSION_1_3)
+, m_resolve_resources(resolve_resources)
 , m_module_cache(cache)
 , m_annotated_def(NULL)
 , m_next_param_idx(0)
@@ -2770,6 +2820,22 @@ public:
         return res;
     }
 
+    /// Clone a call expression.
+    ///
+    /// \param call   the expression to clone
+    IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL
+    {
+        // just clone it
+        IExpression const *ref = m_module.clone_expr(c_expr->get_reference(), this);
+        IExpression_call *call = m_fact->create_call(ref);
+
+        for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
+            IArgument const *arg = m_module.clone_arg(c_expr->get_argument(i), this);
+            call->add_argument(arg);
+        }
+        return call;
+    }
+
     /// Clone a literal.
     ///
     /// \param lit  the literal to clone
@@ -2777,6 +2843,14 @@ public:
     {
         // just clone it
         return m_module.clone_expr(lit, NULL);
+    }
+
+    /// Clone a qualified name.
+    ///
+    /// \param name  the name to clone
+    IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL
+    {
+        return m_module.clone_name(qname, NULL);
     }
 
     /// Add a new mapping from a field definition to a parameter definition.
@@ -3219,6 +3293,9 @@ Module const *NT_analysis::load_module_to_import(
         // to the current context.
         mi::base::Handle<Thread_context> ctx(m_compiler->create_thread_context());
         ctx->set_front_path(m_ctx.get_front_path());
+        ctx->access_options().set_option(
+            MDL::option_experimental_features, m_enable_experimental_features ? "true" : "false");
+
         imp_mod = m_compiler->compile_module(*ctx.get(), abs_name, &cache);
     }
     if (imp_mod == NULL) {
@@ -11226,7 +11303,15 @@ void NT_analysis::post_visit(IExpression_invalid *inv_expr)
     inv_expr->set_type(m_tc.error_type);
 }
 
-// No need to set the type for literal ...
+void NT_analysis::post_visit(IExpression_literal *lit)
+{
+    // No need to set the type for literal ...
+    if (IValue_resource const *r_val = as<IValue_resource>(lit->get_value())) {
+        // ensure resource are processed if we analyse "hand-written" ASTs which
+        // already use resource values instead of calls to resource constructors
+        handle_resource_url(r_val, lit, r_val->get_type());
+    }
+}
 
 // end of a reference expression
 void NT_analysis::post_visit(IExpression_reference *ref)
@@ -13694,15 +13779,13 @@ void NT_analysis::check_exported_for_existance()
 }
 
 // Check restriction on the given file path.
-void NT_analysis::check_file_path(IValue_string const *sval, Position const &pos)
+void NT_analysis::check_file_path(char const *path, Position const &pos)
 {
     if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_3) {
         // . and .. are not allowed before MDL 1.3
 
         int major = 1, minor = 0;
         m_module.get_version(major, minor);
-
-        char const *path = sval->get_value();
 
         bool start = true;
         for (; path[0] != '\0'; ++path) {
@@ -13745,106 +13828,10 @@ void NT_analysis::handle_resource_constructor(IExpression_call *call_expr)
             IExpression_literal const *lit = as<IExpression_literal>(arg0->get_argument_expr());
             if (lit != NULL) {
                 if (IValue_string const *sval = as<IValue_string>(lit->get_value())) {
-                    check_file_path(sval, lit->access_position());
-
-                    Messages_impl messages(get_allocator(), m_module.get_filename());
-
-                    File_resolver resolver(
-                        *m_compiler,
-                        m_module_cache,
-                        m_compiler->get_search_path(),
-                        m_compiler->get_search_path_lock(),
-                        messages,
-                        m_ctx.get_front_path());
-
-                    File_resolver::UDIM_mode dummy = File_resolver::NO_UDIM;
-
-                    string abs_url(get_allocator());
-                    string abs_file_name = resolver.resolve_resource(
-                        abs_url,
-                        lit->access_position(),
-                        sval->get_value(),
-                        m_module.get_name(),
-                        m_module.get_filename(),
-                        dummy);
-
-                    bool resource_exists = true;
-                    if (messages.get_error_message_count() > 0 || abs_file_name.empty()) {
-                        resource_exists = false;
-
-                        // Resolver failed. This is bad, because letting the name unchanged
-                        // might lead to "wrong" fixes later. One possible solution would be to
-                        // return an invalid resource here, but then the user will not see ANY
-                        // error.
-                        // Hence we do a "stupid" transformation here, i.e. compute an absolute
-                        // path that will point into PA. Note that the resource still will fail,
-                        // otherwise the resolver had found it there.
-                        char const *url =sval->get_value();
-                        if (url[0] != '/') {
-                            abs_url = make_absolute_package(
-                                get_allocator(), url, m_module.get_name());
-                        } else {
-                            abs_url = url;
-                        }
-                    }
-
-                    // add to the resource table
-                    add_resource_entry(
-                        abs_url.c_str(),
-                        abs_file_name.c_str(),
-                        cast<IType_resource>(res_type),
-                        resource_exists);
-
-                    // rewrite if necessary
-                    if (string(sval->get_value(), get_allocator()) != abs_url) {
-                        sval = m_module.get_value_factory()->create_string(abs_url.c_str());
-                        const_cast<IExpression_literal *>(lit)->set_value(sval);
-                    }
-
-                    // copy messages
-                    bool map_err_to_warn = false;
-                    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_4) {
-                        map_err_to_warn = true;
-                    }
-
-                    for (int i = 0, n = messages.get_error_message_count(); i < n; ++i) {
-                        IMessage const *msg = messages.get_message(i);
-
-                        IMessage::Severity sev = msg->get_severity();
-
-                        if (map_err_to_warn) {
-                            // map resource error to warning for MDL < 1.4
-                            if (sev == IMessage::MS_ERROR)
-                                sev = IMessage::MS_WARNING;
-                        }
-
-                        int index = m_module.access_messages_impl().add_message(
-                            sev,
-                            msg->get_code(),
-                            msg->get_class(),
-                            msg->get_string(),
-                            msg->get_file(),
-                            msg->get_position()->get_start_line(),
-                            msg->get_position()->get_start_column(),
-                            msg->get_position()->get_end_line(),
-                            msg->get_position()->get_end_column());
-
-                        for (int j = 0, m = msg->get_note_count(); j < m; ++j) {
-                            IMessage const *note = msg->get_note(j);
-
-                            m_module.access_messages_impl().add_note(
-                                index,
-                                note->get_severity(),
-                                note->get_code(),
-                                note->get_class(),
-                                note->get_string(),
-                                note->get_file(),
-                                note->get_position()->get_start_line(),
-                                note->get_position()->get_start_column(),
-                                note->get_position()->get_end_line(),
-                                note->get_position()->get_end_column());
-                        }
-                    }
+                    handle_resource_url(
+                        sval,
+                        const_cast<IExpression_literal *>(lit),
+                        cast<IType_resource>(res_type));
                 }
             } else {
                 // the spec forbids the uses of non-literals here
@@ -13864,12 +13851,66 @@ void NT_analysis::handle_resource_constructor(IExpression_call *call_expr)
 void NT_analysis::add_resource_entry(
     char const           *url,
     char const           *file_name,
+    int                  resource_tag,
     IType_resource const *type,
     bool                 exists)
 {
-    Resource_entry re(get_allocator(), url, file_name, type, exists);
+    Resource_entry re(get_allocator(), url, file_name, resource_tag, type, exists);
 
-    m_resource_entries.insert(Resource_table::value_type(re.m_url, re));
+    const char *found = strstr(file_name, ".mdle:");
+    if (found) {
+        Resource_table_key key(convert_os_separators_to_slashes(re.m_filename), re.m_res_tag);
+        m_resource_entries.insert(Resource_table::value_type(key, re));
+    } else {
+        Resource_table_key key(re.m_url, re.m_res_tag);
+        m_resource_entries.insert(Resource_table::value_type(key, re));
+    }
+
+}
+
+// Copy the given messages to the current module message.
+void NT_analysis::copy_messages_to_module(
+    Messages_impl const &messages,
+    bool                map_err_to_warn)
+{
+    for (int i = 0, n = messages.get_error_message_count(); i < n; ++i) {
+        IMessage const *msg = messages.get_message(i);
+
+        IMessage::Severity sev = msg->get_severity();
+
+        if (map_err_to_warn) {
+            // map resource error to warning for MDL < 1.4
+            if (sev == IMessage::MS_ERROR)
+                sev = IMessage::MS_WARNING;
+        }
+
+        int index = m_module.access_messages_impl().add_message(
+            sev,
+            msg->get_code(),
+            msg->get_class(),
+            msg->get_string(),
+            msg->get_file(),
+            msg->get_position()->get_start_line(),
+            msg->get_position()->get_start_column(),
+            msg->get_position()->get_end_line(),
+            msg->get_position()->get_end_column());
+
+        for (int j = 0, m = msg->get_note_count(); j < m; ++j) {
+            IMessage const *note = msg->get_note(j);
+
+            m_module.access_messages_impl().add_note(
+                index,
+                note->get_severity(),
+                note->get_code(),
+                note->get_class(),
+                note->get_string(),
+                note->get_file(),
+                note->get_position()->get_start_line(),
+                note->get_position()->get_start_column(),
+                note->get_position()->get_end_line(),
+                note->get_position()->get_end_column());
+        }
+    }
 }
 
 namespace {
@@ -14568,6 +14609,150 @@ void NT_analysis::run()
     }
 }
 
+// Process a resource url.
+void NT_analysis::handle_resource_url(
+    IValue const         *val,
+    IExpression_literal  *lit,
+    IType_resource const *res_type)
+{
+    IValue_string const *sval   = as<IValue_string>(val);
+    IValue_resource const *rval = as<IValue_resource>(val);
+    char const *url = sval != NULL ? sval->get_value() : rval->get_string_value();
+
+    check_file_path(url, lit->access_position());
+
+    string abs_url(get_allocator());
+    string abs_file_name(get_allocator());
+
+    bool resource_exists = true;
+    int resource_tag = 0;
+    if (m_resolve_resources) {
+        Messages_impl messages(get_allocator(), m_module.get_filename());
+
+        File_resolver resolver(
+            *m_compiler,
+            m_module_cache,
+            m_compiler->get_search_path(),
+            m_compiler->get_search_path_lock(),
+            messages,
+            m_ctx.get_front_path());
+
+        File_resolver::UDIM_mode dummy = File_resolver::NO_UDIM;
+
+        resource_exists = true;
+        if (abs_url.empty() && rval != NULL && rval->get_tag_value() != 0) {
+            // this is a "neuray-style" in-memory resource, represented by a tag;
+            // assume existing
+            resource_tag = rval->get_tag_value();
+        } else {
+            // try to resolve it
+            abs_file_name = resolver.resolve_resource(
+                abs_url,
+                lit->access_position(),
+                url,
+                m_module.get_name(),
+                m_module.get_filename(),
+                dummy);
+
+            if (messages.get_error_message_count() > 0 || abs_file_name.empty()) {
+                resource_exists = false;
+
+                // Resolver failed. This is bad, because letting the name unchanged
+                // might lead to "wrong" fixes later. One possible solution would be to
+                // return an invalid resource here, but then the user will not see ANY
+                // error.
+                // Hence we do a "stupid" transformation here, i.e. compute an absolute
+                // path that will point into PA. Note that the resource still will fail,
+                // otherwise the resolver had found it there.
+                if (url[0] != '/') {
+                    abs_url = make_absolute_package(
+                        get_allocator(), url, m_module.get_name());
+                } else {
+                    abs_url = url;
+                }
+            }
+        }
+
+        // copy messages
+        bool map_err_to_warn = false;
+        if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_4) {
+            map_err_to_warn = true;
+        }
+        copy_messages_to_module(messages, map_err_to_warn);
+    } else {
+        // do not modify the url
+        abs_url = url;
+
+        // unknown file name
+        abs_file_name = "";
+
+        // assume the resource exists
+        resource_exists = true;
+    }
+
+    // in case of MDLE, the absolute URL also contains the MDLE file path
+    size_t p = abs_file_name.rfind(".mdle:");
+    if (p != string::npos) {
+        #if defined(MI_PLATFORM_WINDOWS)
+            abs_url = "/" + convert_os_separators_to_slashes(abs_file_name);
+        #else
+            abs_url = convert_os_separators_to_slashes(abs_file_name);
+        #endif
+    }
+
+    // add to the resource table
+    add_resource_entry(
+        abs_url.c_str(),
+        abs_file_name.c_str(),
+        resource_tag,
+        res_type,
+        resource_exists);
+
+    // rewrite if necessary
+    if (string(url, get_allocator()) != abs_url) {
+        switch (val->get_kind()) {
+        case IValue::VK_STRING:
+            val = m_module.get_value_factory()->create_string(abs_url.c_str());
+            break;
+        case IValue::VK_TEXTURE:
+            {
+                IValue_texture const *tval = cast<IValue_texture>(val);
+                val = m_module.get_value_factory()->create_texture(
+                    tval->get_type(),
+                    abs_url.c_str(),
+                    tval->get_gamma_mode(),
+                    tval->get_tag_value(),
+                    tval->get_tag_version());
+            }
+            break;
+        case IValue::VK_LIGHT_PROFILE:
+            {
+                IValue_light_profile const *lval = cast<IValue_light_profile>(val);
+                val = m_module.get_value_factory()->create_light_profile(
+                    lval->get_type(),
+                    abs_url.c_str(),
+                    lval->get_tag_value(),
+                    lval->get_tag_version());
+            }
+            break;
+        case IValue::VK_BSDF_MEASUREMENT:
+            {
+                IValue_bsdf_measurement const *bval = cast<IValue_bsdf_measurement>(val);
+                val = m_module.get_value_factory()->create_bsdf_measurement(
+                    bval->get_type(),
+                    abs_url.c_str(),
+                    bval->get_tag_value(),
+                    bval->get_tag_version());
+            }
+            break;
+        default:
+            MDL_ASSERT(!"unexpected resource type");
+            break;
+        }
+        lit->set_value(val);
+    }
+}
+
 // Constructor.
 Error_params::Error_params(
     Analysis const &ana)
@@ -14583,6 +14768,57 @@ Error_params::Error_params(IAllocator *alloc)
 , m_args(alloc)
 , m_possible_match(NULL)
 {
+}
+
+// -------------------------------- AST checker --------------------------------
+
+// Constructor.
+AST_checker::AST_checker(IAllocator *alloc)
+: Base()
+, m_stmts(0, Stmt_set::hasher(), Stmt_set::key_equal(), alloc)
+, m_exprs(0, Expr_set::hasher(), Expr_set::key_equal(), alloc)
+, m_decls(0, Decl_set::hasher(), Decl_set::key_equal(), alloc)
+, m_errors(false)
+{
+}
+
+// Checker, asserts on failure.
+bool AST_checker::check_module(IModule const *module)
+{
+    Module const *mod = impl_cast<Module>(module);
+
+    AST_checker checker(mod->get_allocator());
+
+    checker.visit(module);
+
+    return !checker.m_errors;
+}
+
+void AST_checker::post_visit(IStatement *stmt)
+{
+    if (!m_stmts.insert(stmt).second) {
+        // already visited, DAG detected
+        m_errors = true;
+        MDL_ASSERT(!"DAG detected in AST, statement reused");
+    }
+}
+
+void AST_checker::post_visit(IExpression *expr)
+{
+    if (!m_exprs.insert(expr).second) {
+        // already visited, DAG detected
+        m_errors = true;
+        MDL_ASSERT(!"DAG detected in AST, expression reused");
+    }
+}
+
+void AST_checker::post_visit(IDeclaration *decl)
+{
+    if (!m_decls.insert(decl).second) {
+        // already visited, DAG detected
+        m_errors = true;
+        MDL_ASSERT(!"DAG detected in AST, declaration reused");
+    }
 }
 
 }  // mdl

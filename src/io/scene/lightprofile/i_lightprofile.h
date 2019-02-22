@@ -34,7 +34,12 @@
 #include <base/data/db/i_db_journal_type.h>
 #include <io/scene/scene/i_scene_scene_element.h>
 
-namespace mi { namespace neuraylib { class IReader; } }
+namespace mi { 
+    namespace neuraylib { 
+        class IBuffer;
+        class IReader; 
+    } 
+}
 
 namespace MI {
 
@@ -117,21 +122,21 @@ public:
         mi::neuraylib::Lightprofile_degree degree = mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_1,
         mi::Uint32 flags = mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE);
 
-    /// Imports a light profile from an archive (used by MDL integration).
+    /// Imports a light profile from an container (used by MDL integration).
     ///
-    /// \param reader                The reader for the light profile.
-    /// \param archive_filename      The resolved archive filename.
-    /// \param archive_membername    The resolved archive member name.
-    /// \param mdl_file_path         The MDL file path.
-    /// \param resolution_phi        See #reset_file().
-    /// \param resolution_theta      See #reset_file().
-    /// \param degree                See #reset_file().
-    /// \param flags                 See #reset_file().
-    /// \return                      See #reset_file() (-2 not possible here).
-    mi::Sint32 reset_archive_mdl(
+    /// \param reader                  The reader for the light profile.
+    /// \param container_filename      The resolved container filename.
+    /// \param container_membername    The resolved container member name.
+    /// \param mdl_file_path           The MDL file path.
+    /// \param resolution_phi          See #reset_file().
+    /// \param resolution_theta        See #reset_file().
+    /// \param degree                  See #reset_file().
+    /// \param flags                   See #reset_file().
+    /// \return                        See #reset_file() (-2 not possible here).
+    mi::Sint32 reset_container_mdl(
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
-        const std::string& archive_membername,
+        const std::string& container_filename,
+        const std::string& container_membername,
         const std::string& mdl_file_path,
         mi::Uint32 resolution_phi = 0,
         mi::Uint32 resolution_theta = 0,
@@ -202,17 +207,17 @@ public:
     /// Indicates whether this light profile is file-based.
     bool is_file_based() const { return !m_resolved_filename.empty(); }
 
-    /// Indicates whether this light profile is archive-based.
-    bool is_archive_based() const { return !m_resolved_archive_filename.empty(); }
+    /// Indicates whether this light profile is container-based.
+    bool is_container_based() const { return !m_resolved_container_filename.empty(); }
 
     /// Indicates whether this light profile is memory-based.
-    bool is_memory_based() const { return !is_file_based() && !is_archive_based(); }
+    bool is_memory_based() const { return !is_file_based() && !is_container_based(); }
 
-    /// Returns the archive file name for archive-based light profiles, and \c NULL otherwise.
-    const std::string& get_archive_filename() const { return m_resolved_archive_filename; }
+    /// Returns the container file name for container-based light profiles, and \c NULL otherwise.
+    const std::string& get_container_filename() const { return m_resolved_container_filename; }
 
-    /// Returns the archive member name for archive-based light profiles, and \c NULL otherwise.
-    const std::string& get_archive_membername() const { return m_resolved_archive_membername; }
+    /// Returns the container member name for container-based light profiles, and \c NULL otherwise.
+    const std::string& get_container_membername() const { return m_resolved_container_membername; }
 
 private:
     /// Imports a BSDF measurement from a reader.
@@ -246,15 +251,15 @@ private:
     /// This is the filename as it has been resolved in reset_file() or deserialize().
     std::string m_resolved_filename;
 
-    /// The archive that contains the data of this DB element
+    /// The container that contains the data of this DB element
     ///
-    /// Non-empty exactly for archive-based light profiles.
-    std::string m_resolved_archive_filename;
+    /// Non-empty exactly for container-based light profiles.
+    std::string m_resolved_container_filename;
 
-    /// The archive member that contains the data of this DB element.
+    /// The container member that contains the data of this DB element.
     ///
-    /// Non-empty exactly for archive-based light profiles.
-    std::string m_resolved_archive_membername;
+    /// Non-empty exactly for container-based light profiles.
+    std::string m_resolved_container_membername;
 
     /// The MDL file path.
     std::string m_mdl_file_path;
@@ -284,6 +289,12 @@ private:
 /// \return               \c true in case of success, \c false otherwise.
 bool export_to_file( const Lightprofile* lightprofile, const std::string& filename);
 
+/// Exports the light profile to a buffer.
+///
+/// \param lightprofile   The light profile to export.
+/// \return               The buffer in case of success, NULL otherwise.
+mi::neuraylib::IBuffer* create_buffer_from_lightprofile( const Lightprofile* lightprofile);
+
 /// Loads a default light profile and stores it in the DB.
 ///
 /// Used by the MDL integration to process light profiles that appear in default arguments
@@ -307,25 +318,25 @@ DB::Tag load_mdl_lightprofile(
 /// Loads a default light profile and stores it in the DB.
 ///
 /// Used by the MDL integration to process light profiles that appear in default arguments
-/// (similar to the texture and BSDF measurement loaders). A fixed mapping from the archive and
+/// (similar to the texture and BSDF measurement loaders). A fixed mapping from the container and
 /// member filenames to DB element name is used to detect already loaded light profiles. In such a
 /// case, the tag of the existing DB element is returned.
 ///
-/// \param transaction         The DB transaction to be used.
-/// \param reader              The reader to be used to obtain the light profile. Needs to
-///                            support absolute access.
-/// \param archive_filename    The resolved filename of the archive itself.
-/// \param archive_membername  The relative filename of the light profile in the archive.
-/// \param mdl_file_path       The MDL file path.
-/// \param shared              Indicates whether a possibly already existing DB element for that
-///                            resource should simply be reused. Otherwise, an independent DB
-///                            element is created, even if the resource has already been loaded.
-/// \return                    The tag of that light profile (invalid in case of failures).
+/// \param transaction           The DB transaction to be used.
+/// \param reader                The reader to be used to obtain the light profile. Needs to
+///                              support absolute access.
+/// \param container_filename    The resolved filename of the container itself.
+/// \param container_membername  The relative filename of the light profile in the container.
+/// \param mdl_file_path         The MDL file path.
+/// \param shared                Indicates whether a possibly already existing DB element for that
+///                              resource should simply be reused. Otherwise, an independent DB
+///                              element is created, even if the resource has already been loaded.
+/// \return                      The tag of that light profile (invalid in case of failures).
 DB::Tag load_mdl_lightprofile(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path,
     bool shared);
 

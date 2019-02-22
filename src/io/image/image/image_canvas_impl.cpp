@@ -283,8 +283,8 @@ Canvas_impl::Canvas_impl(
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin failed to import \"%s\" in \"%s\".",
             member_filename.c_str(), archive_filename.c_str());
-            *errors = -5;
-            set_default_pink_dummy_canvas();
+        *errors = -5;
+        set_default_pink_dummy_canvas();
         return;
     }
 
@@ -594,7 +594,7 @@ bool Canvas_impl::supports_lazy_loading() const
         return false;
 
     SYSTEM::Access_module<Image_module> image_module( false);
-    mi::base::Handle<IMdr_callback> callback( image_module->get_mdr_callback());
+    mi::base::Handle<IMdl_container_callback> callback( image_module->get_mdl_container_callback());
     return callback.is_valid_interface();
 }
 
@@ -687,7 +687,8 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& filename_error_msg
         filename_error_msg = m_archive_filename + "\" in \"" + m_member_filename;
 
         SYSTEM::Access_module<Image_module> image_module( false);
-        mi::base::Handle<IMdr_callback> callback( image_module->get_mdr_callback());
+        mi::base::Handle<IMdl_container_callback> callback(
+            image_module->get_mdl_container_callback());
         mi::base::Handle<mi::neuraylib::IReader> reader(
             callback->get_reader( m_archive_filename.c_str(), m_member_filename.c_str()));
         if( !reader) {

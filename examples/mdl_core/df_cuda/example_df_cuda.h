@@ -70,7 +70,7 @@ struct Df_cuda_material
     #endif
     Df_cuda_material()
         : compiled_material_index(0)
-        , argument_block_index(0)     // (1 based) zero means that no arguments are used
+        , argument_block_index(~0)
         , bsdf(make_invalid())
         , edf(make_invalid())
         , emission_intensity(make_invalid())
@@ -81,7 +81,7 @@ struct Df_cuda_material
     // used on host side only
     unsigned int compiled_material_index;
 
-    // not used at the moment
+    // the argument block index of this material (~0 if not used)
     unsigned int argument_block_index;
 
     // pair of target_code_index and function_index to identify the bsdf

@@ -33,7 +33,13 @@
 #include <base/data/db/i_db_journal_type.h>
 #include <io/scene/scene/i_scene_scene_element.h>
 
-namespace mi { namespace neuraylib { class IBsdf_isotropic_data; class IReader; } }
+namespace mi { 
+    namespace neuraylib { 
+        class IBuffer;
+        class IBsdf_isotropic_data;
+        class IReader;
+    }
+}
 
 namespace MI {
 
@@ -103,20 +109,20 @@ public:
     Sint32 reset_file_mdl(
         const std::string& resolved_filename, const std::string& mdl_file_path);
 
-    /// Imports a BSDF measurement from an archive (used by MDL integration).
+    /// Imports a BSDF measurement from a container (used by MDL integration).
     ///
     /// \param reader                The reader for the BSDF measurement.
-    /// \param archive_filename      The resolved archive filename.
-    /// \param archive_membername    The resolved archive member name.
+    /// \param container_filename    The resolved container filename.
+    /// \param container_membername  The resolved container member name.
     /// \param mdl_file_path         The MDL file path.
     /// \return
     ///                              -  0: Success.
     ///                              - -3: Invalid file format or invalid filename extension (only
     ///                                    \c .mbsdf is supported).
-    Sint32 reset_archive_mdl(
+    Sint32 reset_container_mdl(
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
-        const std::string& archive_membername,
+        const std::string& container_filename,
+        const std::string& container_membername,
         const std::string& mdl_file_path);
 
     const std::string& get_filename() const;
@@ -186,17 +192,19 @@ public:
     /// Indicates whether this BSDF measurement is file-based.
     bool is_file_based() const { return !m_resolved_filename.empty(); }
 
-    /// Indicates whether this BSDF measurement is archive-based.
-    bool is_archive_based() const { return !m_resolved_archive_filename.empty(); }
+    /// Indicates whether this BSDF measurement is container-based.
+    bool is_container_based() const { return !m_resolved_container_filename.empty(); }
 
     /// Indicates whether this BSDF measurement is memory-based.
-    bool is_memory_based() const { return !is_file_based() && !is_archive_based(); }
+    bool is_memory_based() const { return !is_file_based() && !is_container_based(); }
 
-    /// Returns the archive file name for archive-based BSDF measurements, and \c NULL otherwise.
-    const std::string& get_archive_filename() const { return m_resolved_archive_filename;; }
+    /// Returns the container file name for container-based BSDF measurements, 
+    /// and \c NULL otherwise.
+    const std::string& get_container_filename() const { return m_resolved_container_filename;; }
 
-    /// Returns the archive member name for archive-based BSDF measurements, and \c NULL otherwise.
-    const std::string& get_archive_membername() const { return m_resolved_archive_membername; }
+    /// Returns the container member name for container-based BSDF measurements, 
+    /// and \c NULL otherwise.
+    const std::string& get_container_membername() const { return m_resolved_container_membername; }
 
 private:
     /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
@@ -237,15 +245,15 @@ private:
     /// This is the filename as it has been resolved in reset_file() or deserialize().
     std::string m_resolved_filename;
 
-    /// The archive that contains the data of this DB element
+    /// The container that contains the data of this DB element
     ///
-    /// Non-empty exactly for archive-based BSDF measurements.
-    std::string m_resolved_archive_filename;
+    /// Non-empty exactly for container-based BSDF measurements.
+    std::string m_resolved_container_filename;
 
-    /// The archive member that contains the data of this DB element.
+    /// The container member that contains the data of this DB element.
     ///
-    /// Non-empty exactly for archive-based BSDF measurements.
-    std::string m_resolved_archive_membername;
+    /// Non-empty exactly for container-based BSDF measurements.
+    std::string m_resolved_container_membername;
 
     /// The MDL file path.
     std::string m_mdl_file_path;
@@ -291,24 +299,24 @@ bool import_from_reader(
 
 /// Imports BSDF data from a reader.
 ///
-/// \param reader              The reader to import from.
-/// \param archive_filename    The resolved filename of the archive itself.
-/// \param archive_membername  The relative filename of the BSDF measurement in the archive.
-/// \param[out] reflection     The imported BSDF data for the reflection. The incoming value must be
-///                            \p NULL. The reference count of the outgoing value has already been
-///                            increased for the caller (similar as for return values). Note that
-///                            the outgoing value is \p NULL if there is no BSDF data for the
-///                            reflection.
-/// \param[out] transmission   The imported BSDF data for the reflection. The incoming value must be
-///                            \p NULL. The reference count of the outgoing value has already been
-///                            increased for the caller (similar as for return values). Note that
-///                            the outgoing value is \p NULL if there is no BSDF data for the
-///                            transmission.
-/// \return                    \c true in case of success, \c false otherwise.
+/// \param reader               The reader to import from.
+/// \param container_filename   The resolved filename of the container itself.
+/// \param container_membername The relative filename of the BSDF measurement in the container.
+/// \param[out] reflection      The imported BSDF data for the reflection. The incoming value must
+///                             be \p NULL. The reference count of the outgoing value has already
+///                             been increased for the caller (similar as for return values). Note
+///                             that the outgoing value is \p NULL if there is no BSDF data for the
+///                             reflection.
+/// \param[out] transmission    The imported BSDF data for the reflection. The incoming value must 
+///                             be \p NULL. The reference count of the outgoing value has already 
+///                             been increased for the caller (similar as for return values). Note 
+///                             that the outgoing value is \p NULL if there is no BSDF data for the
+///                             transmission.
+/// \return                     \c true in case of success, \c false otherwise.
 bool import_from_reader(
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     mi::neuraylib::IBsdf_isotropic_data*& reflection,
     mi::neuraylib::IBsdf_isotropic_data*& transmission);
 
@@ -322,6 +330,16 @@ bool export_to_file(
     const mi::neuraylib::IBsdf_isotropic_data* reflection,
     const mi::neuraylib::IBsdf_isotropic_data* transmission,
     const std::string& filename);
+
+/// Exports the BSDF data to a buffer.
+///
+/// \param reflection     The BSDF data to export for the reflection. Can be \p NULL.
+/// \param transmission   The BSDF data to export for the transmission. Can be \p NULL.
+/// \return               The buffer in case of success, NULL otherwise.
+mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
+    const mi::neuraylib::IBsdf_isotropic_data* reflection,
+    const mi::neuraylib::IBsdf_isotropic_data* transmission);
+
 
 /// Loads a default BSDF measurement and stores it in the DB.
 ///
@@ -346,25 +364,25 @@ DB::Tag load_mdl_bsdf_measurement(
 /// Loads a default BSDF measurement and stores it in the DB.
 ///
 /// Used by the MDL integration to process BSDF measurements that appear in default arguments
-/// (similar to the texture and light profile loaders). A fixed mapping from the archive and member
-/// filenames to DB element name is used to detect already loaded BSDF measurements. In such a case,
-/// the tag of the existing DB element is returned.
+/// (similar to the texture and light profile loaders). A fixed mapping from the container and 
+/// member filenames to DB element name is used to detect already loaded BSDF measurements. 
+/// In such a case, the tag of the existing DB element is returned.
 ///
-/// \param transaction         The DB transaction to be used.
-/// \param reader              The reader to be used to obtain the BSDF measurement. Needs to
-///                            support absolute access.
-/// \param archive_filename    The resolved filename of the archive itself.
-/// \param archive_membername  The relative filename of the BSDF measurement in the archive.
-/// \param mdl_file_path       The MDL file path.
-/// \param shared              Indicates whether a possibly already existing DB element for that
-///                            resource should simply be reused. Otherwise, an independent DB
-///                            element is created, even if the resource has already been loaded.
-/// \return                    The tag of that BSDF measurement (invalid in case of failures).
+/// \param transaction           The DB transaction to be used.
+/// \param reader                The reader to be used to obtain the BSDF measurement. Needs to
+///                              support absolute access.
+/// \param container_filename    The resolved filename of the container itself.
+/// \param container_membername  The relative filename of the BSDF measurement in the container.
+/// \param mdl_file_path         The MDL file path.
+/// \param shared                Indicates whether a possibly already existing DB element for that
+///                              resource should simply be reused. Otherwise, an independent DB
+///                              element is created, even if the resource has already been loaded.
+/// \return                      The tag of that BSDF measurement (invalid in case of failures).
 DB::Tag load_mdl_bsdf_measurement(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
-    const std::string& archive_membername,
+    const std::string& container_filename,
+    const std::string& container_membername,
     const std::string& mdl_file_path,
     bool shared);
 

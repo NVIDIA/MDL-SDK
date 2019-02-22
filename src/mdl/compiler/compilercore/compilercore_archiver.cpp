@@ -28,12 +28,6 @@
 
 #include "pch.h"
 
-#include <base/lib/libzip/zip.h>
-
-// defined in zipint.h
-extern "C" int zip_source_remove(zip_source_t *);
-extern "C" zip_int64_t zip_source_supports(zip_source_t *src);
-
 #include "compilercore_file_utils.h"
 #include "compilercore_mdl.h"
 #include "compilercore_errors.h"
@@ -56,292 +50,16 @@ bool has_suffix(string const &str, char const *suffix)
     return str.size() >= l && str.compare(str.size() - l, l, suffix) == 0;
 }
 
-static char const mdr_header_v1[] = {
-    'M', 'D', 'R', 0x00,  0x00, 0x01, 0x00, 0x00
-};
+static const MDL_zip_container_header header_supported_read_version = MDL_zip_container_header(
+    "MDR", 3,   // prefix
+    1,          // major version
+    0);         // minor version
 
-/// Helper class to implement a layered callback for libzip's source streams.
-class Layered_zip_source {
-public:
-    /// Constructor.
-    ///
-    /// param base  the base source layer, takes ownership
-    Layered_zip_source(zip_source_t *base)
-    : m_base(base)
-    {
-        zip_error_init(&m_ze);
-    }
+static const MDL_zip_container_header header_write_version = MDL_zip_container_header(
+    "MDR", 3,   // prefix
+    1,          // major version
+    0);         // minor version
 
-    /// Destructor.
-    ~Layered_zip_source()
-    {
-    }
-
-    /// Open the layered stream
-    ///
-    /// param ze  if this function fails, ze contains the lipzip error
-    zip_source_t *open(zip_error_t &ze) {
-        return zip_source_function_create(callback, this, &ze);
-    }
-
-private:
-    /// The source callback function, delegates all requests to the base layer but adjusts
-    /// the offsets.
-    static zip_int64_t callback(
-        void             *env,
-        void             *data,
-        zip_uint64_t     len,
-        zip_source_cmd_t cmd)
-    {
-        Layered_zip_source *self = reinterpret_cast<Layered_zip_source *>(env);
-        zip_source_t *src = self->m_base;
-        zip_error_t  &ze  = self->m_ze;
-
-        switch (cmd) {
-        case ZIP_SOURCE_BEGIN_WRITE:
-            {
-                zip_int64_t res = zip_source_begin_write(src);
-                ze = *zip_source_error(src);
-                if (res < 0)
-                    return res;
-
-                res = zip_source_write(src, mdr_header_v1, sizeof(mdr_header_v1));
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_COMMIT_WRITE:
-            {
-                int res = zip_source_commit_write(src);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_CLOSE:
-            {
-                int res = zip_source_close(src);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_ERROR:
-            return zip_error_to_data(&ze, data, len);
-
-        case ZIP_SOURCE_FREE:
-            zip_source_free(src);
-            return 0;
-
-        case ZIP_SOURCE_OPEN:
-            {
-                int res =zip_source_open(src);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_READ:
-            {
-                zip_int64_t res = zip_source_read(src, data, len);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_REMOVE:
-            {
-                int res = zip_source_remove(src);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_ROLLBACK_WRITE:
-            {
-                zip_source_rollback_write(src);
-                ze = *zip_source_error(src);
-                return 0;
-            }
-
-        case ZIP_SOURCE_SEEK:
-            {
-                zip_source_args_seek_t *args =
-                    ZIP_SOURCE_GET_ARGS(zip_source_args_seek_t, data, len, &ze);
-
-                if (args == NULL)
-                    return -1;
-
-                zip_int64_t offset = args->offset;
-                int         whence = args->whence;
-
-                switch (whence) {
-                case SEEK_SET:
-                    // adjust position
-                    offset += sizeof(mdr_header_v1);
-                    break;
-                case SEEK_END:
-                case SEEK_CUR:
-                    break;
-                }
-
-                int res = zip_source_seek(src, offset, whence);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_SEEK_WRITE:
-            {
-                zip_source_args_seek_t *args;
-
-                args = ZIP_SOURCE_GET_ARGS(zip_source_args_seek_t, data, len, &ze);
-                if (args == NULL) {
-                    return -1;
-                }
-
-                zip_int64_t offset = args->offset;
-                int         whence = args->whence;
-
-                switch (whence) {
-                case SEEK_SET:
-                    // adjust position
-                    offset += sizeof(mdr_header_v1);
-                    break;
-                case SEEK_END:
-                case SEEK_CUR:
-                    break;
-                }
-
-                int res = zip_source_seek_write(src, offset, whence);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        case ZIP_SOURCE_STAT:
-            {
-                zip_stat_t *st = (zip_stat_t *)data;
-                int res = zip_source_stat(src, st);
-                ze = *zip_source_error(src);
-
-                if (res < 0)
-                    return res;
-
-                if (st->valid & ZIP_STAT_SIZE) {
-                    if (st->size >= sizeof(mdr_header_v1))
-                        st->size -= sizeof(mdr_header_v1);
-                }
-                return res;
-            }
-
-        case ZIP_SOURCE_SUPPORTS:
-            return zip_source_supports(src);
-
-        case ZIP_SOURCE_TELL:
-            {
-                zip_int64_t pos = zip_source_tell(src);
-                ze = *zip_source_error(src);
-                if (pos >= sizeof(mdr_header_v1))
-                    pos -= sizeof(mdr_header_v1);
-                return pos;
-            }
-
-        case ZIP_SOURCE_TELL_WRITE:
-            {
-                zip_int64_t pos = zip_source_tell_write(src);
-                ze = *zip_source_error(src);
-                if (pos >= sizeof(mdr_header_v1))
-                    pos -= sizeof(mdr_header_v1);
-                return pos;
-            }
-
-        case ZIP_SOURCE_WRITE:
-            {
-                zip_int64_t res = zip_source_write(src, data, len);
-                ze = *zip_source_error(src);
-                return res;
-            }
-
-        default:
-            zip_error_set(&ze, ZIP_ER_OPNOTSUPP, 0);
-            return -1;
-        }
-    }
-
-private:
-    /// the base layer
-    zip_source_t *m_base;
-
-    /// The error
-    zip_error_t m_ze;
-};
-
-/// Implementation of the IInput_stream interface wrapping a IMDL_resource_reader.
-class Resource_Input_stream : public Allocator_interface_implement<IInput_stream>
-{
-    typedef Allocator_interface_implement<IInput_stream> Base;
-public:
-    /// Acquires a const interface.
-    mi::base::IInterface const *get_interface(
-        mi::base::Uuid const &interface_id) const MDL_FINAL
-    {
-        if (interface_id == IMDL_resource_reader::IID()) {
-            m_reader->retain();
-            return m_reader.get();
-        }
-        return Base::get_interface(interface_id);
-    }
-
-    /// Acquires a non-const interface.
-    mi::base::IInterface *get_interface(
-        mi::base::Uuid const &interface_id) MDL_FINAL
-    {
-        if (interface_id == IMDL_resource_reader::IID()) {
-            m_reader->retain();
-            return m_reader.get();
-        }
-        return Base::get_interface(interface_id);
-    }
-
-    /// Read a character from the input stream.
-    /// \returns    The code of the character read, or -1 on the end of the stream.
-    int read_char() MDL_OVERRIDE
-    {
-        char c;
-
-        if (m_reader->read(&c, 1) == 1)
-            return static_cast<unsigned char>(c);
-        return -1;
-    }
-
-    /// Get the name of the file on which this input stream operates.
-    /// \returns    The name of the file or null if the stream does not operate on a file.
-    char const *get_filename() MDL_FINAL {
-        return m_reader->get_filename();
-    }
-
-    /// Construct an input stream from a character buffer.
-    /// Does NOT copy the buffer, so it must stay until the lifetime of the
-    /// Input stream object!
-    ///
-    /// \param alloc     the allocator
-    /// \param buffer    the character buffer
-    /// \param length    the length of the buffer
-    /// \param filename  the name of the buffer or NULL
-    explicit Resource_Input_stream(
-        IAllocator           *alloc,
-        IMDL_resource_reader *reader)
-    : Base(alloc)
-    , m_reader(reader, mi::base::DUP_INTERFACE)
-    {
-    }
-
-private:
-    // non copyable
-    Resource_Input_stream(Resource_Input_stream const &) MDL_DELETED_FUNCTION;
-    Resource_Input_stream &operator=(Resource_Input_stream const &) MDL_DELETED_FUNCTION;
-
-protected:
-    virtual ~Resource_Input_stream() {}
-
-private:
-    /// Current position.
-    mi::base::Handle<IMDL_resource_reader> m_reader;
-};
 
 /// Base class for Archive operators.
 class Archive_helper {
@@ -629,9 +347,9 @@ private:
 
     /// Map a file error.
     void handle_file_error(
-        Archiv_error_code err,
-        char const        *archive_name,
-        char const        *file_name);
+        MDL_zip_container_error_code   err,
+        char const                     *archive_name,
+        char const                     *file_name);
 
 private:
     /// Set to true if files can be overwritten.
@@ -1530,7 +1248,7 @@ bool Archive_builder::create_zip_archive()
 
     set_archive_name(arc_name);
 
-    // create the the writable stream
+    // create the writable stream
     zip_error_t ze;
     zip_source_t *src = zip_source_file_create(arc_name.c_str(), 0, -1, &ze);
     if (src == NULL) {
@@ -1539,7 +1257,7 @@ bool Archive_builder::create_zip_archive()
     }
 
     // wrap it by the extra layer that writes our MDR header
-    Layered_zip_source layer(src);
+    Layered_zip_source layer(src, header_write_version);
     zip_source_t *lsrc = layer.open(ze);
     if (lsrc == 0) {
         zip_source_free(src);
@@ -1558,7 +1276,7 @@ bool Archive_builder::create_zip_archive()
         return false;
     }
 
-    // ensure the life time of the output buffer lasts until zip_close() where teh data is written
+    // ensure the life time of the output buffer lasts until zip_close() where the data is written
     Allocator_builder builder(m_alloc);
     mi::base::Handle<Buffer_output_stream> os(builder.create<Buffer_output_stream>(m_alloc));
 
@@ -1569,9 +1287,9 @@ bool Archive_builder::create_zip_archive()
         printer->print(m_manifest.get());
 
         size_t       manifest_len      = os->get_data_size();
-        char const   *manifest_contest = os->get_data();
+        char const   *manifest_content = os->get_data();
         zip_source_t *manifest_src     =
-            zip_source_buffer(za, manifest_contest, manifest_len, /*freep=*/0);
+            zip_source_buffer(za, manifest_content, manifest_len, /*freep=*/0);
 
         fire_event(IArchive_tool_event::EV_STORING, "MANIFEST");
 
@@ -1837,7 +1555,7 @@ void Archive_extractor::extract(
     }
 
     // wrap it by the extra layer that writes our MDR header
-    Layered_zip_source layer(src);
+    Layered_zip_source layer(src, header_write_version);
     zip_source_t *lsrc = layer.open(ze);
     if (lsrc == 0) {
         zip_source_free(src);
@@ -1952,7 +1670,7 @@ IMDL_resource_reader *Archive_extractor::get_content_buffer(
     full_path.append(':');
     full_path.append(file_name);
 
-    Archiv_error_code err;
+    MDL_zip_container_error_code err= EC_OK;
     IMDL_resource_reader *res = open_resource_file(
         m_alloc,
         /*mdl_url=*/"",
@@ -2017,17 +1735,17 @@ void Archive_extractor::normalize_separators(string &path)
 
 // Map a file error.
 void Archive_extractor::handle_file_error(
-    Archiv_error_code err,
-    char const        *archive_name,
-    char const        *file_name)
+    MDL_zip_container_error_code   err,
+    char const                     *archive_name,
+    char const                     *file_name)
 {
     switch (err) {
     case EC_OK:
         return;
-    case EC_ARC_NOT_EXIST:
+    case EC_CONTAINER_NOT_EXIST:
         error(ARCHIVE_DOES_NOT_EXIST, Error_params(m_alloc).add(archive_name));
         return;
-    case EC_ARC_OPEN_FAILED:
+    case EC_CONTAINER_OPEN_FAILED:
         error(CANT_OPEN_ARCHIVE, Error_params(m_alloc).add(archive_name));
         return;
     case EC_FILE_OPEN_FAILED:
@@ -2040,7 +1758,7 @@ void Archive_extractor::handle_file_error(
             return;
         }
         // fall-through
-    case EC_INVALID_ARCHIVE:
+    case EC_INVALID_CONTAINER:
         error(
             INVALID_MDL_ARCHIVE,
             Error_params(m_alloc).add(archive_name));
@@ -2066,6 +1784,12 @@ void Archive_extractor::handle_file_error(
         return;
     case EC_RENAME_ERROR:
         error(RENAME_FAILED, Error_params(m_alloc).add(archive_name));
+        return;
+    case EC_INVALID_HEADER:
+        error(MDR_INVALID_HEADER, Error_params(m_alloc).add(archive_name));
+        return;
+    case EC_INVALID_HEADER_VERSION:
+        error(MDR_INVALID_HEADER_VERSION, Error_params(m_alloc).add(archive_name));
         return;
     case EC_INTERNAL_ERROR:
         error(INTERNAL_ARCHIVER_ERROR, Error_params(m_alloc).add(archive_name));
@@ -2351,7 +2075,128 @@ void Manifest_parser::error()
 
 }  // anonymous
 
-// ---------------------------- Archive ----------------------------
+// ---------------------------- Archive ZIP Container ---------------------------------------------
+
+// Open a container file.
+MDL_zip_container_archive *MDL_zip_container_archive::open(
+    IAllocator                     *alloc,
+    char const                     *path,
+    MDL_zip_container_error_code  &err,
+    bool                            with_manifest)
+{
+    zip_t* za = MDL_zip_container::open(alloc, path, err, header_supported_read_version);
+
+    if (err != EC_OK)
+        return NULL;
+
+    zip_int64_t manifest_idx = zip_name_locate(za, "MANIFEST", ZIP_FL_ENC_UTF_8);
+    if (manifest_idx != 0) {
+        // MANIFEST must be the first entry in an archive
+        zip_close(za);
+        err = EC_INVALID_CONTAINER;
+        return NULL;
+    }
+
+    zip_stat_t st;
+    if (zip_stat_index(za, manifest_idx, ZIP_FL_ENC_UTF_8, &st) < 0) {
+        zip_close(za);
+        err = EC_INVALID_CONTAINER;
+        return NULL;
+    }
+
+    if ((st.valid & ZIP_STAT_COMP_METHOD) == 0 || st.comp_method != ZIP_CM_STORE) {
+        // MANIFEST is not stored uncompressed
+        zip_close(za);
+        err = EC_INVALID_CONTAINER;
+        return NULL;
+    }
+
+    Allocator_builder builder(alloc);
+    MDL_zip_container_archive *archiv = builder.create<MDL_zip_container_archive>(
+        alloc, path, za, with_manifest);
+
+    if (with_manifest) {
+        mi::base::Handle<Manifest const> m(archiv->get_manifest());
+        if (!m.is_valid_interface()) {
+            // MANIFEST missing or parse error occurred
+            builder.destroy(archiv);
+            err = EC_INVALID_CONTAINER;
+            return NULL;
+        }
+    }
+    return archiv;
+}
+
+
+// Get the manifest of this archive.
+Manifest const *MDL_zip_container_archive::get_manifest()
+{
+    Manifest const *m = m_manifest.get();
+    if (m == NULL) {
+        m_manifest = parse_manifest();
+        m = m_manifest.get();
+    }
+    if (m != NULL)
+        m->retain();
+    return m;
+}
+
+// Destructor
+MDL_zip_container_archive::~MDL_zip_container_archive()
+{
+}
+
+// Constructor.
+MDL_zip_container_archive::MDL_zip_container_archive(
+    IAllocator  *alloc,
+    char const  *path,
+    zip_t       *za,
+    bool         with_manifest)
+: MDL_zip_container(alloc, path, za)
+, m_manifest(with_manifest ? parse_manifest() : NULL)
+{
+}
+
+// Get the manifest.
+Manifest *MDL_zip_container_archive::parse_manifest()
+{
+    if (MDL_zip_container_file *fp = file_open("MANIFEST"))
+    {
+        Allocator_builder builder(m_alloc);
+
+        File_handle *manifest_fp =
+            builder.create<File_handle>(
+                get_allocator(), 
+                File_handle::FH_ARCHIVE, 
+                this, 
+                /*owns_archive=*/false, 
+                fp);
+        
+        mi::base::Handle<Buffered_archive_resource_reader> reader(
+            builder.create<Buffered_archive_resource_reader>(
+            m_alloc,
+            manifest_fp,
+            "MANIFEST",
+            /*mdl_url=*/""));
+        
+        Manifest *manifest = Archive_tool::parse_manifest(m_alloc, reader.get());
+        if (manifest != NULL) {
+            string arc_name(get_container_name(), m_alloc);
+            size_t pos = arc_name.rfind(os_separator());
+            if (pos == string::npos)
+                pos = 0;
+            else
+                pos += 1;
+            size_t e = arc_name.length() - 4; // skip ".mdr"
+            arc_name = arc_name.substr(pos, e - pos);
+            manifest->set_archive_name(arc_name.c_str());
+        }
+        return manifest;
+    }
+    return NULL;
+}
+
+// ---------------------------- Archive -----------------------------------------------------------
 
 // Constructor.
 Archive::Archive(

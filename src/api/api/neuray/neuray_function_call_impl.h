@@ -93,6 +93,8 @@ public:
     mi::Sint32 set_argument(
         const char* name,
         const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
+
+    bool is_default() const NEURAY_FINAL;
 };
 
 } // namespace NEURAY

@@ -219,6 +219,11 @@ mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_mater
     return api_instance;
 }
 
+bool Material_instance_impl::is_default() const
+{
+    return get_db_element()->is_immutable();
+}
+
 } // namespace NEURAY
 
 } // namespace MI

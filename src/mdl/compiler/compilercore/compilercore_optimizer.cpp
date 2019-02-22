@@ -900,7 +900,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                     if (IExpression_unary const *uarg = as<IExpression_unary>(arg)) {
                         if (uarg->get_operator() == op)
                             return uarg->get_argument();
-                    }                    
+                    }
                 }
                 break;
             case IExpression_unary::OK_LOGICAL_NOT:
@@ -909,7 +909,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                     if (IExpression_unary const *uarg = as<IExpression_unary>(arg)) {
                         if (uarg->get_operator() == op)
                             return uarg->get_argument();
-                    }                    
+                    }
                     if (IExpression_binary const *uarg = as<IExpression_binary>(arg)) {
                         IExpression_binary::Operator op = uarg->get_operator();
                         IExpression_binary::Operator not_opt;
@@ -924,7 +924,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                             IExpression_binary *res = create_binary(not_opt, lhs, rhs, pos);
                             return local_opt(res);
                         }
-                    }                    
+                    }
                 }
                 break;
 
