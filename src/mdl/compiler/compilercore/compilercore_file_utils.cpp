@@ -261,7 +261,7 @@ bool mkdir_utf8(
         return false;
     }
 #endif
-    return false;
+    return true;
 }
 
 // Get the current working directory
@@ -299,7 +299,7 @@ static inline bool is_path_separator(
 bool is_path_absolute(
     char const *path)
 {
-    if (path == NULL)
+    if (path == NULL || path[0] == 0)
         return false;
 
     if (is_path_separator(path[0]))

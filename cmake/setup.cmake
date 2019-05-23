@@ -55,6 +55,18 @@ define_property(TARGET PROPERTY VS_DEBUGGER_PATHS
     BRIEF_DOCS "List of paths that are added to the Visual Studio debugger environment PATH."
     FULL_DOCS "List of paths that are added to the Visual Studio debugger environment PATH. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
     )
+define_property(TARGET PROPERTY VS_DEBUGGER_PATHS_DEBUG
+    BRIEF_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Debug builds only."
+    FULL_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Debug builds only. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
+    )
+define_property(TARGET PROPERTY VS_DEBUGGER_PATHS_RELEASE
+    BRIEF_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release builds only."
+    FULL_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release builds only. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
+    )
+define_property(TARGET PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO
+    BRIEF_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release with debug info builds only."
+    FULL_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release with debug info builds only. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
+    )
 
 # set platform variable
 set(WINDOWS FALSE)
@@ -73,7 +85,17 @@ else()
 endif()
 
 # remove the /MD flag cmake sets by default
-set(CompilerFlags CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE)
+set(CompilerFlags
+    CMAKE_CXX_FLAGS
+    CMAKE_CXX_FLAGS_DEBUG
+    CMAKE_CXX_FLAGS_RELEASE
+    CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    CMAKE_C_FLAGS
+    CMAKE_C_FLAGS_DEBUG
+    CMAKE_C_FLAGS_RELEASE
+    CMAKE_C_FLAGS_RELWITHDEBINFO
+    )
+
 foreach(CompilerFlag ${CompilerFlags})
   string(REPLACE "/MDd" "" ${CompilerFlag} "${${CompilerFlag}}")
   string(REPLACE "/MD" "" ${CompilerFlag} "${${CompilerFlag}}")
@@ -112,6 +134,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS:                    " ${CMAKE_CXX_FLAGS})
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_DEBUG:              " ${CMAKE_CXX_FLAGS_DEBUG})
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELEASE:            " ${CMAKE_CXX_FLAGS_RELEASE})
+    MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELWITHDEBINFO:     " ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
 endif()
 
 # check for dependencies
@@ -120,6 +143,7 @@ endif()
 option(MDL_ENABLE_CUDA_EXAMPLES "Enable examples that require CUDA." ON)
 option(MDL_ENABLE_OPENGL_EXAMPLES "Enable examples that require OpenGL." ON)
 option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ON)
+option(MDL_ENABLE_D3D12_EXAMPLES "Enable examples that require Direct3D and DirectX 12." ${WINDOWS})
 
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/tests/CMakeLists.txt)
     option(MDL_ENABLE_TESTS "Generates unit and example tests." ON)
@@ -142,6 +166,9 @@ find_opengl_ext()
 include(${MDL_BASE_FOLDER}/cmake/find/find_qt_ext.cmake)
 find_qt_ext()
 
+include(${MDL_BASE_FOLDER}/cmake/find/find_d3d12_ext.cmake)
+find_d3d12_ext()
+
 # examples could potentially use FreeImage directly
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
     include(${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
@@ -156,5 +183,6 @@ endif()
 if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_ENABLE_OPENGL_EXAMPLES:         " ${MDL_ENABLE_OPENGL_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_CUDA_EXAMPLES:           " ${MDL_ENABLE_CUDA_EXAMPLES})
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_D3D12_EXAMPLES:          " ${MDL_ENABLE_D3D12_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_QT_EXAMPLES:             " ${MDL_ENABLE_QT_EXAMPLES})
 endif()

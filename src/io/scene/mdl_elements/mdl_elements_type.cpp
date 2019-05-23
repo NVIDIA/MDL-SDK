@@ -597,6 +597,14 @@ public:
 };
 
 
+class Type_hair_bsdf final : public Type_base_immutable<IType_hair_bsdf>
+{
+public:
+    // user defined default constructor required to be const-default-constructible
+    Type_hair_bsdf() {}
+};
+
+
 class Type_edf final : public Type_base_immutable<IType_edf>
 {
 public:
@@ -623,6 +631,7 @@ static const Type_texture          the_texture_3d_type(IType_texture::TS_3D);
 static const Type_texture          the_texture_cube_type(IType_texture::TS_CUBE);
 static const Type_texture          the_texture_ptex_type(IType_texture::TS_PTEX);
 static const Type_bsdf             the_bsdf_type;
+static const Type_hair_bsdf        the_hair_bsdf_type;
 static const Type_vdf              the_vdf_type;
 static const Type_edf              the_edf_type;
 static const Type_light_profile    the_light_profile_type;
@@ -956,8 +965,17 @@ const IType_bsdf_measurement* Type_factory::create_bsdf_measurement() const
     return &TYPES::the_bsdf_measurement_type;
 }
 
+IType_list* Type_factory::create_type_list() const
+{
+    return new Type_list;
+}
+
 const IType_bsdf* Type_factory::create_bsdf() const {
     return &TYPES::the_bsdf_type;
+}
+
+const IType_hair_bsdf* Type_factory::create_hair_bsdf() const {
+    return &TYPES::the_hair_bsdf_type;
 }
 
 const IType_edf* Type_factory::create_edf() const {
@@ -990,6 +1008,16 @@ const IType_struct* Type_factory::get_predefined_struct(
         return nullptr;
     it->second->retain();
     return it->second.get();
+}
+
+mi::Sint32 Type_factory::compare(const IType* lhs, const IType* rhs) const
+{
+    return compare_static(lhs, rhs);
+}
+
+mi::Sint32 Type_factory::compare(const IType_list* lhs, const IType_list* rhs) const
+{
+    return compare_static(lhs, rhs);
 }
 
 namespace {
@@ -1191,6 +1219,7 @@ void Type_factory::serialize(SERIAL::Serializer* serializer, const IType* type) 
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         return;
@@ -1303,6 +1332,7 @@ const IType* Type_factory::deserialize(SERIAL::Deserializer* deserializer)
     case IType::TK_LIGHT_PROFILE:    return create_light_profile();
     case IType::TK_BSDF_MEASUREMENT: return create_bsdf_measurement();
     case IType::TK_BSDF:             return create_bsdf();
+    case IType::TK_HAIR_BSDF:        return create_hair_bsdf();
     case IType::TK_EDF:              return create_edf();
     case IType::TK_VDF:              return create_vdf();
 
@@ -1496,6 +1526,7 @@ mi::Sint32 Type_factory::compare_static(
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         return 0;
@@ -1627,6 +1658,7 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
     case IType::TK_LIGHT_PROFILE:    return "light_profile";
     case IType::TK_BSDF_MEASUREMENT: return "bsdf_measurement";
     case IType::TK_BSDF:             return "bsdf";
+    case IType::TK_HAIR_BSDF:        return "hair_bsdf";
     case IType::TK_EDF:              return "edf";
     case IType::TK_VDF:              return "vdf";
 
@@ -1809,6 +1841,7 @@ void Type_factory::dump_static(
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         s << name;
@@ -1878,6 +1911,63 @@ void Type_factory::dump_static(
     }
 
     s << (n > 0 ? prefix : "") << "]";
+}
+
+mi::Sint32 Type_factory::is_compatible(const IType* src, const IType* dst) const
+{
+    if (!(src && dst))
+        return -1;
+
+    if (compare_static(src, dst) == 0)
+        return 1;
+
+    if (src->get_kind() == IType::TK_STRUCT && dst->get_kind() == IType::TK_STRUCT) {
+
+        mi::base::Handle<const IType_struct> src_str(src->get_interface<IType_struct>());
+        mi::base::Handle<const IType_struct> dst_str(dst->get_interface<IType_struct>());
+
+        if (src_str->get_size() != dst_str->get_size())
+            return -1;
+        for (mi::Size i = 0, n = src_str->get_size(); i < n; ++i) {
+
+            mi::base::Handle<const IType> src_field_type(src_str->get_field_type(i));
+            mi::base::Handle<const IType> dst_field_type(dst_str->get_field_type(i));
+
+            if (is_compatible(src_field_type.get(), dst_field_type.get()) < 0)
+                return -1;
+        }
+        return 0;
+    }
+    else if (src->get_kind() == IType::TK_ENUM && dst->get_kind() == IType::TK_ENUM) {
+
+        mi::base::Handle<const IType_enum> src_e(src->get_interface<IType_enum>());
+        mi::base::Handle<const IType_enum> dst_e(dst->get_interface<IType_enum>());
+
+        std::set<mi::Sint32> dst_codes;
+        for (mi::Size i = 0, n = dst_e->get_size(); i < n; ++i) {
+            dst_codes.insert(dst_e->get_value_code(i));
+        }
+        for (mi::Size i = 0, n = src_e->get_size(); i < n; ++i) {
+            if (dst_codes.find(src_e->get_value_code(i)) == dst_codes.end()) {
+                return -1;
+           }
+        }
+        return 0;
+    }
+    else if (src->get_kind() == IType::TK_ARRAY && dst->get_kind() == IType::TK_ARRAY) {
+
+        mi::base::Handle<const IType_array> src_a(src->get_interface<IType_array>());
+        mi::base::Handle<const IType_array> dst_a(dst->get_interface<IType_array>());
+
+        if (src_a->get_size() != dst_a->get_size())
+            return -1;
+
+        mi::base::Handle<const IType> src_a_elem_type(src_a->get_element_type());
+        mi::base::Handle<const IType> dst_a_elem_type(dst_a->get_element_type());
+
+        return is_compatible(src_a_elem_type.get(), dst_a_elem_type.get());
+    }
+    return -1;
 }
 
 } // namespace MDL

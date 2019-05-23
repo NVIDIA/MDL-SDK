@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.4;
+mdl 1.5;
 
 export annotation soft_range(int     min, int     max);
 export annotation soft_range(float   min, float   max);
@@ -99,3 +99,5 @@ export annotation usage(string hint);  // since(1,4)
 export annotation enable_if(string condition); // since(1,4)
 
 export annotation thumbnail(string name); // since(1,4)
+
+export annotation origin(string name); // since(1,5)

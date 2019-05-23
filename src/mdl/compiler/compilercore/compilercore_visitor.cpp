@@ -387,6 +387,9 @@ void Module_visitor::do_unary_expression(IExpression_unary const *expr)
     if (pre_visit(e)) {
         IExpression const *op = e->get_argument();
         do_expression(op);
+        if (IType_name const *tn = e->get_type_name()) {
+            do_type_name(tn);
+        }
     }
     post_visit(e);
 }
@@ -831,6 +834,12 @@ void Module_visitor::do_annotation(IAnnotation const *anno)
 
             do_argument(arg);
         }
+
+        if (IAnnotation_enable_if const *ei = as<IAnnotation_enable_if>(anno)) {
+            if (IExpression const *expr = ei->get_expression()) {
+                do_expression(expr);
+            }
+        }
     }
     post_visit(a);
 }
@@ -894,6 +903,8 @@ void Module_visitor::do_declaration_annotation(IDeclaration_annotation const *an
             IParameter const *p = d->get_parameter(i);
             do_parameter(p);
         }
+        if (IAnnotation_block const *anno = d->get_annotations())
+            do_annotations(anno);
     }
     post_visit(d);
 }

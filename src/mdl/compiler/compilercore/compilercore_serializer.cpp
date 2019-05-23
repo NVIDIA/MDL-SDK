@@ -596,6 +596,7 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -777,6 +778,7 @@ struct IType_less {
             case IType::TK_STRING:
             case IType::TK_LIGHT_PROFILE:
             case IType::TK_BSDF:
+            case IType::TK_HAIR_BSDF:
             case IType::TK_EDF:
             case IType::TK_VDF:
             case IType::TK_COLOR:
@@ -1496,6 +1498,7 @@ void Factory_serializer::write_type(IType const *type)
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -1856,6 +1859,9 @@ void Module_serializer::write_decl(
                 write_parameter(param);
             }
             DEC_SCOPE();
+
+            IAnnotation_block const *annos = a_decl->get_annotations();
+            write_annos(annos);
         }
         DEC_SCOPE();
         break;
@@ -2864,6 +2870,7 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -3462,7 +3469,7 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
         INC_SCOPE();
         {
             ISimple_name const      *anno_name = read_sname(mod);
-            IDeclaration_annotation *a_decl = df->create_annotation(anno_name, exported);
+            IDeclaration_annotation *a_decl = df->create_annotation(anno_name, NULL, exported);
 
             Tag_t def_tag = read_encoded_tag();
             IDefinition const *def = get_definition(def_tag);
@@ -3479,6 +3486,10 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
                 a_decl->add_parameter(param);
             }
             DEC_SCOPE();
+
+            IAnnotation_block const *annos = read_annos(mod);
+            a_decl->set_annotations(annos);
+
             decl = a_decl;
         }
         DEC_SCOPE();

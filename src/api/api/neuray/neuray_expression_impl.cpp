@@ -41,6 +41,7 @@
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
+#include "neuray_type_impl.h"
 
 namespace MI {
 
@@ -703,6 +704,41 @@ const mi::neuraylib::IAnnotation_list* Expression_factory::create_annotation_lis
     const MDL::IAnnotation_list* list, const mi::base::IInterface* owner) const
 {
     return create_annotation_list( const_cast<MDL::IAnnotation_list*>( list), owner);
+}
+
+mi::neuraylib::IExpression* Expression_factory::create_cast(
+    mi::neuraylib::IExpression* src_expr,
+    const mi::neuraylib::IType* target_type,
+    const char* cast_db_name,
+    bool force_cast,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if (errors == NULL)
+        errors = &dummy_errors;
+    *errors = 0;
+
+    if (!(src_expr && target_type)) {
+        *errors = -1;
+        return nullptr;
+    }
+    mi::base::Handle<MDL::IExpression> src_expr_int(get_internal_expression(src_expr));
+    mi::base::Handle<const MDL::IType> target_type_int(get_internal_type(target_type));
+
+    mi::base::Handle<MDL::IExpression> result_int(m_ef->create_cast(
+        get_db_transaction(),
+        src_expr_int.get(),
+        target_type_int.get(),
+        cast_db_name,
+        force_cast,
+        /*direct_call=*/false,
+        errors));
+
+    if (src_expr_int == result_int) {
+        src_expr->retain();
+        return src_expr;
+    }
+    return create(result_int.get(), /*owner=*/ NULL);
 }
 
 DB::Transaction* Expression_factory::get_db_transaction() const

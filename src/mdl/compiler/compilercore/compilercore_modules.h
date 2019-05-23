@@ -912,6 +912,7 @@ public:
         PR_WIDTH_HEIGTH_ADD_UV_TILE     = 0x10, ///< add an uv_tile param to width()/height()
         PR_TEXEL_ADD_UV_TILE            = 0x20, ///< add an uv_tile param to texel_*()
         PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x40, ///< add roundness param to rounded_corner_normal
+        PR_MATERIAL_ADD_HAIR            = 0x80, ///< add hair bsdf to material constructor
     };
 
     /// Alters one call argument according to the given promotion rules.

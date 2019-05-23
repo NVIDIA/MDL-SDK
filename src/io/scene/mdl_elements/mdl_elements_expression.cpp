@@ -32,10 +32,14 @@
 
 #include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_function_call.h"
+#include "i_mdl_elements_function_definition.h"
+#include "i_mdl_elements_utilities.h"
+
 #include "mdl_elements_expression.h"
+#include "mdl_elements_detail.h"
 #include "mdl_elements_type.h"
-#include "mdl_elements_value.h"
 #include "mdl_elements_utilities.h"
+#include "mdl_elements_value.h"
 
 #include <mi/neuraylib/istring.h>
 #include <cstring>
@@ -564,6 +568,77 @@ const mi::IString* Expression_factory::dump(
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), list, name, depth, s);
     return new String( s.str().c_str());
+}
+
+IExpression* Expression_factory::create_cast(
+    DB::Transaction* transaction,
+    IExpression* src_expr,
+    const IType* target_type,
+    const char* cast_db_name,
+    bool force_cast,
+    bool direct_call,
+    mi::Sint32* errors) const
+{
+    ASSERT(M_SCENE, src_expr);
+    ASSERT(M_SCENE, target_type);
+    ASSERT(M_SCENE, errors);
+
+    mi::base::Handle<const IType> src_type(src_expr->get_type());
+
+    mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
+    mi::Sint32 r = tf->is_compatible(src_type.get(), target_type);
+    if (r < 0) {
+        *errors = -2;
+        return nullptr;
+    }
+    if (!force_cast && r == 1) {
+        src_expr->retain();
+        return src_expr;
+    }
+
+    DB::Tag cast_def_tag = transaction->name_to_tag(get_cast_operator_db_name());
+    ASSERT(M_SCENE, cast_def_tag.is_valid());
+    DB::Access<Mdl_function_definition> cast_def(cast_def_tag, transaction);
+    ASSERT(M_SCENE, cast_def);
+
+    mi::base::Handle<IExpression_list> args(create_expression_list());
+    args->add_expression("cast", src_expr);
+
+    if (direct_call) {
+        return create_direct_call(target_type, cast_def_tag, args.get());
+    }
+
+    DB::Privacy_level level = 0;
+    DB::Privacy_level store_level = 255;
+    if (src_expr->get_kind() == IExpression::EK_CALL) {
+        mi::base::Handle<IExpression_call> call(
+            src_expr->get_interface<IExpression_call>());
+        DB::Tag t = call->get_call();
+        level = transaction->get_tag_privacy_level(t);
+        store_level = transaction->get_tag_storage_level(t);
+    }
+
+    mi::base::Handle<IValue> target_type_value(m_value_factory->create(target_type));
+    mi::base::Handle<IExpression> target_type_expr(create_constant(target_type_value.get()));
+    args->add_expression("cast_return", target_type_expr.get());
+
+    std::string call_name;
+    if (cast_db_name) {
+        DB::Tag tag = transaction->name_to_tag(cast_db_name);
+        if (tag.is_valid())
+            call_name = DETAIL::generate_unique_db_name(transaction, cast_db_name);
+        else
+            call_name = cast_db_name;
+    }
+    else
+        call_name = DETAIL::generate_unique_db_name(transaction, "mdl::operator_cast");
+
+    Mdl_function_call *cast_call = cast_def->create_function_call(transaction, args.get());
+    DB::Tag call_tag = transaction->store_for_reference_counting(
+        cast_call, call_name.c_str(), level, store_level);
+    ASSERT(M_SCENE, call_tag); // should always succeed
+
+    return create_call(target_type, call_tag);
 }
 
 void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpression* expr) const

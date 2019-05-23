@@ -1,13 +1,4 @@
-set(LLVM_LINK_COMPONENTS
-  debuginfo
-  object
-  support
-  )
-
-set(DebugInfoSources
-  DWARFFormValueTest.cpp
-  )
-
-add_llvm_unittest(DebugInfoTests
-  ${DebugInfoSources}
-  )
+add_subdirectory(CodeView)
+add_subdirectory(DWARF)
+add_subdirectory(MSF)
+add_subdirectory(PDB)

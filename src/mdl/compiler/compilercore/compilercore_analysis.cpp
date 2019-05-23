@@ -334,17 +334,16 @@ IValue_resource const *retarget_resource_url(
     char const *url = r->get_string_value();
     if (url != NULL && url[0] != '/') {
         string abs_url(alloc);
-        File_resolver::UDIM_mode dummy = File_resolver::NO_UDIM;
 
-        string abs_file_name = resolver.resolve_resource(
-            abs_url,
+        mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
             pos,
             url,
             src->get_name(),
-            src->get_filename(),
-            dummy);
+            src->get_filename()));
 
-        if (abs_file_name.empty()) {
+        if (res.is_valid_interface()) {
+            abs_url = res->get_mdl_url_mask();
+        } else {
             // Resolver failed. This is bad, because letting the name unchanged
             // might lead to "wrong" fixes later. One possible solution would be to
             // return an invalid resource here, but then the user will not see ANY
@@ -738,6 +737,9 @@ static void replace_since_version(
         case 5:
             flags |= unsigned(IMDL::MDL_VERSION_1_5);
             break;
+        case 6:
+            flags |= unsigned(IMDL::MDL_VERSION_1_6);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -776,6 +778,9 @@ static void replace_removed_version(
             break;
         case 5:
             flags |= (unsigned(IMDL::MDL_VERSION_1_5) << 8);
+            break;
+        case 6:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_6) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -871,6 +876,7 @@ static bool is_assign_operator(IExpression::Operator op)
     case mi::mdl::IExpression::OK_LOGICAL_NOT:
     case mi::mdl::IExpression::OK_POSITIVE:
     case mi::mdl::IExpression::OK_NEGATIVE:
+    case mi::mdl::IExpression::OK_CAST:
     case mi::mdl::IExpression::OK_SEQUENCE:
     case mi::mdl::IExpression::OK_TERNARY:
     case mi::mdl::IExpression::OK_CALL:
@@ -1034,6 +1040,7 @@ public:
                     File_resolver resolver(
                         *m_ana.m_compiler,
                         /*module_cache=*/NULL,
+                        m_ana.m_compiler->get_external_resolver(),
                         m_ana.m_compiler->get_search_path(),
                         m_ana.m_compiler->get_search_path_lock(),
                         ignore_msg,
@@ -2762,6 +2769,7 @@ restart:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         // although the reference types HAVE a default constructor,
@@ -3251,20 +3259,24 @@ Module const *NT_analysis::load_module_to_import(
     File_resolver resolver(
         *m_compiler,
         m_module_cache,
+        m_compiler->get_external_resolver(),
         m_compiler->get_search_path(),
         m_compiler->get_search_path_lock(),
         m_module.access_messages_impl(),
         m_ctx.get_front_path());
 
     // let the resolver find the absolute name
-    import_name = m_compiler->resolve_import(
-        resolver, import_name.c_str(), &m_module, &rel_name->access_position());
+    mi::base::Handle<IMDL_import_result> result(m_compiler->resolve_import(
+        resolver,
+        import_name.c_str(),
+        &m_module,
+        &rel_name->access_position()));
 
-    if (import_name.empty()) {
+    if (!result.is_valid_interface()) {
         // name could not be resolved
         return NULL;
     }
-    abs_name = import_name.c_str();
+    abs_name = result->get_absolute_name();
 
     // check if we have this module already in other import table
     bool direct = false;
@@ -4158,6 +4170,7 @@ restart:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_FUNCTION:
@@ -4222,6 +4235,7 @@ restart:
         return NULL;
 
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         // reference types are allowed in std module functions, otherwise forbidden
@@ -4306,6 +4320,7 @@ static bool is_allowed_array_type(IType const *type)
             return false;
 
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
         case IType::TK_VECTOR:
@@ -4359,13 +4374,15 @@ static bool is_allowed_array_type(IType const *type)
 
 /// Checks if the given type is allowed for function parameter types.
 ///
-/// \param type         the type to check
-/// \param is_std_mod   true if the current module is a standard module
+/// \param type            the type to check
+/// \param allow_df        true *df types are allowed
+/// \param allow_resource  true if resource types are allowed
 ///
 /// \returns  the forbidden type or NULL if the type is ok
-static IType const *has_forbidden_function_parameter_type(
+static IType const *has_forbidden_parameter_type(
     IType const *type,
-    bool        is_std_mod)
+    bool        allow_df,
+    bool        allow_resource)
 {
     for (;;) {
         switch (type->get_kind()) {
@@ -4379,14 +4396,14 @@ static IType const *has_forbidden_function_parameter_type(
         case IType::TK_FLOAT:
         case IType::TK_DOUBLE:
         case IType::TK_STRING:
-        case IType::TK_LIGHT_PROFILE:
             return NULL;
 
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
             // only allowed in std library functions
-            return is_std_mod ? NULL : type;
+            return allow_df ? NULL : type;
 
         case IType::TK_VECTOR:
         case IType::TK_MATRIX:
@@ -4396,7 +4413,7 @@ static IType const *has_forbidden_function_parameter_type(
             {
                 IType_array const *a_type = cast<IType_array>(type);
                 IType const       *e_type = a_type->get_element_type();
-                return has_forbidden_function_parameter_type(e_type, is_std_mod);
+                return has_forbidden_parameter_type(e_type, allow_df, allow_resource);
             }
 
         case IType::TK_COLOR:
@@ -4420,7 +4437,7 @@ static IType const *has_forbidden_function_parameter_type(
 
                     s_type->get_field(i, f_type, f_name);
                     IType const *bad_type =
-                        has_forbidden_function_parameter_type(f_type, is_std_mod);
+                        has_forbidden_parameter_type(f_type, allow_df, allow_resource);
                     if (bad_type != NULL) {
                         return bad_type;
                     }
@@ -4430,7 +4447,8 @@ static IType const *has_forbidden_function_parameter_type(
 
         case IType::TK_TEXTURE:
         case IType::TK_BSDF_MEASUREMENT:
-            return NULL;
+        case IType::TK_LIGHT_PROFILE:
+            return allow_resource ? NULL : type;
 
         case IType::TK_INCOMPLETE:
             MDL_ASSERT(!"incomplete type occured unexpected");
@@ -4443,6 +4461,30 @@ static IType const *has_forbidden_function_parameter_type(
         MDL_ASSERT(!"Unsupported type kind");
         return type;
     }
+}
+
+/// Checks if the given type is allowed for function parameter types.
+///
+/// \param type         the type to check
+/// \param is_std_mod   true if the current module is a standard module
+///
+/// \returns  the forbidden type or NULL if the type is ok
+static IType const *has_forbidden_function_parameter_type(
+    IType const *type,
+    bool        is_std_mod)
+{
+    return has_forbidden_parameter_type(type, /*allow_df=*/is_std_mod, /*allow_resource=*/true);
+}
+
+/// Checks if the given type is allowed for annotation parameter types.
+///
+/// \param type         the type to check
+///
+/// \returns  the forbidden type or NULL if the type is ok
+static IType const *has_forbidden_annotation_parameter_type(
+    IType const *type)
+{
+    return has_forbidden_parameter_type(type, /*allow_df=*/false, /*allow_resource=*/false);
 }
 
 // Checks if the given type is allowed for material parameter types.
@@ -4467,6 +4509,7 @@ IType const *NT_analysis::has_forbidden_material_parameter_type(
             return NULL;
 
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
             return type;
@@ -7246,6 +7289,11 @@ static void update_flags(
     unsigned         &removed_ver)
 {
     type = type->skip_type_alias();
+    if (is_material_type_or_sub_type(type)) {
+        // material and subtypes can only be used in materials itself where they alwys are
+        // promoted to the lastest version, hence there is no restriction
+        return;
+    }
     if (Scope *scope = def_tab->get_type_scope(type)) {
         if (Definition const *type_def = scope->get_owner_definition()) {
             unsigned flags = type_def->get_version_flags();
@@ -7277,6 +7325,8 @@ static void update_flags(
         REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),
         SINCE_1_5   = IMDL::MDL_VERSION_1_5,
         REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
+        SINCE_1_6   = IMDL::MDL_VERSION_1_6,
+        REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),
     };
 
     size_t id = sym->get_id();
@@ -7286,8 +7336,12 @@ static void update_flags(
         case ISymbol::SYM_TYPE_INTENSITY_MODE:
         case ISymbol::SYM_ENUM_INTENSITY_RADIANT_EXITANCE:
         case ISymbol::SYM_ENUM_INTENSITY_POWER:
-            // keyword in MDL 1.1, so it cannot be used
+            // keyword in MDL 1.1, so it cannot be used as identifier
             since_ver = max(since_ver, REMOVED_1_1);
+            break;
+        case ISymbol::SYM_TYPE_HAIR_BSDF:
+            // keyword in MDL 1.5, so it cannot be used as identifier
+            since_ver = max(since_ver, REMOVED_1_5);
             break;
         default:
             break;
@@ -7341,6 +7395,16 @@ static void update_flags(
         void post_visit(IExpression_reference *expr) MDL_FINAL
         {
             if (Definition const *def = impl_cast<Definition>(expr->get_definition())) {
+                if (def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+                    IType_function const *ftype = cast<IType_function>(def->get_type());
+
+                    if (is_material_type_or_sub_type(ftype->get_return_type())) {
+                        // material and subtypes can only be used inside materials,
+                        // where always a promotion exists, hence no restriction
+                        // on the usage of those constructors
+                        return;
+                    }
+                }
                 unsigned flags = def->get_version_flags();
 
                 m_since_ver   = max(m_since_ver,   mdl_since_version(flags));
@@ -8169,7 +8233,9 @@ Definition const *NT_analysis::find_overload(
                 DEFINED_AT,
                 *def_pos,
                 Error_params(*this)
-                    .add_signature(def));
+                     .add("'")
+                    .add_signature(def)
+                    .add("' "));
         }
         return get_error_definition();
     }
@@ -9316,6 +9382,7 @@ IDefinition const *NT_analysis::has_side_effect(
             case IExpression_unary::OK_LOGICAL_NOT:
             case IExpression_unary::OK_POSITIVE:
             case IExpression_unary::OK_NEGATIVE:
+            case IExpression_unary::OK_CAST:
                 break;
             case IExpression_unary::OK_PRE_INCREMENT:
             case IExpression_unary::OK_PRE_DECREMENT:
@@ -9489,7 +9556,9 @@ void NT_analysis::reformat_arguments(
         IType::Kind kind         = constr_type->get_kind();
 
         // constructors for builtin-types use "named" mode
-        if (kind == IType::TK_BSDF || kind == IType::TK_VDF || kind == IType::TK_EDF) {
+        if (kind == IType::TK_BSDF || kind == IType::TK_HAIR_BSDF ||
+            kind == IType::TK_VDF || kind == IType::TK_EDF)
+        {
             function_mode = false;
         } else if (kind == IType::TK_STRUCT) {
             IType_struct const *s_type = cast<IType_struct>(constr_type);
@@ -10186,6 +10255,23 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
         ISimple_name const *pname = param->get_name();
         ISymbol const      *psym  = pname->get_symbol();
 
+        IType const *bad_type = has_forbidden_annotation_parameter_type(ptype);
+        if (bad_type != NULL) {
+            error(
+                FORBIDDEN_ANNOTATION_PARAMETER_TYPE,
+                pname->access_position(),
+                Error_params(*this).add(ptype));
+            if (bad_type->skip_type_alias() != ptype->skip_type_alias()) {
+                add_note(
+                    TYPE_CONTAINS_FORBIDDEN_SUBTYPE,
+                    pname->access_position(),
+                    Error_params(*this)
+                    .add(ptype)
+                    .add(bad_type));
+            }
+            ptype = m_tc.error_type;
+        }
+
         params[i].p_type = ptype;
         params[i].p_sym  = psym;
         inits[i]         = NULL;
@@ -10256,6 +10342,25 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
     const_cast<ISimple_name *>(a_name)->set_definition(a_def);
     anno_decl->set_definition(a_def);
 
+    if (IAnnotation_block const *anno = anno_decl->get_annotations()) {
+        Definition_store store(m_annotated_def, a_def);
+
+        if (m_module.get_version() < IMDL::MDL_VERSION_1_5) {
+            int major, minor;
+            m_module.get_version(major, minor);
+
+            warning(
+                ANNOS_ON_ANNO_DECL_NOT_SUPPORTED,
+                anno->access_position(),
+                Error_params(*this).add(major).add(minor));
+
+            anno_decl->set_annotations(NULL);
+            m_annotated_def = get_error_definition();
+        }
+
+        visit(anno);
+    }
+
     if (m_is_stdlib) {
         // handle standard annotations known by the compiler
         string abs_name(m_module.get_name(), m_module.get_allocator());
@@ -10296,6 +10401,10 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
             case IDefinition::DS_THUMBNAIL_ANNOTATION:
                 // these annotations are available from MDL 1.4
                 replace_since_version(a_def, 1, 4);
+                break;
+            case IDefinition::DS_ORIGIN_ANNOTATION:
+                // these annotations are available from MDL 1.5
+                replace_since_version(a_def, 1, 5);
                 break;
             default:
                 break;
@@ -11369,9 +11478,13 @@ void NT_analysis::post_visit(IExpression_reference *ref)
 // end of unary expression
 void NT_analysis::post_visit(IExpression_unary *un_expr)
 {
-    IExpression_unary::Operator op   = un_expr->get_operator();
-    IExpression const           *arg = un_expr->get_argument();
+    IExpression_unary::Operator op = un_expr->get_operator();
 
+    if (op == IExpression_unary::OK_CAST) {
+        return handle_cast_expression(un_expr);
+    }
+
+    IExpression const           *arg = un_expr->get_argument();
     IType const                 *arg_types[1];
 
     if (m_inside_material_constr) {
@@ -11787,23 +11900,37 @@ bool NT_analysis::pre_visit(IExpression_call *call_expr)
 // end of a call
 void NT_analysis::post_visit(IExpression_call *call_expr)
 {
-    IExpression_reference const *callee = as<IExpression_reference>(call_expr->get_reference());
+    IExpression const *callee = call_expr->get_reference();
 
-    if (callee == NULL) {
+    if (is<IExpression_invalid>(callee)) {
         // syntax error
         call_expr->set_type(m_tc.error_type);
         return;
     }
 
-    if (callee->in_parenthesis()) {
+    if (!is<IExpression_reference>(callee)) {
+        error(
+            CALLED_OBJECT_NOT_A_FUNCTION,
+            callee->access_position(),
+            Error_params(*this)
+                .add("")
+                .add("")
+                .add(""));
+        call_expr->set_type(m_tc.error_type);
+        return;
+    }
+
+    IExpression_reference const *callee_ref = cast<IExpression_reference>(callee);
+
+    if (callee_ref->in_parenthesis()) {
         warning(
             EXTRA_PARENTHESIS_AROUND_FUNCTION_NAME,
-            callee->access_position(),
-            Error_params(*this).add(callee));
+            callee_ref->access_position(),
+            Error_params(*this).add(callee_ref));
     }
 
     bool bound_to_scope = false;
-    IType_name const *type_name = callee->get_name();
+    IType_name const *type_name = callee_ref->get_name();
     if (type_name->is_absolute())
         bound_to_scope = true;
     else {
@@ -11812,16 +11939,16 @@ void NT_analysis::post_visit(IExpression_call *call_expr)
             bound_to_scope = true;
     }
 
-    Definition const *initial_def = impl_cast<Definition>(callee->get_definition());
+    Definition const *initial_def = impl_cast<Definition>(callee_ref->get_definition());
     if (initial_def->get_kind() == Definition::DK_CONSTRUCTOR) {
         // if we identified a constructor, we are always bound to scope
         bound_to_scope = true;
     }
 
-    if (callee->is_array_constructor()) {
+    if (callee_ref->is_array_constructor()) {
         if (handle_array_copy_constructor(call_expr)) {
             // not a real call, but a collection of calls
-            const_cast<IExpression_reference *>(callee)->set_definition(NULL);
+            const_cast<IExpression_reference *>(callee_ref)->set_definition(NULL);
         } else if (handle_array_constructor(initial_def, call_expr)) {
             IType const *res_type = get_result_type(initial_def);
 
@@ -11914,12 +12041,12 @@ void NT_analysis::post_visit(IExpression_call *call_expr)
             call_expr->set_type(m_tc.error_type);
         }
         // not a real call, but a collection of calls
-        const_cast<IExpression_reference *>(callee)->set_definition(NULL);
+        const_cast<IExpression_reference *>(callee_ref)->set_definition(NULL);
     } else {
         // not an array constructor: handle overloads
         Definition const *def = find_overload(initial_def, call_expr, bound_to_scope);
 
-        const_cast<IExpression_reference *>(callee)->set_definition(def);
+        const_cast<IExpression_reference *>(callee_ref)->set_definition(def);
 
         IType const *res_type = get_result_type(def);
 
@@ -12516,6 +12643,11 @@ Definition const *NT_analysis::handle_known_annotation(
     Definition const *def,
     IAnnotation      *anno)
 {
+    if (m_annotated_def != NULL && is_error(m_annotated_def)) {
+        // the annotated entity is already wrong, ignore
+        return get_error_definition();
+    }
+
     if (m_annotated_def == NULL) {
         if (m_is_module_annotation) {
             // check for annotations allowed on modules
@@ -12584,6 +12716,9 @@ Definition const *NT_analysis::handle_known_annotation(
                     anno->access_position(),
                     Error_params(*this).add(def->get_sym()));
                 break;
+            case Definition::DS_ORIGIN_ANNOTATION:
+                // allowed on ALL entities.
+                return def;
             default:
                 // do nothing
                 return def;
@@ -13057,6 +13192,9 @@ Definition const *NT_analysis::handle_known_annotation(
         // ensure the annotation is deleted from the source for later ...
         def = get_error_definition();
         break;
+    case Definition::DS_ORIGIN_ANNOTATION:
+        // allowed on any entity
+        break;
     default:
         MDL_ASSERT(!"missing handler for known annotation");
         break;
@@ -13144,6 +13282,7 @@ void NT_analysis::check_enable_if_condition(
             case IExpression_unary::OK_BITWISE_COMPLEMENT:
             case IExpression_unary::OK_POSITIVE:
             case IExpression_unary::OK_NEGATIVE:
+            case IExpression_unary::OK_CAST:
                 break;
 
             // Invalid unary operators
@@ -13188,6 +13327,10 @@ void NT_analysis::check_enable_if_condition(
                         case IDefinition::DS_INTRINSIC_TEX_TEXTURE_ISVALID:
                         case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
                         case IDefinition::DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID:
+                            // *_isvalid() is allowed
+                        case IDefinition::DS_CONV_OPERATOR:
+                        case IDefinition::DS_CONV_CONSTRUCTOR:
+                            // conversion operator/constructor is allowed
                             is_valid = true;
                             break;
                         default:
@@ -13293,6 +13436,321 @@ IType const *NT_analysis::check_performance_restriction(
         break;
     }
     return type;
+}
+
+// Check if the given source type can be casted into the destination type.
+IType const *NT_analysis::check_cast_conversion(
+    Position const &pos,
+    IType const    *src_tp,
+    IType const    *dst_tp,
+    bool           dst_is_incomplete,
+    bool           report_error)
+{
+    IType const *src_type = src_tp->skip_type_alias();
+    IType const *dst_type = dst_tp->skip_type_alias();
+
+    if (is<IType_error>(dst_type))
+        return dst_type;
+
+    if (src_type == dst_type)
+        return dst_tp;
+
+    IType::Kind kind = src_type->get_kind();
+    if (kind != dst_type->get_kind() && (kind != IType::TK_ARRAY || !dst_is_incomplete)) {
+        if (report_error) {
+            error(
+                CAST_TYPES_UNRELATED,
+                pos,
+                Error_params(*this)
+                    .add(src_tp)
+                    .add(dst_tp, dst_is_incomplete)
+                    .add(dst_is_incomplete ? "[]" : "")
+            );
+        }
+        return m_tc.error_type;
+    }
+
+    bool has_error = false;
+
+    if (kind == IType::TK_ENUM) {
+        IType_enum const *s_type = cast<IType_enum>(src_type);
+        IType_enum const *d_type = cast<IType_enum>(dst_type);
+
+        typedef map<int, ISymbol const *>::Type EV_map;
+
+        EV_map enum_values(EV_map::key_compare(), get_allocator());
+
+        for (int i = 0, n_values = s_type->get_value_count(); i < n_values; ++i) {
+            ISymbol const *sym;
+            int           code;
+
+            s_type->get_value(i, sym, code);
+
+            enum_values.insert(EV_map::value_type(code, sym));
+        }
+
+        for (int i = 0, n_values = d_type->get_value_count(); i < n_values; ++i) {
+            ISymbol const *sym;
+            int           code;
+
+            d_type->get_value(i, sym, code);
+
+            EV_map::iterator it(enum_values.find(code));
+            if (it == enum_values.end()) {
+                has_error = true;
+
+                if (report_error) {
+                    // destination enum has more values ...
+                    error(
+                        CAST_MISSING_ENUM_VALUE_DST,
+                        pos,
+                        Error_params(*this)
+                            .add(src_tp)
+                            .add(dst_type)
+                            .add(sym)
+                            .add(code)
+                    );
+                }
+            } else {
+                it->second = NULL;
+            }
+        }
+
+        for (EV_map::iterator it(enum_values.begin()), end(enum_values.end()); it != end; ++it) {
+            if (ISymbol const *sym = it->second) {
+                // found unused value
+                has_error = true;
+
+                if (report_error) {
+                    int code = 0;
+                    for (int i = 0, n = s_type->get_value_count(); i < n; ++i) {
+                        ISymbol const *e_sym;
+
+                        s_type->get_value(i, e_sym, code);
+                        if (e_sym == sym)
+                            break;
+                    }
+
+                    error(
+                        CAST_MISSING_ENUM_VALUE_SRC,
+                        pos,
+                        Error_params(*this)
+                        .add(src_tp)
+                        .add(dst_type)
+                        .add(sym)
+                        .add(code)
+                    );
+                }
+            }
+        }
+
+        return has_error ? m_tc.error_type : dst_tp;
+    } else if (kind == IType::TK_STRUCT) {
+        IType_struct const *s_type = cast<IType_struct>(src_type);
+        IType_struct const *d_type = cast<IType_struct>(dst_type);
+
+        int n_fields = s_type->get_field_count();
+
+        if (n_fields != d_type->get_field_count()) {
+            if (report_error) {
+                error(
+                    CAST_STRUCT_FIELD_COUNT,
+                    pos,
+                    Error_params(*this)
+                    .add(src_tp)
+                    .add(dst_tp)
+                );
+            }
+            return m_tc.error_type;
+        }
+
+        for (int i = 0; i < n_fields; ++i) {
+            IType const   *fs_type;
+            ISymbol const *fs_sym;
+
+            s_type->get_field(i, fs_type, fs_sym);
+
+            IType const   *fd_type;
+            ISymbol const *fd_sym;
+
+            d_type->get_field(i, fd_type, fd_sym);
+
+            if (is<IType_error>(
+                check_cast_conversion(
+                    pos,
+                    fs_type,
+                    fd_type,
+                    /*dst_is_incomplete=*/false,
+                    /*report_error=*/false))
+            ) {
+                if (report_error) {
+                     // field conversion failed
+                    error(
+                        CAST_STRUCT_FIELD_INCOMPATIBLE,
+                        pos,
+                        Error_params(*this)
+                        .add(src_tp)
+                        .add(dst_tp)
+                        .add(fs_sym)
+                        .add(fd_sym)
+                    );
+                }
+                has_error = true;
+            }
+        }
+        return has_error ? m_tc.error_type : dst_tp;
+    } else if (kind == IType::TK_ARRAY) {
+        IType_array const *s_arr_type = cast<IType_array>(src_type);
+        IType const       *s_el_type  = s_arr_type->get_element_type();
+        IType_array const *d_arr_type = NULL;
+        IType const       *d_el_type  = dst_type;
+
+        if (!dst_is_incomplete) {
+            d_arr_type    = cast<IType_array>(dst_type);
+            d_el_type = d_arr_type->get_element_type();
+        }
+
+        bool s_imm = s_arr_type->is_immediate_sized();
+
+        if (is<IType_error>(
+            check_cast_conversion(
+                pos,
+                s_el_type,
+                d_el_type,
+                /*dst_is_incomplete=*/false,
+                /*report_error=*/false))
+        ) {
+            if (report_error) {
+                error(
+                    CAST_ARRAY_ELEMENT_INCOMPATIBLE,
+                    pos,
+                    Error_params(*this)
+                    .add(src_tp)
+                    .add(dst_tp)
+                    .add(dst_is_incomplete ? "[]" : "")
+                );
+            }
+            has_error = true;
+        } else if (dst_is_incomplete) {
+            // compute destination type
+            if (s_imm) {
+                size_t l = s_arr_type->get_size();
+                d_arr_type = cast<IType_array>(m_tc.create_array(d_el_type, l));
+            } else {
+                IType_array_size const *l = s_arr_type->get_deferred_size();
+                d_arr_type = cast<IType_array>(m_tc.create_array(d_el_type, l));
+            }
+        }
+
+        bool d_imm = d_arr_type != NULL ? d_arr_type->is_immediate_sized() : s_imm;
+        if (s_imm != d_imm) {
+            // deferred size must be the same
+            if (d_imm) {
+                if (report_error) {
+                    // cannot cast from deferred size
+                    error(
+                        CAST_ARRAY_DEFERRED_TO_IMM,
+                        pos,
+                        Error_params(*this)
+                        .add(src_tp)
+                        .add(dst_tp)
+                    );
+                }
+                has_error = true;
+            } else {
+                if (report_error) {
+                    // cannot cast from deferred size
+                    error(
+                        CAST_ARRAY_IMM_TO_DEFERRED,
+                        pos,
+                        Error_params(*this)
+                        .add(src_tp)
+                        .add(dst_tp)
+                    );
+                }
+                has_error = true;
+            }
+        } else if (!dst_is_incomplete) {
+            if (s_imm) {
+                // both array are immediate sized
+                if (s_arr_type->get_size() != d_arr_type->get_size()) {
+                    if (report_error) {
+                        // different array size
+                        error(
+                            CAST_ARRAY_DIFFERENT_LENGTH,
+                            pos,
+                            Error_params(*this)
+                            .add(src_tp)
+                            .add(dst_tp)
+                        );
+                    }
+                    has_error = true;
+                }
+            } else {
+                // both array are deferred sized
+                if (s_arr_type->get_deferred_size() != d_arr_type->get_deferred_size()) {
+                    if (report_error) {
+                        // different array size
+                        error(
+                            CAST_ARRAY_DIFFERENT_LENGTH,
+                            pos,
+                            Error_params(*this)
+                            .add(src_tp)
+                            .add(dst_tp)
+                        );
+                    }
+                    has_error = true;
+                }
+            }
+        }
+        // return the newly computed type here
+        return has_error ? m_tc.error_type : (IType const *)d_arr_type;
+    }
+
+    if (report_error) {
+        // completely unrelated
+        if (report_error) {
+            error(
+                CAST_TYPES_UNRELATED,
+                pos,
+                Error_params(*this)
+                .add(src_tp)
+                .add(dst_tp, dst_is_incomplete)
+                .add(dst_is_incomplete ? "[]" : "")
+            );
+        }
+    }
+
+    return  m_tc.error_type;
+}
+
+// Handle a cast expression.
+void NT_analysis::handle_cast_expression(IExpression_unary *cast_expr)
+{
+    IType_name const *tn            = cast_expr->get_type_name();
+    IType const      *dst_type      = m_tc.error_type;
+    bool              d_incomplete  = false;
+
+    if (tn == NULL) {
+        // this should not happen, wrong AST
+        MDL_ASSERT(!"incomplete cast expression, missing type name");
+    } else {
+        dst_type = tn->get_type();
+
+        d_incomplete = tn->is_incomplete_array();
+    }
+
+    if (!is<IType_error>(dst_type)) {
+        IType const *arg_type = cast_expr->get_argument()->get_type();
+        dst_type = check_cast_conversion(
+            cast_expr->access_position(),
+            arg_type,
+            dst_type,
+            d_incomplete,
+            /*report_error=*/true);
+    }
+
+    cast_expr->set_type(dst_type);
 }
 
 // end of a annotation
@@ -14580,6 +15038,7 @@ void NT_analysis::run()
         File_resolver resolver(
             *m_compiler,
             m_module_cache,
+            m_compiler->get_external_resolver(),
             m_compiler->get_search_path(),
             m_compiler->get_search_path_lock(),
             m_module.access_messages_impl(),
@@ -14632,12 +15091,11 @@ void NT_analysis::handle_resource_url(
         File_resolver resolver(
             *m_compiler,
             m_module_cache,
+            m_compiler->get_external_resolver(),
             m_compiler->get_search_path(),
             m_compiler->get_search_path_lock(),
             messages,
             m_ctx.get_front_path());
-
-        File_resolver::UDIM_mode dummy = File_resolver::NO_UDIM;
 
         resource_exists = true;
         if (abs_url.empty() && rval != NULL && rval->get_tag_value() != 0) {
@@ -14646,15 +15104,18 @@ void NT_analysis::handle_resource_url(
             resource_tag = rval->get_tag_value();
         } else {
             // try to resolve it
-            abs_file_name = resolver.resolve_resource(
-                abs_url,
+            mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
                 lit->access_position(),
                 url,
                 m_module.get_name(),
-                m_module.get_filename(),
-                dummy);
+                m_module.get_filename()));
 
-            if (messages.get_error_message_count() > 0 || abs_file_name.empty()) {
+            if (res.is_valid_interface()) {
+                abs_url       = res->get_mdl_url_mask();
+                abs_file_name = res->get_filename_mask();
+            }
+
+            if (messages.get_error_message_count() > 0 || !res.is_valid_interface()) {
                 resource_exists = false;
 
                 // Resolver failed. This is bad, because letting the name unchanged
@@ -14680,9 +15141,20 @@ void NT_analysis::handle_resource_url(
         }
         copy_messages_to_module(messages, map_err_to_warn);
     } else {
-        // do not modify the url
-        abs_url = url;
-
+        if (url[0] == '/')
+            // an absolute url, keep it.
+            abs_url = url;
+        else if ((url[0] == '.' && url[1] == '/') ||
+                 (url[0] == '.' && url[1] == '.' && url[2] == '/' )) { 
+            // strict relative, make absolute
+            abs_url = make_absolute_package(
+                get_allocator(), url, m_module.get_name());
+        } else {
+            // weak relative, prepend module name separated by a |
+            abs_url = m_module.get_name();
+            abs_url += "|";
+            abs_url += url;
+        }
         // unknown file name
         abs_file_name = "";
 
@@ -14693,11 +15165,7 @@ void NT_analysis::handle_resource_url(
     // in case of MDLE, the absolute URL also contains the MDLE file path
     size_t p = abs_file_name.rfind(".mdle:");
     if (p != string::npos) {
-        #if defined(MI_PLATFORM_WINDOWS)
-            abs_url = "/" + convert_os_separators_to_slashes(abs_file_name);
-        #else
-            abs_url = convert_os_separators_to_slashes(abs_file_name);
-        #endif
+        abs_url = convert_os_separators_to_slashes(abs_file_name);
     }
 
     // add to the resource table

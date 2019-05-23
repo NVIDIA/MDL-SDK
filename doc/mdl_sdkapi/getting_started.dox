@@ -99,7 +99,7 @@ The following third-party libraries are required:
     - Windows: Download and extract the pre-compiled x64 binaries from 
     [glfw.org](http://www.glfw.org/download.html).
 
--   **NVIDIA CUDA Toolkit** (9.0 or 9.2)
+-   **NVIDIA CUDA Toolkit** (9.0 or later)
     - Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
@@ -107,6 +107,10 @@ The following third-party libraries are required:
     - Please follow the instructions on the [Qt Website](https://www.qt.io/).  
     To build with Qt 5.10.1 on Linux, your system's GLIBC needs to be release 
     2.14 or later.
+
+-   **DirectX Raytracing support**
+    - To build the DXR example, Windows 10 version 1809 and the corresponding 
+    SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
     
 \subsection mi_neuray_getting_started_windows_build Building on Windows
 
@@ -288,8 +292,10 @@ The following third-party libraries are required:
 The following options allow to select the components to build and particular logging information:
 
 -   **MDL_ENABLE_CUDA_EXAMPLES**  
-
     [ON/OFF] enable/disable examples that require CUDA.
+
+-   **MDL_ENABLE_D3D12_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require D3D12 (Windows only).
 
 -   **MDL_ENABLE_OPENGL_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OpenGL.

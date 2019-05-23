@@ -52,6 +52,7 @@ public:
         CK_DAG,         ///< Generated DAG code.
         CK_PTX,         ///< Generated cuda PTX code.
         CK_GLSL,        ///< Generated GLSL code.
+        CK_HLSL,        ///< Generated HLSL code.
         CK_LLVM_IR,     ///< Generated LLVM-IR code.
         CK_EXECUTABLE   ///< Generated (native CPU) executable code.
     };

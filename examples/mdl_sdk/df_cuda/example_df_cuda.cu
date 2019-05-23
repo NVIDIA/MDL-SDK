@@ -599,8 +599,13 @@ __device__ inline bool trace_sphere(
             Bsdf_pdf_data      pdf_data;
         };
 
+        // for thin_walled materials there is no 'inside'
+        bool thin_walled = false;
+        as_expression(get_mdl_function_index(material.thin_walled))(
+            &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
+
         // initialize shared fields
-        if (ray_state.inside)
+        if (ray_state.inside && !thin_walled)
         {
             sample_data.ior1.x = BSDF_USE_MATERIAL_IOR;
             sample_data.ior2 = make_float3(1.0f, 1.0f, 1.0f);

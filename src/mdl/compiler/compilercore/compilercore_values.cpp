@@ -45,6 +45,11 @@
 namespace mi {
 namespace mdl {
 
+template<>
+inline Value_factory *impl_cast(IValue_factory *t) {
+    return static_cast<Value_factory *>(t);
+}
+
 /// A mixin base class for all base IValue methods.
 ///
 /// \tparam Interface  the base class for the desired IValue
@@ -985,6 +990,23 @@ public:
                     break;
                 IValue const *args[4] = { v, v, v, v };
                 return factory->create_vector(v_type, args, v_type->get_size());
+            }
+        case IType::TK_ENUM:
+            {
+                // enum to enum conversion (cast<> operator)
+                IType_enum const *e_type = cast<IType_enum>(dst_tp);
+
+                for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
+                    ISymbol const *v_sym;
+                    int           v_code = 0;
+
+                    e_type->get_value(i, v_sym, v_code);
+
+                    if (v_code == v)
+                        return factory->create_enum(e_type, i);
+                }
+                // not found
+                return factory->create_bad();
             }
         default:
             // no other conversions supported
@@ -2525,6 +2547,38 @@ public:
             }
         }
         return NULL;
+    }
+
+    /// Convert a value.
+    IValue const *convert(
+        IValue_factory *factory,
+        IType const    *dst_type) const MDL_OVERRIDE
+    {
+        if (IType_struct const *s_type = as<IType_struct>(dst_type)) {
+            // conversion to another struct type (cast operator)
+            if (s_type == m_type)
+                return this;
+
+            int n_fields = m_type->get_field_count();
+            if (s_type->get_field_count() != n_fields)
+                return factory->create_bad();
+
+            Value_factory *vf = impl_cast<Value_factory>(factory);
+            Small_VLA<IValue const *, 8> values(vf->get_allocator(), n_fields);
+            for (int i = 0; i < n_fields; ++i) {
+                IType const   *f_type = NULL;
+                ISymbol const *f_sym  = NULL;
+
+                s_type->get_field(i, f_type, f_sym);
+                IValue const *v = m_values[i]->convert(factory, f_type);
+
+                if (is<IValue_bad>(v))
+                    return v;
+                values[i] = v;
+            }
+            return factory->create_struct(s_type, values.data(), values.size());
+        }
+        return Base::convert(factory, dst_type);
     }
 
     /// Constructor.

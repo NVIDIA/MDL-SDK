@@ -1,0 +1,2192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:trolltech="urn:trolltech:names:ts:document:1.0">
+    <file original="" datatype="plaintext" source-language="en" target-language="fr">
+        <body>
+            <trans-unit id="0">
+                <source xml:space="preserve">Type of the return value from texturing functions</source>
+                <target xml:space="preserve">Type de la valeur de retour des fonctions de texturation</target>
+                <note from="translator">::anno::description(string) texture_return</note>
+            </trans-unit>
+            <trans-unit id="1">
+                <source xml:space="preserve">Return value suitable to for driving input parameters of type color</source>
+                <target xml:space="preserve">Valeur de retour adaptée au contrôle des paramètres d'entrée de type couleur</target>
+                <note from="translator">::anno::description(string) texture_return</note>
+            </trans-unit>
+            <trans-unit id="2">
+                <source xml:space="preserve">Gray-scale return value suitable for driving input parameters of type float</source>
+                <target xml:space="preserve">Valeur renvoyée en niveaux de gris adaptée au contrôle des paramètres d'entrée de type flottant</target>
+                <note from="translator">::anno::description(string) texture_return</note>
+            </trans-unit>
+            <trans-unit id="3">
+                <source xml:space="preserve">Modes for the creation of a gray-scale value from a color</source>
+                <target xml:space="preserve">Modes pour la création d'une valeur en niveaux de gris à partir d'une couleur</target>
+                <note from="translator">::anno::description(string) mono_mode</note>
+            </trans-unit>
+            <trans-unit id="4">
+                <source xml:space="preserve">Alpha channel of the texture is used</source>
+                <target xml:space="preserve">Le canal alpha de la texture est utilisé</target>
+                <note from="translator">::anno::description(string) mono_mode</note>
+            </trans-unit>
+            <trans-unit id="5">
+                <source xml:space="preserve">Average intensity of RGB is used</source>
+                <target xml:space="preserve">L'intensité moyenne de la couleur RVB est utilisée</target>
+                <note from="translator">::anno::description(string) mono_mode</note>
+            </trans-unit>
+            <trans-unit id="6">
+                <source xml:space="preserve">Value is calculated using math::math::luminance()</source>
+                <target xml:space="preserve">La valeur est calculée en utilisant math::math::luminance()</target>
+                <note from="translator">::anno::description(string) mono_mode</note>
+            </trans-unit>
+            <trans-unit id="7">
+                <source xml:space="preserve">Maximum intensity of the texture is used</source>
+                <target xml:space="preserve">L'intensité maximale de la texture est utilisée</target>
+                <note from="translator">::anno::description(string) mono_mode</note>
+            </trans-unit>
+            <trans-unit id="8">
+                <source xml:space="preserve">Texture combination modes between two layers. The two layers are modified in the manner described by the modes, and the result is blended with the bottom layer based on a weighting factor.</source>
+                <target xml:space="preserve">Modes de combinaison de texture entre deux couches. Les deux couches sont modifiées de la manière décrite par les modes et le résultat est mélangé à la couche inférieure en fonction d'un facteur de pondération.</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="9">
+                <source xml:space="preserve">top</source>
+                <target xml:space="preserve">haut</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="10">
+                <source xml:space="preserve">top + bottom</source>
+                <target xml:space="preserve">haut + bas</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="11">
+                <source xml:space="preserve">top * bottom</source>
+                <target xml:space="preserve">haut * bas</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="12">
+                <source xml:space="preserve">1 - ((1 - top) * (1 - bottom))</source>
+                <target xml:space="preserve">1 - ((1 - haut) * (1 - bas))</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="13">
+                <source xml:space="preserve">for each channel individually: if bottom &lt;0.5: top*bottom*2, else: 2*(top+bottom-top*bottom-0.5)</source>
+                <target xml:space="preserve">pour chaque canal individuellement: si bas &lt;0.5: haut * bas * 2, sinon: 2 * (haut + bas-haut * bas-0.5)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="14">
+                <source xml:space="preserve">Hue of the bottom layer combined with the intensity of the top</source>
+                <target xml:space="preserve">Teinte de la couche inférieure combinée avec l'intensité de la couche supérieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="15">
+                <source xml:space="preserve">Intensity of the bottom layer combined with the hue of the top</source>
+                <target xml:space="preserve">Intensité de la couche inférieure combinée à la teinte de la couche supérieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="16">
+                <source xml:space="preserve">bottom + top - bottom * top * 2</source>
+                <target xml:space="preserve">bas + haut - bas * haut * 2</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="17">
+                <source xml:space="preserve">Average of top and bottom layer</source>
+                <target xml:space="preserve">Moyenne des couches supérieure et inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="18">
+                <source xml:space="preserve">Maximum of top and bottom layer</source>
+                <target xml:space="preserve">Maximum de la couche supérieure et inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="19">
+                <source xml:space="preserve">Minimum of top and bottom layer</source>
+                <target xml:space="preserve">Minimum de la couche supérieure et inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="20">
+                <source xml:space="preserve">bottom + top - 1</source>
+                <target xml:space="preserve">bas + haut - 1</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="21">
+                <source xml:space="preserve">1 - math::abs(1 - (bottom + top))</source>
+                <target xml:space="preserve">1 - maths::abs(1 - (bas + haut))</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="22">
+                <source xml:space="preserve">Absolute difference of top and bottom layer</source>
+                <target xml:space="preserve">Différence absolue de la couche supérieure et inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="23">
+                <source xml:space="preserve">(top &lt; 0.5) ? 2 * (top * bottom + bottom * bottom * (0.5 - top)) : 2 * (math::sqrt(bottom) * (top - 0.5) + bottom - top * bottom)</source>
+                <target xml:space="preserve">(haut &lt;0.5)? 2 * (haut * bas + bas * bas * (0,5 - haut)): 2 * (maths::sqrt(bas) * (haut - 0,5) + bas - haut * bas)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="24">
+                <source xml:space="preserve">bottom / (1 - top)</source>
+                <target xml:space="preserve">bas / (1 - haut)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="25">
+                <source xml:space="preserve">bottom * bottom/(1 - top)</source>
+                <target xml:space="preserve">bas * bas / (1 - haut)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="26">
+                <source xml:space="preserve">1 - (1 - bottom)/top</source>
+                <target xml:space="preserve">1 - (1 - bas) / haut</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="27">
+                <source xml:space="preserve">Minimum of both layers minus the maximum of both layers (plus 1.0)</source>
+                <target xml:space="preserve">Minimum des deux couches moins le maximum des deux couches (plus 1,0)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="28">
+                <source xml:space="preserve">for each channel individually: if top &gt;0.5: top*bottom*2, else: 2*(top+bottom-top*bottom-0.5)</source>
+                <target xml:space="preserve">pour chaque canal individuellement: si haut&gt; 0.5: haut * bas * 2, sinon: 2 * (haut + bas-haut * bas-0.5)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="29">
+                <source xml:space="preserve"> </source>
+                <target xml:space="preserve"> </target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="30">
+                <source xml:space="preserve">for each channel individually: (top+bottom &lt;= 1) ? 0 : 1</source>
+                <target xml:space="preserve">pour chaque canal individuellement: (top + bottom &lt;= 1)? 0: 1</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="31">
+                <source xml:space="preserve">top + bottom (clamped)</source>
+                <target xml:space="preserve">haut + bas (clamped)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="32">
+                <source xml:space="preserve">bottom + top - 1 (clamped)</source>
+                <target xml:space="preserve">bas + haut - 1 (clamped)</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="33">
+                <source xml:space="preserve">2 * top * bottom</source>
+                <target xml:space="preserve">2 * haut * bas</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="34">
+                <source xml:space="preserve">top * bottom + bottom</source>
+                <target xml:space="preserve">haut * bas + bas</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="35">
+                <source xml:space="preserve">Uses hue from top layer, saturation and brightness from bottom</source>
+                <target xml:space="preserve">Utilise la teinte de la couche supérieure, la saturation et la luminosité de la couche inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="36">
+                <source xml:space="preserve">Uses saturation from top layer, hue and brightness from bottom</source>
+                <target xml:space="preserve">Utilise la saturation de la couche supérieure, la teinte et la luminosité de la couche inférieure</target>
+                <note from="translator">::anno::description(string) color_layer_mode</note>
+            </trans-unit>
+            <trans-unit id="37">
+                <source xml:space="preserve">used to annotate materials as hint for grouping in the ui</source>
+                <target xml:space="preserve">utilisé pour annoter des matériaux comme suggestion pour un regroupement dans l'interface utilisateur</target>
+                <note from="translator">::anno::description(string) material_type
+::anno::description(string) cell_base</note>
+            </trans-unit>
+            <trans-unit id="38">
+                <source xml:space="preserve">Simple material</source>
+                <target xml:space="preserve">Matériau simple</target>
+                <note from="translator">::anno::description(string) material_type</note>
+            </trans-unit>
+            <trans-unit id="39">
+                <source xml:space="preserve">Complex material</source>
+                <target xml:space="preserve">Matériau complexe</target>
+                <note from="translator">::anno::description(string) material_type</note>
+            </trans-unit>
+            <trans-unit id="40">
+                <source xml:space="preserve">Combiner material</source>
+                <target xml:space="preserve">Matériau de combinaison</target>
+                <note from="translator">::anno::description(string) material_type</note>
+            </trans-unit>
+            <trans-unit id="41">
+                <source xml:space="preserve">Material modifier</source>
+                <target xml:space="preserve">Modificateur de matériau</target>
+                <note from="translator">::anno::description(string) material_type</note>
+            </trans-unit>
+            <trans-unit id="42">
+                <source xml:space="preserve">Used in light sources to define the emission mode</source>
+                <target xml:space="preserve">Utilisé dans les sources de lumière pour définir le mode d'émission</target>
+                <note from="translator">::anno::description(string) emission_type</note>
+            </trans-unit>
+            <trans-unit id="43">
+                <source xml:space="preserve">lumen/m2</source>
+                <target xml:space="preserve">lumen/m2</target>
+                <note from="translator">::anno::description(string) emission_type</note>
+            </trans-unit>
+            <trans-unit id="44">
+                <source xml:space="preserve">lumen</source>
+                <target xml:space="preserve">lumen</target>
+                <note from="translator">::anno::description(string) emission_type</note>
+            </trans-unit>
+            <trans-unit id="45">
+                <source xml:space="preserve">candela</source>
+                <target xml:space="preserve">candela</target>
+                <note from="translator">::anno::description(string) emission_type</note>
+            </trans-unit>
+            <trans-unit id="46">
+                <source xml:space="preserve">nit (candela/m2)</source>
+                <target xml:space="preserve">nit (candela/m2)</target>
+                <note from="translator">::anno::description(string) emission_type</note>
+            </trans-unit>
+            <trans-unit id="47">
+                <source xml:space="preserve">used to define the behavior of Worley noise</source>
+                <target xml:space="preserve">utilisé pour définir le comportement du bruit de Worley</target>
+                <note from="translator">::anno::description(string) cell_type</note>
+            </trans-unit>
+            <trans-unit id="48">
+                <source xml:space="preserve">Simple Cells</source>
+                <target xml:space="preserve">Cellules simples</target>
+                <note from="translator">::anno::description(string) cell_type</note>
+            </trans-unit>
+            <trans-unit id="49">
+                <source xml:space="preserve">Crystal cells</source>
+                <target xml:space="preserve">Cellules cristallines</target>
+                <note from="translator">::anno::description(string) cell_type</note>
+            </trans-unit>
+            <trans-unit id="50">
+                <source xml:space="preserve">Bordered cells</source>
+                <target xml:space="preserve">Cellules bordées</target>
+                <note from="translator">::anno::description(string) cell_type</note>
+            </trans-unit>
+            <trans-unit id="51">
+                <source xml:space="preserve">Circle base</source>
+                <target xml:space="preserve">Base de cercle</target>
+                <note from="translator">::anno::description(string) cell_base</note>
+            </trans-unit>
+            <trans-unit id="52">
+                <source xml:space="preserve">Diamond base</source>
+                <target xml:space="preserve">Base de diamant</target>
+                <note from="translator">::anno::description(string) cell_base</note>
+            </trans-unit>
+            <trans-unit id="53">
+                <source xml:space="preserve">Blend colors</source>
+                <target xml:space="preserve">Mélange de couleurs</target>
+                <note from="translator">::anno::display_name(string) blend_colors(color,color,::base::color_layer_mode,float)</note>
+            </trans-unit>
+            <trans-unit id="54">
+                <source xml:space="preserve">Allows combining textures in varied ways</source>
+                <target xml:space="preserve">Permet de combiner des textures de différentes manières</target>
+                <note from="translator">::anno::description(string) blend_colors(color,color,::base::color_layer_mode,float)</note>
+            </trans-unit>
+            <trans-unit id="55">
+                <source xml:space="preserve">NVIDIA Corporation</source>
+                <target xml:space="preserve">NVIDIA Corporation</target>
+                <note from="translator">::anno::author(string) blend_colors(color,color,::base::color_layer_mode,float)
+::anno::author(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::author(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::author(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::author(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::author(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::author(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::author(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::author(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::author(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::author(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::author(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::author(string) diffuse
+::anno::author(string) scratched_metal
+::anno::author(string) metal
+::anno::author(string) plastic
+::anno::author(string) scratched_plastic
+::anno::author(string) retroreflective
+::anno::author(string) flex_material
+::anno::author(string) thin_glass
+::anno::author(string) thin_translucent
+::anno::author(string) thick_glass
+::anno::author(string) thick_translucent
+::anno::author(string) blend
+::anno::author(string) apply_clearcoat
+::anno::author(string) apply_thinfilm
+::anno::author(string) apply_metalcoat
+::anno::author(string) apply_dustcover
+::anno::author(string) apply_colorfalloff_v2
+::anno::author(string) apply_colorfalloff
+::anno::author(string) apply_metallicflakes
+::anno::author(string) flake_paint
+::anno::author(string) add_cutout
+::anno::author(string) add_simple_sticker
+::anno::author(string) add_globalbump
+::anno::author(string) add_displacement
+::anno::author(string) add_emission
+::anno::author(string) add_thermal_emission
+::anno::author(string) light_omni
+::anno::author(string) light_spot
+::anno::author(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="56">
+                <source xml:space="preserve">Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.</source>
+                <target xml:space="preserve">Copyright (c) 2018, NVIDIA CORPORATION. Tous droits réservés.</target>
+                <note from="translator">::anno::copyright_notice(string) blend_colors(color,color,::base::color_layer_mode,float)
+::anno::copyright_notice(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::copyright_notice(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::copyright_notice(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::copyright_notice(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::copyright_notice(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::copyright_notice(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::copyright_notice(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::copyright_notice(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::copyright_notice(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::copyright_notice(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::copyright_notice(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::copyright_notice(string) diffuse
+::anno::copyright_notice(string) scratched_metal
+::anno::copyright_notice(string) metal
+::anno::copyright_notice(string) plastic
+::anno::copyright_notice(string) scratched_plastic
+::anno::copyright_notice(string) retroreflective
+::anno::copyright_notice(string) flex_material
+::anno::copyright_notice(string) thin_glass
+::anno::copyright_notice(string) thin_translucent
+::anno::copyright_notice(string) thick_glass
+::anno::copyright_notice(string) thick_translucent
+::anno::copyright_notice(string) blend
+::anno::copyright_notice(string) apply_clearcoat
+::anno::copyright_notice(string) apply_thinfilm
+::anno::copyright_notice(string) apply_metalcoat
+::anno::copyright_notice(string) apply_dustcover
+::anno::copyright_notice(string) apply_colorfalloff_v2
+::anno::copyright_notice(string) apply_colorfalloff
+::anno::copyright_notice(string) apply_metallicflakes
+::anno::copyright_notice(string) flake_paint
+::anno::copyright_notice(string) add_cutout
+::anno::copyright_notice(string) add_simple_sticker
+::anno::copyright_notice(string) add_globalbump
+::anno::copyright_notice(string) add_displacement
+::anno::copyright_notice(string) add_emission
+::anno::copyright_notice(string) add_thermal_emission
+::anno::copyright_notice(string) light_omni
+::anno::copyright_notice(string) light_spot
+::anno::copyright_notice(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="57">
+                <source xml:space="preserve">Color 1</source>
+                <target xml:space="preserve">Couleur 1</target>
+                <note from="translator">::anno::display_name(string) blend_colors(color,color,::base::color_layer_mode,float)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="58">
+                <source xml:space="preserve">Color 2</source>
+                <target xml:space="preserve">Couleur 2</target>
+                <note from="translator">::anno::display_name(string) blend_colors(color,color,::base::color_layer_mode,float)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) apply_colorfalloff_v2
+::anno::description(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="59">
+                <source xml:space="preserve">Describes how Color 1 and Color 2 are combined</source>
+                <target xml:space="preserve">Décrit comment les couleurs 1 et 2 sont combinées</target>
+                <note from="translator">::anno::description(string) blend_colors(color,color,::base::color_layer_mode,float)</note>
+            </trans-unit>
+            <trans-unit id="60">
+                <source xml:space="preserve">Blend mode</source>
+                <target xml:space="preserve">Mode de mélange</target>
+                <note from="translator">::anno::display_name(string) blend_colors(color,color,::base::color_layer_mode,float)</note>
+            </trans-unit>
+            <trans-unit id="61">
+                <source xml:space="preserve">Defines strength of the effect. At weight of 0, only color 1 will be visible. At weight 1, the blend function will have full effect</source>
+                <target xml:space="preserve">Définit la force de l'effet. Avec un poids de 0, seule la couleur 1 sera visible. Avec un poids de 1, la fonction de mélange aura un effet total</target>
+                <note from="translator">::anno::description(string) blend_colors(color,color,::base::color_layer_mode,float)</note>
+            </trans-unit>
+            <trans-unit id="62">
+                <source xml:space="preserve">Blend weight</source>
+                <target xml:space="preserve">Facteur de pondération du mélange</target>
+                <note from="translator">::anno::display_name(string) blend_colors(color,color,::base::color_layer_mode,float)
+::anno::display_name(string) blend</note>
+            </trans-unit>
+            <trans-unit id="63">
+                <source xml:space="preserve">Bitmap texture</source>
+                <target xml:space="preserve">Texture bitmap</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="64">
+                <source xml:space="preserve">Allows texturing using image files of various file formats</source>
+                <target xml:space="preserve">Permet de texturer en utilisant des fichiers image de différents formats</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="65">
+                <source xml:space="preserve">Bitmap file</source>
+                <target xml:space="preserve">Fichier bitmap</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="66">
+                <source xml:space="preserve">Bitmap parameters</source>
+                <target xml:space="preserve">Paramètres de bitmap</target>
+                <note from="translator">::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="67">
+                <source xml:space="preserve">Scalar mode</source>
+                <target xml:space="preserve">Mode scalaire</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="68">
+                <source xml:space="preserve">Defines how the texture applies to scalar parameters</source>
+                <target xml:space="preserve">Définit comment la texture s'applique aux paramètres scalaires</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="69">
+                <source xml:space="preserve">Brightness</source>
+                <target xml:space="preserve">Luminosité</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="70">
+                <source xml:space="preserve">Contrast</source>
+                <target xml:space="preserve">Contraste</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="71">
+                <source xml:space="preserve">Controls the scale of the texture on the object</source>
+                <target xml:space="preserve">Contrôle l'échelle de la texture sur l'objet</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="72">
+                <source xml:space="preserve">Tiling</source>
+                <target xml:space="preserve">Mode de répétition</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="73">
+                <source xml:space="preserve">Placement</source>
+                <target xml:space="preserve">Placement</target>
+                <note from="translator">::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="74">
+                <source xml:space="preserve">Controls position of the texture on the object</source>
+                <target xml:space="preserve">Contrôle la position de la texture sur l'objet</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="75">
+                <source xml:space="preserve">Offset</source>
+                <target xml:space="preserve">Décalage</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="76">
+                <source xml:space="preserve">Rotation angle of the texture in degrees</source>
+                <target xml:space="preserve">Angle de rotation de la texture en degrés</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="77">
+                <source xml:space="preserve">Rotation</source>
+                <target xml:space="preserve">Rotation</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="78">
+                <source xml:space="preserve">If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0</source>
+                <target xml:space="preserve">Si réglé à vrai, la texture ne se répète pas. En dehors de la texture, la couleur sera noire et la valeur scalaire sera 0</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="79">
+                <source xml:space="preserve">Clip</source>
+                <target xml:space="preserve">Découpage</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="80">
+                <source xml:space="preserve">Selects a specific UV space</source>
+                <target xml:space="preserve">Sélectionne un espace UV spécifique</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="81">
+                <source xml:space="preserve">UV space index</source>
+                <target xml:space="preserve">Indice d'espace UV</target>
+                <note from="translator">::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="82">
+                <source xml:space="preserve">Invert image</source>
+                <target xml:space="preserve">Inverser l'image</target>
+                <note from="translator">::anno::description(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
+::anno::display_name(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)</note>
+            </trans-unit>
+            <trans-unit id="83">
+                <source xml:space="preserve">Perlin noise texture</source>
+                <target xml:space="preserve">Texture de bruit de Perlin</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="84">
+                <source xml:space="preserve">Allow texturing with a random noise pattern</source>
+                <target xml:space="preserve">Autoriser la texturation avec un motif de bruit aléatoire</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="85">
+                <source xml:space="preserve">Noise parameters</source>
+                <target xml:space="preserve">Paramètres de bruit</target>
+                <note from="translator">::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::in_group(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="86">
+                <source xml:space="preserve">If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used</source>
+                <target xml:space="preserve">Si désactivé, l'espace UV sera utilisé. Si cette option est activée, la texturation 3D dans l'espace objet s'appliquera. Pour les applications qui ne prennent pas en charge l’espace objet, l’espace monde sera utilisé.</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="87">
+                <source xml:space="preserve">Use object space</source>
+                <target xml:space="preserve">Utiliser l'espace objet</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="88">
+                <source xml:space="preserve">Higher amounts will add detail to the noise</source>
+                <target xml:space="preserve">Des quantités plus élevées ajouteront des détails au bruit</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="89">
+                <source xml:space="preserve">Levels</source>
+                <target xml:space="preserve">Niveaux</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="90">
+                <source xml:space="preserve">Billowing appearance</source>
+                <target xml:space="preserve">Aspect tourbillonnant</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="91">
+                <source xml:space="preserve">Lowering this value will create bigger areas uniformly colored with Color 1</source>
+                <target xml:space="preserve">La diminution de cette valeur créera de plus grandes zones uniformément colorées avec la Couleur 1</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="92">
+                <source xml:space="preserve">Upper threshold</source>
+                <target xml:space="preserve">Seuil supérieur</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="93">
+                <source xml:space="preserve">Increasing this value will create bigger areas uniformly colored with Color 2</source>
+                <target xml:space="preserve">L'augmentation de cette valeur créera de plus grandes zones uniformément colorées avec la Couleur 2</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="94">
+                <source xml:space="preserve">Lower threshold</source>
+                <target xml:space="preserve">Seuil inférieur</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="95">
+                <source xml:space="preserve">Only applies if "Use object space" is off. Selects a specific UV space</source>
+                <target xml:space="preserve">S'applique uniquement si "Utiliser l'espace objet" est désactivé. Sélectionne un espace UV spécifique</target>
+                <note from="translator">::anno::description(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)
+::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="96">
+                <source xml:space="preserve">Allows texturing a random noise pattern</source>
+                <target xml:space="preserve">Permet de texturer un motif de bruit aléatoire</target>
+                <note from="translator">::anno::description(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="97">
+                <source xml:space="preserve">Bump strength</source>
+                <target xml:space="preserve">Intensité du bump</target>
+                <note from="translator">::anno::display_name(string) perlin_noise_bump_texture(float,float3,int,bool,bool,float,float,float3,float3,int)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="98">
+                <source xml:space="preserve">Cellular noise texture</source>
+                <target xml:space="preserve">Texture de bruit cellulaire</target>
+                <note from="translator">::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="99">
+                <source xml:space="preserve">Allow texturing with a cell forming pattern</source>
+                <target xml:space="preserve">Permet la texturation avec un motif cellulaire</target>
+                <note from="translator">::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="100">
+                <source xml:space="preserve">Cell type</source>
+                <target xml:space="preserve">Type de cellule</target>
+                <note from="translator">::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="101">
+                <source xml:space="preserve">Cell pattern type</source>
+                <target xml:space="preserve">Type de motif cellulaire</target>
+                <note from="translator">::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="102">
+                <source xml:space="preserve">Cell shape</source>
+                <target xml:space="preserve">Forme de cellule</target>
+                <note from="translator">::anno::display_name(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::display_name(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="103">
+                <source xml:space="preserve">The shape of the cell form</source>
+                <target xml:space="preserve">La forme de la cellule</target>
+                <note from="translator">::anno::description(string) worley_noise_texture(color,color,bool,int,::nvidia::core_definitions::cell_type,::nvidia::core_definitions::cell_base,float,float,float3,float3,float3)
+::anno::description(string) worley_noise_bump_texture(float,::nvidia::core_definitions::cell_base,bool,int,float,float,float3,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="104">
+                <source xml:space="preserve">Flow noise texture</source>
+                <target xml:space="preserve">Texture de bruit d'écoulement</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="105">
+                <source xml:space="preserve">Allow texturing with a 2D noise pattern suitable for waves</source>
+                <target xml:space="preserve">Permet la texturation avec un motif de bruit 2D adapté à la génération de vagues</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="106">
+                <source xml:space="preserve">Phase offset</source>
+                <target xml:space="preserve">Décalage de phase</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="107">
+                <source xml:space="preserve">Controls the 3rd dimension of the function</source>
+                <target xml:space="preserve">Contrôle la 3ème dimension de la fonction</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="108">
+                <source xml:space="preserve">Level intensity gain</source>
+                <target xml:space="preserve">Niveau d'intensité de gain</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="109">
+                <source xml:space="preserve">If multiple levels are used, "level_gain" specifies a weighting factor for subsequent levels</source>
+                <target xml:space="preserve">Si plusieurs niveaux sont utilisés, "Niveau d'intensité" spécifie un facteur de pondération pour les niveaux suivants</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="110">
+                <source xml:space="preserve">Level scaling</source>
+                <target xml:space="preserve">Echelle de niveau</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="111">
+                <source xml:space="preserve">If multiple levels are used, "level_scale" specifies a global scaling factor for subsequent levels</source>
+                <target xml:space="preserve">Si plusieurs niveaux sont utilisés, "Echelle de niveau" spécifie un facteur d'échelle global pour les niveaux suivants</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="112">
+                <source xml:space="preserve">Progressive u scale</source>
+                <target xml:space="preserve">Échelle progressive dans la direction "u"</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="113">
+                <source xml:space="preserve">If multiple levels are used, "level_progressive_u_scale" specifies an additional scaling factor in the "u" direction</source>
+                <target xml:space="preserve">Si plusieurs niveaux sont utilisés, "Échelle progressive dans la direction u" spécifie un facteur de mise à l'échelle supplémentaire dans la direction "u"</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="114">
+                <source xml:space="preserve">Progressive v offset</source>
+                <target xml:space="preserve">Échelle progressive dans la direction "v"</target>
+                <note from="translator">::anno::display_name(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::display_name(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="115">
+                <source xml:space="preserve">If multiple levels are used, "level_progressive_v_motion" specifies an offset for subsequent levels in the "v" direction</source>
+                <target xml:space="preserve">Si plusieurs niveaux sont utilisés, "Échelle progressive dans la direction v" spécifie un décalage pour les niveaux suivants dans la direction "v"</target>
+                <note from="translator">::anno::description(string) flow_noise_texture(color,color,bool,int,int,bool,float,float,float,float,float,float3,float3,float3)
+::anno::description(string) flow_noise_bump_texture(float,float3,int,bool,int,bool,float,float,float,float,float,float3,float3)</note>
+            </trans-unit>
+            <trans-unit id="116">
+                <source xml:space="preserve">3d checker texture</source>
+                <target xml:space="preserve">Texture 3D en damier</target>
+                <note from="translator">::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="117">
+                <source xml:space="preserve">Allows texturing a checkerboard pattern</source>
+                <target xml:space="preserve">Permet de texturer un motif en damier</target>
+                <note from="translator">::anno::description(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::description(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="118">
+                <source xml:space="preserve">Checker parameters</source>
+                <target xml:space="preserve">Paramètres du damier</target>
+                <note from="translator">::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)
+::anno::in_group(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="119">
+                <source xml:space="preserve">Blur</source>
+                <target xml:space="preserve">Flou</target>
+                <note from="translator">::anno::display_name(string) checker_texture(color,color,float3,float3,bool,float,float3,int)
+::anno::display_name(string) checker_bump_texture(float,float,bool,float3,float3,float3,int)</note>
+            </trans-unit>
+            <trans-unit id="120">
+                <source xml:space="preserve">Bump mode</source>
+                <target xml:space="preserve">Mode de bump</target>
+                <note from="translator">::anno::display_name(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="121">
+                <source xml:space="preserve">Defines how the texture is evaluated to create the bumps</source>
+                <target xml:space="preserve">Définit comment la texture est évaluée pour créer les bumps</target>
+                <note from="translator">::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="122">
+                <source xml:space="preserve">If set to true, texture will not repeat. Outside of the texture the surface will be flat</source>
+                <target xml:space="preserve">Si défini à vrai, la texture ne se répète pas. En dehors de la texture, la surface sera plate</target>
+                <note from="translator">::anno::description(string) file_bump_texture(texture_2d,::base::mono_mode,float2,float2,float,bool,float,int)
+::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="123">
+                <source xml:space="preserve">Normalmap texture</source>
+                <target xml:space="preserve">Texture de normales</target>
+                <note from="translator">::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="124">
+                <source xml:space="preserve">Allows the use of tangent space normal maps</source>
+                <target xml:space="preserve">Permet l'utilisation de textures de normales définies dans l’espace tangent</target>
+                <note from="translator">::anno::description(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="125">
+                <source xml:space="preserve">Normalmap file</source>
+                <target xml:space="preserve">Fichier de texture de normales</target>
+                <note from="translator">::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="126">
+                <source xml:space="preserve">Normalmap parameters</source>
+                <target xml:space="preserve">Paramètres de texture de normales</target>
+                <note from="translator">::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)
+::anno::in_group(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="127">
+                <source xml:space="preserve">Strength</source>
+                <target xml:space="preserve">Intensité</target>
+                <note from="translator">::anno::display_name(string) normalmap_texture(texture_2d,float2,float2,float,bool,float,int)</note>
+            </trans-unit>
+            <trans-unit id="128">
+                <source xml:space="preserve">Simple diffuse</source>
+                <target xml:space="preserve">Simple diffus</target>
+                <note from="translator">::anno::display_name(string) diffuse</note>
+            </trans-unit>
+            <trans-unit id="129">
+                <source xml:space="preserve">A basic diffuse material</source>
+                <target xml:space="preserve">Un matériau diffus de base</target>
+                <note from="translator">::anno::description(string) diffuse</note>
+            </trans-unit>
+            <trans-unit id="130">
+                <source xml:space="preserve">Color</source>
+                <target xml:space="preserve">Couleur</target>
+                <note from="translator">::anno::display_name(string) diffuse
+::anno::display_name(string) scratched_metal
+::anno::display_name(string) metal
+::anno::display_name(string) plastic
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) retroreflective
+::anno::display_name(string) apply_metallicflakes
+::anno::display_name(string) add_emission
+::anno::display_name(string) light_omni
+::anno::display_name(string) light_spot
+::anno::display_name(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="131">
+                <source xml:space="preserve">The color of the material</source>
+                <target xml:space="preserve">Couleur du matériau</target>
+                <note from="translator">::anno::description(string) diffuse
+::anno::description(string) plastic
+::anno::description(string) scratched_plastic
+::anno::description(string) retroreflective
+::anno::description(string) flex_material
+::anno::description(string) thin_glass
+::anno::description(string) thin_translucent
+::anno::description(string) thick_translucent
+::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="132">
+                <source xml:space="preserve">Diffuse roughness</source>
+                <target xml:space="preserve">Rugosité diffuse</target>
+                <note from="translator">::anno::display_name(string) diffuse
+::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="133">
+                <source xml:space="preserve">Higher roughness values lead a powdery appearance</source>
+                <target xml:space="preserve">Des valeurs de rugosité élevées donnent un aspect poudré</target>
+                <note from="translator">::anno::description(string) diffuse</note>
+            </trans-unit>
+            <trans-unit id="134">
+                <source xml:space="preserve">Bumps</source>
+                <target xml:space="preserve">Bumps</target>
+                <note from="translator">::anno::display_name(string) diffuse
+::anno::display_name(string) scratched_metal
+::anno::display_name(string) metal
+::anno::display_name(string) plastic
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) retroreflective
+::anno::display_name(string) flex_material
+::anno::display_name(string) thin_glass
+::anno::display_name(string) thin_translucent
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent
+::anno::display_name(string) apply_clearcoat
+::anno::display_name(string) apply_metalcoat
+::anno::display_name(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="135">
+                <source xml:space="preserve">Attach bump or normal maps here</source>
+                <target xml:space="preserve">Connecter les bump ou texture de normales ici</target>
+                <note from="translator">::anno::description(string) diffuse
+::anno::description(string) scratched_metal
+::anno::description(string) metal
+::anno::description(string) plastic
+::anno::description(string) scratched_plastic
+::anno::description(string) retroreflective
+::anno::description(string) flex_material
+::anno::description(string) thin_glass
+::anno::description(string) thin_translucent
+::anno::description(string) thick_glass
+::anno::description(string) thick_translucent
+::anno::description(string) apply_clearcoat
+::anno::description(string) apply_metalcoat
+::anno::description(string) apply_dustcover
+::anno::description(string) flake_paint
+::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="136">
+                <source xml:space="preserve">Metal</source>
+                <target xml:space="preserve">Métal</target>
+                <note from="translator">::anno::display_name(string) scratched_metal</note>
+            </trans-unit>
+            <trans-unit id="137">
+                <source xml:space="preserve">A metallic material with stretched reflections</source>
+                <target xml:space="preserve">Un matériau métallique aux reflets étirés</target>
+                <note from="translator">::anno::description(string) scratched_metal</note>
+            </trans-unit>
+            <trans-unit id="138">
+                <source xml:space="preserve">The color of the metal</source>
+                <target xml:space="preserve">Couleur du métal</target>
+                <note from="translator">::anno::description(string) scratched_metal
+::anno::description(string) metal</note>
+            </trans-unit>
+            <trans-unit id="139">
+                <source xml:space="preserve">Roughness</source>
+                <target xml:space="preserve">Rugosité</target>
+                <note from="translator">::anno::display_name(string) scratched_metal
+::anno::display_name(string) metal
+::anno::display_name(string) plastic
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) retroreflective
+::anno::display_name(string) thin_glass
+::anno::display_name(string) thin_translucent
+::anno::display_name(string) thick_glass
+::anno::display_name(string) apply_metallicflakes</note>
+            </trans-unit>
+            <trans-unit id="140">
+                <source xml:space="preserve">Higher roughness values lead to bigger highlights and blurry reflections</source>
+                <target xml:space="preserve">Des valeurs de rugosité plus élevées donnent des reflets plus grands et des réflexions plus floues</target>
+                <note from="translator">::anno::description(string) scratched_metal
+::anno::description(string) metal
+::anno::description(string) plastic
+::anno::description(string) scratched_plastic
+::anno::description(string) retroreflective
+::anno::description(string) thin_glass
+::anno::description(string) thin_translucent
+::anno::description(string) thick_glass
+::anno::description(string) thick_translucent
+::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="141">
+                <source xml:space="preserve">Reflection weight</source>
+                <target xml:space="preserve">Importance de la réflexion</target>
+                <note from="translator">::anno::display_name(string) scratched_metal
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) flex_material
+::anno::display_name(string) thick_translucent
+::anno::display_name(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="142">
+                <source xml:space="preserve">Intensity of highlights and glossy reflections and highlights</source>
+                <target xml:space="preserve">Intensité des reflets et reflets brillants</target>
+                <note from="translator">::anno::description(string) scratched_metal
+::anno::description(string) metal</note>
+            </trans-unit>
+            <trans-unit id="143">
+                <source xml:space="preserve">Anisotropy</source>
+                <target xml:space="preserve">Anisotropie</target>
+                <note from="translator">::anno::display_name(string) scratched_metal
+::anno::display_name(string) scratched_plastic</note>
+            </trans-unit>
+            <trans-unit id="144">
+                <source xml:space="preserve">Higher values will stretch the highlight</source>
+                <target xml:space="preserve">Des valeurs plus élevées étireront la zone de réflexion</target>
+                <note from="translator">::anno::description(string) scratched_metal
+::anno::description(string) scratched_plastic
+::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="145">
+                <source xml:space="preserve">Anisotropy rotation</source>
+                <target xml:space="preserve">Rotation de l'anisotropie</target>
+                <note from="translator">::anno::display_name(string) scratched_metal
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="146">
+                <source xml:space="preserve">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees</source>
+                <target xml:space="preserve">Change l'orientation de l'anisotropie. Une valeur de 1 fera pivoter l'orientation de 360 ​​degrés</target>
+                <note from="translator">::anno::description(string) scratched_metal
+::anno::description(string) scratched_plastic
+::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="147">
+                <source xml:space="preserve">Simple metal, deprecated</source>
+                <target xml:space="preserve">Métal simple, obsolète</target>
+                <note from="translator">::anno::display_name(string) metal</note>
+            </trans-unit>
+            <trans-unit id="148">
+                <source xml:space="preserve">A basic metallic material</source>
+                <target xml:space="preserve">Un matériau métallique de base</target>
+                <note from="translator">::anno::description(string) metal</note>
+            </trans-unit>
+            <trans-unit id="149">
+                <source xml:space="preserve">Reflectivity</source>
+                <target xml:space="preserve">Réflectivité</target>
+                <note from="translator">::anno::display_name(string) metal</note>
+            </trans-unit>
+            <trans-unit id="150">
+                <source xml:space="preserve">Simple plastic, deprecated</source>
+                <target xml:space="preserve">Plastique simple, obsolète</target>
+                <note from="translator">::anno::display_name(string) plastic</note>
+            </trans-unit>
+            <trans-unit id="151">
+                <source xml:space="preserve">A basic dielectric, works for everything opaque that is not metallic</source>
+                <target xml:space="preserve">Un diélectrique de base, fonctionne pour tout ce qui est opaque et non métallique</target>
+                <note from="translator">::anno::description(string) plastic</note>
+            </trans-unit>
+            <trans-unit id="152">
+                <source xml:space="preserve">IOR</source>
+                <target xml:space="preserve">Indice de réfraction</target>
+                <note from="translator">::anno::display_name(string) plastic
+::anno::display_name(string) scratched_plastic
+::anno::display_name(string) flex_material
+::anno::display_name(string) thin_glass
+::anno::display_name(string) thin_translucent
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent
+::anno::display_name(string) apply_clearcoat
+::anno::display_name(string) apply_thinfilm
+::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="153">
+                <source xml:space="preserve">Determines reflectivity</source>
+                <target xml:space="preserve">Détermine la réflectivité</target>
+                <note from="translator">::anno::description(string) plastic
+::anno::description(string) scratched_plastic
+::anno::description(string) thin_glass
+::anno::description(string) thin_translucent
+::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="154">
+                <source xml:space="preserve">Plastic</source>
+                <target xml:space="preserve">Plastique</target>
+                <note from="translator">::anno::display_name(string) scratched_plastic</note>
+            </trans-unit>
+            <trans-unit id="155">
+                <source xml:space="preserve">A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights</source>
+                <target xml:space="preserve">Un diélectrique de base, fonctionne pour tout ce qui est opaque et non métallique. Prise en charge des reflets étirés</target>
+                <note from="translator">::anno::description(string) scratched_plastic</note>
+            </trans-unit>
+            <trans-unit id="156">
+                <source xml:space="preserve">Additional Reflectivity control</source>
+                <target xml:space="preserve">Contrôle de réflectivité supplémentaire</target>
+                <note from="translator">::anno::description(string) scratched_plastic
+::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="157">
+                <source xml:space="preserve">Retroreflective</source>
+                <target xml:space="preserve">Rétroréfléchissant</target>
+                <note from="translator">::anno::display_name(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="158">
+                <source xml:space="preserve">A material with a retroreflective component, works well for road signs and retroreflective stickers</source>
+                <target xml:space="preserve">Un matériau avec une composante rétroréfléchissante, convient bien aux panneaux de signalisation routière et aux autocollants rétroréfléchissants</target>
+                <note from="translator">::anno::description(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="159">
+                <source xml:space="preserve">Reflection color</source>
+                <target xml:space="preserve">Couleur de réflexion</target>
+                <note from="translator">::anno::display_name(string) retroreflective
+::anno::display_name(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="160">
+                <source xml:space="preserve">The color of the retroreflection</source>
+                <target xml:space="preserve">Couleur de la rétroréflexion</target>
+                <note from="translator">::anno::description(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="161">
+                <source xml:space="preserve">Reflection weight facing</source>
+                <target xml:space="preserve">Poids de la réflexion de face</target>
+                <note from="translator">::anno::display_name(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="162">
+                <source xml:space="preserve">Reflectivity control for geometry facing the viewer</source>
+                <target xml:space="preserve">Contrôle de réflectivité pour la géométrie vue de face</target>
+                <note from="translator">::anno::description(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="163">
+                <source xml:space="preserve">Reflection weight edge</source>
+                <target xml:space="preserve">Poids de la réflexion de côté</target>
+                <note from="translator">::anno::display_name(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="164">
+                <source xml:space="preserve">Reflectivity control for the reflectivity at geometry edges</source>
+                <target xml:space="preserve">Contrôle de la réflectivité pour la réflectivité vue de côté</target>
+                <note from="translator">::anno::description(string) retroreflective</note>
+            </trans-unit>
+            <trans-unit id="165">
+                <source xml:space="preserve">Flexible material model</source>
+                <target xml:space="preserve">Modèle de matériau flexible</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="166">
+                <source xml:space="preserve">A complex material that can be configured to a wide variety of looks</source>
+                <target xml:space="preserve">Un matériau complexe pouvant être configuré pour une grande variété d'apparences</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="167">
+                <source xml:space="preserve">Base color</source>
+                <target xml:space="preserve">Couleur de base</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="168">
+                <source xml:space="preserve">Base</source>
+                <target xml:space="preserve">Base</target>
+                <note from="translator">::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="169">
+                <source xml:space="preserve">Higher roughness values lead to a more "powdery" look</source>
+                <target xml:space="preserve">Des valeurs de rugosité plus élevées donnent un aspect plus "poudré"</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="170">
+                <source xml:space="preserve">Metallic material</source>
+                <target xml:space="preserve">Matériau métallique</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="171">
+                <source xml:space="preserve">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect)</source>
+                <target xml:space="preserve">Si vrai, la réflexion sera colorée et indépendante de la direction de la vue. Si faux, la réflexion sera blanche et dépend de la direction. La dépendance directionnelle est dans ce cas basée sur l'indice de réfraction (effet Fresnel)</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="172">
+                <source xml:space="preserve">Controls the amount of reflection</source>
+                <target xml:space="preserve">Contrôle la quantité de réflexion</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="173">
+                <source xml:space="preserve">Reflection roughness</source>
+                <target xml:space="preserve">Rugosité de réflexion</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) thick_translucent
+::anno::display_name(string) apply_clearcoat
+::anno::display_name(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="174">
+                <source xml:space="preserve">Higher roughness values lead to more blurry reflections</source>
+                <target xml:space="preserve">Des valeurs de rugosité plus élevées conduisent à des réflexions plus floues</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="175">
+                <source xml:space="preserve">Reflection anisotropy</source>
+                <target xml:space="preserve">Anisotropie de la réflexion</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="176">
+                <source xml:space="preserve">Transmission weight</source>
+                <target xml:space="preserve">Poids de transmission</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="177">
+                <source xml:space="preserve">Transmission</source>
+                <target xml:space="preserve">Transmission</target>
+                <note from="translator">::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="178">
+                <source xml:space="preserve">Weights how much light passes through the object vs. its diffuse reflectivity</source>
+                <target xml:space="preserve">Détermine la proportion d’énergie lumineuse traversant l’objet par rapport à sa réflectivité diffuse</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="179">
+                <source xml:space="preserve">Transmission color</source>
+                <target xml:space="preserve">Couleur de transmission</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) thin_glass
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="180">
+                <source xml:space="preserve">Color effect for transmission independent of thickness of the object. Think stained glass</source>
+                <target xml:space="preserve">Effet de couleur pour la transmission indépendante de l'épaisseur de l'objet. Pensez au vitrail</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="181">
+                <source xml:space="preserve">Volume color</source>
+                <target xml:space="preserve">Couleur du volume</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="182">
+                <source xml:space="preserve">If the material is not "Thin walled", "Volume color" will be reached at "Volume reference distance"(m)</source>
+                <target xml:space="preserve">Si le matériau n'est pas "À paroi mince", la "couleur du volume" sera atteinte à la "Distance de référence du volume" (m)</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="183">
+                <source xml:space="preserve">Transmission roughness</source>
+                <target xml:space="preserve">Rugosité de transmission</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="184">
+                <source xml:space="preserve">higher values lead to objects seen through the material to appear blurry</source>
+                <target xml:space="preserve">Des valeurs plus élevées conduisent à ce que les objets vus à travers le matériau apparaissent flous</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="185">
+                <source xml:space="preserve">Volume reference distance</source>
+                <target xml:space="preserve">Distance de référence du volume</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="186">
+                <source xml:space="preserve">If the material is not "Thin walled", "Volume color" will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+                <target xml:space="preserve">Si le matériau n'est pas "À paroi mince", la "couleur du volume" sera atteinte à cette distance (m). Entrez ici l'épaisseur typique des objets fabriqués avec ce matériau</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="187">
+                <source xml:space="preserve">Global</source>
+                <target xml:space="preserve">Global</target>
+                <note from="translator">::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material
+::anno::in_group(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="188">
+                <source xml:space="preserve">Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic</source>
+                <target xml:space="preserve">Détermine la réfraction dans le volume. Ce paramètre influence également la réflectivité des matériaux non métalliques</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="189">
+                <source xml:space="preserve">Thin walled</source>
+                <target xml:space="preserve">À paroi mince</target>
+                <note from="translator">::anno::display_name(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="190">
+                <source xml:space="preserve">Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass</source>
+                <target xml:space="preserve">Les matériaux à paroi mince ne réfractent pas et n'ont pas d'effet de volume. Adapté aux bulles de savon ou au verre des vitres</target>
+                <note from="translator">::anno::description(string) flex_material</note>
+            </trans-unit>
+            <trans-unit id="191">
+                <source xml:space="preserve">Abbe number</source>
+                <target xml:space="preserve">Nombre d'Abbe</target>
+                <note from="translator">::anno::display_name(string) flex_material
+::anno::display_name(string) thick_glass
+::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="192">
+                <source xml:space="preserve">Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85</source>
+                <target xml:space="preserve">Contrôle la dispersion. La valeur 0 désactive la dispersion, les matériaux dispersifs ont des nombres d'Abbe compris entre 25 et 85</target>
+                <note from="translator">::anno::description(string) flex_material
+::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="193">
+                <source xml:space="preserve">Thin glass</source>
+                <target xml:space="preserve">Verre mince</target>
+                <note from="translator">::anno::display_name(string) thin_glass</note>
+            </trans-unit>
+            <trans-unit id="194">
+                <source xml:space="preserve">A basic transmissive dielectric without refraction or volume</source>
+                <target xml:space="preserve">Diélectrique transmissif de base sans réfraction ni volume</target>
+                <note from="translator">::anno::description(string) thin_glass</note>
+            </trans-unit>
+            <trans-unit id="195">
+                <source xml:space="preserve">Thin translucent</source>
+                <target xml:space="preserve">Mince translucide</target>
+                <note from="translator">::anno::display_name(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="196">
+                <source xml:space="preserve">A diffuse transmissive dielectric material</source>
+                <target xml:space="preserve">Matériau diélectrique transmissif diffus</target>
+                <note from="translator">::anno::description(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="197">
+                <source xml:space="preserve">Diffuse color</source>
+                <target xml:space="preserve">Couleur diffuse</target>
+                <note from="translator">::anno::display_name(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="198">
+                <source xml:space="preserve">Translucence color</source>
+                <target xml:space="preserve">Couleur de translucidité</target>
+                <note from="translator">::anno::display_name(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="199">
+                <source xml:space="preserve">The color of the volume of the material</source>
+                <target xml:space="preserve">Couleur de volume du matériau</target>
+                <note from="translator">::anno::description(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="200">
+                <source xml:space="preserve">Translucence weight</source>
+                <target xml:space="preserve">Poids de translucidité</target>
+                <note from="translator">::anno::display_name(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="201">
+                <source xml:space="preserve">Fraction of the incoming light that should be visible on the backside</source>
+                <target xml:space="preserve">Fraction de la lumière entrante qui devrait être visible à l'arrière</target>
+                <note from="translator">::anno::description(string) thin_translucent</note>
+            </trans-unit>
+            <trans-unit id="202">
+                <source xml:space="preserve">Thick glass</source>
+                <target xml:space="preserve">Verre épais</target>
+                <note from="translator">::anno::display_name(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="203">
+                <source xml:space="preserve">A basic transmissive dielectric with refraction and coloring in the volume</source>
+                <target xml:space="preserve">Diélectrique transmissif de base avec réfraction et coloration dans la masse</target>
+                <note from="translator">::anno::description(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="204">
+                <source xml:space="preserve">Colors the light entering the volume. Think stained glass</source>
+                <target xml:space="preserve">Colore la lumière entrant dans le volume. Pensez au vitrail</target>
+                <note from="translator">::anno::description(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="205">
+                <source xml:space="preserve">The color of the glass body</source>
+                <target xml:space="preserve">Couleur du verre dans la masse</target>
+                <note from="translator">::anno::description(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="206">
+                <source xml:space="preserve">Determines reflectivity as well as amount of refraction</source>
+                <target xml:space="preserve">Détermine la réflectivité ainsi que la quantité de réfraction</target>
+                <note from="translator">::anno::description(string) thick_glass
+::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="207">
+                <source xml:space="preserve">"Volume color" will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+                <target xml:space="preserve">La "Couleur du volume" sera atteinte à cette distance (m). Entrez ici l'épaisseur typique d'objets fabriqués avec ce matériau</target>
+                <note from="translator">::anno::description(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="208">
+                <source xml:space="preserve">Controls dispersion. 0.0 switches dispersion off, dispersive materials have Abbe numbers between 25.0 and 85.0</source>
+                <target xml:space="preserve">Contrôle la dispersion. La valeur 0 désactive la dispersion, les matériaux dispersifs ont des nombres d'Abbe compris entre 25 et 85</target>
+                <note from="translator">::anno::description(string) thick_glass</note>
+            </trans-unit>
+            <trans-unit id="209">
+                <source xml:space="preserve">Thick translucent</source>
+                <target xml:space="preserve">Épais translucide</target>
+                <note from="translator">::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="210">
+                <source xml:space="preserve">A subsurface scattering material</source>
+                <target xml:space="preserve">Matériau transluminescent (SSS)</target>
+                <note from="translator">::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="211">
+                <source xml:space="preserve">The color of the volume at "Volume reference distance"</source>
+                <target xml:space="preserve">Couleur du volume à la "Distance de référence du volume"</target>
+                <note from="translator">::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="212">
+                <source xml:space="preserve">Volume scattering</source>
+                <target xml:space="preserve">Dispersion du volume</target>
+                <note from="translator">::anno::display_name(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="213">
+                <source xml:space="preserve">Amount of scattering for objects at "Volume reference distance"</source>
+                <target xml:space="preserve">Quantité de dispersion pour les objets à la "Distance de référence du volume"</target>
+                <note from="translator">::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="214">
+                <source xml:space="preserve">Overall reflectivity of the material</source>
+                <target xml:space="preserve">Réflectivité globale du matériau</target>
+                <note from="translator">::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="215">
+                <source xml:space="preserve">"Volume color" and "Volume scattering" will be reached at this distance (m). Enter a typical thickness of objects made of this material here</source>
+                <target xml:space="preserve">"Couleur du volume" et "Dispersion du volume" seront atteints à cette distance (m). Entrez ici l'épaisseur typique d'objets fabriqués avec ce matériau</target>
+                <note from="translator">::anno::description(string) thick_translucent</note>
+            </trans-unit>
+            <trans-unit id="216">
+                <source xml:space="preserve">Surface blender</source>
+                <target xml:space="preserve">Mélangeur de surface</target>
+                <note from="translator">::anno::display_name(string) blend</note>
+            </trans-unit>
+            <trans-unit id="217">
+                <source xml:space="preserve">Blend surface characteristics of 2 materials or mask them using a texture</source>
+                <target xml:space="preserve">Mélangez les caractéristiques de surface de 2 matériaux ou masquez-les à l'aide d'une texture</target>
+                <note from="translator">::anno::description(string) blend</note>
+            </trans-unit>
+            <trans-unit id="218">
+                <source xml:space="preserve">Base material</source>
+                <target xml:space="preserve">Matériau de base</target>
+                <note from="translator">::anno::display_name(string) blend
+::anno::display_name(string) apply_clearcoat
+::anno::display_name(string) apply_thinfilm
+::anno::display_name(string) apply_metalcoat
+::anno::display_name(string) apply_dustcover
+::anno::display_name(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff
+::anno::display_name(string) apply_metallicflakes
+::anno::display_name(string) add_cutout
+::anno::display_name(string) add_simple_sticker
+::anno::display_name(string) add_globalbump
+::anno::display_name(string) add_displacement
+::anno::display_name(string) add_emission
+::anno::display_name(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="219">
+                <source xml:space="preserve">The material the blend is based on</source>
+                <target xml:space="preserve">Le matériau sur lequel le mélange est basé</target>
+                <note from="translator">::anno::description(string) blend</note>
+            </trans-unit>
+            <trans-unit id="220">
+                <source xml:space="preserve">Blend Material</source>
+                <target xml:space="preserve">Matériau de mélange</target>
+                <note from="translator">::anno::display_name(string) blend</note>
+            </trans-unit>
+            <trans-unit id="221">
+                <source xml:space="preserve">Surface properties to use for the blend</source>
+                <target xml:space="preserve">Propriétés de surface à utiliser pour le mélange</target>
+                <note from="translator">::anno::description(string) blend</note>
+            </trans-unit>
+            <trans-unit id="222">
+                <source xml:space="preserve">Blend weight or mask texture</source>
+                <target xml:space="preserve">Facteur de pondération du mélange</target>
+                <note from="translator">::anno::description(string) blend</note>
+            </trans-unit>
+            <trans-unit id="223">
+                <source xml:space="preserve">Apply clear coating</source>
+                <target xml:space="preserve">Appliquer un revêtement transparent</target>
+                <note from="translator">::anno::display_name(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="224">
+                <source xml:space="preserve">Apply clear coat to an existing material</source>
+                <target xml:space="preserve">Appliquer une couche transparente sur un matériau existant</target>
+                <note from="translator">::anno::description(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="225">
+                <source xml:space="preserve">The material that will get a clear coating applied</source>
+                <target xml:space="preserve">Le matériau qui recevra un revêtement transparent</target>
+                <note from="translator">::anno::description(string) apply_clearcoat
+::anno::description(string) apply_dustcover
+::anno::description(string) apply_colorfalloff_v2
+::anno::description(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="226">
+                <source xml:space="preserve">Determines reflectivity of the clear coat</source>
+                <target xml:space="preserve">Détermine la réflectivité de la couche transparente</target>
+                <note from="translator">::anno::description(string) apply_clearcoat
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="227">
+                <source xml:space="preserve">Determines roughness of the clear coat</source>
+                <target xml:space="preserve">Détermine la rugosité de la couche transparente</target>
+                <note from="translator">::anno::description(string) apply_clearcoat
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="228">
+                <source xml:space="preserve">Coat visibility</source>
+                <target xml:space="preserve">Visibilité du vernis</target>
+                <note from="translator">::anno::display_name(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="229">
+                <source xml:space="preserve">Determines visibility of the clear coat</source>
+                <target xml:space="preserve">Détermine la visibilité de la couche transparente</target>
+                <note from="translator">::anno::description(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="230">
+                <source xml:space="preserve">Coat filter color</source>
+                <target xml:space="preserve">Couleur du filtre</target>
+                <note from="translator">::anno::display_name(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="231">
+                <source xml:space="preserve">For simulating coatings with colored resins that modulate the color of underlying layers</source>
+                <target xml:space="preserve">Pour simuler des revêtements avec des résines colorées modulant la couleur des couches sous-jacentes</target>
+                <note from="translator">::anno::description(string) apply_clearcoat</note>
+            </trans-unit>
+            <trans-unit id="232">
+                <source xml:space="preserve">Apply thin film</source>
+                <target xml:space="preserve">Appliquer un film mince</target>
+                <note from="translator">::anno::display_name(string) apply_thinfilm</note>
+            </trans-unit>
+            <trans-unit id="233">
+                <source xml:space="preserve">Apply thin film to an existing material</source>
+                <target xml:space="preserve">Appliquer un film mince sur un matériau existant</target>
+                <note from="translator">::anno::description(string) apply_thinfilm</note>
+            </trans-unit>
+            <trans-unit id="234">
+                <source xml:space="preserve">The material that will get shows a thin film effect</source>
+                <target xml:space="preserve">Le matériau sous-jacent montre un effet de film mince</target>
+                <note from="translator">::anno::description(string) apply_thinfilm</note>
+            </trans-unit>2
+            <trans-unit id="235">
+                <source xml:space="preserve">The IOR of the thin film interface</source>
+                <target xml:space="preserve">Indice de réfraction de l'interface couche mince</target>
+                <note from="translator">::anno::description(string) apply_thinfilm</note>
+            </trans-unit>
+            <trans-unit id="236">
+                <source xml:space="preserve">Thickness</source>
+                <target xml:space="preserve">Épaisseur</target>
+                <note from="translator">::anno::display_name(string) apply_thinfilm</note>
+            </trans-unit>
+            <trans-unit id="237">
+                <source xml:space="preserve">Thickness of the thin film in nm</source>
+                <target xml:space="preserve">Epaisseur du film mince en nm</target>
+                <note from="translator">::anno::description(string) apply_thinfilm</note>
+            </trans-unit>
+            <trans-unit id="238">
+                <source xml:space="preserve">Apply thin metal coating</source>
+                <target xml:space="preserve">Appliquer une fine couche de métal</target>
+                <note from="translator">::anno::display_name(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="239">
+                <source xml:space="preserve">Apply metal coat to an existing material</source>
+                <target xml:space="preserve">Appliquer une couche de métal sur un matériau existant</target>
+                <note from="translator">::anno::description(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="240">
+                <source xml:space="preserve">The material that will get a metallic coating applied</source>
+                <target xml:space="preserve">Matériau qui recevra un revêtement métallique</target>
+                <note from="translator">::anno::description(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="241">
+                <source xml:space="preserve">the color of the metal</source>
+                <target xml:space="preserve">Couleur du métal</target>
+                <note from="translator">::anno::description(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="242">
+                <source xml:space="preserve">the opacity of the coat</source>
+                <target xml:space="preserve">Opacité de la couche</target>
+                <note from="translator">::anno::description(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="243">
+                <source xml:space="preserve">Determines roughness of the metal coat</source>
+                <target xml:space="preserve">Détermine la rugosité de la couche métallique</target>
+                <note from="translator">::anno::description(string) apply_metalcoat</note>
+            </trans-unit>
+            <trans-unit id="244">
+                <source xml:space="preserve">Apply a cover of dust</source>
+                <target xml:space="preserve">Appliquer un revêtement de poussière</target>
+                <note from="translator">::anno::display_name(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="245">
+                <source xml:space="preserve">Apply a diffuse cover of dust or dirt</source>
+                <target xml:space="preserve">Appliquer un revêtement diffus de poussière ou de saleté</target>
+                <note from="translator">::anno::description(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="246">
+                <source xml:space="preserve">Dust color</source>
+                <target xml:space="preserve">Couleur de la poussière</target>
+                <note from="translator">::anno::display_name(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="247">
+                <source xml:space="preserve">The color of the dust</source>
+                <target xml:space="preserve">Couleur de la poussière</target>
+                <note from="translator">::anno::description(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="248">
+                <source xml:space="preserve">Dust density</source>
+                <target xml:space="preserve">Densité de poussière</target>
+                <note from="translator">::anno::display_name(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="249">
+                <source xml:space="preserve">The opacity of the cover</source>
+                <target xml:space="preserve">Opacité du revêtement</target>
+                <note from="translator">::anno::description(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="250">
+                <source xml:space="preserve">Dust amount</source>
+                <target xml:space="preserve">Quantité de poussière</target>
+                <note from="translator">::anno::display_name(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="251">
+                <source xml:space="preserve">How dusty the material is</source>
+                <target xml:space="preserve">Combien le matériau est poussiéreux</target>
+                <note from="translator">::anno::description(string) apply_dustcover</note>
+            </trans-unit>
+            <trans-unit id="252">
+                <source xml:space="preserve">Apply a color falloff</source>
+                <target xml:space="preserve">Appliquer une décroissance de couleur</target>
+                <note from="translator">::anno::display_name(string) apply_colorfalloff_v2</note>
+            </trans-unit>
+            <trans-unit id="253">
+                <source xml:space="preserve">Makes the color view dependent</source>
+                <target xml:space="preserve">Rend la couleur dépendante du point de vue</target>
+                <note from="translator">::anno::description(string) apply_colorfalloff_v2
+::anno::description(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="254">
+                <source xml:space="preserve">Color 1 (facing direction)</source>
+                <target xml:space="preserve">Couleur 1 (faisant face à la direction)</target>
+                <note from="translator">::anno::description(string) apply_colorfalloff_v2</note>
+            </trans-unit>
+            <trans-unit id="255">
+                <source xml:space="preserve">Color 3</source>
+                <target xml:space="preserve">Couleur 3</target>
+                <note from="translator">::anno::display_name(string) apply_colorfalloff_v2
+::anno::description(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="256">
+                <source xml:space="preserve">Color 4</source>
+                <target xml:space="preserve">Couleur 4</target>
+                <note from="translator">::anno::display_name(string) apply_colorfalloff_v2
+::anno::description(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="257">
+                <source xml:space="preserve">Color 5</source>
+                <target xml:space="preserve">Couleur 5</target>
+                <note from="translator">::anno::display_name(string) apply_colorfalloff_v2
+::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="258">
+                <source xml:space="preserve">Color 5 (object edges)</source>
+                <target xml:space="preserve">Couleur 5 (bords de l'objet)</target>
+                <note from="translator">::anno::description(string) apply_colorfalloff_v2</note>
+            </trans-unit>
+            <trans-unit id="259">
+                <source xml:space="preserve">Apply a color falloff, deprecated</source>
+                <target xml:space="preserve">Appliquer une décroissance de couleur, obsolète</target>
+                <note from="translator">::anno::display_name(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="260">
+                <source xml:space="preserve">the color of the dust</source>
+                <target xml:space="preserve">Couleur de la poussière</target>
+                <note from="translator">::anno::description(string) apply_colorfalloff
+::anno::description(string) apply_colorfalloff
+::anno::description(string) apply_colorfalloff
+::anno::description(string) apply_colorfalloff
+::anno::description(string) apply_colorfalloff</note>
+            </trans-unit>
+            <trans-unit id="261">
+                <source xml:space="preserve">Apply flake coating</source>
+                <target xml:space="preserve">Appliquer le revêtement en paillettes</target>
+                <note from="translator">::anno::display_name(string) apply_metallicflakes</note>
+            </trans-unit>
+            <trans-unit id="262">
+                <source xml:space="preserve">Apply layer of metallic flakes to an existing material</source>
+                <target xml:space="preserve">Appliquer une couche de paillettes métalliques sur un matériau existant</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes</note>
+            </trans-unit>
+            <trans-unit id="263">
+                <source xml:space="preserve">The material that will get a flake layer applied</source>
+                <target xml:space="preserve">Matériau qui recevra une couche de paillettes</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes</note>
+            </trans-unit>
+            <trans-unit id="264">
+                <source xml:space="preserve">The color of the Flakes</source>
+                <target xml:space="preserve">Couleur des paillettes</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="265">
+                <source xml:space="preserve">Determines roughness of the metallic flakes</source>
+                <target xml:space="preserve">Détermine la rugosité des paillettes métalliques</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="266">
+                <source xml:space="preserve">Flake size</source>
+                <target xml:space="preserve">Taille des paillettes</target>
+                <note from="translator">::anno::display_name(string) apply_metallicflakes
+::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="267">
+                <source xml:space="preserve">Determines size of the metallic flakes, in mm</source>
+                <target xml:space="preserve">Détermine la taille des paillettes métalliques, en mm</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="268">
+                <source xml:space="preserve">Flake amount</source>
+                <target xml:space="preserve">Quantité de paillettes</target>
+                <note from="translator">::anno::display_name(string) apply_metallicflakes
+::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="269">
+                <source xml:space="preserve">Determines amount of visible metallic flakes</source>
+                <target xml:space="preserve">Détermine la quantité de paillettes métalliques visibles</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="270">
+                <source xml:space="preserve">Flake opacity</source>
+                <target xml:space="preserve">Opacité des paillettes</target>
+                <note from="translator">::anno::display_name(string) apply_metallicflakes</note>
+            </trans-unit>
+            <trans-unit id="271">
+                <source xml:space="preserve">Determines visibility of the metallic flakes</source>
+                <target xml:space="preserve">Détermine la visibilité des paillettes métalliques</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="272">
+                <source xml:space="preserve">Flake orientation randomness</source>
+                <target xml:space="preserve">Orientation aléatoire des paillettes</target>
+                <note from="translator">::anno::display_name(string) apply_metallicflakes
+::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="273">
+                <source xml:space="preserve">Larger numbers will increase the sparkle radius around highlights</source>
+                <target xml:space="preserve">Un plus grand nombre augmentera le rayon de scintillement autour des reflets</target>
+                <note from="translator">::anno::description(string) apply_metallicflakes
+::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="274">
+                <source xml:space="preserve">Flaky paint</source>
+                <target xml:space="preserve">Peinture écaillée</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="275">
+                <source xml:space="preserve">A multi layer paint material containing flakes</source>
+                <target xml:space="preserve">Une peinture multicouche contenant des paillettes</target>
+                <note from="translator">::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="276">
+                <source xml:space="preserve">The color of the base paint</source>
+                <target xml:space="preserve">Couleur de la peinture de base</target>
+                <note from="translator">::anno::description(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="277">
+                <source xml:space="preserve">Flake color</source>
+                <target xml:space="preserve">Couleur des paillettes</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="278">
+                <source xml:space="preserve">Flake roughness</source>
+                <target xml:space="preserve">Rugosité des paillettes</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="279">
+                <source xml:space="preserve">Flake weight</source>
+                <target xml:space="preserve">Poids des paillettes</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="280">
+                <source xml:space="preserve">Coat roughness</source>
+                <target xml:space="preserve">Rugosité de la couche</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="281">
+                <source xml:space="preserve">Coat bump</source>
+                <target xml:space="preserve">Bump de la couche</target>
+                <note from="translator">::anno::display_name(string) flake_paint</note>
+            </trans-unit>
+            <trans-unit id="282">
+                <source xml:space="preserve">Add cut-outs</source>
+                <target xml:space="preserve">Ajouter des découpes</target>
+                <note from="translator">::anno::display_name(string) add_cutout</note>
+            </trans-unit>
+            <trans-unit id="283">
+                <source xml:space="preserve">Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences</source>
+                <target xml:space="preserve">Ajoute des découpes à des matériaux existants. Force également les matériaux à être à paroi mince. Adapté pour modéliser des feuilles, de l'herbe ou des clôtures</target>
+                <note from="translator">::anno::description(string) add_cutout</note>
+            </trans-unit>
+            <trans-unit id="284">
+                <source xml:space="preserve">The material that will get a cut-out</source>
+                <target xml:space="preserve">Le matériau qui fera l'objet d'une découpe</target>
+                <note from="translator">::anno::description(string) add_cutout</note>
+            </trans-unit>
+            <trans-unit id="285">
+                <source xml:space="preserve">Cutout</source>
+                <target xml:space="preserve">Découpe</target>
+                <note from="translator">::anno::display_name(string) add_cutout</note>
+            </trans-unit>
+            <trans-unit id="286">
+                <source xml:space="preserve">Determines where the object is visible</source>
+                <target xml:space="preserve">Détermine où l'objet est visible</target>
+                <note from="translator">::anno::description(string) add_cutout</note>
+            </trans-unit>
+            <trans-unit id="287">
+                <source xml:space="preserve">Add simple sticker</source>
+                <target xml:space="preserve">Ajouter un autocollant simple</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="288">
+                <source xml:space="preserve">A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent</source>
+                <target xml:space="preserve">Un moyen rapide d'ajouter des autocollants simples à un matériau. L'autocollant est un simple diélectrique et nécessite un masque pour définir son étendue</target>
+                <note from="translator">::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="289">
+                <source xml:space="preserve">Sticker color</source>
+                <target xml:space="preserve">Couleur de l'autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="290">
+                <source xml:space="preserve">Sticker roughness</source>
+                <target xml:space="preserve">Rugosité de l’autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="291">
+                <source xml:space="preserve">Sticker IOR</source>
+                <target xml:space="preserve">Indice de réfraction de l'autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="292">
+                <source xml:space="preserve">Sticker reflectivity</source>
+                <target xml:space="preserve">Réflectivité de l'autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="293">
+                <source xml:space="preserve">Sticker bumps</source>
+                <target xml:space="preserve">Bump de l'autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="294">
+                <source xml:space="preserve">Sticker mask</source>
+                <target xml:space="preserve">Masque de l'autocollant</target>
+                <note from="translator">::anno::display_name(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="295">
+                <source xml:space="preserve">Determines extent of the sticker</source>
+                <target xml:space="preserve">Détermine l'étendue de l'autocollant</target>
+                <note from="translator">::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="296">
+                <source xml:space="preserve">The material that will get a sticker added</source>
+                <target xml:space="preserve">Le matériau qui recevra l'autocollant</target>
+                <note from="translator">::anno::description(string) add_simple_sticker</note>
+            </trans-unit>
+            <trans-unit id="297">
+                <source xml:space="preserve">Add global bumpmap</source>
+                <target xml:space="preserve">Ajouter un bumpmap global</target>
+                <note from="translator">::anno::display_name(string) add_globalbump</note>
+            </trans-unit>
+            <trans-unit id="298">
+                <source xml:space="preserve">Adds global bumpmap to existing materials. Local bump map of the base material is preserved</source>
+                <target xml:space="preserve">Ajoute un bumpmap global aux matériaux existants. Le bumpmap local du matériau de base est préservé</target>
+                <note from="translator">::anno::description(string) add_globalbump</note>
+            </trans-unit>
+            <trans-unit id="299">
+                <source xml:space="preserve">The material that will get a bump map</source>
+                <target xml:space="preserve">Le matériau qui recevra un bumpmap</target>
+                <note from="translator">::anno::description(string) add_globalbump
+::anno::description(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="300">
+                <source xml:space="preserve">Bump</source>
+                <target xml:space="preserve">Bump</target>
+                <note from="translator">::anno::display_name(string) add_globalbump</note>
+            </trans-unit>
+            <trans-unit id="301">
+                <source xml:space="preserve">An additional global bump map for the material. Local bump map of the base material is preserved</source>
+                <target xml:space="preserve">Un bumpmap global supplémentaire pour le matériau. Le bumpmap local du matériau de base est préservé</target>
+                <note from="translator">::anno::description(string) add_globalbump</note>
+            </trans-unit>
+            <trans-unit id="302">
+                <source xml:space="preserve">Add displacement</source>
+                <target xml:space="preserve">Ajouter un déplacement</target>
+                <note from="translator">::anno::display_name(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="303">
+                <source xml:space="preserve">Adds displacement to existing materials</source>
+                <target xml:space="preserve">Ajoute un déplacement à des matériaux existants</target>
+                <note from="translator">::anno::description(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="304">
+                <source xml:space="preserve">Displacement amount</source>
+                <target xml:space="preserve">Quantité de déplacement</target>
+                <note from="translator">::anno::display_name(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="305">
+                <source xml:space="preserve">Attach displacement texture here. Note that the object needs to be set up correctly to have good displacement results</source>
+                <target xml:space="preserve">Attachez ici la texture de déplacement. Notez que l'objet doit être configuré correctement pour avoir de bons résultats de déplacement</target>
+                <note from="translator">::anno::description(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="306">
+                <source xml:space="preserve">Displacement scale</source>
+                <target xml:space="preserve">Facteur de déplacement</target>
+                <note from="translator">::anno::display_name(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="307">
+                <source xml:space="preserve">A global scale factor for the displacement amount</source>
+                <target xml:space="preserve">Un facteur d'échelle global pour la quantité de déplacement</target>
+                <note from="translator">::anno::description(string) add_displacement</note>
+            </trans-unit>
+            <trans-unit id="308">
+                <source xml:space="preserve">Add emission</source>
+                <target xml:space="preserve">Ajouter une émission</target>
+                <note from="translator">::anno::display_name(string) add_emission</note>
+            </trans-unit>
+            <trans-unit id="309">
+                <source xml:space="preserve">Adds emission to a material</source>
+                <target xml:space="preserve">Ajoute une émission de lumière à un matériau</target>
+                <note from="translator">::anno::description(string) add_emission</note>
+            </trans-unit>
+            <trans-unit id="310">
+                <source xml:space="preserve">The material that will get emission added</source>
+                <target xml:space="preserve">Le matériau qui recevra l'émission</target>
+                <note from="translator">::anno::description(string) add_emission
+::anno::description(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="311">
+                <source xml:space="preserve">The color of the Light</source>
+                <target xml:space="preserve">Couleur de la lumière</target>
+                <note from="translator">::anno::description(string) add_emission
+::anno::description(string) light_omni
+::anno::description(string) light_spot
+::anno::description(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="312">
+                <source xml:space="preserve">Intensity</source>
+                <target xml:space="preserve">Intensité</target>
+                <note from="translator">::anno::display_name(string) add_emission
+::anno::display_name(string) add_thermal_emission
+::anno::display_name(string) light_omni
+::anno::display_name(string) light_spot
+::anno::display_name(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="313">
+                <source xml:space="preserve">The brightness of the light source</source>
+                <target xml:space="preserve">Intensité de la source de lumière</target>
+                <note from="translator">::anno::description(string) add_emission
+::anno::description(string) add_thermal_emission
+::anno::description(string) light_omni
+::anno::description(string) light_spot
+::anno::description(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="314">
+                <source xml:space="preserve">Unit scale</source>
+                <target xml:space="preserve">Facteur d'échelle</target>
+                <note from="translator">::anno::display_name(string) add_emission
+::anno::display_name(string) light_omni
+::anno::display_name(string) light_spot
+::anno::display_name(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="315">
+                <source xml:space="preserve">Modeling unit to meter conversion factor</source>
+                <target xml:space="preserve">Facteur de conversion de l'unité de modélisation en mètre</target>
+                <note from="translator">::anno::description(string) add_emission
+::anno::description(string) light_omni
+::anno::description(string) light_spot
+::anno::description(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="316">
+                <source xml:space="preserve">Unit for emission</source>
+                <target xml:space="preserve">Unité d'émission</target>
+                <note from="translator">::anno::display_name(string) add_emission
+::anno::display_name(string) add_thermal_emission
+::anno::display_name(string) light_omni
+::anno::display_name(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="317">
+                <source xml:space="preserve">The physical unit of Intensity</source>
+                <target xml:space="preserve">Unité physique de l'intensité</target>
+                <note from="translator">::anno::description(string) add_emission
+::anno::description(string) add_thermal_emission
+::anno::description(string) light_omni
+::anno::description(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="318">
+                <source xml:space="preserve">Add thermal emission</source>
+                <target xml:space="preserve">Ajouter une émission thermique</target>
+                <note from="translator">::anno::display_name(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="319">
+                <source xml:space="preserve">Adds emission to a material, color is based on a "color temperature"</source>
+                <target xml:space="preserve">Ajoute l'émission à un matériau, la couleur est basée sur une "température de couleur"</target>
+                <note from="translator">::anno::description(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="320">
+                <source xml:space="preserve">Temperature</source>
+                <target xml:space="preserve">Température</target>
+                <note from="translator">::anno::display_name(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="321">
+                <source xml:space="preserve">The color temperature of the Light in Kelvin</source>
+                <target xml:space="preserve">Température de la couleur de la lumière en Kelvin</target>
+                <note from="translator">::anno::description(string) add_thermal_emission</note>
+            </trans-unit>
+            <trans-unit id="322">
+                <source xml:space="preserve">Diffuse emission</source>
+                <target xml:space="preserve">Émission diffuse</target>
+                <note from="translator">::anno::display_name(string) light_omni</note>
+            </trans-unit>
+            <trans-unit id="323">
+                <source xml:space="preserve">Emissive material emitting in all directions</source>
+                <target xml:space="preserve">Matériau émissif émettant dans toutes les directions</target>
+                <note from="translator">::anno::description(string) light_omni</note>
+            </trans-unit>
+            <trans-unit id="324">
+                <source xml:space="preserve">Spotlight emission</source>
+                <target xml:space="preserve">Emission spot</target>
+                <note from="translator">::anno::display_name(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="325">
+                <source xml:space="preserve">Emissive material emitting focused in one direction</source>
+                <target xml:space="preserve">Matériau émissif à émission concentrée dans une direction</target>
+                <note from="translator">::anno::description(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="326">
+                <source xml:space="preserve">Spot focus</source>
+                <target xml:space="preserve">Focus du spot</target>
+                <note from="translator">::anno::display_name(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="327">
+                <source xml:space="preserve">larger values lead to more focused spotlights</source>
+                <target xml:space="preserve">Des valeurs plus élevées conduisent à des spots plus concentrés</target>
+                <note from="translator">::anno::description(string) light_spot</note>
+            </trans-unit>
+            <trans-unit id="328">
+                <source xml:space="preserve">IES file based emission</source>
+                <target xml:space="preserve">Emission basée sur fichier IES</target>
+                <note from="translator">::anno::display_name(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="329">
+                <source xml:space="preserve">Emissive material emitting as described in an IES file</source>
+                <target xml:space="preserve">Matériau émissif dont l'émission est décrite dans un fichier IES</target>
+                <note from="translator">::anno::description(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="330">
+                <source xml:space="preserve">IES light profile data</source>
+                <target xml:space="preserve">Données de profil lumineux IES</target>
+                <note from="translator">::anno::display_name(string) light_ies</note>
+            </trans-unit>
+            <trans-unit id="331">
+                <source xml:space="preserve">data to describe the distribution of the light</source>
+                <target xml:space="preserve">Données pour décrire la distribution de la lumière</target>
+                <note from="translator">::anno::description(string) light_ies</note>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>

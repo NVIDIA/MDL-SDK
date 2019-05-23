@@ -317,6 +317,12 @@ public:
     /// Set the name of the annotation.
     void set_name(ISimple_name const *name) MDL_FINAL { m_name = name; }
 
+    /// Get the annotation block of this annotation declaration if any.
+    IAnnotation_block const *get_annotations() const MDL_FINAL { return m_annotations; }
+
+    /// Set the annotation block of this annotation declaration.
+    void set_annotations(IAnnotation_block const *annos) MDL_FINAL { m_annotations = annos; }
+
     /// Get the number of parameters.
     int get_parameter_count() const MDL_FINAL { return int(m_parameters.size()); }
 
@@ -332,11 +338,13 @@ public:
     }
 
     explicit Declaration_annotation(
-        Memory_arena       *arena,
-        ISimple_name const *name,
-        bool               is_exported)
+        Memory_arena            *arena,
+        ISimple_name const      *name,
+        IAnnotation_block const *annotations,
+        bool                    is_exported)
     : Base(is_exported)
     , m_name(name)
+    , m_annotations(annotations)
     , m_parameters(arena)
     {
     }
@@ -344,6 +352,9 @@ public:
 private:
     /// The name of this annotation.
     ISimple_name const *m_name;
+
+    /// The annotations of this entity (if any).
+    IAnnotation_block const *m_annotations;
 
     /// The vector of parameters.
     Parameter_vector m_parameters;
@@ -1052,15 +1063,16 @@ IParameter const *Declaration_factory::create_parameter(
 
 /// Create a new annotation declaration.
 IDeclaration_annotation *Declaration_factory::create_annotation(
-    ISimple_name const *name,
-    bool               exported,
-    int                start_line,
-    int                start_column,
-    int                end_line,
-    int                end_column)
+    ISimple_name const      *name,
+    IAnnotation_block const *annotations,
+    bool                    exported,
+    int                     start_line,
+    int                     start_column,
+    int                     end_line,
+    int                     end_column)
 {
-    IDeclaration_annotation *result =
-        m_builder.create<Declaration_annotation>(m_builder.get_arena(), name, exported);
+    IDeclaration_annotation *result = m_builder.create<Declaration_annotation>(
+            m_builder.get_arena(), name, annotations, exported);
     set_position(result,start_line, start_column, end_line, end_column);
     return result;
 }

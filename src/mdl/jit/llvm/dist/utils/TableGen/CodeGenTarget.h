@@ -14,11 +14,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CODEGEN_TARGET_H
-#define CODEGEN_TARGET_H
+#ifndef LLVM_UTILS_TABLEGEN_CODEGENTARGET_H
+#define LLVM_UTILS_TABLEGEN_CODEGENTARGET_H
 
+#include "CodeGenHwModes.h"
 #include "CodeGenInstruction.h"
 #include "CodeGenRegisters.h"
+#include "InfoByHwMode.h"
+#include "SDNodeProperties.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TableGen/Record.h"
 #include <algorithm>
@@ -29,31 +32,12 @@ struct CodeGenRegister;
 class CodeGenSchedModels;
 class CodeGenTarget;
 
-// SelectionDAG node properties.
-//  SDNPMemOperand: indicates that a node touches memory and therefore must
-//                  have an associated memory operand that describes the access.
-enum SDNP {
-  SDNPCommutative,
-  SDNPAssociative,
-  SDNPHasChain,
-  SDNPOutGlue,
-  SDNPInGlue,
-  SDNPOptInGlue,
-  SDNPMayLoad,
-  SDNPMayStore,
-  SDNPSideEffect,
-  SDNPMemOperand,
-  SDNPVariadic,
-  SDNPWantRoot,
-  SDNPWantParent
-};
-
 /// getValueType - Return the MVT::SimpleValueType that the specified TableGen
 /// record corresponds to.
 MVT::SimpleValueType getValueType(Record *Rec);
 
-std::string getName(MVT::SimpleValueType T);
-std::string getEnumName(MVT::SimpleValueType T);
+StringRef getName(MVT::SimpleValueType T);
+StringRef getEnumName(MVT::SimpleValueType T);
 
 /// getQualifiedName - Return the name of the specified record, with a
 /// namespace qualifier if the record contains one.
@@ -65,31 +49,39 @@ class CodeGenTarget {
   RecordKeeper &Records;
   Record *TargetRec;
 
-  mutable DenseMap<const Record*, CodeGenInstruction*> Instructions;
-  mutable CodeGenRegBank *RegBank;
+  mutable DenseMap<const Record*,
+                   std::unique_ptr<CodeGenInstruction>> Instructions;
+  mutable std::unique_ptr<CodeGenRegBank> RegBank;
   mutable std::vector<Record*> RegAltNameIndices;
-  mutable SmallVector<MVT::SimpleValueType, 8> LegalValueTypes;
+  mutable SmallVector<ValueTypeByHwMode, 8> LegalValueTypes;
+  CodeGenHwModes CGH;
   void ReadRegAltNameIndices() const;
   void ReadInstructions() const;
   void ReadLegalValueTypes() const;
 
-  mutable CodeGenSchedModels *SchedModels;
+  mutable std::unique_ptr<CodeGenSchedModels> SchedModels;
 
   mutable std::vector<const CodeGenInstruction*> InstrsByEnum;
+  mutable unsigned NumPseudoInstructions = 0;
 public:
   CodeGenTarget(RecordKeeper &Records);
   ~CodeGenTarget();
 
   Record *getTargetRecord() const { return TargetRec; }
-  const std::string &getName() const;
+  const StringRef getName() const;
 
   /// getInstNamespace - Return the target-specific instruction namespace.
   ///
-  std::string getInstNamespace() const;
+  StringRef getInstNamespace() const;
 
   /// getInstructionSet - Return the InstructionSet object.
   ///
   Record *getInstructionSet() const;
+
+  /// getAllowRegisterRenaming - Return the AllowRegisterRenaming flag value for
+  /// this target.
+  ///
+  bool getAllowRegisterRenaming() const;
 
   /// getAsmParser - Return the AssemblyParser definition for this target.
   ///
@@ -127,26 +119,21 @@ public:
 
   /// getRegisterVTs - Find the union of all possible SimpleValueTypes for the
   /// specified physical register.
-  std::vector<MVT::SimpleValueType> getRegisterVTs(Record *R) const;
+  std::vector<ValueTypeByHwMode> getRegisterVTs(Record *R) const;
 
-  ArrayRef<MVT::SimpleValueType> getLegalValueTypes() const {
-    if (LegalValueTypes.empty()) ReadLegalValueTypes();
+  ArrayRef<ValueTypeByHwMode> getLegalValueTypes() const {
+    if (LegalValueTypes.empty())
+      ReadLegalValueTypes();
     return LegalValueTypes;
-  }
-
-  /// isLegalValueType - Return true if the specified value type is natively
-  /// supported by the target (i.e. there are registers that directly hold it).
-  bool isLegalValueType(MVT::SimpleValueType VT) const {
-    ArrayRef<MVT::SimpleValueType> LegalVTs = getLegalValueTypes();
-    for (unsigned i = 0, e = LegalVTs.size(); i != e; ++i)
-      if (LegalVTs[i] == VT) return true;
-    return false;
   }
 
   CodeGenSchedModels &getSchedModels() const;
 
+  const CodeGenHwModes &getHwModes() const { return CGH; }
+
 private:
-  DenseMap<const Record*, CodeGenInstruction*> &getInstructions() const {
+  DenseMap<const Record*, std::unique_ptr<CodeGenInstruction>> &
+  getInstructions() const {
     if (Instructions.empty()) ReadInstructions();
     return Instructions;
   }
@@ -154,21 +141,34 @@ public:
 
   CodeGenInstruction &getInstruction(const Record *InstRec) const {
     if (Instructions.empty()) ReadInstructions();
-    DenseMap<const Record*, CodeGenInstruction*>::iterator I =
-      Instructions.find(InstRec);
+    auto I = Instructions.find(InstRec);
     assert(I != Instructions.end() && "Not an instruction");
     return *I->second;
   }
 
-  /// getInstructionsByEnumValue - Return all of the instructions defined by the
-  /// target, ordered by their enum value.
-  const std::vector<const CodeGenInstruction*> &
-  getInstructionsByEnumValue() const {
-    if (InstrsByEnum.empty()) ComputeInstrsByEnum();
+  /// Returns the number of predefined instructions.
+  static unsigned getNumFixedInstructions();
+
+  /// Returns the number of pseudo instructions.
+  unsigned getNumPseudoInstructions() const {
+    if (InstrsByEnum.empty())
+      ComputeInstrsByEnum();
+    return NumPseudoInstructions;
+  }
+
+  /// Return all of the instructions defined by the target, ordered by their
+  /// enum value.
+  /// The following order of instructions is also guaranteed:
+  /// - fixed / generic instructions as declared in TargetOpcodes.def, in order;
+  /// - pseudo instructions in lexicographical order sorted by name;
+  /// - other instructions in lexicographical order sorted by name.
+  ArrayRef<const CodeGenInstruction *> getInstructionsByEnumValue() const {
+    if (InstrsByEnum.empty())
+      ComputeInstrsByEnum();
     return InstrsByEnum;
   }
 
-  typedef std::vector<const CodeGenInstruction*>::const_iterator inst_iterator;
+  typedef ArrayRef<const CodeGenInstruction *>::const_iterator inst_iterator;
   inst_iterator inst_begin() const{return getInstructionsByEnumValue().begin();}
   inst_iterator inst_end() const { return getInstructionsByEnumValue().end(); }
 
@@ -176,6 +176,10 @@ public:
   /// isLittleEndianEncoding - are instruction bit patterns defined as  [0..n]?
   ///
   bool isLittleEndianEncoding() const;
+
+  /// reverseBitsForLittleEndianEncoding - For little-endian instruction bit
+  /// encodings, reverse the bit order of all instructions.
+  void reverseBitsForLittleEndianEncoding();
 
   /// guessInstructionProperties - should we just guess unset instruction
   /// properties?
@@ -193,8 +197,8 @@ class ComplexPattern {
   std::string SelectFunc;
   std::vector<Record*> RootNodes;
   unsigned Properties; // Node properties
+  unsigned Complexity;
 public:
-  ComplexPattern() : NumOperands(0) {}
   ComplexPattern(Record *R);
 
   MVT::SimpleValueType getValueType() const { return Ty; }
@@ -204,6 +208,7 @@ public:
     return RootNodes;
   }
   bool hasProperty(enum SDNP Prop) const { return Properties & (1 << Prop); }
+  unsigned getComplexity() const { return Complexity; }
 };
 
 } // End llvm namespace

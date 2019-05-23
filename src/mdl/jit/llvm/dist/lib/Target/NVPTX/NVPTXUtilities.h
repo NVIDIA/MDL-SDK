@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef NVPTXUTILITIES_H
-#define NVPTXUTILITIES_H
+#ifndef LLVM_LIB_TARGET_NVPTX_NVPTXUTILITIES_H
+#define LLVM_LIB_TARGET_NVPTX_NVPTXUTILITIES_H
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -25,70 +25,40 @@
 
 namespace llvm {
 
-#define NVCL_IMAGE2D_READONLY_FUNCNAME "__is_image2D_readonly"
-#define NVCL_IMAGE3D_READONLY_FUNCNAME "__is_image3D_readonly"
+void clearAnnotationCache(const Module *);
 
-class NVVMAnnotations {
-    typedef std::map<std::string, std::vector<unsigned> > key_val_pair_t;
-    typedef std::map<const GlobalValue *, key_val_pair_t> global_val_annot_t;
-    typedef std::map<const Module *, global_val_annot_t> per_module_annot_t;
+bool findOneNVVMAnnotation(const GlobalValue *, const std::string &,
+                           unsigned &);
+bool findAllNVVMAnnotation(const GlobalValue *, const std::string &,
+                           std::vector<unsigned> &);
 
-public:
-    NVVMAnnotations() {}
+bool isTexture(const Value &);
+bool isSurface(const Value &);
+bool isSampler(const Value &);
+bool isImage(const Value &);
+bool isImageReadOnly(const Value &);
+bool isImageWriteOnly(const Value &);
+bool isImageReadWrite(const Value &);
+bool isManaged(const Value &);
 
-    bool findOneNVVMAnnotation(const llvm::GlobalValue *, std::string, unsigned &) const;
-    bool findAllNVVMAnnotation(const llvm::GlobalValue *, std::string,
-                               std::vector<unsigned> &) const;
+std::string getTextureName(const Value &);
+std::string getSurfaceName(const Value &);
+std::string getSamplerName(const Value &);
 
-    bool isTexture(const llvm::Value &) const;
-    bool isSurface(const llvm::Value &) const;
-    bool isSampler(const llvm::Value &) const;
-    bool isImage(const llvm::Value &) const;
-    bool isImageReadOnly(const llvm::Value &) const;
-    bool isImageWriteOnly(const llvm::Value &) const;
-    bool isImageReadWrite(const llvm::Value &) const;
-    bool isManaged(const llvm::Value &) const;
+bool getMaxNTIDx(const Function &, unsigned &);
+bool getMaxNTIDy(const Function &, unsigned &);
+bool getMaxNTIDz(const Function &, unsigned &);
 
-    bool getMaxNTIDx(const llvm::Function &, unsigned &) const;
-    bool getMaxNTIDy(const llvm::Function &, unsigned &) const;
-    bool getMaxNTIDz(const llvm::Function &, unsigned &) const;
+bool getReqNTIDx(const Function &, unsigned &);
+bool getReqNTIDy(const Function &, unsigned &);
+bool getReqNTIDz(const Function &, unsigned &);
 
-    bool getReqNTIDx(const llvm::Function &, unsigned &) const;
-    bool getReqNTIDy(const llvm::Function &, unsigned &) const;
-    bool getReqNTIDz(const llvm::Function &, unsigned &) const;
+bool getMinCTASm(const Function &, unsigned &);
+bool getMaxNReg(const Function &, unsigned &);
+bool isKernelFunction(const Function &);
 
-    bool getMinCTASm(const llvm::Function &, unsigned &) const;
-    bool isKernelFunction(const llvm::Function &) const;
-
-    bool getAlign(const llvm::Function &, unsigned index, unsigned &) const;
-
-private:
-    static void cacheAnnotationFromMD(const MDNode *, key_val_pair_t &);
-    void cacheAnnotationFromMD(const Module *, const GlobalValue *) const;
-
-private:
-    mutable per_module_annot_t Cache;
-};
-
-bool getAlign(const llvm::CallInst &, unsigned index, unsigned &);
-
-std::string getTextureName(const llvm::Value &);
-std::string getSurfaceName(const llvm::Value &);
-std::string getSamplerName(const llvm::Value &);
-
-bool isBarrierIntrinsic(llvm::Intrinsic::ID);
-bool isMemorySpaceTransferIntrinsic(Intrinsic::ID id);
-const Value *skipPointerTransfer(const Value *V, bool ignore_GEP_indices);
-const Value *
-skipPointerTransfer(const Value *V, std::set<const Value *> &processed);
-BasicBlock *getParentBlock(Value *v);
-Function *getParentFunction(Value *v);
-void dumpBlock(Value *v, char *blockName);
-Instruction *getInst(Value *base, char *instName);
-void dumpInst(Value *base, char *instName);
-void dumpInstRec(Value *v, std::set<Instruction *> *visited);
-void dumpInstRec(Value *v);
-void dumpParent(Value *v);
+bool getAlign(const Function &, unsigned index, unsigned &);
+bool getAlign(const CallInst &, unsigned index, unsigned &);
 
 }
 

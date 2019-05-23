@@ -89,7 +89,8 @@ Mdl_function_definition::Mdl_function_definition(
     const mi::mdl::IGenerated_code_dag* code_dag,
     mi::Uint32 function_index,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    bool load_resources)
 : m_tf( get_type_factory())
 , m_vf( get_value_factory())
 , m_ef( get_expression_factory())
@@ -136,7 +137,8 @@ Mdl_function_definition::Mdl_function_definition(
         /*create_direct_calls*/ false,
         module_filename,
         module_name,
-        m_prototype_tag);
+        m_prototype_tag,
+        load_resources);
 
     const mi::mdl::IType* return_type = code_dag->get_function_return_type( function_index);
     m_return_type = mdl_type_to_int_type( m_tf.get(), return_type);
@@ -232,11 +234,16 @@ Mdl_function_definition::Mdl_function_definition(
 Mdl_function_call* Mdl_function_definition::create_function_call(
    DB::Transaction* transaction, const IExpression_list* arguments, mi::Sint32* errors) const
 {
-    return m_mdl_semantic == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR
-        ? create_array_constructor_call_internal(
-            transaction, arguments, /*immutable*/ false, errors)
-        : create_function_call_internal(
-            transaction, arguments, /*allow_ek_parameter*/ false, /*immutable*/ false, errors);
+    if (m_mdl_semantic == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
+        return create_array_constructor_call_internal(
+            transaction, arguments, /*immutable=*/ false, errors);
+    }
+    else if (m_semantic == mi::neuraylib::IFunction_definition::DS_CAST) {
+        return create_cast_call_internal(
+            transaction, arguments, /*immutable=*/ false, errors);
+    }
+    return create_function_call_internal(
+            transaction, arguments, /*allow_ek_parameter=*/ false, /*immutable=*/ false, errors);
 }
 
 Mdl_function_call* Mdl_function_definition::create_function_call_internal(
@@ -256,24 +263,37 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
         return NULL;
     }
 
+    std::vector<bool> needs_cast(m_parameter_types->get_size(), false);
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    bool allow_cast = mdlc_module->get_implicit_cast_enabled();
+
     // check that the provided arguments are parameters of the function definition and that their
     // types match the expected types
     if( arguments) {
         mi::Size n = arguments->get_size();
         for( mi::Size i = 0; i < n; ++i) {
             const char* name = arguments->get_name( i);
-            mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( name));
+            mi::Size parameter_index = get_parameter_index(name);
+            mi::base::Handle<const IType> expected_type( m_parameter_types->get_type(parameter_index));
             if( !expected_type) {
                 *errors = -1;
                 return NULL;
             }
             mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
             mi::base::Handle<const IType> actual_type( argument->get_type());
-            if( !argument_type_matches_parameter_type(
-                m_tf.get(), actual_type.get(), expected_type.get())) {
+
+            bool needs_cast_tmp = false;
+            if (!argument_type_matches_parameter_type(
+                m_tf.get(),
+                actual_type.get(),
+                expected_type.get(),
+                allow_cast,
+                needs_cast_tmp)) {
                 *errors = -2;
                 return NULL;
             }
+            needs_cast[parameter_index] = needs_cast_tmp;
+
             bool actual_type_varying
                 = (actual_type->get_all_type_modifiers()   & IType::MK_VARYING) != 0;
             bool expected_type_uniform
@@ -306,9 +326,25 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
         if( argument) {
             // use provided argument
             mi::base::Handle<IExpression> argument_copy( m_ef->clone( argument.get(),
-                /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
+                transaction, /*copy_immutable_calls=*/ !immutable));
             ASSERT( M_SCENE, argument_copy);
+
+            if (needs_cast[i]) {
+                mi::base::Handle<const IType> expected_type(
+                    m_parameter_types->get_type(i));
+                mi::Sint32 errors = 0;
+                argument_copy = m_ef->create_cast(
+                    transaction,
+                    argument_copy.get(),
+                    expected_type.get(),
+                    /*db_element_name=*/nullptr,
+                    /*force_cast=*/false,
+                    /*direct_call=*/false,
+                    &errors);
+                ASSERT(M_SCENE, argument_copy); // should always succeed.
+            }
             argument = argument_copy;
+
         } else {
             // no argument provided, use default
             mi::base::Handle<const IExpression> default_( m_defaults->get_expression( name));
@@ -349,6 +385,83 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
     return function_call;
 }
 
+Mdl_function_call* Mdl_function_definition::create_cast_call_internal(
+    DB::Transaction* transaction,
+    const IExpression_list* arguments,
+    bool immutable,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if (errors == NULL)
+        errors = &dummy_errors;
+
+    // check that this method is only used for the cast operator
+    ASSERT(M_SCENE, m_semantic == mi::neuraylib::IFunction_definition::DS_CAST);
+
+    // the  cast operator is always exported
+    ASSERT(M_SCENE, m_is_exported);
+
+    // the cast operator has no defaults
+    if (!arguments) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // we need exactly two arguments
+    mi::Size n = arguments->get_size();
+    if (n != 2) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // check names
+    if (strcmp(arguments->get_name(0), "cast") != 0 ||
+        strcmp(arguments->get_name(1), "cast_return") != 0)
+    {
+        *errors = -3;
+        return NULL;
+    }
+
+    mi::base::Handle<const IExpression> cast_from(
+        arguments->get_expression(mi::Size(0)));
+    mi::base::Handle<const IType> cast_from_type(cast_from->get_type());
+
+    mi::base::Handle<const IExpression> cast_to(
+        arguments->get_expression(1));
+    mi::base::Handle<const IType> cast_to_type(cast_to->get_type());
+
+    if (m_tf->is_compatible(cast_from_type.get(), cast_to_type.get()) < 0) {
+        *errors = -2;
+        return NULL;
+    }
+
+    // the actual call only has one argument, clone it and create a new list
+    mi::base::Handle<IExpression_list> new_args(m_ef->create_expression_list());
+    mi::base::Handle<IExpression> new_arg(
+        m_ef->clone(cast_from.get(), /*transaction*/ transaction, /*copy_immutable_calls*/ !immutable));
+    new_args->add_expression("cast", new_arg.get());
+    ASSERT(M_SCENE, new_args);
+
+    // create parameter type list
+    mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
+    parameter_types->add_type("cast", cast_from_type.get());
+
+    Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
+        m_function_tag,
+        m_function_index,
+        new_args.get(),
+        m_mdl_semantic,
+        m_name.c_str(),
+        parameter_types.get(),
+        cast_to_type.get(),
+        immutable,
+        m_enable_if_conditions.get());
+
+    *errors = 0;
+    return function_call;
+}
+
 Mdl_function_call* Mdl_function_definition::create_array_constructor_call_internal(
    DB::Transaction* transaction,
    const IExpression_list* arguments,
@@ -378,19 +491,36 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
         return NULL;
     }
 
+    std::vector<bool> needs_cast(n, false);
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    bool allow_cast = mdlc_module->get_implicit_cast_enabled();
+
     // check that the provided arguments are all of the same type
     mi::base::Handle<const IExpression> first_argument(
         arguments->get_expression( static_cast<mi::Size>( 0)));
     mi::base::Handle<const IType> expected_type( first_argument->get_type());
     bool expected_type_uniform
         = (expected_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
+
     for( mi::Size i = 1; i < n; ++i) {
         mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
         mi::base::Handle<const IType> actual_type( argument->get_type());
-        if( m_tf->compare( actual_type.get(), expected_type.get()) != 0) {
-            *errors = -2;
-            return NULL;
+        mi::Sint32 r = m_tf->is_compatible(actual_type.get(), expected_type.get());
+        if (allow_cast) {
+            if (r == 0) // compatible types
+                needs_cast[i] = true;
+            else if (r < 0) {
+                *errors = -2;
+                return NULL;
+            }
         }
+        else {
+            if (r != 1) { // different types
+                *errors = -2;
+                return NULL;
+            }
+        }
+
         bool actual_type_varying
             = (actual_type->get_all_type_modifiers() & IType::MK_VARYING) != 0;
         if( actual_type_varying && expected_type_uniform) {
@@ -410,7 +540,25 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
 
     // clone arguments
     mi::base::Handle<IExpression_list> complete_arguments(
-        m_ef->clone(arguments, /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
+        m_ef->create_expression_list());
+    for (mi::Size i = 0; i < n; ++i) {
+
+        mi::base::Handle<const IExpression> arg0(arguments->get_expression(i));
+        mi::base::Handle<IExpression> arg(
+            m_ef->clone(arg0.get(), transaction, /*copy_immutable_calls=*/!immutable));
+        if (needs_cast[i]) {
+            arg = m_ef->create_cast(
+                transaction,
+                arg.get(),
+                expected_type.get(),
+                /*cast_db_name=*/nullptr,
+                /*force_cast=*/false,
+                /*direct_call=*/false,
+                errors);
+        }
+        complete_arguments->add_expression(arguments->get_name(i), arg.get());
+    }
+
     ASSERT( M_SCENE, complete_arguments);
 
     // compute parameter types and return type

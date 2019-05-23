@@ -152,8 +152,18 @@ public:
         mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
 
     mi::neuraylib::IReader* get_user_file(
-        const char* mlde_file_name,
+        const char* mdle_file_name,
         const char* user_file_name,
+        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
+    mi::Sint32 compare_mdle(
+        const char* mdle_file_name_a,
+        const char* mdle_file_name_b,
+        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
+    mi::Sint32 get_hash(
+        const char* mdle_file_name,
+        mi::base::Uuid& hash,
         mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
 
     // internal methods

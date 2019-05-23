@@ -10,13 +10,31 @@
 // source file, implement it.
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TOOLS_OBJ2YAML_H
-#define LLVM_TOOLS_OBJ2YAML_H
+#ifndef LLVM_TOOLS_OBJ2YAML_OBJ2YAML_H
+#define LLVM_TOOLS_OBJ2YAML_OBJ2YAML_H
 
-#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Object/COFF.h"
+#include "llvm/Object/Wasm.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
+#include <system_error>
 
-llvm::error_code coff2yaml(llvm::raw_ostream &Out, llvm::MemoryBuffer *TheObj);
+std::error_code coff2yaml(llvm::raw_ostream &Out,
+                          const llvm::object::COFFObjectFile &Obj);
+std::error_code elf2yaml(llvm::raw_ostream &Out,
+                         const llvm::object::ObjectFile &Obj);
+std::error_code macho2yaml(llvm::raw_ostream &Out,
+                           const llvm::object::Binary &Obj);
+std::error_code wasm2yaml(llvm::raw_ostream &Out,
+                          const llvm::object::WasmObjectFile &Obj);
+
+// Forward decls for dwarf2yaml
+namespace llvm {
+class DWARFContext;
+namespace DWARFYAML {
+struct Data;
+}
+}
+
+std::error_code dwarf2yaml(llvm::DWARFContext &DCtx, llvm::DWARFYAML::Data &Y);
 
 #endif

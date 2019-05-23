@@ -95,44 +95,6 @@ something that reassoc doesn't think about yet.
 
 //===---------------------------------------------------------------------===//
 
-This function: (derived from GCC PR19988)
-double foo(double x, double y) {
-  return ((x + 0.1234 * y) * (x + -0.1234 * y));
-}
-
-compiles to:
-_foo:
-	movapd	%xmm1, %xmm2
-	mulsd	LCPI1_1(%rip), %xmm1
-	mulsd	LCPI1_0(%rip), %xmm2
-	addsd	%xmm0, %xmm1
-	addsd	%xmm0, %xmm2
-	movapd	%xmm1, %xmm0
-	mulsd	%xmm2, %xmm0
-	ret
-
-Reassociate should be able to turn it into:
-
-double foo(double x, double y) {
-  return ((x + 0.1234 * y) * (x - 0.1234 * y));
-}
-
-Which allows the multiply by constant to be CSE'd, producing:
-
-_foo:
-	mulsd	LCPI1_0(%rip), %xmm1
-	movapd	%xmm1, %xmm2
-	addsd	%xmm0, %xmm2
-	subsd	%xmm1, %xmm0
-	mulsd	%xmm2, %xmm0
-	ret
-
-This doesn't need -ffast-math support at all.  This is particularly bad because
-the llvm-gcc frontend is canonicalizing the later into the former, but clang
-doesn't have this problem.
-
-//===---------------------------------------------------------------------===//
-
 These two functions should generate the same code on big-endian systems:
 
 int g(int *j,int *l)  {  return memcmp(j,l,4);  }
@@ -144,7 +106,7 @@ for 1,2,4,8 bytes.
 //===---------------------------------------------------------------------===//
 
 It would be nice to revert this patch:
-http://lists.cs.uiuc.edu/pipermail/llvm-commits/Week-of-Mon-20060213/031986.html
+http://lists.llvm.org/pipermail/llvm-commits/Week-of-Mon-20060213/031986.html
 
 And teach the dag combiner enough to simplify the code expanded before 
 legalize.  It seems plausible that this knowledge would let it simplify other
@@ -221,8 +183,8 @@ so cool to turn it into something like:
    
 ... which would only do one 32-bit XOR per loop iteration instead of two.
 
-It would also be nice to recognize the reg->size doesn't alias reg->node[i], but
-this requires TBAA.
+It would also be nice to recognize the reg->size doesn't alias reg->node[i],
+but this requires TBAA.
 
 //===---------------------------------------------------------------------===//
 
@@ -771,7 +733,7 @@ f (unsigned long a, unsigned long b, unsigned long c)
   return ((a & (c - 1)) != 0) | ((b & (c - 1)) != 0);
 }
 Both should combine to ((a|b) & (c-1)) != 0.  Currently not optimized with
-"clang -emit-llvm-bc | opt -std-compile-opts".
+"clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
@@ -784,7 +746,7 @@ void clear_pmd_range(unsigned long start, unsigned long end)
 }
 The expression should optimize to something like
 "!((start|end)&~PMD_MASK). Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
@@ -803,7 +765,7 @@ int f(int x, int y)
  return (abs(x)) >= 0;
 }
 This should optimize to x == INT_MIN. (With -fwrapv.)  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
@@ -841,117 +803,117 @@ rshift_gt (unsigned int a)
 
 All should simplify to a single comparison.  All of these are
 currently not optimized with "clang -emit-llvm-bc | opt
--std-compile-opts".
+-O3".
 
 //===---------------------------------------------------------------------===//
 
 From GCC Bug 32605:
 int c(int* x) {return (char*)x+2 == (char*)x;}
 Should combine to 0.  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts" (although llc can optimize it).
+-emit-llvm-bc | opt -O3" (although llc can optimize it).
 
 //===---------------------------------------------------------------------===//
 
 int a(unsigned b) {return ((b << 31) | (b << 30)) >> 31;}
 Should be combined to  "((b >> 1) | b) & 1".  Currently not optimized
-with "clang -emit-llvm-bc | opt -std-compile-opts".
+with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 unsigned a(unsigned x, unsigned y) { return x | (y & 1) | (y & 2);}
 Should combine to "x | (y & 3)".  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int a, int b, int c) {return (~a & c) | ((c|a) & b);}
 Should fold to "(~a & c) | (a & b)".  Currently not optimized with
-"clang -emit-llvm-bc | opt -std-compile-opts".
+"clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int a,int b) {return (~(a|b))|a;}
 Should fold to "a|~b".  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int a, int b) {return (a&&b) || (a&&!b);}
 Should fold to "a".  Currently not optimized with "clang -emit-llvm-bc
-| opt -std-compile-opts".
+| opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int a, int b, int c) {return (a&&b) || (!a&&c);}
 Should fold to "a ? b : c", or at least something sane.  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int a, int b, int c) {return (a&&b) || (a&&c) || (a&&b&&c);}
 Should fold to a && (b || c).  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int x) {return x | ((x & 8) ^ 8);}
 Should combine to x | 8.  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int x) {return x ^ ((x & 8) ^ 8);}
 Should also combine to x | 8.  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int a(int x) {return ((x | -9) ^ 8) & x;}
 Should combine to x & -9.  Currently not optimized with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 unsigned a(unsigned a) {return a * 0x11111111 >> 28 & 1;}
 Should combine to "a * 0x88888888 >> 31".  Currently not optimized
-with "clang -emit-llvm-bc | opt -std-compile-opts".
+with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 unsigned a(char* x) {if ((*x & 32) == 0) return b();}
 There's an unnecessary zext in the generated code with "clang
--emit-llvm-bc | opt -std-compile-opts".
+-emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 unsigned a(unsigned long long x) {return 40 * (x >> 1);}
 Should combine to "20 * (((unsigned)x) & -2)".  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int g(int x) { return (x - 10) < 0; }
 Should combine to "x <= 9" (the sub has nsw).  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int g(int x) { return (x + 10) < 0; }
 Should combine to "x < -10" (the add has nsw).  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 int f(int i, int j) { return i < j + 1; }
 int g(int i, int j) { return j > i - 1; }
 Should combine to "i <= j" (the add/sub has nsw).  Currently not
-optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
 unsigned f(unsigned x) { return ((x & 7) + 1) & 15; }
 The & 15 part should be optimized away, it doesn't change the result. Currently
-not optimized with "clang -emit-llvm-bc | opt -std-compile-opts".
+not optimized with "clang -emit-llvm-bc | opt -O3".
 
 //===---------------------------------------------------------------------===//
 
@@ -1163,7 +1125,7 @@ There are many load PRE testcases in testsuite/gcc.dg/tree-ssa/loadpre* in the
 GCC testsuite, ones we don't get yet are (checked through loadpre25):
 
 [CRIT EDGE BREAKING]
-loadpre3.c predcom-4.c
+predcom-4.c
 
 [PRE OF READONLY CALL]
 loadpre5.c
@@ -1306,7 +1268,8 @@ int foo (void) {
 ..
   else if (strchr ("<>", *intel_parser.op_string)
 
-Those should be turned into a switch.
+Those should be turned into a switch.  SimplifyLibCalls only gets the second
+case.
 
 //===---------------------------------------------------------------------===//
 
@@ -1815,7 +1778,7 @@ We do get this at the codegen level, so something knows about it, but
 instcombine should catch it earlier:
 
 _foo:                                   ## @foo
-## BB#0:                                ## %entry
+## %bb.0:                               ## %entry
 	movl	%edi, %eax
 	sarl	$4, %eax
 	ret
@@ -1879,44 +1842,6 @@ we remove checking in code like
   char *p = malloc(strlen(s)+1);
   __strcpy_chk(p, s, __builtin_objectsize(p, 0));
 
-//===---------------------------------------------------------------------===//
-
-This code (from Benchmarks/Dhrystone/dry.c):
-
-define i32 @Func1(i32, i32) nounwind readnone optsize ssp {
-entry:
-  %sext = shl i32 %0, 24
-  %conv = ashr i32 %sext, 24
-  %sext6 = shl i32 %1, 24
-  %conv4 = ashr i32 %sext6, 24
-  %cmp = icmp eq i32 %conv, %conv4
-  %. = select i1 %cmp, i32 10000, i32 0
-  ret i32 %.
-}
-
-Should be simplified into something like:
-
-define i32 @Func1(i32, i32) nounwind readnone optsize ssp {
-entry:
-  %sext = shl i32 %0, 24
-  %conv = and i32 %sext, 0xFF000000
-  %sext6 = shl i32 %1, 24
-  %conv4 = and i32 %sext6, 0xFF000000
-  %cmp = icmp eq i32 %conv, %conv4
-  %. = select i1 %cmp, i32 10000, i32 0
-  ret i32 %.
-}
-
-and then to:
-
-define i32 @Func1(i32, i32) nounwind readnone optsize ssp {
-entry:
-  %conv = and i32 %0, 0xFF
-  %conv4 = and i32 %1, 0xFF
-  %cmp = icmp eq i32 %conv, %conv4
-  %. = select i1 %cmp, i32 10000, i32 0
-  ret i32 %.
-}
 //===---------------------------------------------------------------------===//
 
 clang -O3 currently compiles this code
@@ -2156,7 +2081,7 @@ struct x testfunc() {
 }
 
 We currently compile this to:
-$ clang t.c -S -o - -O0 -emit-llvm | opt -scalarrepl -S
+$ clang t.c -S -o - -O0 -emit-llvm | opt -sroa -S
 
 
 %struct.x = type { i8, [4 x i32] }
@@ -2309,13 +2234,13 @@ void foo(funcs f, int which) {
 which we compile to:
 
 foo:                                    # @foo
-# BB#0:                                 # %entry
+# %bb.0:                                # %entry
        pushq   %rbp
        movq    %rsp, %rbp
        testl   %esi, %esi
        movq    %rdi, %rax
        je      .LBB0_2
-# BB#1:                                 # %if.then
+# %bb.1:                                # %if.then
        movl    $5, %edi
        callq   *%rax
        popq    %rbp

@@ -169,6 +169,12 @@ const char* get_array_constructor_db_name();
 /// Returns the MDL name used for the array constructor.
 const char* get_array_constructor_mdl_name();
 
+/// Returns the DB element name used for the cast operator.
+const char* get_cast_operator_db_name();
+
+/// Returns the MDL name used for the cast operator.
+const char* get_cast_operator_mdl_name();
+
 /// Returns \c true for builtin modules.
 ///
 /// Builtin modules have no underlying file, e.g., "::state".
@@ -176,6 +182,10 @@ const char* get_array_constructor_mdl_name();
 /// \param module   The name of the module (including leading double colons, e.g., "::state").
 bool is_builtin_module( const std::string& module);
 
+
+/// Checks, if the given call definition is valid for use as a prototype for create_functions
+/// MDLE file or presets.
+bool is_supported_prototype(const Mdl_function_definition *fdef, bool for_preset);
 
 /// Returns a default compiled material.
 ///
@@ -289,6 +299,7 @@ public:
     #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL       "include_geometry_normal"
     #define MDL_CTX_OPTION_BUNDLE_RESOURCES         "bundle_resources"
     #define MDL_CTX_OPTION_EXPERIMENTAL             "experimental"
+    #define MDL_CTX_OPTION_RESOLVE_RESOURCES        "resolve_resources"
 
     Execution_context();
 
@@ -357,6 +368,11 @@ void report_messages(const mi::mdl::Messages& in_messages, Execution_context* co
 
 /// Wraps an MDL resource reader as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* reader);
+
+/// Returns a reader to a resource from an MDL archive or MDLE file.
+mi::neuraylib::IReader* get_container_resource_reader(
+    const std::string& resolved_container_filename,
+    const std::string& container_member_name);
 
 /// Creates an instance of an implementation of IMAGE::IMdl_container_callback.
 IMAGE::IMdl_container_callback* create_mdl_container_callback();

@@ -121,7 +121,8 @@ public:
         MDL_VERSION_1_3,                        ///< compile MDL 1.3
         MDL_VERSION_1_4,                        ///< compile MDL 1.4
         MDL_VERSION_1_5,                        ///< compile MDL 1.5
-        MDL_LATEST_VERSION = MDL_VERSION_1_4,   ///< always the latest supported version
+        MDL_VERSION_1_6,                        ///< compile MDL 1.6
+        MDL_LATEST_VERSION = MDL_VERSION_1_5,   ///< always the latest supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
 
@@ -143,6 +144,9 @@ public:
 
     /// The name of the option that enables undocumented experimental MDL features.
     #define MDL_OPTION_EXPERIMENTAL_FEATURES "experimental"
+
+    /// The name of the option that controls, if resources are to be resolved by the compiler.
+    #define MDL_OPTION_RESOLVE_RESOURCES "resolve_resources"
 
     /// The value of \c limits::FLOAT_MIN.
     #define MDL_OPTION_LIMITS_FLOAT_MIN "limits::FLOAT_MIN"
@@ -484,6 +488,13 @@ public:
     /// The module transformer operates on modules, transforming them into semantically equivalent
     /// modules.
     virtual IMDL_module_transformer *create_module_transformer() = 0;
+
+    /// Sets a resolver interface that will be used to lookup MDL modules and resources.
+    ///
+    /// \param resolver  the resolver
+    ///
+    /// \note This disables the built-it resolver currently.
+    virtual void set_external_entity_resolver(IEntity_resolver *resolver) = 0;
 };
 
 

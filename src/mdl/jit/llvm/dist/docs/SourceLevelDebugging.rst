@@ -63,20 +63,22 @@ away during the compilation process.  This meta information provides an LLVM
 user a relationship between generated code and the original program source
 code.
 
-Currently, debug information is consumed by DwarfDebug to produce dwarf
-information used by the gdb debugger.  Other targets could use the same
-information to produce stabs or other debug forms.
+Currently, there are two backend consumers of debug info: DwarfDebug and
+CodeViewDebug. DwarfDebug produces DWARF suitable for use with GDB, LLDB, and
+other DWARF-based debuggers. :ref:`CodeViewDebug <codeview>` produces CodeView,
+the Microsoft debug info format, which is usable with Microsoft debuggers such
+as Visual Studio and WinDBG. LLVM's debug information format is mostly derived
+from and inspired by DWARF, but it is feasible to translate into other target
+debug info formats such as STABS.
 
 It would also be reasonable to use debug information to feed profiling tools
 for analysis of generated code, or, tools for reconstructing the original
 source from generated code.
 
-TODO - expound a bit more.
-
 .. _intro_debugopt:
 
-Debugging optimized code
-------------------------
+Debug information and optimizations
+-----------------------------------
 
 An extremely high priority of LLVM debugging information is to make it interact
 well with optimizations and analysis.  In particular, the LLVM debug
@@ -90,11 +92,10 @@ information provides the following guarantees:
   as setting program variables, or calling functions that have been
   deleted.
 
-* As desired, LLVM optimizations can be upgraded to be aware of the LLVM
-  debugging information, allowing them to update the debugging information
-  as they perform aggressive optimizations.  This means that, with effort,
-  the LLVM optimizers could optimize debug code just as well as non-debug
-  code.
+* As desired, LLVM optimizations can be upgraded to be aware of debugging
+  information, allowing them to update the debugging information as they
+  perform aggressive optimizations.  This means that, with effort, the LLVM
+  optimizers could optimize debug code just as well as non-debug code.
 
 * LLVM debug information does not prevent optimizations from
   happening (for example inlining, basic block reordering/merging/cleanup,
@@ -111,10 +112,10 @@ the program as it executes from a debugger.  Compiling a program with
 "``-O3 -g``" gives you full debug information that is always available and
 accurate for reading (e.g., you get accurate stack traces despite tail call
 elimination and inlining), but you might lose the ability to modify the program
-and call functions where were optimized out of the program, or inlined away
+and call functions which were optimized out of the program, or inlined away
 completely.
 
-:ref:`LLVM test suite <test-suite-quickstart>` provides a framework to test
+The :ref:`LLVM test suite <test-suite-quickstart>` provides a framework to test
 optimizer's handling of debugging information.  It can be run like this:
 
 .. code-block:: bash
@@ -153,471 +154,100 @@ debugger to interpret the information.
 To provide basic functionality, the LLVM debugger does have to make some
 assumptions about the source-level language being debugged, though it keeps
 these to a minimum.  The only common features that the LLVM debugger assumes
-exist are :ref:`source files <format_files>`, and :ref:`program objects
-<format_global_variables>`.  These abstract objects are used by a debugger to
-form stack traces, show information about local variables, etc.
+exist are `source files <LangRef.html#difile>`_, and `program objects
+<LangRef.html#diglobalvariable>`_.  These abstract objects are used by a
+debugger to form stack traces, show information about local variables, etc.
 
 This section of the documentation first describes the representation aspects
 common to any source-language.  :ref:`ccxx_frontend` describes the data layout
 conventions used by the C and C++ front-ends.
 
-Debug information descriptors
------------------------------
-
-In consideration of the complexity and volume of debug information, LLVM
-provides a specification for well formed debug descriptors.
-
-Consumers of LLVM debug information expect the descriptors for program objects
-to start in a canonical format, but the descriptors can include additional
-information appended at the end that is source-language specific.  All debugging
-information objects start with a tag to indicate what type of object it is.
-The source-language is allowed to define its own objects, by using unreserved
-tag numbers.  We recommend using with tags in the range 0x1000 through 0x2000
-(there is a defined ``enum DW_TAG_user_base = 0x1000``.)
-
-The fields of debug descriptors used internally by LLVM are restricted to only
-the simple data types ``i32``, ``i1``, ``float``, ``double``, ``mdstring`` and
-``mdnode``.
-
-.. code-block:: llvm
-
-  !1 = metadata !{
-    i32,   ;; A tag
-    ...
-  }
-
-<a name="LLVMDebugVersion">The first field of a descriptor is always an
-``i32`` containing a tag value identifying the content of the descriptor.
-The remaining fields are specific to the descriptor.  The values of tags are
-loosely bound to the tag values of DWARF information entries.  However, that
-does not restrict the use of the information supplied to DWARF targets.
-
-The details of the various descriptors follow.
-
-Compile unit descriptors
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !0 = metadata !{
-    i32,       ;; Tag = 17 (DW_TAG_compile_unit)
-    metadata,  ;; Source directory (including trailing slash) & file pair
-    i32,       ;; DWARF language identifier (ex. DW_LANG_C89)
-    metadata   ;; Producer (ex. "4.0.1 LLVM (LLVM research group)")
-    i1,        ;; True if this is optimized.
-    metadata,  ;; Flags
-    i32        ;; Runtime version
-    metadata   ;; List of enums types
-    metadata   ;; List of retained types
-    metadata   ;; List of subprograms
-    metadata   ;; List of global variables
-    metadata   ;; List of imported entities
-    metadata   ;; Split debug filename
-  }
-
-These descriptors contain a source language ID for the file (we use the DWARF
-3.0 ID numbers, such as ``DW_LANG_C89``, ``DW_LANG_C_plus_plus``,
-``DW_LANG_Cobol74``, etc), a reference to a metadata node containing a pair of
-strings for the source file name and the working directory, as well as an
-identifier string for the compiler that produced it.
-
-Compile unit descriptors provide the root context for objects declared in a
-specific compilation unit.  File descriptors are defined using this context.
-These descriptors are collected by a named metadata ``!llvm.dbg.cu``.  They
-keep track of subprograms, global variables, type information, and imported
-entities (declarations and namespaces).
-
-.. _format_files:
-
-File descriptors
-^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !0 = metadata !{
-    i32,       ;; Tag = 41 (DW_TAG_file_type)
-    metadata,  ;; Source directory (including trailing slash) & file pair
-  }
-
-These descriptors contain information for a file.  Global variables and top
-level functions would be defined using this context.  File descriptors also
-provide context for source line correspondence.
-
-Each input file is encoded as a separate file descriptor in LLVM debugging
-information output.
-
-.. _format_global_variables:
-
-Global variable descriptors
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !1 = metadata !{
-    i32,      ;; Tag = 52 (DW_TAG_variable)
-    i32,      ;; Unused field.
-    metadata, ;; Reference to context descriptor
-    metadata, ;; Name
-    metadata, ;; Display name (fully qualified C++ name)
-    metadata, ;; MIPS linkage name (for C++)
-    metadata, ;; Reference to file where defined
-    i32,      ;; Line number where defined
-    metadata, ;; Reference to type descriptor
-    i1,       ;; True if the global is local to compile unit (static)
-    i1,       ;; True if the global is defined in the compile unit (not extern)
-    {}*,      ;; Reference to the global variable
-    metadata, ;; The static member declaration, if any
-  }
-
-These descriptors provide debug information about globals variables.  They
-provide details such as name, type and where the variable is defined.  All
-global variables are collected inside the named metadata ``!llvm.dbg.cu``.
-
-.. _format_subprograms:
-
-Subprogram descriptors
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32,      ;; Tag = 46 (DW_TAG_subprogram)
-    metadata, ;; Source directory (including trailing slash) & file pair
-    metadata, ;; Reference to context descriptor
-    metadata, ;; Name
-    metadata, ;; Display name (fully qualified C++ name)
-    metadata, ;; MIPS linkage name (for C++)
-    i32,      ;; Line number where defined
-    metadata, ;; Reference to type descriptor
-    i1,       ;; True if the global is local to compile unit (static)
-    i1,       ;; True if the global is defined in the compile unit (not extern)
-    i32,      ;; Virtuality, e.g. dwarf::DW_VIRTUALITY__virtual
-    i32,      ;; Index into a virtual function
-    metadata, ;; indicates which base type contains the vtable pointer for the
-              ;; derived class
-    i32,      ;; Flags - Artificial, Private, Protected, Explicit, Prototyped.
-    i1,       ;; isOptimized
-    Function * , ;; Pointer to LLVM function
-    metadata, ;; Lists function template parameters
-    metadata, ;; Function declaration descriptor
-    metadata, ;; List of function variables
-    i32       ;; Line number where the scope of the subprogram begins
-  }
-
-These descriptors provide debug information about functions, methods and
-subprograms.  They provide details such as name, return types and the source
-location where the subprogram is defined.
-
-Block descriptors
-^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !3 = metadata !{
-    i32,     ;; Tag = 11 (DW_TAG_lexical_block)
-    metadata,;; Source directory (including trailing slash) & file pair
-    metadata,;; Reference to context descriptor
-    i32,     ;; Line number
-    i32,     ;; Column number
-    i32      ;; Unique ID to identify blocks from a template function
-  }
-
-This descriptor provides debug information about nested blocks within a
-subprogram.  The line number and column numbers are used to dinstinguish two
-lexical blocks at same depth.
-
-.. code-block:: llvm
-
-  !3 = metadata !{
-    i32,     ;; Tag = 11 (DW_TAG_lexical_block)
-    metadata,;; Source directory (including trailing slash) & file pair
-    metadata ;; Reference to the scope we're annotating with a file change
-  }
-
-This descriptor provides a wrapper around a lexical scope to handle file
-changes in the middle of a lexical block.
-
-.. _format_basic_type:
-
-Basic type descriptors
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !4 = metadata !{
-    i32,      ;; Tag = 36 (DW_TAG_base_type)
-    metadata, ;; Source directory (including trailing slash) & file pair (may be null)
-    metadata, ;; Reference to context
-    metadata, ;; Name (may be "" for anonymous types)
-    i32,      ;; Line number where defined (may be 0)
-    i64,      ;; Size in bits
-    i64,      ;; Alignment in bits
-    i64,      ;; Offset in bits
-    i32,      ;; Flags
-    i32       ;; DWARF type encoding
-  }
-
-These descriptors define primitive types used in the code.  Example ``int``,
-``bool`` and ``float``.  The context provides the scope of the type, which is
-usually the top level.  Since basic types are not usually user defined the
-context and line number can be left as NULL and 0.  The size, alignment and
-offset are expressed in bits and can be 64 bit values.  The alignment is used
-to round the offset when embedded in a :ref:`composite type
-<format_composite_type>` (example to keep float doubles on 64 bit boundaries).
-The offset is the bit offset if embedded in a :ref:`composite type
-<format_composite_type>`.
-
-The type encoding provides the details of the type.  The values are typically
-one of the following:
-
-.. code-block:: llvm
-
-  DW_ATE_address       = 1
-  DW_ATE_boolean       = 2
-  DW_ATE_float         = 4
-  DW_ATE_signed        = 5
-  DW_ATE_signed_char   = 6
-  DW_ATE_unsigned      = 7
-  DW_ATE_unsigned_char = 8
-
-.. _format_derived_type:
-
-Derived type descriptors
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !5 = metadata !{
-    i32,      ;; Tag (see below)
-    metadata, ;; Source directory (including trailing slash) & file pair (may be null)
-    metadata, ;; Reference to context
-    metadata, ;; Name (may be "" for anonymous types)
-    i32,      ;; Line number where defined (may be 0)
-    i64,      ;; Size in bits
-    i64,      ;; Alignment in bits
-    i64,      ;; Offset in bits
-    i32,      ;; Flags to encode attributes, e.g. private
-    metadata, ;; Reference to type derived from
-    metadata, ;; (optional) Name of the Objective C property associated with
-              ;; Objective-C an ivar, or the type of which this
-              ;; pointer-to-member is pointing to members of.
-    metadata, ;; (optional) Name of the Objective C property getter selector.
-    metadata, ;; (optional) Name of the Objective C property setter selector.
-    i32       ;; (optional) Objective C property attributes.
-  }
-
-These descriptors are used to define types derived from other types.  The value
-of the tag varies depending on the meaning.  The following are possible tag
-values:
-
-.. code-block:: llvm
-
-  DW_TAG_formal_parameter   = 5
-  DW_TAG_member             = 13
-  DW_TAG_pointer_type       = 15
-  DW_TAG_reference_type     = 16
-  DW_TAG_typedef            = 22
-  DW_TAG_ptr_to_member_type = 31
-  DW_TAG_const_type         = 38
-  DW_TAG_volatile_type      = 53
-  DW_TAG_restrict_type      = 55
-
-``DW_TAG_member`` is used to define a member of a :ref:`composite type
-<format_composite_type>` or :ref:`subprogram <format_subprograms>`.  The type
-of the member is the :ref:`derived type <format_derived_type>`.
-``DW_TAG_formal_parameter`` is used to define a member which is a formal
-argument of a subprogram.
-
-``DW_TAG_typedef`` is used to provide a name for the derived type.
-
-``DW_TAG_pointer_type``, ``DW_TAG_reference_type``, ``DW_TAG_const_type``,
-``DW_TAG_volatile_type`` and ``DW_TAG_restrict_type`` are used to qualify the
-:ref:`derived type <format_derived_type>`.
-
-:ref:`Derived type <format_derived_type>` location can be determined from the
-context and line number.  The size, alignment and offset are expressed in bits
-and can be 64 bit values.  The alignment is used to round the offset when
-embedded in a :ref:`composite type <format_composite_type>`  (example to keep
-float doubles on 64 bit boundaries.) The offset is the bit offset if embedded
-in a :ref:`composite type <format_composite_type>`.
-
-Note that the ``void *`` type is expressed as a type derived from NULL.
-
-.. _format_composite_type:
-
-Composite type descriptors
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !6 = metadata !{
-    i32,      ;; Tag (see below)
-    metadata, ;; Source directory (including trailing slash) & file pair (may be null)
-    metadata, ;; Reference to context
-    metadata, ;; Name (may be "" for anonymous types)
-    i32,      ;; Line number where defined (may be 0)
-    i64,      ;; Size in bits
-    i64,      ;; Alignment in bits
-    i64,      ;; Offset in bits
-    i32,      ;; Flags
-    metadata, ;; Reference to type derived from
-    metadata, ;; Reference to array of member descriptors
-    i32,      ;; Runtime languages
-    metadata, ;; Base type containing the vtable pointer for this type
-    metadata, ;; Template parameters
-    metadata  ;; A unique identifier for type uniquing purpose (may be null)
-  }
-
-These descriptors are used to define types that are composed of 0 or more
-elements.  The value of the tag varies depending on the meaning.  The following
-are possible tag values:
-
-.. code-block:: llvm
-
-  DW_TAG_array_type       = 1
-  DW_TAG_enumeration_type = 4
-  DW_TAG_structure_type   = 19
-  DW_TAG_union_type       = 23
-  DW_TAG_subroutine_type  = 21
-  DW_TAG_inheritance      = 28
-
-The vector flag indicates that an array type is a native packed vector.
-
-The members of array types (tag = ``DW_TAG_array_type``) are
-:ref:`subrange descriptors <format_subrange>`, each
-representing the range of subscripts at that level of indexing.
-
-The members of enumeration types (tag = ``DW_TAG_enumeration_type``) are
-:ref:`enumerator descriptors <format_enumerator>`, each representing the
-definition of enumeration value for the set.  All enumeration type descriptors
-are collected inside the named metadata ``!llvm.dbg.cu``.
-
-The members of structure (tag = ``DW_TAG_structure_type``) or union (tag =
-``DW_TAG_union_type``) types are any one of the :ref:`basic
-<format_basic_type>`, :ref:`derived <format_derived_type>` or :ref:`composite
-<format_composite_type>` type descriptors, each representing a field member of
-the structure or union.
-
-For C++ classes (tag = ``DW_TAG_structure_type``), member descriptors provide
-information about base classes, static members and member functions.  If a
-member is a :ref:`derived type descriptor <format_derived_type>` and has a tag
-of ``DW_TAG_inheritance``, then the type represents a base class.  If the member
-of is a :ref:`global variable descriptor <format_global_variables>` then it
-represents a static member.  And, if the member is a :ref:`subprogram
-descriptor <format_subprograms>` then it represents a member function.  For
-static members and member functions, ``getName()`` returns the members link or
-the C++ mangled name.  ``getDisplayName()`` the simplied version of the name.
-
-The first member of subroutine (tag = ``DW_TAG_subroutine_type``) type elements
-is the return type for the subroutine.  The remaining elements are the formal
-arguments to the subroutine.
-
-:ref:`Composite type <format_composite_type>` location can be determined from
-the context and line number.  The size, alignment and offset are expressed in
-bits and can be 64 bit values.  The alignment is used to round the offset when
-embedded in a :ref:`composite type <format_composite_type>` (as an example, to
-keep float doubles on 64 bit boundaries).  The offset is the bit offset if
-embedded in a :ref:`composite type <format_composite_type>`.
-
-.. _format_subrange:
-
-Subrange descriptors
-^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !42 = metadata !{
-    i32,    ;; Tag = 33 (DW_TAG_subrange_type)
-    i64,    ;; Low value
-    i64     ;; High value
-  }
-
-These descriptors are used to define ranges of array subscripts for an array
-:ref:`composite type <format_composite_type>`.  The low value defines the lower
-bounds typically zero for C/C++.  The high value is the upper bounds.  Values
-are 64 bit.  ``High - Low + 1`` is the size of the array.  If ``Low > High``
-the array bounds are not included in generated debugging information.
-
-.. _format_enumerator:
-
-Enumerator descriptors
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !6 = metadata !{
-    i32,      ;; Tag = 40 (DW_TAG_enumerator)
-    metadata, ;; Name
-    i64       ;; Value
-  }
-
-These descriptors are used to define members of an enumeration :ref:`composite
-type <format_composite_type>`, it associates the name to the value.
-
-Local variables
-^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !7 = metadata !{
-    i32,      ;; Tag (see below)
-    metadata, ;; Context
-    metadata, ;; Name
-    metadata, ;; Reference to file where defined
-    i32,      ;; 24 bit - Line number where defined
-              ;; 8 bit - Argument number. 1 indicates 1st argument.
-    metadata, ;; Type descriptor
-    i32,      ;; flags
-    metadata  ;; (optional) Reference to inline location
-  }
-
-These descriptors are used to define variables local to a sub program.  The
-value of the tag depends on the usage of the variable:
-
-.. code-block:: llvm
-
-  DW_TAG_auto_variable   = 256
-  DW_TAG_arg_variable    = 257
-
-An auto variable is any variable declared in the body of the function.  An
-argument variable is any variable that appears as a formal argument to the
-function.
-
-The context is either the subprogram or block where the variable is defined.
-Name the source variable name.  Context and line indicate where the variable
-was defined.  Type descriptor defines the declared type of the variable.
+Debug information descriptors are `specialized metadata nodes
+<LangRef.html#specialized-metadata>`_, first-class subclasses of ``Metadata``.
 
 .. _format_common_intrinsics:
 
 Debugger intrinsic functions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 
 LLVM uses several intrinsic functions (name prefixed with "``llvm.dbg``") to
-provide debug information at various points in generated code.
+track source local variables through optimization and code generation.
+
+``llvm.dbg.addr``
+^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: llvm
+
+  void @llvm.dbg.addr(metadata, metadata, metadata)
+
+This intrinsic provides information about a local element (e.g., variable).
+The first argument is metadata holding the address of variable, typically a
+static alloca in the function entry block.  The second argument is a
+`local variable <LangRef.html#dilocalvariable>`_ containing a description of
+the variable.  The third argument is a `complex expression
+<LangRef.html#diexpression>`_.  An `llvm.dbg.addr` intrinsic describes the
+*address* of a source variable.
+
+.. code-block:: text
+
+    %i.addr = alloca i32, align 4
+    call void @llvm.dbg.addr(metadata i32* %i.addr, metadata !1,
+                             metadata !DIExpression()), !dbg !2
+    !1 = !DILocalVariable(name: "i", ...) ; int i
+    !2 = !DILocation(...)
+    ...
+    %buffer = alloca [256 x i8], align 8
+    ; The address of i is buffer+64.
+    call void @llvm.dbg.addr(metadata [256 x i8]* %buffer, metadata !3,
+                             metadata !DIExpression(DW_OP_plus, 64)), !dbg !4
+    !3 = !DILocalVariable(name: "i", ...) ; int i
+    !4 = !DILocation(...)
+
+A frontend should generate exactly one call to ``llvm.dbg.addr`` at the point
+of declaration of a source variable. Optimization passes that fully promote the
+variable from memory to SSA values will replace this call with possibly
+multiple calls to `llvm.dbg.value`. Passes that delete stores are effectively
+partial promotion, and they will insert a mix of calls to ``llvm.dbg.value``
+and ``llvm.dbg.addr`` to track the source variable value when it is available.
+After optimization, there may be multiple calls to ``llvm.dbg.addr`` describing
+the program points where the variables lives in memory. All calls for the same
+concrete source variable must agree on the memory location.
+
 
 ``llvm.dbg.declare``
 ^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: llvm
 
-  void %llvm.dbg.declare(metadata, metadata)
+  void @llvm.dbg.declare(metadata, metadata, metadata)
 
-This intrinsic provides information about a local element (e.g., variable).
-The first argument is metadata holding the alloca for the variable.  The second
-argument is metadata containing a description of the variable.
+This intrinsic is identical to `llvm.dbg.addr`, except that there can only be
+one call to `llvm.dbg.declare` for a given concrete `local variable
+<LangRef.html#dilocalvariable>`_. It is not control-dependent, meaning that if
+a call to `llvm.dbg.declare` exists and has a valid location argument, that
+address is considered to be the true home of the variable across its entire
+lifetime. This makes it hard for optimizations to preserve accurate debug info
+in the presence of ``llvm.dbg.declare``, so we are transitioning away from it,
+and we plan to deprecate it in future LLVM releases.
+
 
 ``llvm.dbg.value``
 ^^^^^^^^^^^^^^^^^^
 
 .. code-block:: llvm
 
-  void %llvm.dbg.value(metadata, i64, metadata)
+  void @llvm.dbg.value(metadata, metadata, metadata)
 
 This intrinsic provides information when a user source variable is set to a new
 value.  The first argument is the new value (wrapped as metadata).  The second
-argument is the offset in the user source variable where the new value is
-written.  The third argument is metadata containing a description of the user
-source variable.
+argument is a `local variable <LangRef.html#dilocalvariable>`_ containing a
+description of the variable.  The third argument is a `complex expression
+<LangRef.html#diexpression>`_.
+
+An `llvm.dbg.value` intrinsic describes the *value* of a source variable
+directly, not its address.  Note that the value operand of this intrinsic may
+be indirect (i.e, a pointer to the source variable), provided that interpreting
+the complex expression derives the direct value.
 
 Object lifetimes and scoping
 ============================
@@ -646,90 +276,68 @@ following C fragment, for example:
   8.    X = Y;
   9.  }
 
+.. FIXME: Update the following example to use llvm.dbg.addr once that is the
+   default in clang.
+
 Compiled to LLVM, this function would be represented like this:
 
-.. code-block:: llvm
+.. code-block:: text
 
-  define void @foo() #0 {
+  ; Function Attrs: nounwind ssp uwtable
+  define void @foo() #0 !dbg !4 {
   entry:
-   %X = alloca i32, align 4
+    %X = alloca i32, align 4
     %Y = alloca i32, align 4
     %Z = alloca i32, align 4
-    call void @llvm.dbg.declare(metadata !{i32* %X}, metadata !10), !dbg !12
-      ; [debug line = 2:7] [debug variable = X]
-    store i32 21, i32* %X, align 4, !dbg !12
-    call void @llvm.dbg.declare(metadata !{i32* %Y}, metadata !13), !dbg !14
-      ; [debug line = 3:7] [debug variable = Y]
-    store i32 22, i32* %Y, align 4, !dbg !14
-    call void @llvm.dbg.declare(metadata !{i32* %Z}, metadata !15), !dbg !17
-      ; [debug line = 5:9] [debug variable = Z]
-    store i32 23, i32* %Z, align 4, !dbg !17
-    %0 = load i32* %X, align 4, !dbg !18
-      [debug line = 6:5]
-    store i32 %0, i32* %Z, align 4, !dbg !18
-    %1 = load i32* %Y, align 4, !dbg !19
-      [debug line = 8:3]
-    store i32 %1, i32* %X, align 4, !dbg !19
-    ret void, !dbg !20
+    call void @llvm.dbg.declare(metadata i32* %X, metadata !11, metadata !13), !dbg !14
+    store i32 21, i32* %X, align 4, !dbg !14
+    call void @llvm.dbg.declare(metadata i32* %Y, metadata !15, metadata !13), !dbg !16
+    store i32 22, i32* %Y, align 4, !dbg !16
+    call void @llvm.dbg.declare(metadata i32* %Z, metadata !17, metadata !13), !dbg !19
+    store i32 23, i32* %Z, align 4, !dbg !19
+    %0 = load i32, i32* %X, align 4, !dbg !20
+    store i32 %0, i32* %Z, align 4, !dbg !21
+    %1 = load i32, i32* %Y, align 4, !dbg !22
+    store i32 %1, i32* %X, align 4, !dbg !23
+    ret void, !dbg !24
   }
 
   ; Function Attrs: nounwind readnone
-  declare void @llvm.dbg.declare(metadata, metadata) #1
+  declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
-  attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false"
-    "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf"
-    "no-infs-fp-math"="false" "no-nans-fp-math"="false"
-    "stack-protector-buffer-size"="8" "unsafe-fp-math"="false"
-    "use-soft-float"="false" }
+  attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
   attributes #1 = { nounwind readnone }
 
   !llvm.dbg.cu = !{!0}
-  !llvm.module.flags = !{!8}
-  !llvm.ident = !{!9}
+  !llvm.module.flags = !{!7, !8, !9}
+  !llvm.ident = !{!10}
 
-  !0 = metadata !{i32 786449, metadata !1, i32 12,
-                  metadata !"clang version 3.4 (trunk 193128) (llvm/trunk 193139)",
-                  i1 false, metadata !"", i32 0, metadata !2, metadata !2, metadata !3,
-                  metadata !2, metadata !2, metadata !""} ; [ DW_TAG_compile_unit ] \
-                    [/private/tmp/foo.c] \
-                    [DW_LANG_C99]
-  !1 = metadata !{metadata !"t.c", metadata !"/private/tmp"}
-  !2 = metadata !{i32 0}
-  !3 = metadata !{metadata !4}
-  !4 = metadata !{i32 786478, metadata !1, metadata !5, metadata !"foo",
-                  metadata !"foo", metadata !"", i32 1, metadata !6,
-                  i1 false, i1 true, i32 0, i32 0, null, i32 0, i1 false,
-                  void ()* @foo, null, null, metadata !2, i32 1}
-                  ; [ DW_TAG_subprogram ] [line 1] [def] [foo]
-  !5 = metadata !{i32 786473, metadata !1}  ; [ DW_TAG_file_type ] \
-                    [/private/tmp/t.c]
-  !6 = metadata !{i32 786453, i32 0, null, metadata !"", i32 0, i64 0, i64 0,
-                  i64 0, i32 0, null, metadata !7, i32 0, null, null, null}
-                  ; [ DW_TAG_subroutine_type ] \
-                    [line 0, size 0, align 0, offset 0] [from ]
-  !7 = metadata !{null}
-  !8 = metadata !{i32 2, metadata !"Dwarf Version", i32 2}
-  !9 = metadata !{metadata !"clang version 3.4 (trunk 193128) (llvm/trunk 193139)"}
-  !10 = metadata !{i32 786688, metadata !4, metadata !"X", metadata !5, i32 2,
-                   metadata !11, i32 0, i32 0} ; [ DW_TAG_auto_variable ] [X] \
-                     [line 2]
-  !11 = metadata !{i32 786468, null, null, metadata !"int", i32 0, i64 32,
-                   i64 32, i64 0, i32 0, i32 5} ; [ DW_TAG_base_type ] [int] \
-                     [line 0, size 32, align 32, offset 0, enc DW_ATE_signed]
-  !12 = metadata !{i32 2, i32 0, metadata !4, null}
-  !13 = metadata !{i32 786688, metadata !4, metadata !"Y", metadata !5, i32 3,
-                   metadata !11, i32 0, i32 0} ; [ DW_TAG_auto_variable ] [Y] \
-                     [line 3]
-  !14 = metadata !{i32 3, i32 0, metadata !4, null}
-  !15 = metadata !{i32 786688, metadata !16, metadata !"Z", metadata !5, i32 5,
-                   metadata !11, i32 0, i32 0} ; [ DW_TAG_auto_variable ] [Z] \
-                     [line 5]
-  !16 = metadata !{i32 786443, metadata !1, metadata !4, i32 4, i32 0, i32 0} \
-                   ; [ DW_TAG_lexical_block ] [/private/tmp/t.c]
-  !17 = metadata !{i32 5, i32 0, metadata !16, null}
-  !18 = metadata !{i32 6, i32 0, metadata !16, null}
-  !19 = metadata !{i32 8, i32 0, metadata !4, null} ; [ DW_TAG_imported_declaration ]
-  !20 = metadata !{i32 9, i32 0, metadata !4, null}
+  !0 = !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 3.7.0 (trunk 231150) (llvm/trunk 231154)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+  !1 = !DIFile(filename: "/dev/stdin", directory: "/Users/dexonsmith/data/llvm/debug-info")
+  !2 = !{}
+  !3 = !{!4}
+  !4 = distinct !DISubprogram(name: "foo", scope: !1, file: !1, line: 1, type: !5, isLocal: false, isDefinition: true, scopeLine: 1, isOptimized: false, variables: !2)
+  !5 = !DISubroutineType(types: !6)
+  !6 = !{null}
+  !7 = !{i32 2, !"Dwarf Version", i32 2}
+  !8 = !{i32 2, !"Debug Info Version", i32 3}
+  !9 = !{i32 1, !"PIC Level", i32 2}
+  !10 = !{!"clang version 3.7.0 (trunk 231150) (llvm/trunk 231154)"}
+  !11 = !DILocalVariable(name: "X", scope: !4, file: !1, line: 2, type: !12)
+  !12 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
+  !13 = !DIExpression()
+  !14 = !DILocation(line: 2, column: 9, scope: !4)
+  !15 = !DILocalVariable(name: "Y", scope: !4, file: !1, line: 3, type: !12)
+  !16 = !DILocation(line: 3, column: 9, scope: !4)
+  !17 = !DILocalVariable(name: "Z", scope: !18, file: !1, line: 5, type: !12)
+  !18 = distinct !DILexicalBlock(scope: !4, file: !1, line: 4, column: 5)
+  !19 = !DILocation(line: 5, column: 11, scope: !18)
+  !20 = !DILocation(line: 6, column: 11, scope: !18)
+  !21 = !DILocation(line: 6, column: 9, scope: !18)
+  !22 = !DILocation(line: 8, column: 9, scope: !4)
+  !23 = !DILocation(line: 8, column: 7, scope: !4)
+  !24 = !DILocation(line: 9, column: 3, scope: !4)
+
 
 This example illustrates a few important details about LLVM debugging
 information.  In particular, it shows how the ``llvm.dbg.declare`` intrinsic and
@@ -739,27 +347,23 @@ variable definitions, and the code used to implement the function.
 
 .. code-block:: llvm
 
-  call void @llvm.dbg.declare(metadata !{i32* %X}, metadata !10), !dbg !12
+  call void @llvm.dbg.declare(metadata i32* %X, metadata !11, metadata !13), !dbg !14
     ; [debug line = 2:7] [debug variable = X]
 
 The first intrinsic ``%llvm.dbg.declare`` encodes debugging information for the
-variable ``X``.  The metadata ``!dbg !12`` attached to the intrinsic provides
+variable ``X``.  The metadata ``!dbg !14`` attached to the intrinsic provides
 scope information for the variable ``X``.
 
-.. code-block:: llvm
+.. code-block:: text
 
-  !12 = metadata !{i32 2, i32 0, metadata !4, null}
-  !4 = metadata !{i32 786478, metadata !1, metadata !5, metadata !"foo",
-                  metadata !"foo", metadata !"", i32 1, metadata !6,
-                  i1 false, i1 true, i32 0, i32 0, null, i32 0, i1 false,
-                  void ()* @foo, null, null, metadata !2, i32 1}
-                    ; [ DW_TAG_subprogram ] [line 1] [def] [foo]
+  !14 = !DILocation(line: 2, column: 9, scope: !4)
+  !4 = distinct !DISubprogram(name: "foo", scope: !1, file: !1, line: 1, type: !5,
+                              isLocal: false, isDefinition: true, scopeLine: 1,
+                              isOptimized: false, variables: !2)
 
-Here ``!12`` is metadata providing location information.  It has four fields:
-line number, column number, scope, and original scope.  The original scope
-represents inline location if this instruction is inlined inside a caller, and
-is null otherwise.  In this example, scope is encoded by ``!4``, a
-:ref:`subprogram descriptor <format_subprograms>`.  This way the location
+Here ``!14`` is metadata providing `location information
+<LangRef.html#dilocation>`_.  In this example, scope is encoded by ``!4``, a
+`subprogram descriptor <LangRef.html#disubprogram>`_.  This way the location
 information attached to the intrinsics indicates that the variable ``X`` is
 declared at line number 2 at a function level scope in function ``foo``.
 
@@ -767,22 +371,21 @@ Now lets take another example.
 
 .. code-block:: llvm
 
-  call void @llvm.dbg.declare(metadata !{i32* %Z}, metadata !15), !dbg !17
+  call void @llvm.dbg.declare(metadata i32* %Z, metadata !17, metadata !13), !dbg !19
     ; [debug line = 5:9] [debug variable = Z]
 
 The third intrinsic ``%llvm.dbg.declare`` encodes debugging information for
-variable ``Z``.  The metadata ``!dbg !17`` attached to the intrinsic provides
+variable ``Z``.  The metadata ``!dbg !19`` attached to the intrinsic provides
 scope information for the variable ``Z``.
 
-.. code-block:: llvm
+.. code-block:: text
 
-  !16 = metadata !{i32 786443, metadata !1, metadata !4, i32 4, i32 0, i32 0}
-                   ; [ DW_TAG_lexical_block ] [/private/tmp/t.c]
-  !17 = metadata !{i32 5, i32 0, metadata !16, null}
+  !18 = distinct !DILexicalBlock(scope: !4, file: !1, line: 4, column: 5)
+  !19 = !DILocation(line: 5, column: 11, scope: !18)
 
-Here ``!15`` indicates that ``Z`` is declared at line number 5 and
-column number 0 inside of lexical scope ``!16``.  The lexical scope itself
-resides inside of subprogram ``!4`` described above.
+Here ``!19`` indicates that ``Z`` is declared at line number 5 and column
+number 0 inside of lexical scope ``!18``.  The lexical scope itself resides
+inside of subprogram ``!4`` described above.
 
 The scope information attached with each instruction provides a straightforward
 way to find instructions covered by a scope.
@@ -806,84 +409,25 @@ to provide completely different forms if they don't fit into the DWARF model.
 As support for debugging information gets added to the various LLVM
 source-language front-ends, the information used should be documented here.
 
-The following sections provide examples of various C/C++ constructs and the
-debug information that would best describe those constructs.
+The following sections provide examples of a few C/C++ constructs and the debug
+information that would best describe those constructs.  The canonical
+references are the ``DIDescriptor`` classes defined in
+``include/llvm/IR/DebugInfo.h`` and the implementations of the helper functions
+in ``lib/IR/DIBuilder.cpp``.
 
 C/C++ source file information
 -----------------------------
 
-Given the source files ``MySource.cpp`` and ``MyHeader.h`` located in the
-directory ``/Users/mine/sources``, the following code:
-
-.. code-block:: c
-
-  #include "MyHeader.h"
-
-  int main(int argc, char *argv[]) {
-    return 0;
-  }
-
-a C/C++ front-end would generate the following descriptors:
-
-.. code-block:: llvm
-
-  ...
-  ;;
-  ;; Define the compile unit for the main source file "/Users/mine/sources/MySource.cpp".
-  ;;
-  !0 = metadata !{
-    i32 786449,   ;; Tag
-    metadata !1,  ;; File/directory name
-    i32 4,        ;; Language Id
-    metadata !"clang version 3.4 ",
-    i1 false,     ;; Optimized compile unit
-    metadata !"", ;; Compiler flags
-    i32 0,        ;; Runtime version
-    metadata !2,  ;; Enumeration types
-    metadata !2,  ;; Retained types
-    metadata !3,  ;; Subprograms
-    metadata !2,  ;; Global variables
-    metadata !2,  ;; Imported entities (declarations and namespaces)
-    metadata !""  ;; Split debug filename
-  }
-
-  ;;
-  ;; Define the file for the file "/Users/mine/sources/MySource.cpp".
-  ;;
-  !1 = metadata !{
-    metadata !"MySource.cpp",
-    metadata !"/Users/mine/sources"
-  }
-  !5 = metadata !{
-    i32 786473, ;; Tag
-    metadata !1
-  }
-
-  ;;
-  ;; Define the file for the file "/Users/mine/sources/Myheader.h"
-  ;;
-  !14 = metadata !{
-    i32 786473, ;; Tag
-    metadata !15
-  }
-  !15 = metadata !{
-    metadata !"./MyHeader.h",
-    metadata !"/Users/mine/sources",
-  }
-
-  ...
-
 ``llvm::Instruction`` provides easy access to metadata attached with an
 instruction.  One can extract line number information encoded in LLVM IR using
-``Instruction::getMetadata()`` and ``DILocation::getLineNumber()``.
+``Instruction::getDebugLoc()`` and ``DILocation::getLine()``.
 
 .. code-block:: c++
 
-  if (MDNode *N = I->getMetadata("dbg")) {  // Here I is an LLVM instruction
-    DILocation Loc(N);                      // DILocation is in DebugInfo.h
-    unsigned Line = Loc.getLineNumber();
-    StringRef File = Loc.getFilename();
-    StringRef Dir = Loc.getDirectory();
+  if (DILocation *Loc = I->getDebugLoc()) { // Here I is an LLVM instruction
+    unsigned Line = Loc->getLine();
+    StringRef File = Loc->getFilename();
+    StringRef Dir = Loc->getDirectory();
   }
 
 C/C++ global variable information
@@ -893,93 +437,67 @@ Given an integer global variable declared as follows:
 
 .. code-block:: c
 
-  int MyGlobal = 100;
+  _Alignas(8) int MyGlobal = 100;
 
 a C/C++ front-end would generate the following descriptors:
 
-.. code-block:: llvm
+.. code-block:: text
 
   ;;
   ;; Define the global itself.
   ;;
-  %MyGlobal = global int 100
-  ...
+  @MyGlobal = global i32 100, align 8, !dbg !0
+
   ;;
   ;; List of debug info of globals
   ;;
-  !llvm.dbg.cu = !{!0}
+  !llvm.dbg.cu = !{!1}
+
+  ;; Some unrelated metadata.
+  !llvm.module.flags = !{!6, !7}
+  !llvm.ident = !{!8}
+
+  ;; Define the global variable itself
+  !0 = distinct !DIGlobalVariable(name: "MyGlobal", scope: !1, file: !2, line: 1, type: !5, isLocal: false, isDefinition: true, align: 64)
 
   ;; Define the compile unit.
-  !0 = metadata !{
-    i32 786449,                       ;; Tag
-    i32 0,                            ;; Context
-    i32 4,                            ;; Language
-    metadata !"foo.cpp",              ;; File
-    metadata !"/Volumes/Data/tmp",    ;; Directory
-    metadata !"clang version 3.1 ",   ;; Producer
-    i1 true,                          ;; Deprecated field
-    i1 false,                         ;; "isOptimized"?
-    metadata !"",                     ;; Flags
-    i32 0,                            ;; Runtime Version
-    metadata !1,                      ;; Enum Types
-    metadata !1,                      ;; Retained Types
-    metadata !1,                      ;; Subprograms
-    metadata !3,                      ;; Global Variables
-    metadata !1,                      ;; Imported entities
-    "",                               ;; Split debug filename
-  } ; [ DW_TAG_compile_unit ]
-
-  ;; The Array of Global Variables
-  !3 = metadata !{
-    metadata !4
-  }
-
-  ;;
-  ;; Define the global variable itself.
-  ;;
-  !4 = metadata !{
-    i32 786484,                        ;; Tag
-    i32 0,                             ;; Unused
-    null,                              ;; Unused
-    metadata !"MyGlobal",              ;; Name
-    metadata !"MyGlobal",              ;; Display Name
-    metadata !"",                      ;; Linkage Name
-    metadata !6,                       ;; File
-    i32 1,                             ;; Line
-    metadata !7,                       ;; Type
-    i32 0,                             ;; IsLocalToUnit
-    i32 1,                             ;; IsDefinition
-    i32* @MyGlobal,                    ;; LLVM-IR Value
-    null                               ;; Static member declaration
-  } ; [ DW_TAG_variable ]
+  !1 = distinct !DICompileUnit(language: DW_LANG_C99, file: !2,
+                               producer: "clang version 4.0.0 (http://llvm.org/git/clang.git ae4deadbea242e8ea517eef662c30443f75bd086) (http://llvm.org/git/llvm.git 818b4c1539df3e51dc7e62c89ead4abfd348827d)",
+                               isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug,
+                               enums: !3, globals: !4)
 
   ;;
   ;; Define the file
   ;;
-  !5 = metadata !{
-    metadata !"foo.cpp",               ;; File
-    metadata !"/Volumes/Data/tmp",     ;; Directory
-  }
-  !6 = metadata !{
-    i32 786473,                        ;; Tag
-    metadata !5                        ;; Unused
-  } ; [ DW_TAG_file_type ]
+  !2 = !DIFile(filename: "/dev/stdin",
+               directory: "/Users/dexonsmith/data/llvm/debug-info")
+
+  ;; An empty array.
+  !3 = !{}
+
+  ;; The Array of Global Variables
+  !4 = !{!0}
 
   ;;
   ;; Define the type
   ;;
-  !7 = metadata !{
-    i32 786468,                         ;; Tag
-    null,                               ;; Unused
-    null,                               ;; Unused
-    metadata !"int",                    ;; Name
-    i32 0,                              ;; Line
-    i64 32,                             ;; Size in Bits
-    i64 32,                             ;; Align in Bits
-    i64 0,                              ;; Offset
-    i32 0,                              ;; Flags
-    i32 5                               ;; Encoding
-  } ; [ DW_TAG_base_type ]
+  !5 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+
+  ;; Dwarf version to output.
+  !6 = !{i32 2, !"Dwarf Version", i32 4}
+
+  ;; Debug info schema version.
+  !7 = !{i32 2, !"Debug Info Version", i32 3}
+
+  ;; Compiler identification
+  !8 = !{!"clang version 4.0.0 (http://llvm.org/git/clang.git ae4deadbea242e8ea517eef662c30443f75bd086) (http://llvm.org/git/llvm.git 818b4c1539df3e51dc7e62c89ead4abfd348827d)"}
+
+
+The align value in DIGlobalVariable description specifies variable alignment in
+case it was forced by C11 _Alignas(), C++11 alignas() keywords or compiler
+attribute __attribute__((aligned ())). In other case (when this field is missing)
+alignment is considered default. This is used when producing DWARF output
+for DW_AT_alignment value.
 
 C/C++ function information
 --------------------------
@@ -994,475 +512,22 @@ Given a function declared as follows:
 
 a C/C++ front-end would generate the following descriptors:
 
-.. code-block:: llvm
+.. code-block:: text
 
   ;;
   ;; Define the anchor for subprograms.
   ;;
-  !6 = metadata !{
-    i32 786484,        ;; Tag
-    metadata !1,       ;; File
-    metadata !1,       ;; Context
-    metadata !"main",  ;; Name
-    metadata !"main",  ;; Display name
-    metadata !"main",  ;; Linkage name
-    i32 1,             ;; Line number
-    metadata !4,       ;; Type
-    i1 false,          ;; Is local
-    i1 true,           ;; Is definition
-    i32 0,             ;; Virtuality attribute, e.g. pure virtual function
-    i32 0,             ;; Index into virtual table for C++ methods
-    i32 0,             ;; Type that holds virtual table.
-    i32 0,             ;; Flags
-    i1 false,          ;; True if this function is optimized
-    Function *,        ;; Pointer to llvm::Function
-    null,              ;; Function template parameters
-    null,              ;; List of function variables (emitted when optimizing)
-    1                  ;; Line number of the opening '{' of the function
-  }
+  !4 = !DISubprogram(name: "main", scope: !1, file: !1, line: 1, type: !5,
+                     isLocal: false, isDefinition: true, scopeLine: 1,
+                     flags: DIFlagPrototyped, isOptimized: false,
+                     variables: !2)
+
   ;;
   ;; Define the subprogram itself.
   ;;
-  define i32 @main(i32 %argc, i8** %argv) {
+  define i32 @main(i32 %argc, i8** %argv) !dbg !4 {
   ...
   }
-
-C/C++ basic types
------------------
-
-The following are the basic type descriptors for C/C++ core types:
-
-bool
-^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"bool",  ;; Name
-    i32 0,             ;; Line number
-    i64 8,             ;; Size in Bits
-    i64 8,             ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 2              ;; Encoding
-  }
-
-char
-^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"char",  ;; Name
-    i32 0,             ;; Line number
-    i64 8,             ;; Size in Bits
-    i64 8,             ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 6              ;; Encoding
-  }
-
-unsigned char
-^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"unsigned char",
-    i32 0,             ;; Line number
-    i64 8,             ;; Size in Bits
-    i64 8,             ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 8              ;; Encoding
-  }
-
-short
-^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"short int",
-    i32 0,             ;; Line number
-    i64 16,            ;; Size in Bits
-    i64 16,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 5              ;; Encoding
-  }
-
-unsigned short
-^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"short unsigned int",
-    i32 0,             ;; Line number
-    i64 16,            ;; Size in Bits
-    i64 16,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 7              ;; Encoding
-  }
-
-int
-^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"int",   ;; Name
-    i32 0,             ;; Line number
-    i64 32,            ;; Size in Bits
-    i64 32,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 5              ;; Encoding
-  }
-
-unsigned int
-^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"unsigned int",
-    i32 0,             ;; Line number
-    i64 32,            ;; Size in Bits
-    i64 32,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 7              ;; Encoding
-  }
-
-long long
-^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"long long int",
-    i32 0,             ;; Line number
-    i64 64,            ;; Size in Bits
-    i64 64,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 5              ;; Encoding
-  }
-
-unsigned long long
-^^^^^^^^^^^^^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"long long unsigned int",
-    i32 0,             ;; Line number
-    i64 64,            ;; Size in Bits
-    i64 64,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 7              ;; Encoding
-  }
-
-float
-^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"float",
-    i32 0,             ;; Line number
-    i64 32,            ;; Size in Bits
-    i64 32,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 4              ;; Encoding
-  }
-
-double
-^^^^^^
-
-.. code-block:: llvm
-
-  !2 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"double",;; Name
-    i32 0,             ;; Line number
-    i64 64,            ;; Size in Bits
-    i64 64,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 4              ;; Encoding
-  }
-
-C/C++ derived types
--------------------
-
-Given the following as an example of C/C++ derived type:
-
-.. code-block:: c
-
-  typedef const int *IntPtr;
-
-a C/C++ front-end would generate the following descriptors:
-
-.. code-block:: llvm
-
-  ;;
-  ;; Define the typedef "IntPtr".
-  ;;
-  !2 = metadata !{
-    i32 786454,          ;; Tag
-    metadata !3,         ;; File
-    metadata !1,         ;; Context
-    metadata !"IntPtr",  ;; Name
-    i32 0,               ;; Line number
-    i64 0,               ;; Size in bits
-    i64 0,               ;; Align in bits
-    i64 0,               ;; Offset in bits
-    i32 0,               ;; Flags
-    metadata !4          ;; Derived From type
-  }
-  ;;
-  ;; Define the pointer type.
-  ;;
-  !4 = metadata !{
-    i32 786447,          ;; Tag
-    null,                ;; File
-    null,                ;; Context
-    metadata !"",        ;; Name
-    i32 0,               ;; Line number
-    i64 64,              ;; Size in bits
-    i64 64,              ;; Align in bits
-    i64 0,               ;; Offset in bits
-    i32 0,               ;; Flags
-    metadata !5          ;; Derived From type
-  }
-  ;;
-  ;; Define the const type.
-  ;;
-  !5 = metadata !{
-    i32 786470,          ;; Tag
-    null,                ;; File
-    null,                ;; Context
-    metadata !"",        ;; Name
-    i32 0,               ;; Line number
-    i64 0,               ;; Size in bits
-    i64 0,               ;; Align in bits
-    i64 0,               ;; Offset in bits
-    i32 0,               ;; Flags
-    metadata !6          ;; Derived From type
-  }
-  ;;
-  ;; Define the int type.
-  ;;
-  !6 = metadata !{
-    i32 786468,          ;; Tag
-    null,                ;; File
-    null,                ;; Context
-    metadata !"int",     ;; Name
-    i32 0,               ;; Line number
-    i64 32,              ;; Size in bits
-    i64 32,              ;; Align in bits
-    i64 0,               ;; Offset in bits
-    i32 0,               ;; Flags
-    i32 5                ;; Encoding
-  }
-
-C/C++ struct/union types
-------------------------
-
-Given the following as an example of C/C++ struct type:
-
-.. code-block:: c
-
-  struct Color {
-    unsigned Red;
-    unsigned Green;
-    unsigned Blue;
-  };
-
-a C/C++ front-end would generate the following descriptors:
-
-.. code-block:: llvm
-
-  ;;
-  ;; Define basic type for unsigned int.
-  ;;
-  !5 = metadata !{
-    i32 786468,        ;; Tag
-    null,              ;; File
-    null,              ;; Context
-    metadata !"unsigned int",
-    i32 0,             ;; Line number
-    i64 32,            ;; Size in Bits
-    i64 32,            ;; Align in Bits
-    i64 0,             ;; Offset in Bits
-    i32 0,             ;; Flags
-    i32 7              ;; Encoding
-  }
-  ;;
-  ;; Define composite type for struct Color.
-  ;;
-  !2 = metadata !{
-    i32 786451,        ;; Tag
-    metadata !1,       ;; Compile unit
-    null,              ;; Context
-    metadata !"Color", ;; Name
-    i32 1,             ;; Line number
-    i64 96,            ;; Size in bits
-    i64 32,            ;; Align in bits
-    i64 0,             ;; Offset in bits
-    i32 0,             ;; Flags
-    null,              ;; Derived From
-    metadata !3,       ;; Elements
-    i32 0,             ;; Runtime Language
-    null,              ;; Base type containing the vtable pointer for this type
-    null               ;; Template parameters
-  }
-
-  ;;
-  ;; Define the Red field.
-  ;;
-  !4 = metadata !{
-    i32 786445,        ;; Tag
-    metadata !1,       ;; File
-    metadata !1,       ;; Context
-    metadata !"Red",   ;; Name
-    i32 2,             ;; Line number
-    i64 32,            ;; Size in bits
-    i64 32,            ;; Align in bits
-    i64 0,             ;; Offset in bits
-    i32 0,             ;; Flags
-    metadata !5        ;; Derived From type
-  }
-
-  ;;
-  ;; Define the Green field.
-  ;;
-  !6 = metadata !{
-    i32 786445,        ;; Tag
-    metadata !1,       ;; File
-    metadata !1,       ;; Context
-    metadata !"Green", ;; Name
-    i32 3,             ;; Line number
-    i64 32,            ;; Size in bits
-    i64 32,            ;; Align in bits
-    i64 32,             ;; Offset in bits
-    i32 0,             ;; Flags
-    metadata !5        ;; Derived From type
-  }
-
-  ;;
-  ;; Define the Blue field.
-  ;;
-  !7 = metadata !{
-    i32 786445,        ;; Tag
-    metadata !1,       ;; File
-    metadata !1,       ;; Context
-    metadata !"Blue",  ;; Name
-    i32 4,             ;; Line number
-    i64 32,            ;; Size in bits
-    i64 32,            ;; Align in bits
-    i64 64,             ;; Offset in bits
-    i32 0,             ;; Flags
-    metadata !5        ;; Derived From type
-  }
-
-  ;;
-  ;; Define the array of fields used by the composite type Color.
-  ;;
-  !3 = metadata !{metadata !4, metadata !6, metadata !7}
-
-C/C++ enumeration types
------------------------
-
-Given the following as an example of C/C++ enumeration type:
-
-.. code-block:: c
-
-  enum Trees {
-    Spruce = 100,
-    Oak = 200,
-    Maple = 300
-  };
-
-a C/C++ front-end would generate the following descriptors:
-
-.. code-block:: llvm
-
-  ;;
-  ;; Define composite type for enum Trees
-  ;;
-  !2 = metadata !{
-    i32 786436,        ;; Tag
-    metadata !1,       ;; File
-    metadata !1,       ;; Context
-    metadata !"Trees", ;; Name
-    i32 1,             ;; Line number
-    i64 32,            ;; Size in bits
-    i64 32,            ;; Align in bits
-    i64 0,             ;; Offset in bits
-    i32 0,             ;; Flags
-    null,              ;; Derived From type
-    metadata !3,       ;; Elements
-    i32 0              ;; Runtime language
-  }
-
-  ;;
-  ;; Define the array of enumerators used by composite type Trees.
-  ;;
-  !3 = metadata !{metadata !4, metadata !5, metadata !6}
-
-  ;;
-  ;; Define Spruce enumerator.
-  ;;
-  !4 = metadata !{i32 786472, metadata !"Spruce", i64 100}
-
-  ;;
-  ;; Define Oak enumerator.
-  ;;
-  !5 = metadata !{i32 786472, metadata !"Oak", i64 200}
-
-  ;;
-  ;; Define Maple enumerator.
-  ;;
-  !6 = metadata !{i32 786472, metadata !"Maple", i64 300}
 
 Debugging information format
 ============================
@@ -1646,21 +711,39 @@ New DWARF Attributes
 New DWARF Constants
 ^^^^^^^^^^^^^^^^^^^
 
-+--------------------------------+-------+
-| Name                           | Value |
-+================================+=======+
-| DW_AT_APPLE_PROPERTY_readonly  | 0x1   |
-+--------------------------------+-------+
-| DW_AT_APPLE_PROPERTY_readwrite | 0x2   |
-+--------------------------------+-------+
-| DW_AT_APPLE_PROPERTY_assign    | 0x4   |
-+--------------------------------+-------+
-| DW_AT_APPLE_PROPERTY_retain    | 0x8   |
-+--------------------------------+-------+
-| DW_AT_APPLE_PROPERTY_copy      | 0x10  |
-+--------------------------------+-------+
-| DW_AT_APPLE_PROPERTY_nonatomic | 0x20  |
-+--------------------------------+-------+
++--------------------------------------+-------+
+| Name                                 | Value |
++======================================+=======+
+| DW_APPLE_PROPERTY_readonly           | 0x01  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_getter             | 0x02  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_assign             | 0x04  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_readwrite          | 0x08  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_retain             | 0x10  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_copy               | 0x20  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_nonatomic          | 0x40  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_setter             | 0x80  |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_atomic             | 0x100 |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_weak               | 0x200 |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_strong             | 0x400 |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_unsafe_unretained  | 0x800 |
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_nullability        | 0x1000|
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_null_resettable    | 0x2000|
++--------------------------------------+-------+
+| DW_APPLE_PROPERTY_class              | 0x4000|
++--------------------------------------+-------+
 
 Name Accelerator Tables
 -----------------------
@@ -1688,7 +771,7 @@ qualified name.  Debugger users tend not to enter their search strings as
 "``a::b::c``".  So the name entered in the name table must be demangled in
 order to chop it up appropriately and additional names must be manually entered
 into the table to make it effective as a name lookup table for debuggers to
-se.
+use.
 
 All debuggers currently ignore the "``.debug_pubnames``" table as a result of
 its inconsistent and useless public-only name content making it a waste of
@@ -1797,13 +880,13 @@ for the current string value.
 
 The problem with this layout for debuggers is that we need to optimize for the
 negative lookup case where the symbol we're searching for is not present.  So
-if we were to lookup "``printf``" in the table above, we would make a 32 hash
-for "``printf``", it might match ``bucket[3]``.  We would need to go to the
-offset 0x000034f0 and start looking to see if our 32 bit hash matches.  To do
-so, we need to read the next pointer, then read the hash, compare it, and skip
-to the next bucket.  Each time we are skipping many bytes in memory and
-touching new cache pages just to do the compare on the full 32 bit hash.  All
-of these accesses then tell us that we didn't have a match.
+if we were to lookup "``printf``" in the table above, we would make a 32-bit
+hash for "``printf``", it might match ``bucket[3]``.  We would need to go to
+the offset 0x000034f0 and start looking to see if our 32 bit hash matches.  To
+do so, we need to read the next pointer, then read the hash, compare it, and
+skip to the next bucket.  Each time we are skipping many bytes in memory and
+touching new pages just to do the compare on the full 32 bit hash.  All of
+these accesses then tell us that we didn't have a match.
 
 Name Hash Tables
 """"""""""""""""
@@ -2227,12 +1310,12 @@ tag is one of:
 * DW_TAG_subrange_type
 * DW_TAG_base_type
 * DW_TAG_const_type
-* DW_TAG_constant
 * DW_TAG_file_type
 * DW_TAG_namelist
 * DW_TAG_packed_type
 * DW_TAG_volatile_type
 * DW_TAG_restrict_type
+* DW_TAG_atomic_type
 * DW_TAG_interface_type
 * DW_TAG_unspecified_type
 * DW_TAG_shared_type
@@ -2306,7 +1389,7 @@ stringWithCString:]``") and the basename is the selector only
 Mach-O Changes
 """"""""""""""
 
-The sections names for the apple hash tables are for non mach-o files.  For
+The sections names for the apple hash tables are for non-mach-o files.  For
 mach-o files, the sections should be contained in the ``__DWARF`` segment with
 names as follows:
 
@@ -2315,3 +1398,251 @@ names as follows:
 * "``.apple_namespaces``" -> "``__apple_namespac``" (16 character limit)
 * "``.apple_objc``" -> "``__apple_objc``"
 
+.. _codeview:
+
+CodeView Debug Info Format
+==========================
+
+LLVM supports emitting CodeView, the Microsoft debug info format, and this
+section describes the design and implementation of that support.
+
+Format Background
+-----------------
+
+CodeView as a format is clearly oriented around C++ debugging, and in C++, the
+majority of debug information tends to be type information. Therefore, the
+overriding design constraint of CodeView is the separation of type information
+from other "symbol" information so that type information can be efficiently
+merged across translation units. Both type information and symbol information is
+generally stored as a sequence of records, where each record begins with a
+16-bit record size and a 16-bit record kind.
+
+Type information is usually stored in the ``.debug$T`` section of the object
+file.  All other debug info, such as line info, string table, symbol info, and
+inlinee info, is stored in one or more ``.debug$S`` sections. There may only be
+one ``.debug$T`` section per object file, since all other debug info refers to
+it. If a PDB (enabled by the ``/Zi`` MSVC option) was used during compilation,
+the ``.debug$T`` section will contain only an ``LF_TYPESERVER2`` record pointing
+to the PDB. When using PDBs, symbol information appears to remain in the object
+file ``.debug$S`` sections.
+
+Type records are referred to by their index, which is the number of records in
+the stream before a given record plus ``0x1000``. Many common basic types, such
+as the basic integral types and unqualified pointers to them, are represented
+using type indices less than ``0x1000``. Such basic types are built in to
+CodeView consumers and do not require type records.
+
+Each type record may only contain type indices that are less than its own type
+index. This ensures that the graph of type stream references is acyclic. While
+the source-level type graph may contain cycles through pointer types (consider a
+linked list struct), these cycles are removed from the type stream by always
+referring to the forward declaration record of user-defined record types. Only
+"symbol" records in the ``.debug$S`` streams may refer to complete,
+non-forward-declaration type records.
+
+Working with CodeView
+---------------------
+
+These are instructions for some common tasks for developers working to improve
+LLVM's CodeView support. Most of them revolve around using the CodeView dumper
+embedded in ``llvm-readobj``.
+
+* Testing MSVC's output::
+
+    $ cl -c -Z7 foo.cpp # Use /Z7 to keep types in the object file
+    $ llvm-readobj -codeview foo.obj
+
+* Getting LLVM IR debug info out of Clang::
+
+    $ clang -g -gcodeview --target=x86_64-windows-msvc foo.cpp -S -emit-llvm
+
+  Use this to generate LLVM IR for LLVM test cases.
+
+* Generate and dump CodeView from LLVM IR metadata::
+
+    $ llc foo.ll -filetype=obj -o foo.obj
+    $ llvm-readobj -codeview foo.obj > foo.txt
+
+  Use this pattern in lit test cases and FileCheck the output of llvm-readobj
+
+Improving LLVM's CodeView support is a process of finding interesting type
+records, constructing a C++ test case that makes MSVC emit those records,
+dumping the records, understanding them, and then generating equivalent records
+in LLVM's backend.
+
+Testing Debug Info Preservation in Optimizations
+================================================
+
+The following paragraphs are an introduction to the debugify utility
+and examples of how to use it in regression tests to check debug info
+preservation after optimizations.
+
+The ``debugify`` utility
+------------------------
+
+The ``debugify`` synthetic debug info testing utility consists of two
+main parts. The ``debugify`` pass and the ``check-debugify`` one. They are
+meant to be used with ``opt`` for development purposes.
+
+The first applies synthetic debug information to every instruction of the module,
+while the latter checks that this DI is still available after an optimization
+has occurred, reporting any errors/warnings while doing so.
+
+The instructions are assigned sequentially increasing line locations,
+and are immediately used by debug value intrinsics when possible.
+
+For example, here is a module before:
+
+.. code-block:: llvm
+
+   define dso_local void @f(i32* %x) {
+   entry:
+     %x.addr = alloca i32*, align 8
+     store i32* %x, i32** %x.addr, align 8
+     %0 = load i32*, i32** %x.addr, align 8
+     store i32 10, i32* %0, align 4
+     ret void
+   }
+
+and after running ``opt -debugify``  on it we get:
+
+.. code-block:: llvm
+
+   define dso_local void @f(i32* %x) !dbg !6 {
+   entry:
+     %x.addr = alloca i32*, align 8, !dbg !12
+     call void @llvm.dbg.value(metadata i32** %x.addr, metadata !9, metadata !DIExpression()), !dbg !12
+     store i32* %x, i32** %x.addr, align 8, !dbg !13
+     %0 = load i32*, i32** %x.addr, align 8, !dbg !14
+     call void @llvm.dbg.value(metadata i32* %0, metadata !11, metadata !DIExpression()), !dbg !14
+     store i32 10, i32* %0, align 4, !dbg !15
+     ret void, !dbg !16
+   }
+
+   !llvm.dbg.cu = !{!0}
+   !llvm.debugify = !{!3, !4}
+   !llvm.module.flags = !{!5}
+
+   !0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "debugify", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2)
+   !1 = !DIFile(filename: "debugify-sample.ll", directory: "/")
+   !2 = !{}
+   !3 = !{i32 5}
+   !4 = !{i32 2}
+   !5 = !{i32 2, !"Debug Info Version", i32 3}
+   !6 = distinct !DISubprogram(name: "f", linkageName: "f", scope: null, file: !1, line: 1, type: !7, isLocal: false, isDefinition: true, scopeLine: 1, isOptimized: true, unit: !0, retainedNodes: !8)
+   !7 = !DISubroutineType(types: !2)
+   !8 = !{!9, !11}
+   !9 = !DILocalVariable(name: "1", scope: !6, file: !1, line: 1, type: !10)
+   !10 = !DIBasicType(name: "ty64", size: 64, encoding: DW_ATE_unsigned)
+   !11 = !DILocalVariable(name: "2", scope: !6, file: !1, line: 3, type: !10)
+   !12 = !DILocation(line: 1, column: 1, scope: !6)
+   !13 = !DILocation(line: 2, column: 1, scope: !6)
+   !14 = !DILocation(line: 3, column: 1, scope: !6)
+   !15 = !DILocation(line: 4, column: 1, scope: !6)
+   !16 = !DILocation(line: 5, column: 1, scope: !6)
+
+The following is an example of the -check-debugify output:
+
+.. code-block:: none
+
+   $ opt -enable-debugify -loop-vectorize llvm/test/Transforms/LoopVectorize/i8-induction.ll -disable-output
+   ERROR: Instruction with empty DebugLoc in function f --  %index = phi i32 [ 0, %vector.ph ], [ %index.next, %vector.body ]
+
+Errors/warnings can range from instructions with empty debug location to an
+instruction having a type that's incompatible with the source variable it describes,
+all the way to missing lines and missing debug value intrinsics.
+
+Fixing errors
+^^^^^^^^^^^^^
+
+Each of the errors above has a relevant API available to fix it.
+
+* In the case of missing debug location, ``Instruction::setDebugLoc`` or possibly
+  ``IRBuilder::setCurrentDebugLocation`` when using a Builder and the new location
+  should be reused.
+
+* When a debug value has incompatible type ``llvm::replaceAllDbgUsesWith`` can be used.
+  After a RAUW call an incompatible type error can occur because RAUW does not handle
+  widening and narrowing of variables while ``llvm::replaceAllDbgUsesWith`` does. It is
+  also capable of changing the DWARF expression used by the debugger to describe the variable.
+  It also prevents use-before-def by salvaging or deleting invalid debug values.
+
+* When a debug value is missing ``llvm::salvageDebugInfo`` can be used when no replacement
+  exists, or ``llvm::replaceAllDbgUsesWith`` when a replacement exists.
+
+Using ``debugify``
+------------------
+
+In order for ``check-debugify`` to work, the DI must be coming from
+``debugify``. Thus, modules with existing DI will be skipped.
+
+The most straightforward way to use ``debugify`` is as follows::
+
+  $ opt -debugify -pass-to-test -check-debugify sample.ll
+
+This will inject synthetic DI to ``sample.ll`` run the ``pass-to-test``
+and then check for missing DI.
+
+Some other ways to run debugify are avaliable:
+
+.. code-block:: bash
+
+   # Same as the above example.
+   $ opt -enable-debugify -pass-to-test sample.ll
+
+   # Suppresses verbose debugify output.
+   $ opt -enable-debugify -debugify-quiet -pass-to-test sample.ll
+
+   # Prepend -debugify before and append -check-debugify -strip after
+   # each pass on the pipeline (similar to -verify-each).
+   $ opt -debugify-each -O2 sample.ll
+
+``debugify`` can also be used to test a backend, e.g:
+
+.. code-block:: bash
+
+   $ opt -debugify < sample.ll | llc -o -
+
+``debugify`` in regression tests
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``-debugify`` pass is especially helpful when it comes to testing that
+a given pass preserves DI while transforming the module. For this to work,
+the ``-debugify`` output must be stable enough to use in regression tests.
+Changes to this pass are not allowed to break existing tests.
+
+It allows us to test for DI loss in the same tests we check that the
+transformation is actually doing what it should.
+
+Here is an example from ``test/Transforms/InstCombine/cast-mul-select.ll``:
+
+.. code-block:: llvm
+
+   ; RUN: opt < %s -debugify -instcombine -S | FileCheck %s --check-prefix=DEBUGINFO
+
+   define i32 @mul(i32 %x, i32 %y) {
+   ; DBGINFO-LABEL: @mul(
+   ; DBGINFO-NEXT:    [[C:%.*]] = mul i32 {{.*}}
+   ; DBGINFO-NEXT:    call void @llvm.dbg.value(metadata i32 [[C]]
+   ; DBGINFO-NEXT:    [[D:%.*]] = and i32 {{.*}}
+   ; DBGINFO-NEXT:    call void @llvm.dbg.value(metadata i32 [[D]]
+
+     %A = trunc i32 %x to i8
+     %B = trunc i32 %y to i8
+     %C = mul i8 %A, %B
+     %D = zext i8 %C to i32
+     ret i32 %D
+   }
+
+Here we test that the two ``dbg.value`` instrinsics are preserved and
+are correctly pointing to the ``[[C]]`` and ``[[D]]`` variables.
+
+.. note::
+
+   Note, that when writing this kind of regression tests, it is important
+   to make them as robust as possible. That's why we should try to avoid
+   hardcoding line/variable numbers in check lines. If for example you test
+   for a ``DILocation`` to have a specific line number, and someone later adds
+   an instruction before the one we check the test will fail. In the cases this
+   can't be avoided (say, if a test wouldn't be precise enough), moving the
+   test to it's own file is preferred.

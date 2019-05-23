@@ -74,20 +74,31 @@ class ICode_cache : public
 public:
     /// An entry in the cache.
     struct Entry {
+        struct Func_info
+        {
+            char const *name;
+            IGenerated_code_executable::Distribution_kind dist_kind;
+            IGenerated_code_executable::Function_kind func_kind;
+            char const *prototypes[IGenerated_code_executable::PL_NUM_LANGUAGES];
+            size_t arg_block_index;
+        };
+
         /// Constructor.
         ///
         /// \note Note that this only transports pointer to the data, the copy must take place
         ///       inside enter() if necessary.
         Entry(
-            char const *code,
-            size_t     code_size,
-            char const *const_seg,
-            size_t     const_seg_size,
-            char const *arg_layout,
-            size_t     arg_layout_size,
-            char const *mapped_strings[],
-            size_t     mapped_string_size,
-            unsigned   render_state_usage)
+            char const      *code,
+            size_t          code_size,
+            char const      *const_seg,
+            size_t          const_seg_size,
+            char const      *arg_layout,
+            size_t          arg_layout_size,
+            char const      *mapped_strings[],
+            size_t          mapped_string_size,
+            unsigned        render_state_usage,
+            Func_info const *func_infos,
+            size_t          func_info_size)
         : code(code)
         , code_size(code_size)
         , const_seg(const_seg)
@@ -97,6 +108,8 @@ public:
         , render_state_usage(render_state_usage)
         , mapped_strings(mapped_strings)
         , mapped_string_size(mapped_string_size)
+        , func_infos(func_infos)
+        , func_info_size(func_info_size)
         {
             size_t sz = 0;
             for (size_t i = 0; i < mapped_string_size; ++i) {
@@ -105,13 +118,25 @@ public:
             // align
             sz = (sz + size_t(15u)) & ~size_t(15u);
             mapped_string_data_size = sz;
+
+            sz = 0;
+            for (size_t i = 0; i < func_info_size; ++i) {
+                sz += strlen(func_infos[i].name) + 1;
+                for (int j = 0 ; j < int(IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
+                    sz += strlen(func_infos[i].prototypes[j]) + 1;
+                }
+            }
+            // align
+            sz = (sz + size_t(15u)) & ~size_t(15u);
+            func_info_string_data_size = sz;
         }
 
         /// Return the data size of the cache entry.
         size_t get_cache_data_size() const
         {
             return mapped_string_size * sizeof(char *) + mapped_string_data_size +
-                code_size + const_seg_size + arg_layout_size;
+                code_size + const_seg_size + arg_layout_size +
+                func_info_size * sizeof(Func_info) + func_info_string_data_size;
         }
 
     public:
@@ -125,6 +150,10 @@ public:
         char const * const *mapped_strings;
         size_t             mapped_string_size;
         size_t             mapped_string_data_size;
+        Func_info const    *func_infos;
+        size_t             func_info_size;
+        size_t             func_info_string_data_size;
+
     };
 
     /// Lookup a data blob.
@@ -516,6 +545,13 @@ public:
     ///
     /// \param resolver  the call name resolver
     virtual void initialize_derivative_infos(ICall_name_resolver const *resolver) = 0;
+
+    /// Returns true, if the attributes in the resource attribute table are valid.
+    /// If false, only the indices are valid.
+    virtual bool has_resource_attributes() const = 0;
+
+    /// Sets whether the resource attribute table contains valid attributes.
+    virtual void set_has_resource_attributes(bool avail) = 0;
 };
 
 /// An interface used to manage the DF and non-DF parts of an MDL material surface.
@@ -571,11 +607,13 @@ public:
     /// Any material parameters must already be registered in the main DF lambda at this point.
     /// The DAG nodes must already be owned by the main DF lambda.
     ///
-    /// \param material_constructor     the DAG node of the material constructor
-    /// \param path                     the path of the distribution function
-    /// \param include_geometry_normal  if true, the geometry normal will be handled
-    /// \param calc_derivative_infos    if true, derivative information will be calculated
-    /// \param name_resolver            the call name resolver
+    /// \param material_constructor       the DAG node of the material constructor
+    /// \param path                       the path of the distribution function
+    /// \param include_geometry_normal    if true, the geometry normal will be handled
+    /// \param calc_derivative_infos      if true, derivative information will be calculated
+    /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
+    ///                                   values
+    /// \param name_resolver              the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     virtual Error_code initialize(
@@ -583,6 +621,7 @@ public:
         char const                *path,
         bool                       include_geometry_normal,
         bool                       calc_derivative_infos,
+        bool                       allow_double_expr_lambdas,
         ICall_name_resolver const *name_resolver) = 0;
 
     /// Get the main DF function representing a DF DAG call.
@@ -630,79 +669,6 @@ class ILink_unit : public
     mi::base::IInterface>
 {
 public:
-
-    /// Possible kinds of distribution functions.
-    enum Distribution_kind
-    {
-        DK_NONE,
-        DK_BSDF,
-        DK_EDF,
-        DK_INVALID
-    };
-
-    /// Possible kinds of functions.
-    enum Function_kind {
-        FK_INVALID,
-        FK_LAMBDA,
-        FK_SWITCH_LAMBDA,
-        FK_ENVIRONMENT,
-        FK_DF_INIT,
-        FK_DF_SAMPLE,
-        FK_DF_EVALUATE,
-        FK_DF_PDF
-    };
-
-
-    struct Target_function_description
-    {
-        Target_function_description(const char* expression_path = NULL,
-                                    const char* base_function_name = NULL)
-            : path(expression_path)
-            , base_fname(base_function_name)
-            , argument_block_index(~0)
-            , function_index(~0)
-            , distribution_kind(ILink_unit::DK_INVALID)
-            , return_code(~0) // not processed
-        {
-        }
-
-        /// The path from the material root to the expression that should be translated,
-        /// e.g., \c "surface.scattering".
-        const char* path;
-
-        /// The base name of the generated functions.
-        /// If \c NULL is passed, the function name will be 'lambda' followed by an increasing
-        /// counter. Note, that this counter is tracked per link unit. That means, you need to 
-        /// provide functions names when using multiple link units in order to avoid collisions.
-        const char* base_fname;
-
-        /// The index of argument block that belongs to the compiled material the function is  
-        /// generated from or ~0 if none of the added function required arguments. 
-        /// It allows to get the layout and a writable pointer to argument data. This is an output
-        /// parameter which is available after adding the function to the link unit.
-        size_t argument_block_index;
-
-        /// The index of the generated function for accessing the callable function information of 
-        /// the link unit or ~0 if the selected function is an invalid distribution function. 
-        /// ~0 is not an error case, it just means, that evaluating the function will result in 0.
-        /// In case the function is a distribution function, the returned index will be the 
-        /// index of the \c init function, while \c sample, \c evaluate, and \c pdf will be 
-        /// accessible by the consecutive indices, i.e., function_index + 1, function_index + 2,
-        /// function_index + 3. This is an output parameter which is available after adding the
-        /// function to the link unit.
-        size_t function_index;
-
-        /// Return the distribution kind of this function (or NONE in case expressions). This is 
-        /// an output parameter which is available after adding the function to the link unit. 
-        ILink_unit::Distribution_kind distribution_kind;
-
-        /// Return code of the processing of the function:
-        /// -   0  Success
-        /// -  ~0  Function not processed
-        /// -  -1  An error occurred while processing the function.
-        Sint32 return_code;
-    };
-
     /// Add a lambda function to this link unit.
     ///
     /// All resources used by \p lambda must have been registered in \p lambda via
@@ -719,11 +685,11 @@ public:
     ///
     /// \return true on success
     virtual bool add(
-        ILambda_function const    *lambda,
-        ICall_name_resolver const *name_resolver,
-        Function_kind              kind,
-        size_t                    *arg_block_index,
-        size_t                    *function_index) = 0;
+        ILambda_function const                    *lambda,
+        ICall_name_resolver const                 *name_resolver,
+        IGenerated_code_executable::Function_kind  kind,
+        size_t                                    *arg_block_index,
+        size_t                                    *function_index) = 0;
 
     /// Add a distribution function to this link unit.
     ///
@@ -765,14 +731,14 @@ public:
     /// \param i  the index of the function
     ///
     /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
-    virtual Distribution_kind get_distribution_kind(size_t i) const = 0;
+    virtual IGenerated_code_executable::Distribution_kind get_distribution_kind(size_t i) const = 0;
 
     /// Returns the function kind of the i'th function inside this link unit.
     ///
     /// \param i  the index of the function
     ///
     /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
-    virtual Function_kind get_function_kind(size_t i) const = 0;
+    virtual IGenerated_code_executable::Function_kind get_function_kind(size_t i) const = 0;
 
     /// Get the index of the target argument block layout for the i'th function inside this link
     /// unit if used.
@@ -794,6 +760,17 @@ public:
 
     /// Access messages.
     virtual Messages const &access_messages() const = 0;
+
+    /// Returns the prototype of the i'th function inside this link unit.
+    ///
+    /// \param index   the index of the function.
+    /// \param lang    the language to use for the prototype.
+    ///
+    /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
+    ///         for this target code.
+    virtual char const *get_function_prototype(
+        size_t index,
+        IGenerated_code_executable::Prototype_language lang) const = 0;
 };
 
 /// The DAG code generator interface.
@@ -901,12 +878,16 @@ class ICode_generator_jit : public
     /// The name of the option to enable/disable the builtin texture runtime of the native backend
     #define MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU "jit_use_builtin_resource_handler_cpu"
 
+    /// The name of the option to enable the HLSL resource data struct argument.
+    #define MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA "jit_hlsl_use_resource_data"
+
 public:
     /// The compilation mode for whole module compilation.
     enum Compilation_mode {
         CM_NATIVE  = 0,   ///< Compile into native code.
         CM_PTX     = 1,   ///< Compile into PTX assembler.
-        CM_LLVM_IR = 2    ///< Compile into LLVM IR (LLVM 3.4 compatible).
+        CM_HLSL    = 2,   ///< Compile into HLSL code.
+        CM_LLVM_IR = 3    ///< Compile into LLVM IR (LLVM 7.0 compatible).
     };
 
 public:
@@ -1030,7 +1011,7 @@ public:
         unsigned                  num_texture_results,
         bool                      enable_simd) = 0;
 
-    /// Compile a lambda function into a PTX using the JIT.
+    /// Compile a lambda function into PTX or HLSL using the JIT.
     ///
     /// The generated function will have the signature #mi::mdl::Lambda_generic_function or
     /// #mi::mdl::Lambda_switch_function depending on the type of the lambda.
@@ -1041,17 +1022,20 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param ptx_output           true: generate PTX, false: generate LLVM-IR (prepared for PTX)
+    /// \param comp_mode            the compilation mode deciding the target language,
+    ///                             must be PTX or HLSL
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
-    virtual IGenerated_code_executable *compile_into_ptx(
+    virtual IGenerated_code_executable *compile_into_source(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
         unsigned                  sm_version,
-        bool                      ptx_output) = 0;
+        Compilation_mode          comp_mode,
+        bool                      llvm_ir_output) = 0;
 
     /// Compile a distribution function into native code using the JIT.
     ///
@@ -1080,7 +1064,7 @@ public:
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results) = 0;
 
-    /// Compile a distribution function into a PTX using the JIT.
+    /// Compile a distribution function into PTX or HLSL using the JIT.
     ///
     /// The generated functions will have the signatures #mi::mdl::Bsdf_init_function,
     /// #mi::mdl::Bsdf_sample_function, #mi::mdl::Bsdf_evaluate_function and
@@ -1100,7 +1084,9 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param ptx_output           true: generate PTX, false: generate LLVM-IR (prepared for PTX)
+    /// \param comp_mode            the compilation mode deciding the target language,
+    ///                             must be PTX or HLSL
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_gpu(
@@ -1109,7 +1095,8 @@ public:
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results,
         unsigned                     sm_version,
-        bool                         ptx_output) = 0;
+        Compilation_mode             comp_mode,
+        bool                         llvm_ir_output) = 0;
 
     /// Get the device library for PTX compilation.
     ///

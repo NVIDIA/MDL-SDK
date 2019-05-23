@@ -1,5 +1,18 @@
-set(LLVM_LINK_COMPONENTS core jit interpreter native)
+set(LLVM_LINK_COMPONENTS
+  Analysis
+  Core
+  ExecutionEngine
+  InstCombine
+  Object
+  OrcJIT
+  RuntimeDyld
+  ScalarOpts
+  Support
+  native
+  )
 
-add_llvm_example(Kaleidoscope-Ch5
+add_kaleidoscope_chapter(Kaleidoscope-Ch5
   toy.cpp
   )
+
+export_executable_symbols(Kaleidoscope-Ch5)

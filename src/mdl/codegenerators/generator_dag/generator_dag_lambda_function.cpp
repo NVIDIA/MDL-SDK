@@ -184,6 +184,7 @@ Lambda_function::Lambda_function(
 , m_root_map(0, Root_map::hasher(), Root_map::key_equal(), alloc)
 , m_roots(alloc)
 , m_resource_attr_map(0, Resource_attr_map::hasher(), Resource_attr_map::key_equal(), alloc)
+, m_has_resource_attributes(true)
 , m_context(context)
 , m_hash()
 , m_body_expr(NULL)
@@ -838,6 +839,7 @@ void Lambda_function::optimize(
     File_resolver file_resolver(
         *m_mdl.get(),
         /*module_cache=*/NULL,
+        m_mdl->get_external_resolver(),
         m_mdl->get_search_path(),
         m_mdl->get_search_path_lock(),
         dummy_msgs,
@@ -1618,6 +1620,19 @@ void Lambda_function::initialize_derivative_infos(ICall_name_resolver const *res
     m_deriv_infos_calculated = true;
 }
 
+// Returns true, if the attributes in the resource attribute table are valid.
+// If false, only the indices are valid.
+bool Lambda_function::has_resource_attributes() const
+{
+    return m_has_resource_attributes;
+}
+
+// Sets whether the resource attribute table contains valid attributes.
+void Lambda_function::set_has_resource_attributes(bool avail)
+{
+    m_has_resource_attributes = avail;
+}
+
 // Get the derivative information if they have been initialized.
 Derivative_infos const *Lambda_function::get_derivative_infos() const
 {
@@ -1825,6 +1840,7 @@ void Lambda_function::serialize(ISerializer *is) const
         }
     }
 
+    dag_serializer.write_bool(m_has_resource_attributes);
     dag_serializer.write_bool(m_uses_render_state);
     dag_serializer.write_bool(m_has_dead_code);
     dag_serializer.write_bool(m_uses_lambda_results);
@@ -1944,9 +1960,10 @@ Lambda_function *Lambda_function::deserialize(
         res->m_resource_attr_map[v] = e;
     }
 
-    res->m_uses_render_state   = dag_deserializer.read_bool();
-    res->m_has_dead_code       = dag_deserializer.read_bool();
-    res->m_uses_lambda_results = dag_deserializer.read_bool();
+    res->m_has_resource_attributes = dag_deserializer.read_bool();
+    res->m_uses_render_state       = dag_deserializer.read_bool();
+    res->m_has_dead_code           = dag_deserializer.read_bool();
+    res->m_uses_lambda_results     = dag_deserializer.read_bool();
 
     // The serial number is not serialized, but a new one is drawn:
     // Otherwise it is not possible to keep them in sync over the network ...
@@ -2081,7 +2098,8 @@ public:
         DAG_node const *mat_root_node,
         char const *df_path,
         bool include_geometry_normal,
-        bool calc_derivative_infos)
+        bool calc_derivative_infos,
+        bool allow_double_expr_lambdas)
     {
         if (mat_root_node == NULL || df_path == NULL)
             return IDistribution_function::EC_INVALID_PARAMETERS;
@@ -2143,7 +2161,13 @@ public:
 
         // translate all non-df nodes to call_lambda nodes
         Distribution_function_builder mat_builder(
-            alloc, *dist_func, mat_root_node, compiler, resolver, calc_derivative_infos);
+            alloc,
+            *dist_func,
+            mat_root_node,
+            compiler,
+            resolver,
+            calc_derivative_infos,
+            allow_double_expr_lambdas);
         mat_builder.collect_flags_and_used_nodes(
             df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL);
 
@@ -2211,7 +2235,8 @@ public:
         DAG_node const *mat_root_node,
         IMDL *compiler,
         ICall_name_resolver const *resolver,
-        bool calc_derivative_infos)
+        bool calc_derivative_infos,
+        bool allow_double_expr_lambdas)
     : m_alloc(alloc)
     , m_compiler(compiler, mi::base::DUP_INTERFACE)
     , m_dist_func(dist_func)
@@ -2220,7 +2245,9 @@ public:
     , m_root_lambda(impl_cast<Lambda_function>(dist_func.get_main_df()))
     , m_type_factory(*m_root_lambda->get_type_factory())
     , m_resolver(resolver)
+    , m_node_info_map(0, Node_info_map::hasher(), Node_info_map::key_equal(), alloc)
     , m_flags(FL_NONE)
+    , m_allow_double_expr_lambdas(allow_double_expr_lambdas)
     {
     }
 
@@ -2306,14 +2333,19 @@ public:
     /// or any types containing DF types.
     bool may_create_expr_lambda(DAG_node const *expr)
     {
+        IType const *type = expr->get_type();
+
         // don't allow expression lambdas returning matrices,
         // as matrices are float 16 vectors which need to be aligned to 64 byte
         // and they take up far too much memory space
-        if (as<IType_matrix>(expr->get_type()) != NULL)
+        if (as<IType_matrix>(type) != NULL)
             return false;
 
         // no DF types or types containing DF types
-        if (contains_df_type(expr->get_type()))
+        if (contains_df_type(type))
+            return false;
+
+        if (!m_allow_double_expr_lambdas && is<IType_double>(type))
             return false;
 
         return true;
@@ -2685,8 +2717,12 @@ private:
     bool needs_thin_walled(IDefinition::Semantics sema) {
         switch (sema)
         {
+            case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+            case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+            case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
             case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
             case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
+            case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
             case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
             case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
             case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
@@ -2708,8 +2744,12 @@ private:
     bool needs_ior(IDefinition::Semantics sema) {
         switch (sema)
         {
+            case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+            case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+            case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
             case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
             case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
+            case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
             case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
             case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
             case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
@@ -2858,18 +2898,16 @@ private:
         }
     };
 
-    typedef boost::unordered_map<
-        DAG_node const *,
-        Node_info,
-        Hash_ptr<DAG_node const>,
-        Equal_ptr<DAG_node const>
-    > Node_info_map;
+    typedef ptr_hash_map<DAG_node const, Node_info>::Type Node_info_map;
 
     /// Maps from DAG nodes created via the builder to an information structure.
     Node_info_map m_node_info_map;
 
     /// Collected flags.
     Flags m_flags;
+
+    /// If true, expression lambdas may be created for double values.
+    bool m_allow_double_expr_lambdas;
 };
 
 
@@ -2937,6 +2975,7 @@ char const *Distribution_function_dumper::get_type_name(IType const *type)
     case IType::TK_LIGHT_PROFILE:    return "light_profile";
     case IType::TK_BSDF_MEASUREMENT: return "bsdf_measurement";
     case IType::TK_BSDF:             return "bsdf";
+    case IType::TK_HAIR_BSDF:        return "hair_bsdf";
     case IType::TK_EDF:              return "edf";
     case IType::TK_VDF:              return "vdf";
     case IType::TK_VECTOR:
@@ -3062,6 +3101,7 @@ IDistribution_function::Error_code Distribution_function::initialize(
     char const                *df_path,
     bool                       include_geometry_normal,
     bool                       calc_derivative_infos,
+    bool                       allow_double_expr_lambdas,
     ICall_name_resolver const *name_resolver)
 {
     m_deriv_infos_calculated = calc_derivative_infos;
@@ -3073,7 +3113,8 @@ IDistribution_function::Error_code Distribution_function::initialize(
         material_constructor,
         df_path,
         include_geometry_normal,
-        calc_derivative_infos);
+        calc_derivative_infos,
+        allow_double_expr_lambdas);
 }
 
 // Get the main DF function representing a DF DAG call.

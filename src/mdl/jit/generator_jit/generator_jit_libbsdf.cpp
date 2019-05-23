@@ -29,13 +29,13 @@
 
 #include "pch.h"
 
-#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/system_error.h>
 
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 #include "mdl/compiler/compilercore/compilercore_assert.h"
+#include "mdl/compiler/compilercore/compilercore_errors.h"
 
 #include "generator_jit_llvm.h"
 
@@ -45,16 +45,20 @@ namespace mi {
 namespace mdl {
 
 // Load the libbsdf LLVM module.
-llvm::Module *LLVM_code_generator::load_libbsdf(
+std::unique_ptr<llvm::Module> LLVM_code_generator::load_libbsdf(
     llvm::LLVMContext &llvm_context)
 {
-    llvm::MemoryBuffer *mem = llvm::MemoryBuffer::getMemBuffer(
+    std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
         llvm::StringRef((char const *) libbsdf_bitcode, dimension_of(libbsdf_bitcode)),
         "libbsdf",
-        /*RequiresNullTerminator=*/false);
-    llvm::Module *module = llvm::ParseBitcodeFile(mem, llvm_context);
-    delete mem;
-    return module;
+        /*RequiresNullTerminator=*/ false));
+    auto mod = llvm::parseBitcodeFile(*mem.get(), llvm_context);
+    if (!mod) {
+        error(PARSING_LIBBSDF_MODULE_FAILED, Error_params(get_allocator()));
+        MDL_ASSERT(!"Parsing libbsdf failed");
+        return nullptr;
+    }
+    return std::move(mod.get());
 }
 
 }  // mdl

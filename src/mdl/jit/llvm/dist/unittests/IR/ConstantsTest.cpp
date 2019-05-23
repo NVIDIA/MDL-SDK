@@ -8,18 +8,22 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/Constants.h"
+#include "llvm-c/Core.h"
+#include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"
 
 namespace llvm {
 namespace {
 
 TEST(ConstantsTest, Integer_i1) {
-  IntegerType* Int1 = IntegerType::get(getGlobalContext(), 1);
+  LLVMContext Context;
+  IntegerType *Int1 = IntegerType::get(Context, 1);
   Constant* One = ConstantInt::get(Int1, 1, true);
   Constant* Zero = ConstantInt::get(Int1, 0);
   Constant* NegOne = ConstantInt::get(Int1, static_cast<uint64_t>(-1), true);
@@ -100,7 +104,8 @@ TEST(ConstantsTest, Integer_i1) {
 }
 
 TEST(ConstantsTest, IntSigns) {
-  IntegerType* Int8Ty = Type::getInt8Ty(getGlobalContext());
+  LLVMContext Context;
+  IntegerType *Int8Ty = Type::getInt8Ty(Context);
   EXPECT_EQ(100, ConstantInt::get(Int8Ty, 100, false)->getSExtValue());
   EXPECT_EQ(100, ConstantInt::get(Int8Ty, 100, true)->getSExtValue());
   EXPECT_EQ(100, ConstantInt::getSigned(Int8Ty, 100)->getSExtValue());
@@ -113,16 +118,17 @@ TEST(ConstantsTest, IntSigns) {
 }
 
 TEST(ConstantsTest, FP128Test) {
-  Type *FP128Ty = Type::getFP128Ty(getGlobalContext());
+  LLVMContext Context;
+  Type *FP128Ty = Type::getFP128Ty(Context);
 
-  IntegerType *Int128Ty = Type::getIntNTy(getGlobalContext(), 128);
+  IntegerType *Int128Ty = Type::getIntNTy(Context, 128);
   Constant *Zero128 = Constant::getNullValue(Int128Ty);
   Constant *X = ConstantExpr::getUIToFP(Zero128, FP128Ty);
   EXPECT_TRUE(isa<ConstantFP>(X));
 }
 
 TEST(ConstantsTest, PointerCast) {
-  LLVMContext &C(getGlobalContext());
+  LLVMContext C;
   Type *Int8PtrTy = Type::getInt8PtrTy(C);
   Type *Int32PtrTy = Type::getInt32PtrTy(C);
   Type *Int64Ty = Type::getInt64Ty(C);
@@ -149,27 +155,50 @@ TEST(ConstantsTest, PointerCast) {
   EXPECT_EQ(Constant::getNullValue(Int32PtrVecTy),
             ConstantExpr::getPointerCast(
               Constant::getNullValue(Int8PtrVecTy), Int32PtrVecTy));
+
+  Type *Int32Ptr1Ty = Type::getInt32PtrTy(C, 1);
+  ConstantInt *K = ConstantInt::get(Type::getInt64Ty(C), 1234);
+
+  // Make sure that addrspacecast of inttoptr is not folded away.
+  EXPECT_NE(K,
+            ConstantExpr::getAddrSpaceCast(
+              ConstantExpr::getIntToPtr(K, Int32PtrTy), Int32Ptr1Ty));
+  EXPECT_NE(K,
+            ConstantExpr::getAddrSpaceCast(
+              ConstantExpr::getIntToPtr(K, Int32Ptr1Ty), Int32PtrTy));
+
+  Constant *NullInt32Ptr0 = Constant::getNullValue(Int32PtrTy);
+  Constant *NullInt32Ptr1 = Constant::getNullValue(Int32Ptr1Ty);
+
+  // Make sure that addrspacecast of null is not folded away.
+  EXPECT_NE(Constant::getNullValue(Int32PtrTy),
+            ConstantExpr::getAddrSpaceCast(NullInt32Ptr0, Int32Ptr1Ty));
+
+  EXPECT_NE(Constant::getNullValue(Int32Ptr1Ty),
+            ConstantExpr::getAddrSpaceCast(NullInt32Ptr1, Int32PtrTy));
 }
 
-#define CHECK(x, y) {                                         		\
-    std::string __s;                                            	\
-    raw_string_ostream __o(__s);                                	\
-    Instruction *__I = cast<ConstantExpr>(x)->getAsInstruction();	\
-    __I->print(__o);      						\
-    delete __I; 							\
-    __o.flush();                                                	\
-    EXPECT_EQ(std::string("  <badref> = " y), __s);             	\
+#define CHECK(x, y)                                                            \
+  {                                                                            \
+    std::string __s;                                                           \
+    raw_string_ostream __o(__s);                                               \
+    Instruction *__I = cast<ConstantExpr>(x)->getAsInstruction();              \
+    __I->print(__o);                                                           \
+    __I->deleteValue();                                                        \
+    __o.flush();                                                               \
+    EXPECT_EQ(std::string("  <badref> = " y), __s);                            \
   }
 
 TEST(ConstantsTest, AsInstructionsTest) {
-  OwningPtr<Module> M(new Module("MyModule", getGlobalContext()));
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
 
-  Type *Int64Ty = Type::getInt64Ty(getGlobalContext());
-  Type *Int32Ty = Type::getInt32Ty(getGlobalContext());
-  Type *Int16Ty = Type::getInt16Ty(getGlobalContext());
-  Type *Int1Ty = Type::getInt1Ty(getGlobalContext());
-  Type *FloatTy = Type::getFloatTy(getGlobalContext());
-  Type *DoubleTy = Type::getDoubleTy(getGlobalContext());
+  Type *Int64Ty = Type::getInt64Ty(Context);
+  Type *Int32Ty = Type::getInt32Ty(Context);
+  Type *Int16Ty = Type::getInt16Ty(Context);
+  Type *Int1Ty = Type::getInt1Ty(Context);
+  Type *FloatTy = Type::getFloatTy(Context);
+  Type *DoubleTy = Type::getDoubleTy(Context);
 
   Constant *Global = M->getOrInsertGlobal("dummy",
                                          PointerType::getUnqual(Int32Ty));
@@ -185,6 +214,12 @@ TEST(ConstantsTest, AsInstructionsTest) {
   Constant *P6 = ConstantExpr::getBitCast(P4, VectorType::get(Int16Ty, 2));
 
   Constant *One = ConstantInt::get(Int32Ty, 1);
+  Constant *Two = ConstantInt::get(Int64Ty, 2);
+  Constant *Big = ConstantInt::get(Context, APInt{256, uint64_t(-1), true});
+  Constant *Elt = ConstantInt::get(Int16Ty, 2015);
+  Constant *Undef16  = UndefValue::get(Int16Ty);
+  Constant *Undef64  = UndefValue::get(Int64Ty);
+  Constant *UndefV16 = UndefValue::get(P6->getType());
 
   #define P0STR "ptrtoint (i32** @dummy to i32)"
   #define P1STR "uitofp (i32 ptrtoint (i32** @dummy to i32) to float)"
@@ -246,15 +281,200 @@ TEST(ConstantsTest, AsInstructionsTest) {
   // FIXME: getGetElementPtr() actually creates an inbounds ConstantGEP,
   //        not a normal one!
   //CHECK(ConstantExpr::getGetElementPtr(Global, V, false),
-  //      "getelementptr i32** @dummy, i32 1");
-  CHECK(ConstantExpr::getInBoundsGetElementPtr(Global, V),
-        "getelementptr inbounds i32** @dummy, i32 1");
+  //      "getelementptr i32*, i32** @dummy, i32 1");
+  CHECK(ConstantExpr::getInBoundsGetElementPtr(PointerType::getUnqual(Int32Ty),
+                                               Global, V),
+        "getelementptr inbounds i32*, i32** @dummy, i32 1");
 
   CHECK(ConstantExpr::getExtractElement(P6, One), "extractelement <2 x i16> "
         P6STR ", i32 1");
+
+  EXPECT_EQ(Undef16, ConstantExpr::getExtractElement(P6, Two));
+  EXPECT_EQ(Undef16, ConstantExpr::getExtractElement(P6, Big));
+  EXPECT_EQ(Undef16, ConstantExpr::getExtractElement(P6, Undef64));
+
+  EXPECT_EQ(Elt, ConstantExpr::getExtractElement(
+                 ConstantExpr::getInsertElement(P6, Elt, One), One));
+  EXPECT_EQ(UndefV16, ConstantExpr::getInsertElement(P6, Elt, Two));
+  EXPECT_EQ(UndefV16, ConstantExpr::getInsertElement(P6, Elt, Big));
+  EXPECT_EQ(UndefV16, ConstantExpr::getInsertElement(P6, Elt, Undef64));
 }
 
+#ifdef GTEST_HAS_DEATH_TEST
+#ifndef NDEBUG
+TEST(ConstantsTest, ReplaceWithConstantTest) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  Type *Int32Ty = Type::getInt32Ty(Context);
+  Constant *One = ConstantInt::get(Int32Ty, 1);
+
+  Constant *Global =
+      M->getOrInsertGlobal("dummy", PointerType::getUnqual(Int32Ty));
+  Constant *GEP = ConstantExpr::getGetElementPtr(
+      PointerType::getUnqual(Int32Ty), Global, One);
+  EXPECT_DEATH(Global->replaceAllUsesWith(GEP),
+               "this->replaceAllUsesWith\\(expr\\(this\\)\\) is NOT valid!");
+}
+
+#endif
+#endif
+
 #undef CHECK
+
+TEST(ConstantsTest, ConstantArrayReplaceWithConstant) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  Type *IntTy = Type::getInt8Ty(Context);
+  ArrayType *ArrayTy = ArrayType::get(IntTy, 2);
+  Constant *A01Vals[2] = {ConstantInt::get(IntTy, 0),
+                          ConstantInt::get(IntTy, 1)};
+  Constant *A01 = ConstantArray::get(ArrayTy, A01Vals);
+
+  Constant *Global = new GlobalVariable(*M, IntTy, false,
+                                        GlobalValue::ExternalLinkage, nullptr);
+  Constant *GlobalInt = ConstantExpr::getPtrToInt(Global, IntTy);
+  Constant *A0GVals[2] = {ConstantInt::get(IntTy, 0), GlobalInt};
+  Constant *A0G = ConstantArray::get(ArrayTy, A0GVals);
+  ASSERT_NE(A01, A0G);
+
+  GlobalVariable *RefArray =
+      new GlobalVariable(*M, ArrayTy, false, GlobalValue::ExternalLinkage, A0G);
+  ASSERT_EQ(A0G, RefArray->getInitializer());
+
+  GlobalInt->replaceAllUsesWith(ConstantInt::get(IntTy, 1));
+  ASSERT_EQ(A01, RefArray->getInitializer());
+}
+
+TEST(ConstantsTest, ConstantExprReplaceWithConstant) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  Type *IntTy = Type::getInt8Ty(Context);
+  Constant *G1 = new GlobalVariable(*M, IntTy, false,
+                                    GlobalValue::ExternalLinkage, nullptr);
+  Constant *G2 = new GlobalVariable(*M, IntTy, false,
+                                    GlobalValue::ExternalLinkage, nullptr);
+  ASSERT_NE(G1, G2);
+
+  Constant *Int1 = ConstantExpr::getPtrToInt(G1, IntTy);
+  Constant *Int2 = ConstantExpr::getPtrToInt(G2, IntTy);
+  ASSERT_NE(Int1, Int2);
+
+  GlobalVariable *Ref =
+      new GlobalVariable(*M, IntTy, false, GlobalValue::ExternalLinkage, Int1);
+  ASSERT_EQ(Int1, Ref->getInitializer());
+
+  G1->replaceAllUsesWith(G2);
+  ASSERT_EQ(Int2, Ref->getInitializer());
+}
+
+TEST(ConstantsTest, GEPReplaceWithConstant) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  Type *IntTy = Type::getInt32Ty(Context);
+  Type *PtrTy = PointerType::get(IntTy, 0);
+  auto *C1 = ConstantInt::get(IntTy, 1);
+  auto *Placeholder = new GlobalVariable(
+      *M, IntTy, false, GlobalValue::ExternalWeakLinkage, nullptr);
+  auto *GEP = ConstantExpr::getGetElementPtr(IntTy, Placeholder, C1);
+  ASSERT_EQ(GEP->getOperand(0), Placeholder);
+
+  auto *Ref =
+      new GlobalVariable(*M, PtrTy, false, GlobalValue::ExternalLinkage, GEP);
+  ASSERT_EQ(GEP, Ref->getInitializer());
+
+  auto *Global = new GlobalVariable(*M, PtrTy, false,
+                                    GlobalValue::ExternalLinkage, nullptr);
+  auto *Alias = GlobalAlias::create(IntTy, 0, GlobalValue::ExternalLinkage,
+                                    "alias", Global, M.get());
+  Placeholder->replaceAllUsesWith(Alias);
+  ASSERT_EQ(GEP, Ref->getInitializer());
+  ASSERT_EQ(GEP->getOperand(0), Alias);
+}
+
+TEST(ConstantsTest, AliasCAPI) {
+  LLVMContext Context;
+  SMDiagnostic Error;
+  std::unique_ptr<Module> M =
+      parseAssemblyString("@g = global i32 42", Error, Context);
+  GlobalVariable *G = M->getGlobalVariable("g");
+  Type *I16Ty = Type::getInt16Ty(Context);
+  Type *I16PTy = PointerType::get(I16Ty, 0);
+  Constant *Aliasee = ConstantExpr::getBitCast(G, I16PTy);
+  LLVMValueRef AliasRef =
+      LLVMAddAlias(wrap(M.get()), wrap(I16PTy), wrap(Aliasee), "a");
+  ASSERT_EQ(unwrap<GlobalAlias>(AliasRef)->getAliasee(), Aliasee);
+}
+
+static std::string getNameOfType(Type *T) {
+  std::string S;
+  raw_string_ostream RSOS(S);
+  T->print(RSOS);
+  return S;
+}
+
+TEST(ConstantsTest, BuildConstantDataArrays) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  for (Type *T : {Type::getInt8Ty(Context), Type::getInt16Ty(Context),
+                  Type::getInt32Ty(Context), Type::getInt64Ty(Context)}) {
+    ArrayType *ArrayTy = ArrayType::get(T, 2);
+    Constant *Vals[] = {ConstantInt::get(T, 0), ConstantInt::get(T, 1)};
+    Constant *CDV = ConstantArray::get(ArrayTy, Vals);
+    ASSERT_TRUE(dyn_cast<ConstantDataArray>(CDV) != nullptr)
+        << " T = " << getNameOfType(T);
+  }
+
+  for (Type *T : {Type::getHalfTy(Context), Type::getFloatTy(Context),
+                  Type::getDoubleTy(Context)}) {
+    ArrayType *ArrayTy = ArrayType::get(T, 2);
+    Constant *Vals[] = {ConstantFP::get(T, 0), ConstantFP::get(T, 1)};
+    Constant *CDV = ConstantArray::get(ArrayTy, Vals);
+    ASSERT_TRUE(dyn_cast<ConstantDataArray>(CDV) != nullptr)
+        << " T = " << getNameOfType(T);
+  }
+}
+
+TEST(ConstantsTest, BuildConstantDataVectors) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  for (Type *T : {Type::getInt8Ty(Context), Type::getInt16Ty(Context),
+                  Type::getInt32Ty(Context), Type::getInt64Ty(Context)}) {
+    Constant *Vals[] = {ConstantInt::get(T, 0), ConstantInt::get(T, 1)};
+    Constant *CDV = ConstantVector::get(Vals);
+    ASSERT_TRUE(dyn_cast<ConstantDataVector>(CDV) != nullptr)
+        << " T = " << getNameOfType(T);
+  }
+
+  for (Type *T : {Type::getHalfTy(Context), Type::getFloatTy(Context),
+                  Type::getDoubleTy(Context)}) {
+    Constant *Vals[] = {ConstantFP::get(T, 0), ConstantFP::get(T, 1)};
+    Constant *CDV = ConstantVector::get(Vals);
+    ASSERT_TRUE(dyn_cast<ConstantDataVector>(CDV) != nullptr)
+        << " T = " << getNameOfType(T);
+  }
+}
+
+TEST(ConstantsTest, BitcastToGEP) {
+  LLVMContext Context;
+  std::unique_ptr<Module> M(new Module("MyModule", Context));
+
+  auto *i32 = Type::getInt32Ty(Context);
+  auto *U = StructType::create(Context, "Unsized");
+  Type *EltTys[] = {i32, U};
+  auto *S = StructType::create(EltTys);
+
+  auto *G = new GlobalVariable(*M, S, false,
+                               GlobalValue::ExternalLinkage, nullptr);
+  auto *PtrTy = PointerType::get(i32, 0);
+  auto *C = ConstantExpr::getBitCast(G, PtrTy);
+  ASSERT_EQ(cast<ConstantExpr>(C)->getOpcode(), Instruction::BitCast);
+}
 
 }  // end anonymous namespace
 }  // end namespace llvm

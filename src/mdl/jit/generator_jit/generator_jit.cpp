@@ -42,6 +42,8 @@
 #include "generator_jit_code_printer.h"
 #include "generator_jit_generated_code.h"
 #include "generator_jit_llvm.h"
+#include "generator_jit_opt_pass_gate.h"
+
 
 namespace mi {
 namespace mdl {
@@ -123,6 +125,10 @@ Code_generator_jit::Code_generator_jit(
         MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU,
         "true",
         "Use built-in resource handler on CPU");
+    m_options.add_option(
+        MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA,
+        "false",
+        "HLSL: Pass an extra user defined resource data struct to resource callbacks");
 }
 
 // Get the name of the target language.
@@ -153,6 +159,8 @@ IGenerated_code_executable *Code_generator_jit::compile(
 
     if (mode == CM_NATIVE) {
         result->compile_module_to_llvm(module, m_options);
+    } else if (mode == CM_HLSL) {
+        result->compile_module_to_hlsl(module, m_options);
     } else {
         result->compile_module_to_ptx(module, m_options);
     }
@@ -187,7 +195,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
     // environment is executed on CPU only
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_texture_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -204,11 +212,12 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
     if (func != NULL) {
         llvm::Module *module = func->getParent();
 
-        code_gen.jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        code_gen.fill_function_info(code);
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(func);
+        void *entry_point = code_gen.get_entry_point(module_key, func);
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -348,7 +357,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     // const function are evaluated on the CPU only
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -365,11 +374,12 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
             *lambda, resolver, attr, world_to_object, object_to_world, object_id))
     {
         llvm::Module *module = func->getParent();
-        code_gen.jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        code_gen.fill_function_info(code.get());
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(func);
+        void *entry_point = code_gen.get_entry_point(module_key, func);
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -427,7 +437,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     // a texture handler is available
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/lambda->get_execution_context() != ILambda_function::LEC_CORE,
@@ -443,12 +453,13 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     code_gen.enable_ro_data_segment();
 
     llvm::Function *func = code_gen.compile_switch_lambda(
-        /*incremental=*/false, *lambda, resolver);
+        /*incremental=*/false, *lambda, resolver, /*next_arg_block_index=*/0);
     if (func != NULL) {
         llvm::Module *module = func->getParent();
 
-        code_gen.jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        code_gen.fill_function_info(code);
 
         size_t data_size = 0;
         char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
@@ -456,7 +467,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
         code->set_ro_segment(data, data_size);
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(func);
+        void *entry_point = code_gen.get_entry_point(module_key, func);
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -517,7 +528,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
     // GPU switch functions are used in the core only
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
-        /*ptx_mode=*/true,
+        LLVM_code_generator::TL_PTX,
         Type_mapper::TM_PTX,
         sm_version,
         /*has_tex_handler=*/false,
@@ -533,11 +544,12 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
     code_gen.enable_ro_data_segment();
 
     llvm::Function *func = code_gen.compile_switch_lambda(
-        /*incremental=*/false, *lambda, resolver);
+        /*incremental=*/false, *lambda, resolver, /*next_arg_block_index=*/0);
     if (func != NULL) {
         llvm::Module *module = func->getParent();
 
         code_gen.ptx_compile(module, code->access_src_code());
+        code_gen.fill_function_info(code);
 
         // it's now save to drop this module
         code_gen.drop_llvm_module(module);
@@ -605,7 +617,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
     // generic functions are for CPU only
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -618,14 +630,15 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         &res_manag, /*enable_debug=*/false);
 
     llvm::Function *func = code_gen.compile_generic_lambda(
-        /*incremental=*/false, *lambda, resolver, transformer);
+        /*incremental=*/false, *lambda, resolver, transformer, /*next_arg_block_index=*/0);
     if (func != NULL) {
         llvm::Module *module = func->getParent();
-        code_gen.jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        code_gen.fill_function_info(code.get());
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(func);
+        void *entry_point = code_gen.get_entry_point(module_key, func);
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -685,7 +698,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
 
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
         /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -706,10 +719,17 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
     llvm::Function *func = NULL;
     if (body != NULL) {
         func = code_gen.compile_generic_lambda(
-            /*incremental=*/false, *lambda, resolver, /*transformer=*/NULL);
+            /*incremental=*/false,
+            *lambda,
+            resolver,
+            /*transformer=*/NULL,
+            /*next_arg_block_index=*/0);
     } else {
         func = code_gen.compile_switch_lambda(
-            /*incremental=*/false, *lambda, resolver);
+            /*incremental=*/false,
+            *lambda,
+            resolver,
+            /*next_arg_block_index=*/0);
     }
     if (func != NULL) {
         llvm::Module *module = func->getParent();
@@ -718,6 +738,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
             code_gen.llvm_bc_compile(module, code->access_src_code());
         else
             code_gen.llvm_ir_compile(module, code->access_src_code());
+        code_gen.fill_function_info(code);
 
         // it's now save to drop this module
         code_gen.drop_llvm_module(module);
@@ -776,7 +797,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        /*ptx_mode=*/false,
+        LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -790,16 +811,17 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = code_gen.compile_distribution_function(
-        /*incremental=*/false, *dist_func, resolver, llvm_funcs);
+        /*incremental=*/false, *dist_func, resolver, llvm_funcs, /*next_arg_block_index=*/0);
 
     if (module != NULL) {
-        code_gen.jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        code_gen.fill_function_info(code.get());
 
         // add all generated functions (init, sample, evaluate, pdf) as entrypoints
         for (LLVM_code_generator::Function_vector::const_iterator it = llvm_funcs.begin(),
                 end = llvm_funcs.end(); it != end; ++it) {
-            code->add_entry_point(code_gen.get_entry_point(*it));
+            code->add_entry_point(code_gen.get_entry_point(module_key, *it));
         }
 
         // copy the render state usage
@@ -819,14 +841,15 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
     return code.get();
 }
 
-// Compile a distribution function into a PTX using the JIT.
+// Compile a distribution function into a PTX or HLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gpu(
     IDistribution_function const *idist_func,
     ICall_name_resolver const    *resolver,
     unsigned                     num_texture_spaces,
     unsigned                     num_texture_results,
     unsigned                     sm_version,
-    bool                         ptx_output)
+    Compilation_mode             comp_mode,
+    bool                         llvm_ir_output)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
 
@@ -839,21 +862,38 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
-    Generated_code_source *code = builder.create<Generated_code_source>(
-        alloc,
-        ptx_output ? IGenerated_code_executable::CK_PTX : IGenerated_code_executable::CK_LLVM_IR);
+    IGenerated_code_executable::Kind code_kind;
+    if (llvm_ir_output)
+        code_kind = IGenerated_code_executable::CK_LLVM_IR;
+    else if (comp_mode == ICode_generator_jit::CM_PTX)
+        code_kind = IGenerated_code_executable::CK_PTX;
+    else if (comp_mode == ICode_generator_jit::CM_HLSL)
+        code_kind = IGenerated_code_executable::CK_HLSL;
+    else {
+        MDL_ASSERT(!"Invalid compilation_mode for compile_distribution_function_gpu");
+        return NULL;
+    }
+
+    Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
 
     Generated_code_source::Source_res_manag res_manag(
         alloc, &root_lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
+    HLSLOptPassGate opt_pass_gate;
+    if (comp_mode == ICode_generator_jit::CM_HLSL) {
+        llvm_context.setOptPassGate(opt_pass_gate);
+    }
+
     mi::base::Handle<MDL> compiler(dist_func->get_compiler());
 
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
-        /*ptx_mode=*/true,
-        Type_mapper::TM_PTX,
-        sm_version,
+        comp_mode == ICode_generator_jit::CM_PTX ?
+            LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
+        comp_mode == ICode_generator_jit::CM_PTX ?
+            Type_mapper::TM_PTX : Type_mapper::TM_HLSL,
+        comp_mode == ICode_generator_jit::CM_PTX ? sm_version : 0,
         /*has_tex_handler=*/false,
         Type_mapper::SSM_CORE,
         num_texture_spaces,
@@ -871,18 +911,22 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = code_gen.compile_distribution_function(
-        /*incremental=*/false, *dist_func, resolver, llvm_funcs);
+        /*incremental=*/false, *dist_func, resolver, llvm_funcs, /*next_arg_block_index=*/0);
 
     if (module != NULL) {
-        if (ptx_output) {
-            code_gen.ptx_compile(module, code->access_src_code());
-        }
-        else {
+        if (llvm_ir_output) {
             if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
                 code_gen.llvm_bc_compile(module, code->access_src_code());
             else
                 code_gen.llvm_ir_compile(module, code->access_src_code());
         }
+        else {
+            if (comp_mode == ICode_generator_jit::CM_PTX)
+                code_gen.ptx_compile(module, code->access_src_code());
+            else
+                code_gen.hlsl_compile(module, code->access_src_code());
+        }
+        code_gen.fill_function_info(code);
 
         // it's now save to drop this module
         code_gen.drop_llvm_module(module);
@@ -913,15 +957,117 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     return code;
 }
 
-// Compile a lambda function into a PTX using the JIT.
-IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
+// Fill a code object from a code cache entry.
+void Code_generator_jit::fill_code_from_cache(
+    Generated_code_source *code,
+    ICode_cache::Entry const *entry)
+{
+    IAllocator        *alloc = get_allocator();
+    Allocator_builder builder(alloc);
+
+    code->access_src_code() = string(entry->code, entry->code_size, alloc);
+
+    code->set_ro_segment(entry->const_seg, entry->const_seg_size);
+
+    // only add a captured arguments layout, if it's non-empty
+    if (entry->arg_layout_size != 0) {
+        mi::base::Handle<Generated_code_value_layout> layout(
+            builder.create<Generated_code_value_layout>(
+                alloc,
+                entry->arg_layout,
+                entry->arg_layout_size,
+                m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS)));
+        code->add_captured_arguments_layout(layout.get());
+    }
+
+    code->set_render_state_usage(entry->render_state_usage);
+
+    // copy the string table if any
+    for (size_t i = 0; i < entry->mapped_string_size; ++i) {
+        code->add_mapped_string(entry->mapped_strings[i], i);
+    }
+
+    // copy function infos
+    for (size_t i = 0; i < entry->func_info_size; ++i) {
+        ICode_cache::Entry::Func_info const &info = entry->func_infos[i];
+        size_t index = code->add_function_info(
+            info.name, info.dist_kind, info.func_kind, info.arg_block_index);
+
+        for (int j = 0 ; j < int(IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
+            char const *prototype = info.prototypes[j];
+            if (*prototype) {
+                code->set_function_prototype(
+                    index, IGenerated_code_executable::Prototype_language(j), prototype);
+            }
+        }
+    }
+}
+
+// Enter a code object into the code cache.
+void Code_generator_jit::enter_code_into_cache(
+    Generated_code_source *code,
+    ICode_cache *code_cache,
+    unsigned char const cache_key[16])
+{
+    string const &code_str = code->access_src_code();
+
+    size_t n_strings = code->get_string_constant_count();
+    Small_VLA<char const *, 8> mapped_strings(get_allocator(), n_strings);
+    for (size_t i = 0; i < n_strings; ++i) {
+        mapped_strings[i] = code->get_string_constant(i);
+    }
+
+    char const *empty_str = "";
+    Small_VLA<ICode_cache::Entry::Func_info, 8> func_infos(
+        get_allocator(), code->get_function_count());
+    for (size_t i = 0, n = code->get_function_count(); i < n; ++i) {
+        ICode_cache::Entry::Func_info &info = func_infos[i];
+        info.name = code->get_function_name(i);
+        info.dist_kind = code->get_distribution_kind(i);
+        info.func_kind = code->get_function_kind(i);
+        info.arg_block_index = code->get_function_arg_block_layout_index(i);
+
+        for (int j = 0 ; j < int(IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
+            char const *prototype = code->get_function_prototype(
+                i, IGenerated_code_executable::Prototype_language(j));
+            info.prototypes[j] = prototype != NULL ? prototype : empty_str;
+        }
+    }
+
+    size_t data_size = 0;
+    char const *data = reinterpret_cast<char const *>(code->get_ro_data_segment(data_size));
+
+    char const *layout_data = NULL;
+    size_t layout_data_size = 0;
+    if (code->get_captured_argument_layouts_count() > 0) {
+        mi::base::Handle<IGenerated_code_value_layout const> i_layout(
+            code->get_captured_arguments_layout(0));
+        Generated_code_value_layout const *layout =
+            impl_cast<Generated_code_value_layout>(i_layout.get());
+        layout_data = layout->get_layout_data(layout_data_size);
+    }
+
+    ICode_cache::Entry entry(
+        code_str.c_str(), code_str.size(),
+        data, data_size,
+        layout_data, layout_data_size,
+        mapped_strings.data(), mapped_strings.size(),
+        code->get_state_usage(),
+        func_infos.data(), func_infos.size());
+
+    code_cache->enter(cache_key, entry);
+}
+
+// Compile a lambda function into PTX or HLSL using the JIT.
+IGenerated_code_executable *Code_generator_jit::compile_into_source(
     ICode_cache               *code_cache,
     ILambda_function const    *ilambda,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results,
     unsigned                  sm_version,
-    bool                      ptx_output)
+    Compilation_mode          comp_mode,
+    bool                      llvm_ir_output)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL)
@@ -936,9 +1082,19 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
-    Generated_code_source *code = builder.create<Generated_code_source>(
-        alloc,
-        ptx_output ? IGenerated_code_executable::CK_PTX : IGenerated_code_executable::CK_LLVM_IR);
+    IGenerated_code_executable::Kind code_kind;
+    if (llvm_ir_output)
+        code_kind = IGenerated_code_executable::CK_LLVM_IR;
+    else if (comp_mode == ICode_generator_jit::CM_PTX)
+        code_kind = IGenerated_code_executable::CK_PTX;
+    else if (comp_mode == ICode_generator_jit::CM_HLSL)
+        code_kind = IGenerated_code_executable::CK_HLSL;
+    else {
+        MDL_ASSERT(!"Invalid compilation_mode for compile_into_source");
+        return NULL;
+    }
+
+    Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
 
     unsigned char cache_key[16];
 
@@ -952,16 +1108,16 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
 
         hasher.update(lambda->get_name());
         hasher.update(hash->data(), hash->size());
-        hasher.update(sm_version);
-
-        hasher.update(ptx_output);
+        if (comp_mode == ICode_generator_jit::CM_PTX)
+            hasher.update(sm_version);
+        hasher.update(llvm_ir_output);
 
         // Beware: the selected options change the generated code, hence we must include them into
         // the key
         hasher.update(lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
-        hasher.update(num_texture_spaces),
-        hasher.update(num_texture_results),
+        hasher.update(num_texture_spaces);
+        hasher.update(num_texture_results);
         hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
         hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
@@ -970,6 +1126,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
 
         hasher.final(cache_key);
 
@@ -977,28 +1134,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
 
         if (entry != NULL) {
             // found a hit
-            code->access_src_code() = string(entry->code, entry->code_size, alloc);
-
-            code->set_ro_segment(entry->const_seg, entry->const_seg_size);
-
-            // only add a captured arguments layout, if it's non-empty
-            if (entry->arg_layout_size != 0) {
-                mi::base::Handle<Generated_code_value_layout> layout(
-                    builder.create<Generated_code_value_layout>(
-                        alloc,
-                        entry->arg_layout,
-                        entry->arg_layout_size,
-                        m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS)));
-                code->add_captured_arguments_layout(layout.get());
-            }
-
-            code->set_render_state_usage(entry->render_state_usage);
-
-            // copy the string table if any
-            for (size_t i = 0; i < entry->mapped_string_size; ++i) {
-                code->add_mapped_string(entry->mapped_strings[i], i);
-            }
-
+            fill_code_from_cache(code, entry);
             return code;
         }
     }
@@ -1010,13 +1146,20 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
     Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
+    HLSLOptPassGate opt_pass_gate;
+    if (comp_mode == ICode_generator_jit::CM_HLSL) {
+        llvm_context.setOptPassGate(opt_pass_gate);
+    }
+
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
 
     LLVM_code_generator code_gen(
         m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
-        /*ptx_mode=*/true,
-        Type_mapper::TM_PTX,
-        sm_version,
+        comp_mode == ICode_generator_jit::CM_PTX ?
+            LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
+        comp_mode == ICode_generator_jit::CM_PTX ?
+            Type_mapper::TM_PTX : Type_mapper::TM_HLSL,
+        comp_mode == ICode_generator_jit::CM_PTX ? sm_version : 0,
         /*has_tex_handler=*/false,
         lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE,
@@ -1036,22 +1179,33 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
     llvm::Function *func = NULL;
     if (body != NULL) {
         func = code_gen.compile_generic_lambda(
-            /*incremental=*/false, *lambda, resolver, /*transformer=*/NULL);
+            /*incremental=*/false,
+            *lambda,
+            resolver,
+            /*transformer=*/NULL,
+            /*next_arg_block_index=*/0);
     } else {
         func = code_gen.compile_switch_lambda(
-            /*incremental=*/false, *lambda, resolver);
+            /*incremental=*/false,
+            *lambda,
+            resolver,
+            /*next_arg_block_index=*/0);
     }
     if (func != NULL) {
         llvm::Module *module = func->getParent();
 
-        if (ptx_output) {
-            code_gen.ptx_compile(module, code->access_src_code());
-        } else {
+        if (llvm_ir_output) {
             if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
                 code_gen.llvm_bc_compile(module, code->access_src_code());
             else
                 code_gen.llvm_ir_compile(module, code->access_src_code());
+        } else {
+            if (comp_mode == ICode_generator_jit::CM_PTX)
+                code_gen.ptx_compile(module, code->access_src_code());
+            else
+                code_gen.hlsl_compile(module, code->access_src_code());
         }
+        code_gen.fill_function_info(code);
 
         // it's now save to drop this module
         code_gen.drop_llvm_module(module);
@@ -1082,28 +1236,15 @@ IGenerated_code_executable *Code_generator_jit::compile_into_ptx(
         }
 
         if (code_cache != NULL) {
-            string const &code_str = code->access_src_code();
-
-            Small_VLA<char const *, 8> mappend_strings(get_allocator(), n_strings);
-            for (size_t i = 0; i < n_strings; ++i) {
-                mappend_strings[i] = code_gen.get_string_constant(i);
-            }
-
-            ICode_cache::Entry entry(
-                code_str.c_str(),       code_str.size(),
-                data,                   data_size,
-                layout_data,            layout_data_size,
-                mappend_strings.data(), mappend_strings.size(),
-                code->get_state_usage());
-
-            code_cache->enter(cache_key, entry);
+            enter_code_into_cache(code, code_cache, cache_key);
         }
     } else if (code->access_messages().get_error_message_count() == 0) {
         // on failure, ensure that the code contains an error message
-        code_gen.error(INTERNAL_JIT_BACKEND_ERROR, "Compiling lambda function into PTX failed");
+        code_gen.error(INTERNAL_JIT_BACKEND_ERROR, "Compiling lambda function into source failed");
     }
     return code;
 }
+
 
 // Get the device library for PTX compilation for the given target architecture.
 unsigned char const *Code_generator_jit::get_libdevice_for_gpu(
@@ -1128,7 +1269,7 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
     Type_mapper::Type_mapping_mode tm_mode;
     switch (mode) {
         case CM_PTX:
-            target_kind = Link_unit_jit::TK_CUDA_PTX;
+            target_kind = Link_unit_jit::TK_PTX;
             tm_mode = Type_mapper::TM_PTX;
             break;
 
@@ -1140,6 +1281,11 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
         case CM_NATIVE:
             target_kind = Link_unit_jit::TK_NATIVE;
             tm_mode = Type_mapper::TM_NATIVE_X86;
+            break;
+
+        case CM_HLSL:
+            target_kind = Link_unit_jit::TK_HLSL;
+            tm_mode = Type_mapper::TM_HLSL;
             break;
 
         default:
@@ -1187,13 +1333,14 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             code_obj->get_interface<mi::mdl::Generated_code_lambda_function>());
 
         llvm::Module *module = unit.get_function(0)->getParent();
-        unit->jit_compile(module);
-        code->set_llvm_module(module);
+        MDL_JIT_module_key module_key = unit->jit_compile(module);
+        code->set_llvm_module(module_key, module);
+        unit->fill_function_info(code.get());
 
         // add all generated functions as entry points
         for (size_t i = 0; i < num_funcs; ++i) {
             llvm::Function *func = unit.get_function(i);
-            code->add_entry_point(unit->get_entry_point(func));
+            code->add_entry_point(unit->get_entry_point(module_key, func));
         }
 
         // copy the render state usage
@@ -1211,15 +1358,18 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
         mi::base::Handle<Generated_code_source> code(
             code_obj->get_interface<mi::mdl::Generated_code_source>());
 
-        if (unit.get_target_kind() == Link_unit_jit::TK_CUDA_PTX) {
+        if (unit.get_target_kind() == Link_unit_jit::TK_PTX) {
             unit->ptx_compile(module, code->access_src_code());
+        } else if (unit.get_target_kind() == Link_unit_jit::TK_HLSL) {
+            unit->hlsl_compile(module, code->access_src_code());
         } else {
-            // target kind == TK_LLVM_IR
+            MDL_ASSERT(unit.get_target_kind() == Link_unit_jit::TK_LLVM_IR);
             if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
                 unit->llvm_bc_compile(module, code->access_src_code());
             else
                 unit->llvm_ir_compile(module, code->access_src_code());
         }
+        unit->fill_function_info(code.get());
 
         // set the read-only data segment
         size_t data_size = 0;
@@ -1261,6 +1411,19 @@ unsigned Code_generator_jit::get_state_mapping() const
     return res;
 }
 
+/// Translate the link unit target kind into the target language of the code generator.
+static LLVM_code_generator::Target_language get_target_lang(Link_unit_jit::Target_kind kind)
+{
+    switch (kind) {
+    case Link_unit_jit::TK_PTX:      return LLVM_code_generator::TL_PTX;
+    case Link_unit_jit::TK_LLVM_IR:  return LLVM_code_generator::TL_NATIVE;
+    case Link_unit_jit::TK_NATIVE:   return LLVM_code_generator::TL_NATIVE;
+    case Link_unit_jit::TK_HLSL:     return LLVM_code_generator::TL_HLSL;
+    }
+    MDL_ASSERT(!"unsupported link unit target kind");
+    return LLVM_code_generator::TL_NATIVE;
+}
+
 // Constructor.
 Link_unit_jit::Link_unit_jit(
     IAllocator         *alloc,
@@ -1283,11 +1446,12 @@ Link_unit_jit::Link_unit_jit(
     compiler,
     access_messages(),
     *get_llvm_context(),
-    /*ptx_mode=*/target_kind == TK_CUDA_PTX,
+    get_target_lang(target_kind),
     tm_mode,
     sm_version,
-    /*has_tex_handler=*/target_kind == TK_CUDA_PTX ? false : // PTX mode: there's no tex handler
-        options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU), 
+    /*has_tex_handler=*/target_kind == TK_NATIVE || target_kind == TK_LLVM_IR ?
+        options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU) :
+        false, // PTX and HLSL code cannot have a tex handler
     Type_mapper::SSM_CORE,
     num_texture_spaces,
     num_texture_results,
@@ -1297,7 +1461,6 @@ Link_unit_jit::Link_unit_jit(
     /*res_manag=*/NULL,
     enable_debug)
 , m_res_manag(create_resource_manager(m_code.get()))
-, m_func_infos(alloc)
 , m_arg_block_layouts(alloc)
 , m_lambdas(alloc)
 , m_dist_funcs(alloc)
@@ -1330,7 +1493,8 @@ Link_unit_jit::~Link_unit_jit()
             builder.destroy(res_manag);
         }
         break;
-    case TK_CUDA_PTX:
+    case TK_PTX:
+    case TK_HLSL:
     case TK_LLVM_IR:
         {
             Generated_code_source::Source_res_manag *res_manag =
@@ -1350,9 +1514,12 @@ IGenerated_code_executable *Link_unit_jit::create_code_object(
     switch (m_target_kind) {
     case TK_NATIVE:
         return builder.create<Generated_code_lambda_function>(jitted_code);
-    case TK_CUDA_PTX:
+    case TK_PTX:
         return builder.create<Generated_code_source>(
             get_allocator(), IGenerated_code_executable::CK_PTX);
+    case TK_HLSL:
+        return builder.create<Generated_code_source>(
+            get_allocator(), IGenerated_code_executable::CK_HLSL);
     case TK_LLVM_IR:
         return builder.create<Generated_code_source>(
             get_allocator(), IGenerated_code_executable::CK_LLVM_IR);
@@ -1379,7 +1546,8 @@ IResource_manager *Link_unit_jit::create_resource_manager(
                 *code, /*resource_map=*/NULL);
             return res_manag;
         }
-    case TK_CUDA_PTX:
+    case TK_PTX:
+    case TK_HLSL:
     case TK_LLVM_IR:
         return builder.create<Generated_code_source::Source_res_manag>(
             get_allocator(), (mi::mdl::Resource_attr_map const *)NULL);
@@ -1401,7 +1569,8 @@ void Link_unit_jit::update_resource_attribute_map(
             res_manag->import_from_resource_attribute_map(&lambda->get_resource_attribute_map());
         }
         break;
-    case TK_CUDA_PTX:
+    case TK_PTX:
+    case TK_HLSL:
     case TK_LLVM_IR:
         {
             Generated_code_source::Source_res_manag *res_manag =
@@ -1424,7 +1593,8 @@ const Messages &Link_unit_jit::access_messages() const
                 m_code->get_interface<mi::mdl::Generated_code_lambda_function>());
             return native_code->access_messages();
         }
-    case TK_CUDA_PTX:
+    case TK_PTX:
+    case TK_HLSL:
     case TK_LLVM_IR:
     default:
         {
@@ -1446,7 +1616,8 @@ Messages_impl &Link_unit_jit::access_messages()
                 m_code->get_interface<mi::mdl::Generated_code_lambda_function>());
             return native_code->access_messages();
         }
-    case TK_CUDA_PTX:
+    case TK_PTX:
+    case TK_HLSL:
     case TK_LLVM_IR:
     default:
         {
@@ -1467,13 +1638,14 @@ llvm::LLVMContext *Link_unit_jit::get_llvm_context()
     }
     return &m_source_only_llvm_context;
 }
+
 // Add a lambda function to this link unit.
 bool Link_unit_jit::add(
-    ILambda_function const    *ilambda,
-    ICall_name_resolver const *resolver,
-    Function_kind              kind,
-    size_t                    *arg_block_index,
-    size_t                    *function_index)
+    ILambda_function const                    *ilambda,
+    ICall_name_resolver const                 *resolver,
+    IGenerated_code_executable::Function_kind  kind,
+    size_t                                    *arg_block_index,
+    size_t                                    *function_index)
 {
     if (arg_block_index == NULL)
         return false;
@@ -1494,13 +1666,17 @@ bool Link_unit_jit::add(
     // add to lambda list, as m_code_gen will see it
     m_lambdas.push_back(mi::base::make_handle_dup(lambda));
 
+    size_t func_index = m_code_gen.get_current_exported_function_count();
+
     llvm::Function *func = NULL;
+    size_t next_arg_block_index =
+        *arg_block_index != ~0 ? *arg_block_index : m_arg_block_layouts.size();
     if (body != NULL) {
         func = m_code_gen.compile_generic_lambda(
-            /*incremental=*/true, *lambda, resolver, /*transformer=*/NULL);
+            /*incremental=*/true, *lambda, resolver, /*transformer=*/NULL, next_arg_block_index);
     } else {
         func = m_code_gen.compile_switch_lambda(
-            /*incremental=*/true, *lambda, resolver);
+            /*incremental=*/true, *lambda, resolver, next_arg_block_index);
     }
 
     if (func != NULL) {
@@ -1510,20 +1686,13 @@ bool Link_unit_jit::add(
             m_arg_block_layouts.push_back(
                 mi::base::make_handle(
                     builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
-            *arg_block_index = m_arg_block_layouts.size() - 1;
+            MDL_ASSERT(next_arg_block_index == m_arg_block_layouts.size() - 1);
+            *arg_block_index = next_arg_block_index;
         }
 
         // pass out the function index
         if (function_index != NULL)
-            *function_index = m_func_infos.size();
-
-        m_func_infos.push_back(
-            Link_unit_jit_function_info(
-                string(func->getName().data(), get_allocator()),
-                func,
-                ILink_unit::DK_NONE,
-                kind,
-                *arg_block_index));
+            *function_index = func_index;
 
         return true;
     }
@@ -1550,9 +1719,13 @@ bool Link_unit_jit::add(
     // Add to distribution function list, as m_code_gen will see it
     m_dist_funcs.push_back(mi::base::make_handle_dup(idist_func));
 
+    size_t init_func_index = m_code_gen.get_current_exported_function_count();
+
+    size_t next_arg_block_index =
+        *arg_block_index != ~0 ? *arg_block_index : m_arg_block_layouts.size();
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = m_code_gen.compile_distribution_function(
-        /*incremental=*/true, *dist_func, resolver, llvm_funcs);
+        /*incremental=*/true, *dist_func, resolver, llvm_funcs, next_arg_block_index);
 
     if (module != NULL) {
         if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
@@ -1561,60 +1734,13 @@ bool Link_unit_jit::add(
             m_arg_block_layouts.push_back(
                 mi::base::make_handle(
                     builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
-            *arg_block_index = m_arg_block_layouts.size() - 1;
-        }
-
-        // get distribution kind
-        ILink_unit::Distribution_kind distribution_kind = ILink_unit::Distribution_kind::DK_INVALID;
-        switch (root_lambda->get_body()->get_type()->get_kind())
-        {
-            case mi::mdl::IType::Kind::TK_BSDF:
-                distribution_kind = ILink_unit::DK_BSDF;
-                break;
-
-            case mi::mdl::IType::Kind::TK_EDF:
-                distribution_kind = ILink_unit::DK_EDF;
-                break;
-
-            default:
-                return false;
+            MDL_ASSERT(next_arg_block_index == m_arg_block_layouts.size() - 1);
+            *arg_block_index = next_arg_block_index;
         }
 
         // pass out the function index of the init function
         if (function_index != NULL)
-            *function_index = m_func_infos.size();
-
-        m_func_infos.push_back(
-            Link_unit_jit_function_info(
-                root_lambda->get_name() + string("_init", get_allocator()),
-                llvm_funcs[0],
-                distribution_kind,
-                FK_DF_INIT,
-                *arg_block_index));
-
-        m_func_infos.push_back(
-            Link_unit_jit_function_info(
-                root_lambda->get_name() + string("_sample", get_allocator()),
-                llvm_funcs[1],
-                distribution_kind,
-                FK_DF_SAMPLE,
-                *arg_block_index));
-
-        m_func_infos.push_back(
-            Link_unit_jit_function_info(
-                root_lambda->get_name() + string("_evaluate", get_allocator()),
-                llvm_funcs[2],
-                distribution_kind,
-                FK_DF_EVALUATE,
-                *arg_block_index));
-
-        m_func_infos.push_back(
-            Link_unit_jit_function_info(
-                root_lambda->get_name() + string("_pdf", get_allocator()),
-                llvm_funcs[3],
-                distribution_kind,
-                FK_DF_PDF,
-                *arg_block_index));
+            *function_index = init_func_index;
 
         return true;
     }
@@ -1624,48 +1750,50 @@ bool Link_unit_jit::add(
 // Get the number of functions in this link unit.
 size_t Link_unit_jit::get_function_count() const
 {
-    return m_func_infos.size();
+    return m_code_gen.get_current_exported_function_count();
 }
 
 // Get the name of the i'th function inside this link unit.
 char const *Link_unit_jit::get_function_name(size_t i) const
 {
-    if (i < m_func_infos.size())
-        return m_func_infos[i].m_name.c_str();
-    return NULL;
+    return m_code->get_function_name(i);
 }
 
 // Returns the distribution kind of the i'th function inside this link unit.
-ILink_unit::Distribution_kind Link_unit_jit::get_distribution_kind(size_t i) const
+IGenerated_code_executable::Distribution_kind Link_unit_jit::get_distribution_kind(size_t i) const
 {
-    if (i < m_func_infos.size())
-        return m_func_infos[i].m_dist_kind;
-    return ILink_unit::DK_INVALID;
+    return m_code->get_distribution_kind(i);
 }
 
 // Returns the function kind of the i'th function inside this link unit.
-ILink_unit::Function_kind Link_unit_jit::get_function_kind(size_t i) const
+IGenerated_code_executable::Function_kind Link_unit_jit::get_function_kind(size_t i) const
 {
-    if (i < m_func_infos.size())
-        return m_func_infos[i].m_kind;
-    return ILink_unit::FK_INVALID;
+    return m_code->get_function_kind(i);
 }
 
 // Get the index of the target argument block layout for the i'th function inside this link
 // unit if used.
 size_t Link_unit_jit::get_function_arg_block_layout_index(size_t i) const
 {
-    if (i < m_func_infos.size())
-        return m_func_infos[i].m_arg_block_index;
-    return ~0;
+    return m_code->get_function_arg_block_layout_index(i);
 }
 
 // Get the LLVM function of the i'th function inside this link unit.
 llvm::Function *Link_unit_jit::get_function(size_t i) const
 {
-    if (i < m_func_infos.size())
-        return m_func_infos[i].m_func;
-    return NULL;
+    LLVM_code_generator::Exported_function *exp_func = m_code_gen.get_current_exported_function(i);
+    if (exp_func == NULL)
+        return NULL;
+
+    return exp_func->func;
+}
+
+// Returns the prototype of the i'th function inside this link unit.
+char const *Link_unit_jit::get_function_prototype(
+    size_t index,
+    IGenerated_code_executable::Prototype_language lang) const
+{
+    return m_code->get_function_prototype(index, lang);
 }
 
 // Get the number of target argument block layouts used by this link unit.

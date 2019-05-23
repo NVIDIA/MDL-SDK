@@ -92,12 +92,13 @@ public:
 
     /// Create a new annotation declaration.
     IDeclaration_annotation *create_annotation(
-        ISimple_name const *name = NULL,
-        bool               exported = false,
-        int                start_line = 0,
-        int                start_column = 0,
-        int                end_line = 0,
-        int                end_column = 0) MDL_FINAL;
+        ISimple_name const      *name = NULL,
+        IAnnotation_block const *annotations = NULL,
+        bool                    exported = false,
+        int                     start_line = 0,
+        int                     start_column = 0,
+        int                     end_line = 0,
+        int                     end_column = 0) MDL_FINAL;
 
     /// Create a new constant declaration.
     IDeclaration_constant *create_constant(
@@ -708,6 +709,9 @@ public:
     /// Create a new type bsdf instance.
     IType_bsdf const *create_bsdf() MDL_FINAL;
 
+    /// Create a new type hair_bsdf instance.
+    IType_hair_bsdf const *create_hair_bsdf() MDL_FINAL;
+
     /// Create a new type edf instance.
     IType_edf const *create_edf() MDL_FINAL;
 
@@ -1209,6 +1213,9 @@ public:
 
     /// Check if this value factory is the owner of the given value.
     bool is_owner(IValue const *value) const;
+
+    /// Get the allocator.
+    IAllocator *get_allocator() const { return m_builder.get_arena()->get_allocator(); }
 
     /// Constructor.
     ///

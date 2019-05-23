@@ -133,6 +133,12 @@ public:
     virtual Sint32 create_materials(
         ITransaction* transaction, const char* module_name, const IArray* material_data) = 0;
 
+    virtual Sint32 create_materials(
+        ITransaction* transaction,
+        const char* module_name,
+        const IArray* mdl_data,
+        IMdl_execution_context *context) = 0;
+
     /// Creates a value referencing a texture identified by an MDL file path.
     ///
     /// \param transaction   The transaction to be used.

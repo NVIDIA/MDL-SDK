@@ -180,6 +180,10 @@ __device__ inline void store_result3(float res[3], float v0, float v1, float v2)
 #define APPLY_SMOOTHERSTEP_FILTER()
 #endif
 
+// ------------------------------------------------------------------------------------------------
+// Textures
+// ------------------------------------------------------------------------------------------------
+
 // Implementation of tex::lookup_float4() for a texture_2d texture.
 extern "C" __device__ void tex_lookup_float4_2d(
     float                       result[4],
@@ -470,20 +474,66 @@ extern "C" __device__ void tex_resolution_2d(
     result[1] = tex.size.y;
 }
 
+// Implementation of resolution_3d function needed by generated code.
+// Note: 3d textures are not supported
+extern "C" __device__ void tex_resolution_3d(
+    int                         result[3],
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx)
+{
+    // invalid texture returns zero
+    result[0] = 0;
+    result[1] = 0;
+    result[2] = 0;
+}
+
+// Implementation of texture_isvalid().
+extern "C" __device__ bool tex_texture_isvalid(
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx)
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    return texture_idx != 0 && texture_idx - 1 < self->num_textures;
+}
 
 // ------------------------------------------------------------------------------------------------
 // Light Profiles
+//
+// Note:  Light profiles are not implemented for the MDL Core examples.
+//        See the MDL SDK counterpart for details.
 // ------------------------------------------------------------------------------------------------
+
+// Implementation of light_profile_power() for a light profile.
+extern "C" __device__ float df_light_profile_power(
+    Texture_handler_base const *self_base,
+    unsigned                    light_profile_idx)
+{
+    return 0.0f;
+}
+
+// Implementation of light_profile_maximum() for a light profile.
+extern "C" __device__ float df_light_profile_maximum(
+    Texture_handler_base const *self_base,
+    unsigned                    light_profile_idx)
+{
+    return 0.0f;
+}
+
+// Implementation of light_profile_isvalid() for a light profile.
+extern "C" __device__ bool df_light_profile_isvalid(
+    Texture_handler_base const *self_base,
+    unsigned                    light_profile_idx)
+{
+    return false;
+}
 
 // Implementation of df::light_profile_evaluate() for a light profile.
 extern "C" __device__ float df_light_profile_evaluate(
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    light_profile_idx,
     float const                 theta_phi[2])
 {
-    // Light profiles are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     return 0.0f;
 }
 
@@ -491,12 +541,9 @@ extern "C" __device__ float df_light_profile_evaluate(
 extern "C" __device__ void df_light_profile_sample(
     float                       result[3],          // output: theta, phi, pdf
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    light_profile_idx,
     float const                 xi[3])              // uniform random values
 {
-    // Light profiles are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     result[0] = -1.0f;  // negative theta means no emission
     result[1] = -1.0f;
     result[2] = 0.0f;
@@ -505,13 +552,25 @@ extern "C" __device__ void df_light_profile_sample(
 // Implementation of df::light_profile_pdf() for a light profile.
 extern "C" __device__ float df_light_profile_pdf(
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    light_profile_idx,
     float const                 theta_phi[2])
 {
-    // Light profiles are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     return 0.0f;
+}
+
+// ------------------------------------------------------------------------------------------------
+// BSDF Measurements
+//
+// Note:  Measured BSDFs are not implemented for the MDL Core examples.
+//        See the MDL SDK counterpart for details.
+// ------------------------------------------------------------------------------------------------
+
+// Implementation of df::bsdf_measurement_isvalid() for an MBSDF.
+extern "C" __device__ bool df_bsdf_measurement_isvalid(
+    Texture_handler_base const *self_base,
+    unsigned                    bsdf_measurement_index)
+{
+    return false;
 }
 
 // Implementation of df::bsdf_measurement_resolution() function needed by generated code,
@@ -521,12 +580,9 @@ extern "C" __device__ float df_light_profile_pdf(
 extern "C" __device__ void df_bsdf_measurement_resolution(
     unsigned                    result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    bsdf_measurement_index,
     Mbsdf_part                  part)
 {
-    // Measured BSDFs are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     result[0] = 0;
     result[1] = 0;
     result[2] = 0;
@@ -536,14 +592,11 @@ extern "C" __device__ void df_bsdf_measurement_resolution(
 extern "C" __device__ void df_bsdf_measurement_evaluate(
     float                       result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    bsdf_measurement_index,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
-    // Measured BSDFs are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     store_result3(result, 0.0f);
 }
 
@@ -551,14 +604,11 @@ extern "C" __device__ void df_bsdf_measurement_evaluate(
 extern "C" __device__ void df_bsdf_measurement_sample(
     float                       result[3],          // output: theta, phi, pdf
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    bsdf_measurement_index,
     float const                 theta_phi_out[2],
     float const                 xi[3],              // uniform random values
     Mbsdf_part                  part)
 {
-    // Measured BSDFs are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     result[0] = -1.0f;  // negative theta means absorption
     result[1] = -1.0f;
     result[2] = 0.0f;
@@ -567,14 +617,11 @@ extern "C" __device__ void df_bsdf_measurement_sample(
 // Implementation of df::bsdf_measurement_pdf() for an MBSDF.
 extern "C" __device__ float df_bsdf_measurement_pdf(
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    bsdf_measurement_index,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
-    // Measured BSDFs are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     return 0.0f;
 }
 
@@ -585,12 +632,9 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
                                                     //         [2] albedo trans. for theta_phi
                                                     //         [3] max albedo trans. global
     Texture_handler_base const  *self_base,
-    unsigned                    resource_idx,
+    unsigned                    bsdf_measurement_index,
     float const                 theta_phi[2])
 {
-    // Measured BSDFs are not implemented for the MDL Core examples.
-    // See the MDL SDK counterpart for details.
-
     store_result4(result, 0.0f);
 }
 
@@ -611,9 +655,15 @@ __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
     tex_lookup_float4_cube,
     tex_lookup_float3_cube,
     tex_resolution_2d,
+    tex_resolution_3d,
+    tex_texture_isvalid,
+    df_light_profile_power,
+    df_light_profile_maximum,
+    df_light_profile_isvalid,
     df_light_profile_evaluate,
     df_light_profile_sample,
     df_light_profile_pdf,
+    df_bsdf_measurement_isvalid,
     df_bsdf_measurement_resolution,
     df_bsdf_measurement_evaluate,
     df_bsdf_measurement_sample,
@@ -633,9 +683,15 @@ __device__ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
     tex_lookup_float4_cube,
     tex_lookup_float3_cube,
     tex_resolution_2d,
+    tex_resolution_3d,
+    tex_texture_isvalid,
+    df_light_profile_power,
+    df_light_profile_maximum,
+    df_light_profile_isvalid,
     df_light_profile_evaluate,
     df_light_profile_sample,
     df_light_profile_pdf,
+    df_bsdf_measurement_isvalid,
     df_bsdf_measurement_resolution,
     df_bsdf_measurement_evaluate,
     df_bsdf_measurement_sample,

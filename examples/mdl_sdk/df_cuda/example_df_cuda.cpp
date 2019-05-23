@@ -47,8 +47,11 @@
 #define OPENGL_INTEROP
 #include "example_cuda_shared.h"
 
-#include "imgui.h"
-#include "imgui_impl_glfw_gl3.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 #define terminate()          \
     do {                     \
@@ -81,7 +84,7 @@ inline float3 normalize(const float3 &d)
 /////////////////
 
 // Initialize OpenGL and create a window with an associated OpenGL context.
-static GLFWwindow *init_opengl()
+static GLFWwindow *init_opengl(std::string& version_string)
 {
     // Initialize GLFW
     check_success(glfwInit());
@@ -89,6 +92,7 @@ static GLFWwindow *init_opengl()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    version_string = "#version 330 core"; // see top comments in 'imgui_impl_opengl3.cpp'
 
     // Create an OpenGL window and a context
     GLFWwindow *window = glfwCreateWindow(
@@ -263,7 +267,7 @@ static void handle_scroll(GLFWwindow *window, double xoffset, double yoffset)
         ctx->mouse_wheel_delta = -1; ctx->mouse_event = true;
     }
 
-    ImGui_ImplGlfwGL3_ScrollCallback(window, xoffset, yoffset);
+    ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
 }
 
 // GLFW keyboard callback
@@ -305,7 +309,7 @@ static void handle_key(GLFWwindow *window, int key, int scancode, int action, in
         }
     }
 
-    ImGui_ImplGlfwGL3_KeyCallback(window, key, scancode, action, mods);
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 }
 
 // GLFW mouse button callback
@@ -315,7 +319,7 @@ static void handle_mouse_button(GLFWwindow *window, int button, int action, int 
     ctx->mouse_button = button + 1;
     ctx->mouse_button_action = action;
 
-    ImGui_ImplGlfwGL3_MouseButtonCallback(window, button, action, mods);
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
 
 // GLFW mouse position callback
@@ -498,6 +502,7 @@ static void save_result(
 
 // Application options
 struct Options {
+    int cuda_device;
     float gui_scale;
     bool opengl;
     bool use_class_compilation;
@@ -521,7 +526,8 @@ struct Options {
 
     // Default constructor, sets default values.
     Options()
-    : gui_scale(1.0f)
+    : cuda_device(0)
+    , gui_scale(1.0f)
     , opengl(true)
     , use_class_compilation(true)
     , no_aa(false)
@@ -576,6 +582,7 @@ public:
         PK_FLOAT2,
         PK_FLOAT3,
         PK_COLOR,
+        PK_ARRAY,
         PK_BOOL,
         PK_INT,
         PK_ENUM,
@@ -591,6 +598,9 @@ public:
         char const *display_name,
         char const *group_name,
         Param_kind kind,
+        Param_kind array_elem_kind,
+        mi::Size   array_size,
+        mi::Size   array_pitch,
         char *data_ptr,
         const Enum_type_info *enum_info = nullptr)
     : m_index(index)
@@ -598,6 +608,9 @@ public:
     , m_display_name(display_name)
     , m_group_name(group_name)
     , m_kind(kind)
+    , m_array_elem_kind(array_elem_kind)
+    , m_array_size(array_size)
+    , m_array_pitch(array_pitch)
     , m_data_ptr(data_ptr)
     , m_range_min(-100), m_range_max(100)
     , m_enum_info(enum_info)
@@ -620,6 +633,10 @@ public:
 
     Param_kind kind() const { return m_kind; }
 
+    Param_kind array_elem_kind() const { return m_array_elem_kind; }
+    mi::Size array_size() const        { return m_array_size; }
+    mi::Size array_pitch() const       { return m_array_pitch; }
+
     float &range_min()      { return m_range_min; }
     float range_min() const { return m_range_min; }
     float &range_max()      { return m_range_max; }
@@ -633,6 +650,9 @@ private:
     char const           *m_display_name;
     char const           *m_group_name;
     Param_kind           m_kind;
+    Param_kind           m_array_elem_kind;
+    mi::Size             m_array_size;
+    mi::Size             m_array_pitch;   // the distance between two array elements
     char                 *m_data_ptr;
     float                m_range_min, m_range_max;
     const Enum_type_info *m_enum_info;
@@ -935,15 +955,19 @@ static void render_scene(
 
     if (options.opengl) {
         // Init OpenGL window
-        window = init_opengl();
+        std::string version_string;
+        window = init_opengl(version_string);
         glfwSetWindowUserPointer(window, &window_context);
         glfwSetKeyCallback(window, handle_key);
         glfwSetScrollCallback(window, handle_scroll);
         glfwSetCursorPosCallback(window, handle_mouse_pos);
         glfwSetMouseButtonCallback(window, handle_mouse_button);
-        glfwSetCharCallback(window, ImGui_ImplGlfwGL3_CharCallback);
+        glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
 
-        ImGui_ImplGlfwGL3_Init(window, false);
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForOpenGL(window, false);
+        ImGui_ImplOpenGL3_Init(version_string.c_str());
         ImGui::GetIO().IniFilename = nullptr;       // disable creating imgui.ini
         ImGui::GetStyle().ScaleAllSizes(options.gui_scale);
 
@@ -959,7 +983,7 @@ static void render_scene(
     }
 
     // Initialize CUDA
-    CUcontext cuda_context = init_cuda(options.opengl);
+    CUcontext cuda_context = init_cuda(options.cuda_device, options.opengl);
 
     CUdeviceptr accum_buffer = 0;
     CUgraphicsResource display_buffer_cuda = nullptr;
@@ -1002,7 +1026,7 @@ static void render_scene(
         "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + ptx_name).c_str(),
+        (get_executable_folder() + "/" + ptx_name).c_str(),
         "render_sphere_kernel",
         &cuda_function);
 
@@ -1082,8 +1106,11 @@ static void render_scene(
                 mi::base::Handle<mi::neuraylib::IValue const> arg(cur_mat->get_argument(j));
                 mi::neuraylib::IValue::Kind kind = arg->get_kind();
 
-                Param_info::Param_kind param_kind = Param_info::PK_UNKNOWN;
-                const Enum_type_info *enum_type = nullptr;
+                Param_info::Param_kind param_kind            = Param_info::PK_UNKNOWN;
+                Param_info::Param_kind param_array_elem_kind = Param_info::PK_UNKNOWN;
+                mi::Size               param_array_size      = 0;
+                mi::Size               param_array_pitch     = 0;
+                const Enum_type_info   *enum_type            = nullptr;
 
                 switch (kind) {
                 case mi::neuraylib::IValue::VK_FLOAT:
@@ -1110,6 +1137,76 @@ static void render_scene(
                             switch (val_type->get_size()) {
                             case 2: param_kind = Param_info::PK_FLOAT2; break;
                             case 3: param_kind = Param_info::PK_FLOAT3; break;
+                            default: assert(false || "Vector Size invalid or unhandled.");
+                            }
+                        }
+                    }
+                    break;
+                case mi::neuraylib::IValue::VK_ARRAY:
+                    {
+                        mi::base::Handle<mi::neuraylib::IValue_array const> val(
+                            arg.get_interface<mi::neuraylib::IValue_array const>());
+                        mi::base::Handle<mi::neuraylib::IType_array const> val_type(
+                            val->get_type());
+                        mi::base::Handle<mi::neuraylib::IType const> elem_type(
+                            val_type->get_element_type());
+
+                        // we currently only support arrays of some values
+                        switch (elem_type->get_kind()) {
+                        case mi::neuraylib::IType::TK_FLOAT:
+                            param_array_elem_kind = Param_info::PK_FLOAT;
+                            break;
+                        case mi::neuraylib::IType::TK_COLOR:
+                            param_array_elem_kind = Param_info::PK_COLOR;
+                            break;
+                        case mi::neuraylib::IType::TK_BOOL:
+                            param_array_elem_kind = Param_info::PK_BOOL;
+                            break;
+                        case mi::neuraylib::IType::TK_INT:
+                            param_array_elem_kind = Param_info::PK_INT;
+                            break;
+                        case mi::neuraylib::IType::TK_VECTOR:
+                            {
+                                mi::base::Handle<mi::neuraylib::IType_vector const> val_type(
+                                    elem_type.get_interface<
+                                        mi::neuraylib::IType_vector const>());
+                                mi::base::Handle<mi::neuraylib::IType_atomic const> velem_type(
+                                    val_type->get_element_type());
+                                if (velem_type->get_kind() == mi::neuraylib::IType::TK_FLOAT) {
+                                    switch (val_type->get_size()) {
+                                    case 2:
+                                        param_array_elem_kind = Param_info::PK_FLOAT2;
+                                        break;
+                                    case 3:
+                                        param_array_elem_kind = Param_info::PK_FLOAT3;
+                                        break;
+                                    default: 
+                                        assert(false || "Vector Size invalid or unhandled.");
+                                    }
+                                }
+                            }
+                            break;
+                        default:
+                            assert(false || "Array element type invalid or unhandled.");
+                        }
+                        if (param_array_elem_kind != Param_info::PK_UNKNOWN) {
+                            param_kind = Param_info::PK_ARRAY;
+                            param_array_size = val_type->get_size();
+
+                            // determine pitch of array if there are at least two elements
+                            if (param_array_size > 1) {
+                                mi::neuraylib::Target_value_layout_state array_state(
+                                    layout->get_nested_state(j));
+                                mi::neuraylib::Target_value_layout_state next_elem_state(
+                                    layout->get_nested_state(1, array_state));
+
+                                mi::neuraylib::IValue::Kind kind;
+                                mi::Size param_size;
+                                mi::Size start_offset = layout->get_layout(
+                                    kind, param_size, array_state);
+                                mi::Size next_offset = layout->get_layout(
+                                    kind, param_size, next_elem_state);
+                                param_array_pitch = next_offset - start_offset;
                             }
                         }
                     }
@@ -1162,7 +1259,15 @@ static void render_scene(
                 check_success(kind == kind2);
 
                 Param_info param_info(
-                    j, name, name, /*group_name=*/nullptr, param_kind, arg_block_data + offset,
+                    j,
+                    name,
+                    name,
+                    /*group_name=*/ nullptr,
+                    param_kind,
+                    param_array_elem_kind,
+                    param_array_size,
+                    param_array_pitch,
+                    arg_block_data + offset,
                     enum_type);
 
                 // Check for annotation info
@@ -1234,7 +1339,9 @@ static void render_scene(
 
                 // Poll for events and process them
                 glfwPollEvents();
-                ImGui_ImplGlfwGL3_NewFrame();
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
 
                 // Check if buffers need to be resized
                 int nwidth, nheight;
@@ -1335,6 +1442,60 @@ static void render_scene(
                             &param.data<int>(),
                             int(param.range_min()),
                             int(param.range_max()));
+                        break;
+                    case Param_info::PK_ARRAY:
+                        {
+                            ImGui::Text("%s", param.display_name());
+                            ImGui::Indent(16.0f * options.gui_scale);
+                            char *ptr = &param.data<char>();
+                            for (mi::Size i = 0, n = param.array_size(); i < n; ++i) {
+                                std::string idx_str = to_string(i);
+                                switch (param.array_elem_kind()) {
+                                case Param_info::PK_FLOAT:
+                                    changed |= ImGui::SliderFloat(
+                                        idx_str.c_str(),
+                                        reinterpret_cast<float *>(ptr),
+                                        param.range_min(),
+                                        param.range_max());
+                                    break;
+                                case Param_info::PK_FLOAT2:
+                                    changed |= ImGui::SliderFloat2(
+                                        idx_str.c_str(),
+                                        reinterpret_cast<float *>(ptr),
+                                        param.range_min(),
+                                        param.range_max());
+                                    break;
+                                case Param_info::PK_FLOAT3:
+                                    changed |= ImGui::SliderFloat3(
+                                        idx_str.c_str(),
+                                        reinterpret_cast<float *>(ptr),
+                                        param.range_min(),
+                                        param.range_max());
+                                    break;
+                                case Param_info::PK_COLOR:
+                                    changed |= ImGui::ColorEdit3(
+                                        idx_str.c_str(),
+                                        reinterpret_cast<float *>(ptr));
+                                    break;
+                                case Param_info::PK_BOOL:
+                                    changed |= ImGui::Checkbox(
+                                        param.display_name(),
+                                        reinterpret_cast<bool *>(ptr));
+                                    break;
+                                case Param_info::PK_INT:
+                                    changed |= ImGui::SliderInt(
+                                        param.display_name(),
+                                        reinterpret_cast<int *>(ptr),
+                                        int(param.range_min()),
+                                        int(param.range_max()));
+                                    break;
+                                default:
+                                    assert(false || "Array element type invalid or unhandled.");
+                                }
+                                ptr += param.array_pitch();
+                            }
+                            ImGui::Unindent(16.0f * options.gui_scale);
+                        }
                         break;
                     case Param_info::PK_ENUM:
                         {
@@ -1530,6 +1691,7 @@ static void render_scene(
 
                 // Show the GUI
                 ImGui::Render();
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
                 // Swap front and back buffers
                 glfwSwapBuffers(window);
@@ -1559,7 +1721,9 @@ static void render_scene(
         glDeleteBuffers(1, &quad_vertex_buffer);
         glDeleteProgram(program);
         check_success(glGetError() == GL_NO_ERROR);
-        ImGui_ImplGlfwGL3_Shutdown();
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
         glfwDestroyWindow(window);
         glfwTerminate();
     }
@@ -1602,6 +1766,9 @@ Df_cuda_material create_cuda_material(
     mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
     mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
 
+    mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
+    mat.thin_walled.y = static_cast<unsigned int>(descs[4].function_index);
+
     return mat;
 }
 
@@ -1610,6 +1777,7 @@ static void usage(const char *name)
     std::cout
         << "usage: " << name << " [options] [<material_name1|full_mdle_path1> ...]\n"
         << "-h                          print this text\n"
+        << "--device <id>               run on CUDA device <id> (default: 0)\n"
         << "--nogl                      don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
         << "--gui_scale <factor>        GUI scaling factor (default: 1.0)\n"
@@ -1649,7 +1817,9 @@ int main(int argc, char* argv[])
     for (int i = 1; i < argc; ++i) {
         const char *opt = argv[i];
         if (opt[0] == '-') {
-            if (strcmp(opt, "--nogl") == 0) {
+            if (strcmp(opt, "--device") == 0 && i < argc - 1) {
+                options.cuda_device = atoi(argv[++i]);
+            } else if (strcmp(opt, "--nogl") == 0) {
                 options.opengl = false;
             } else if (strcmp(opt, "--nocc") == 0) {
                 options.use_class_compilation = false;
@@ -1722,8 +1892,14 @@ int main(int argc, char* argv[])
     check_success(mdl_compiler->add_module_path(root.c_str()) == 0);
     check_success(mdl_compiler->add_resource_path(root.c_str()) == 0);
 
-    for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
-        check_success(mdl_compiler->add_module_path(options.mdl_paths[i].c_str()) == 0);
+    for (std::size_t i = 0; i < options.mdl_paths.size(); ++i) {
+        if (mdl_compiler->add_module_path(options.mdl_paths[i].c_str()) != 0) {
+            fprintf(
+                stderr,
+                "Error: Ignoring invalid module path '%s'\n",
+                options.mdl_paths[i].c_str());
+        }
+    }
 
     // Use default material, if none was provided via command line
     if (options.material_names.empty())
@@ -1763,11 +1939,15 @@ int main(int argc, char* argv[])
                 mi::neuraylib::Target_function_description("surface.emission.intensity"));
             descs.push_back(
                 mi::neuraylib::Target_function_description("volume.absorption_coefficient"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("thin_walled"));
 
             // Generate code for all materials
             std::vector<std::string> used_material_names;
             for (size_t i = 0; i < options.material_names.size(); ++i) {
                 std::string material_name(options.material_names[i]);
+                if (!mc.is_mdle_name(material_name) && !starts_with(material_name, "::"))
+                    material_name = "::" + material_name;
 
                 // Is this a material name pattern?
                 if (material_name.size() > 1 && material_name.back() == '*') {

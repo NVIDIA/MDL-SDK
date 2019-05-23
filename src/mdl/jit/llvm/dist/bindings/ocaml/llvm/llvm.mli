@@ -15,7 +15,7 @@
 
 (** {6 Abstract types}
 
-    These abstract types correlate directly to the LLVM VMCore classes. *)
+    These abstract types correlate directly to the LLVMCore classes. *)
 
 (** The top-level container for all LLVM global data. See the
     [llvm::LLVMContext] class. *)
@@ -44,9 +44,18 @@ type llbasicblock
     class. *)
 type llbuilder
 
+(** Used to represent attribute kinds. *)
+type llattrkind
+
+(** An attribute in LLVM IR. See the [llvm::Attribute] class. *)
+type llattribute
+
 (** Used to efficiently handle large buffers of read-only binary data.
     See the [llvm::MemoryBuffer] class. *)
 type llmemorybuffer
+
+(** The kind id of metadata attached to an instruction. *)
+type llmdkind
 
 (** The kind of an [lltype], the result of [classify_type ty]. See the
     [llvm::Type::TypeID] enumeration. *)
@@ -102,6 +111,15 @@ module Visibility : sig
   | Protected
 end
 
+(** The DLL storage class of a global value, accessed with {!dll_storage_class} and
+    {!set_dll_storage_class}. See [llvm::GlobalValue::DLLStorageClassTypes]. *)
+module DLLStorageClass : sig
+  type t =
+  | Default
+  | DLLImport
+  | DLLExport
+end
+
 (** The following calling convention values may be accessed with
     {!function_call_conv} and {!set_function_call_conv}. Calling
     conventions are open-ended. *)
@@ -118,90 +136,75 @@ module CallConv : sig
                               convention from C. *)
 end
 
-(** The attribute kind of a function parameter, result or the function itself.
-    See [llvm::Attribute::AttrKind]. *)
-module Attribute : sig
+(** The logical representation of an attribute. *)
+module AttrRepr : sig
   type t =
-  | Zext
-  | Sext
-  | Noreturn
-  | Inreg
-  | Structret
-  | Nounwind
-  | Noalias
-  | Byval
-  | Nest
-  | Readnone
-  | Readonly
-  | Noinline
-  | Alwaysinline
-  | Optsize
-  | Ssp
-  | Sspreq
-  | Alignment of int
-  | Nocapture
-  | Noredzone
-  | Noimplicitfloat
-  | Naked
-  | Inlinehint
-  | Stackalignment of int
-  | ReturnsTwice
-  | UWTable
-  | NonLazyBind
+  | Enum of llattrkind * int64
+  | String of string * string
+end
+
+(** The position of an attribute. See [LLVMAttributeIndex]. *)
+module AttrIndex : sig
+  type t =
+  | Function
+  | Return
+  | Param of int
 end
 
 (** The predicate for an integer comparison ([icmp]) instruction.
     See the [llvm::ICmpInst::Predicate] enumeration. *)
 module Icmp : sig
   type t =
-  | Eq
-  | Ne
-  | Ugt
-  | Uge
-  | Ult
-  | Ule
-  | Sgt
-  | Sge
-  | Slt
-  | Sle
+  | Eq  (** Equal *)
+  | Ne  (** Not equal *)
+  | Ugt (** Unsigned greater than *)
+  | Uge (** Unsigned greater or equal *)
+  | Ult (** Unsigned less than *)
+  | Ule (** Unsigned less or equal *)
+  | Sgt (** Signed greater than *)
+  | Sge (** Signed greater or equal *)
+  | Slt (** Signed less than *)
+  | Sle (** Signed less or equal *)
 end
 
 (** The predicate for a floating-point comparison ([fcmp]) instruction.
+    Ordered means that neither operand is a QNAN while unordered means
+    that either operand may be a QNAN.
     See the [llvm::FCmpInst::Predicate] enumeration. *)
 module Fcmp : sig
   type t =
-  | False
-  | Oeq
-  | Ogt
-  | Oge
-  | Olt
-  | Ole
-  | One
-  | Ord
-  | Uno
-  | Ueq
-  | Ugt
-  | Uge
-  | Ult
-  | Ule
-  | Une
-  | True
+  | False (** Always false *)
+  | Oeq   (** Ordered and equal *)
+  | Ogt   (** Ordered and greater than *)
+  | Oge   (** Ordered and greater or equal *)
+  | Olt   (** Ordered and less than *)
+  | Ole   (** Ordered and less or equal *)
+  | One   (** Ordered and not equal *)
+  | Ord   (** Ordered (no operand is NaN) *)
+  | Uno   (** Unordered (one operand at least is NaN) *)
+  | Ueq   (** Unordered and equal *)
+  | Ugt   (** Unordered and greater than *)
+  | Uge   (** Unordered and greater or equal *)
+  | Ult   (** Unordered and less than *)
+  | Ule   (** Unordered and less or equal *)
+  | Une   (** Unordered and not equal *)
+  | True  (** Always true *)
 end
 
 (** The opcodes for LLVM instructions and constant expressions. *)
 module Opcode : sig
   type t =
-  | Invalid (* not an instruction *)
-  (* Terminator Instructions *)
-  | Ret
+  | Invalid (** Not an instruction *)
+
+  | Ret (** Terminator Instructions *)
   | Br
   | Switch
   | IndirectBr
   | Invoke
   | Invalid2
   | Unreachable
-  (* Standard Binary Operators *)
-  | Add
+
+  | Add (** Standard Binary Operators *)
   | FAdd
   | Sub
   | FSub
@@ -213,20 +216,20 @@ module Opcode : sig
   | URem
   | SRem
   | FRem
-  (* Logical Operators *)
-  | Shl
+
+  | Shl (** Logical Operators *)
   | LShr
   | AShr
   | And
   | Or
   | Xor
-  (* Memory Operators *)
-  | Alloca
+
+  | Alloca (** Memory Operators *)
   | Load
   | Store
   | GetElementPtr
-  (* Cast Operators *)
-  | Trunc
+
+  | Trunc (** Cast Operators *)
   | ZExt
   | SExt
   | FPToUI
@@ -238,8 +241,8 @@ module Opcode : sig
   | PtrToInt
   | IntToPtr
   | BitCast
-  (* Other Operators *)
-  | ICmp
+
+  | ICmp (** Other Operators *)
   | FCmp
   | PHI
   | Call
@@ -286,7 +289,7 @@ module AtomicOrdering : sig
   | NotAtomic
   | Unordered
   | Monotonic
-  | Invalid (* removed due to API changes *)
+  | Invalid (** removed due to API changes *)
   | Acquire
   | Release
   | AcqiureRelease
@@ -338,6 +341,16 @@ module ValueKind : sig
   | Instruction of Opcode.t
 end
 
+(** The kind of [Diagnostic], the result of [Diagnostic.severity d].
+    See [llvm::DiagnosticSeverity]. *)
+module DiagnosticSeverity : sig
+  type t =
+  | Error
+  | Warning
+  | Remark
+  | Note
+end
+
 
 (** {6 Iteration} *)
 
@@ -358,6 +371,8 @@ type ('a, 'b) llrev_pos =
 
 (** {6 Exceptions} *)
 
+exception FeatureDisabled of string
+
 exception IoError of string
 
 
@@ -376,6 +391,30 @@ val install_fatal_error_handler : (string -> unit) -> unit
 (** [reset_fatal_error_handler ()] resets LLVM's fatal error handler. *)
 val reset_fatal_error_handler : unit -> unit
 
+(** [parse_command_line_options ?overview args] parses [args] using
+    the LLVM command line parser. Note that the only stable thing about this
+    function is its signature; you cannot rely on any particular set of command
+    line arguments being interpreted the same way across LLVM versions.
+
+    See the function [llvm::cl::ParseCommandLineOptions()]. *)
+val parse_command_line_options : ?overview:string -> string array -> unit
+
+(** {6 Context error handling} *)
+
+module Diagnostic : sig
+  type t
+
+  (** [description d] returns a textual description of [d]. *)
+  val description : t -> string
+
+  (** [severity d] returns the severity of [d]. *)
+  val severity : t -> DiagnosticSeverity.t
+end
+
+(** [set_diagnostic_handler c h] set the diagnostic handler of [c] to [h].
+    See the method [llvm::LLVMContext::setDiagnosticHandler]. *)
+val set_diagnostic_handler : llcontext -> (Diagnostic.t -> unit) option -> unit
+
 (** {6 Contexts} *)
 
 (** [create_context ()] creates a context for storing the "global" state in
@@ -386,13 +425,43 @@ val create_context : unit -> llcontext
     [llvm::LLVMContext::~LLVMContext]. *)
 val dispose_context : llcontext -> unit
 
-(** See the function [llvm::getGlobalContext]. *)
+(** See the function [LLVMGetGlobalContext]. *)
 val global_context : unit -> llcontext
 
 (** [mdkind_id context name] returns the MDKind ID that corresponds to the
     name [name] in the context [context].  See the function
     [llvm::LLVMContext::getMDKindID]. *)
-val mdkind_id : llcontext -> string -> int
+val mdkind_id : llcontext -> string -> llmdkind
+
+
+(** {6 Attributes} *)
+
+(** [UnknownAttribute attr] is raised when a enum attribute name [name]
+    is not recognized by LLVM. *)
+exception UnknownAttribute of string
+
+(** [enum_attr_kind name] returns the kind of enum attributes named [name].
+    May raise [UnknownAttribute]. *)
+val enum_attr_kind : string -> llattrkind
+
+(** [create_enum_attr context value kind] creates an enum attribute
+    with the supplied [kind] and [value] in [context]; if the value
+    is not required (as for the majority of attributes), use [0L].
+    May raise [UnknownAttribute].
+    See the constructor [llvm::Attribute::get]. *)
+val create_enum_attr : llcontext -> string -> int64 -> llattribute
+
+(** [create_string_attr context kind value] creates a string attribute
+    with the supplied [kind] and [value] in [context].
+    See the constructor [llvm::Attribute::get]. *)
+val create_string_attr : llcontext -> string -> string -> llattribute
+
+(** [attr_of_repr context repr] creates an attribute with the supplied
+    representation [repr] in [context]. *)
+val attr_of_repr : llcontext -> AttrRepr.t -> llattribute
+
+(** [repr_of_attr attr] describes the representation of attribute [attr]. *)
+val repr_of_attr : llattribute -> AttrRepr.t
 
 
 (** {6 Modules} *)
@@ -591,6 +660,9 @@ val is_opaque : lltype -> bool
 
 (** {7 Operations on pointer, vector, and array types} *)
 
+(** [subtypes ty] returns [ty]'s subtypes *)
+val subtypes : lltype -> lltype array
+
 (** [array_type ty n] returns the array type containing [n] elements of type
     [ty]. See the method [llvm::ArrayType::get]. *)
 val array_type : lltype -> int -> lltype
@@ -646,7 +718,7 @@ val x86_mmx_type : llcontext -> lltype
 val type_by_name : llmodule -> string -> lltype option
 
 
-(* {6 Values} *)
+(** {6 Values} *)
 
 (** [type_of v] returns the type of the value [v].
     See the method [llvm::Value::getType]. *)
@@ -677,7 +749,7 @@ val string_of_llvalue : llvalue -> string
 val replace_all_uses_with : llvalue -> llvalue -> unit
 
 
-(* {6 Uses} *)
+(** {6 Uses} *)
 
 (** [use_begin v] returns the first position in the use list for the value [v].
     [use_begin] and [use_succ] can e used to iterate over the use list in order.
@@ -709,11 +781,16 @@ val fold_left_uses : ('a -> lluse -> 'a) -> 'a -> llvalue -> 'a
 val fold_right_uses : (lluse -> 'a -> 'a) -> llvalue -> 'a -> 'a
 
 
-(* {6 Users} *)
+(** {6 Users} *)
 
 (** [operand v i] returns the operand at index [i] for the value [v]. See the
     method [llvm::User::getOperand]. *)
 val operand : llvalue -> int -> llvalue
+
+(** [operand_use v i] returns the use of the operand at index [i] for the value [v]. See the
+    method [llvm::User::getOperandUse]. *)
+val operand_use : llvalue -> int -> lluse
+
 
 (** [set_operand v i o] sets the operand of the value [v] at the index [i] to
     the value [o].
@@ -770,15 +847,15 @@ val has_metadata : llvalue -> bool
 (** [metadata i kind] optionally returns the metadata associated with the
     kind [kind] in the instruction [i] See the function
     [llvm::Instruction::getMetadata]. *)
-val metadata : llvalue -> int -> llvalue option
+val metadata : llvalue -> llmdkind -> llvalue option
 
 (** [set_metadata i kind md] sets the metadata [md] of kind [kind] in the
     instruction [i]. See the function [llvm::Instruction::setMetadata]. *)
-val set_metadata : llvalue -> int -> llvalue -> unit
+val set_metadata : llvalue -> llmdkind -> llvalue -> unit
 
 (** [clear_metadata i kind] clears the metadata of kind [kind] in the
     instruction [i]. See the function [llvm::Instruction::setMetadata]. *)
-val clear_metadata : llvalue -> int -> unit
+val clear_metadata : llvalue -> llmdkind -> unit
 
 
 (** {7 Operations on metadata} *)
@@ -792,9 +869,16 @@ val mdstring : llcontext -> string -> llvalue
     See the method [llvm::MDNode::get]. *)
 val mdnode : llcontext -> llvalue array -> llvalue
 
+(** [mdnull c ] returns a null MDNode in context [c].  *)
+val mdnull : llcontext -> llvalue
+
 (** [get_mdstring v] returns the MDString.
     See the method [llvm::MDString::getString] *)
 val get_mdstring : llvalue -> string option
+
+(** [get_mdnode_operands v] returns the operands in the MDNode. *)
+(*     See the method [llvm::MDNode::getOperand] *)
+val get_mdnode_operands : llvalue -> llvalue array
 
 (** [get_named_metadata m name] returns all the MDNodes belonging to the named
     metadata (if any).
@@ -832,15 +916,19 @@ val const_int_of_string : lltype -> string -> int -> llvalue
     value [n]. See the method [llvm::ConstantFP::get]. *)
 val const_float : lltype -> float -> llvalue
 
+(** [float_of_const c] returns the float value of the [c] constant float.
+    None is returned if this is not an float constant.
+    See the method [llvm::ConstantFP::getDoubleValue].*)
+val float_of_const : llvalue -> float option
+
 (** [const_float_of_string ty s] returns the floating point constant of type
     [ty] and value [n]. See the method [llvm::ConstantFP::get]. *)
 val const_float_of_string : lltype -> string -> llvalue
 
-
 (** {7 Operations on composite constants} *)
 
 (** [const_string c s] returns the constant [i8] array with the values of the
-    characters in the string [s] in the context [c]. The array is not 
+    characters in the string [s] in the context [c]. The array is not
     null-terminated (but see {!const_stringz}). This value can in turn be used
     as the initializer for a global variable. See the method
     [llvm::ConstantArray::get]. *)
@@ -881,6 +969,14 @@ val const_packed_struct : llcontext -> llvalue array -> llvalue
     [vector_type (type_of elts.(0)) (Array.length elts)] and containing the
     values [elts]. See the method [llvm::ConstantVector::get]. *)
 val const_vector : llvalue array -> llvalue
+
+(** [string_of_const c] returns [Some str] if [c] is a string constant,
+    or [None] if this is not a string constant. *)
+val string_of_const : llvalue -> string option
+
+(** [const_element c] returns a constant for a specified index's element.
+    See the method ConstantDataSequential::getElementAsConstant. *)
+val const_element : llvalue -> int -> llvalue
 
 
 (** {7 Constant expressions} *)
@@ -1048,12 +1144,12 @@ val const_lshr : llvalue -> llvalue -> llvalue
     See the method [llvm::ConstantExpr::getAShr]. *)
 val const_ashr : llvalue -> llvalue -> llvalue
 
-(** [const_gep pc indices] returns the constant [getElementPtr] of [p1] with the
+(** [const_gep pc indices] returns the constant [getElementPtr] of [pc] with the
     constant integers indices from the array [indices].
     See the method [llvm::ConstantExpr::getGetElementPtr]. *)
 val const_gep : llvalue -> llvalue array -> llvalue
 
-(** [const_in_bounds_gep pc indices] returns the constant [getElementPtr] of [p1]
+(** [const_in_bounds_gep pc indices] returns the constant [getElementPtr] of [pc]
     with the constant integers indices from the array [indices].
     See the method [llvm::ConstantExpr::getInBoundsGetElementPtr]. *)
 val const_in_bounds_gep : llvalue -> llvalue array -> llvalue
@@ -1213,6 +1309,16 @@ val linkage : llvalue -> Linkage.t
     See the method [llvm::GlobalValue::setLinkage]. *)
 val set_linkage : Linkage.t -> llvalue -> unit
 
+(** [unnamed_addr g] returns [true] if the global value [g] has the unnamed_addr
+    attribute. Returns [false] otherwise.
+    See the method [llvm::GlobalValue::getUnnamedAddr]. *)
+val unnamed_addr : llvalue -> bool
+
+(** [set_unnamed_addr b g] if [b] is [true], sets the unnamed_addr attribute of
+    the global value [g]. Unset it otherwise.
+    See the method [llvm::GlobalValue::setUnnamedAddr]. *)
+val set_unnamed_addr : bool -> llvalue -> unit
+
 (** [section g] returns the linker section of the global value [g].
     See the method [llvm::GlobalValue::getSection]. *)
 val section : llvalue -> string
@@ -1228,6 +1334,14 @@ val visibility : llvalue -> Visibility.t
 (** [set_visibility v g] sets the linker visibility of the global value [g] to
     [v]. See the method [llvm::GlobalValue::setVisibility]. *)
 val set_visibility : Visibility.t -> llvalue -> unit
+
+(** [dll_storage_class g] returns the DLL storage class of the global value [g].
+    See the method [llvm::GlobalValue::getDLLStorageClass]. *)
+val dll_storage_class : llvalue -> DLLStorageClass.t
+
+(** [set_dll_storage_class v g] sets the DLL storage class of the global value [g] to
+    [v]. See the method [llvm::GlobalValue::setDLLStorageClass]. *)
+val set_dll_storage_class : DLLStorageClass.t -> llvalue -> unit
 
 (** [alignment g] returns the required alignment of the global value [g].
     See the method [llvm::GlobalValue::getAlignment]. *)
@@ -1457,21 +1571,21 @@ val gc : llvalue -> string option
     [gc]. See the method [llvm::Function::setGC]. *)
 val set_gc : string option -> llvalue -> unit
 
-(** [add_function_attr f a] adds attribute [a] to the return type of function
-    [f]. *)
-val add_function_attr : llvalue -> Attribute.t -> unit
+(** [add_function_attr f a i] adds attribute [a] to the function [f]
+    at position [i]. *)
+val add_function_attr : llvalue -> llattribute -> AttrIndex.t -> unit
 
-(** [add_target_dependent_function_attr f a] adds target-dependent attribute
-    [a] to function [f]. *)
-val add_target_dependent_function_attr : llvalue -> string -> string -> unit
+(** [function_attrs f i] returns the attributes for the function [f]
+    at position [i]. *)
+val function_attrs : llvalue -> AttrIndex.t -> llattribute array
 
-(** [function_attr f] returns the function attribute for the function [f].
-    See the method [llvm::Function::getAttributes] *)
-val function_attr : llvalue -> Attribute.t list
+(** [remove_enum_function_attr f k i] removes enum attribute with kind [k]
+    from the function [f] at position [i]. *)
+val remove_enum_function_attr : llvalue -> llattrkind -> AttrIndex.t -> unit
 
-(** [remove_function_attr f a] removes attribute [a] from the return type of
-    function [f]. *)
-val remove_function_attr : llvalue -> Attribute.t -> unit
+(** [remove_string_function_attr f k i] removes string attribute with kind [k]
+    from the function [f] at position [i]. *)
+val remove_string_function_attr : llvalue -> string -> AttrIndex.t -> unit
 
 
 (** {7 Operations on params} *)
@@ -1483,11 +1597,6 @@ val params : llvalue -> llvalue array
 (** [param f n] returns the [n]th parameter of function [f].
     See the method [llvm::Function::getArgumentList]. *)
 val param : llvalue -> int -> llvalue
-
-(** [param_attr p] returns the attributes of parameter [p].
-    See the methods [llvm::Function::getAttributes] and
-    [llvm::Attributes::getParamAttributes] *)
-val param_attr : llvalue -> Attribute.t list
 
 (** [param_parent p] returns the parent function that owns the parameter.
     See the method [llvm::Argument::getParent]. *)
@@ -1529,15 +1638,6 @@ val rev_iter_params : (llvalue -> unit) -> llvalue -> unit
 (** [fold_right_params f fn init] is [f (... (f init bN) ...) b1] where
     [b1,...,bN] are the parameters of function [fn]. Tail recursive. *)
 val fold_right_params : (llvalue -> 'a -> 'a) -> llvalue -> 'a -> 'a
-
-(** [add_param p a] adds attribute [a] to parameter [p]. *)
-val add_param_attr : llvalue -> Attribute.t -> unit
-
-(** [remove_param_attr p a] removes attribute [a] from parameter [p]. *)
-val remove_param_attr : llvalue -> Attribute.t -> unit
-
-(** [set_param_alignment p a] set the alignment of parameter [p] to [a]. *)
-val set_param_alignment : llvalue -> int -> unit
 
 
 (** {7 Operations on basic blocks} *)
@@ -1682,6 +1782,15 @@ val instr_opcode : llvalue -> Opcode.t
     instruction [i]. *)
 val icmp_predicate : llvalue -> Icmp.t option
 
+(** [fcmp_predicate i] returns the [fcmp.t] corresponding to an [fcmp]
+    instruction [i]. *)
+val fcmp_predicate : llvalue -> Fcmp.t option
+
+(** [inst_clone i] returns a copy of instruction [i],
+    The instruction has no parent, and no name.
+    See the method [llvm::Instruction::clone]. *)
+val instr_clone : llvalue -> llvalue
+
 
 (** {7 Operations on call sites} *)
 
@@ -1698,15 +1807,21 @@ val instruction_call_conv: llvalue -> int
     and [llvm::InvokeInst::setCallingConv]. *)
 val set_instruction_call_conv: int -> llvalue -> unit
 
-(** [add_instruction_param_attr ci i a] adds attribute [a] to the [i]th
-    parameter of the call or invoke instruction [ci]. [i]=0 denotes the return
-    value. *)
-val add_instruction_param_attr : llvalue -> int -> Attribute.t -> unit
+(** [add_call_site_attr f a i] adds attribute [a] to the call instruction [ci]
+    at position [i]. *)
+val add_call_site_attr : llvalue -> llattribute -> AttrIndex.t -> unit
 
-(** [remove_instruction_param_attr ci i a] removes attribute [a] from the
-    [i]th parameter of the call or invoke instruction [ci]. [i]=0 denotes the
-    return value. *)
-val remove_instruction_param_attr : llvalue -> int -> Attribute.t -> unit
+(** [call_site_attr f i] returns the attributes for the call instruction [ci]
+    at position [i]. *)
+val call_site_attrs : llvalue -> AttrIndex.t -> llattribute array
+
+(** [remove_enum_call_site_attr f k i] removes enum attribute with kind [k]
+    from the call instruction [ci] at position [i]. *)
+val remove_enum_call_site_attr : llvalue -> llattrkind -> AttrIndex.t -> unit
+
+(** [remove_string_call_site_attr f k i] removes string attribute with kind [k]
+    from the call instruction [ci] at position [i]. *)
+val remove_string_call_site_attr : llvalue -> string -> AttrIndex.t -> unit
 
 
 (** {7 Operations on call instructions (only)} *)
@@ -1736,6 +1851,52 @@ val is_volatile : llvalue -> bool
     [llvm::StoreInst::setVolatile]. *)
 val set_volatile : bool -> llvalue -> unit
 
+(** {7 Operations on terminators} *)
+
+(** [is_terminator v] returns true if the instruction [v] is a terminator. *)
+val is_terminator : llvalue -> bool
+
+(** [successor v i] returns the successor at index [i] for the value [v].
+    See the method [llvm::TerminatorInst::getSuccessor]. *)
+val successor : llvalue -> int -> llbasicblock
+
+(** [set_successor v i o] sets the successor of the value [v] at the index [i] to
+    the value [o].
+    See the method [llvm::TerminatorInst::setSuccessor]. *)
+val set_successor : llvalue -> int -> llbasicblock -> unit
+
+(** [num_successors v] returns the number of successors for the value [v].
+    See the method [llvm::TerminatorInst::getNumSuccessors]. *)
+val num_successors : llvalue -> int
+
+(** [successors v] returns the successors of [v]. *)
+val successors : llvalue -> llbasicblock array
+
+(** [iter_successors f v] applies function f to each successor [v] in order. Tail recursive. *)
+val iter_successors : (llbasicblock -> unit) -> llvalue -> unit
+
+(** [fold_successors f v init] is [f (... (f init vN) ...) v1] where [v1,...,vN] are the successors of [v]. Tail recursive. *)
+val fold_successors : (llbasicblock -> 'a -> 'a) -> llvalue -> 'a -> 'a
+
+(** {7 Operations on branches} *)
+
+(** [is_conditional v] returns true if the branch instruction [v] is conditional.
+    See the method [llvm::BranchInst::isConditional]. *)
+val is_conditional : llvalue -> bool
+
+(** [condition v] return the condition of the branch instruction [v].
+    See the method [llvm::BranchInst::getCondition]. *)
+val condition : llvalue -> llvalue
+
+(** [set_condition v c] sets the condition of the branch instruction [v] to the value [c].
+    See the method [llvm::BranchInst::setCondition]. *)
+val set_condition : llvalue -> llvalue -> unit
+
+(** [get_branch c] returns a description of the branch instruction [c]. *)
+val get_branch : llvalue ->
+  [ `Conditional of llvalue * llbasicblock * llbasicblock
+  | `Unconditional of llbasicblock ]
+    option
 
 (** {7 Operations on phi nodes} *)
 
@@ -2317,6 +2478,12 @@ val build_fcmp : Fcmp.t -> llvalue -> llvalue -> string ->
 val build_phi : (llvalue * llbasicblock) list -> string -> llbuilder ->
                      llvalue
 
+(** [build_empty_phi ty name b] creates a
+    [%name = phi %ty] instruction at the position specified by
+    the instruction builder [b]. [ty] is the type of the instruction.
+    See the method [llvm::LLVMBuilder::CreatePHI]. *)
+val build_empty_phi : lltype -> string -> llbuilder -> llvalue
+
 (** [build_call fn args name b] creates a
     [%name = call %fn(args...)]
     instruction at the position specified by the instruction builder [b].
@@ -2357,7 +2524,7 @@ val build_insertelement : llvalue -> llvalue -> llvalue -> string ->
 val build_shufflevector : llvalue -> llvalue -> llvalue -> string ->
                                llbuilder -> llvalue
 
-(** [build_insertvalue agg idx name b] creates a
+(** [build_extractvalue agg idx name b] creates a
     [%name = extractvalue %agg, %idx]
     instruction at the position specified by the instruction builder [b].
     See the method [llvm::LLVMBuilder::CreateExtractValue]. *)
@@ -2397,7 +2564,7 @@ module MemoryBuffer : sig
       path [p]. If the file could not be read, then [IoError msg] is
       raised. *)
   val of_file : string -> llmemorybuffer
-  
+
   (** [of_stdin ()] is the memory buffer containing the contents of standard input.
       If standard input is empty, then [IoError msg] is raised. *)
   val of_stdin : unit -> llmemorybuffer
@@ -2408,7 +2575,7 @@ module MemoryBuffer : sig
 
   (** [as_string mb] is the string containing the contents of memory buffer [mb]. *)
   val as_string : llmemorybuffer -> string
-  
+
   (** Disposes of a memory buffer. *)
   val dispose : llmemorybuffer -> unit
 end
@@ -2420,13 +2587,13 @@ module PassManager : sig
   (**  *)
   type 'a t
   type any = [ `Module | `Function ]
-  
+
   (** [PassManager.create ()] constructs a new whole-module pass pipeline. This
       type of pipeline is suitable for link-time optimization and whole-module
       transformations.
       See the constructor of [llvm::PassManager]. *)
   val create : unit -> [ `Module ] t
-  
+
   (** [PassManager.create_function m] constructs a new function-by-function
       pass pipeline over the module [m]. It does not take ownership of [m].
       This type of pipeline is suitable for code generation and JIT compilation
@@ -2445,19 +2612,19 @@ module PassManager : sig
       the module, [false] otherwise.
       See the [llvm::FunctionPassManager::doInitialization] method. *)
   val initialize : [ `Function ] t -> bool
-  
+
   (** [run_function f fpm] executes all of the function passes scheduled in the
       function pass manager [fpm] over the function [f]. Returns [true] if any
       of the passes modified [f], [false] otherwise.
       See the [llvm::FunctionPassManager::run] method. *)
   val run_function : llvalue -> [ `Function ] t -> bool
-  
-  (** [finalize fpm] finalizes all of the function passes scheduled in in the
+
+  (** [finalize fpm] finalizes all of the function passes scheduled in the
       function pass manager [fpm]. Returns [true] if any of the passes
       modified the module, [false] otherwise.
       See the [llvm::FunctionPassManager::doFinalization] method. *)
   val finalize : [ `Function ] t -> bool
-  
+
   (** Frees the memory of a pass pipeline. For function pipelines, does not free
       the module.
       See the destructor of [llvm::BasePassManager]. *)

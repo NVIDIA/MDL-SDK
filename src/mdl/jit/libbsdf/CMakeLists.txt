@@ -40,6 +40,12 @@ set(_GENERATED_SOURCES
     ${_GENERATED_DIR}/libbsdf.ll    # useful for debugging
     )
 
+# add dummy-source to create a dummy-lib
+set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
+if(NOT EXISTS ${DUMMY_CPP})
+    file(WRITE ${DUMMY_CPP} "")
+endif()
+
 # collect sources
 set(PROJECT_HEADERS
     "libbsdf.h"
@@ -53,18 +59,21 @@ set(PROJECT_SOURCES
     ${PROJECT_HEADERS}
     )
 
+# disable compiling
+set_source_files_properties("libbsdf.cpp" PROPERTIES HEADER_FILE_ONLY ON)
 
 # mark files as generated to disable the check for existence during configure
 set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
 
-# create target
-add_custom_target(${PROJECT_NAME} 
-    DEPENDS
-        ${_GENERATED_DIR}/libbsdf.bc
-        ${_GENERATED_DIR}/libbsdf.d
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
     SOURCES 
         ${PROJECT_SOURCES}
+        ${_GENERATED_SOURCES}
+        ${DUMMY_CPP}
     )
+
 target_print_log_header(TARGET ${PROJECT_NAME})
 setup_ide(TARGET ${PROJECT_NAME} SOURCES ${PROJECT_SOURCES})
 

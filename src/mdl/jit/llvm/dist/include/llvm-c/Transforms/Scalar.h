@@ -19,7 +19,7 @@
 #ifndef LLVM_C_TRANSFORMS_SCALAR_H
 #define LLVM_C_TRANSFORMS_SCALAR_H
 
-#include "llvm-c/Core.h"
+#include "llvm-c/Types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,14 +35,32 @@ extern "C" {
 /** See llvm::createAggressiveDCEPass function. */
 void LLVMAddAggressiveDCEPass(LLVMPassManagerRef PM);
 
+/** See llvm::createAggressiveInstCombinerPass function. */
+void LLVMAddAggressiveInstCombinerPass(LLVMPassManagerRef PM);
+
+/** See llvm::createBitTrackingDCEPass function. */
+void LLVMAddBitTrackingDCEPass(LLVMPassManagerRef PM);
+
+/** See llvm::createAlignmentFromAssumptionsPass function. */
+void LLVMAddAlignmentFromAssumptionsPass(LLVMPassManagerRef PM);
+
 /** See llvm::createCFGSimplificationPass function. */
 void LLVMAddCFGSimplificationPass(LLVMPassManagerRef PM);
 
 /** See llvm::createDeadStoreEliminationPass function. */
 void LLVMAddDeadStoreEliminationPass(LLVMPassManagerRef PM);
 
+/** See llvm::createScalarizerPass function. */
+void LLVMAddScalarizerPass(LLVMPassManagerRef PM);
+
+/** See llvm::createMergedLoadStoreMotionPass function. */
+void LLVMAddMergedLoadStoreMotionPass(LLVMPassManagerRef PM);
+
 /** See llvm::createGVNPass function. */
 void LLVMAddGVNPass(LLVMPassManagerRef PM);
+
+/** See llvm::createGVNPass function. */
+void LLVMAddNewGVNPass(LLVMPassManagerRef PM);
 
 /** See llvm::createIndVarSimplifyPass function. */
 void LLVMAddIndVarSimplifyPass(LLVMPassManagerRef PM);
@@ -71,6 +89,9 @@ void LLVMAddLoopRerollPass(LLVMPassManagerRef PM);
 /** See llvm::createLoopUnrollPass function. */
 void LLVMAddLoopUnrollPass(LLVMPassManagerRef PM);
 
+/** See llvm::createLoopUnrollAndJamPass function. */
+void LLVMAddLoopUnrollAndJamPass(LLVMPassManagerRef PM);
+
 /** See llvm::createLoopUnswitchPass function. */
 void LLVMAddLoopUnswitchPass(LLVMPassManagerRef PM);
 
@@ -80,22 +101,19 @@ void LLVMAddMemCpyOptPass(LLVMPassManagerRef PM);
 /** See llvm::createPartiallyInlineLibCallsPass function. */
 void LLVMAddPartiallyInlineLibCallsPass(LLVMPassManagerRef PM);
 
-/** See llvm::createPromoteMemoryToRegisterPass function. */
-void LLVMAddPromoteMemoryToRegisterPass(LLVMPassManagerRef PM);
-
 /** See llvm::createReassociatePass function. */
 void LLVMAddReassociatePass(LLVMPassManagerRef PM);
 
 /** See llvm::createSCCPPass function. */
 void LLVMAddSCCPPass(LLVMPassManagerRef PM);
 
-/** See llvm::createScalarReplAggregatesPass function. */
+/** See llvm::createSROAPass function. */
 void LLVMAddScalarReplAggregatesPass(LLVMPassManagerRef PM);
 
-/** See llvm::createScalarReplAggregatesPass function. */
+/** See llvm::createSROAPass function. */
 void LLVMAddScalarReplAggregatesPassSSA(LLVMPassManagerRef PM);
 
-/** See llvm::createScalarReplAggregatesPass function. */
+/** See llvm::createSROAPass function. */
 void LLVMAddScalarReplAggregatesPassWithThreshold(LLVMPassManagerRef PM,
                                                   int Threshold);
 
@@ -120,11 +138,17 @@ void LLVMAddCorrelatedValuePropagationPass(LLVMPassManagerRef PM);
 /** See llvm::createEarlyCSEPass function */
 void LLVMAddEarlyCSEPass(LLVMPassManagerRef PM);
 
+/** See llvm::createEarlyCSEPass function */
+void LLVMAddEarlyCSEMemSSAPass(LLVMPassManagerRef PM);
+
 /** See llvm::createLowerExpectIntrinsicPass function */
 void LLVMAddLowerExpectIntrinsicPass(LLVMPassManagerRef PM);
 
 /** See llvm::createTypeBasedAliasAnalysisPass function */
 void LLVMAddTypeBasedAliasAnalysisPass(LLVMPassManagerRef PM);
+
+/** See llvm::createScopedNoAliasAAPass function */
+void LLVMAddScopedNoAliasAAPass(LLVMPassManagerRef PM);
 
 /** See llvm::createBasicAliasAnalysisPass function */
 void LLVMAddBasicAliasAnalysisPass(LLVMPassManagerRef PM);

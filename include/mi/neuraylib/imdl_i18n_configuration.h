@@ -80,7 +80,7 @@ public:
     /// Specifies which locale to use to translate annotations.
     ///
     /// This interface can be used to set the locale to use for translation,
-    /// overwite the system locale or disable any tranlsation. By default, the locale
+    /// overwite the system locale or disable any translation. By default, the locale
     /// defined by the system is used.
     ///
     /// This function can only be called before \neurayProductName has been started.

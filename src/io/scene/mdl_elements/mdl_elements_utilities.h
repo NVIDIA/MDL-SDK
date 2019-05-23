@@ -105,6 +105,10 @@ const T* mdl_type_to_int_type(
         return 0;
     return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
 }
+/// Converts MI::MDL::IType to mi::mdl::IType.
+const mi::mdl::IType* int_type_to_mdl_type(
+    const IType *type,
+    mi::mdl::IType_factory &tf);
 
 /// Converts mi::mdl::IValue to MI::MDL::IValue.
 ///
@@ -117,6 +121,7 @@ const T* mdl_type_to_int_type(
 /// \param module_filename        The filename of the module (used for string-based resources with
 ///                               relative filenames).
 /// \param module_name            The fully-qualified MDL module name.
+/// \param load_resources         If true, resources are loaded into the database.
 /// \return                       The converted value, or \c NULL in case of failures.
 IValue* mdl_value_to_int_value(
     IValue_factory* vf,
@@ -124,7 +129,8 @@ IValue* mdl_value_to_int_value(
     const IType* type_int,
     const mi::mdl::IValue* value,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    bool load_resources);
 
 /// Converts mi::mdl::IValue to MI::MDL::IValue.
 ///
@@ -136,10 +142,12 @@ IValue* mdl_value_to_int_value(
     const IType* type_int,
     const mi::mdl::IValue* value,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    bool load_resources)
 {
     mi::base::Handle<IValue> ptr_value(
-        mdl_value_to_int_value( vf, transaction, type_int, value, module_filename, module_name));
+        mdl_value_to_int_value(
+            vf, transaction, type_int, value, module_filename, module_name, load_resources));
     if( !ptr_value)
         return 0;
     return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
@@ -160,6 +168,7 @@ public:
     ///                               with relative filenames).
     /// \param module_name            The fully-qualified MDL module name.
     /// \param prototype_tag          The prototype_tag if relevant.
+    /// \param load_resources         True, if resources are supposed to be loaded into the DB
     Mdl_dag_converter(
         IExpression_factory* ef,
         DB::Transaction* transaction,
@@ -167,7 +176,8 @@ public:
         bool create_direct_calls,
         const char* module_filename,
         const char* module_name,
-        DB::Tag prototype_tag);
+        DB::Tag prototype_tag,
+        bool load_resources);
 
     /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
     ///
@@ -224,6 +234,7 @@ private:
     const char* m_module_filename;
     const char* m_module_name;
     DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
+    bool        m_load_resources;
 };
 
 // ********** Conversion from MI::MDL to mi::mdl ***************************************************
@@ -277,8 +288,14 @@ std::string prefix_symbol_name( const char* symbol);
 /// Returns \c true iff the modifier-stripped types are identical, or if the modifier-stripped
 /// argument type is an array and the modifier-stripped parameter type is a deferred-sized array of
 /// the same element type.
+/// If allow_compatible_types is true, this function also returns true, if \p argument_type can be
+/// casted to \p parameter_type. In this case, the output parameter \p needs_cast is set to true.
 bool argument_type_matches_parameter_type(
-    IType_factory* tf, const IType* argument_type, const IType* parameter_type);
+    IType_factory* tf,
+    const IType* argument_type,
+    const IType* parameter_type,
+    bool allow_cast,
+    bool &needs_cast);
 
 /// Returns \c true iff the return type of the called function definition is varying. This includes
 /// definitions where the \em effective return if varying, i.e., it is declared auto but the
@@ -430,6 +447,16 @@ const mi::mdl::IExpression_reference* signature_to_reference(
 /// \return                       The MDL AST expression reference for the type, or for arrays the
 ///                               MDL AST expression reference for the corresponding array
 ///                               constructor.
+mi::mdl::IType_name* type_to_type_name(
+    mi::mdl::IModule* module, const mi::mdl::IType* type);
+
+/// Creates an MDL AST expression reference for a given MDL type.
+///
+/// \param module                 The module on which the qualified name is created.
+/// \param type                   The type.
+/// \return                       The MDL AST expression reference for the type, or for arrays the
+///                               MDL AST expression reference for the corresponding array
+///                               constructor.
 mi::mdl::IExpression_reference* type_to_reference(
     mi::mdl::IModule* module, const mi::mdl::IType* type);
 
@@ -498,6 +525,9 @@ public:
     /// Collects all imports required by an AST expression.
     void collect_imports( const mi::mdl::IExpression* expr);
 
+    /// Collects all imports required by a type name.
+    void collect_imports(const mi::mdl::IType_name* tn);
+
     /// Collects all imports required by an annotation block.
     void collect_imports( const mi::mdl::IAnnotation_block* annotation_block);
 
@@ -506,6 +536,9 @@ public:
 
     /// Write the collected imports into the module.
     void add_imports();
+
+    /// Returns true if the current list of imports contains MDLE definitions.
+    bool imports_mdle() const;
 
 private:
     /// The name importer.
@@ -539,10 +572,29 @@ private:
 class Call_evaluator : public mi::mdl::ICall_evaluator
 {
 public:
-    Call_evaluator( DB::Transaction* transaction) { m_transaction = transaction; }
+    Call_evaluator(
+        DB::Transaction* transaction,
+        bool has_resource_attributes)
+    : m_transaction(transaction)
+    , m_has_resource_attributes(has_resource_attributes)
+    {}
 
-    virtual ~Call_evaluator() { };
+    virtual ~Call_evaluator() {}
 
+    /// Check whether evaluate_intrinsic_function() should be called for an unhandled
+    /// intrinsic functions with the given semantic.
+    ///
+    /// \param semantic  the semantic to check for
+    bool is_evaluate_intrinsic_function_enabled(
+        mi::mdl::IDefinition::Semantics semantic) const;
+
+    /// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
+    ///
+    /// \param semantic     the semantic of the function to call
+    /// \param arguments    the arguments for the call
+    /// \param n_arguments  the number of arguments
+    ///
+    /// \return IValue_bad if this function could not be evaluated, its value otherwise
     const mi::mdl::IValue* evaluate_intrinsic_function(
         mi::mdl::IValue_factory* value_factory,
         mi::mdl::IDefinition::Semantics semantic,
@@ -589,6 +641,7 @@ private:
         mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
 
     DB::Transaction* m_transaction;
+    bool m_has_resource_attributes;
 };
 
 
@@ -606,6 +659,35 @@ public:
     mi::mdl::IGenerated_code_dag::IMaterial_instance* create_material_instance(
         DB::Transaction* transaction, const Mdl_compiled_material* material);
 };
+
+/// Check if it is possible to enforce the uniform property if the new parameter is uniform
+///
+/// \param[in]  transaction      current transaction
+/// \param[in]  args             argument list
+/// \param[in]  param_types      parameter type list
+/// \param[in]  path             path to the newly parameter
+/// \param[in]  expr             the expression that will be turned into parameter
+/// \param[out] must_be_uniform  \c true, iff the newly created parameter must be uniform to
+///                              enforce the uniform property
+///
+/// \return true if possible, false if not possible
+bool can_enforce_uniform(
+    DB::Transaction* transaction,
+    mi::base::Handle<const IExpression_list> const &args,
+    mi::base::Handle<const IType_list> const &param_types,
+    std::string const &path,
+    mi::base::Handle<const IExpression> const &expr,
+    bool &must_be_uniform);
+
+/// Find the expression a path is pointing on.
+///
+/// \param transaction  the current transaction
+/// \param path         the path
+/// \param args         the material arguments
+mi::base::Handle<const IExpression> find_path(
+    DB::Transaction* transaction,
+    const std::string& path,
+    const mi::base::Handle<const IExpression_list>& args);
 
 } // namespace MDL
 

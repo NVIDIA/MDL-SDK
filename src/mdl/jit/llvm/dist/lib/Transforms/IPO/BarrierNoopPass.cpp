@@ -23,7 +23,7 @@
 using namespace llvm;
 
 namespace {
-/// \brief A nonce module pass used to place a barrier in a pass manager.
+/// A nonce module pass used to place a barrier in a pass manager.
 ///
 /// There is no mechanism for ending a CGSCC pass manager once one is started.
 /// This prevents extension points from having clear deterministic ordering
@@ -36,7 +36,7 @@ public:
     initializeBarrierNoopPass(*PassRegistry::getPassRegistry());
   }
 
-  bool runOnModule(Module &M) { return false; }
+  bool runOnModule(Module &M) override { return false; }
 };
 }
 

@@ -1,6 +1,129 @@
 Change Log
 ==========
 
+MDL SDK 2019.1 (317500.1752): 16 May 2019
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2019.1 (317500.1752) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.5 Language Specification
+
+    - A new cast operator has been added to support assignments between
+      structurally equivalent user defined structure types and value
+      equivalent enumeration types to support workflows with the new
+      MDLE format. Beginning with MDL 1.5, `cast` is a reserved word.
+    - A new field named `hair` of type `hair_bsdf` has been added to the
+      material type, which represents the shading model applicable for hair
+      primitives. Beginning with MDL 1.5, `hair_bsdf` is a reserved word.
+    - A new elemental distribution function `df::chiang_hair_bsdf` has been
+      added as a hair shading model.
+    - A new distribution function modifier `df::measured_factor` has been
+      added to support microfacet coloring based on the angle between the
+      half-vector and the shading normal in addition to the angle between
+      the half-vector and the incoming ray direction.
+    - Annotations have been added to annotation declarations.
+    - A new standard annotation `origin()` has been added, which is used in
+      the MDLE file format to reference the original declarations of
+      refactored elements.
+    - The new Appendix D -- MDLE File Format defines a new container format
+      for a self contained MDL material or function including all of its
+      dependencies and resources.
+    - The new Appendix E -- Internationalization defines the use of XLIFF
+      files for the localization of MDL string annotations.
+
+- General
+
+    - A new function `IMdle_api::get_hash()` has been added.
+    - A new function `IMdl_compiler::get_module_db_name()` has been added.
+    - The MDLE file format version has been bumped to `1.0`.
+    - MDLE files now use the new `anno::origin` annotation rather than a custom one.
+    - A new interface `mi::neuraylib::IValue_string_localized` has been added.
+    - A new function `IType_factory::is_compatible()` has been added to check if one MDL
+      type can be cast to another.
+    - A new function `IExpression_factory::create_cast()` has been added.
+    - A new configuration interface `IMdl_configuration` has been added, which can be used
+      to control the behavior of the SDK regarding the automatic insertion of casts when
+      assigning compatible but different types to arguments of MDL instances.
+    - The `IMdl_discovery_api` has been extended to also support discovery of resources and
+      XLIFF files.
+
+- MDL Compiler and Backends
+
+    - A new backend `mi::neuraylib::IMdl_compiler::MB_HLSL` for `HLSL` code generation
+      has been added. Please refer to the `dxr` example for an illustrative path tracer
+      using it.
+    - The CUDA/OptiX backend expects some new functions in the user provided renderer runtime
+      to allow using resources unknown at compile-time via argument blocks with class compilation:
+        - `bool tex_texture_isvalid(Texture_handler_base const *self, tct_uint texture_idx)`
+        - `void tex_resolution_3d(int result[3], Texture_handler_base const *self, tct_uint texture_idx)`
+        - `bool df_light_profile_isvalid(Texture_handler_base const *self, tct_uint resource_idx)`
+        - `tct_float df_light_profile_power(Texture_handler_base const *self, tct_uint resource_idx)`
+        - `tct_float df_light_profile_maximum(Texture_handler_base const *self, tct_uint resource_idx)`
+        - `bool df_bsdf_measurement_isvalid(Texture_handler_base const *self, tct_uint resource_idx)`
+      The `tex_resolution_3d()` function fills the width, height and depth for the given
+      texture index into the respective result entry.
+      The other functions are implementations for the corresponding MDL functions.
+      See `examples/mdl_sdk/shared/texture_support_cuda.h` for an example implementation.
+    - The compiler support for the ternary operator on material and material sub types has been
+      improved. Several materials that caused compile errors before are now compiled flawless.
+    - The MDL compiler now correctly issues an error when the called object is not a function,
+      detecting (wrong) code like f()().
+    - The compiler generated now correct MDL code when exporting functions containing a
+      dangling if construct.
+    - The compiler now (correctly) forbids the use of resource types as parameter types
+      in annotations.
+    - The PTX backend does not use global counters to generate temporary identifiers anymore,
+      this greatly improves PTX cache hits.
+    - The following MDL 1.5 features are now supported by the MDL compiler:
+        - `hair_bsdf()` type
+        - `df::chiang_hair_bsdf()`
+        - `anno::origin` annotation
+        - support for annotations on annotation declarations
+    - The backends were upgraded to use the LLVM 7 library. This means, that the LLVM-IR
+      backend now produces LLVM 7 IR code.
+    - Allow generating code for `bsdf()` if "compile_constants" options is "on" (default).
+
+- MDL SDK examples
+    - A new Direct3D 12 example `dxr` has been added which illustrates how to use
+      the `HLSL` back-end in an RTX-based real-time path tracer.
+    - Support for thin-walled materials has been added to `example_df_cuda`.
+
+**Fixed Bugs**
+
+- General
+
+    - Failing MDLE creation when an argument of the MDLE prototype is connected to a function
+      which returns a user-defined type has been fixed.
+    - A bug leading to different output (and therefore different hashes) when exporting the
+      same MDLE more than once has been fixed.
+    - A failure (error code -8) when creating presets from functions with user-defined
+      return types has been fixed.
+    - A failure (error code -8) when creating function presets from MDL modules
+      with versions < 1.3 has been fixed.
+    - When exporting presets from MDLE definitions or MDL definitions containing calls to MDLE
+      definitions in their arguments, the MDLE code is now inlined into the new module, rather
+      than resulting in invalid MDL.
+    - The missing `origin` annotation on the main definition of an MDLE file has been added.
+    - Issues resolving MDLE files on UNC file paths have been fixed.
+    - Missing imports for user-defined function return types which caused MDLE creation
+      to fail, have been added.
+    - The conversion of array constructors to MDL AST expressions has been fixed.
+    - The use of implicit conversion functions inside `enable-if` expressions is no longer
+      forbidden.
+
+- MDL Compiler and Backends
+    - Unnecessarily slow code generation for very big output has been fixed.
+    - Wrong code generation for `df::bsdf_measurement_isvalid()` has been fixed.
+    - Creating DAG call nodes for ternary operators returning non-builtin types has been fixed.
+    - For the native and PTX backends, wrong order of array elements returned by `math::modf()`
+      has been fixed.
+    - Native code execution on Mac has been fixed.
+    - Struct member access for MDLE types containing a dot in their file path has been fixed.
+
+
 MDL SDK 2019 (314800.830): 20 Feb 2019
 -----------------------------------------------
 

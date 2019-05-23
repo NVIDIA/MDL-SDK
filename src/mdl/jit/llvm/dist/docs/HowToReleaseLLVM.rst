@@ -2,17 +2,13 @@
 How To Release LLVM To The Public
 =================================
 
-.. contents::
-   :local:
-   :depth: 1
-
 Introduction
 ============
 
 This document contains information about successfully releasing LLVM ---
-including subprojects: e.g., ``clang`` and ``dragonegg`` --- to the public.  It
-is the Release Manager's responsibility to ensure that a high quality build of
-LLVM is released.
+including sub-projects: e.g., ``clang`` and ``compiler-rt`` --- to the public.
+It is the Release Manager's responsibility to ensure that a high quality build
+of LLVM is released.
 
 If you're looking for the document on how to test the release candidates and
 create the binary packages, please refer to the :doc:`ReleaseProcess` instead.
@@ -22,12 +18,15 @@ create the binary packages, please refer to the :doc:`ReleaseProcess` instead.
 Release Timeline
 ================
 
-LLVM is released on a time based schedule --- roughly every 6 months.  We do
-not normally have dot releases because of the nature of LLVM's incremental
-development philosophy.  That said, the only thing preventing dot releases for
-critical bug fixes from happening is a lack of resources --- testers,
-machines, time, etc.  And, because of the high quality we desire for LLVM
-releases, we cannot allow for a truncated form of release qualification.
+LLVM is released on a time based schedule --- with major releases roughly
+every 6 months.  In between major releases there may be dot releases.
+The release manager will determine if and when to make a dot release based
+on feedback from the community.  Typically, dot releases should be made if
+there are large number of bug-fixes in the stable branch or a critical bug
+has been discovered that affects a large number of users.
+
+Unless otherwise stated, dot releases will follow the same procedure as
+major releases.
 
 The release process is roughly as follows:
 
@@ -43,13 +42,17 @@ The release process is roughly as follows:
   the end of the first round of testing will be removed or disabled for the
   release.
 
-* Generate and send out the second release candidate sources.  Only *critial*
+* Generate and send out the second release candidate sources.  Only *critical*
   bugs found during this testing phase will be fixed.  Any bugs introduced by
   merged patches will be fixed.  If so a third round of testing is needed.
 
 * The release notes are updated.
 
 * Finally, release!
+
+The release process will be accelerated for dot releases.  If the first round
+of testing finds no critical bugs and no regressions since the last major release,
+then additional rounds of testing will not be required.
 
 Release Process
 ===============
@@ -82,24 +85,10 @@ Branch the Subversion trunk using the following procedure:
 #. Verify that the current Subversion trunk is in decent shape by
    examining nightly tester and buildbot results.
 
-#. Create the release branch for ``llvm``, ``clang``, the ``test-suite``, and
-   ``dragonegg`` from the last known good revision.  The branch's name is
+#. Create the release branch for ``llvm``, ``clang``, and other sub-projects,
+   from the last known good revision.  The branch's name is
    ``release_XY``, where ``X`` is the major and ``Y`` the minor release
-   numbers.  The branches should be created using the following commands:
-
-   ::
-
-     $ svn copy https://llvm.org/svn/llvm-project/llvm/trunk \
-                https://llvm.org/svn/llvm-project/llvm/branches/release_XY
-
-     $ svn copy https://llvm.org/svn/llvm-project/cfe/trunk \
-                https://llvm.org/svn/llvm-project/cfe/branches/release_XY
-
-     $ svn copy https://llvm.org/svn/llvm-project/dragonegg/trunk \
-                https://llvm.org/svn/llvm-project/dragonegg/branches/release_XY
-
-     $ svn copy https://llvm.org/svn/llvm-project/test-suite/trunk \
-                https://llvm.org/svn/llvm-project/test-suite/branches/release_XY
+   numbers.  Use ``utils/release/tag.sh`` to tag the release.
 
 #. Advise developers that they may now check their patches into the Subversion
    tree again.
@@ -114,8 +103,6 @@ Branch the Subversion trunk using the following procedure:
 
      $ svn co https://llvm.org/svn/llvm-project/cfe/branches/release_XY clang-X.Y
 
-     $ svn co https://llvm.org/svn/llvm-project/dragonegg/branches/release_XY dragonegg-X.Y
-
      $ svn co https://llvm.org/svn/llvm-project/test-suite/branches/release_XY test-suite-X.Y
 
 Update LLVM Version
@@ -129,115 +116,38 @@ Regenerate the configure scripts for both ``llvm`` and the ``test-suite``.
 In addition, the version numbers of all the Bugzilla components must be updated
 for the next release.
 
-Build the LLVM Release Candidates
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Tagging the LLVM Release Candidates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create release candidates for ``llvm``, ``clang``, ``dragonegg``, and the LLVM
-``test-suite`` by tagging the branch with the respective release candidate
-number.  For instance, to create **Release Candidate 1** you would issue the
-following commands:
+Tag release candidates using the tag.sh script in utils/release.
 
 ::
 
-  $ svn mkdir https://llvm.org/svn/llvm-project/llvm/tags/RELEASE_XY
-  $ svn copy https://llvm.org/svn/llvm-project/llvm/branches/release_XY \
-             https://llvm.org/svn/llvm-project/llvm/tags/RELEASE_XY/rc1
-
-  $ svn mkdir https://llvm.org/svn/llvm-project/cfe/tags/RELEASE_XY
-  $ svn copy https://llvm.org/svn/llvm-project/cfe/branches/release_XY \
-             https://llvm.org/svn/llvm-project/cfe/tags/RELEASE_XY/rc1
-
-  $ svn mkdir https://llvm.org/svn/llvm-project/dragonegg/tags/RELEASE_XY
-  $ svn copy https://llvm.org/svn/llvm-project/dragonegg/branches/release_XY \
-             https://llvm.org/svn/llvm-project/dragonegg/tags/RELEASE_XY/rc1
-
-  $ svn mkdir https://llvm.org/svn/llvm-project/test-suite/tags/RELEASE_XY
-  $ svn copy https://llvm.org/svn/llvm-project/test-suite/branches/release_XY \
-             https://llvm.org/svn/llvm-project/test-suite/tags/RELEASE_XY/rc1
-
-Similarly, **Release Candidate 2** would be named ``RC2`` and so on.  This keeps
-a permanent copy of the release candidate around for people to export and build
-as they wish.  The final released sources will be tagged in the ``RELEASE_XY``
-directory as ``Final`` (c.f. :ref:`tag`).
+  $ ./tag.sh -release X.Y.Z -rc $RC
 
 The Release Manager may supply pre-packaged source tarballs for users.  This can
-be done with the following commands:
+be done with the export.sh script in utils/release.
 
 ::
 
-  $ svn export https://llvm.org/svn/llvm-project/llvm/tags/RELEASE_XY/rc1 llvm-X.Yrc1
-  $ svn export https://llvm.org/svn/llvm-project/cfe/tags/RELEASE_XY/rc1 clang-X.Yrc1
-  $ svn export https://llvm.org/svn/llvm-project/dragonegg/tags/RELEASE_XY/rc1 dragonegg-X.Yrc1
-  $ svn export https://llvm.org/svn/llvm-project/test-suite/tags/RELEASE_XY/rc1 llvm-test-X.Yrc1
+  $ ./export.sh -release X.Y.Z -rc $RC
 
-  $ tar -cvf - llvm-X.Yrc1        | gzip > llvm-X.Yrc1.src.tar.gz
-  $ tar -cvf - clang-X.Yrc1       | gzip > clang-X.Yrc1.src.tar.gz
-  $ tar -cvf - dragonegg-X.Yrc1   | gzip > dragonegg-X.Yrc1.src.tar.gz
-  $ tar -cvf - llvm-test-X.Yrc1   | gzip > llvm-test-X.Yrc1.src.tar.gz
-
-Building the Release
---------------------
-
-The builds of ``llvm``, ``clang``, and ``dragonegg`` *must* be free of
-errors and warnings in Debug, Release+Asserts, and Release builds.  If all
-builds are clean, then the release passes Build Qualification.
-
-The ``make`` options for building the different modes:
-
-+-----------------+---------------------------------------------+
-| Mode            | Options                                     |
-+=================+=============================================+
-| Debug           | ``ENABLE_OPTIMIZED=0``                      |
-+-----------------+---------------------------------------------+
-| Release+Asserts | ``ENABLE_OPTIMIZED=1``                      |
-+-----------------+---------------------------------------------+
-| Release         | ``ENABLE_OPTIMIZED=1 DISABLE_ASSERTIONS=1`` |
-+-----------------+---------------------------------------------+
-
-Build LLVM
-^^^^^^^^^^
-
-Build ``Debug``, ``Release+Asserts``, and ``Release`` versions
-of ``llvm`` on all supported platforms.  Directions to build ``llvm``
-are :doc:`here <GettingStarted>`.
+This will generate source tarballs for each LLVM project being validated, which
+can be uploaded to the website for further testing.
 
 Build Clang Binary Distribution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Creating the ``clang`` binary distribution (Debug/Release+Asserts/Release)
-requires performing the following steps for each supported platform:
+Creating the ``clang`` binary distribution requires following the instructions
+:doc:`here <ReleaseProcess>`.
 
-#. Build clang according to the directions `here
-   <http://clang.llvm.org/get_started.html>`__.
+That process will perform both Release+Asserts and Release builds but only
+pack the Release build for upload. You should use the Release+Asserts sysroot,
+normally under ``final/Phase3/Release+Asserts/llvmCore-3.8.1-RCn.install/``,
+for test-suite and run-time benchmarks, to make sure nothing serious has 
+passed through the net. For compile-time benchmarks, use the Release version.
 
-#. Build both a Debug and Release version of clang.  The binary will be the
-   Release build.
-
-#. Package ``clang`` (details to follow).
-
-Target Specific Build Details
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The table below specifies which compilers are used for each Arch/OS combination
-when qualifying the build of ``llvm``, ``clang``, and ``dragonegg``.
-
-+--------------+---------------+----------------------+
-| Architecture | OS            | compiler             |
-+==============+===============+======================+
-| x86-32       | Mac OS 10.5   | gcc 4.0.1            |
-+--------------+---------------+----------------------+
-| x86-32       | Linux         | gcc 4.2.X, gcc 4.3.X |
-+--------------+---------------+----------------------+
-| x86-32       | FreeBSD       | gcc 4.2.X            |
-+--------------+---------------+----------------------+
-| x86-32       | mingw         | gcc 3.4.5            |
-+--------------+---------------+----------------------+
-| x86-64       | Mac OS 10.5   | gcc 4.0.1            |
-+--------------+---------------+----------------------+
-| x86-64       | Linux         | gcc 4.2.X, gcc 4.3.X |
-+--------------+---------------+----------------------+
-| x86-64       | FreeBSD       | gcc 4.2.X            |
-+--------------+---------------+----------------------+
+The minimum required version of the tools you'll need are :doc:`here <GettingStarted>`
 
 Release Qualification Criteria
 ------------------------------
@@ -247,64 +157,53 @@ baseline).  Regressions are related to correctness first and performance second.
 (We may tolerate some minor performance regressions if they are deemed
 necessary for the general quality of the compiler.)
 
-**Regressions are new failures in the set of tests that are used to qualify
+More specifically, Clang/LLVM is qualified when it has a clean test with all
+supported sub-projects included (``make check-all``), per target, and it has no
+regressions with the ``test-suite`` in relation to the previous release.
+
+Regressions are new failures in the set of tests that are used to qualify
 each product and only include things on the list.  Every release will have
 some bugs in it.  It is the reality of developing a complex piece of
 software.  We need a very concrete and definitive release criteria that
 ensures we have monotonically improving quality on some metric.  The metric we
 use is described below.  This doesn't mean that we don't care about other
 criteria, but these are the criteria which we found to be most important and
-which must be satisfied before a release can go out.**
+which must be satisfied before a release can go out.
 
-Qualify LLVM
-^^^^^^^^^^^^
+Official Testing
+----------------
 
-LLVM is qualified when it has a clean test run without a front-end.  And it has
-no regressions when using either ``clang`` or ``dragonegg`` with the
-``test-suite`` from the previous release.
+A few developers in the community have dedicated time to validate the release
+candidates and volunteered to be the official release testers for each
+architecture.
 
-Qualify Clang
-^^^^^^^^^^^^^
+These will be the ones testing, generating and uploading the official binaries
+to the server, and will be the minimum tests *necessary* for the release to
+proceed.
 
-``Clang`` is qualified when front-end specific tests in the ``llvm`` regression
-test suite all pass, clang's own test suite passes cleanly, and there are no
-regressions in the ``test-suite``.
+This will obviously not cover all OSs and distributions, so additional community
+validation is important. However, if community input is not reached before the
+release is out, all bugs reported will have to go on the next stable release.
 
-Specific Target Qualification Details
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The official release managers are:
 
-+--------------+-------------+----------------+-----------------------------+
-| Architecture | OS          | clang baseline | tests                       |
-+==============+=============+================+=============================+
-| x86-32       | Linux       | last release   | llvm regression tests,      |
-|              |             |                | clang regression tests,     |
-|              |             |                | test-suite (including spec) |
-+--------------+-------------+----------------+-----------------------------+
-| x86-32       | FreeBSD     | last release   | llvm regression tests,      |
-|              |             |                | clang regression tests,     |
-|              |             |                | test-suite                  |
-+--------------+-------------+----------------+-----------------------------+
-| x86-32       | mingw       | none           | QT                          |
-+--------------+-------------+----------------+-----------------------------+
-| x86-64       | Mac OS 10.X | last release   | llvm regression tests,      |
-|              |             |                | clang regression tests,     |
-|              |             |                | test-suite (including spec) |
-+--------------+-------------+----------------+-----------------------------+
-| x86-64       | Linux       | last release   | llvm regression tests,      |
-|              |             |                | clang regression tests,     |
-|              |             |                | test-suite (including spec) |
-+--------------+-------------+----------------+-----------------------------+
-| x86-64       | FreeBSD     | last release   | llvm regression tests,      |
-|              |             |                | clang regression tests,     |
-|              |             |                | test-suite                  |
-+--------------+-------------+----------------+-----------------------------+
+* Major releases (X.0): Hans Wennborg
+* Stable releases (X.n): Tom Stellard
+
+The official release testers are volunteered from the community and have
+consistently validated and released binaries for their targets/OSs. To contact
+them, you should email the ``release-testers@lists.llvm.org`` mailing list.
+
+The official testers list is in the file ``RELEASE_TESTERS.TXT``, in the ``LLVM``
+repository.
 
 Community Testing
 -----------------
 
 Once all testing has been completed and appropriate bugs filed, the release
 candidate tarballs are put on the website and the LLVM community is notified.
-Ask that all LLVM developers test the release in 2 ways:
+
+We ask that all LLVM developers test the release in any the following ways:
 
 #. Download ``llvm-X.Y``, ``llvm-test-X.Y``, and the appropriate ``clang``
    binary.  Build LLVM.  Run ``make check`` and the full LLVM test suite (``make
@@ -314,20 +213,70 @@ Ask that all LLVM developers test the release in 2 ways:
    everything.  Run ``make check`` and the full LLVM test suite (``make
    TEST=nightly report``).
 
-Ask LLVM developers to submit the test suite report and ``make check`` results
-to the list.  Verify that there are no regressions from the previous release.
-The results are not used to qualify a release, but to spot other potential
-problems.  For unsupported targets, verify that ``make check`` is at least
-clean.
+#. Download ``llvm-X.Y``, ``llvm-test-X.Y``, and the appropriate ``clang``
+   binary. Build whole programs with it (ex. Chromium, Firefox, Apache) for
+   your platform.
+
+#. Download ``llvm-X.Y``, ``llvm-test-X.Y``, and the appropriate ``clang``
+   binary. Build *your* programs with it and check for conformance and
+   performance regressions.
+
+#. Run the :doc:`release process <ReleaseProcess>`, if your platform is
+   *different* than that which is officially supported, and report back errors
+   only if they were not reported by the official release tester for that
+   architecture.
+
+We also ask that the OS distribution release managers test their packages with
+the first candidate of every release, and report any *new* errors in Bugzilla.
+If the bug can be reproduced with an unpatched upstream version of the release
+candidate (as opposed to the distribution's own build), the priority should be
+release blocker.
 
 During the first round of testing, all regressions must be fixed before the
 second release candidate is tagged.
 
-If this is the second round of testing, the testing is only to ensure that bug
+In the subsequent stages, the testing is only to ensure that bug
 fixes previously merged in have not created new major problems. *This is not
 the time to solve additional and unrelated bugs!* If no patches are merged in,
 the release is determined to be ready and the release manager may move onto the
 next stage.
+
+Reporting Regressions
+---------------------
+
+Every regression that is found during the tests (as per the criteria above),
+should be filled in a bug in Bugzilla with the priority *release blocker* and
+blocking a specific release.
+
+To help manage all the bugs reported and which ones are blockers or not, a new
+"[meta]" bug should be created and all regressions *blocking* that Meta. Once
+all blockers are done, the Meta can be closed.
+
+If a bug can't be reproduced, or stops being a blocker, it should be removed
+from the Meta and its priority decreased to *normal*. Debugging can continue,
+but on trunk.
+
+Merge Requests
+--------------
+
+You can use any of the following methods to request that a revision from trunk
+be merged into a release branch:
+
+#. Use the ``utils/release/merge-request.sh`` script which will automatically
+   file a bug_ requesting that the patch be merged. e.g. To request revision
+   12345 be merged into the branch for the 5.0.1 release:
+   ``llvm.src/utils/release/merge-request.sh -stable-version 5.0 -r 12345 -user bugzilla@example.com``
+
+#. Manually file a bug_ with the subject: "Merge r12345 into the X.Y branch",
+   enter the commit(s) that you want merged in the "Fixed by Commit(s)" and mark
+   it as a blocker of the current release bug.  Release bugs are given aliases
+   in the form of release-x.y.z, so to mark a bug as a blocker for the 5.0.1
+   release, just enter release-5.0.1 in the "Blocks" field.
+
+#. Reply to the commit email on llvm-commits for the revision to merge and cc
+   the release manager.
+
+.. _bug: https://bugs.llvm.org/
 
 Release Patch Rules
 -------------------
@@ -335,7 +284,8 @@ Release Patch Rules
 Below are the rules regarding patching the release branch:
 
 #. Patches applied to the release branch may only be applied by the release
-   manager.
+   manager, the official release testers or the code owners with approval from
+   the release manager.
 
 #. During the first round of testing, patches that fix regressions or that are
    small and relatively risk free (verified by the appropriate code owner) are
@@ -345,6 +295,26 @@ Below are the rules regarding patching the release branch:
 
 #. During the remaining rounds of testing, only patches that fix critical
    regressions may be applied.
+
+#. For dot releases all patches must maintain both API and ABI compatibility with
+   the previous major release.  Only bug-fixes will be accepted.
+
+Merging Patches
+^^^^^^^^^^^^^^^
+
+The ``utils/release/merge.sh`` script can be used to merge individual revisions
+into any one of the llvm projects. To merge revision ``$N`` into project
+``$PROJ``, do:
+
+#. ``svn co https://llvm.org/svn/llvm-project/$PROJ/branches/release_XX
+   $PROJ.src``
+
+#. ``$PROJ.src/utils/release/merge.sh --proj $PROJ --rev $N``
+
+#. Run regression tests.
+
+#. ``cd $PROJ.src``. Run the ``svn commit`` command printed out by ``merge.sh``
+   in step 2.
 
 Release Final Tasks
 -------------------
@@ -368,21 +338,11 @@ mainline into the release branch.
 Tag the LLVM Final Release
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Tag the final release sources using the following procedure:
+Tag the final release sources using the tag.sh script in utils/release.
 
 ::
 
-  $ svn copy https://llvm.org/svn/llvm-project/llvm/branches/release_XY \
-             https://llvm.org/svn/llvm-project/llvm/tags/RELEASE_XY/Final
-
-  $ svn copy https://llvm.org/svn/llvm-project/cfe/branches/release_XY \
-             https://llvm.org/svn/llvm-project/cfe/tags/RELEASE_XY/Final
-
-  $ svn copy https://llvm.org/svn/llvm-project/dragonegg/branches/release_XY \
-             https://llvm.org/svn/llvm-project/dragonegg/tags/RELEASE_XY/Final
-
-  $ svn copy https://llvm.org/svn/llvm-project/test-suite/branches/release_XY \
-             https://llvm.org/svn/llvm-project/test-suite/tags/RELEASE_XY/Final
+  $ ./tag.sh -release X.Y.Z -final
 
 Update the LLVM Demo Page
 -------------------------
@@ -398,10 +358,10 @@ is what to do:
 
 #. Check out the ``www`` module from Subversion.
 
-#. Create a new subdirectory ``X.Y`` in the releases directory.
+#. Create a new sub-directory ``X.Y`` in the releases directory.
 
-#. Commit the ``llvm``, ``test-suite``, ``clang`` source, ``clang binaries``,
-   ``dragonegg`` source, and ``dragonegg`` binaries in this new directory.
+#. Commit the ``llvm``, ``test-suite``, ``clang`` source and binaries in this
+   new directory.
 
 #. Copy and commit the ``llvm/docs`` and ``LICENSE.txt`` files into this new
    directory.  The docs should be built with ``BUILD_FOR_WEBSITE=1``.
@@ -421,5 +381,6 @@ is what to do:
 Announce the Release
 ^^^^^^^^^^^^^^^^^^^^
 
-Have Chris send out the release announcement when everything is finished.
+Send an email to the list announcing the release, pointing people to all the
+relevant documentation, download pages and bugs fixed.
 

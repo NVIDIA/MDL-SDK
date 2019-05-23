@@ -298,8 +298,19 @@ enum Compilation_error {
     FUNC_VARIANT_WITH_DEFERRED_ARRAY_RET_TYPE,
     ARCHIVE_CONFLICT,
     MATERIAL_PTR_USED,
+    CAST_TYPES_UNRELATED,
+    CAST_MISSING_ENUM_VALUE_SRC,
+    CAST_MISSING_ENUM_VALUE_DST,
+    CAST_STRUCT_FIELD_COUNT,
+    CAST_STRUCT_FIELD_INCOMPATIBLE,
+    CAST_ARRAY_ELEMENT_INCOMPATIBLE,
+    CAST_ARRAY_DEFERRED_TO_IMM,
+    CAST_ARRAY_IMM_TO_DEFERRED,
+    CAST_ARRAY_DIFFERENT_LENGTH,
+    FORBIDDEN_ANNOTATION_PARAMETER_TYPE,
+    ANNOS_ON_ANNO_DECL_NOT_SUPPORTED,
 
-    MAX_ERROR_NUM = MATERIAL_PTR_USED,
+    MAX_ERROR_NUM = ANNOS_ON_ANNO_DECL_NOT_SUPPORTED,
     INTERNAL_COMPILER_ERROR = 999,
 };
 
@@ -337,6 +348,7 @@ enum Archiver_error {
     EXTRA_FILES_IGNORED,
     MDR_INVALID_HEADER,
     MDR_INVALID_HEADER_VERSION,
+    MDR_PRE_RELEASE_VERSION,
 
     INTERNAL_ARCHIVER_ERROR = 999,
 };
@@ -361,6 +373,7 @@ enum Encapsulator_error {
     MDLE_INVALID_HEADER,
     MDLE_INVALID_HEADER_VERSION,
     MDLE_FAILED_TO_ADD_ZIP_COMMENT,
+    MDLE_PRE_RELEASE_VERSION,
 
     MDLE_INTERNAL_ERROR = 999,
 };
@@ -370,6 +383,8 @@ enum Jit_backend_error {
     COMPILING_LLVM_CODE_FAILED = 100,
     LINKING_LIBDEVICE_FAILED,
     LINKING_LIBBSDF_FAILED,
+    PARSING_LIBDEVICE_MODULE_FAILED,
+    PARSING_LIBBSDF_MODULE_FAILED,
     PARSING_STATE_MODULE_FAILED,
     DEMANGLING_NAME_OF_EXTERNAL_FUNCTION_FAILED,
     WRONG_FUNCTYPE_FOR_MDL_RUNTIME_FUNCTION,
@@ -487,7 +502,10 @@ private:
         Kind kind;
 
         union U {
-            IType const             *type;
+            struct {
+                IType const         *type;
+                bool                suppress_prefix;
+            }                       type;
             struct {
                 IType const         *e_type;
                 int                 size;
@@ -536,13 +554,15 @@ public:
 
     /// Add a type argument.
     ///
-    /// \param type  the type
-    Error_params &add(IType const *type);
+    /// \param type     the type
+    /// \param suppress_prefix  if true, do not write "struct/enum" if front
+    Error_params &add(IType const *type, bool supress_prefix = false);
 
     /// Return the type argument of given index.
     ///
-    /// \param index  the argument index
-    IType const *get_type_arg(size_t index) const;
+    /// \param[in]  index           the argument index
+    /// \param[out] supress_prefix  if true, do not print the prefix
+    IType const *get_type_arg(size_t index, bool &suppress_prefix) const;
 
     /// Add an array type argument.
     ///

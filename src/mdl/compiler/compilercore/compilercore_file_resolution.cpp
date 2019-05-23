@@ -476,6 +476,7 @@ static char const *get_string_based_prefix()
 File_resolver::File_resolver(
     MDL const                                &mdl,
     IModule_cache                            *module_cache,
+    mi::base::Handle<IEntity_resolver> const &external_resolver,
     mi::base::Handle<IMDL_search_path> const &search_path,
     mi::base::Lock                           &sp_lock,
     Messages_impl                            &msgs,
@@ -485,6 +486,7 @@ File_resolver::File_resolver(
 , m_module_cache(module_cache)
 , m_msgs(msgs)
 , m_pos(NULL)
+, m_external_resolver(external_resolver)
 , m_search_path(search_path)
 , m_resolver_lock(sp_lock)
 , m_paths(m_alloc)
@@ -824,7 +826,7 @@ void File_resolver::split_module_file_system_path(
 bool File_resolver::check_no_dots(
     char const *s)
 {
-    bool absolute = s[0] == '/';
+    bool absolute = is_path_absolute(s);
     if (absolute)
         ++s;
 
@@ -962,22 +964,17 @@ string File_resolver::normalize_file_path(
         return simplify_path(current_module_path + "/" + file_path, '/');
     }
 
-    // absolute file paths
-    if (file_path[0] == '/') {
-        // reject invalid absolute paths
-        if (!check_no_dots(file_path.c_str()))
-            return string(m_alloc);
+    // reject invalid weak relative paths
+    if (!check_no_dots(file_path.c_str()))
+        return string(m_alloc);
 
+    // absolute file paths
+    if (is_path_absolute(file_path.c_str())) {
         // canonical path is the same as the file path
         return file_path;
     }
 
-
     // weak relative file paths
-
-    // reject invalid weak relative paths
-    if (!check_no_dots(file_path.c_str()))
-        return string(m_alloc);
 
     // special case (not in spec)
     if (module_file_system_path.empty())
@@ -1551,10 +1548,30 @@ bool File_resolver::file_exists(
     return false;
 }
 
+#ifdef MI_PLATFORM_WINDOWS
+
+static bool is_drive_letter(char c)
+{
+    return ((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z'));
+}
+
+#endif
+
 /// Check if a given MDL url is absolute.
 static bool is_url_absolute(char const *url)
 {
-    return url != NULL && url[0] == '/';
+    if (url == NULL)
+        return false;
+
+    if (url[0] == '/')
+        return true;
+
+#ifdef MI_PLATFORM_WINDOWS
+    if (strlen(url) > 1 && is_drive_letter(url[0]) && url[1] == ':')
+        return true;
+#endif
+
+    return false;
 }
 
 // Resolve a MDL file name.
@@ -1568,6 +1585,7 @@ string File_resolver::resolve_filename(
     UDIM_mode      &udim_mode)
 {
     abs_file_name.clear();
+    udim_mode = NO_UDIM;
 
     Position_store store(m_pos, pos);
 
@@ -1582,14 +1600,13 @@ string File_resolver::resolve_filename(
     // check if this is an mdle or a resource inside one
     bool is_mdle = false;
     if (is_resource && module_name != NULL) {
-        string module_name_str(module_name, m_alloc);
-        size_t l = module_name_str.size();
-        if(l > 5 &&
-           module_name_str[l - 5] == '.' &&
-           module_name_str[l - 4] == 'm' &&
-           module_name_str[l - 3] == 'd' &&
-           module_name_str[l - 2] == 'l' &&
-           module_name_str[l - 1] == 'e') {
+        size_t l = strlen(module_name);
+        if (l > 5 &&
+            module_name[l - 5] == '.' &&
+            module_name[l - 4] == 'm' &&
+            module_name[l - 3] == 'd' &&
+            module_name[l - 2] == 'l' &&
+            module_name[l - 1] == 'e') {
 
            is_mdle = true;
         }
@@ -1754,34 +1771,23 @@ string File_resolver::resolve_filename(
     string resolved_file_system_location(m_alloc);
     // Step 2.1 check for MDLe existence
     if (is_mdle) {
-
         string file(m_alloc);
-        if (is_resource)
-        {
+
+        if (is_resource) {
             file = simplify_path(url_mask, os_separator());
-            if(!is_url_absolute(file.c_str())) {
-                file =
-                    #if defined(MI_PLATFORM_WINDOWS)
-                        "/" +
-                    #endif
-                    current_working_directory + ':' + file;
+            if (!is_url_absolute(file.c_str())) {
+                // for MDLE, the current working directory is the MDLE file
+                file = current_working_directory + ':' + file;
             }
             file = convert_slashes_to_os_separators(file);
-
-            #if defined(MI_PLATFORM_WINDOWS)
-                file = file.substr(1);
-            #endif
         } else {
-            file = string(file_path, m_alloc);;
-            file = convert_slashes_to_os_separators(file);
+            file = convert_slashes_to_os_separators(url_mask);
         }
 
         if (!file_exists(file.c_str())) {
-
             string module_for_error_msg(m_alloc);
 
-            if (m_pos->get_start_line() == 0)
-            {
+            if (m_pos->get_start_line() == 0) {
                 if (!module_file_system_path_str.empty())
                     module_for_error_msg = module_file_system_path_str;
                 else if (module_name != NULL)
@@ -1798,22 +1804,16 @@ string File_resolver::resolve_filename(
         }
 
         resolved_file_system_location = file.c_str();
-
-    // Step 2: consider search paths
     } else {
+        // Step 2: consider search paths
         resolved_file_system_location = consider_search_paths(
             canonical_file_mask, is_resource, file_path, udim_mode);
 
         // the referenced resource is part of an MDLE
         // Note, this is invalid for mdl modules in the search paths!
-        if(resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
-            #if defined(MI_PLATFORM_WINDOWS)
-                size_t offset = 1;
-            #else
-                size_t offset = 0;
-            #endif
-            if (file_exists(file_path + offset))
-                resolved_file_system_location = file_path + offset;
+        if (resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
+            if (file_exists(file_path))
+                resolved_file_system_location = file_path;
         }
 
         if (resolved_file_system_location.empty()) {
@@ -1847,7 +1847,9 @@ string File_resolver::resolve_filename(
         is_resource,
         csp_is_archive,
         owner_is_string_module))
+    {
         return string(m_alloc);
+    }
 
     abs_file_name = resolved_file_system_location;
     return canonical_file_path;
@@ -1898,6 +1900,8 @@ void File_resolver::handle_file_error(MDL_zip_container_error_code err)
         return;
     case EC_INVALID_HEADER_VERSION:
         return;
+    case EC_PRE_RELEASE_VERSION:
+        return;
     case EC_INTERNAL_ERROR:
         return;
     }
@@ -1905,11 +1909,11 @@ void File_resolver::handle_file_error(MDL_zip_container_error_code err)
 
 
 // Resolve an import (module) name to the corresponding absolute module name.
-string File_resolver::resolve_import(
-    Position const         &pos,
-    char const             *import_name,
-    char const             *owner_name,
-    char const             *owner_filename)
+IMDL_import_result *File_resolver::resolve_import(
+    Position const &pos,
+    char const     *import_name,
+    char const     *owner_name,
+    char const     *owner_filename)
 {
     mark_module_search(import_name);
 
@@ -1924,18 +1928,16 @@ string File_resolver::resolve_import(
         import_file[l - 2] == 'l' &&
         import_file[l - 1] == 'e') {
 
-        // knowing that MDLE paths are absolute, the leading slashed need to be removed
-        if(import_name[0] == ':' && import_name[1] == ':') {
-            #if defined(MI_PLATFORM_WINDOWS)
-                import_file = import_file.substr(2);
-            #else
-                import_file = import_file.substr(1);
-            #endif
-        }
-        is_mdle = true;
+        // undo 'to_url' and remove the leading 'module ::' when handling MDLE
+        if(import_name[0] == ':' && import_name[1] == ':')
+            import_file = import_name + 2;
 
-    // no MDLe
+        // use forward slashes to detect absolute filenames correctly
+        std::replace(import_file.begin(), import_file.end(), '\\', '/');
+
+        is_mdle = true;
     } else {
+        // no MDLe
         import_file.append(".mdl");
     }
 
@@ -1944,8 +1946,16 @@ string File_resolver::resolve_import(
     if (owner_filename != NULL && owner_filename[0] == '\0')
         owner_filename = NULL;
 
-    UDIM_mode udim_mode = NO_UDIM;
+    if (m_external_resolver.is_valid_interface()) {
+        return m_external_resolver->resolve_module(
+                import_file.c_str(),
+                owner_filename,
+                owner_name,
+                &pos);
+    }
+
     string os_file_name(m_alloc);
+    UDIM_mode udim_mode = NO_UDIM;
     string canonical_file_name = resolve_filename(
         os_file_name,
         import_file.c_str(),
@@ -1956,29 +1966,32 @@ string File_resolver::resolve_import(
         udim_mode);
     MDL_ASSERT(udim_mode == NO_UDIM && "only resources should return a file mask");
     if (canonical_file_name.empty()) {
-        return string(m_alloc);
+        return NULL;
     }
 
+    Allocator_builder builder(m_alloc);
 
-    if(is_mdle) {
+    if (is_mdle) {
         string absolute_name = to_module_name(canonical_file_name.c_str());
+
         MDL_ASSERT(absolute_name.substr(absolute_name.size() - 5) == ".mdle");
-        return absolute_name;
+        return builder.create<MDL_import_result>(m_alloc, absolute_name, os_file_name);
     }
 
     string absolute_name = to_module_name(canonical_file_name.c_str());
     MDL_ASSERT(absolute_name.substr(absolute_name.size() - 4) == ".mdl");
-    return absolute_name.substr(0, absolute_name.size() - 4);
+    return builder.create<MDL_import_result>(
+        m_alloc,
+        absolute_name.substr(0, absolute_name.size() - 4),
+        os_file_name);
 }
 
 // Resolve a resource (file) name to the corresponding absolute file path.
-string File_resolver::resolve_resource(
-    string         &abs_file_name,
+IMDL_resource_set *File_resolver::resolve_resource(
     Position const &pos,
     char const     *import_file,
     char const     *owner_name,
-    char const     *owner_filename,
-    UDIM_mode      &udim_mode)
+    char const     *owner_filename)
 {
     mark_resource_search(import_file);
 
@@ -1989,22 +2002,47 @@ string File_resolver::resolve_resource(
 
     // Make owner file system path absolute
     string owner_filename_str(m_alloc);
-    if (owner_filename == NULL)
+    if (owner_filename == NULL) {
         owner_filename_str = "";
-    else {
+    } else {
         MDL_ASSERT(is_path_absolute(owner_filename));
         owner_filename_str = owner_filename;
     }
 
-    udim_mode = NO_UDIM;
+    if (m_external_resolver.is_valid_interface()) {
+        return m_external_resolver->resolve_resource_file_name(
+            import_file,
+            owner_filename,
+            owner_name,
+            &pos);
+    }
 
+    UDIM_mode udim_mode = NO_UDIM;
     string os_file_name(m_alloc);
-    abs_file_name = resolve_filename(
+    string abs_file_name = resolve_filename(
         os_file_name, import_file, /*is_resource=*/true,
         owner_filename_str.c_str(), owner_name, &pos, udim_mode);
-    return os_file_name;
-}
 
+    if (abs_file_name.empty())
+        return NULL;
+
+    if (udim_mode != NO_UDIM) {
+        // lookup ALL files for the given mask
+        return MDL_resource_set::from_mask(
+            m_alloc,
+            abs_file_name.c_str(),
+            os_file_name.c_str(),
+            udim_mode);
+    } else {
+        // single return
+        Allocator_builder builder(m_alloc);
+
+        return builder.create<MDL_resource_set>(
+            m_alloc,
+            abs_file_name.c_str(),
+            os_file_name.c_str());
+    }
+}
 
 // Checks whether the given module source exists.
 IInput_stream *File_resolver::open(
@@ -2016,12 +2054,7 @@ IInput_stream *File_resolver::open(
     string resolved_file_path(m_alloc);
 
     if (canonical_file_path.size() > 5 &&
-        canonical_file_path.substr(canonical_file_path.size() - 5) == ".mdle") {
-#ifdef MI_PLATFORM_WINDOWS
-            resolved_file_path = string(canonical_file_path.c_str() + 2, m_alloc);
-#else
-            resolved_file_path = string(canonical_file_path.c_str() + 1, m_alloc);
-#endif
+            canonical_file_path.substr(canonical_file_path.size() - 5) == ".mdle") {
         resolved_file_path.append(":main.mdl");
     } else {
         canonical_file_path += ".mdl";
@@ -2049,15 +2082,14 @@ IInput_stream *File_resolver::open(
 
     Allocator_builder builder(m_alloc);
 
-    switch (file->get_kind())
-    {
+    switch (file->get_kind()) {
     case File_handle::FH_FILE:
         return builder.create<Simple_file_input_stream>(
             m_alloc, file, resolved_file_path.c_str());
 
     case File_handle::FH_ARCHIVE:
         {
-            MDL_zip_container_archive* archive = static_cast<MDL_zip_container_archive*>(
+            MDL_zip_container_archive *archive = static_cast<MDL_zip_container_archive *>(
                 file->get_container());
             mi::base::Handle<Manifest const> manifest(archive->get_manifest());
             return builder.create<Archive_input_stream>(
@@ -2065,10 +2097,8 @@ IInput_stream *File_resolver::open(
         }
 
     case File_handle::FH_MDLE:
-        {
-            return builder.create<Mdle_input_stream>(
-                m_alloc, file, resolved_file_path.c_str());
-        }
+        return builder.create<Mdle_input_stream>(
+            m_alloc, file, resolved_file_path.c_str());
 
     default:
         return NULL;
@@ -2197,30 +2227,37 @@ MDL_resource_set::MDL_resource_set(
     1,
     Resource_entry(Arena_strdup(m_arena, url), Arena_strdup(m_arena, filename), 0, 0),
     &m_arena)
-, m_is_udim_set(false)
+, m_udim_mode(NO_UDIM)
+, m_url_mask(url, alloc)
+, m_filename_mask(filename, alloc)
 {
 }
 
-// Empty Constructor.
+// Empty Constructor from masks.
 MDL_resource_set::MDL_resource_set(
-    IAllocator *alloc)
+    IAllocator *alloc,
+    UDIM_mode  udim_mode,
+    char const *url_mask,
+    char const *filename_mask)
+
 : Base(alloc)
 , m_arena(alloc)
 , m_entries(&m_arena)
-, m_is_udim_set(true)
+, m_udim_mode(udim_mode)
+, m_url_mask(url_mask, alloc)
+, m_filename_mask(filename_mask, alloc)
 {
 }
 
 // Create a resource set from a file mask.
 MDL_resource_set *MDL_resource_set::from_mask(
-    IAllocator               *alloc,
-    char const               *url,
-    char const               *file_mask,
-    File_resolver::UDIM_mode udim_mode)
+    IAllocator *alloc,
+    char const *url,
+    char const *file_mask,
+    UDIM_mode  udim_mode)
 {
     char const *p = strstr(file_mask, ".mdr:");
-    if (p != NULL)
-    {
+    if (p != NULL) {
         string container_name(file_mask, p + 4, alloc);
         p += 5;
         return from_mask_container(
@@ -2228,8 +2265,7 @@ MDL_resource_set *MDL_resource_set::from_mask(
     }
 
     p = strstr(file_mask, ".mdle:");
-    if (p != NULL)
-    {
+    if (p != NULL) {
         string container_name(file_mask, p + 5, alloc);
         p += 6;
         return from_mask_container(
@@ -2237,15 +2273,14 @@ MDL_resource_set *MDL_resource_set::from_mask(
     }
 
     return from_mask_file(alloc, url, file_mask, udim_mode);
-
 }
 
 // Create a resource set from a file mask describing files on disk.
 MDL_resource_set *MDL_resource_set::from_mask_file(
-    IAllocator               *alloc,
-    char const               *url,
-    char const               *file_mask,
-    File_resolver::UDIM_mode udim_mode)
+    IAllocator *alloc,
+    char const *url,
+    char const *file_mask,
+    UDIM_mode  udim_mode)
 {
     Directory dir(alloc);
     string dname(alloc);
@@ -2275,20 +2310,20 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
     char const *q = NULL;
 
     switch (udim_mode) {
-    case File_resolver::NO_UDIM:
+    case NO_UDIM:
         MDL_ASSERT(!"UDIM mode not set");
         return NULL;
-    case File_resolver::UM_MARI:
+    case UM_MARI:
         // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
         p = strstr(file_mask, "[0-9][0-9][0-9][0-9]");
         q = strstr(url, UDIM_MARI_MARKER);
         break;
-    case File_resolver::UM_ZBRUSH:
+    case UM_ZBRUSH:
         // 0-based (Zbrush), expands to "_u0_v0" for the first tile
         p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
         q = strstr(url, UDIM_ZBRUSH_MARKER);
         break;
-    case File_resolver::UM_MUDBOX:
+    case UM_MUDBOX:
         // 1-based (Mudbox), expands to "_u1_v1" for the first tile
         p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
         q = strstr(url, UDIM_MUDBOX_MARKER);
@@ -2304,7 +2339,7 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
 
     Allocator_builder builder(alloc);
 
-    MDL_resource_set *s = builder.create<MDL_resource_set>(alloc);
+    MDL_resource_set *s = builder.create<MDL_resource_set>(alloc, udim_mode, url, file_mask);
 
     for (char const *entry = dir.read(); entry != NULL; entry = dir.read()) {
         if (utf8_match(file_mask, entry)) {
@@ -2324,12 +2359,12 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
 
 // Create a resource set from a file mask describing files on an archive.
 MDL_resource_set *MDL_resource_set::from_mask_container(
-    IAllocator               *alloc,
-    char const               *url,
-    char const               *container_name,
-    File_handle::Kind        container_kind,
-    char const               *file_mask,
-    File_resolver::UDIM_mode udim_mode)
+    IAllocator        *alloc,
+    char const        *url,
+    char const        *container_name,
+    File_handle::Kind container_kind,
+    char const        *file_mask,
+    UDIM_mode         udim_mode)
 {
     MDL_zip_container_error_code err = EC_OK;
     MDL_zip_container* container = NULL;
@@ -2349,20 +2384,20 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
         char const *q = NULL;
 
         switch (udim_mode) {
-        case File_resolver::NO_UDIM:
+        case NO_UDIM:
             MDL_ASSERT(!"UDIM mode not set");
             return NULL;
-        case File_resolver::UM_MARI:
+        case UM_MARI:
             // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
             p = strstr(file_mask, "[0-9][0-9][0-9][0-9]");
             q = strstr(url, UDIM_MARI_MARKER);
             break;
-        case File_resolver::UM_ZBRUSH:
+        case UM_ZBRUSH:
             // 0-based (Zbrush), expands to "_u0_v0" for the first tile
             p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
             q = strstr(url, UDIM_ZBRUSH_MARKER);
             break;
-        case File_resolver::UM_MUDBOX:
+        case UM_MUDBOX:
             // 1-based (Mudbox), expands to "_u1_v1" for the first tile
             p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
             q = strstr(url, UDIM_MUDBOX_MARKER);
@@ -2378,7 +2413,7 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
 
         Allocator_builder builder(alloc);
 
-        MDL_resource_set *s = builder.create<MDL_resource_set>(alloc);
+        MDL_resource_set *s = builder.create<MDL_resource_set>(alloc, udim_mode, url, file_mask);
 
         // ZIP uses '/'
         string forward(file_mask, alloc);
@@ -2414,19 +2449,19 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
 
 // Parse a file name and enter it into a resource set.
 void MDL_resource_set::parse_u_v(
-    MDL_resource_set         *s,
-    char const               *name,
-    size_t                   ofs,
-    char const               *url,
-    string const             &prefix,
-    char                     sep,
-    File_resolver::UDIM_mode udim_mode)
+    MDL_resource_set *s,
+    char const       *name,
+    size_t           ofs,
+    char const       *url,
+    string const     &prefix,
+    char             sep,
+    UDIM_mode        udim_mode)
 {
     int u = 0, v = 0, sign = 1;
     switch (udim_mode) {
-    case File_resolver::NO_UDIM:
+    case NO_UDIM:
         break;
-    case File_resolver::UM_MARI:
+    case UM_MARI:
         // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
         {
             char const *n = name + ofs;
@@ -2450,9 +2485,9 @@ void MDL_resource_set::parse_u_v(
             );
         }
         break;
-    case File_resolver::UM_ZBRUSH:
+    case UM_ZBRUSH:
         // 0-based (Zbrush), expands to "_u0_v0" for the first tile
-    case File_resolver::UM_MUDBOX:
+    case UM_MUDBOX:
         // 1-based (Mudbox), expands to "_u1_v1" for the first tile
         {
             char const *n = name + ofs + 2;
@@ -2486,7 +2521,7 @@ void MDL_resource_set::parse_u_v(
             }
             v *= sign;
 
-            if (udim_mode == File_resolver::UM_MUDBOX) {
+            if (udim_mode == UM_MUDBOX) {
                 u -= 1;
                 v -= 1;
             }
@@ -2502,6 +2537,18 @@ void MDL_resource_set::parse_u_v(
         }
         break;
     }
+}
+
+// Get the MDL URL mask of the ordered set.
+char const *MDL_resource_set::get_mdl_url_mask() const
+{
+    return m_url_mask.c_str();
+}
+
+// Get the file name mask of the ordered set.
+char const *MDL_resource_set::get_filename_mask() const
+{
+    return m_filename_mask.c_str();
 }
 
 // Get the number of resolved file names.
@@ -2530,7 +2577,7 @@ char const *MDL_resource_set::get_mdl_url(size_t i) const
 bool MDL_resource_set::get_udim_mapping(size_t i, int &u, int &v) const
 {
     u = v = 0;
-    if (m_is_udim_set) {
+    if (m_udim_mode != NO_UDIM) {
         if (i < m_entries.size()) {
             u = m_entries[i].u;
             v = m_entries[i].v;
@@ -2557,6 +2604,101 @@ IMDL_resource_reader *MDL_resource_set::open_reader(size_t i) const
     return NULL;
 }
 
+// Get the UDIM mode for this set.
+UDIM_mode MDL_resource_set::get_udim_mode() const
+{
+    return m_udim_mode;
+}
+
+// --------------------------------------------------------------------------
+
+// Constructor.
+MDL_import_result::MDL_import_result(
+    IAllocator   *alloc,
+    string const &abs_name,
+    string const &os_file_name)
+: Base(alloc)
+, m_abs_name(abs_name)
+, m_os_file_name(os_file_name)
+{
+}
+
+// Return the absolute MDL name of the found entity, or NULL, if the entity could not be resolved.
+char const *MDL_import_result::get_absolute_name() const
+{
+    return m_abs_name.empty() ? NULL : m_abs_name.c_str();
+}
+
+// Return the OS-dependent file name of the found entity, or NULL, if the entity could not
+// be resolved.
+char const *MDL_import_result::get_file_name() const
+{
+    return m_os_file_name.empty() ? NULL : m_os_file_name.c_str();
+}
+
+// Return an input stream to the given entity if found, NULL otherwise.
+IInput_stream *MDL_import_result::open(Thread_context &ctx) const
+{
+    if (m_os_file_name.empty())
+        return NULL;
+
+    IAllocator *alloc = get_allocator();
+
+    string resolved(m_os_file_name);
+
+    size_t l = m_os_file_name.size();
+    if (l > 5 &&
+            m_os_file_name[l - 1] == 'e' &&
+            m_os_file_name[l - 2] == 'l' &&
+            m_os_file_name[l - 3] == 'd' &&
+            m_os_file_name[l - 4] == 'm' &&
+            m_os_file_name[l - 5] == '.') {
+        resolved.append(":main.mdl");
+    }
+
+    MDL_zip_container_error_code  err;
+    File_handle *file = File_handle::open(alloc, resolved.c_str(), err);
+    if (file == NULL) {
+        return NULL;
+    }
+
+    // load a pre-released version (0.2) will probably get an error at some point in time
+    if (err == EC_PRE_RELEASE_VERSION)
+    {
+        Position_impl zero(0, 0, 0, 0);
+
+        string msg(ctx.access_messages_impl().format_msg(
+            MDLE_PRE_RELEASE_VERSION, 'E', Error_params(alloc).add(m_os_file_name)));
+        ctx.access_messages_impl().add_warning_message(
+            MDLE_PRE_RELEASE_VERSION, 'E', 0, &zero, msg.c_str());
+    }
+
+
+    Allocator_builder builder(alloc);
+
+    switch (file->get_kind()) {
+    case File_handle::FH_FILE:
+        return builder.create<Simple_file_input_stream>(
+            alloc, file, resolved.c_str());
+
+    case File_handle::FH_ARCHIVE:
+        {
+            MDL_zip_container_archive *archive = static_cast<MDL_zip_container_archive *>(
+                file->get_container());
+            mi::base::Handle<Manifest const> manifest(archive->get_manifest());
+            return builder.create<Archive_input_stream>(
+                alloc, file, resolved.c_str(), manifest.get());
+        }
+
+    case File_handle::FH_MDLE:
+        return builder.create<Mdle_input_stream>(
+            alloc, file, resolved.c_str());
+
+    default:
+        return NULL;
+    }
+}
+
 // --------------------------------------------------------------------------
 
 // Constructor.
@@ -2564,28 +2706,31 @@ Entity_resolver::Entity_resolver(
     IAllocator *alloc,
     MDL const                                *compiler,
     IModule_cache                            *module_cache,
+    mi::base::Handle<IEntity_resolver> const &external_resolver,
     mi::base::Handle<IMDL_search_path> const &search_path)
 : Base(alloc)
 , m_msg_list(alloc, /*owner_fname=*/"")
 , m_resolver(
     *compiler,
     module_cache,
+    external_resolver,
     search_path,
     compiler->get_search_path_lock(),
     m_msg_list,
     /*front_path=*/NULL)
-, m_search_path(search_path)
-, m_tmp(alloc)
 {
 }
 
 // Resolve a resource file name.
-MDL_resource_set *Entity_resolver::resolve_resource_file_name(
+IMDL_resource_set *Entity_resolver::resolve_resource_file_name(
     char const     *file_path,
     char const     *owner_file_path,
     char const     *owner_name,
     Position const *pos)
 {
+    if (!file_path)
+        return NULL;
+
     Position_impl zero(0, 0, 0, 0);
 
     if (pos == NULL)
@@ -2593,36 +2738,11 @@ MDL_resource_set *Entity_resolver::resolve_resource_file_name(
 
     m_msg_list.clear();
 
-    File_resolver::UDIM_mode udim_mode = File_resolver::NO_UDIM;
-
-    string abs_file_name(get_allocator());
-    string resolved_file_path = m_resolver.resolve_resource(
-        abs_file_name,
+    return m_resolver.resolve_resource(
         *pos,
         file_path,
         owner_name,
-        owner_file_path,
-        udim_mode);
-
-    if (resolved_file_path.empty())
-        return NULL;
-
-    if (udim_mode != File_resolver::NO_UDIM) {
-        // lookup ALL files for the given mask
-        return MDL_resource_set::from_mask(
-            get_allocator(),
-            abs_file_name.c_str(),
-            resolved_file_path.c_str(),
-            udim_mode);
-    } else {
-        // single return
-        Allocator_builder builder(get_allocator());
-
-        return builder.create<MDL_resource_set>(
-            get_allocator(),
-            abs_file_name.c_str(),
-            resolved_file_path.c_str());
-    }
+        owner_file_path);
 }
 
 // Opens a resource.
@@ -2639,44 +2759,40 @@ IMDL_resource_reader *Entity_resolver::open_resource(
 
     m_msg_list.clear();
 
-    File_resolver::UDIM_mode udim_mode = File_resolver::NO_UDIM;
-
-    string abs_file_name(get_allocator());
-    string resolved_file_path = m_resolver.resolve_resource(
-        abs_file_name,
+    mi::base::Handle<IMDL_resource_set> res(m_resolver.resolve_resource(
         *pos,
         file_path,
         owner_name,
-        owner_file_path,
-        udim_mode);
+        owner_file_path));
 
-    MDL_ASSERT(
-        udim_mode == File_resolver::NO_UDIM &&
-        "open_resource() cannot be used to open a UDIM mask");
-
-    if (udim_mode != File_resolver::NO_UDIM || resolved_file_path.empty())
+    if (!res.is_valid_interface())
         return NULL;
 
-    MDL_zip_container_error_code err = EC_OK;
-    IMDL_resource_reader *res = open_resource_file(
-        get_allocator(),
-        abs_file_name.c_str(),
-        resolved_file_path.c_str(),
-        err);
-    // FIXME: handle error?
-    return res;
+    MDL_ASSERT(
+        res->get_udim_mode() == NO_UDIM &&
+        "open_resource() cannot be used to open a UDIM mask");
+
+    return res->open_reader(0);
 }
 
 // Resolve a module name.
-char const *Entity_resolver::resolve_module_name(
-    char const *name)
+IMDL_import_result *Entity_resolver::resolve_module(
+    char const     *mdl_name,
+    char const     *owner_file_path,
+    char const     *owner_name,
+    Position const *pos)
 {
     Position_impl zero(0, 0, 0, 0);
 
     m_msg_list.clear();
 
-    m_tmp = m_resolver.resolve_import(zero, name, /*owner_name=*/NULL, /*owner_filename=*/NULL);
-    return m_tmp.c_str();
+    Allocator_builder builder(get_allocator());
+
+    return m_resolver.resolve_import(
+        pos == NULL ? zero : *pos,
+        mdl_name,
+        owner_name,
+        owner_file_path);
 }
 
 // Access messages of last resolver operation.

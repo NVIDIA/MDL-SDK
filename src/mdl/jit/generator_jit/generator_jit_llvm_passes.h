@@ -32,6 +32,7 @@
 #include <llvm/ADT/StringMap.h>
 
 namespace llvm {
+    class FunctionPass;
     class ModulePass;
     class PassRegistry;
 
@@ -42,9 +43,7 @@ namespace llvm {
     ModulePass *createDeleteUnusedLibDevicePass();
 
     /// Creates the NVVM reflect pass.
-    ///
-    /// \param Mapping  a map of NVVM defines to its values
-    ModulePass *createNVVMReflectPass(StringMap<int> const &Mapping);
+    FunctionPass *createNVVMReflectPass();
 }  // llvm
 
 #endif // MDL_GENERATOR_JIT_LLVM_PASSES_H

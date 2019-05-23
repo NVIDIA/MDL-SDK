@@ -56,6 +56,7 @@ public:
         TK_STRING,                  ///< The string type.
         TK_LIGHT_PROFILE,           ///< The light profile type.
         TK_BSDF,                    ///< The bsdf type.
+        TK_HAIR_BSDF,               ///< The hair_bsdf type.
         TK_EDF,                     ///< The edf type.
         TK_VDF,                     ///< The vdf type.
         TK_VECTOR,                  ///< A vector type.
@@ -253,6 +254,14 @@ class IType_bsdf : public IType_df
 public:
     /// The kind of this subclass.
     static Kind const s_kind = TK_BSDF;
+};
+
+/// The hair_bsdf type.
+class IType_hair_bsdf : public IType_df
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_HAIR_BSDF;
 };
 
 /// The edf type.
@@ -550,6 +559,7 @@ inline IType_reference *as<IType_reference>(IType *type) {
     type = type->skip_type_alias();
     switch (type->get_kind()) {
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_VDF:
     case IType::TK_EDF:
     case IType::TK_LIGHT_PROFILE:
@@ -573,6 +583,7 @@ inline IType_df *as<IType_df>(IType *type) {
     type = type->skip_type_alias();
     switch (type->get_kind()) {
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_VDF:
     case IType::TK_EDF:
         return static_cast<IType_df *>(type);
@@ -655,6 +666,7 @@ template<>
 inline bool is<IType_reference>(IType const *type) {
     switch (type->get_kind()) {
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_VDF:
     case IType::TK_EDF:
     case IType::TK_LIGHT_PROFILE:
@@ -671,6 +683,7 @@ template<>
 inline bool is<IType_df>(IType const *type) {
     switch (type->get_kind()) {
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_VDF:
     case IType::TK_EDF:
         return true;
@@ -767,6 +780,9 @@ public:
 
     /// Create a new type bsdf instance.
     virtual IType_bsdf const *create_bsdf() = 0;
+
+    /// Create a new type hair_bsdf instance.
+    virtual IType_hair_bsdf const *create_hair_bsdf() = 0;
 
     /// Create a new type edf instance.
     virtual IType_edf const *create_edf() = 0;

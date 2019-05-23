@@ -565,6 +565,38 @@ public:
     ///       \em not base application logic on it.
     virtual const IString* dump( const IAnnotation_list* list, const char* name, Size depth = 0)
         const = 0;
+
+    /// Returns an expression which casts the source expression to the \p target_type.
+    ///
+    /// This is a convenience function that creates an instance of the cast operator with
+    /// the necessary arguments, stores it in the database and creates and returns an
+    /// #mi::neuraylib::IExpression_call using the just created function. If \p force_cast is
+    /// set to \c true, the cast will always be inserted, even if the types match. If \p force_cast
+    /// is set to \c false, the original expression is returned for identical types.
+    /// If the type of \p src_expr and \p target_type are not compatible, \c NULL is returned.
+    ///
+    /// \param src_expr     The expression whose type is supposed to be casted.
+    /// \param target_type  The result type of the cast.
+    /// \param cast_db_name This name is used when storing the instance
+    ///                     of the cast-operator function into the database. If the name is already
+    ///                     taken by another DB element, this string will be used as the base for
+    ///                     generating a unique name. If NULL, a unique name is generated.
+    /// \param force_cast   If true, the cast will be created even if the types are
+    ///                     identical. Please note that a cast cannot be forced for
+    ///                     incompatible types.
+    /// \param errors       An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                     written. The error codes have the following meaning:
+    ///                     - 0: Success.
+    ///                     - 1: Invalid parameters (\c NULL pointer).
+    ///                     - 2: The type of \p src_expr cannot be cast to \p target_type.
+    ///
+    /// \return             The resulting expression or \c NULL in case of failure.
+    virtual IExpression* create_cast(
+        IExpression* src_expr,
+        const IType* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        Sint32 *errors = 0) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_types

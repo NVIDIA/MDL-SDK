@@ -234,6 +234,7 @@ The following types have built-in support in YAML I/O:
 * float
 * double
 * StringRef
+* std::string
 * int64_t
 * int32_t
 * int16_t
@@ -331,7 +332,7 @@ as a field type:
       }
     };
 
-When reading YAML, if the string found does not match any of the the strings
+When reading YAML, if the string found does not match any of the strings
 specified by enumCase() methods, an error is automatically generated.
 When writing YAML, if the value being written does not match any of the values
 specified by the enumCase() methods, a runtime assertion is triggered.
@@ -398,6 +399,42 @@ the above schema, a same valid YAML document is:
     name:    Tom
     flags:   [ pointy, flat ]
 
+Sometimes a "flags" field might contains an enumeration part
+defined by a bit-mask.
+
+.. code-block:: c++
+
+    enum {
+      flagsFeatureA = 1,
+      flagsFeatureB = 2,
+      flagsFeatureC = 4,
+
+      flagsCPUMask = 24,
+
+      flagsCPU1 = 8,
+      flagsCPU2 = 16
+    };
+
+To support reading and writing such fields, you need to use the maskedBitSet()
+method and provide the bit values, their names and the enumeration mask.
+
+.. code-block:: c++
+
+    template <>
+    struct ScalarBitSetTraits<MyFlags> {
+      static void bitset(IO &io, MyFlags &value) {
+        io.bitSetCase(value, "featureA",  flagsFeatureA);
+        io.bitSetCase(value, "featureB",  flagsFeatureB);
+        io.bitSetCase(value, "featureC",  flagsFeatureC);
+        io.maskedBitSetCase(value, "CPU1",  flagsCPU1, flagsCPUMask);
+        io.maskedBitSetCase(value, "CPU2",  flagsCPU2, flagsCPUMask);
+      }
+    };
+
+YAML I/O (when writing) will apply the enumeration mask to the flags field,
+and compare the result and values from the bitset. As in case of a regular
+bitset, each that matches will cause the corresponding string to be added
+to the flow sequence.
 
 Custom Scalar
 -------------
@@ -419,15 +456,68 @@ looks like:
 
     template <>
     struct ScalarTraits<MyCustomType> {
-      static void output(const T &value, llvm::raw_ostream &out) {
+      static void output(const MyCustomType &value, void*,
+                         llvm::raw_ostream &out) {
         out << value;  // do custom formatting here
       }
-      static StringRef input(StringRef scalar, T &value) {
+      static StringRef input(StringRef scalar, void*, MyCustomType &value) {
         // do custom parsing here.  Return the empty string on success,
         // or an error message on failure.
-        return StringRef(); 
+        return StringRef();
+      }
+      // Determine if this scalar needs quotes.
+      static QuotingType mustQuote(StringRef) { return QuotingType::Single; }
+    };
+
+Block Scalars
+-------------
+
+YAML block scalars are string literals that are represented in YAML using the
+literal block notation, just like the example shown below:
+
+.. code-block:: yaml
+
+    text: |
+      First line
+      Second line
+
+The YAML I/O library provides support for translating between YAML block scalars
+and specific C++ types by allowing you to specialize BlockScalarTraits<> on
+your data type. The library doesn't provide any built-in support for block
+scalar I/O for types like std::string and llvm::StringRef as they are already
+supported by YAML I/O and use the ordinary scalar notation by default.
+
+BlockScalarTraits specializations are very similar to the
+ScalarTraits specialization - YAML I/O will provide the native type and your
+specialization must create a temporary llvm::StringRef when writing, and
+it will also provide an llvm::StringRef that has the value of that block scalar
+and your specialization must convert that to your native data type when reading.
+An example of a custom type with an appropriate specialization of
+BlockScalarTraits is shown below:
+
+.. code-block:: c++
+
+    using llvm::yaml::BlockScalarTraits;
+    using llvm::yaml::IO;
+
+    struct MyStringType {
+      std::string Str;
+    };
+
+    template <>
+    struct BlockScalarTraits<MyStringType> {
+      static void output(const MyStringType &Value, void *Ctxt,
+                         llvm::raw_ostream &OS) {
+        OS << Value.Str;
+      }
+
+      static StringRef input(StringRef Scalar, void *Ctxt,
+                             MyStringType &Value) {
+        Value.Str = Scalar.str();
+        return StringRef();
       }
     };
+
     
 
 Mappings
@@ -640,12 +730,77 @@ The YAML syntax supports tags as a way to specify the type of a node before
 it is parsed. This allows dynamic types of nodes.  But the YAML I/O model uses
 static typing, so there are limits to how you can use tags with the YAML I/O
 model. Recently, we added support to YAML I/O for checking/setting the optional 
-tag on a map. Using this functionality it is even possbile to support differnt 
-mappings, as long as they are convertable.  
+tag on a map. Using this functionality it is even possbile to support different 
+mappings, as long as they are convertible.  
 
 To check a tag, inside your mapping() method you can use io.mapTag() to specify
 what the tag should be.  This will also add that tag when writing yaml.
 
+Validation
+----------
+
+Sometimes in a yaml map, each key/value pair is valid, but the combination is
+not.  This is similar to something having no syntax errors, but still having
+semantic errors.  To support semantic level checking, YAML I/O allows
+an optional ``validate()`` method in a MappingTraits template specialization.  
+
+When parsing yaml, the ``validate()`` method is call *after* all key/values in 
+the map have been processed. Any error message returned by the ``validate()`` 
+method during input will be printed just a like a syntax error would be printed.
+When writing yaml, the ``validate()`` method is called *before* the yaml 
+key/values  are written.  Any error during output will trigger an ``assert()`` 
+because it is a programming error to have invalid struct values.
+
+
+.. code-block:: c++
+
+    using llvm::yaml::MappingTraits;
+    using llvm::yaml::IO;
+    
+    struct Stuff {
+      ...
+    };
+
+    template <>
+    struct MappingTraits<Stuff> {
+      static void mapping(IO &io, Stuff &stuff) {
+      ...
+      }
+      static StringRef validate(IO &io, Stuff &stuff) {
+        // Look at all fields in 'stuff' and if there
+        // are any bad values return a string describing
+        // the error.  Otherwise return an empty string.
+        return StringRef();
+      }
+    };
+
+Flow Mapping
+------------
+A YAML "flow mapping" is a mapping that uses the inline notation
+(e.g { x: 1, y: 0 } ) when written to YAML. To specify that a type should be
+written in YAML using flow mapping, your MappingTraits specialization should
+add "static const bool flow = true;". For instance:
+
+.. code-block:: c++
+
+    using llvm::yaml::MappingTraits;
+    using llvm::yaml::IO;
+
+    struct Stuff {
+      ...
+    };
+
+    template <>
+    struct MappingTraits<Stuff> {
+      static void mapping(IO &io, Stuff &stuff) {
+        ...
+      }
+
+      static const bool flow = true;
+    }
+
+Flow mappings are subject to line wrapping according to the Output object
+configuration.
 
 Sequence
 ========
@@ -690,9 +845,11 @@ add "static const bool flow = true;".  For instance:
   };
 
 With the above, if you used MyList as the data type in your native data 
-structures, then then when converted to YAML, a flow sequence of integers 
+structures, then when converted to YAML, a flow sequence of integers 
 will be used (e.g. [ 10, -3, 4 ]).
 
+Flow sequences are subject to line wrapping according to the Output object
+configuration.
 
 Utility Macros
 --------------
@@ -756,14 +913,14 @@ Output
 
 The llvm::yaml::Output class is used to generate a YAML document from your 
 in-memory data structures, using traits defined on your data types.  
-To instantiate an Output object you need an llvm::raw_ostream, and optionally 
-a context pointer:
+To instantiate an Output object you need an llvm::raw_ostream, an optional 
+context pointer and an optional wrapping column:
 
 .. code-block:: c++
 
       class Output : public IO {
       public:
-        Output(llvm::raw_ostream &, void *context=NULL);
+        Output(llvm::raw_ostream &, void *context = NULL, int WrapColumn = 70);
     
 Once you have an Output object, you can use the C++ stream operator on it
 to write your native data as YAML. One thing to recall is that a YAML file
@@ -771,6 +928,10 @@ can contain multiple "documents".  If the top level data structure you are
 streaming as YAML is a mapping, scalar, or sequence, then Output assumes you
 are generating one document and wraps the mapping output 
 with  "``---``" and trailing "``...``".  
+
+The WrapColumn parameter will cause the flow mappings and sequences to
+line-wrap when they go over the supplied column. Pass 0 to completely
+suppress the wrapping.
 
 .. code-block:: c++
    
@@ -859,7 +1020,7 @@ object.  For example:
      // Reading multiple documents in one file
      using llvm::yaml::Input;
 
-     LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(std::vector<MyDocType>)
+     LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(MyDocType)
      
      Input yin(mb.getBuffer());
      

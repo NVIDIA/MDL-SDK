@@ -607,8 +607,8 @@
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="121" approved="yes">
-      <source xml:space="preserve">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnell effect)</source>
-      <target xml:space="preserve">Farbige Reflektion falls der Wert auf true gesetzt wird. Ist er false, wird weiss reflektiert in Abhängigkeit der Richtung des Brechungsindex (Fresnell Effekt) </target>
+      <source xml:space="preserve">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect)</source>
+      <target xml:space="preserve">Farbige Reflektion falls der Wert auf true gesetzt wird. Ist er false, wird weiss reflektiert in Abhängigkeit der Richtung des Brechungsindex (Fresnel Effekt) </target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="122" approved="yes">
@@ -717,7 +717,7 @@
       <note from="translator">::anno::display_name(string)</note>
     </trans-unit>
     <trans-unit id="143" approved="yes">
-      <source xml:space="preserve">Controls dispersion. 0 switches dispersion off, dispersive materials have abbe numbers between 25 and 85</source>
+      <source xml:space="preserve">Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85</source>
       <target xml:space="preserve">Kontrolliert Dispersion. Der Wert 0 deaktiviert Dispersion. Dispersive Materialien haben einen Abbeschen Wert von 25 bis 85</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
@@ -797,7 +797,7 @@
       <note from="translator">::anno::description(string)</note>
     </trans-unit>
     <trans-unit id="159" approved="yes">
-      <source xml:space="preserve">Controls dispersion. 0.0 switches dispersion off, dispersive materials have abbe numbers between 25.0 and 85.0</source>
+      <source xml:space="preserve">Controls dispersion. 0.0 switches dispersion off, dispersive materials have Abbe numbers between 25.0 and 85.0</source>
       <target xml:space="preserve">Kontrolliert Dispersion. Der Wert 0 deaktiviert Dispersion. Dispersive Materialien haben einen Abbeschen Wert von 25 bis 85</target>
       <note from="translator">::anno::description(string)</note>
     </trans-unit>

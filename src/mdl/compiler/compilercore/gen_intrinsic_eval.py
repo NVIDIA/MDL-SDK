@@ -655,12 +655,12 @@ class SignatureParser:
 					# support modf for float types
 					kind = self.m_inv_types[arg_tp]
 					self.write(f, "IValue_%s const *a = cast<IValue_%s>(arguments[0]);\n" % (kind, kind))
-					self.write(f, "%s t_s, t_c;\n" % kind)
-					self.write(f, "t_s = modf(a->get_value(), t_c);\n")
+					self.write(f, "%s t_fractional, t_integral;\n" % kind)
+					self.write(f, "t_fractional = modf(a->get_value(), t_integral);\n")
 					self.write(f, "IValue const *res[2] = {\n")
 					self.indent += 1
-					self.write(f, "value_factory->create_%s(t_s),\n" % kind)
-					self.write(f, "value_factory->create_%s(t_c)};\n" % kind)
+					self.write(f, "value_factory->create_%s(t_integral),\n" % kind)
+					self.write(f, "value_factory->create_%s(t_fractional)};\n" % kind)
 					self.indent -= 1
 					self.write(f, "IType_factory *type_factory = value_factory->get_type_factory();\n")
 					self.write(f, "IType const *a_type = type_factory->create_array(a->get_type(), 2);\n")
@@ -670,23 +670,23 @@ class SignatureParser:
 				if vt and (vt[0] == "float" or vt[0] == "double"):
 					# support modf for float vector types
 					kind = vt[0]
-					self.write(f, "IValue const *r_s[%d];\n" % vt[1])
-					self.write(f, "IValue const *r_c[%d];\n" % vt[1])
+					self.write(f, "IValue const *r_fractional[%d];\n" % vt[1])
+					self.write(f, "IValue const *r_integral[%d];\n" % vt[1])
 					self.write(f, "IValue_vector const *arg = cast<IValue_vector>(arguments[0]);\n")
 					self.write(f, "for (int j = 0; j < %d; ++j) {\n" % vt[1])
 					self.indent += 1
 					self.write(f, "IValue_%s const *a = cast<IValue_%s>(arg->get_value(j));\n" % (kind, kind))
-					self.write(f, "%s t_s, t_c;\n" % kind)
-					self.write(f, "t_s = modf(a->get_value(), t_c);\n")
-					self.write(f, "r_s[j] = value_factory->create_%s(t_s);\n" % kind)
-					self.write(f, "r_c[j] = value_factory->create_%s(t_c);\n" % kind)
+					self.write(f, "%s t_fractional, t_integral;\n" % kind)
+					self.write(f, "t_fractional = modf(a->get_value(), t_integral);\n")
+					self.write(f, "r_fractional[j] = value_factory->create_%s(t_fractional);\n" % kind)
+					self.write(f, "r_integral[j] = value_factory->create_%s(t_integral);\n" % kind)
 					self.indent -= 1
 					self.write(f, "}\n")
 					self.write(f, "IType_vector const *v_type = arg->get_type();\n")
 					self.write(f, "IValue const *res[2] = {\n")
 					self.indent += 1
-					self.write(f, "value_factory->create_vector(v_type, r_s, %d),\n" % vt[1])
-					self.write(f, "value_factory->create_vector(v_type, r_c, %d)};\n" % vt[1])
+					self.write(f, "value_factory->create_vector(v_type, r_integral, %d),\n" % vt[1])
+					self.write(f, "value_factory->create_vector(v_type, r_fractional, %d)};\n" % vt[1])
 					self.indent -= 1
 					self.write(f, "IType_factory *type_factory = value_factory->get_type_factory();\n")
 					self.write(f, "IType const *a_type = type_factory->create_array(v_type, 2);\n")

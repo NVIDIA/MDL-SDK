@@ -254,6 +254,17 @@ public:
     virtual void set_value( const char* value) = 0;
 };
 
+/// A value of type string which can be used to obtain the original, non-localized value of a localized string.
+class IValue_string_localized : public
+    mi::base::Interface_declare<0x1fe80d3d, 0xe79e, 0x4bdb, 0xb6, 0x30, 0xe3, 0x36, 0x31, 0xa4, 0x1e, 0x39,
+    neuraylib::IValue_string>
+{
+public:
+    /// Returns the original value of a localized string.
+    /// While IValue_string::value() returns the translated string.
+    virtual const char* get_original_value() const = 0;
+};
+
 /// A compound value.
 class IValue_compound : public
     mi::base::Interface_declare<0xdabc8fe3,0x5c70,0x4ef0,0xa2,0xf7,0x34,0x30,0xb5,0x67,0xdc,0x75,

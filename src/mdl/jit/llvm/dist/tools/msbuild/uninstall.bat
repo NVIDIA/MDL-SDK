@@ -2,49 +2,32 @@
 
 echo Uninstalling MSVC integration...
 
+REM In general this script should not be used except for development and testing
+REM purposes.  The proper way to install is via the VSIX, and the proper way to
+REM uninstall is through the Visual Studio extension manager.
+
 REM CD to the directory of this batch file.
 cd /d %~dp0
 
-SET D="%ProgramFiles%\MSBuild\Microsoft.Cpp\v4.0\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2010 del %D%\LLVM-vs2010\Microsoft.Cpp.Win32.LLVM-vs2010.props
-IF EXIST %D%\LLVM-vs2010 del %D%\LLVM-vs2010\Microsoft.Cpp.Win32.LLVM-vs2010.targets
-IF EXIST %D%\LLVM-vs2010 rmdir %D%\LLVM-vs2010
+SET VCTargets=%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Professional\Common7\IDE\VC\VCTargets
 
-SET D="%ProgramFiles(x86)%\MSBuild\Microsoft.Cpp\v4.0\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2010 del %D%\LLVM-vs2010\Microsoft.Cpp.Win32.LLVM-vs2010.props
-IF EXIST %D%\LLVM-vs2010 del %D%\LLVM-vs2010\Microsoft.Cpp.Win32.LLVM-vs2010.targets
-IF EXIST %D%\LLVM-vs2010 rmdir %D%\LLVM-vs2010
+ECHO Uninstalling Common Files
+IF EXIST "%VCTargets%\LLVM.Cpp.Common.props" del "%VCTargets%\LLVM.Cpp.Common.props"
+IF EXIST "%VCTargets%\LLVM.Cpp.Common.targets" del "%VCTargets%\LLVM.Cpp.Common.targets"
 
-SET D="%ProgramFiles%\MSBuild\Microsoft.Cpp\v4.0\V110\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2012 del %D%\LLVM-vs2012\Microsoft.Cpp.Win32.LLVM-vs2012.props
-IF EXIST %D%\LLVM-vs2012 del %D%\LLVM-vs2012\Microsoft.Cpp.Win32.LLVM-vs2012.targets
-IF EXIST %D%\LLVM-vs2012 rmdir %D%\LLVM-vs2012
-IF EXIST %D%\LLVM-vs2012_xp del %D%\LLVM-vs2012_xp\Microsoft.Cpp.Win32.LLVM-vs2012_xp.props
-IF EXIST %D%\LLVM-vs2012_xp del %D%\LLVM-vs2012_xp\Microsoft.Cpp.Win32.LLVM-vs2012_xp.targets
-IF EXIST %D%\LLVM-vs2012_xp rmdir %D%\LLVM-vs2012_xp
+ECHO Uninstalling x64 Platform Toolset
+SET PlatformToolsets=%VCTargets%\Platforms\x64\PlatformToolsets
+IF EXIST "%PlatformToolsets%\llvm\Toolset.props" del "%PlatformToolsets%\llvm\Toolset.props"
+IF EXIST "%PlatformToolsets%\llvm\Toolset.targets" del "%PlatformToolsets%\llvm\Toolset.targets"
+IF EXIST "%PlatformToolsets%\llvm" rd "%PlatformToolsets%\llvm"
 
-SET D="%ProgramFiles(x86)%\MSBuild\Microsoft.Cpp\v4.0\V110\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2012 del %D%\LLVM-vs2012\Microsoft.Cpp.Win32.LLVM-vs2012.props
-IF EXIST %D%\LLVM-vs2012 del %D%\LLVM-vs2012\Microsoft.Cpp.Win32.LLVM-vs2012.targets
-IF EXIST %D%\LLVM-vs2012 rmdir %D%\LLVM-vs2012
-IF EXIST %D%\LLVM-vs2012_xp del %D%\LLVM-vs2012_xp\Microsoft.Cpp.Win32.LLVM-vs2012_xp.props
-IF EXIST %D%\LLVM-vs2012_xp del %D%\LLVM-vs2012_xp\Microsoft.Cpp.Win32.LLVM-vs2012_xp.targets
-IF EXIST %D%\LLVM-vs2012_xp rmdir %D%\LLVM-vs2012_xp
+ECHO Uninstalling Win32 Platform Toolset
+SET PlatformToolsets=%VCTargets%\Platforms\Win32\PlatformToolsets
+IF EXIST "%PlatformToolsets%\llvm\Toolset.props" del "%PlatformToolsets%\llvm\Toolset.props"
+IF EXIST "%PlatformToolsets%\llvm\Toolset.targets" del "%PlatformToolsets%\llvm\Toolset.targets"
+IF EXIST "%PlatformToolsets%\llvm" rd "%PlatformToolsets%\llvm"
 
-SET D="%ProgramFiles%\MSBuild\Microsoft.Cpp\v4.0\V120\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2013 del %D%\LLVM-vs2013\toolset.props
-IF EXIST %D%\LLVM-vs2013 del %D%\LLVM-vs2013\toolset.targets
-IF EXIST %D%\LLVM-vs2013 rmdir %D%\LLVM-vs2013
-IF EXIST %D%\LLVM-vs2013_xp del %D%\LLVM-vs2013_xp\toolset.props
-IF EXIST %D%\LLVM-vs2013_xp del %D%\LLVM-vs2013_xp\toolset.targets
-IF EXIST %D%\LLVM-vs2013_xp rmdir %D%\LLVM-vs2013_xp
-
-SET D="%ProgramFiles(x86)%\MSBuild\Microsoft.Cpp\v4.0\V120\Platforms\Win32\PlatformToolsets"
-IF EXIST %D%\LLVM-vs2013 del %D%\LLVM-vs2013\toolset.props
-IF EXIST %D%\LLVM-vs2013 del %D%\LLVM-vs2013\toolset.targets
-IF EXIST %D%\LLVM-vs2013 rmdir %D%\LLVM-vs2013
-IF EXIST %D%\LLVM-vs2013_xp del %D%\LLVM-vs2013_xp\toolset.props
-IF EXIST %D%\LLVM-vs2013_xp del %D%\LLVM-vs2013_xp\toolset.targets
-IF EXIST %D%\LLVM-vs2013_xp rmdir %D%\LLVM-vs2013_xp
+ECHO Uninstalling C++ Settings UI
+IF EXIST "%VCTargets%\1033\llvm-general.xml" del "%VCTargets%\1033\llvm-general.xml"
 
 echo Done!

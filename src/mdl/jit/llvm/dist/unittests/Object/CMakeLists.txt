@@ -1,7 +1,9 @@
 set(LLVM_LINK_COMPONENTS
-  object
+  Object
   )
 
 add_llvm_unittest(ObjectTests
-  YAMLTest.cpp
+  SymbolSizeTest.cpp
+  SymbolicFileTest.cpp
   )
+

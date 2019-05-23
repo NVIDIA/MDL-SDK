@@ -405,6 +405,13 @@ void File_Output_stream::flush()
     fflush(m_file);
 }
 
+// Remove the last character from output stream if possible.
+bool File_Output_stream::unput(char c)
+{
+    // unsupported
+    return false;
+}
+
 // File output streams do not support color for now.
 bool File_Output_stream::has_color() const
 {
@@ -487,6 +494,13 @@ void Debug_Output_stream::flush()
 #endif
 }
 
+// Remove the last character from output stream if possible.
+bool Debug_Output_stream::unput(char c)
+{
+    // unsupported
+    return false;
+}
+
 // Constructor.
 Debug_Output_stream::Debug_Output_stream(IAllocator *alloc)
 : Base(alloc)
@@ -562,6 +576,16 @@ void Buffer_output_stream::write(char const *string)
 void Buffer_output_stream::flush()
 {
     // always flushed, do nothing
+}
+
+// Remove the last character from output stream if possible.
+bool Buffer_output_stream::unput(char c)
+{
+    if (m_data_length > 0 && m_data[m_data_length - 1] == c) {
+        --m_data_length;
+        return true;
+    }
+    return false;
 }
 
 // Clear the buffer.

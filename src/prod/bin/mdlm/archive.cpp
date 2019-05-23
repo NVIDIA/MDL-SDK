@@ -41,6 +41,15 @@ using std::string;
 using std::vector;
 using std::pair;
 
+// In the GNU C Library, "minor" and "major" are defined
+#ifdef minor
+    #undef minor
+#endif
+
+#ifdef major
+    #undef major
+#endif
+
 bool validate_archive(const std::string& archive, const std::string& path);
 
 bool Archive::Test()

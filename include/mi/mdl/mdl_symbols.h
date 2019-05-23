@@ -116,7 +116,8 @@ public:
         SYM_TYPE_MATERIAL,
         SYM_TYPE_TEX_GAMMA_MODE,
         SYM_TYPE_INTENSITY_MODE,
-        SYM_TYPE_LAST = SYM_TYPE_INTENSITY_MODE,
+        SYM_TYPE_HAIR_BSDF,
+        SYM_TYPE_LAST = SYM_TYPE_HAIR_BSDF,
 
         // enums
         SYM_ENUM_FIRST,
@@ -146,7 +147,8 @@ public:
         SYM_FIELD_THIN_WALLED,
         SYM_FIELD_VOLUME,
         SYM_FIELD_MODE,
-        SYM_FIELD_LAST = SYM_FIELD_MODE,
+        SYM_FIELD_HAIR,
+        SYM_FIELD_LAST = SYM_FIELD_HAIR,
 
         // constants
         SYM_CNST_FIRST,

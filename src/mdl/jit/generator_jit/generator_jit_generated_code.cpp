@@ -38,6 +38,7 @@
 #include "generator_jit_code_printer.h"
 #include "generator_jit_generated_code.h"
 #include "generator_jit_llvm.h"
+#include "generator_jit_opt_pass_gate.h"
 
 namespace mi {
 namespace mdl {
@@ -155,6 +156,7 @@ public:
                 case IType::TK_STRING:
                 case IType::TK_LIGHT_PROFILE:
                 case IType::TK_BSDF:
+                case IType::TK_HAIR_BSDF:
                 case IType::TK_EDF:
                 case IType::TK_VDF:
                 case IType::TK_FUNCTION:
@@ -238,6 +240,7 @@ private:
             MAP_KIND( TK_STRING,           VK_STRING);
             MAP_KIND( TK_LIGHT_PROFILE,    VK_LIGHT_PROFILE);
             MAP_KIND( TK_BSDF,             VK_BAD);
+            MAP_KIND( TK_HAIR_BSDF,        VK_BAD);
             MAP_KIND( TK_EDF,              VK_BAD);
             MAP_KIND( TK_VDF,              VK_BAD);
             MAP_KIND( TK_VECTOR,           VK_VECTOR);
@@ -314,6 +317,7 @@ private:
 
             case IType::TK_ALIAS:
             case IType::TK_BSDF:
+            case IType::TK_HAIR_BSDF:
             case IType::TK_EDF:
             case IType::TK_VDF:
             case IType::TK_FUNCTION:
@@ -593,10 +597,104 @@ int Generated_code_value_layout::set_value(
     return -5;
 }
 
-char const *Generated_code_value_layout::get_layout_data(size_t &size)
+char const *Generated_code_value_layout::get_layout_data(size_t &size) const
 {
     size = m_layout_data.size();
     return &m_layout_data[0];
+}
+
+
+// ------------------------------- Generated_code_executable_base -------------------------------
+
+// Get the number of functions in this link unit.
+template <class I>
+size_t Generated_code_executable_base<I>::get_function_count() const
+{
+    return m_func_infos.size();
+}
+
+// Get the name of the i'th function inside this link unit.
+template <class I>
+char const *Generated_code_executable_base<I>::get_function_name(size_t i) const
+{
+    if (i < m_func_infos.size())
+        return m_func_infos[i].m_name.c_str();
+    return NULL;
+}
+
+// Returns the distribution kind of the i'th function inside this link unit.
+template <class I>
+IGenerated_code_executable::Distribution_kind
+Generated_code_executable_base<I>::get_distribution_kind(size_t i) const
+{
+    if (i < m_func_infos.size())
+        return m_func_infos[i].m_dist_kind;
+    return IGenerated_code_executable::DK_INVALID;
+}
+
+// Returns the function kind of the i'th function inside this link unit.
+template <class I>
+IGenerated_code_executable::Function_kind
+Generated_code_executable_base<I>::get_function_kind(size_t i) const
+{
+    if (i < m_func_infos.size())
+        return m_func_infos[i].m_kind;
+    return IGenerated_code_executable::FK_INVALID;
+}
+
+// Get the index of the target argument block layout for the i'th function inside this link
+// unit if used.
+template <class I>
+size_t Generated_code_executable_base<I>::get_function_arg_block_layout_index(size_t i) const
+{
+    if (i < m_func_infos.size())
+        return m_func_infos[i].m_arg_block_index;
+    return ~0;
+}
+
+// Returns the prototype of the i'th function inside this link unit.
+template <class I>
+char const *Generated_code_executable_base<I>::get_function_prototype(
+    size_t index,
+    IGenerated_code_executable::Prototype_language lang) const
+{
+    if (index >= m_func_infos.size() ||
+            lang >= m_func_infos[index].m_prototypes.size()) {
+        return NULL;
+    }
+    return m_func_infos[index].m_prototypes[lang].c_str();
+}
+
+// Set a function prototype for a function.
+template <class I>
+void Generated_code_executable_base<I>::set_function_prototype(
+    size_t index,
+    IGenerated_code_executable::Prototype_language lang,
+    char const *prototype)
+{
+    MDL_ASSERT(index < m_func_infos.size());
+    if (lang >= m_func_infos[index].m_prototypes.size()) {
+        m_func_infos[index].m_prototypes.resize(lang + 1, string(this->get_allocator()));
+    }
+    m_func_infos[index].m_prototypes[lang] = string(prototype, this->get_allocator());
+}
+
+// Add information for a generated function.
+template <class I>
+size_t Generated_code_executable_base<I>::add_function_info(
+    char const *name,
+    IGenerated_code_executable::Distribution_kind dist_kind,
+    IGenerated_code_executable::Function_kind func_kind,
+    size_t arg_block_index)
+{
+    m_func_infos.push_back(
+        Generated_code_function_info(
+            string(name, this->get_allocator()),
+            dist_kind,
+            func_kind,
+            arg_block_index));
+
+    return m_func_infos.size() - 1;
 }
 
 // ----------------------------------- Generated_code_jit -----------------------------------
@@ -609,12 +707,11 @@ Generated_code_jit::Generated_code_jit(
 : Base(alloc)
 , m_builder(alloc)
 , m_llvm_context()
-, m_llvm_module(NULL)
 , m_jitted_code(mi::base::make_handle_dup(jitted_code))
 , m_messages(alloc, filename)
-, m_ptx_code(alloc)
+, m_source_code(alloc)
 , m_render_state_usage(-1)
-, m_mappend_strings(alloc)
+, m_mapped_strings(alloc)
 {
 }
 
@@ -660,8 +757,8 @@ mi::base::IInterface const *Generated_code_jit::get_interface(
 // Returns the assembler code of the executable code module if available.
 char const *Generated_code_jit::get_source_code(size_t &size) const
 {
-    size = m_ptx_code.size();
-    return m_ptx_code.c_str();
+    size = m_source_code.size();
+    return m_source_code.c_str();
 }
 
 // Get the data for the read-only data segment if available.
@@ -695,14 +792,14 @@ IGenerated_code_value_layout const *Generated_code_jit::get_captured_arguments_l
 // Get the number of mapped string constants used inside the generated code.
 size_t Generated_code_jit::get_string_constant_count() const
 {
-    return m_mappend_strings.size();
+    return m_mapped_strings.size();
 }
 
 // Get the mapped string constant for a given id.
 char const *Generated_code_jit::get_string_constant(size_t id) const
 {
-    if (id < m_mappend_strings.size()) {
-        return m_mappend_strings[id].c_str();
+    if (id < m_mapped_strings.size()) {
+        return m_mapped_strings[id].c_str();
     }
     return NULL;
 }
@@ -710,10 +807,10 @@ char const *Generated_code_jit::get_string_constant(size_t id) const
 // Add a mapped string.
 void Generated_code_jit::add_mapped_string(char const *s, size_t id)
 {
-    if (id >= m_mappend_strings.size()) {
-        m_mappend_strings.resize(id + 1, string(get_allocator()));
+    if (id >= m_mapped_strings.size()) {
+        m_mapped_strings.resize(id + 1, string(get_allocator()));
     }
-    m_mappend_strings[id] = string(s, get_allocator());
+    m_mapped_strings[id] = string(s, get_allocator());
 }
 
 // Compile a whole module into LLVM-IR.
@@ -724,12 +821,14 @@ void Generated_code_jit::compile_module_to_llvm(
     Module const *mod = impl_cast<Module>(module);
     mi::base::Handle<MDL> compiler(mod->get_compiler());
 
+    llvm::LLVMContext llvm_context;
+
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
         compiler.get(),
         m_messages,
-        m_llvm_context,
-        /*ptx_mode=*/false,
+        llvm_context,
+        /*target_language=*/LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/true,
@@ -745,9 +844,11 @@ void Generated_code_jit::compile_module_to_llvm(
     // for now, mark exported functions as entries, so the module will not be empty
     llvm_generator.mark_exported_funcs_as_entries();
 
-    m_llvm_module.reset(llvm_generator.compile_module(module));
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
 
-    if (!m_llvm_module) {
+    if (llvm_module) {
+        llvm_generator.llvm_ir_compile(llvm_module.get(), m_source_code);
+    } else {
         size_t file_id = m_messages.register_fname(module->get_filename());
         m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
             "Compiling LLVM code failed");
@@ -764,13 +865,15 @@ void Generated_code_jit::compile_module_to_ptx(
     Module const *mod = impl_cast<Module>(module);
     mi::base::Handle<MDL> compiler(mod->get_compiler());
 
+    llvm::LLVMContext llvm_context;
+
     unsigned sm_version = 20;
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
         compiler.get(),
         m_messages,
-        m_llvm_context,
-        /*ptx_mode=*/true,
+        llvm_context,
+        /*target_language=*/LLVM_code_generator::TL_PTX,
         Type_mapper::TM_PTX,
         sm_version,
         /*has_tex_handler=*/false,
@@ -786,11 +889,59 @@ void Generated_code_jit::compile_module_to_ptx(
     // for now, mark exported functions as entries, so the module will not be empty
     llvm_generator.mark_exported_funcs_as_entries();
 
-    llvm::OwningPtr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
     if (llvm_module) {
         // FIXME: pass the sm version here. However, this is currently used for debugging
         // only.
-        llvm_generator.ptx_compile(llvm_module.get(), m_ptx_code);
+        llvm_generator.ptx_compile(llvm_module.get(), m_source_code);
+    } else {
+        size_t file_id = m_messages.register_fname(module->get_filename());
+        m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
+            "Compiling LLVM code failed");
+    }
+
+    m_render_state_usage = llvm_generator.get_render_state_usage();
+}
+
+// Compile a whole module into HLSL.
+void Generated_code_jit::compile_module_to_hlsl(
+    IModule const      *module,
+    Options_impl const &options)
+{
+    Module const *mod = impl_cast<Module>(module);
+    mi::base::Handle<MDL> compiler(mod->get_compiler());
+
+    llvm::LLVMContext llvm_context;
+    HLSLOptPassGate opt_pass_gate;
+    llvm_context.setOptPassGate(opt_pass_gate);
+
+    LLVM_code_generator llvm_generator(
+        m_jitted_code.get(),
+        compiler.get(),
+        m_messages,
+        llvm_context,
+        /*target_language=*/LLVM_code_generator::TL_HLSL,
+        Type_mapper::TM_HLSL,
+        /*sm_version=*/0,
+        /*has_tex_handler=*/false,
+        Type_mapper::SSM_FULL_SET,
+        /*num_texture_spaces=*/4,
+        /*num_texture_results=*/32,
+        options,
+        /*incremental=*/false,
+        /*state_mapping=*/Type_mapper::SM_INCLUDE_UNIFORM_STATE,  // include uniform state for HLSL
+        /*res_manag=*/NULL,
+        /*debug=*/false);
+
+    // for now, mark exported functions as entries, so the module will not be empty
+    llvm_generator.mark_exported_funcs_as_entries();
+
+    // the HLSL backend expects the RO-data-segment to be used
+    llvm_generator.enable_ro_data_segment();
+
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
+    if (llvm_module) {
+        llvm_generator.hlsl_compile(llvm_module.get(), m_source_code);
     } else {
         size_t file_id = m_messages.register_fname(module->get_filename());
         m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
@@ -908,6 +1059,7 @@ void Generated_code_source::add_mapped_string(char const *s, size_t id)
     m_mappend_strings[id] = string(s, get_allocator());
 }
 
+
 // Constructor.
 Generated_code_source::Source_res_manag::Source_res_manag(
     IAllocator              *alloc,
@@ -991,6 +1143,7 @@ Generated_code_lambda_function::Generated_code_lambda_function(
 , m_jitted_code(mi::base::make_handle_dup(jitted_code))
 , m_context()
 , m_module(NULL)
+, m_module_key(0)
 , m_jitted_funcs(get_allocator())
 , m_res_entries(get_allocator())
 , m_string_entries(get_allocator())
@@ -1017,8 +1170,10 @@ Generated_code_lambda_function::~Generated_code_lambda_function()
         alloc->free((void *)m_ro_segment);
     }
 
-    if (m_module != NULL)
-        m_jitted_code->delete_llvm_module(m_module);
+    if (m_module != NULL) {
+        m_module = NULL;  // avoid dangling pointer, module will be deleted by delete_llvm_module
+        m_jitted_code->delete_llvm_module(m_module_key);
+    }
 }
 
 // Get the kind of code generated.
@@ -1150,7 +1305,7 @@ bool Generated_code_lambda_function::run_environment(
     void                            *tex_data)
 {
     if (!m_aborted && index < m_jitted_funcs.size()) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, tex_data);
 
         if (setjmp(exc.env) == 0) {
@@ -1169,7 +1324,7 @@ bool Generated_code_lambda_function::run_environment(
 bool Generated_code_lambda_function::run(bool &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1185,7 +1340,7 @@ bool Generated_code_lambda_function::run(bool &result)
 bool Generated_code_lambda_function::run(int &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1201,7 +1356,7 @@ bool Generated_code_lambda_function::run(int &result)
 bool Generated_code_lambda_function::run(unsigned &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1218,7 +1373,7 @@ bool Generated_code_lambda_function::run(unsigned &result)
 bool Generated_code_lambda_function::run(float &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1235,7 +1390,7 @@ bool Generated_code_lambda_function::run(float &result)
 bool Generated_code_lambda_function::run(Float2_struct &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1252,7 +1407,7 @@ bool Generated_code_lambda_function::run(Float2_struct &result)
 bool Generated_code_lambda_function::run(Float3_struct &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1269,7 +1424,7 @@ bool Generated_code_lambda_function::run(Float3_struct &result)
 bool Generated_code_lambda_function::run(Float4_struct &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1286,7 +1441,7 @@ bool Generated_code_lambda_function::run(Float4_struct &result)
 bool Generated_code_lambda_function::run(Matrix3x3_struct &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1303,7 +1458,7 @@ bool Generated_code_lambda_function::run(Matrix3x3_struct &result)
 bool Generated_code_lambda_function::run(Matrix4x4_struct &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1320,7 +1475,7 @@ bool Generated_code_lambda_function::run(Matrix4x4_struct &result)
 bool Generated_code_lambda_function::run(char const *&result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, NULL);
 
         if (setjmp(exc.env) == 0) {
@@ -1342,7 +1497,7 @@ bool Generated_code_lambda_function::run_core(
     void const                   *cap_args)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, tex_data);
 
         if (setjmp(exc.env) == 0) {
@@ -1362,7 +1517,7 @@ bool Generated_code_lambda_function::run_generic(
     void const                   *cap_args)
 {
     if (!m_aborted && index < m_jitted_funcs.size()) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, tex_data);
 
         if (setjmp(exc.env) == 0) {
@@ -1382,7 +1537,7 @@ bool Generated_code_lambda_function::run_init(
     void const             *cap_args)
 {
     if (!m_aborted && index < m_jitted_funcs.size()) {
-        LLVM_code_generator::Exc_state exc(m_exc_handler, m_aborted);
+        Exc_state     exc(m_exc_handler, m_aborted);
         Res_data_pair pair(m_res_data, tex_data);
 
         if (setjmp(exc.env) == 0) {

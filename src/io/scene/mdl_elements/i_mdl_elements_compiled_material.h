@@ -77,6 +77,7 @@ public:
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
     /// \param mdl_wavelength_max          The largest supported wavelength.
+    /// \param load_resources              True if resources are supposed to be loaded into the DB.
     Mdl_compiled_material(
         DB::Transaction* transaction,
         const mi::mdl::IGenerated_code_dag::IMaterial_instance* instance,
@@ -84,7 +85,8 @@ public:
         const char* module_name,
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
-        mi::Float32 mdl_wavelength_max);
+        mi::Float32 mdl_wavelength_max,
+        bool        load_resources);
 
     // methods corresponding to mi::neuraylib::ICompiled_material
 
@@ -124,6 +126,10 @@ public:
         DB::Transaction* transaction,
         DB::Tag material_instance_tag,
         const std::string& path) const;
+
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_opacity() const;
+
+    bool get_cutout_opacity(mi::Float32 *cutout_opacity) const;
 
     // internal methods
 
@@ -214,6 +220,13 @@ private:
         m_properties;                                 ///< Instance properties.
 
     std::string m_internal_space;                     ///< Internal space.
+
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity 
+        m_opacity;                                    ///< Material opacity.
+
+    mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
+    bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
+
 };
 
 } // namespace MDL

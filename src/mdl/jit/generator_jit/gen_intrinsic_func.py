@@ -155,6 +155,7 @@ class SignatureParser:
 
 			# unsupported types
 			"bsdf"                      : "UB",
+			"hair_bsdf"                 : "UH",
 			"edf"                       : "UE",
 			"vdf"                       : "UV",
 			"bsdf_measurement"          : "UM",
@@ -165,6 +166,9 @@ class SignatureParser:
 			"color_bsdf_component[<N>]" : "UABB",
 			"color_edf_component[<N>]"  : "UAEE",
 			"color[<N>]"                : "UACC",
+
+			# derived types
+			"struct { float[2], float[2], float[2] }" : "FD2",
 		}
 
 		# map type codes to suffixes for C runtime functions
@@ -202,13 +206,14 @@ class SignatureParser:
 	def get_atomic_type_kind(self, type_code):
 		"""If type_code is an atomic value, return its value kind, else None."""
 		cases = {
-			"bool":          "mi::mdl::IType::TK_BOOL",
-			"int":           "mi::mdl::IType::TK_INT",
-			"float":         "mi::mdl::IType::TK_FLOAT",
-			"double":        "mi::mdl::IType::TK_DOUBLE",
-			"color":         "mi::mdl::IType::TK_COLOR",
-			"string":        "mi::mdl::IType::TK_STRING",
-			"light_profile": "mi::mdl::IType::TK_LIGHT_PROFILE",
+			"bool":             "mi::mdl::IType::TK_BOOL",
+			"int":              "mi::mdl::IType::TK_INT",
+			"float":            "mi::mdl::IType::TK_FLOAT",
+			"double":           "mi::mdl::IType::TK_DOUBLE",
+			"color":            "mi::mdl::IType::TK_COLOR",
+			"string":           "mi::mdl::IType::TK_STRING",
+			"light_profile":    "mi::mdl::IType::TK_LIGHT_PROFILE",
+			"bsdf_measurement": "mi::mdl::IType::TK_BSDF_MEASUREMENT",
 		}
 		return cases.get(self.m_inv_types[type_code], None)
 
@@ -442,13 +447,13 @@ class SignatureParser:
 	def register_runtime_func(self, fname, signature):
 		"""Register a C runtime function by name and signature."""
 		if self.m_c_runtime_functions.get(fname) != None:
-			error("C runtime function '%' already registzered\n", fname)
+			error("C runtime function '%s' already registered\n" % fname)
 		self.m_c_runtime_functions[fname] = signature
 
 	def register_mdl_runtime_func(self, fname, signature):
 		"""Register a mdl runtime function by name and signature."""
 		if self.m_mdl_runtime_functions.get(fname) != None:
-			error("MDL runtime function '%' already registzered\n", fname)
+			error("MDL runtime function '%s' already registered\n" % fname)
 		self.m_mdl_runtime_functions[fname] = signature
 
 	def is_state_supported(self, name, signature):
@@ -507,37 +512,39 @@ class SignatureParser:
 		ret_type, params = self.split_signature(signature)
 
 		if (name == "diffuse_reflection_bsdf" or
-			name == "diffuse_transmission_bsdf" or
-			name == "specular_bsdf" or
-			name == "simple_glossy_bsdf" or
-			name == "backscattering_glossy_reflection_bsdf" or
-			name == "measured_bsdf" or
-			name == "microfacet_beckmann_smith_bsdf" or
-			name == "microfacet_ggx_smith_bsdf" or
-			name == "microfacet_beckmann_vcavities_bsdf" or
-			name == "microfacet_ggx_vcavities_bsdf" or
-			name == "ward_geisler_moroder_bsdf" or
-			name == "diffuse_edf" or
-			name == "spot_edf" or
-			name == "measured_edf" or
-			name == "anisotropic_vdf" or
-			name == "tint" or
-			name == "thin_film" or
-			name == "directional_factor" or
-			name == "normalized_mix" or
-			name == "clamped_mix" or
-			name == "weighted_layer" or
-			name == "fresnel_layer" or
-			name == "custom_curve_layer" or
-			name == "measured_curve_layer" or
-			name == "measured_curve_factor" or
-			name == "color_normalized_mix" or
-			name == "color_clamped_mix" or
-			name == "color_weighted_layer" or
-			name == "color_fresnel_layer" or
-			name == "color_custom_curve_layer" or
-			name == "color_measured_curve_layer" or
-			name == "fresnel_factor"):
+				name == "diffuse_transmission_bsdf" or
+				name == "specular_bsdf" or
+				name == "simple_glossy_bsdf" or
+				name == "backscattering_glossy_reflection_bsdf" or
+				name == "measured_bsdf" or
+				name == "microfacet_beckmann_smith_bsdf" or
+				name == "microfacet_ggx_smith_bsdf" or
+				name == "microfacet_beckmann_vcavities_bsdf" or
+				name == "microfacet_ggx_vcavities_bsdf" or
+				name == "ward_geisler_moroder_bsdf" or
+				name == "diffuse_edf" or
+				name == "spot_edf" or
+				name == "measured_edf" or
+				name == "anisotropic_vdf" or
+				name == "tint" or
+				name == "thin_film" or
+				name == "directional_factor" or
+				name == "normalized_mix" or
+				name == "clamped_mix" or
+				name == "weighted_layer" or
+				name == "fresnel_layer" or
+				name == "custom_curve_layer" or
+				name == "measured_curve_layer" or
+				name == "measured_curve_factor" or
+				name == "color_normalized_mix" or
+				name == "color_clamped_mix" or
+				name == "color_weighted_layer" or
+				name == "color_fresnel_layer" or
+				name == "color_custom_curve_layer" or
+				name == "color_measured_curve_layer" or
+				name == "fresnel_factor" or
+				name == "measured_factor" or
+				name == "chiang_hair_bsdf"):
 			self.unsupported_intrinsics[name] = "unsupported"
 			return True;
 		if (name == "light_profile_power" or name == "light_profile_maximum" or
@@ -1044,6 +1051,9 @@ class SignatureParser:
 
 		self.write(f, "Function_context ctx(m_alloc, m_code_gen, inst, func, flags);\n")
 		self.write(f, "llvm::Value *res;\n")
+
+		# all intrinsics have internal linkage
+		self.write(f, "func->setLinkage(llvm::GlobalValue::InternalLinkage);\n")
 
 		ret_type, params = self.split_signature(signature)
 
@@ -1812,8 +1822,9 @@ class SignatureParser:
 
 			self.format_code(f, """
 			// expand to dual, derivative is zero unless undefined for which we also set zero
-			if (inst.get_return_derivs())
+			if (inst.get_return_derivs()) {
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "math::min_value|max_value":
@@ -1834,7 +1845,7 @@ class SignatureParser:
 					llvm::Value *cmp = ctx->CreateFCmp(
 						llvm::ICmpInst::FCMP_O%(cmp)s,
 						ctx.get_dual_val(res),
-					    ctx.get_dual_val(a_elem));
+						ctx.get_dual_val(a_elem));
 					res = ctx->CreateSelect(cmp, res, a_elem);
 				}
 				""" % code_params
@@ -1899,8 +1910,9 @@ class SignatureParser:
 				res = ctx->CreateInsertValue(res, res_z, idxes);
 
 				// TODO: Add derivative support
-				if (inst.get_return_derivs())  // expand to dual
+				if (inst.get_return_derivs()) { // expand to dual
 					res = ctx.get_dual(res);
+				}
 			} else {
 				res = ctx.create_cross(a_val, b_val);
 				if (inst.get_return_derivs()) {
@@ -1981,56 +1993,64 @@ class SignatureParser:
 			rows = int(type_code[-1])
 			cols = int(type_code[-2])
 
+			params = { "rows" : rows, "cols" : cols }
 
-			self.write(f, "llvm::Type *ret_tp = ctx.get_non_deriv_return_type();\n")
-			self.write(f, "if (ret_tp->isArrayTy()) {\n")
-			self.indent += 1
-			self.write(f, "llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(ret_tp);\n")
-			self.write(f, "llvm::Type      *e_tp = a_tp->getElementType();\n")
-			self.write(f, "if (!e_tp->isVectorTy()) {\n")
-			self.indent += 1
-
-			self.write(f, "res = llvm::ConstantAggregateZero::get(ret_tp);\n")
-			self.write(f, "unsigned src_idxes[1], tgt_idxes[1];\n")
-			self.write(f, "llvm::Value *tmp;\n\n")
-
-			for col in range(cols):
-				for row in range(rows):
-					tgt_idx = col * rows + row
-					src_idx = row * cols + col
-					self.write(f, "src_idxes[0] = %du; tmp = ctx->CreateExtractValue(a, src_idxes);\n" % src_idx)
-					self.write(f, "tgt_idxes[0] = %du; res = ctx->CreateInsertValue(res, tmp, tgt_idxes);\n" % tgt_idx)
-			self.indent -= 1
-
-			self.write(f, "} else {\n")
-
-			self.indent += 1
-			self.write(f, "MDL_ASSERT(!\"NYI\");")
-			self.write(f, "res = llvm::UndefValue::get(ret_tp); // NYI array of vectors\n")
-			self.indent -= 1
-			self.write(f, "}\n")
-
-			self.indent -= 1
-			self.write(f, "} else {\n")
-			self.indent += 1
-			code = "static const int idxes[] = {";
+			# the shuffle indexes for big_vector mode
+			code = "";
 
 			for col in range(cols):
 				for row in range(rows):
 					src_idx = row * cols + col
 					code = code + (" %d," % src_idx)
-			self.write(f, code[0:-1] + " };\n")
 
-			self.write(f, "llvm::Value *shuffle = ctx.get_shuffle(idxes);\n")
-			self.write(f, "res = ctx->CreateShuffleVector(a, a, shuffle);\n")
+			params["shuffle_idxes"] = code[0:-1]
 
-			self.indent -= 1
-			self.write(f, "}\n")
+			code = """
+				llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
+				if (ret_tp->isArrayTy()) {
+					llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(ret_tp);
+					llvm::Type      *e_tp = a_tp->getElementType();
+					if (e_tp->isVectorTy()) {
+						// small vector mode
+						llvm::Value *column[%(cols)d];
 
-			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual (actually should not happen)
-				res = ctx.get_dual(res);
-			""")
+						res = llvm::UndefValue::get(ret_tp);
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							column[col] = ctx->CreateExtractValue(a, { col });
+						}
+						for (unsigned row = 0; row < %(rows)d; ++row) {
+							llvm::Value *tmp = llvm::UndefValue::get(e_tp);
+							for (unsigned col = 0; col < %(cols)d; ++col) {
+								llvm::Value *elem = ctx->CreateExtractElement(column[col], ctx.get_constant(int(row)));
+								tmp  = ctx->CreateInsertElement(tmp, elem, ctx.get_constant(int(col)));
+							}
+							res = ctx->CreateInsertValue(res, tmp, { row });
+						}
+					} else {
+						// all scalar mode
+						res = llvm::UndefValue::get(ret_tp);
+						llvm::Value *tmp;
+
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							for (unsigned row = 0; row < %(rows)d; ++row) {
+								unsigned tgt_idxes[1] = { col * %(rows)d + row };
+								unsigned src_idxes[1] = { row * %(cols)d + col };
+								tmp = ctx->CreateExtractValue(a, src_idxes);
+								res = ctx->CreateInsertValue(res, tmp, tgt_idxes);
+							}
+						}
+					}
+				} else {
+					// big vector mode
+					static const int idxes[] = { %(shuffle_idxes)s };
+					llvm::Value *shuffle = ctx.get_shuffle(idxes);
+					res = ctx->CreateShuffleVector(a, a, shuffle);
+				}
+				if (inst.get_return_derivs()) { // expand to dual (actually should not happen)
+					res = ctx.get_dual(res);
+				}
+			"""
+			self.format_code(f, code % params)
 
 		elif mode == "math::sincos":
 			# we know that the return type is an array, so get the element type here
@@ -2099,7 +2119,7 @@ class SignatureParser:
 									ctx.get_constant(int(%d))
 								};
 								llvm::Value *cosp = ctx->CreateInBoundsGEP(res, access1);
-								ctx->CreateCall3(sincos_func, a_val, sinp, cosp);
+								ctx->CreateCall(sincos_func, { a_val, sinp, cosp });
 							} else {
 						""" % (i, i)
 
@@ -2132,7 +2152,7 @@ class SignatureParser:
 								idx = ctx.get_constant(%d);
 
 								tmp   = ctx->CreateExtractElement(a_val, idx);
-								ctx->CreateCall3(sincos_func, tmp, s_tmp, c_tmp);
+								ctx->CreateCall(sincos_func, { tmp, s_tmp, c_tmp });
 								res_0 = ctx->CreateInsertElement(res_0, ctx->CreateLoad(s_tmp), idx);
 								res_1 = ctx->CreateInsertElement(res_1, ctx->CreateLoad(c_tmp), idx);
 						""" % i
@@ -2181,7 +2201,7 @@ class SignatureParser:
 								res, ctx.get_constant(int(0)));
 							llvm::Value *cosp = ctx.create_simple_gep_in_bounds(
 								res, ctx.get_constant(int(1)));
-							ctx->CreateCall3(sincos_func, a_val, sinp, cosp);
+							ctx->CreateCall(sincos_func, { a_val, sinp, cosp });
 							res = ctx->CreateLoad(res);
 						} else {
 							llvm::Function *sin_func = get_runtime_func(RT_SINF);
@@ -2256,7 +2276,7 @@ class SignatureParser:
 			# we know that the return type is an array, so get the element type here
 			self.format_code(f, """
 			llvm::Value     *a_val = ctx.get_dual_val(a);
-			llvm::Value     *res_0, *res_1;
+			llvm::Value     *res_integral, *res_fractional;
 			llvm::ArrayType *ret_tp = llvm::cast<llvm::ArrayType>(ctx.get_non_deriv_return_type());
 			llvm::Type      *elm_tp = ret_tp->getElementType();
 			res = llvm::ConstantAggregateZero::get(ret_tp);
@@ -2272,8 +2292,8 @@ class SignatureParser:
 				self.format_code(f, """
 				llvm::Function *modf   = get_runtime_func(%s);
 
-				res_0 = llvm::ConstantAggregateZero::get(elm_tp);
-				res_1 = llvm::ConstantAggregateZero::get(elm_tp);
+				res_integral = llvm::ConstantAggregateZero::get(elm_tp);
+				res_fractional = llvm::ConstantAggregateZero::get(elm_tp);
 
 				llvm::Type  *t_type = llvm::cast<llvm::SequentialType>(elm_tp)->getElementType();
 				llvm::Value *intptr = ctx.create_local(t_type, "tmp");
@@ -2283,10 +2303,10 @@ class SignatureParser:
 				for i in range(n_elems):
 					self.format_code(f, """
 					tmp = ctx.create_extract(a_val, %(idx)u);
-					tmp = ctx->CreateCall2(modf, tmp, intptr);
-					res_0 = ctx.create_insert(res_0, tmp, %(idx)u);
-					res_1 = ctx.create_insert(res_1, ctx->CreateLoad(intptr), %(idx)u);
-				    """ % { "idx": i })
+					tmp = ctx->CreateCall(modf, { tmp, intptr });
+					res_fractional = ctx.create_insert(res_fractional, tmp, %(idx)u);
+					res_integral = ctx.create_insert(res_integral, ctx->CreateLoad(intptr), %(idx)u);
+					""" % { "idx": i })
 			else:
 				atom_code = elem_type
 				f_name    = "RT_MODF" + self.get_type_suffix(atom_code).upper()
@@ -2294,13 +2314,13 @@ class SignatureParser:
 				self.format_code(f, """
 				llvm::Function *modf = get_runtime_func(%s);
 				llvm::Value *intptr = ctx.create_local(elm_tp, \"tmp\");
-				res_0 = ctx->CreateCall2(modf, a_val, intptr);
-				res_1 = ctx->CreateLoad(intptr);
+				res_fractional = ctx->CreateCall(modf, { a_val, intptr });
+				res_integral = ctx->CreateLoad(intptr);
 				""" % f_name)
 
 			self.format_code(f, """
-			res = ctx.create_insert(res, res_0, 0);
-			res = ctx.create_insert(res, res_1, 1);
+			res = ctx.create_insert(res, res_integral, 0);
+			res = ctx.create_insert(res, res_fractional, 1);
 
 			if (inst.get_return_derivs()) {
 				llvm::Value *res_dx = llvm::ConstantAggregateZero::get(ret_tp);
@@ -2474,8 +2494,9 @@ class SignatureParser:
 				llvm::Function *callee = get_runtime_func(%s);
 				res = ctx->CreateCall(callee, ctx.get_dual_val(a));
 
-				if (inst.get_return_derivs())  // expand to dual, derivatives are zero
+				if (inst.get_return_derivs()) { // expand to dual, derivatives are zero
 					res = ctx.get_dual(res);
+				}
 				""" % f_name
 			self.format_code(f, code)
 
@@ -2553,8 +2574,9 @@ class SignatureParser:
 				// for non-derivative types, always return null
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""" % { "comp": intrinsic.lower() }
 			self.format_code(f, code)
 
@@ -2689,7 +2711,7 @@ class SignatureParser:
 				llvm::Function  *bb_func = get_runtime_func(RT_MDL_BLACKBODY);
 				llvm::ArrayType *arr_tp  = m_code_gen.m_type_mapper.get_arr_float_3_type();
 				llvm::Value     *tmp     = ctx.create_local(arr_tp, "tmp");
-				ctx->CreateCall2(bb_func, tmp, ctx.get_dual_val(a));
+				ctx->CreateCall(bb_func, { tmp, ctx.get_dual_val(a) });
 
 				if (ret_tp->isArrayTy()) {
 					res = ctx->CreateLoad(tmp);
@@ -2706,8 +2728,9 @@ class SignatureParser:
 			} else {
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code)
 
@@ -2723,8 +2746,9 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code % intrinsic.upper())
 
@@ -2747,8 +2771,9 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code)
 
@@ -2757,10 +2782,20 @@ class SignatureParser:
 			llvm::Type *ret_tp = ctx_data->get_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				llvm::Value *state = ctx.get_state_parameter();
-				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-					state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_%s)));
-				llvm::Value *tc    = ctx->CreateLoad(adr);
-				adr = ctx->CreateInBoundsGEP(tc, a);
+				llvm::Value *tex_coord_state_idx = ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_%s));
+				llvm::Value *adr;
+				if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+					adr = ctx.create_simple_gep_in_bounds(state, tex_coord_state_idx);
+					llvm::Value *tc = ctx->CreateLoad(adr);
+					adr = ctx->CreateInBoundsGEP(tc, a);
+				} else {
+					llvm::Value *idxs[] = {
+						ctx.get_constant(int(0)),
+						tex_coord_state_idx,
+						a
+					};
+					adr = ctx->CreateInBoundsGEP(state, idxs);
+				}
 				// no derivatives requested? -> get pointer to value component
 				if (!inst.get_return_derivs() && m_code_gen.m_type_mapper.use_derivatives()) {
 					adr = ctx.create_simple_gep_in_bounds(adr, 0u);
@@ -2784,7 +2819,7 @@ class SignatureParser:
 			code = """
 			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
-				if (m_code_gen.m_type_mapper.is_bitangents_used()) {
+				if (m_code_gen.m_type_mapper.use_bitangents()) {
 					// encoded as bitangent
 					llvm::Value *state = ctx.get_state_parameter();
 					llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
@@ -2802,10 +2837,22 @@ class SignatureParser:
 				} else {
 					// directly encoded
 					llvm::Value *state = ctx.get_state_parameter();
-					llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-						state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_TANGENT_V)));
-					llvm::Value *tc    = ctx->CreateLoad(adr);
-					adr = ctx->CreateInBoundsGEP(tc, a);
+					llvm::Value *tangent_v_state_idx = ctx.get_constant(
+						m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_TANGENT_V));
+
+					llvm::Value *adr;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						adr = ctx.create_simple_gep_in_bounds(state, tangent_v_state_idx);
+						llvm::Value *tc = ctx->CreateLoad(adr);
+						adr = ctx->CreateInBoundsGEP(tc, a);
+					} else {
+						llvm::Value *idxs[] = {
+							ctx.get_constant(int(0)),
+							tangent_v_state_idx,
+							a
+						};
+						adr = ctx->CreateInBoundsGEP(state, idxs);
+					}
 					res = ctx.load_and_convert(ret_tp, adr);
 				}
 			} else {
@@ -2813,8 +2860,9 @@ class SignatureParser:
 				(void)a;
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code)
 
@@ -2822,7 +2870,7 @@ class SignatureParser:
 			code = """
 			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
-				if (m_code_gen.m_type_mapper.is_bitangents_used()) {
+				if (m_code_gen.m_type_mapper.use_bitangents()) {
 					// encoded as bitangent
 					// float3 bitangent = cross(normal, tangent) * tangent_bitangentsign.w
 					llvm::Value *state = ctx.get_state_parameter();
@@ -2860,10 +2908,22 @@ class SignatureParser:
 				} else {
 					// directly encoded
 					llvm::Value *state = ctx.get_state_parameter();
-					llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-						state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_TANGENT_U)));
-					llvm::Value *tc    = ctx->CreateLoad(adr);
-					adr = ctx->CreateInBoundsGEP(tc, a);
+					llvm::Value *tangent_u_state_idx = ctx.get_constant(
+						m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_TANGENT_U));
+
+					llvm::Value *adr;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						adr = ctx.create_simple_gep_in_bounds(state, tangent_u_state_idx);
+						llvm::Value *tc = ctx->CreateLoad(adr);
+						adr = ctx->CreateInBoundsGEP(tc, a);
+					} else {
+						llvm::Value *idxs[] = {
+							ctx.get_constant(int(0)),
+							tangent_u_state_idx,
+							a
+						};
+						adr = ctx->CreateInBoundsGEP(state, idxs);
+					}
 					res = ctx.load_and_convert(ret_tp, adr);
 				}
 			} else {
@@ -2871,8 +2931,9 @@ class SignatureParser:
 				(void)a;
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code)
 
@@ -2947,76 +3008,112 @@ class SignatureParser:
 						llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
 						llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
 
-						llvm::BasicBlock *w2o_bb = ctx.create_bb("w2o");
-						llvm::BasicBlock *o2w_bb = ctx.create_bb("o2w");
+						// convert w2o or o2w matrix from row-major to col-major
 
-						ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-						{
-							// convert w2o matrix from row major to column major
-							ctx->SetInsertPoint(w2o_bb);
+						llvm::Value *m_ptr = ctx->CreateSelect(
+							cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
 
-							llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 0; i < 3; ++i) {
-								llvm::Value *idx = ctx.get_constant(i);
-								llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								llvm::Value *row = ctx->CreateLoad(ptr);
-								for (int j = 0; j < 4; ++j) {
-									unsigned idxes[] = { unsigned(j) };
-									llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-									llvm::Value *idx  = ctx.get_constant(i + j * 4);
-									res = ctx->CreateInsertElement(res, elem, idx);
-								}
+						res = llvm::Constant::getNullValue(ret_tp);
+						for (int i = 0; i < 3; ++i) {
+							llvm::Value *idx = ctx.get_constant(i);
+							llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+							llvm::Value *row = ctx->CreateLoad(ptr);
+							for (int j = 0; j < 4; ++j) {
+								unsigned idxes[] = { unsigned(j) };
+								llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
+								llvm::Value *idx  = ctx.get_constant(i + j * 4);
+								res = ctx->CreateInsertElement(res, elem, idx);
 							}
-							{
-								// last row is always (0, 0, 0, 1)
-								for (int j = 0; j < 4; ++j) {
-									llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-									llvm::Value *idx  = ctx.get_constant(3 + j * 4);
-									res = ctx->CreateInsertElement(res, elem, idx);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
 						}
 						{
-							// convert o2w matrix from row major to column major
-							ctx->SetInsertPoint(o2w_bb);
-
-							llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 0; i < 3; ++i) {
-								llvm::Value *idx = ctx.get_constant(i);
-								llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								llvm::Value *row = ctx->CreateLoad(ptr);
-								for (int j = 0; j < 4; ++j) {
-									unsigned idxes[] = { unsigned(j) };
-									llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-									llvm::Value *idx  = ctx.get_constant(i + j * 4);
-									res = ctx->CreateInsertElement(res, elem, idx);
-								}
+							// last row is always (0, 0, 0, 1)
+							for (int j = 0; j < 4; ++j) {
+								llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
+								llvm::Value *idx  = ctx.get_constant(3 + j * 4);
+								res = ctx->CreateInsertElement(res, elem, idx);
 							}
-							{
-								// last row is always (0, 0, 0, 1)
-								for (int j = 0; j < 4; ++j) {
-									llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-									llvm::Value *idx  = ctx.get_constant(3 + j * 4);
-									res = ctx->CreateInsertElement(res, elem, idx);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
 						}
+						ctx->CreateStore(res, result);
+						ctx->CreateBr(end_bb);
 					}
 					ctx->SetInsertPoint(end_bb);
 				} else if (ret_tp->isArrayTy()) {
 					llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(ret_tp);
 					llvm::Type      *e_tp   = arr_tp->getElementType();
+
 					if (e_tp->isVectorTy()) {
 						// small vector mode
-						MDL_ASSERT(!"NYI");
+						llvm::Value *col;
+
+						ctx->CreateCondBr(cond, id_bb, non_id_bb);
+						{
+							// return the identity matrix
+							ctx->SetInsertPoint(id_bb);
+
+							llvm::Value *one = ctx.get_constant(1.0f);
+
+							for (unsigned i = 0; i < 4; ++i) {
+								unsigned idxes[1] { i };
+								col = ctx->CreateExtractValue(res, idxes);
+								col = ctx->CreateInsertElement(col, one,  ctx.get_constant(int(i)));
+								ctx->CreateInsertValue(res, col, idxes);
+							}
+
+							ctx->CreateStore(res, result);
+							ctx->CreateBr(end_bb);
+						}
+						{
+							ctx->SetInsertPoint(non_id_bb);
+
+							llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
+							llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
+
+							// convert w2o or o2w matrix from row-major to col-major
+							llvm::Value *matrix = ctx->CreateSelect(
+								cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
+							llvm::Value *m_ptr =
+								llvm::isa<llvm::PointerType>(matrix->getType()) ? matrix : NULL;
+
+							llvm::Value *res_cols[4] = {
+								llvm::Constant::getNullValue(e_tp),
+								llvm::Constant::getNullValue(e_tp),
+								llvm::Constant::getNullValue(e_tp),
+								llvm::Constant::getNullValue(e_tp)
+							};
+
+							res = llvm::Constant::getNullValue(ret_tp);
+							for (int i = 0; i < 3; ++i) {
+								llvm::Value *row;
+								unsigned idxes[] = { unsigned(i) };
+
+								if (m_ptr != NULL) {
+									// matrix is a pointer
+									llvm::Value *idx = ctx.get_constant(i);
+									llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+									row = ctx->CreateLoad(ptr);
+								} else {
+									// matrix is a value
+									row = ctx->CreateExtractValue(matrix, idxes);
+								}
+
+								for (int j = 0; j < 4; ++j) {
+									unsigned elem_idx = { unsigned(j) };
+									llvm::Value *elem = ctx->CreateExtractElement(row, elem_idx);
+									res_cols[j] = ctx->CreateInsertElement(res_cols[j], elem, unsigned(i));
+								}
+							}
+
+							// last row is always (0, 0, 0, 1), so insert the 1 into res_cols[3][3]
+							llvm::Value *one = ctx.get_constant(1.0f);
+							res_cols[3] = ctx->CreateInsertElement(res_cols[3], one, 3);
+
+							for (unsigned i = 0; i < 4; ++i) {
+								res = ctx->CreateInsertValue(res, res_cols[i], i);
+							}
+							ctx->CreateStore(res, result);
+							ctx->CreateBr(end_bb);
+						}
+						ctx->SetInsertPoint(end_bb);
 					} else {
 						// scalar mode
 
@@ -3044,68 +3141,32 @@ class SignatureParser:
 							llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
 							llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
 
-							llvm::BasicBlock *w2o_bb = ctx.create_bb("w2o");
-							llvm::BasicBlock *o2w_bb = ctx.create_bb("o2w");
+							// convert w2o or o2w matrix from row-major to col-major
+							llvm::Value *m_ptr = ctx->CreateSelect(
+								cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
 
-							ctx->CreateCondBr(cond, w2o_bb, o2w_bb);
-							{
-								// convert w2o matrix from row major to column major
-								ctx->SetInsertPoint(w2o_bb);
-
-								llvm::Value *m_ptr = ctx.get_w2o_transform_value();
-
-								res = llvm::Constant::getNullValue(ret_tp);
-								for (int i = 0; i < 3; ++i) {
-									llvm::Value *idx = ctx.get_constant(i);
-									llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-									llvm::Value *row = ctx->CreateLoad(ptr);
-									for (unsigned j = 0; j < 4; ++j) {
-										unsigned idxes[] = { j };
-										llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-										idxes[0] = unsigned(i) + j * 4;
-										res = ctx->CreateInsertValue(res, elem, idxes);
-									}
+							res = llvm::Constant::getNullValue(ret_tp);
+							for (int i = 0; i < 3; ++i) {
+								llvm::Value *idx = ctx.get_constant(i);
+								llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+								llvm::Value *row = ctx->CreateLoad(ptr);
+								for (unsigned j = 0; j < 4; ++j) {
+									unsigned idxes[] = { j };
+									llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
+									idxes[0] = unsigned(i) + j * 4;
+									res = ctx->CreateInsertValue(res, elem, idxes);
 								}
-								{
-									// last row is always (0, 0, 0, 1)
-									for (unsigned j = 0; j < 4; ++j) {
-										unsigned idxes[] = { 3 + j * 4 };
-										llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-										res = ctx->CreateInsertValue(res, elem, idxes);
-									}
-								}
-								ctx->CreateStore(res, result);
-								ctx->CreateBr(end_bb);
 							}
 							{
-								// convert o2w matrix from row major to column major
-								ctx->SetInsertPoint(o2w_bb);
-
-								llvm::Value *m_ptr = ctx.get_o2w_transform_value();
-
-								res = llvm::Constant::getNullValue(ret_tp);
-								for (int i = 0; i < 3; ++i) {
-									llvm::Value *idx = ctx.get_constant(i);
-									llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-									llvm::Value *row = ctx->CreateLoad(ptr);
-									for (unsigned j = 0; j < 4; ++j) {
-										unsigned idxes[] = { j };
-										llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-										idxes[0] = unsigned(i) + j * 4;
-										res = ctx->CreateInsertValue(res, elem, idxes);
-									}
+								// last row is always (0, 0, 0, 1)
+								for (unsigned j = 0; j < 4; ++j) {
+									unsigned idxes[] = { 3 + j * 4 };
+									llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
+									res = ctx->CreateInsertValue(res, elem, idxes);
 								}
-								{
-									// last row is always (0, 0, 0, 1)
-									for (unsigned j = 0; j < 4; ++j) {
-										unsigned idxes[] = { 3 + j * 4 };
-										llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-										res = ctx->CreateInsertValue(res, elem, idxes);
-									}
-								}
-								ctx->CreateStore(res, result);
-								ctx->CreateBr(end_bb);
 							}
+							ctx->CreateStore(res, result);
+							ctx->CreateBr(end_bb);
 						}
 						ctx->SetInsertPoint(end_bb);
 					}
@@ -3114,8 +3175,9 @@ class SignatureParser:
 				// zero in all other contexts
 			}
 			res = ctx->CreateLoad(result);
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			"""
 			self.format_code(f, code)
 
@@ -3343,33 +3405,51 @@ class SignatureParser:
 					llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
 					llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
 
-					llvm::Value *w2o_ptr = ctx.get_w2o_transform_value();
-					llvm::Value *o2w_ptr = ctx.get_o2w_transform_value();
-					llvm::Value *m_ptr = ctx->CreateSelect(cond, w2o_ptr, o2w_ptr);
+					llvm::Value *matrix = ctx->CreateSelect(
+						cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
+					llvm::Value *m_ptr  =
+						 llvm::isa<llvm::PointerType>(matrix->getType()) ? matrix : NULL;
 
 					mi::mdl::IDefinition const *t_def = m_code_gen.find_stdlib_signature("::math", "length(float3)");
 
 					llvm::Function *t_fkt = get_intrinsic_function(t_def, /*return_derivs=*/ false);
 					llvm::Type *float3_tp = m_code_gen.get_type_mapper().get_float3_type();
-					llvm::Value *idx, *ptr;
 					llvm::Value *t_args[1];
 
+					static int const xyz[] = { 0, 1, 2 };
+					llvm::Value *shuffle = m_ptr != NULL ? NULL : ctx.get_shuffle(xyz);
+
 					// || transform_vector(float3(1,0,0), a, b) || == || transform[0] ||
-					idx = ctx.get_constant(0);
-					ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-					t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					if (m_ptr != NULL) {
+						llvm::Value *idx = ctx.get_constant(0);
+						llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+						t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					} else {
+						llvm::Value *row = ctx.create_extract(matrix, 0);
+						t_args[0] = ctx->CreateShuffleVector(row, row, shuffle);
+					}
 					llvm::Value *v_x = call_rt_func(ctx, t_fkt, t_args);
 
 					// || transform_vector(float3(0,1,0), a, b) || == || transform[1] ||
-					idx = ctx.get_constant(1);
-					ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-					t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					if (m_ptr != NULL) {
+						llvm::Value *idx = ctx.get_constant(1);
+						llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+						t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					} else {
+						llvm::Value *row = ctx.create_extract(matrix, 1);
+						t_args[0] = ctx->CreateShuffleVector(row, row, shuffle);
+					}
 					llvm::Value *v_y = call_rt_func(ctx, t_fkt, t_args);
 
 					// || transform_vector(float3(0,0,1), a, b) || == || transform[2] ||
-					idx = ctx.get_constant(2);
-					ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-					t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					if (m_ptr != NULL) {
+						llvm::Value *idx = ctx.get_constant(2);
+						llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+						t_args[0] = ctx.load_and_convert(float3_tp, ptr);
+					} else {
+						llvm::Value *row = ctx.create_extract(matrix, 2);
+						t_args[0] = ctx->CreateShuffleVector(row, row, shuffle);
+					}
 					llvm::Value *v_z = call_rt_func(ctx, t_fkt, t_args);
 
 					// calc average
@@ -3401,16 +3481,23 @@ class SignatureParser:
 			self.format_code(f, code)
 
 		elif mode == "tex::attr_lookup" or mode ==  "tex::attr_lookup_uvtile":
+			texture_param = params[0]
+			tex_dim = "3d" if texture_param == "T3" else "2d"
+
 			# texture attribute
-			code_params = {}
+			code_params = { "intrinsic": intrinsic }
 			if intrinsic == "width":
 				code_params["name"] = "WIDTH"
+				code_params["handler_name"] = "tex_resolution_" + tex_dim
 			elif intrinsic == "height":
 				code_params["name"] = "HEIGHT"
+				code_params["handler_name"] = "tex_resolution_" + tex_dim
 			elif intrinsic == "depth":
 				code_params["name"]  = "DEPTH"
+				code_params["handler_name"] = "tex_resolution_3d"
 			elif intrinsic == "texture_isvalid":
-				code_params["name"]  = "VALID"
+				code_params["name"]  = "ISVALID"
+				code_params["handler_name"] = "tex_texture_isvalid"
 
 			if mode == "tex::attr_lookup_uvtile":
 				code_params["get_uv_tile"] = "ctx.convert_and_store(b, uv_tile);"
@@ -3418,7 +3505,6 @@ class SignatureParser:
 				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
 
 			# check for udim special cases
-			texture_param = params[0]
 			if texture_param == "T2" and intrinsic in ["width", "height"]:
 				# special handling for texture_2d width() and height(), because these have
 				# uv_tile extra parameter, use the resource handler or resolution function
@@ -3438,7 +3524,7 @@ class SignatureParser:
 
 					%(get_uv_tile)s
 					llvm::Function *glue_func = get_runtime_func(RT_MDL_TEX_RESOLUTION_2D);
-					ctx->CreateCall4(glue_func, tmp, res_data, a, uv_tile);
+					ctx->CreateCall(glue_func, { tmp, res_data, a, uv_tile });
 
 					// return the %(comment_name)s component of the resolution
 					llvm::Value *arr = ctx->CreateLoad(tmp);
@@ -3473,62 +3559,75 @@ class SignatureParser:
 			else:
 				# use resource handler or lookup table
 				code = """
-				if (m_has_res_handler) {
-					llvm::Function *glue_func = get_runtime_func(RT_MDL_TEX_%(name)s);
-					res = ctx->CreateCall2(glue_func, res_data, a);
-				} else {
-					llvm::Type  *res_type = ctx.get_non_deriv_return_type();
+				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 
-					llvm::Value *lut      = m_code_gen.get_attribute_table(
-						ctx, LLVM_code_generator::RTK_TEXTURE);
-					llvm::Value *lut_size = m_code_gen.get_attribute_table_size(
-						ctx, LLVM_code_generator::RTK_TEXTURE);
-					if (lut != NULL) {
-						// have a lookup table
-						llvm::Value *tmp  = ctx.create_local(res_type, "tmp");
+				llvm::Value *lut      = m_code_gen.get_attribute_table(
+					ctx, LLVM_code_generator::RTK_TEXTURE);
+				llvm::Value *lut_size = m_code_gen.get_attribute_table_size(
+					ctx, LLVM_code_generator::RTK_TEXTURE);
+				if (lut != NULL) {
+					// have a lookup table
+					llvm::Value *tmp  = ctx.create_local(res_type, "tmp");
 
-						llvm::Value *cond = ctx->CreateICmpULT(a, lut_size);
+					llvm::Value *cond = ctx->CreateICmpULT(a, lut_size);
 
-						llvm::BasicBlock *lut_bb = ctx.create_bb("lut_bb");
-						llvm::BasicBlock *bad_bb = ctx.create_bb("bad_bb");
-						llvm::BasicBlock *end_bb = ctx.create_bb("end");
+					llvm::BasicBlock *lut_bb = ctx.create_bb("lut_bb");
+					llvm::BasicBlock *bad_bb = ctx.create_bb("bad_bb");
+					llvm::BasicBlock *end_bb = ctx.create_bb("end");
 
-						// we do not expect out of bounds here
-						ctx.CreateWeightedCondBr(cond, lut_bb, bad_bb, 1, 0);
-						{
-							ctx->SetInsertPoint(lut_bb);
+					// we do not expect out of bounds here
+					ctx.CreateWeightedCondBr(cond, lut_bb, bad_bb, 1, 0);
+					{
+						ctx->SetInsertPoint(lut_bb);
 
-							llvm::Value *select[] = {
-								a,
-								ctx.get_constant(int(Type_mapper::TAE_%(name)s))
-							};
+						llvm::Value *select[] = {
+							a,
+							ctx.get_constant(int(Type_mapper::TAE_%(name)s))
+						};
 
-							llvm::Value *adr = ctx->CreateInBoundsGEP(lut, select);
-							llvm::Value *v   = ctx->CreateLoad(adr);
+						llvm::Value *adr = ctx->CreateInBoundsGEP(lut, select);
+						llvm::Value *v   = ctx->CreateLoad(adr);
 
-							ctx->CreateStore(v, tmp);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(bad_bb);
-							ctx->CreateStore(llvm::Constant::getNullValue(res_type), tmp);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(end_bb);
-							res = ctx->CreateLoad(tmp);
-						}
-					} else {
-						// no lookup table
-						res = llvm::Constant::getNullValue(res_type);
+						ctx->CreateStore(v, tmp);
+						ctx->CreateBr(end_bb);
 					}
+					{
+						ctx->SetInsertPoint(bad_bb);
+						llvm::Value *val = call_tex_attr_func(
+							ctx,
+							RT_MDL_TEX_%(name)s,
+							Type_mapper::THV_%(handler_name)s,
+							res_data,
+							a,
+							nullptr,
+							res_type);
+
+						ctx->CreateStore(val, tmp);
+						ctx->CreateBr(end_bb);
+					}
+					{
+						ctx->SetInsertPoint(end_bb);
+						res = ctx->CreateLoad(tmp);
+					}
+				} else {
+					// no lookup table, call resource handler
+
+					res = call_tex_attr_func(
+						ctx,
+						RT_MDL_TEX_%(name)s,
+						Type_mapper::THV_%(handler_name)s,
+						res_data,
+						a,
+						nullptr,
+						res_type);
 				}
 				""" % code_params
 			self.format_code(f, code)
 
 			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "tex::lookup_float":
@@ -3700,8 +3799,9 @@ class SignatureParser:
 			self.format_code(f, code)
 
 			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "tex::lookup_floatX":
@@ -3905,8 +4005,9 @@ class SignatureParser:
 			self.format_code(f, code % code_params)
 
 			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()){  // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "tex::texel_float" or mode == "tex::texel_float_uvtile":
@@ -4002,8 +4103,9 @@ class SignatureParser:
 			self.format_code(f, code % code_params)
 
 			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "tex::texel_floatX" or mode == "tex::texel_floatX_uvtile":
@@ -4115,13 +4217,17 @@ class SignatureParser:
 			self.format_code(f, code % code_params)
 
 			self.format_code(f, """
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""")
 
 		elif mode == "debug::breakpoint":
 			code = """
-			if (m_ptx_mode) {
+			if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
+				llvm::Function *break_func = get_runtime_func(RT_MDL_DEBUGBREAK);
+				ctx->CreateCall(break_func);
+			} else if (m_target_lang == LLVM_code_generator::TL_PTX) {
 				llvm::FunctionType *f_tp = llvm::FunctionType::get(
 					m_code_gen.m_type_mapper.get_void_type(), /*is_VarArg=*/false);
 				llvm::InlineAsm *ia = llvm::InlineAsm::get(
@@ -4130,9 +4236,6 @@ class SignatureParser:
 					"",
 					/*hasSideEffects=*/false);
 				ctx->CreateCall(ia);
-			} else {
-				llvm::Function *break_func = get_runtime_func(RT_MDL_DEBUGBREAK);
-				ctx->CreateCall(break_func);
 			}
 			res = ctx.get_constant(true);
 			"""
@@ -4140,48 +4243,50 @@ class SignatureParser:
 
 		elif mode == "debug::assert":
 			code = """
-			llvm::Function   *conv_func = get_runtime_func(RT_MDL_TO_CSTRING);
+			if (m_target_lang != LLVM_code_generator::TL_HLSL) {
+				llvm::Function   *conv_func = get_runtime_func(RT_MDL_TO_CSTRING);
 
-			llvm::Value      *cond    = ctx->CreateICmpNE(a, ctx.get_constant(false));
+				llvm::Value      *cond    = ctx->CreateICmpNE(a, ctx.get_constant(false));
 
-			llvm::BasicBlock *fail_bb = ctx.create_bb("fail_bb");
-			llvm::BasicBlock *end_bb  = ctx.create_bb("end");
+				llvm::BasicBlock *fail_bb = ctx.create_bb("fail_bb");
+				llvm::BasicBlock *end_bb  = ctx.create_bb("end");
 
-			// we do not expect the assertion to fail here
-			ctx.CreateWeightedCondBr(cond, end_bb, fail_bb, 1, 0);
-			{
-				ctx->SetInsertPoint(fail_bb);
+				// we do not expect the assertion to fail here
+				ctx.CreateWeightedCondBr(cond, end_bb, fail_bb, 1, 0);
+				{
+					ctx->SetInsertPoint(fail_bb);
 
-				// convert the string arguments to cstrings
-				b = ctx->CreateCall(conv_func, b);  // message
-				c = ctx->CreateCall(conv_func, c);  // function name
-				d = ctx->CreateCall(conv_func, d);  // file
+					// convert the string arguments to cstrings
+					b = ctx->CreateCall(conv_func, b);  // message
+					c = ctx->CreateCall(conv_func, c);  // function name
+					d = ctx->CreateCall(conv_func, d);  // file
 
-				if (m_ptx_mode) {
-					llvm::Value *args[] = {
-						b,                           // message
-						d,                           // file
-						e,                           // line
-						c,                           // function name
-						ctx.get_constant(size_t(1))  // charSize
-					};
-					llvm::Function *assert_func = get_runtime_func(RT___ASSERTFAIL);
-					ctx->CreateCall(assert_func, args);
-				} else {
-					llvm::Value *args[] = {
-						b,                           // message
-						c,                           // function name
-						d,                           // file
-						e                            // line
-					};
-					llvm::Function *assert_func = get_runtime_func(RT_MDL_ASSERTFAIL);
-					ctx->CreateCall(assert_func, args);
+					if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
+						llvm::Value *args[] = {
+							b,                           // message
+							c,                           // function name
+							d,                           // file
+							e                            // line
+						};
+						llvm::Function *assert_func = get_runtime_func(RT_MDL_ASSERTFAIL);
+						ctx->CreateCall(assert_func, args);
+					} else if (m_target_lang == LLVM_code_generator::TL_PTX) {
+						llvm::Value *args[] = {
+							b,                           // message
+							d,                           // file
+							e,                           // line
+							c,                           // function name
+							ctx.get_constant(size_t(1))  // charSize
+						};
+						llvm::Function *assert_func = get_runtime_func(RT___ASSERTFAIL);
+						ctx->CreateCall(assert_func, args);
+					}
+
+					ctx->CreateBr(end_bb);
 				}
-
-				ctx->CreateBr(end_bb);
-			}
-			{
-				ctx->SetInsertPoint(end_bb);
+				{
+					ctx->SetInsertPoint(end_bb);
+				}
 			}
 			res = ctx.get_constant(true);
 			"""
@@ -4196,7 +4301,7 @@ class SignatureParser:
 
 			# PTX prolog
 			code = """
-				if (m_ptx_mode) {
+				if (m_target_lang == LLVM_code_generator::TL_PTX) {
 					llvm::Function    *vprintf_func = get_runtime_func(RT_VPRINTF);
 					llvm::PointerType *void_ptr_tp = m_code_gen.m_type_mapper.get_void_ptr_type();
 					llvm::DataLayout   data_layout(m_code_gen.get_llvm_module());
@@ -4270,7 +4375,7 @@ class SignatureParser:
 
 			# Allocate valist buffer
 			code = """
-				buffer_size = data_layout.RoundUpAlignment(buffer_size, VPRINTF_BUFFER_ROUND_UP);
+				buffer_size = int(llvm::alignTo(buffer_size, VPRINTF_BUFFER_ROUND_UP));
 				llvm::AllocaInst *valist = ctx->CreateAlloca(
 					llvm::ArrayType::get(
 						m_code_gen.m_type_mapper.get_char_type(),
@@ -4354,7 +4459,7 @@ class SignatureParser:
 						ctx->CreateBitCast(valist, void_ptr_tp)
 					};
 					ctx->CreateCall(vprintf_func, args);
-				} else {
+				} else if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
 					llvm::Function *begin_func = get_runtime_func(RT_MDL_PRINT_BEGIN);
 					llvm::Value    *buf        = ctx->CreateCall(begin_func);
 			""" % format_str
@@ -4380,25 +4485,25 @@ class SignatureParser:
 							unsigned idxes[1];
 
 							for (unsigned i = 0; i < 3; ++i) {
-								ctx->CreateCall2(prints_func, buf, comma);
+								ctx->CreateCall(prints_func, { buf, comma });
 								comma = next;
 								idxes[0] = i;
 
 								llvm::Value *elem = ctx->CreateExtractValue(%(param)s, idxes);
-								ctx->CreateCall2(print_func, buf, elem);
+								ctx->CreateCall(print_func, { buf, elem });
 							}
 						} else {
 							for (int i = 0; i < 3; ++i) {
-								ctx->CreateCall2(prints_func, buf, comma);
+								ctx->CreateCall(prints_func, { buf, comma });
 								comma = next;
 
 								llvm::Value *idx  = ctx.get_constant(i);
 								llvm::Value *elem = ctx->CreateExtractElement(%(param)s, idx);
-								ctx->CreateCall2(print_func, buf, elem);
+								ctx->CreateCall(print_func, { buf, elem });
 							}
 						}
 						llvm::Value *end = ctx.get_constant(")");
-						ctx->CreateCall2(prints_func, buf, end);
+						ctx->CreateCall(prints_func, { buf, end });
 					}
 					"""
 				elif atomic_chk:
@@ -4420,7 +4525,7 @@ class SignatureParser:
 					code = add_conv + """
 					{
 						llvm::Function *print_func = get_runtime_func(RT_MDL_PRINT_%(type)s);
-						ctx->CreateCall2(print_func, buf, %(param)s);
+						ctx->CreateCall(print_func, { buf, %(param)s });
 					}
 					"""
 				elif vector_chk:
@@ -4438,25 +4543,25 @@ class SignatureParser:
 							unsigned idxes[1];
 
 							for (unsigned i = 0; i < %(size)d; ++i) {
-								ctx->CreateCall2(prints_func, buf, comma);
+								ctx->CreateCall(prints_func, { buf, comma });
 								comma = next;
 								idxes[0] = i;
 
 								llvm::Value *elem = ctx->CreateExtractValue(%(param)s, idxes);
-								ctx->CreateCall2(print_func, buf, elem);
+								ctx->CreateCall(print_func, { buf, elem });
 							}
 						} else {
 							for (int i = 0; i < %(size)d; ++i) {
-								ctx->CreateCall2(prints_func, buf, comma);
+								ctx->CreateCall(prints_func, { buf, comma });
 								comma = next;
 
 								llvm::Value *idx  = ctx.get_constant(i);
 								llvm::Value *elem = ctx->CreateExtractElement(%(param)s, idx);
-								ctx->CreateCall2(print_func, buf, elem);
+								ctx->CreateCall(print_func, { buf, elem });
 							}
 						}
 						llvm::Value *end = ctx.get_constant(">");
-						ctx->CreateCall2(prints_func, buf, end);
+						ctx->CreateCall(prints_func, { buf, end });
 					}
 					"""
 				else:
@@ -4466,7 +4571,7 @@ class SignatureParser:
 					"""
 				self.format_code(f, code % { "type" : type, "size" : size, "param" : chr(ord('a') + idx) })
 				idx = idx + 1
-			# epilog
+			# CPU epilog
 			code = """
 					llvm::Function *end_func = get_runtime_func(RT_MDL_PRINT_END);
 					ctx->CreateCall(end_func, buf);
@@ -4486,68 +4591,75 @@ class SignatureParser:
 
 		elif mode == "df::attr_lookup":
 			# light profile or bsdf measurement attribute
-			code_params = { "TYPE" : "LIGHT_PROFILE" }
+			code_params = { "TYPE" : "LIGHT_PROFILE", "intrinsic" : intrinsic }
 			if intrinsic == "light_profile_power":
 				code_params["name"] = "POWER"
 			elif intrinsic == "light_profile_maximum":
 				code_params["name"] = "MAXIMUM"
 			elif intrinsic == "light_profile_isvalid":
-				code_params["name"] = "VALID"
+				code_params["name"] = "ISVALID"
 			elif intrinsic == "bsdf_measurement_isvalid":
 				code_params["TYPE"] = "BSDF_MEASUREMENT"
-				code_params["name"] = "VALID"
+				code_params["name"] = "ISVALID"
 			code = """
-			if (m_has_res_handler) {
-				llvm::Function *glue_func = get_runtime_func(RT_MDL_DF_%(TYPE)s_%(name)s);
-				res = ctx->CreateCall2(glue_func, res_data, a);
-			} else {
-				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
-				llvm::Value *lut      = m_code_gen.get_attribute_table(
-					ctx, LLVM_code_generator::RTK_%(TYPE)s);
-				llvm::Value *lut_size =  m_code_gen.get_attribute_table_size(
-					ctx, LLVM_code_generator::RTK_%(TYPE)s);
-				if (lut != NULL) {
-					// have a lookup table
-					llvm::Value *tmp  = ctx.create_local(res_type, "tmp");
+			llvm::Type  *res_type = ctx.get_non_deriv_return_type();
+			llvm::Value *lut      = m_code_gen.get_attribute_table(
+				ctx, LLVM_code_generator::RTK_%(TYPE)s);
+			llvm::Value *lut_size =  m_code_gen.get_attribute_table_size(
+				ctx, LLVM_code_generator::RTK_%(TYPE)s);
+			if (lut != NULL) {
+				// have a lookup table
+				llvm::Value *tmp  = ctx.create_local(res_type, "tmp");
 
-					llvm::Value *cond = ctx->CreateICmpULT(a, lut_size);
+				llvm::Value *cond = ctx->CreateICmpULT(a, lut_size);
 
-					llvm::BasicBlock *lut_bb = ctx.create_bb("lut_bb");
-					llvm::BasicBlock *bad_bb = ctx.create_bb("bad_bb");
-					llvm::BasicBlock *end_bb = ctx.create_bb("end");
+				llvm::BasicBlock *lut_bb = ctx.create_bb("lut_bb");
+				llvm::BasicBlock *bad_bb = ctx.create_bb("bad_bb");
+				llvm::BasicBlock *end_bb = ctx.create_bb("end");
 
-					// we do not expect out of bounds here
-					ctx.CreateWeightedCondBr(cond, lut_bb, bad_bb, 1, 0);
-					{
-						ctx->SetInsertPoint(lut_bb);
+				// we do not expect out of bounds here
+				ctx.CreateWeightedCondBr(cond, lut_bb, bad_bb, 1, 0);
+				{
+					ctx->SetInsertPoint(lut_bb);
 
-						llvm::Value *select[] = {
-							a,
-							ctx.get_constant(int(Type_mapper::LAE_%(name)s))
-						};
+					llvm::Value *select[] = {
+						a,
+						ctx.get_constant(int(Type_mapper::LAE_%(name)s))
+					};
 
-						llvm::Value *adr = ctx->CreateInBoundsGEP(lut, select);
-						llvm::Value *v   = ctx->CreateLoad(adr);
+					llvm::Value *adr = ctx->CreateInBoundsGEP(lut, select);
+					llvm::Value *v   = ctx->CreateLoad(adr);
 
-						ctx->CreateStore(v, tmp);
-						ctx->CreateBr(end_bb);
-					}
-					{
-						ctx->SetInsertPoint(bad_bb);
-						ctx->CreateStore(llvm::Constant::getNullValue(res_type), tmp);
-						ctx->CreateBr(end_bb);
-					}
-					{
-						ctx->SetInsertPoint(end_bb);
-						res = ctx->CreateLoad(tmp);
-					}
-				} else {
-					// no lookup table
-					res = llvm::Constant::getNullValue(res_type);
+					ctx->CreateStore(v, tmp);
+					ctx->CreateBr(end_bb);
 				}
+				{
+					ctx->SetInsertPoint(bad_bb);
+					llvm::Value *val = call_attr_func(
+						ctx,
+						RT_MDL_DF_%(TYPE)s_%(name)s,
+						Type_mapper::THV_%(intrinsic)s,
+						res_data,
+						a);
+					ctx->CreateStore(val, tmp);
+					ctx->CreateBr(end_bb);
+				}
+				{
+					ctx->SetInsertPoint(end_bb);
+					res = ctx->CreateLoad(tmp);
+				}
+			} else {
+				// no lookup table
+				res = call_attr_func(
+					ctx,
+					RT_MDL_DF_%(TYPE)s_%(name)s,
+					Type_mapper::THV_%(intrinsic)s,
+					res_data,
+					a);
 			}
-			if (inst.get_return_derivs())  // expand to dual
+			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
+			}
 			""" % code_params
 			self.format_code(f, code)
 
@@ -4944,7 +5056,7 @@ class SignatureParser:
 	def register_c_runtime(self):
 		"""Register functions from the C runtime."""
 
-		# note: this sewction contains only functions supported in the C-runtime of Windows and Linux
+		# note: this section contains only functions supported in the C-runtime of Windows and Linux
 		self.register_runtime_func("absi",   "II_II")
 		self.register_runtime_func("absf",   "FF_FF")
 		self.register_runtime_func("abs",    "DD_DD")
@@ -4981,13 +5093,15 @@ class SignatureParser:
 		self.register_runtime_func("sqrtf",  "FF_FF")
 		self.register_runtime_func("tan",    "DD_DD")
 		self.register_runtime_func("tanf",   "FF_FF")
-		# extra used by other functions
+		# used by other functions if supported
 		self.register_runtime_func("copysign",  "DD_DDDD")
 		self.register_runtime_func("copysignf", "FF_FFFF")
 		# optional supported
 		self.register_runtime_func("sincosf", "VV_FFffff")
 		self.register_runtime_func("exp2f",   "FF_FF")
 		self.register_runtime_func("exp2",    "DD_DD")
+		self.register_runtime_func("fracf",   "FF_FF")
+		self.register_runtime_func("frac",    "DD_DD")
 		self.register_runtime_func("log2f",   "FF_FF")
 		self.register_runtime_func("log2",    "DD_DD")
 		self.register_runtime_func("mini",    "II_IIII")
@@ -4998,6 +5112,8 @@ class SignatureParser:
 		self.register_runtime_func("max",     "DD_DDDD")
 		self.register_runtime_func("rsqrtf",  "FF_FF")
 		self.register_runtime_func("rsqrt",   "DD_DD")
+		self.register_runtime_func("signf",   "II_FF")
+		self.register_runtime_func("sign",    "II_DD")
 
 	def register_atomic_runtime(self):
 		self.register_mdl_runtime_func("mdl_clampi",      "II_IIIIII")
@@ -5031,10 +5147,11 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_max",         "DD_DDDD")
 		# tex functions
 		self.register_mdl_runtime_func("mdl_tex_resolution_2d", "IA2_PTIIIA2")
+		self.register_mdl_runtime_func("mdl_tex_resolution_3d", "IA3_PTII")
 		self.register_mdl_runtime_func("mdl_tex_width",         "II_PTII")
 		self.register_mdl_runtime_func("mdl_tex_height",        "II_PTII")
 		self.register_mdl_runtime_func("mdl_tex_depth",         "II_PTII")
-		self.register_mdl_runtime_func("mdl_tex_valid",         "BB_PTII")
+		self.register_mdl_runtime_func("mdl_tex_isvalid",       "BB_PTII")
 
 		self.register_mdl_runtime_func("mdl_tex_lookup_float_2d",       "FF_PTIIFA2EWMEWMFA2FA2")
 		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float_2d", "FF_PTIIFD2EWMEWMFA2FA2")
@@ -5081,8 +5198,8 @@ class SignatureParser:
 		# df functions
 		self.register_mdl_runtime_func("mdl_df_light_profile_power",            "FF_PTII")
 		self.register_mdl_runtime_func("mdl_df_light_profile_maximum",          "FF_PTII")
-		self.register_mdl_runtime_func("mdl_df_light_profile_valid",            "BB_PTII")
-		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_valid",         "BB_PTII")
+		self.register_mdl_runtime_func("mdl_df_light_profile_isvalid",          "BB_PTII")
+		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_isvalid",       "BB_PTII")
 		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_resolution",    "IA3_PTIIEMP")
 		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_evaluate",      "FA3_PTIIFA2FA2EMP")
 		self.register_mdl_runtime_func("mdl_df_bsdf_measurement_sample",        "FA3_PTIIFA2FA3EMP")
@@ -5286,6 +5403,38 @@ class SignatureParser:
 			Function_context              &ctx,
 			llvm::Function                *callee,
 			llvm::ArrayRef<llvm::Value *> args);
+
+		/// Call texture attribute runtime function.
+		///
+		/// \param ctx            the current function context
+		/// \param tex_func_code  the runtime function code
+		/// \param tex_func_idx   the index in the texture handler vtable
+		/// \param res_data       the resource data
+		/// \param tex_id         the ID of the texture
+		/// \param opt_uv_tile    the UV tile, if resolution_2d will be called
+		/// \param res_type       the type of the attribute
+		llvm::Value *call_tex_attr_func(
+			Function_context &ctx,
+			Runtime_function tex_func_code,
+			Type_mapper::Tex_handler_vtable_index tex_func_idx,
+			llvm::Value *res_data,
+			llvm::Value *tex_id,
+			llvm::Value *opt_uv_tile,
+			llvm::Type *res_type);
+
+		/// Call attribute runtime function.
+		///
+		/// \param ctx            the current function context
+		/// \param func_code      the runtime function code
+		/// \param tex_func_idx   the index in the texture handler vtable
+		/// \param res_data       the resource data
+		/// \param res_id         the ID of the resource
+		llvm::Value *call_attr_func(
+			Function_context &ctx,
+			Runtime_function func_code,
+			Type_mapper::Tex_handler_vtable_index tex_func_idx,
+			llvm::Value *res_data,
+			llvm::Value *res_id);
 		"""
 		self.format_code(f, code)
 
@@ -5465,17 +5614,17 @@ class SignatureParser:
 		f = open(self.out_name, "w")
 
 		# add class members
-		self.add_class_member("mi::mdl::IAllocator *", "m_alloc",                      "The allocator.",               True)
-		self.add_class_member("LLVM_code_generator &", "m_code_gen",                   "The code generator.",          True)
-		self.add_class_member("bool",                  "m_ptx_mode",                   "True if destination is PTX.",  True)
-		self.add_class_member("bool",                  "m_fast_math",                  "True if fast-math is enabled.",  True)
-		self.add_class_member("bool",                  "m_has_sincosf",                "True if destination has sincosf.",  True)
-		self.add_class_member("bool",                  "m_has_res_handler",            "True if a resource handler I/F is available.", True)
-		self.add_class_member("bool",                  "m_use_user_state_module",      "True if user-defined state module functions should be used.", False)
-		self.add_class_member("int",                   "m_internal_space",             "The internal_space encoding.", True)
-		self.add_class_member("llvm::Function *",      "m_runtime_funcs[RT_LAST + 1]", "Runtime functions.",           False)
-		self.add_class_member("llvm::Function *",      "m_intrinsics[%d * 2]" % self.m_next_func_index, "Cache for intrinsic functions, with and without derivative returns.", False)
-		self.add_class_member("llvm::Function *",      "m_internal_funcs[Internal_function::KI_NUM_INTERNAL_FUNCTIONS]", "Cache for internal functions.", False)
+		self.add_class_member("mi::mdl::IAllocator *",                "m_alloc",                      "The allocator.",               True)
+		self.add_class_member("LLVM_code_generator &",                "m_code_gen",                   "The code generator.",          True)
+		self.add_class_member("LLVM_code_generator::Target_language", "m_target_lang",                "The target language.",  True)
+		self.add_class_member("bool",                                 "m_fast_math",                  "True if fast-math is enabled.",  True)
+		self.add_class_member("bool",                                 "m_has_sincosf",                "True if destination has sincosf.",  True)
+		self.add_class_member("bool",                                 "m_has_res_handler",            "True if a resource handler I/F is available.", True)
+		self.add_class_member("bool",                                 "m_use_user_state_module",      "True if user-defined state module functions should be used.", False)
+		self.add_class_member("int",                                  "m_internal_space",             "The internal_space encoding.", True)
+		self.add_class_member("llvm::Function *",                     "m_runtime_funcs[RT_LAST + 1]", "Runtime functions.",           False)
+		self.add_class_member("llvm::Function *",                     "m_intrinsics[%d * 2]" % self.m_next_func_index, "Cache for intrinsic functions, with and without derivative returns.", False)
+		self.add_class_member("llvm::Function *",                     "m_internal_funcs[Internal_function::KI_NUM_INTERNAL_FUNCTIONS]", "Cache for internal functions.", False)
 
 		# start class
 		self.write(f, "class MDL_runtime_creator {\n")

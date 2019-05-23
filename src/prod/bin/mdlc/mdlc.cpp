@@ -191,7 +191,7 @@ void Mdlc::usage()
         "\tShow source code position in target output.\n"
         "  --inline\n"
         "  -i\n"
-        "\tInlines the given module(if target is set to MDL).\n"
+        "\tInlines the given module (if target is set to MDL).\n"
         "  --help\n"
         "  -?"
         "\tThis help.\n",
@@ -601,6 +601,8 @@ bool Mdlc::backend(IModule const *module)
         }
         break;
     case TL_GLSL:
+        break;
+    case TL_HLSL:
         break;
     case TL_JIT:
         break;

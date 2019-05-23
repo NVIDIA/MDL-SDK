@@ -498,6 +498,12 @@ const mi::neuraylib::IType_bsdf* Type_factory::create_bsdf() const
     return create<mi::neuraylib::IType_bsdf>( result_int.get(), /*owner*/ 0);
 }
 
+const mi::neuraylib::IType_hair_bsdf* Type_factory::create_hair_bsdf() const
+{
+    mi::base::Handle<const MDL::IType_hair_bsdf> result_int( m_tf->create_hair_bsdf());
+    return create<mi::neuraylib::IType_hair_bsdf>( result_int.get(), /*owner*/ 0);
+}
+
 const mi::neuraylib::IType_edf* Type_factory::create_edf() const
 {
     mi::base::Handle<const MDL::IType_edf> result_int( m_tf->create_edf());
@@ -546,6 +552,14 @@ mi::Sint32 Type_factory::compare(
     mi::base::Handle<const MDL::IType_list> lhs_int( get_internal_type_list( lhs));
     mi::base::Handle<const MDL::IType_list> rhs_int( get_internal_type_list( rhs));
     return m_tf->compare( lhs_int.get(), rhs_int.get());
+}
+
+mi::Sint32 Type_factory::is_compatible(
+    const mi::neuraylib::IType* src, const mi::neuraylib::IType* dst) const
+{
+    mi::base::Handle<const MDL::IType> src_int( get_internal_type(src));
+    mi::base::Handle<const MDL::IType> dst_int( get_internal_type(dst));
+    return m_tf->is_compatible( src_int.get(), dst_int.get());
 }
 
 const mi::IString* Type_factory::dump( const mi::neuraylib::IType* type, mi::Size depth) const
@@ -635,6 +649,11 @@ const mi::neuraylib::IType* Type_factory::create(
         case MDL::IType::TK_BSDF: {
             mi::base::Handle<const MDL::IType_bsdf> t( type->get_interface<MDL::IType_bsdf>());
             return new Type_bsdf( this, t.get(), owner);
+        }
+        case MDL::IType::TK_HAIR_BSDF: {
+            mi::base::Handle<const MDL::IType_hair_bsdf> t(
+                type->get_interface<MDL::IType_hair_bsdf>());
+            return new Type_hair_bsdf(this, t.get(), owner);
         }
         case MDL::IType::TK_EDF: {
             mi::base::Handle<const MDL::IType_edf> t( type->get_interface<MDL::IType_edf>());

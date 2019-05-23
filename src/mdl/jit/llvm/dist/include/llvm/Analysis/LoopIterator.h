@@ -31,6 +31,66 @@ namespace llvm {
 
 class LoopBlocksTraversal;
 
+// A traits type that is intended to be used in graph algorithms. The graph
+// traits starts at the loop header, and traverses the BasicBlocks that are in
+// the loop body, but not the loop header. Since the loop header is skipped,
+// the back edges are excluded.
+//
+// TODO: Explore the possibility to implement LoopBlocksTraversal in terms of
+//       LoopBodyTraits, so that insertEdge doesn't have to be specialized.
+struct LoopBodyTraits {
+  using NodeRef = std::pair<const Loop *, BasicBlock *>;
+
+  // This wraps a const Loop * into the iterator, so we know which edges to
+  // filter out.
+  class WrappedSuccIterator
+      : public iterator_adaptor_base<
+            WrappedSuccIterator, succ_iterator,
+            typename std::iterator_traits<succ_iterator>::iterator_category,
+            NodeRef, std::ptrdiff_t, NodeRef *, NodeRef> {
+    using BaseT = iterator_adaptor_base<
+        WrappedSuccIterator, succ_iterator,
+        typename std::iterator_traits<succ_iterator>::iterator_category,
+        NodeRef, std::ptrdiff_t, NodeRef *, NodeRef>;
+
+    const Loop *L;
+
+  public:
+    WrappedSuccIterator(succ_iterator Begin, const Loop *L)
+        : BaseT(Begin), L(L) {}
+
+    NodeRef operator*() const { return {L, *I}; }
+  };
+
+  struct LoopBodyFilter {
+    bool operator()(NodeRef N) const {
+      const Loop *L = N.first;
+      return N.second != L->getHeader() && L->contains(N.second);
+    }
+  };
+
+  using ChildIteratorType =
+      filter_iterator<WrappedSuccIterator, LoopBodyFilter>;
+
+  static NodeRef getEntryNode(const Loop &G) { return {&G, G.getHeader()}; }
+
+  static ChildIteratorType child_begin(NodeRef Node) {
+    return make_filter_range(make_range<WrappedSuccIterator>(
+                                 {succ_begin(Node.second), Node.first},
+                                 {succ_end(Node.second), Node.first}),
+                             LoopBodyFilter{})
+        .begin();
+  }
+
+  static ChildIteratorType child_end(NodeRef Node) {
+    return make_filter_range(make_range<WrappedSuccIterator>(
+                                 {succ_begin(Node.second), Node.first},
+                                 {succ_end(Node.second), Node.first}),
+                             LoopBodyFilter{})
+        .end();
+  }
+};
+
 /// Store the result of a depth first search within basic blocks contained by a
 /// single loop.
 ///
@@ -108,13 +168,32 @@ public:
   }
 };
 
+/// Wrapper class to LoopBlocksDFS that provides a standard begin()/end()
+/// interface for the DFS reverse post-order traversal of blocks in a loop body.
+class LoopBlocksRPO {
+private:
+  LoopBlocksDFS DFS;
+
+public:
+  LoopBlocksRPO(Loop *Container) : DFS(Container) {}
+
+  /// Traverse the loop blocks and store the DFS result.
+  void perform(LoopInfo *LI) {
+    DFS.perform(LI);
+  }
+
+  /// Reverse iterate over the cached postorder blocks.
+  LoopBlocksDFS::RPOIterator begin() const { return DFS.beginRPO(); }
+  LoopBlocksDFS::RPOIterator end() const { return DFS.endRPO(); }
+};
+
 /// Specialize po_iterator_storage to record postorder numbers.
 template<> class po_iterator_storage<LoopBlocksTraversal, true> {
   LoopBlocksTraversal &LBT;
 public:
   po_iterator_storage(LoopBlocksTraversal &lbs) : LBT(lbs) {}
   // These functions are defined below.
-  bool insertEdge(BasicBlock *From, BasicBlock *To);
+  bool insertEdge(Optional<BasicBlock *> From, BasicBlock *To);
   void finishPostorder(BasicBlock *BB);
 };
 
@@ -166,8 +245,8 @@ public:
   }
 };
 
-inline bool po_iterator_storage<LoopBlocksTraversal, true>::
-insertEdge(BasicBlock *From, BasicBlock *To) {
+inline bool po_iterator_storage<LoopBlocksTraversal, true>::insertEdge(
+    Optional<BasicBlock *> From, BasicBlock *To) {
   return LBT.visitPreorder(To);
 }
 

@@ -31,8 +31,7 @@ well together.
 
 This document contains information necessary to successfully implement this
 interface, use it, and to test both sides.  It also explains some of the finer
-points about what exactly results mean.  If you feel that something is unclear
-or should be added, please `let me know <mailto:sabre@nondot.org>`_.
+points about what exactly results mean.  
 
 ``AliasAnalysis`` Class Overview
 ================================
@@ -51,7 +50,7 @@ starting address and size, and function calls are represented as the actual
 get mod/ref information for arbitrary instructions.
 
 All ``AliasAnalysis`` interfaces require that in queries involving multiple
-values, values which are not `constants <LangRef.html#constants>`_ are all
+values, values which are not :ref:`constants <constants>` are all
 defined within the same function.
 
 Representation of Pointers
@@ -111,7 +110,7 @@ returns MustAlias, PartialAlias, MayAlias, or NoAlias as appropriate.
 
 Like all ``AliasAnalysis`` interfaces, the ``alias`` method requires that either
 the two pointer values be defined within the same function, or at least one of
-the values is a `constant <LangRef.html#constants>`_.
+the values is a :ref:`constant <constants>`.
 
 .. _Must, May, or No:
 
@@ -126,18 +125,19 @@ used for reading memory. Another is when the memory is freed and reallocated
 between accesses through one pointer and accesses through the other --- in this
 case, there is a dependence, but it's mediated by the free and reallocation.
 
-As an exception to this is with the `noalias <LangRef.html#noalias>`_ keyword;
+As an exception to this is with the :ref:`noalias <noalias>` keyword;
 the "irrelevant" dependencies are ignored.
 
 The ``MayAlias`` response is used whenever the two pointers might refer to the
 same object.
 
 The ``PartialAlias`` response is used when the two memory objects are known to
-be overlapping in some way, but do not start at the same address.
+be overlapping in some way, regardless whether they start at the same address
+or not.
 
 The ``MustAlias`` response may only be returned if the two memory objects are
 guaranteed to always start at exactly the same location. A ``MustAlias``
-response implies that the pointers compare equal.
+response does not imply that the pointers compare equal.
 
 The ``getModRefInfo`` methods
 -----------------------------
@@ -190,7 +190,7 @@ this property are side-effect free, only depending on their input arguments and
 the state of memory when they are called.  This property allows calls to these
 functions to be eliminated and moved around, as long as there is no store
 instruction that changes the contents of memory.  Note that all functions that
-satisfy the ``doesNotAccessMemory`` method also satisfies ``onlyReadsMemory``.
+satisfy the ``doesNotAccessMemory`` method also satisfy ``onlyReadsMemory``.
 
 Writing a new ``AliasAnalysis`` Implementation
 ==============================================
@@ -246,6 +246,20 @@ analysis run method (``run`` for a ``Pass``, ``runOnFunction`` for a
     return false;
   }
 
+Required methods to override
+----------------------------
+
+You must override the ``getAdjustedAnalysisPointer`` method on all subclasses
+of ``AliasAnalysis``. An example implementation of this method would look like:
+
+.. code-block:: c++
+
+  void *getAdjustedAnalysisPointer(const void* ID) override {
+    if (ID == &AliasAnalysis::ID)
+      return (AliasAnalysis*)this;
+    return this;
+  }
+
 Interfaces which may be specified
 ---------------------------------
 
@@ -272,8 +286,8 @@ Mod/Ref result, simply return whatever the superclass computes.  For example:
 
 .. code-block:: c++
 
-  AliasAnalysis::AliasResult alias(const Value *V1, unsigned V1Size,
-                                   const Value *V2, unsigned V2Size) {
+  AliasResult alias(const Value *V1, unsigned V1Size,
+                    const Value *V2, unsigned V2Size) {
     if (...)
       return NoAlias;
     ...
@@ -375,12 +389,6 @@ in its ``getAnalysisUsage`` that it does so. Some passes attempt to use
 ``AU.addPreserved<AliasAnalysis>``, however this doesn't actually have any
 effect.
 
-``AliasAnalysisCounter`` (``-count-aa``) and ``AliasDebugger`` (``-debug-aa``)
-are implemented as ``ModulePass`` classes, so if your alias analysis uses
-``FunctionPass``, it won't be able to use these utilities. If you try to use
-them, the pass manager will silently route alias analysis queries directly to
-``BasicAliasAnalysis`` instead.
-
 Similarly, the ``opt -p`` option introduces ``ModulePass`` passes between each
 pass, which prevents the use of ``FunctionPass`` alias analysis passes.
 
@@ -395,17 +403,10 @@ before it appears in an alias query. However, popular clients such as ``GVN``
 don't support this, and are known to trigger errors when run with the
 ``AliasAnalysisDebugger``.
 
-Due to several of the above limitations, the most obvious use for the
-``AliasAnalysisCounter`` utility, collecting stats on all alias queries in a
-compilation, doesn't work, even if the ``AliasAnalysis`` implementations don't
-use ``FunctionPass``.  There's no way to set a default, much less a default
-sequence, and there's no way to preserve it.
-
 The ``AliasSetTracker`` class (which is used by ``LICM``) makes a
-non-deterministic number of alias queries. This can cause stats collected by
-``AliasAnalysisCounter`` to have fluctuations among identical runs, for
-example. Another consequence is that debugging techniques involving pausing
-execution after a predetermined number of queries can be unreliable.
+non-deterministic number of alias queries. This can cause debugging techniques
+involving pausing execution after a predetermined number of queries to be
+unreliable.
 
 Many alias queries can be reformulated in terms of other alias queries. When
 multiple ``AliasAnalysis`` queries are chained together, it would make sense to
@@ -621,7 +622,7 @@ transformations:
 * It uses mod/ref information to hoist function calls out of loops that do not
   write to memory and are loop-invariant.
 
-* If uses alias information to promote memory objects that are loaded and stored
+* It uses alias information to promote memory objects that are loaded and stored
   to in loops to live in a register instead.  It can do this if there are no may
   aliases to the loaded/stored memory location.
 
@@ -663,21 +664,6 @@ you're using the ``AliasSetTracker`` class.  To use it, use something like:
 
   % opt -ds-aa -print-alias-sets -disable-output
 
-The ``-count-aa`` pass
-^^^^^^^^^^^^^^^^^^^^^^
-
-The ``-count-aa`` pass is useful to see how many queries a particular pass is
-making and what responses are returned by the alias analysis.  As an example:
-
-.. code-block:: bash
-
-  % opt -basicaa -count-aa -ds-aa -count-aa -licm
-
-will print out how many queries (and what responses are returned) by the
-``-licm`` pass (of the ``-ds-aa`` pass) and how many queries are made of the
-``-basicaa`` pass by the ``-ds-aa`` pass.  This can be useful when debugging a
-transformation or an alias analysis implementation.
-
 The ``-aa-eval`` pass
 ^^^^^^^^^^^^^^^^^^^^^
 
@@ -689,6 +675,12 @@ algorithm will have a lower number of may aliases).
 
 Memory Dependence Analysis
 ==========================
+
+.. note::
+
+  We are currently in the process of migrating things from
+  ``MemoryDependenceAnalysis`` to :doc:`MemorySSA`. Please try to use
+  that instead.
 
 If you're just looking to be a client of alias analysis information, consider
 using the Memory Dependence Analysis interface instead.  MemDep is a lazy,

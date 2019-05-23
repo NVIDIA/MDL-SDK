@@ -62,6 +62,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_START_GROUP}
         mdl::include-mi
         mdl::mdl-compiler-compilercore
+        mdl::mdl-compiler-compiler_hlsl
         mdl::mdl-codegenerators-generator_dag
         mdl::mdl-codegenerators-generator_code
         mdl::mdl-runtime

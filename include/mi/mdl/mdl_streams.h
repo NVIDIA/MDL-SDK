@@ -91,6 +91,14 @@ public:
 
     /// Flush the stream.
     virtual void flush() = 0;
+
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    virtual bool unput(char c) = 0;
 };
 
 /// The interface of an output stream that supports colored output.

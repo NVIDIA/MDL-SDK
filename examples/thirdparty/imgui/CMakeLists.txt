@@ -28,22 +28,58 @@
 
 # name of the target and the resulting library
 set(PROJECT_NAME imgui)
-set(PROJECT_VERSION 1.54)
+set(PROJECT_VERSION 1.70) # ef7c58cc54007ef4c80150a4b3ba783575cd9790
 
 # collect sources
 set(PROJECT_SOURCES
-    "include/imconfig.h"
-    "include/imgui.h"
-    "include/imgui_impl_glfw_gl3.h"
-    "src/imgui.cpp"
-    "src/imgui_demo.cpp"
-    "src/imgui_draw.cpp"
-    "src/imgui_impl_glfw_gl3.cpp"
-    "src/imgui_internal.h"
-    "src/stb_rect_pack.h"
-    "src/stb_textedit.h"
-    "src/stb_truetype.h"
+    "imconfig.h"
+    "imgui.h"
+    "imgui_internal.h"
+    "imstb_rectpack.h"
+    "imstb_textedit.h"
+    "imstb_truetype.h"
+    "imgui.cpp"
+    "imgui_demo.cpp"
+    "imgui_draw.cpp"
+    "imgui_widgets.cpp"
     )
+
+if(WINDOWS)
+    list(APPEND PROJECT_SOURCES 
+        "imgui_impl_win32.h"
+        "imgui_impl_win32.cpp"
+        )
+
+    if(MDL_ENABLE_D3D11_EXAMPLES)
+        list(APPEND PROJECT_SOURCES 
+            "imgui_impl_dx11.cpp"
+            "imgui_impl_dx11.h"
+        )
+    endif()
+
+    if(MDL_ENABLE_D3D12_EXAMPLES)
+        list(APPEND PROJECT_SOURCES 
+            "imgui_impl_dx12.cpp"
+            "imgui_impl_dx12.h"
+        )
+    endif()
+endif()
+
+if(MACOSX)
+    list(APPEND PROJECT_SOURCES 
+        "imgui_impl_osx.h"
+        "imgui_impl_osx.mm"
+        )
+endif()
+
+if(MDL_ENABLE_OPENGL_EXAMPLES)
+    list(APPEND PROJECT_SOURCES 
+        "imgui_impl_glfw.cpp"
+        "imgui_impl_glfw.h"
+        "imgui_impl_opengl3.cpp"
+        "imgui_impl_opengl3.h"
+    )
+endif()
 
 # create target from template
 create_from_base_preset(
@@ -53,17 +89,22 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
 )
 
-# add dependencies
-# to avoid redundant definitions for the samples we use this helper function
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
-        opengl 
-    # NO_LINKING      # the consumer will also add the opengl dependency
-    # NO_RUNTIME_COPY # the consumer will also add the opengl dependency
-    )
+if(MDL_ENABLE_OPENGL_EXAMPLES)
+    # add dependencies
+    target_add_dependencies(TARGET ${PROJECT_NAME} 
+        DEPENDS 
+            opengl 
+        )
+
+    # additional definitions
+    target_compile_definitions(${PROJECT_NAME} 
+        PRIVATE 
+            "IMGUI_IMPL_OPENGL_LOADER_GLEW" 
+        )
+endif()
 
 # add include directories
 target_include_directories(${PROJECT_NAME} 
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )

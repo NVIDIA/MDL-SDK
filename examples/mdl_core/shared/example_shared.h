@@ -64,7 +64,7 @@ void* g_dso_handle = 0;
 /// Returns the value of the given environment variable.
 ///
 /// \param env_var   environment variable name
-/// \return          the value of the environment variable or an empty string 
+/// \return          the value of the environment variable or an empty string
 ///                  if that variable does not exist or does not have a value.
 std::string get_environment(const char* env_var)
 {
@@ -117,7 +117,7 @@ std::string get_samples_root()
     return ".";
 }
 
-/// Returns a string pointing to the MDL search root for the MDL-Core examples 
+/// Returns a string pointing to the MDL search root for the MDL-Core examples
 std::string get_samples_mdl_root()
 {
     return get_samples_root() + "/mdl";
@@ -172,7 +172,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
     void* handle = LoadLibraryA((LPSTR) filename);
     if (!handle) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -186,7 +186,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
     void* symbol = GetProcAddress((HMODULE) handle, "mi_mdl_factory");
     if (!symbol) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -221,7 +221,7 @@ bool unload()
     int result = FreeLibrary((HMODULE)g_dso_handle);
     if (result == 0) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -293,7 +293,7 @@ std::string get_executable_folder()
 
     char *last_sep = strrchr(path, sep);
     if (last_sep == nullptr) return "";
-    return std::string(path, last_sep + 1);
+    return std::string(path, last_sep);
 }
 
 

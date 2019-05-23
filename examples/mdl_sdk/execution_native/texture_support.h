@@ -24,7 +24,7 @@
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*****************************************************************************/
+ *****************************************************************************/
 
 // This file contains the implementations and the vtable of the texture access functions.
 
@@ -387,7 +387,6 @@ void tex_resolution_2d(
     mi::Uint32 texture_idx,
     const mi::Sint32 uv_tile[2])
 {
-
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
     if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
@@ -403,10 +402,56 @@ void tex_resolution_2d(
     result[1] = tex.size.y;
 }
 
+/// Implementation of \c resolution_3d function needed by generated code,
+/// which retrieves the width, height and depth of the given texture.
+void tex_resolution_3d(
+    mi::Sint32 result[3],
+    const mi::neuraylib::Texture_handler_base *self_base,
+    mi::Uint32 texture_idx)
+{
+    result[0] = 0;
+    result[1] = 0;
+    result[2] = 0;
+}
+
+/// Implementation of \c tex::texture_isvalid() function.
+bool tex_isvalid(
+    const mi::neuraylib::Texture_handler_base *self_base,
+    mi::Uint32 texture_idx)
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+    return texture_idx != 0 && texture_idx - 1 < self->num_textures;
+}
+
+/// Implementation of \c df::light_profile_power() for a light profile.
+/// Note: The example does not support light profiles.
+mi::Float32 light_profile_power(
+    const Texture_handler_base *self,
+    mi::Uint32                  light_profile_idx)
+{
+    return 0.0f;
+}
+
+/// Implementation of \c df::light_profile_maximum() for a light profile.
+mi::Float32 light_profile_maximum(
+    const Texture_handler_base *self,
+    mi::Uint32                  light_profile_idx)
+{
+    return 0.0f;
+}
+
+/// Implementation of \c df::light_profile_isvalid() for a light profile.
+bool light_profile_isvalid(
+    const Texture_handler_base *self,
+    mi::Uint32                  light_profile_idx)
+{
+    return false;
+}
+
 /// Implementation of \c df::light_profile_evaluate() for a light profile.
 mi::Float32 light_profile_evaluate(
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 light_profile_idx,
     const float theta_phi[2])
 {
     return 0.0f;
@@ -416,7 +461,7 @@ mi::Float32 light_profile_evaluate(
 void light_profile_sample(
     mi::Float32 result[3], // theta, phi, pdf
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 light_profile_idx,
     const float xi[3])
 {
     result[0] = 0.0f;
@@ -427,17 +472,26 @@ void light_profile_sample(
 /// Implementation of \c df::light_profile_pdf() for a light profile.
 mi::Float32 light_profile_pdf(
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 light_profile_idx,
     const float theta_phi[2])
 {
     return 0.0f;
+}
+
+/// Implementation of \c df::bsdf_measurement_isvalid() for a light profile.
+/// Note: The example does not support BSDF measurements.
+bool bsdf_measurement_isvalid(
+    const Texture_handler_base *self,
+    mi::Uint32                  bsdf_measurement_index)
+{
+    return false;
 }
 
 /// Implementation of \c df::bsdf_measurement_resolution().
 void bsdf_measurement_resolution(
     mi::Uint32 result[3],
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 bsdf_measurement_index,
     mi::neuraylib::Mbsdf_part part)
 {
     result[0] = 0;
@@ -449,7 +503,7 @@ void bsdf_measurement_resolution(
 void bsdf_measurement_evaluate(
     mi::Float32 result[3],
     const Texture_handler_base  *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 bsdf_measurement_index,
     const mi::Float32 theta_phi_in[2],
     const mi::Float32 theta_phi_out[2],
     mi::neuraylib::Mbsdf_part part)
@@ -459,11 +513,11 @@ void bsdf_measurement_evaluate(
     result[2] = 0.0f;
 }
 
-// Implementation of \c df::bsdf_measurement_sample() for an MBSDF.
+/// Implementation of \c df::bsdf_measurement_sample() for an MBSDF.
 void bsdf_measurement_sample(
     mi::Float32 result[3],
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 bsdf_measurement_index,
     const mi::Float32 theta_phi_out[2],
     const mi::Float32 xi[3],
     mi::neuraylib::Mbsdf_part part)
@@ -476,7 +530,7 @@ void bsdf_measurement_sample(
 /// Implementation of \c df::bsdf_measurement_pdf() for an MBSDF.
 mi::Float32 bsdf_measurement_pdf(
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 bsdf_measurement_index,
     const mi::Float32 theta_phi_in[2],
     const mi::Float32 theta_phi_out[2],
     mi::neuraylib::Mbsdf_part part)
@@ -484,11 +538,11 @@ mi::Float32 bsdf_measurement_pdf(
     return 0.0f;
 }
 
-// Implementation of \c df::bsdf_measurement_albedos() for an MBSDF.
+/// Implementation of \c df::bsdf_measurement_albedos() for an MBSDF.
 void bsdf_measurement_albedos(
     mi::Float32 result[4],
     const Texture_handler_base *self,
-    mi::Uint32 resource_idx,
+    mi::Uint32 bsdf_measurement_index,
     const mi::Float32 theta_phi[2])
 {
     result[0] = 0.0f;
@@ -508,9 +562,15 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_lookup_float4_cube,
     tex_lookup_float3_cube,
     tex_resolution_2d,
+    tex_resolution_3d,
+    tex_isvalid,
+    light_profile_power,
+    light_profile_maximum,
+    light_profile_isvalid,
     light_profile_evaluate,
     light_profile_sample,
     light_profile_pdf,
+    bsdf_measurement_isvalid,
     bsdf_measurement_resolution,
     bsdf_measurement_evaluate,
     bsdf_measurement_sample,

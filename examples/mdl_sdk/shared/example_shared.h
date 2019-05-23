@@ -59,14 +59,14 @@
 #endif
 
 // Pointer to the DSO handle. Cached here for unload().
-void* g_dso_handle = 0;
+static void* g_dso_handle = 0;
 
 // Returns the value of the given environment variable.
 //
 // \param env_var   environment variable name
 // \return          the value of the environment variable or an empty string 
 //                  if that variable does not exist or does not have a value.
-std::string get_environment(const char* env_var)
+inline std::string get_environment(const char* env_var)
 {
     std::string value;
 #ifdef MI_PLATFORM_WINDOWS
@@ -88,7 +88,7 @@ std::string get_environment(const char* env_var)
 //
 // \param env_var   environment variable name
 // \param value     the new value to set.
-bool set_environment(const char* env_var, const char* value)
+inline bool set_environment(const char* env_var, const char* value)
 {
 #ifdef MI_PLATFORM_WINDOWS
     return 0 == _putenv_s(env_var, value);
@@ -101,7 +101,7 @@ bool set_environment(const char* env_var, const char* value)
 //
 // \param  directory path to check
 // \return true, of the path points to a directory, false if not
-bool dir_exists(const char* path)
+inline bool dir_exists(const char* path)
 {
 #ifdef MI_PLATFORM_WINDOWS
     DWORD attrib = GetFileAttributesA(path);
@@ -118,20 +118,23 @@ bool dir_exists(const char* path)
 
 // Returns a string pointing to the directory relative to which the SDK examples
 // expect their resources, e. g. materials or textures.
-std::string get_samples_root()
+inline std::string get_samples_root()
 {
     std::string samples_root = get_environment("MDL_SAMPLES_ROOT");
     if (samples_root.empty()) {
         samples_root = MDL_SAMPLES_ROOT;
     }
     if (dir_exists(samples_root.c_str()))
+    {
+        std::replace(samples_root.begin(), samples_root.end(), '\\', '/');
         return samples_root;
+    }
 
     return ".";
 }
 
 // Returns a string pointing to the MDL search root for the SDK examples 
-std::string get_samples_mdl_root()
+inline std::string get_samples_mdl_root()
 {
     return get_samples_root() + "/mdl";
 }
@@ -139,7 +142,7 @@ std::string get_samples_mdl_root()
 // Ensures that the console with the log messages does not close immediately. On Windows, the user
 // is asked to press enter. On other platforms, nothing is done as the examples are most likely
 // started from the console anyway.
-void keep_console_open() {
+inline void keep_console_open() {
 #ifdef MI_PLATFORM_WINDOWS
     if( IsDebuggerPresent()) {
         fprintf( stderr, "Press enter to continue . . . \n");
@@ -160,7 +163,7 @@ void keep_console_open() {
 
 // Helper function similar to check_success(), but specifically for the result of
 // #mi::neuraylib::INeuray::start().
-void check_start_success( mi::Sint32 result)
+inline void check_start_success( mi::Sint32 result)
 {
     if( result == 0)
         return;
@@ -173,7 +176,7 @@ void check_start_success( mi::Sint32 result)
 // freeimage plugin.
 //
 // \param neuray    pointer to the main MDL SDK interface
-void configure(mi::neuraylib::INeuray* neuray)
+inline void configure(mi::neuraylib::INeuray* neuray)
 {
     mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
@@ -187,7 +190,7 @@ void configure(mi::neuraylib::INeuray* neuray)
 }
 
 // Returns a string-representation of the given message severity
-const char* message_severity_to_string(mi::base::Message_severity severity)
+inline const char* message_severity_to_string(mi::base::Message_severity severity)
 {
     switch (severity) {
 
@@ -209,7 +212,7 @@ const char* message_severity_to_string(mi::base::Message_severity severity)
 
 
 // Returns a string-representation of the given message category
-const char* message_kind_to_string(mi::neuraylib::IMessage::Kind message_kind)
+inline const char* message_kind_to_string(mi::neuraylib::IMessage::Kind message_kind)
 {
     switch (message_kind) {
 
@@ -234,7 +237,7 @@ const char* message_kind_to_string(mi::neuraylib::IMessage::Kind message_kind)
 
 // Prints the messages of the given context.
 // Returns true, if the context does not contain any error messages, false otherwise.
-bool print_messages(mi::neuraylib::IMdl_execution_context* context)
+inline bool print_messages(mi::neuraylib::IMdl_execution_context* context)
 {
     for (mi::Size i = 0; i < context->get_messages_count(); ++i) {
 
@@ -265,7 +268,7 @@ bool print_messages(mi::neuraylib::IMdl_execution_context* context)
 // \param filename    The file name of the DSO. It is feasible to pass \c nullptr, which uses a
 //                    built-in default value.
 // \return            A pointer to an instance of the main #mi::neuraylib::INeuray interface
-mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
+inline mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
 {
     if( !filename)
         filename = "libmdl_sdk" MI_BASE_DLL_FILE_EXT;
@@ -273,7 +276,7 @@ mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
     void* handle = LoadLibraryA((LPSTR) filename);
     if( !handle) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if( FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -287,7 +290,7 @@ mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
     void* symbol = GetProcAddress((HMODULE) handle, "mi_factory");
     if( !symbol) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if( FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -328,13 +331,13 @@ mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0)
 }
 
 // Unloads the MDL SDK.
-bool unload()
+inline bool unload()
 {
 #ifdef MI_PLATFORM_WINDOWS
     int result = FreeLibrary( (HMODULE)g_dso_handle);
     if( result == 0) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if( FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -357,7 +360,7 @@ bool unload()
 }
 
 // Sleep the indicated number of seconds.
-void sleep_seconds( mi::Float32 seconds)
+inline void sleep_seconds( mi::Float32 seconds)
 {
 #ifdef MI_PLATFORM_WINDOWS
     Sleep( static_cast<DWORD>( seconds * 1000));
@@ -372,7 +375,7 @@ void sleep_seconds( mi::Float32 seconds)
 #endif
 
 // get the current working directory.
-std::string get_working_directory()
+inline std::string get_working_directory()
 {
     char current_path[FILENAME_MAX];
     #ifdef MI_PLATFORM_WINDOWS
@@ -380,11 +383,14 @@ std::string get_working_directory()
     #else
         getcwd(current_path, FILENAME_MAX); // TODO
     #endif
-    return current_path;
+
+    std::string res(current_path);
+    std::replace(res.begin(), res.end(), '\\', '/');
+    return res;
 }
 
 // Returns the folder path of the current executable.
-std::string get_executable_folder()
+inline std::string get_executable_folder()
 {
 #ifdef MI_PLATFORM_WINDOWS
     char path[MAX_PATH];
@@ -418,9 +424,23 @@ std::string get_executable_folder()
 
     char *last_sep = strrchr(path, sep);
     if (last_sep == nullptr) return "";
-    return std::string(path, last_sep + 1);
+
+    std::string res = std::string(path, last_sep);
+    std::replace(res.begin(), res.end(), '\\', '/');
+    return res;
 }
 
+inline bool is_absolute_path(const std::string& path)
+{
+    std::string npath = path;
+    std::replace(npath.begin(), npath.end(), '\\', '/');
+
+    #ifdef MI_PLATFORM_WINDOWS
+        return !(npath.size() < 2 || (npath[0] != '/' && npath[1] != ':'));
+    #else
+        return npath[0] == '/' || npath[0] != '~';
+    #endif
+}
 
 namespace
 {
@@ -477,7 +497,7 @@ namespace
     }
 }
 
-std::vector<std::string> get_mdl_admin_space_search_paths()
+inline std::vector<std::string> get_mdl_admin_space_search_paths()
 {
     std::string paths = get_environment("MDL_SYSTEM_PATH");
     if (!paths.empty())
@@ -498,7 +518,7 @@ std::vector<std::string> get_mdl_admin_space_search_paths()
     return result;
 }
 
-std::vector<std::string> get_mdl_user_space_search_paths()
+inline std::vector<std::string> get_mdl_user_space_search_paths()
 {
     std::string paths = get_environment("MDL_USER_PATH");
     if (!paths.empty())
@@ -521,7 +541,7 @@ std::vector<std::string> get_mdl_user_space_search_paths()
 // construct the database name of the main material of an MDLE given an full MDLE file path.
 // This is especially useful for materials, as their database name contains no arguments
 // For functions, consider 'mdle_to_db_name_with_signature' which also requires an transaction
-std::string mdle_to_db_name(const std::string& mdle_path)
+inline std::string mdle_to_db_name(const std::string& mdle_path)
 {
     // the database name begins with 'mdle::'
     std::string main_db_name = "mdle::";
@@ -542,7 +562,7 @@ std::string mdle_to_db_name(const std::string& mdle_path)
 
 // construct the database name of the main function of an MDLE given an full MDLE file path.
 // This requires the module to be load in order to get the complete function signature.
-std::string mdle_to_db_name_with_signature(
+inline std::string mdle_to_db_name_with_signature(
     mi::neuraylib::ITransaction* transaction,
     const std::string& mdle_path)
 {

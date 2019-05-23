@@ -50,22 +50,8 @@ void JIT_code_printer::print(Printer *printer, mi::base::IInterface const *code)
     if (!code_jit.is_valid_interface())
         return;
 
-    Generated_code_jit const *code_llvm =
-        static_cast<Generated_code_jit const *>(code_jit.get());
-
-    MI::STLEXT::Store<Printer *> tmp(m_printer, printer);
-
-    llvm::Module const *llvm_module = code_llvm->get_llvm_module();
-    if (llvm_module != NULL) {
-        std::string llvm_asm;
-        llvm::raw_string_ostream s(llvm_asm);
-
-        llvm_module->print(s, /*AssemblyAnnotationWriter=*/NULL);
-
-        printer->print(llvm_asm.c_str());
-    } else {
-        printer->print(code_llvm->get_ptx_code());
-    }
+    size_t size;
+    printer->print(code_jit->get_source_code(size));
 }
 
 } // mdl

@@ -45,6 +45,7 @@
 namespace mi {
 namespace mdl {
 
+class IMDL_import_result;
 class File_resolver;
 class Jitted_code;
 class Messages_impl;
@@ -81,6 +82,9 @@ public:
     /// The name of the option that enables undocumented experimental MDL features.
     static char const *option_experimental_features;
 
+    /// The name of the option that controls, if resources are resolved by the compiler.
+    static char const *option_resolve_resources;
+    
     /// The value of limits::FLOAT_MIN.
     static char const *option_limits_float_min;
 
@@ -359,6 +363,13 @@ public:
     /// modules.
     IMDL_module_transformer *create_module_transformer() MDL_FINAL;
 
+    /// Sets a resolver interface that will be used to lookup MDL modules and resources.
+    ///
+    /// \param resolver  the resolver
+    ///
+    /// \note This disables the built-it resolver currently.
+    void set_external_entity_resolver(IEntity_resolver *resolver) MDL_FINAL;
+
     // ------------------- non interface methods ---------------------------
 
     /// Check if the compiler supports a requested MDL version.
@@ -417,11 +428,8 @@ public:
     /// \param pos                     The position where the import must be resolved for an
     ///                                error message.
     ///                                This may be NULL for the top-level import.
-    /// \returns                       The absolute name of the module
-    ///                                or null if the module does not exist.
-    ///                                The returned char pointer only remains valid
-    ///                                up to the next call to relative_to_absolute.
-    string resolve_import(
+    /// \returns                       The import result or null if the module does not exist.
+    IMDL_import_result *resolve_import(
         File_resolver  &resolver,
         char const     *import_name,
         Module         *owner_module,
@@ -545,6 +553,11 @@ public:
     /// Get the search path helper.
     mi::base::Handle<IMDL_search_path> const &get_search_path() const { return m_search_path; }
 
+    /// Get the external entity resolver.
+    mi::base::Handle<IEntity_resolver> const &get_external_resolver() const {
+        return m_external_resolver;
+    }
+
     /// Parse a string to an MDL expression.
     ///
     /// \param expr_str                      the expression string to parse
@@ -667,6 +680,9 @@ private:
 
     /// The search path helper.
     mi::base::Handle<IMDL_search_path> m_search_path;
+
+    /// If set, use this external entity resolver instead of the search path.
+    mi::base::Handle<IEntity_resolver> m_external_resolver;
 
     /// Global compiler lock.
     mi::base::Lock m_global_lock;

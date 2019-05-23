@@ -1103,6 +1103,7 @@ bool Comparator::compare_types(
     case IType::TK_COLOR:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_BSDF_MEASUREMENT:

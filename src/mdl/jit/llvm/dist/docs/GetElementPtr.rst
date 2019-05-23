@@ -9,10 +9,11 @@ Introduction
 ============
 
 This document seeks to dispel the mystery and confusion surrounding LLVM's
-`GetElementPtr <LangRef.html#i_getelementptr>`_ (GEP) instruction.  Questions
-about the wily GEP instruction are probably the most frequently occurring
-questions once a developer gets down to coding with LLVM. Here we lay out the
-sources of confusion and show that the GEP instruction is really quite simple.
+`GetElementPtr <LangRef.html#getelementptr-instruction>`_ (GEP) instruction.
+Questions about the wily GEP instruction are probably the most frequently
+occurring questions once a developer gets down to coding with LLVM. Here we lay
+out the sources of confusion and show that the GEP instruction is really quite
+simple.
 
 Address Computation
 ===================
@@ -26,7 +27,7 @@ questions.
 What is the first index of the GEP instruction?
 -----------------------------------------------
 
-Quick answer: The index stepping through the first operand.
+Quick answer: The index stepping through the second operand.
 
 The confusion with the first index usually arises from thinking about the
 GetElementPtr instruction as if it was a C index operator. They aren't the
@@ -58,7 +59,7 @@ Sometimes this question gets rephrased as:
   won't be dereferenced?*
 
 The answer is simply because memory does not have to be accessed to perform the
-computation. The first operand to the GEP instruction must be a value of a
+computation. The second operand to the GEP instruction must be a value of a
 pointer type. The value of the pointer is provided directly to the GEP
 instruction as an operand without any need for accessing memory. It must,
 therefore be indexed and requires an index operand. Consider this example:
@@ -77,10 +78,10 @@ therefore be indexed and requires an index operand. Consider this example:
   ...
   munge(Array);
 
-In this "C" example, the front end compiler (llvm-gcc) will generate three GEP
+In this "C" example, the front end compiler (Clang) will generate three GEP
 instructions for the three indices through "P" in the assignment statement.  The
-function argument ``P`` will be the first operand of each of these GEP
-instructions.  The second operand indexes through that pointer.  The third
+function argument ``P`` will be the second operand of each of these GEP
+instructions.  The third operand indexes through that pointer.  The fourth
 operand will be the field offset into the ``struct munger_struct`` type, for
 either the ``f1`` or ``f2`` field. So, in LLVM assembly the ``munge`` function
 looks like:
@@ -89,29 +90,29 @@ looks like:
 
   void %munge(%struct.munger_struct* %P) {
   entry:
-    %tmp = getelementptr %struct.munger_struct* %P, i32 1, i32 0
+    %tmp = getelementptr %struct.munger_struct, %struct.munger_struct* %P, i32 1, i32 0
     %tmp = load i32* %tmp
-    %tmp6 = getelementptr %struct.munger_struct* %P, i32 2, i32 1
+    %tmp6 = getelementptr %struct.munger_struct, %struct.munger_struct* %P, i32 2, i32 1
     %tmp7 = load i32* %tmp6
     %tmp8 = add i32 %tmp7, %tmp
-    %tmp9 = getelementptr %struct.munger_struct* %P, i32 0, i32 0
+    %tmp9 = getelementptr %struct.munger_struct, %struct.munger_struct* %P, i32 0, i32 0
     store i32 %tmp8, i32* %tmp9
     ret void
   }
 
-In each case the first operand is the pointer through which the GEP instruction
-starts. The same is true whether the first operand is an argument, allocated
+In each case the second operand is the pointer through which the GEP instruction
+starts. The same is true whether the second operand is an argument, allocated
 memory, or a global variable.
 
 To make this clear, let's consider a more obtuse example:
 
-.. code-block:: llvm
+.. code-block:: text
 
   %MyVar = uninitialized global i32
   ...
-  %idx1 = getelementptr i32* %MyVar, i64 0
-  %idx2 = getelementptr i32* %MyVar, i64 1
-  %idx3 = getelementptr i32* %MyVar, i64 2
+  %idx1 = getelementptr i32, i32* %MyVar, i64 0
+  %idx2 = getelementptr i32, i32* %MyVar, i64 1
+  %idx3 = getelementptr i32, i32* %MyVar, i64 2
 
 These GEP instructions are simply making address computations from the base
 address of ``MyVar``.  They compute, as follows (using C syntax):
@@ -142,11 +143,11 @@ Quick answer: there are no superfluous indices.
 This question arises most often when the GEP instruction is applied to a global
 variable which is always a pointer type. For example, consider this:
 
-.. code-block:: llvm
+.. code-block:: text
 
   %MyStruct = uninitialized global { float*, i32 }
   ...
-  %idx = getelementptr { float*, i32 }* %MyStruct, i64 0, i32 1
+  %idx = getelementptr { float*, i32 }, { float*, i32 }* %MyStruct, i64 0, i32 1
 
 The GEP above yields an ``i32*`` by indexing the ``i32`` typed field of the
 structure ``%MyStruct``. When people first look at it, they wonder why the ``i64
@@ -158,11 +159,11 @@ confusion:
    i32 }*``. That is, ``%MyStruct`` is a pointer to a structure containing a
    pointer to a ``float`` and an ``i32``.
 
-#. Point #1 is evidenced by noticing the type of the first operand of the GEP
+#. Point #1 is evidenced by noticing the type of the second operand of the GEP
    instruction (``%MyStruct``) which is ``{ float*, i32 }*``.
 
 #. The first index, ``i64 0`` is required to step over the global variable
-   ``%MyStruct``.  Since the first argument to the GEP instruction must always
+   ``%MyStruct``.  Since the second argument to the GEP instruction must always
    be a value of pointer type, the first index steps through that pointer. A
    value of 0 means 0 elements offset from that pointer.
 
@@ -178,11 +179,11 @@ The GetElementPtr instruction dereferences nothing. That is, it doesn't access
 memory in any way. That's what the Load and Store instructions are for.  GEP is
 only involved in the computation of addresses. For example, consider this:
 
-.. code-block:: llvm
+.. code-block:: text
 
   %MyVar = uninitialized global { [40 x i32 ]* }
   ...
-  %idx = getelementptr { [40 x i32]* }* %MyVar, i64 0, i32 0, i64 0, i64 17
+  %idx = getelementptr { [40 x i32]* }, { [40 x i32]* }* %MyVar, i64 0, i32 0, i64 0, i64 17
 
 In this example, we have a global variable, ``%MyVar`` that is a pointer to a
 structure containing a pointer to an array of 40 ints. The GEP instruction seems
@@ -195,20 +196,20 @@ illegal.
 In order to access the 18th integer in the array, you would need to do the
 following:
 
-.. code-block:: llvm
+.. code-block:: text
 
-  %idx = getelementptr { [40 x i32]* }* %, i64 0, i32 0
+  %idx = getelementptr { [40 x i32]* }, { [40 x i32]* }* %, i64 0, i32 0
   %arr = load [40 x i32]** %idx
-  %idx = getelementptr [40 x i32]* %arr, i64 0, i64 17
+  %idx = getelementptr [40 x i32], [40 x i32]* %arr, i64 0, i64 17
 
 In this case, we have to load the pointer in the structure with a load
 instruction before we can index into the array. If the example was changed to:
 
-.. code-block:: llvm
+.. code-block:: text
 
   %MyVar = uninitialized global { [40 x i32 ] }
   ...
-  %idx = getelementptr { [40 x i32] }*, i64 0, i32 0, i64 17
+  %idx = getelementptr { [40 x i32] }, { [40 x i32] }*, i64 0, i32 0, i64 17
 
 then everything works fine. In this case, the structure does not contain a
 pointer and the GEP instruction can index through the global variable, into the
@@ -225,9 +226,9 @@ index. Consider this example:
 
 .. code-block:: llvm
 
-  %MyVar = global { [10 x i32 ] }
-  %idx1 = getelementptr { [10 x i32 ] }* %MyVar, i64 0, i32 0, i64 1
-  %idx2 = getelementptr { [10 x i32 ] }* %MyVar, i64 1
+  %MyVar = global { [10 x i32] }
+  %idx1 = getelementptr { [10 x i32] }, { [10 x i32] }* %MyVar, i64 0, i32 0, i64 1
+  %idx2 = getelementptr { [10 x i32] }, { [10 x i32] }* %MyVar, i64 1
 
 In this example, ``idx1`` computes the address of the second integer in the
 array that is in the structure in ``%MyVar``, that is ``MyVar+4``. The type of
@@ -248,9 +249,9 @@ type. Consider this example:
 
 .. code-block:: llvm
 
-  %MyVar = global { [10 x i32 ] }
-  %idx1 = getelementptr { [10 x i32 ] }* %MyVar, i64 1, i32 0, i64 0
-  %idx2 = getelementptr { [10 x i32 ] }* %MyVar, i64 1
+  %MyVar = global { [10 x i32] }
+  %idx1 = getelementptr { [10 x i32] }, { [10 x i32] }* %MyVar, i64 1, i32 0, i64 0
+  %idx2 = getelementptr { [10 x i32] }, { [10 x i32] }* %MyVar, i64 1
 
 In this example, the value of ``%idx1`` is ``%MyVar+40`` and its type is
 ``i32*``. The value of ``%idx2`` is also ``MyVar+40`` but its type is ``{ [10 x
@@ -266,7 +267,7 @@ in the IR. In the future, it will probably be outright disallowed.
 What effect do address spaces have on GEPs?
 -------------------------------------------
 
-None, except that the address space qualifier on the first operand pointer type
+None, except that the address space qualifier on the second operand pointer type
 always matches the address space qualifier on the result type.
 
 How is GEP different from ``ptrtoint``, arithmetic, and ``inttoptr``?
@@ -429,7 +430,8 @@ because LLVM has no restrictions on mixing types in addressing, loads or stores.
 
 LLVM's type-based alias analysis pass uses metadata to describe a different type
 system (such as the C type system), and performs type-based aliasing on top of
-that.  Further details are in the `language reference <LangRef.html#tbaa>`_.
+that.  Further details are in the
+`language reference <LangRef.html#tbaa-metadata>`_.
 
 What happens if a GEP computation overflows?
 --------------------------------------------
@@ -524,7 +526,7 @@ instruction:
 #. The GEP instruction never accesses memory, it only provides pointer
    computations.
 
-#. The first operand to the GEP instruction is always a pointer and it must be
+#. The second operand to the GEP instruction is always a pointer and it must be
    indexed.
 
 #. There are no superfluous indices for the GEP instruction.

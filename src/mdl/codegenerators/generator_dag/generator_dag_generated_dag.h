@@ -716,11 +716,14 @@ public:
         /// Returns true if this instance depends on the global distribution (edf).
         bool depends_on_global_distribution() const MDL_FINAL;
 
-        /// Returns true if this instance is opaque.
+        /// Returns the opacity of this instance.
+        Opacity get_opacity() const MDL_FINAL;
+
+        /// Returns the cutout opacity of this instance if it is constant.
         ///
-        /// This is a must analysis, when it returns true the instance is
-        /// surely opaque. When false is returned, the instance might be opaque.
-        bool is_opaque() const MDL_FINAL;
+        /// \return if the cutout opacity is a constant (and was read),
+        ///         NULL if it depends on parameters / complex user expressions
+        IValue_float const *get_cutout_opacity() const MDL_FINAL;
 
         /// Access messages.
         Messages const &access_messages() const MDL_FINAL;
@@ -808,30 +811,6 @@ public:
 
         /// Build temporaries by traversing the DAG and creating them for nodes with phen-out > 1.
         void build_temporaries();
-
-        /// Move ternary operator down from the root so the root is always a material constructor
-        /// with "known" slots.
-        void move_ternary_down();
-
-        /// Move ternary operator down from the root so the root is always a material constructor
-        /// with "known" slots.
-        DAG_call *move_ternary_down(DAG_call *ternary);
-
-        /// Creates a ternary operator.
-        ///
-        /// \param cond    the conditional expression
-        /// \param t_expr  the true expression
-        /// \param f_expr  the false expression
-        DAG_node const *create_ternary(
-            DAG_node const *cond,
-            DAG_node const *t_expr,
-            DAG_node const *f_expr);
-
-        /// Converts a struct constant into a elemental constructor.
-        ///
-        /// \param c  a constant node, must represent a struct value
-        DAG_call const *value_to_constructor(
-            DAG_constant const *c);
 
         /// Calculate the hash values for this instance.
         void calc_hashes();
@@ -1997,6 +1976,13 @@ private:
     /// \param value_factory    The value factory to use for constructing the result.
     /// \returns                The default bsdf.
     static IValue_invalid_ref const *create_default_bsdf(
+        IValue_factory &value_factory);
+
+    /// Create a default hair_bsdf.
+    ///
+    /// \param value_factory    The value factory to use for constructing the result.
+    /// \returns                The default hair_bsdf.
+    static IValue_invalid_ref const *create_default_hair_bsdf(
         IValue_factory &value_factory);
 
     /// Create a default edf.

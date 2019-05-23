@@ -3,6 +3,15 @@
 import os
 import sys
 
+config_map = {}
+
+def map_config(source_dir, site_config):
+    global config_map
+    source_dir = os.path.realpath(source_dir)
+    source_dir = os.path.normcase(source_dir)
+    site_config = os.path.normpath(site_config)
+    config_map[source_dir] = site_config
+
 # Variables configured at build time.
 llvm_source_root = "@LLVM_SOURCE_DIR@"
 llvm_obj_root = "@LLVM_BINARY_DIR@"
@@ -12,21 +21,12 @@ sys.path.insert(0, os.path.join(llvm_source_root, 'utils', 'lit'))
 
 # Set up some builtin parameters, so that by default the LLVM test suite
 # configuration file knows how to find the object tree.
-builtin_parameters = {
-    'build_mode' : "@CMAKE_CFG_INTDIR@",
-    'llvm_site_config' : os.path.join(llvm_obj_root, 'test', 'lit.site.cfg')
-    }
+builtin_parameters = { 'build_mode' : "@BUILD_MODE@" }
 
-clang_obj_root = os.path.join(llvm_obj_root, 'tools', 'clang')
+@LLVM_LIT_CONFIG_MAP@
 
-if os.path.exists(clang_obj_root):
-    builtin_parameters['clang_site_config'] = \
-        os.path.join(clang_obj_root, 'test', 'lit.site.cfg')
-    clang_tools_extra_obj_root = os.path.join(clang_obj_root, 'tools', 'extra')
-    if os.path.exists(clang_tools_extra_obj_root):
-        builtin_parameters['clang_tools_extra_site_config'] = \
-            os.path.join(clang_tools_extra_obj_root, 'test', 'lit.site.cfg')
+builtin_parameters['config_map'] = config_map
 
 if __name__=='__main__':
-    import lit
-    lit.main(builtin_parameters)
+    from lit.main import main
+    main(builtin_parameters)

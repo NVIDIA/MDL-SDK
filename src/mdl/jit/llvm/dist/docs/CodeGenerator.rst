@@ -45,7 +45,7 @@ components:
    ``include/llvm/CodeGen/``. At this level, concepts like "constant pool
    entries" and "jump tables" are explicitly exposed.
 
-3. Classes and algorithms used to represent code as the object file level, the
+3. Classes and algorithms used to represent code at the object file level, the
    `MC Layer`_.  These classes represent assembly level constructs like labels,
    sections, and instructions.  At this level, concepts like "constant pool
    entries" and "jump tables" don't exist.
@@ -70,7 +70,7 @@ different pieces of this will be useful to you.  In any case, you should be
 familiar with the `target description`_ and `machine code representation`_
 classes.  If you want to add a backend for a new target, you will need to
 `implement the target description`_ classes for your new target and understand
-the `LLVM code representation <LangRef.html>`_.  If you are interested in
+the :doc:`LLVM code representation <LangRef>`.  If you are interested in
 implementing a new `code generation algorithm`_, it should only depend on the
 target-description and machine code representation classes, ensuring that it is
 portable.
@@ -172,7 +172,7 @@ architecture.  These target descriptions often have a large amount of common
 information (e.g., an ``add`` instruction is almost identical to a ``sub``
 instruction).  In order to allow the maximum amount of commonality to be
 factored out, the LLVM code generator uses the
-:doc:`TableGen <TableGenFundamentals>` tool to describe big chunks of the
+:doc:`TableGen/index` tool to describe big chunks of the
 target machine, which allows the use of domain-specific and target-specific
 abstractions to reduce the amount of repetition.
 
@@ -277,7 +277,7 @@ an associated register class.  When the register allocator runs, it replaces
 virtual registers with a physical register in the set.
 
 The target-specific implementations of these classes is auto-generated from a
-`TableGen <TableGenFundamentals.html>`_ description of the register file.
+:doc:`TableGen/index` description of the register file.
 
 .. _TargetInstrInfo:
 
@@ -290,10 +290,10 @@ the opcode, the number of operands, the list of implicit register uses and defs,
 whether the instruction has certain target-independent properties (accesses
 memory, is commutable, etc), and holds any target-specific flags.
 
-The ``TargetFrameInfo`` class
------------------------------
+The ``TargetFrameLowering`` class
+---------------------------------
 
-The ``TargetFrameInfo`` class is used to provide information about the stack
+The ``TargetFrameLowering`` class is used to provide information about the stack
 frame layout of the target. It holds the direction of stack growth, the known
 stack alignment on entry to each function, and the offset to the local area.
 The offset to the local area is the offset from the stack pointer on function
@@ -386,32 +386,27 @@ functions make it easy to build arbitrary machine instructions.  Usage of the
 .. code-block:: c++
 
   // Create a 'DestReg = mov 42' (rendered in X86 assembly as 'mov DestReg, 42')
-  // instruction.  The '1' specifies how many operands will be added.
-  MachineInstr *MI = BuildMI(X86::MOV32ri, 1, DestReg).addImm(42);
-
-  // Create the same instr, but insert it at the end of a basic block.
+  // instruction and insert it at the end of the given MachineBasicBlock.
+  const TargetInstrInfo &TII = ...
   MachineBasicBlock &MBB = ...
-  BuildMI(MBB, X86::MOV32ri, 1, DestReg).addImm(42);
+  DebugLoc DL;
+  MachineInstr *MI = BuildMI(MBB, DL, TII.get(X86::MOV32ri), DestReg).addImm(42);
 
   // Create the same instr, but insert it before a specified iterator point.
   MachineBasicBlock::iterator MBBI = ...
-  BuildMI(MBB, MBBI, X86::MOV32ri, 1, DestReg).addImm(42);
+  BuildMI(MBB, MBBI, DL, TII.get(X86::MOV32ri), DestReg).addImm(42);
 
   // Create a 'cmp Reg, 0' instruction, no destination reg.
-  MI = BuildMI(X86::CMP32ri, 2).addReg(Reg).addImm(0);
+  MI = BuildMI(MBB, DL, TII.get(X86::CMP32ri8)).addReg(Reg).addImm(42);
 
   // Create an 'sahf' instruction which takes no operands and stores nothing.
-  MI = BuildMI(X86::SAHF, 0);
+  MI = BuildMI(MBB, DL, TII.get(X86::SAHF));
 
   // Create a self looping branch instruction.
-  BuildMI(MBB, X86::JNE, 1).addMBB(&MBB);
+  BuildMI(MBB, DL, TII.get(X86::JNE)).addMBB(&MBB);
 
-The key thing to remember with the ``BuildMI`` functions is that you have to
-specify the number of operands that the machine instruction will take.  This
-allows for efficient memory allocation.  You also need to specify if operands
-default to be uses of values, not definitions.  If you need to add a definition
-operand (other than the optional destination register), you must explicitly mark
-it as such:
+If you need to add a definition operand (other than the optional destination
+register), you must explicitly mark it as such:
 
 .. code-block:: c++
 
@@ -434,14 +429,14 @@ For example, consider this simple LLVM example:
 .. code-block:: llvm
 
   define i32 @test(i32 %X, i32 %Y) {
-    %Z = udiv i32 %X, %Y
+    %Z = sdiv i32 %X, %Y
     ret i32 %Z
   }
 
-The X86 instruction selector produces this machine code for the ``div`` and
-``ret`` (use "``llc X.bc -march=x86 -print-machineinstrs``" to get this):
+The X86 instruction selector might produce this machine code for the ``div`` and
+``ret``:
 
-.. code-block:: llvm
+.. code-block:: text
 
   ;; Start of div
   %EAX = mov %reg1024           ;; Copy X (in reg1024) into EAX
@@ -454,17 +449,17 @@ The X86 instruction selector produces this machine code for the ``div`` and
   %EAX = mov %reg1026           ;; 32-bit return value goes in EAX
   ret
 
-By the end of code generation, the register allocator has coalesced the
-registers and deleted the resultant identity moves producing the following
+By the end of code generation, the register allocator would coalesce the
+registers and delete the resultant identity moves producing the following
 code:
 
-.. code-block:: llvm
+.. code-block:: text
 
   ;; X is in EAX, Y is in ECX
   mov %EAX, %EDX
   sar %EDX, 31
   idiv %ECX
-  ret 
+  ret
 
 This approach is extremely general (if it can handle the X86 architecture, it
 can handle anything!) and allows all of the target specific knowledge about the
@@ -571,7 +566,7 @@ MI bundle support does not change the physical representations of
 MachineBasicBlock and MachineInstr. All the MIs (including top level and nested
 ones) are stored as sequential list of MIs. The "bundled" MIs are marked with
 the 'InsideBundle' flag. A top level MI with the special BUNDLE opcode is used
-to represent the start of a bundle. It's legal to mix BUNDLE MIs with indiviual
+to represent the start of a bundle. It's legal to mix BUNDLE MIs with individual
 MIs that are not inside bundles nor represent bundles.
 
 MachineInstr passes should operate on a MI bundle as a single unit. Member
@@ -632,7 +627,7 @@ directives through MCStreamer.
 
 On the implementation side of MCStreamer, there are two major implementations:
 one for writing out a .s file (MCAsmStreamer), and one for writing out a .o
-file (MCObjectStreamer).  MCAsmStreamer is a straight-forward implementation
+file (MCObjectStreamer).  MCAsmStreamer is a straightforward implementation
 that prints out a directive for each method (e.g. ``EmitValue -> .byte``), but
 MCObjectStreamer implements a full assembler.
 
@@ -640,7 +635,7 @@ For target specific directives, the MCStreamer has a MCTargetStreamer instance.
 Each target that needs it defines a class that inherits from it and is a lot
 like MCStreamer itself: It has one method per directive and two classes that
 inherit from it, a target object streamer and a target asm streamer. The target
-asm streamer just prints it (``emitFnStart -> .fnstrart``), and the object
+asm streamer just prints it (``emitFnStart -> .fnstart``), and the object
 streamer implement the assembler logic for it.
 
 To make llvm use these classes, the target initialization must call
@@ -749,7 +744,7 @@ The SelectionDAG is a Directed-Acyclic-Graph whose nodes are instances of the
 ``SDNode`` class.  The primary payload of the ``SDNode`` is its operation code
 (Opcode) that indicates what operation the node performs and the operands to the
 operation.  The various operation node types are described at the top of the
-``include/llvm/CodeGen/SelectionDAGNodes.h`` file.
+``include/llvm/CodeGen/ISDOpcodes.h`` file.
 
 Although most operations define a single value, each node in the graph may
 define multiple values.  For example, a combined div/rem operation will define
@@ -769,7 +764,9 @@ provide an ordering between nodes that have side effects (such as loads, stores,
 calls, returns, etc).  All nodes that have side effects should take a token
 chain as input and produce a new one as output.  By convention, token chain
 inputs are always operand #0, and chain results are always the last value
-produced by an operation.
+produced by an operation. However, after instruction selection, the
+machine nodes have their chain after the instruction's operands, and
+may be followed by glue nodes.
 
 A SelectionDAG has designated "Entry" and "Root" nodes.  The Entry node is
 always a marker node with an Opcode of ``ISD::EntryToken``.  The Root node is
@@ -827,7 +824,7 @@ One great way to visualize what is going on here is to take advantage of a few
 LLC command line options.  The following options pop up a window displaying the
 SelectionDAG at specific times (if you only get errors printed to the console
 while using this, you probably `need to configure your
-system <ProgrammersManual.html#ViewGraph>`_ to add support for it).
+system <ProgrammersManual.html#viewing-graphs-while-debugging-code>`_ to add support for it).
 
 * ``-view-dag-combine1-dags`` displays the DAG after being built, before the
   first optimization pass.
@@ -845,6 +842,10 @@ The ``-view-sunit-dags`` displays the Scheduler's dependency graph.  This graph
 is based on the final SelectionDAG, with nodes that must be scheduled together
 bundled into a single scheduling-unit node, and with immediate operands and
 other nodes that aren't relevant for scheduling omitted.
+
+The option ``-filter-view-dags`` allows to select the name of the basic block
+that you are interested to visualize and filters all the previous
+``view-*-dags`` options.
 
 .. _Build initial DAG:
 
@@ -964,7 +965,7 @@ target code.  For example, consider the following LLVM fragment:
 
 This LLVM code corresponds to a SelectionDAG that looks basically like this:
 
-.. code-block:: llvm
+.. code-block:: text
 
   (fadd:f32 (fmul:f32 (fadd:f32 W, X), Y), Z)
 
@@ -1004,7 +1005,7 @@ The TableGen DAG instruction selector generator reads the instruction patterns
 in the ``.td`` file and automatically builds parts of the pattern matching code
 for your target.  It has the following strengths:
 
-* At compiler-compiler time, it analyzes your instruction patterns and tells you
+* At compiler-compile time, it analyzes your instruction patterns and tells you
   if your patterns make sense or not.
 
 * It can handle arbitrary constraints on operands for the pattern match.  In
@@ -1025,7 +1026,7 @@ for your target.  It has the following strengths:
 
 * Targets can define their own (and rely on built-in) "pattern fragments".
   Pattern fragments are chunks of reusable patterns that get inlined into your
-  patterns during compiler-compiler time.  For example, the integer "``(not
+  patterns during compiler-compile time.  For example, the integer "``(not
   x)``" operation is actually defined as a pattern fragment that expands as
   "``(xor x, -1)``", since the SelectionDAG does not have a native '``not``'
   operation.  Targets can define their own short-hand fragments as they see fit.
@@ -1228,7 +1229,7 @@ used. Each virtual register can only be mapped to physical registers of a
 particular class. For instance, in the X86 architecture, some virtuals can only
 be allocated to 8 bit registers.  A register class is described by
 ``TargetRegisterClass`` objects.  To discover if a virtual register is
-compatible with a given physical, this code can be used:</p>
+compatible with a given physical, this code can be used:
 
 .. code-block:: c++
 
@@ -1334,7 +1335,7 @@ found before being stored or after being reloaded.
 If the indirect strategy is used, after all the virtual registers have been
 mapped to physical registers or stack slots, it is necessary to use a spiller
 object to place load and store instructions in the code. Every virtual that has
-been mapped to a stack slot will be stored to memory after been defined and will
+been mapped to a stack slot will be stored to memory after being defined and will
 be loaded before being used. The implementation of the spiller tries to recycle
 load/store instructions, avoiding unnecessary instructions. For an example of
 how to invoke the spiller, see ``RegAllocLinearScan::runOnMachineFunction`` in
@@ -1347,7 +1348,7 @@ With very rare exceptions (e.g., function calls), the LLVM machine code
 instructions are three address instructions. That is, each instruction is
 expected to define at most one register, and to use at most two registers.
 However, some architectures use two address instructions. In this case, the
-defined register is also one of the used register. For instance, an instruction
+defined register is also one of the used registers. For instance, an instruction
 such as ``ADD %EAX, %EBX``, in X86 is actually equivalent to ``%EAX = %EAX +
 %EBX``.
 
@@ -1572,10 +1573,21 @@ three important things that you have to implement for your target:
    correspond to. The MCInsts that are generated by this are fed into the
    instruction printer or the encoder.
 
-Finally, at your choosing, you can also implement an subclass of MCCodeEmitter
+Finally, at your choosing, you can also implement a subclass of MCCodeEmitter
 which lowers MCInst's into machine code bytes and relocations.  This is
 important if you want to support direct .o file emission, or would like to
 implement an assembler for your target.
+
+Emitting function stack size information
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A section containing metadata on function stack sizes will be emitted when
+``TargetLoweringObjectFile::StackSizesSection`` is not null, and
+``TargetOptions::EmitStackSizeSection`` is set (-stack-size-section). The
+section will contain an array of pairs of function symbol values (pointer size)
+and stack sizes (unsigned LEB128). The stack size values only include the space
+allocated in the function prologue. Functions with dynamic stack allocations are
+not included.
 
 VLIW Packetizer
 ---------------
@@ -1683,7 +1695,7 @@ ones supported by the matcher), through a Requires clause:
   def : MnemonicAlias<"pushf", "pushfq">, Requires<[In64BitMode]>;
   def : MnemonicAlias<"pushf", "pushfl">, Requires<[In32BitMode]>;
 
-In this example, the mnemonic gets mapped into different a new one depending on
+In this example, the mnemonic gets mapped into a different one depending on
 the current instruction set.
 
 Instruction Aliases
@@ -1765,13 +1777,11 @@ table that summarizes what features are supported by each target.
 Target Feature Matrix
 ---------------------
 
-Note that this table does not include the C backend or Cpp backends, since they
-do not use the target independent code generator infrastructure.  It also
-doesn't list features that are not supported fully by any target yet.  It
-considers a feature to be supported if at least one subtarget supports it.  A
-feature being supported means that it is useful and works for most cases, it
-does not indicate that there are zero known bugs in the implementation.  Here is
-the key:
+Note that this table does not list features that are not supported fully by any
+target yet.  It considers a feature to be supported if at least one subtarget
+supports it.  A feature being supported means that it is useful and works for
+most cases, it does not indicate that there are zero known bugs in the
+implementation.  Here is the key:
 
 :raw-html:`<table border="1" cellspacing="0">`
 :raw-html:`<tr>`
@@ -1808,6 +1818,7 @@ Here is the table:
 :raw-html:`<th>SystemZ</th>`
 :raw-html:`<th>X86</th>`
 :raw-html:`<th>XCore</th>`
+:raw-html:`<th>eBPF</th>`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1822,6 +1833,7 @@ Here is the table:
 :raw-html:`<td class="yes"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="yes"></td> <!-- XCore -->`
+:raw-html:`<td class="yes"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1836,6 +1848,7 @@ Here is the table:
 :raw-html:`<td class="yes"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="no"></td> <!-- XCore -->`
+:raw-html:`<td class="no"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1850,6 +1863,7 @@ Here is the table:
 :raw-html:`<td class="no"></td> <!-- Sparc -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="yes"></td> <!-- XCore -->`
+:raw-html:`<td class="yes"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1864,6 +1878,7 @@ Here is the table:
 :raw-html:`<td class="yes"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="yes"></td> <!-- XCore -->`
+:raw-html:`<td class="no"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1878,6 +1893,7 @@ Here is the table:
 :raw-html:`<td class="yes"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="no"></td> <!-- XCore -->`
+:raw-html:`<td class="yes"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1892,6 +1908,7 @@ Here is the table:
 :raw-html:`<td class="yes"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="no"></td> <!-- XCore -->`
+:raw-html:`<td class="yes"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1906,6 +1923,7 @@ Here is the table:
 :raw-html:`<td class="no"></td> <!-- SystemZ -->`
 :raw-html:`<td class="yes"></td> <!-- X86 -->`
 :raw-html:`<td class="no"></td> <!-- XCore -->`
+:raw-html:`<td class="no"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`<tr>`
@@ -1920,6 +1938,7 @@ Here is the table:
 :raw-html:`<td class="no"></td> <!-- SystemZ -->`
 :raw-html:`<td class="partial"><a href="#feat_segstacks_x86">*</a></td> <!-- X86 -->`
 :raw-html:`<td class="no"></td> <!-- XCore -->`
+:raw-html:`<td class="no"></td> <!-- eBPF -->`
 :raw-html:`</tr>`
 
 :raw-html:`</table>`
@@ -1993,7 +2012,7 @@ Tail Calls
 
 This box indicates whether the target supports guaranteed tail calls.  These are
 calls marked "`tail <LangRef.html#i_call>`_" and use the fastcc calling
-convention.  Please see the `tail call section more more details`_.
+convention.  Please see the `tail call section`_ for more details.
 
 .. _feat_segstacks:
 
@@ -2011,7 +2030,7 @@ Basic support exists on the X86 backend. Currently vararg doesn't work and the
 object files are not marked the way the gold linker expects, but simple Go
 programs can be built by dragonegg.
 
-.. _tail call section more more details:
+.. _tail call section:
 
 Tail call optimization
 ----------------------
@@ -2027,7 +2046,7 @@ supported on x86/x86-64 and PowerPC. It is performed if:
 
 * Option ``-tailcallopt`` is enabled.
 
-* Platform specific constraints are met.
+* Platform-specific constraints are met.
 
 x86/x86-64 constraints:
 
@@ -2182,9 +2201,9 @@ prefix byte on an instruction causes the instruction's memory access to go to
 the specified segment.  LLVM address space 0 is the default address space, which
 includes the stack, and any unqualified memory accesses in a program.  Address
 spaces 1-255 are currently reserved for user-defined code.  The GS-segment is
-represented by address space 256, while the FS-segment is represented by address
-space 257. Other x86 segments have yet to be allocated address space
-numbers.
+represented by address space 256, the FS-segment is represented by address space
+257, and the SS-segment is represented by address space 258. Other x86 segments
+have yet to be allocated address space numbers.
 
 While these address spaces may seem similar to TLS via the ``thread_local``
 keyword, and often use the same underlying hardware, there are some fundamental
@@ -2388,7 +2407,7 @@ the following exceptions.  Callee saved registers are spilled after the frame is
 created.  This allows the llvm epilog/prolog support to be common with other
 targets.  The base pointer callee saved register r31 is saved in the TOC slot of
 linkage area.  This simplifies allocation of space for the base pointer and
-makes it convenient to locate programatically and during debugging.
+makes it convenient to locate programmatically and during debugging.
 
 Dynamic Allocation
 ^^^^^^^^^^^^^^^^^^
@@ -2442,3 +2461,198 @@ Code Generator Options:
 :raw-html:`</tr>`
 :raw-html:`</table>`
 
+The extended Berkeley Packet Filter (eBPF) backend
+--------------------------------------------------
+
+Extended BPF (or eBPF) is similar to the original ("classic") BPF (cBPF) used
+to filter network packets.  The
+`bpf() system call <http://man7.org/linux/man-pages/man2/bpf.2.html>`_
+performs a range of operations related to eBPF.  For both cBPF and eBPF
+programs, the Linux kernel statically analyzes the programs before loading
+them, in order to ensure that they cannot harm the running system.  eBPF is
+a 64-bit RISC instruction set designed for one to one mapping to 64-bit CPUs.
+Opcodes are 8-bit encoded, and 87 instructions are defined.  There are 10
+registers, grouped by function as outlined below.
+
+::
+
+  R0        return value from in-kernel functions; exit value for eBPF program
+  R1 - R5   function call arguments to in-kernel functions
+  R6 - R9   callee-saved registers preserved by in-kernel functions
+  R10       stack frame pointer (read only)
+
+Instruction encoding (arithmetic and jump)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+eBPF is reusing most of the opcode encoding from classic to simplify conversion
+of classic BPF to eBPF.  For arithmetic and jump instructions the 8-bit 'code'
+field is divided into three parts:
+
+::
+
+  +----------------+--------+--------------------+
+  |   4 bits       |  1 bit |   3 bits           |
+  | operation code | source | instruction class  |
+  +----------------+--------+--------------------+
+  (MSB)                                      (LSB)
+
+Three LSB bits store instruction class which is one of:
+
+::
+
+  BPF_LD     0x0
+  BPF_LDX    0x1
+  BPF_ST     0x2
+  BPF_STX    0x3
+  BPF_ALU    0x4
+  BPF_JMP    0x5
+  (unused)   0x6
+  BPF_ALU64  0x7
+
+When BPF_CLASS(code) == BPF_ALU or BPF_ALU64 or BPF_JMP,
+4th bit encodes source operand
+
+::
+
+  BPF_X     0x0  use src_reg register as source operand
+  BPF_K     0x1  use 32 bit immediate as source operand
+
+and four MSB bits store operation code
+
+::
+
+  BPF_ADD   0x0  add
+  BPF_SUB   0x1  subtract
+  BPF_MUL   0x2  multiply
+  BPF_DIV   0x3  divide
+  BPF_OR    0x4  bitwise logical OR
+  BPF_AND   0x5  bitwise logical AND
+  BPF_LSH   0x6  left shift
+  BPF_RSH   0x7  right shift (zero extended)
+  BPF_NEG   0x8  arithmetic negation
+  BPF_MOD   0x9  modulo
+  BPF_XOR   0xa  bitwise logical XOR
+  BPF_MOV   0xb  move register to register
+  BPF_ARSH  0xc  right shift (sign extended)
+  BPF_END   0xd  endianness conversion
+
+If BPF_CLASS(code) == BPF_JMP, BPF_OP(code) is one of
+
+::
+
+  BPF_JA    0x0  unconditional jump
+  BPF_JEQ   0x1  jump ==
+  BPF_JGT   0x2  jump >
+  BPF_JGE   0x3  jump >=
+  BPF_JSET  0x4  jump if (DST & SRC)
+  BPF_JNE   0x5  jump !=
+  BPF_JSGT  0x6  jump signed >
+  BPF_JSGE  0x7  jump signed >=
+  BPF_CALL  0x8  function call
+  BPF_EXIT  0x9  function return
+
+Instruction encoding (load, store)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+For load and store instructions the 8-bit 'code' field is divided as:
+
+::
+
+  +--------+--------+-------------------+
+  | 3 bits | 2 bits |   3 bits          |
+  |  mode  |  size  | instruction class |
+  +--------+--------+-------------------+
+  (MSB)                             (LSB)
+
+Size modifier is one of
+
+::
+
+  BPF_W       0x0  word
+  BPF_H       0x1  half word
+  BPF_B       0x2  byte
+  BPF_DW      0x3  double word
+
+Mode modifier is one of
+
+::
+
+  BPF_IMM     0x0  immediate
+  BPF_ABS     0x1  used to access packet data
+  BPF_IND     0x2  used to access packet data
+  BPF_MEM     0x3  memory
+  (reserved)  0x4
+  (reserved)  0x5
+  BPF_XADD    0x6  exclusive add
+
+
+Packet data access (BPF_ABS, BPF_IND)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Two non-generic instructions: (BPF_ABS | <size> | BPF_LD) and
+(BPF_IND | <size> | BPF_LD) which are used to access packet data.
+Register R6 is an implicit input that must contain pointer to sk_buff.
+Register R0 is an implicit output which contains the data fetched
+from the packet.  Registers R1-R5 are scratch registers and must not
+be used to store the data across BPF_ABS | BPF_LD or BPF_IND | BPF_LD
+instructions.  These instructions have implicit program exit condition
+as well.  When eBPF program is trying to access the data beyond
+the packet boundary, the interpreter will abort the execution of the program.
+
+BPF_IND | BPF_W | BPF_LD is equivalent to:
+  R0 = ntohl(\*(u32 \*) (((struct sk_buff \*) R6)->data + src_reg + imm32))
+
+eBPF maps
+^^^^^^^^^
+
+eBPF maps are provided for sharing data between kernel and user-space.
+Currently implemented types are hash and array, with potential extension to
+support bloom filters, radix trees, etc.  A map is defined by its type,
+maximum number of elements, key size and value size in bytes.  eBPF syscall
+supports create, update, find and delete functions on maps.
+
+Function calls
+^^^^^^^^^^^^^^
+
+Function call arguments are passed using up to five registers (R1 - R5).
+The return value is passed in a dedicated register (R0).  Four additional
+registers (R6 - R9) are callee-saved, and the values in these registers
+are preserved within kernel functions.  R0 - R5 are scratch registers within
+kernel functions, and eBPF programs must therefor store/restore values in
+these registers if needed across function calls.  The stack can be accessed
+using the read-only frame pointer R10.  eBPF registers map 1:1 to hardware
+registers on x86_64 and other 64-bit architectures.  For example, x86_64
+in-kernel JIT maps them as
+
+::
+
+  R0 - rax
+  R1 - rdi
+  R2 - rsi
+  R3 - rdx
+  R4 - rcx
+  R5 - r8
+  R6 - rbx
+  R7 - r13
+  R8 - r14
+  R9 - r15
+  R10 - rbp
+
+since x86_64 ABI mandates rdi, rsi, rdx, rcx, r8, r9 for argument passing
+and rbx, r12 - r15 are callee saved.
+
+Program start
+^^^^^^^^^^^^^
+
+An eBPF program receives a single argument and contains
+a single eBPF main routine; the program does not contain eBPF functions.
+Function calls are limited to a predefined set of kernel functions.  The size
+of a program is limited to 4K instructions:  this ensures fast termination and
+a limited number of kernel function calls.  Prior to running an eBPF program,
+a verifier performs static analysis to prevent loops in the code and
+to ensure valid register usage and operand types.
+
+The AMDGPU backend
+------------------
+
+The AMDGPU code generator lives in the ``lib/Target/AMDGPU``
+directory. This code generator is capable of targeting a variety of
+AMD GPU processors. Refer to :doc:`AMDGPUUsage` for more information.

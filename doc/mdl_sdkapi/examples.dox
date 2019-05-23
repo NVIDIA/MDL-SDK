@@ -90,6 +90,9 @@ Section for a description of how the example programs can be compiled.
 - \subpage mi_neuray_example_mdle <br>
   Export and load materials or functions using the MDL encapsulated format.
 
+- \subpage mi_neuray_example_dxr <br>
+  Rendering glTF scenes using MDL materials.
+
 \subpage mi_neuray_example_topics
 
 */

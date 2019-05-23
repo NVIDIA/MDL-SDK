@@ -194,6 +194,13 @@ public:
     /// Get the list of used user types.
     const User_type_list& get_used_user_types() const { return m_used_user_types; }
 
+    /// Un-mangle a DAG mangled name.
+    ///
+    /// \param name  a DAG mangled name
+    ///
+    /// \note does not remove a $mdl_version suffix on deprecated symbols
+    std::string dag_unmangle(char const *name);
+
 private:
     /// The MDL module that will own the newly constructed entities.
     mi::mdl::Module* m_owner;

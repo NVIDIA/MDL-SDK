@@ -183,8 +183,9 @@ void load_module( mi::neuraylib::INeuray* neuray)
 
             if( db_name == nullptr)
             {
-                std::cout << "    The module contains a resource that could not be resolved:"
-                          << std::endl;
+                // resource is either not used and therefore has not been loaded or
+                // could not be found.
+                std::cout << "    db_name:               none" << std::endl;
                 std::cout << "    mdl_file_path:         " << mdl_file_path << std::endl 
                           << std::endl;
                 continue;

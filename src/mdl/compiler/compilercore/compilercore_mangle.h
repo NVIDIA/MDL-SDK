@@ -189,6 +189,21 @@ public:
     /// Flush stream.
     void flush() MDL_FINAL { }
 
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    bool unput(char c) MDL_FINAL {
+        size_t l = m_string.size();
+        if (l > 0 && m_string[l - 1] == c) {
+            m_string.erase(m_string.begin() + l - 1);
+            return true;
+        }
+        return false;
+    }
+
     /// Get string value.
     string const &get_buffer() const { return m_string; }
 

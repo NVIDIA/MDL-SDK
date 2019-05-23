@@ -1,8 +1,15 @@
 set(LLVM_LINK_COMPONENTS
-  DebugInfo
+  DebugInfoDWARF
+  AllTargetsDescs
+  AllTargetsInfos
+  MC
   Object
+  Support
   )
 
 add_llvm_tool(llvm-dwarfdump
+  Statistics.cpp
   llvm-dwarfdump.cpp
   )
+
+add_subdirectory(fuzzer)

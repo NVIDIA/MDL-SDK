@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.4;
+mdl 1.5;
 
 using anno import hard_range;
 using state import texture_tangent_u, normal, transform_vector, coordinate_space;
@@ -330,3 +330,20 @@ export bsdf fresnel_factor(
     color extinction_coefficient,  // k, extinction coefficient, per wavelength
     bsdf  base = bsdf()
 ) [[ intrinsic(), since(1,4) ]];
+
+export bsdf measured_factor(
+    uniform texture_2d values,
+    bsdf  base = bsdf()
+) [[ intrinsic(), since(1,5) ]];
+
+export hair_bsdf chiang_hair_bsdf(
+    float   diffuse_reflection_weight = 0.0,
+    color   diffuse_reflection_tint   = color(1.0),
+    float2  roughness_R   = float2(0.0),
+    float2  roughness_TT  = roughness_R,
+    float2  roughness_TRT = roughness_TT,
+    float   cuticle_angle = 0.0,
+    color   absorption_coefficient = color(0.0),
+    float   ior = 1.55,
+    uniform string handle = ""
+) [[ intrinsic(), since(1,5) ]];

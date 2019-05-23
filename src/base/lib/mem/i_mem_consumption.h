@@ -344,7 +344,8 @@ inline size_t dynamic_memory_consumption (const map<T1, T2>& the_map)
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
     size_t total = the_map.size() * sizeof(std::__tree_node<std::pair<const T1,T2>, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
-    size_t total = the_map.size() * sizeof(Map_type::_Node);
+    struct Sub : public Map_type { typedef Map_type::_Node _Node; };
+    size_t total = the_map.size() * sizeof(Sub::_Node);
 #else
 #warning Unsupported platform
 #endif

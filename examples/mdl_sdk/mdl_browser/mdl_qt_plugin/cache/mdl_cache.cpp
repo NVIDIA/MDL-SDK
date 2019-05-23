@@ -125,7 +125,8 @@ bool Mdl_cache::update(mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransacti
         // at a certain point in time
         const mi::base::Handle<const mi::neuraylib::IMdl_discovery_api> discover(
             neuray->get_api_component<const mi::neuraylib::IMdl_discovery_api>());
-        m_discovery_result = mi::base::make_handle_dup(discover->discover());
+        m_discovery_result = mi::base::make_handle_dup(discover->discover(
+            mi::neuraylib::IMdl_info::DK_PACKAGE | mi::neuraylib::IMdl_info::DK_MODULE));
     });
 
     bool updated = false;

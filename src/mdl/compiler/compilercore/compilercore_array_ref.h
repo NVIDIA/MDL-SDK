@@ -91,6 +91,13 @@ public:
     {
     }
 
+    /// Construct a descriptor from a Small_VLA.
+    template <size_t N>
+    /*implicit*/ Array_ref(Small_VLA<T, N> const &vla)
+    : m_arr(vla.data()), m_n(vla.size())
+    {
+    }
+
     /// Construct from an vector.
     template <typename A>
     /*implecit*/ Array_ref(std::vector<T, A> const &v)

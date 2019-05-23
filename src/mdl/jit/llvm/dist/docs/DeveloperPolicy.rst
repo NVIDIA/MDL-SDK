@@ -30,7 +30,7 @@ This policy is also designed to accomplish the following objectives:
 This policy is aimed at frequent contributors to LLVM. People interested in
 contributing one-off patches can do so in an informal way by sending them to the
 `llvm-commits mailing list
-<http://lists.cs.uiuc.edu/mailman/listinfo/llvm-commits>`_ and engaging another
+<http://lists.llvm.org/mailman/listinfo/llvm-commits>`_ and engaging another
 developer to see it through the process.
 
 Developer Policies
@@ -47,23 +47,23 @@ Stay Informed
 -------------
 
 Developers should stay informed by reading at least the "dev" mailing list for
-the projects you are interested in, such as `llvmdev
-<http://lists.cs.uiuc.edu/mailman/listinfo/llvmdev>`_ for LLVM, `cfe-dev
-<http://lists.cs.uiuc.edu/mailman/listinfo/cfe-dev>`_ for Clang, or `lldb-dev
-<http://lists.cs.uiuc.edu/mailman/listinfo/lldb-dev>`_ for LLDB.  If you are
+the projects you are interested in, such as `llvm-dev
+<http://lists.llvm.org/mailman/listinfo/llvm-dev>`_ for LLVM, `cfe-dev
+<http://lists.llvm.org/mailman/listinfo/cfe-dev>`_ for Clang, or `lldb-dev
+<http://lists.llvm.org/mailman/listinfo/lldb-dev>`_ for LLDB.  If you are
 doing anything more than just casual work on LLVM, it is suggested that you also
 subscribe to the "commits" mailing list for the subproject you're interested in,
 such as `llvm-commits
-<http://lists.cs.uiuc.edu/mailman/listinfo/llvm-commits>`_, `cfe-commits
-<http://lists.cs.uiuc.edu/mailman/listinfo/cfe-commits>`_, or `lldb-commits
-<http://lists.cs.uiuc.edu/mailman/listinfo/lldb-commits>`_.  Reading the
+<http://lists.llvm.org/mailman/listinfo/llvm-commits>`_, `cfe-commits
+<http://lists.llvm.org/mailman/listinfo/cfe-commits>`_, or `lldb-commits
+<http://lists.llvm.org/mailman/listinfo/lldb-commits>`_.  Reading the
 "commits" list and paying attention to changes being made by others is a good
 way to see what other people are interested in and watching the flow of the
 project as a whole.
 
 We recommend that active developers register an email account with `LLVM
-Bugzilla <http://llvm.org/bugs/>`_ and preferably subscribe to the `llvm-bugs
-<http://lists.cs.uiuc.edu/mailman/listinfo/llvmbugs>`_ email list to keep track
+Bugzilla <https://bugs.llvm.org/>`_ and preferably subscribe to the `llvm-bugs
+<http://lists.llvm.org/mailman/listinfo/llvm-bugs>`_ email list to keep track
 of bugs and enhancements occurring in LLVM.  We really appreciate people who are
 proactive at catching incoming bugs in their components and dealing with them
 promptly.
@@ -74,8 +74,8 @@ that notices of confidentiality or non-disclosure cannot be respected.
 .. _patch:
 .. _one-off patches:
 
-Making a Patch
---------------
+Making and Submitting a Patch
+-----------------------------
 
 When making a patch for review, the goal is to make it as easy for the reviewer
 to read it as possible.  As such, we recommend that you:
@@ -96,6 +96,12 @@ to read it as possible.  As such, we recommend that you:
 #. If you are modifying generated files, such as the top-level ``configure``
    script, please separate out those changes into a separate patch from the rest
    of your changes.
+
+Once your patch is ready, submit it by emailing it to the appropriate project's
+commit mailing list (or commit it directly if applicable). Alternatively, some
+patches get sent to the project's development list or component of the LLVM bug
+tracker, but the commit list is the primary place for reviews and should
+generally be preferred.
 
 When sending a patch to a mailing list, it is a good idea to send it as an
 *attachment* to the message, not embedded into the text of the message.  This
@@ -125,7 +131,8 @@ software. We generally follow these policies:
 #. All developers are required to have significant changes reviewed before they
    are committed to the repository.
 
-#. Code reviews are conducted by email, usually on the llvm-commits list.
+#. Code reviews are conducted by email on the relevant project's commit mailing
+   list, or alternatively on the project's development list or bug tracker.
 
 #. Code can be reviewed either before it is committed or after.  We expect major
    changes to be reviewed before being committed, but smaller changes (or
@@ -162,6 +169,8 @@ on a patch, but only people with Subversion write access can approve it.
 There is a web based code review tool that can optionally be used
 for code reviews. See :doc:`Phabricator`.
 
+.. _code owners:
+
 Code Owners
 -----------
 
@@ -179,7 +188,7 @@ problem, we have a notion of an 'owner' for a piece of the code.  The sole
 responsibility of a code owner is to ensure that a commit to their area of the
 code is appropriately reviewed, either by themself or by someone else.  The list
 of current code owners can be found in the file
-`CODE_OWNERS.TXT <http://llvm.org/viewvc/llvm-project/llvm/trunk/CODE_OWNERS.TXT?view=markup>`_
+`CODE_OWNERS.TXT <http://git.llvm.org/klaus/llvm/blob/master/CODE_OWNERS.TXT>`_
 in the root of the LLVM source tree.
 
 Note that code ownership is completely different than reviewers: anyone can
@@ -205,13 +214,10 @@ features added.  Some tips for getting your testcase approved:
   directory. The appropriate sub-directory should be selected (see the
   :doc:`Testing Guide <TestingGuide>` for details).
 
-* Test cases should be written in `LLVM assembly language <LangRef.html>`_
-  unless the feature or regression being tested requires another language
-  (e.g. the bug being fixed or feature being implemented is in the llvm-gcc C++
-  front-end, in which case it must be written in C++).
+* Test cases should be written in :doc:`LLVM assembly language <LangRef>`.
 
 * Test cases, especially for regressions, should be reduced as much as possible,
-  by `bugpoint <Bugpoint.html>`_ or manually. It is unacceptable to place an
+  by :doc:`bugpoint <Bugpoint>` or manually. It is unacceptable to place an
   entire failing program into ``llvm/test`` as this creates a *time-to-test*
   burden on all developers. Please keep them short.
 
@@ -255,7 +261,7 @@ the future that the change is responsible for.  For example:
 * The changes should not cause performance or correctness regressions in code
   compiled by LLVM on all applicable targets.
 
-* You are expected to address any `Bugzilla bugs <http://llvm.org/bugs/>`_ that
+* You are expected to address any `Bugzilla bugs <https://bugs.llvm.org/>`_ that
   result from your change.
 
 We prefer for this to be handled before submission but understand that it isn't
@@ -271,12 +277,70 @@ reverted. This is necessary when the change blocks other developers from making
 progress. The developer is welcome to re-commit the change after the problem has
 been fixed.
 
+.. _commit messages:
+
+Commit messages
+---------------
+
+Although we don't enforce the format of commit messages, we prefer that
+you follow these guidelines to help review, search in logs, email formatting
+and so on. These guidelines are very similar to rules used by other open source
+projects.
+
+Most importantly, the contents of the message should be carefully written to
+convey the rationale of the change (without delving too much in detail). It
+also should avoid being vague or overly specific. For example, "bits were not
+set right" will leave the reviewer wondering about which bits, and why they
+weren't right, while "Correctly set overflow bits in TargetInfo" conveys almost
+all there is to the change.
+
+Below are some guidelines about the format of the message itself:
+
+* Separate the commit message into title, body and, if you're not the original
+  author, a "Patch by" attribution line (see below).
+
+* The title should be concise. Because all commits are emailed to the list with
+  the first line as the subject, long titles are frowned upon.  Short titles
+  also look better in `git log`.
+
+* When the changes are restricted to a specific part of the code (e.g. a
+  back-end or optimization pass), it is customary to add a tag to the
+  beginning of the line in square brackets.  For example, "[SCEV] ..."
+  or "[OpenMP] ...". This helps email filters and searches for post-commit
+  reviews.
+
+* The body, if it exists, should be separated from the title by an empty line.
+
+* The body should be concise, but explanatory, including a complete
+  reasoning.  Unless it is required to understand the change, examples,
+  code snippets and gory details should be left to bug comments, web
+  review or the mailing list.
+
+* If the patch fixes a bug in bugzilla, please include the PR# in the message.
+
+* `Attribution of Changes`_ should be in a separate line, after the end of
+  the body, as simple as "Patch by John Doe.". This is how we officially
+  handle attribution, and there are automated processes that rely on this
+  format.
+
+* Text formatting and spelling should follow the same rules as documentation
+  and in-code comments, ex. capitalization, full stop, etc.
+
+* If the commit is a bug fix on top of another recently committed patch, or a
+  revert or reapply of a patch, include the svn revision number of the prior
+  related commit. This could be as simple as "Revert rNNNN because it caused
+  PR#".
+
+For minor violations of these recommendations, the community normally favors
+reminding the contributor of this policy over reverting. Minor corrections and
+omissions can be handled by sending a reply to the commits mailing list.
+
 Obtaining Commit Access
 -----------------------
 
 We grant commit access to contributors with a track record of submitting high
 quality patches.  If you would like commit access, please send an email to
-`Chris <mailto:sabre@nondot.org>`_ with the following information:
+`Chris <mailto:clattner@llvm.org>`_ with the following information:
 
 #. The user name you want to commit with, e.g. "hacker".
 
@@ -286,8 +350,10 @@ quality patches.  If you would like commit access, please send an email to
 #. A "password hash" of the password you want to use, e.g. "``2ACR96qjUqsyM``".
    Note that you don't ever tell us what your password is; you just give it to
    us in an encrypted form.  To get this, run "``htpasswd``" (a utility that
-   comes with apache) in crypt mode (often enabled with "``-d``"), or find a web
-   page that will do it for you.
+   comes with apache) in *crypt* mode (often enabled with "``-d``"), or find a web
+   page that will do it for you.  Note that our system does not work with MD5
+   hashes.  These are significantly longer than a crypt hash - e.g.
+   "``$apr1$vea6bBV2$Z8IFx.AfeD8LhqlZFqJer0``", we only accept the shorter crypt hash.
 
 Once you've been granted commit access, you should be able to check out an LLVM
 tree with an SVN URL of "https://username@llvm.org/..." instead of the normal
@@ -303,7 +369,7 @@ If you have recently been granted commit access, these policies apply:
 
 #. You are granted *commit-after-approval* to all parts of LLVM.  To get
    approval, submit a `patch`_ to `llvm-commits
-   <http://lists.cs.uiuc.edu/mailman/listinfo/llvm-commits>`_. When approved,
+   <http://lists.llvm.org/mailman/listinfo/llvm-commits>`_. When approved,
    you may commit it yourself.
 
 #. You are allowed to commit patches without approval which you think are
@@ -332,8 +398,8 @@ Making a Major Change
 ---------------------
 
 When a developer begins a major new project with the aim of contributing it back
-to LLVM, s/he should inform the community with an email to the `llvmdev
-<http://lists.cs.uiuc.edu/mailman/listinfo/llvmdev>`_ email list, to the extent
+to LLVM, they should inform the community with an email to the `llvm-dev
+<http://lists.llvm.org/mailman/listinfo/llvm-dev>`_ email list, to the extent
 possible. The reason for this is to:
 
 #. keep the community informed about future changes to LLVM,
@@ -413,15 +479,162 @@ to go about making the change.
 Attribution of Changes
 ----------------------
 
-We believe in correct attribution of contributions to their contributors.
-However, we do not want the source code to be littered with random attributions
-"this code written by J. Random Hacker" (this is noisy and distracting).  In
-practice, the revision control system keeps a perfect history of who changed
-what, and the CREDITS.txt file describes higher-level contributions.  If you
-commit a patch for someone else, please say "patch contributed by J. Random
-Hacker!" in the commit message.
+When contributors submit a patch to an LLVM project, other developers with
+commit access may commit it for the author once appropriate (based on the
+progression of code review, etc.). When doing so, it is important to retain
+correct attribution of contributions to their contributors. However, we do not
+want the source code to be littered with random attributions "this code written
+by J. Random Hacker" (this is noisy and distracting). In practice, the revision
+control system keeps a perfect history of who changed what, and the CREDITS.txt
+file describes higher-level contributions. If you commit a patch for someone
+else, please follow the attribution of changes in the simple manner as outlined
+by the `commit messages`_ section. Overall, please do not add contributor names
+to the source code.
 
-Overall, please do not add contributor names to the source code.
+Also, don't commit patches authored by others unless they have submitted the
+patch to the project or you have been authorized to submit them on their behalf
+(you work together and your company authorized you to contribute the patches,
+etc.). The author should first submit them to the relevant project's commit
+list, development list, or LLVM bug tracker component. If someone sends you
+a patch privately, encourage them to submit it to the appropriate list first.
+
+
+.. _IR backwards compatibility:
+
+IR Backwards Compatibility
+--------------------------
+
+When the IR format has to be changed, keep in mind that we try to maintain some
+backwards compatibility. The rules are intended as a balance between convenience
+for llvm users and not imposing a big burden on llvm developers:
+
+* The textual format is not backwards compatible. We don't change it too often,
+  but there are no specific promises.
+
+* Additions and changes to the IR should be reflected in
+  ``test/Bitcode/compatibility.ll``.
+
+* The current LLVM version supports loading any bitcode since version 3.0.
+
+* After each X.Y release, ``compatibility.ll`` must be copied to
+  ``compatibility-X.Y.ll``. The corresponding bitcode file should be assembled
+  using the X.Y build and committed as ``compatibility-X.Y.ll.bc``.
+
+* Newer releases can ignore features from older releases, but they cannot
+  miscompile them. For example, if nsw is ever replaced with something else,
+  dropping it would be a valid way to upgrade the IR.
+
+* Debug metadata is special in that it is currently dropped during upgrades.
+
+* Non-debug metadata is defined to be safe to drop, so a valid way to upgrade
+  it is to drop it. That is not very user friendly and a bit more effort is
+  expected, but no promises are made.
+
+C API Changes
+----------------
+
+* Stability Guarantees: The C API is, in general, a "best effort" for stability.
+  This means that we make every attempt to keep the C API stable, but that
+  stability will be limited by the abstractness of the interface and the
+  stability of the C++ API that it wraps. In practice, this means that things
+  like "create debug info" or "create this type of instruction" are likely to be
+  less stable than "take this IR file and JIT it for my current machine".
+
+* Release stability: We won't break the C API on the release branch with patches
+  that go on that branch, with the exception that we will fix an unintentional
+  C API break that will keep the release consistent with both the previous and
+  next release.
+
+* Testing: Patches to the C API are expected to come with tests just like any
+  other patch.
+
+* Including new things into the API: If an LLVM subcomponent has a C API already
+  included, then expanding that C API is acceptable. Adding C API for
+  subcomponents that don't currently have one needs to be discussed on the
+  mailing list for design and maintainability feedback prior to implementation.
+
+* Documentation: Any changes to the C API are required to be documented in the
+  release notes so that it's clear to external users who do not follow the
+  project how the C API is changing and evolving.
+
+New Targets
+-----------
+
+LLVM is very receptive to new targets, even experimental ones, but a number of
+problems can appear when adding new large portions of code, and back-ends are
+normally added in bulk.  We have found that landing large pieces of new code 
+and then trying to fix emergent problems in-tree is problematic for a variety 
+of reasons.
+
+For these reasons, new targets are *always* added as *experimental* until
+they can be proven stable, and later moved to non-experimental. The difference
+between both classes is that experimental targets are not built by default
+(need to be added to -DLLVM_TARGETS_TO_BUILD at CMake time).
+
+The basic rules for a back-end to be upstreamed in **experimental** mode are:
+
+* Every target must have a :ref:`code owner<code owners>`. The `CODE_OWNERS.TXT`
+  file has to be updated as part of the first merge. The code owner makes sure
+  that changes to the target get reviewed and steers the overall effort.
+
+* There must be an active community behind the target. This community
+  will help maintain the target by providing buildbots, fixing
+  bugs, answering the LLVM community's questions and making sure the new
+  target doesn't break any of the other targets, or generic code. This
+  behavior is expected to continue throughout the lifetime of the
+  target's code.
+
+* The code must be free of contentious issues, for example, large
+  changes in how the IR behaves or should be formed by the front-ends,
+  unless agreed by the majority of the community via refactoring of the
+  (:doc:`IR standard<LangRef>`) **before** the merge of the new target changes,
+  following the :ref:`IR backwards compatibility`.
+
+* The code conforms to all of the policies laid out in this developer policy
+  document, including license, patent, and coding standards.
+
+* The target should have either reasonable documentation on how it
+  works (ISA, ABI, etc.) or a publicly available simulator/hardware
+  (either free or cheap enough) - preferably both.  This allows
+  developers to validate assumptions, understand constraints and review code 
+  that can affect the target. 
+
+In addition, the rules for a back-end to be promoted to **official** are:
+
+* The target must have addressed every other minimum requirement and
+  have been stable in tree for at least 3 months. This cool down
+  period is to make sure that the back-end and the target community can
+  endure continuous upstream development for the foreseeable future.
+
+* The target's code must have been completely adapted to this policy
+  as well as the :doc:`coding standards<CodingStandards>`. Any exceptions that
+  were made to move into experimental mode must have been fixed **before**
+  becoming official.
+
+* The test coverage needs to be broad and well written (small tests,
+  well documented). The build target ``check-all`` must pass with the
+  new target built, and where applicable, the ``test-suite`` must also
+  pass without errors, in at least one configuration (publicly
+  demonstrated, for example, via buildbots).
+
+* Public buildbots need to be created and actively maintained, unless
+  the target requires no additional buildbots (ex. ``check-all`` covers
+  all tests). The more relevant and public the new target's CI infrastructure
+  is, the more the LLVM community will embrace it.
+
+To **continue** as a supported and official target:
+
+* The maintainer(s) must continue following these rules throughout the lifetime
+  of the target. Continuous violations of aforementioned rules and policies
+  could lead to complete removal of the target from the code base.
+
+* Degradation in support, documentation or test coverage will make the target as
+  nuisance to other targets and be considered a candidate for deprecation and
+  ultimately removed.
+
+In essences, these rules are necessary for targets to gain and retain their
+status, but also markers to define bit-rot, and will be used to clean up the
+tree from unmaintained targets.
 
 .. _copyright-license-patents:
 
@@ -501,19 +714,19 @@ to move code from (e.g.)  libc++ to the LLVM core without concern, but that code
 cannot be moved from the LLVM core to libc++ without the copyright owner's
 permission.
 
-Note that the LLVM Project does distribute llvm-gcc and dragonegg, **which are
-GPL.** This means that anything "linked" into llvm-gcc must itself be compatible
+Note that the LLVM Project does distribute dragonegg, **which is
+GPL.** This means that anything "linked" into dragonegg must itself be compatible
 with the GPL, and must be releasable under the terms of the GPL.  This implies
-that **any code linked into llvm-gcc and distributed to others may be subject to
+that **any code linked into dragonegg and distributed to others may be subject to
 the viral aspects of the GPL** (for example, a proprietary code generator linked
-into llvm-gcc must be made available under the GPL).  This is not a problem for
+into dragonegg must be made available under the GPL).  This is not a problem for
 code already distributed under a more liberal license (like the UIUC license),
 and GPL-containing subprojects are kept in separate SVN repositories whose
 LICENSE.txt files specifically indicate that they contain GPL code.
 
 We have no plans to change the license of LLVM.  If you have questions or
 comments about the license, please contact the `LLVM Developer's Mailing
-List <mailto:llvmdev@cs.uiuc.edu>`_.
+List <mailto:llvm-dev@lists.llvm.org>`_.
 
 Patents
 -------
@@ -529,5 +742,5 @@ patent-related trouble with their changes (including from third parties).  If
 you or your employer own the rights to a patent and would like to contribute
 code to LLVM that relies on it, we require that the copyright owner sign an
 agreement that allows any other user of LLVM to freely use your patent.  Please
-contact the `oversight group <mailto:llvm-oversight@cs.uiuc.edu>`_ for more
+contact the `LLVM Foundation Board of Directors <mailto:board@llvm.org>`_ for more
 details.

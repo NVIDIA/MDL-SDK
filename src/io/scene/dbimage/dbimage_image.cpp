@@ -41,10 +41,12 @@
 #include <base/lib/path/i_path.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/util/registry/i_config_registry.h>
+#include <base/util/string_utils/i_string_utils.h>
 #include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
 #include <io/image/image/i_image_utilities.h>
 #include <io/scene/scene/i_scene_journal_types.h>
+#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 
 namespace {
@@ -110,6 +112,61 @@ public:
 private:
     std::string m_original_filename;
     std::string m_resolved_filename;
+};
+
+class Container_file : public Image_set
+{
+public:
+
+    Container_file(
+        const std::string& resolved_container_filename,
+        const std::string& container_member_name)
+        : m_resolved_container_filename(resolved_container_filename)
+        , m_container_member_name(container_member_name) {}
+
+    bool is_uvtile() const
+    {
+        return false;
+    }
+
+    bool is_mdl_container() const
+    {
+        return true;
+    }
+
+    mi::neuraylib::IReader* open_reader(mi::Size i) const
+    {
+        return MDL::get_container_resource_reader(
+            m_resolved_container_filename,
+            m_container_member_name);
+    }
+
+    const char* get_container_membername(mi::Size index) const
+    {
+        ASSERT(M_SCENE, index == 0);
+        return m_container_member_name.c_str();
+    }
+
+    const char* get_container_filename() const
+    {
+        return m_resolved_container_filename.c_str();
+    }
+
+    bool get_uv_mapping(mi::Size index, mi::Sint32 &u, mi::Sint32 &v) const
+    {
+        ASSERT(M_SCENE, index == 0);
+        u = 0; v = 0;
+        return true;
+    }
+
+    mi::Size get_length() const
+    {
+        return 1;
+    }
+
+private:
+    std::string m_resolved_container_filename;
+    std::string m_container_member_name;
 };
 
 class Uvtile_set : public Image_set
@@ -689,9 +746,36 @@ Image_set* Image::resolve_filename(
     {
         std::string resolved_filename
             = path_module->search(PATH::RESOURCE, filename.c_str());
-        if( resolved_filename.empty())
-            return NULL;
+        if (resolved_filename.empty()) {
 
+            std::string f(filename);
+            STRING::to_lower(f);
+
+            auto p = f.find(".mdr:");
+            if (p != std::string::npos) {
+                // might be from an archive 
+                std::string archive_path = filename.substr(0, p + 4);
+                std::string archive_name = HAL::Ospath::basename(archive_path);
+                // only consider archives that can be resolved via MDL path
+                std::string resolved_archive_filename
+                    = path_module->search(PATH::MDL, archive_name.c_str());
+                if (resolved_archive_filename.empty())
+                    return NULL;
+
+                return new Container_file(resolved_archive_filename, filename.substr(p + 5));
+            }
+            p = f.find(".mdle:");
+            if (p != std::string::npos) {
+                std::string mdle_path = filename.substr(0, p + 5);
+                std::string resolved_mdle_path
+                    = path_module->search(PATH::INCLUDE, mdle_path.c_str());
+                if (resolved_mdle_path.empty())
+                    return NULL;
+
+                return new Container_file(resolved_mdle_path, filename.substr(p + 6));
+            }
+            return NULL;
+        }
         return new Single_file( filename, resolved_filename);
     }
 

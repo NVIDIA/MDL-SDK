@@ -114,8 +114,9 @@ public:
         char c = m_curr[0];
 
         if (c == '\0') {
-            return TT_EOF; \
-        } else if (c == '/') {
+            return TT_EOF;
+        } // check for absolute paths; Unix, Windows UNC and Windows paths starting with "X:/"
+        else if (c == '/' || (isalpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
             unsigned index = 0;
             do {
                 NEXT_CHAR;
@@ -140,7 +141,9 @@ public:
                     m_len = 1;
                     ++m_curr;
                     NEXT_CHAR;
-                    if (c == '/') {
+                    // check for absolute paths; Unix, Windows UNC and 
+                    // Windows paths starting with "X:/"
+                    if (c == '/' || (isalpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
                         unsigned index = 0;
                         do {
                             NEXT_CHAR;
@@ -576,6 +579,7 @@ void Module::get_version(int &major, int &minor) const
     case IMDL::MDL_VERSION_1_3:     major = 1; minor = 3; return;
     case IMDL::MDL_VERSION_1_4:     major = 1; minor = 4; return;
     case IMDL::MDL_VERSION_1_5:     major = 1; minor = 5; return;
+    case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
     }
     MDL_ASSERT(!"MDL version not known");
     major = 0;
@@ -2295,6 +2299,7 @@ restart:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         // create an invalid reference for those
@@ -2358,6 +2363,7 @@ restart:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         // already handled
@@ -3299,6 +3305,7 @@ public:
         case IType::TK_STRING:
         case IType::TK_LIGHT_PROFILE:
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
         case IType::TK_TEXTURE:
@@ -4021,6 +4028,31 @@ int Module::promote_call_arguments(
             return param_index + 1;
         }
     }
+    if (rules & PR_MATERIAL_ADD_HAIR) {
+        if (param_index == 5) {
+            // MDL 1.4 -> 1.5: add default hair bsdf
+            ISymbol const *s = m_name_factory.create_symbol("hair_bsdf");
+            ISimple_name const *sn = m_name_factory.create_simple_name(s);
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn);
+            IType_name *tn = m_name_factory.create_type_name(qn);
+            IExpression_reference *hair_ref = m_expr_factory.create_reference(tn);
+            IExpression_call *hair_call = m_expr_factory.create_call(hair_ref);
+
+            IArgument const   *a = call->get_argument(5);
+            if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                arg = m_expr_factory.create_positional_argument(hair_call);
+            }
+            else {
+                ISymbol const *sh = m_name_factory.create_symbol("hair");
+                ISimple_name const * sn_hair = m_name_factory.create_simple_name(sh);
+                arg = m_expr_factory.create_named_argument(sn_hair, hair_call);
+            }
+            call->add_argument(arg);
+
+            return param_index + 1;
+        }
+    }
     return param_index;
 }
 
@@ -4057,51 +4089,39 @@ private:
     {
         IAllocator *alloc = m_module->get_allocator();
 
-        File_resolver::UDIM_mode udim_mode = File_resolver::NO_UDIM;
+        mi::base::Handle<IMDL_resource_set> result(m_resolver.resolve_resource(
+            pos,
+            url,
+            m_module->get_name(),
+            m_module->get_filename()));
 
-        string abs_url(alloc);
-        string abs_file_name = m_resolver.resolve_resource(
-            abs_url, pos, url, m_module->get_name(), m_module->get_filename(), udim_mode);
+        if (result.is_valid_interface()) {
+            for (size_t i = 0, n = result->get_count(); i < n; ++i) {
+                IResource_restriction_handler::Resource_restriction rr =
+                    m_rrh.process(m_module, result->get_filename(i));
 
-        mi::base::Handle<MDL_resource_set> result;
-
-        if (udim_mode != File_resolver::NO_UDIM) {
-            // lookup ALL files for the given mask
-            result = mi::base::make_handle(MDL_resource_set::from_mask(
-                alloc,
-                abs_url.c_str(),
-                abs_file_name.c_str(),
-                udim_mode));
-        } else {
-            // single return
-            Allocator_builder builder(alloc);
-
-            result = mi::base::make_handle(builder.create<MDL_resource_set>(
-                alloc,
-                abs_url.c_str(),
-                abs_file_name.c_str()));
-        }
-
-        for (size_t i = 0, n = result->get_count(); i < n; ++i) {
-            IResource_restriction_handler::Resource_restriction rr =
-                m_rrh.process(m_module, result->get_filename(i));
-
-            switch (rr) {
-            case IResource_restriction_handler::RR_OK:
-                break;
-            case IResource_restriction_handler::RR_NOT_EXISTANT:
-                m_ana.warning(
-                    MISSING_RESOURCE,
-                    pos,
-                    Error_params(alloc).add(url));
-                break;
-            case IResource_restriction_handler::RR_OUTSIDE_ARCHIVE:
-                m_ana.warning(
-                    RESOURCE_OUTSIDE_ARCHIVE,
-                    pos,
-                    Error_params(alloc).add(url));
-                break;
+                switch (rr) {
+                case IResource_restriction_handler::RR_OK:
+                    break;
+                case IResource_restriction_handler::RR_NOT_EXISTANT:
+                    m_ana.warning(
+                        MISSING_RESOURCE,
+                        pos,
+                        Error_params(alloc).add(url));
+                    break;
+                case IResource_restriction_handler::RR_OUTSIDE_ARCHIVE:
+                    m_ana.warning(
+                        RESOURCE_OUTSIDE_ARCHIVE,
+                        pos,
+                        Error_params(alloc).add(url));
+                    break;
+                }
             }
+        } else {
+            m_ana.warning(
+                MISSING_RESOURCE,
+                pos,
+                Error_params(alloc).add(url));
         }
     }
 
@@ -4219,6 +4239,7 @@ static IType_name *construct_type_name(
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -4543,7 +4564,7 @@ static IExpression const *promote_expr(
             IExpression const *arg = promote_expr(mod, unexpr->get_argument());
             IExpression_unary *u =
                 mod.get_expression_factory()->create_unary(unexpr->get_operator(), arg);
-            u->set_type(expr->get_type());
+            u->set_type_name(unexpr->get_type_name());
             return u;
         }
     case IExpression::EK_BINARY:

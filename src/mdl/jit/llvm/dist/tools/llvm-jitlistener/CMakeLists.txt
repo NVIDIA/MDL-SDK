@@ -3,34 +3,22 @@
 link_directories( ${LLVM_INTEL_JITEVENTS_LIBDIR} )
 include_directories( ${LLVM_INTEL_JITEVENTS_INCDIR} )
 
-if( LLVM_INCLUDE_INTERPRETER )
 set(LLVM_LINK_COMPONENTS
   asmparser
   bitreader
-  debuginfo
+  DebugInfoDWARF
   inteljitevents
   interpreter
   irreader
-  jit
   mcjit
   nativecodegen
   object
   selectiondag
+  Support
+  ExecutionEngine
+  RuntimeDyld
+  Core
   )
-else()
-set(LLVM_LINK_COMPONENTS
-  asmparser
-  bitreader
-  debuginfo
-  inteljitevents
-  irreader
-  jit
-  mcjit
-  nativecodegen
-  object
-  selectiondag
-  )
-endif( LLVM_INCLUDE_INTERPRETER )
 
 add_llvm_tool(llvm-jitlistener
   llvm-jitlistener.cpp

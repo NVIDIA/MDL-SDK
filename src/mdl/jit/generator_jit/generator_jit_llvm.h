@@ -29,29 +29,19 @@
 #ifndef MDL_GENERATOR_JIT_LLVM_H
 #define MDL_GENERATOR_JIT_LLVM_H 1
 
-#include <csetjmp>
-
-#include <mi/base/atom.h>
 #include <mi/base/iinterface.h>
 #include <mi/base/lock.h>
 
-#include <llvm/ADT/OwningPtr.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/GlobalVariable.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Support/Compiler.h>
-#include <llvm/DebugInfo.h>
-
-#include <mi/mdl/mdl_types.h>
 #include <mi/mdl/mdl_declarations.h>
 #include <mi/mdl/mdl_generated_dag.h>
+#include <mi/mdl/mdl_types.h>
 #include <mdl/compiler/compilercore/compilercore_bitset.h>
-#include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
+#include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 
-#include "generator_jit_type_map.h"
 #include "generator_jit_context.h"
+#include "generator_jit_generated_code.h"
+#include "generator_jit_type_map.h"
 
 namespace llvm {
     class Argument;
@@ -60,6 +50,9 @@ namespace llvm {
     class ExecutionEngine;
     class Function;
     class Module;
+    namespace legacy {
+        class FunctionPassManager;
+    }
 }  // llvm
 
 namespace mi {
@@ -86,6 +79,9 @@ class Lambda_function;
 class Distribution_function;
 class MDL;
 class MDL_runtime_creator;
+class MDL_JIT;
+
+using MDL_JIT_module_key = uint64_t;
 
 /// The Jitted code interface holds jitted code.
 class IJitted_code : public
@@ -107,21 +103,23 @@ public:
     /// Add this LLVM module to the execution engine.
     ///
     /// \param llvm_module  the LLVM module, takes ownership
-    void add_llvm_module(llvm::Module *llvm_module);
+    MDL_JIT_module_key add_llvm_module(llvm::Module *llvm_module);
 
     /// Remove this module from the execution engine and delete it.
     ///
     /// \param llvm_module  the LLVM module
-    void delete_llvm_module(llvm::Module *llvm_module);
+    void delete_llvm_module(MDL_JIT_module_key module_key);
 
     /// JIT compile the given LLVM function.
     ///
-    /// \param func  the LLVM function to compile
+    /// \param module_key  the module key returned by add_llvm_module() for the module containing
+    ///                    the function
+    /// \param func        the LLVM function to compile
     ///
     /// \return The address of the jitted code of the function.
     ///
     /// \note: the module of this function must be added in advance
-    void *jit_compile(llvm::Function *func);
+    void *jit_compile(MDL_JIT_module_key module_key, llvm::Function *func);
 
     /// Get the only instance.
     ///
@@ -135,7 +133,7 @@ public:
     void register_function(llvm::StringRef const &func_name, void *address);
 
     /// Get the layout data for the current JITer target.
-    llvm::DataLayout const *get_layout_data() const;
+    llvm::DataLayout get_layout_data() const;
 
 private:
     /// Constructor.
@@ -153,8 +151,8 @@ private:
 
 private:
     // NOT implemented
-    Jitted_code(Jitted_code const &) LLVM_DELETED_FUNCTION;
-    Jitted_code &operator=(Jitted_code const &) LLVM_DELETED_FUNCTION;
+    Jitted_code(Jitted_code const &) MDL_DELETED_FUNCTION;
+    Jitted_code &operator=(Jitted_code const &) MDL_DELETED_FUNCTION;
 
 private:
     /// The singleton.
@@ -169,8 +167,8 @@ private:
     /// The LLVMContext to use for the code generator.
     llvm::LLVMContext *m_llvm_context;
 
-    /// The global ExecutionEngine.
-    llvm::ExecutionEngine *m_execution_engine;
+    /// The LLVM JIT for MDL.
+    MDL_JIT *m_mdl_jit;
 };
 
 ///
@@ -207,9 +205,9 @@ public:
         KI_STATE_OBJECT_ID,                     ///< Kind of state::object_id()
         KI_STATE_CALL_LAMBDA_FLOAT,             ///< Kind of state::call_lambda_float(int)
         KI_STATE_CALL_LAMBDA_FLOAT3,            ///< Kind of state::call_lambda_float3(int)
-        
+
         /// Kind of df::bsdf_measurement_resolution(int,int)
-        KI_DF_BSDF_MEASUREMENT_RESOLUTION,      
+        KI_DF_BSDF_MEASUREMENT_RESOLUTION,
 
         /// Kind of df::bsdf_measurement_evaluate(int,float2,float2,int)
         KI_DF_BSDF_MEASUREMENT_EVALUATE,
@@ -247,14 +245,14 @@ public:
     /// \param param_types    the parameter types of the internal function
     /// \param param_names    the parameter names of the internal function
     Internal_function(
-        Memory_arena *arena,
-        char const *name,
-        char const *mangled_name,
-        Kind kind,
-        Flags flags,
-        llvm::Type *ret_type,
+        Memory_arena                   *arena,
+        char const                     *name,
+        char const                     *mangled_name,
+        Kind                           kind,
+        Flags                          flags,
+        llvm::Type                     *ret_type,
         Array_ref<IType const *> const &param_types,
-        Array_ref<char const *> const &param_names);
+        Array_ref<char const *> const  &param_names);
 
     /// Get the name of the internal function.
     char const *get_name() const { return m_name; }
@@ -279,7 +277,6 @@ public:
 
     /// Get the parameter names of the internal function.
     char const *get_parameter_name(size_t index) const;
-
 
 private:
     /// The name of the internal function.
@@ -522,14 +519,39 @@ private:
 /// OR like a memory address containing the value.
 class Expression_result {
 public:
+    /// The kind of the result.
+    enum Result_kind
+    {
+        RK_VALUE,              ///< This result is a value
+        RK_POINTER,            ///< This result is a pointer
+        RK_OFFSET              ///< This result is an offset into something
+    };
+
+    /// The kind of the offset, if this result is an offset.
+    enum Offset_kind
+    {
+        OK_NONE,               ///< This is not an offset
+        OK_RO_DATA_SEGMENT,    ///< The offset points into the read-only data segment
+        OK_ARG_BLOCK           ///< The offset points into the argument block
+    };
+
     /// Construct an Expression result from a pointer (reference).
     static Expression_result ptr(llvm::Value *ptr) {
-        return Expression_result(ptr, /*is_value=*/false);
+        return Expression_result(ptr, RK_POINTER);
     }
 
     /// Construct an Expression result from a value.
     static Expression_result value(llvm::Value *value) {
-        return Expression_result(value, /*is_value=*/true);
+        return Expression_result(value, RK_VALUE);
+    }
+
+    /// Construct an Expression result from an offset.
+    static Expression_result offset(
+            llvm::Value          *offset,
+            Offset_kind           offs_kind,
+            llvm::Type           *llvm_type,
+            mi::mdl::IType const *mdl_type) {
+        return Expression_result(offset, RK_OFFSET, offs_kind, llvm_type, mdl_type);
     }
 
     /// Create an undefined result of the given type.
@@ -544,25 +566,24 @@ public:
 
     /// Returns a pointer to the value. Puts it in a newly allocated temporary if necessary.
     llvm::Value *as_ptr(Function_context &context) {
-        if (m_is_value) {
+        // turn offset result into value
+        if (m_res_kind == RK_OFFSET) {
+            m_content = as_value(context);
+            m_res_kind = RK_VALUE;
+        }
+
+        if (m_res_kind == RK_VALUE) {
             // do not add debug info here, it is not clear, when this is executed
             llvm::Value *ptr = context.create_local(m_content->getType(), "tmp");
             context->CreateStore(m_content, ptr);
             return ptr;
-        } else {
+        } else {  // RK_POINTER
             return m_content;
         }
     }
 
     /// Return the value.
-    llvm::Value *as_value(Function_context &context) {
-        if (m_is_value) {
-            return m_content;
-        } else {
-            // do not add debug info here, it is not clear, when this is executed
-            return context->CreateLoad(m_content);
-        }
-    }
+    llvm::Value *as_value(Function_context &context);
 
     /// Ensures that the expression result is a derivative value or not, by stripping or zero
     /// extending.
@@ -571,39 +592,40 @@ public:
     /// \param should_be_deriv_value  if true, the expression result value will be zero extended
     ///                               to a derivative value, if necessary,
     ///                               if false, any derivative information will be stripped
-    void ensure_deriv_result(Function_context &context, bool should_be_deriv_value)
-    {
+    void ensure_deriv_result(Function_context &context, bool should_be_deriv_value) {
         if (should_be_deriv_value) {
             if (!is_deriv_value(context)) {
                 llvm::Value *val = as_value(context);
-                m_is_value = true;
+                m_res_kind = RK_VALUE;
                 m_content = context.get_dual(val);
             }
-        } else {
-            if (m_is_value) {
+        } else if (is_deriv_value(context)) {
+            if (m_res_kind == RK_OFFSET) {
+                m_content = as_value(context);
+                m_res_kind = RK_VALUE;
+            }
+
+            if (m_res_kind == RK_VALUE) {
                 m_content = context.get_dual_val(m_content);
             } else {
-                if (context.is_deriv_type(m_content->getType()->getPointerElementType())) {
-                    // change pointer to dual into pointer to value component of dual
-                    m_content = context.get_dual_val_ptr(m_content);
-                }
+                // change pointer to dual into pointer to value component of dual
+                m_content = context.get_dual_val_ptr(m_content);
             }
         }
     }
 
     /// Returns true, if the expression result is a derivative value or a pointer to such value.
     bool is_deriv_value(Function_context &context) {
-        if (m_is_value)
-            return context.is_deriv_type(m_content->getType());
-        else
-            return context.is_deriv_type(m_content->getType()->getPointerElementType());
+        return context.is_deriv_type(get_value_type());
     }
 
     /// Returns true if this expression result is a constant.
     bool is_constant() const {
-        if (m_is_value) {
+        if (m_res_kind == RK_VALUE) {
             // a constant
             return llvm::isa<llvm::Constant>(m_content);
+        } else if (m_res_kind == RK_OFFSET) {
+            return m_offs_kind == OK_RO_DATA_SEGMENT;
         } else if (llvm::GlobalVariable *gv = llvm::dyn_cast<llvm::GlobalVariable>(m_content)) {
             // The address of a constant
             return gv->isConstant();
@@ -612,37 +634,82 @@ public:
     }
 
     /// Return true if it is unset.
-    bool is_unset() const { return m_content == NULL; }
+    bool is_unset() const { return m_content == NULL && m_res_kind == RK_VALUE; }
 
     /// Return true if this expression result represents a value.
-    bool is_value() const { return m_is_value; }
+    bool is_value() const { return m_res_kind == RK_VALUE; }
+
+    /// Return true if this expression result represents a pointer.
+    bool is_pointer() const { return m_res_kind == RK_POINTER; }
+
+    /// Return true if this expression result represents an offset.
+    bool is_offset() const { return m_res_kind == RK_OFFSET; }
 
     /// Return the type of the value.
     llvm::Type *get_value_type() const {
-        if (m_is_value)
+        if (m_res_kind == RK_VALUE)
             return m_content->getType();
-        else
+        else if (m_res_kind == RK_POINTER)
             return m_content->getType()->getPointerElementType();
+        else  // RK_OFFSET
+            return m_offset_res_llvm_type;
     }
+
+    /// Return the offset.
+    llvm::Value *get_offset() const {
+        MDL_ASSERT(is_offset());
+        return m_content;
+    }
+
+    /// Return the offset kind.
+    Offset_kind get_offset_kind() const { return m_offs_kind; }
+
+    /// Return the LLVM type of the result pointed to by the offset.
+    llvm::Type *get_offset_res_llvm_type() const { return m_offset_res_llvm_type; }
+
+    /// Return the MDL type of the result pointed to by the offset.
+    mi::mdl::IType const *get_offset_res_mdl_type() const { return m_offset_res_mdl_type; }
 
 private:
     /// Constructor.
-    Expression_result(llvm::Value *content, bool is_value)
-    : m_content(content), m_is_value(is_value)
+    Expression_result(
+        llvm::Value *content,
+        Result_kind res_kind,
+        Offset_kind offs_kind = OK_NONE,
+        llvm::Type *offset_res_llvm_type = NULL,
+        mi::mdl::IType const *offset_res_mdl_type = NULL)
+    : m_content(content)
+    , m_res_kind(res_kind)
+    , m_offs_kind(offs_kind)
+    , m_offset_res_llvm_type(offset_res_llvm_type)
+    , m_offset_res_mdl_type(offset_res_mdl_type)
     {}
 
 public:
     /// Default constructor, creates an unset result.
     Expression_result()
-    : m_content(NULL), m_is_value(true)
+    : m_content(NULL)
+    , m_res_kind(RK_VALUE)
+    , m_offs_kind(OK_NONE)
+    , m_offset_res_llvm_type(NULL)
+    , m_offset_res_mdl_type(NULL)
     {}
 
 private:
-    /// The value/ptr itself.
+    /// The value/ptr/offset itself.
     llvm::Value *m_content;
 
-    /// True, if m_content represent a value, false if its a pointer.
-    bool m_is_value;
+    /// The kind of the result.
+    Result_kind m_res_kind;
+
+    /// The kind of the offset;
+    Offset_kind m_offs_kind;
+
+    /// The LLVM type of the result pointed to by the offset.
+    llvm::Type           *m_offset_res_llvm_type;
+
+    /// The MDL type of the result pointed to by the offset.
+    mi::mdl::IType const *m_offset_res_mdl_type;
 };
 
 /// A Helper class to unify access to call AST expressions and call DAG expressions.
@@ -828,6 +895,15 @@ public:
     typedef vector<llvm::Function *>::Type Function_vector;
 
     ///
+    /// The target language for the code generator.
+    ///
+    enum Target_language {
+        TL_NATIVE = 0,    ///< Native CPU/LLVM-IR code generation.
+        TL_PTX    = 1,    ///< PTX assembler.
+        TL_HLSL   = 2,    ///< HLSL code.
+    };
+
+    ///
     /// Debug modes for the generated JIT code.
     ///
     enum Jit_debug_mode {
@@ -887,20 +963,6 @@ public:
         LLVM_code_generator &m_generator;
     };
 
-    /// The exception state.
-    struct Exc_state {
-        IMDL_exception_handler *handler;  ///< The exception handler if any.
-        mi::base::Atom32       *abort;    ///< Points to the abort flag.
-                                          ///  The long_jump buffer for abort on exception.
-        jmp_buf                env;       // PVS: -V730_NOINIT
-
-        /// Constructor.
-        Exc_state(IMDL_exception_handler *handler, mi::base::Atom32 &abort)
-        : handler(handler), abort(&abort)
-        {
-        }
-    };
-
     /// Helper value type for the global value map.
     struct Value_offset_pair {
         /// Constructor.
@@ -921,6 +983,44 @@ public:
         bool        is_offset;
     };
 
+    /// Description of exported functions used to generate function information.
+    struct Exported_function {
+        llvm::Function                                *func;
+        IGenerated_code_executable::Distribution_kind  distribution_kind;
+        IGenerated_code_executable::Function_kind      function_kind;
+        size_t                                         arg_block_index;
+
+        // The name may later be updated by the actual target code generator.
+        string                                         name;
+        vector<string>::Type                           prototypes;
+
+        Exported_function(
+            IAllocator                                    *alloc,
+            llvm::Function                                *func,
+            IGenerated_code_executable::Distribution_kind  distribution_kind,
+            IGenerated_code_executable::Function_kind      function_kind,
+            size_t                                         arg_block_index)
+        : func(func)
+        , distribution_kind(distribution_kind)
+        , function_kind(function_kind)
+        , arg_block_index(arg_block_index)
+        , name(func->getName().begin(), func->getName().end(), alloc)
+        , prototypes(alloc)
+        {
+        }
+
+        void set_function_prototype(
+            IGenerated_code_executable::Prototype_language lang,
+            char const *prototype)
+        {
+            if (prototypes.size() <= size_t(lang)) {
+                prototypes.resize(size_t(lang) + 1, string(prototypes.get_allocator()));
+            }
+            prototypes[size_t(lang)] = prototype;
+        }
+    };
+
+    typedef vector<Exported_function>::Type Exported_function_list;
 
 public:
     /// Constructor.
@@ -929,7 +1029,7 @@ public:
     /// \param compiler             the MDL compiler
     /// \param messages             messages object
     /// \param context              the LLVM context to be used for this generator
-    /// \param ptx_mode             if true, ptx will be targeted
+    /// \param target_lang          the language that will be targeted
     /// \param tm_mode              if ptx_mode is false, the type mapping mode
     /// \param sm_version           if ptx_mode is true, the SM_version we compile for
     /// \param has_tex_handler      True if a texture handler interface is available
@@ -948,7 +1048,7 @@ public:
         MDL                *compiler,
         Messages_impl      &messages,
         llvm::LLVMContext  &context,
-        bool               ptx_mode,
+        Target_language    target_lang,
         Type_mapping_mode  tm_mode,
         unsigned           sm_version,
         bool               has_tex_handler,
@@ -987,7 +1087,7 @@ public:
     /// Check if the given value can be stored in the RO data segment.
     ///
     /// \param t  an MDL type to check
-    bool can_be_stored_is_ro_segment(IType const *t);
+    bool can_be_stored_in_ro_segment(IType const *t);
 
     /// Compile all functions of a module.
     ///
@@ -999,10 +1099,12 @@ public:
 
     /// Compile a distribution function into an LLVM Module and return the LLVM module.
     ///
-    /// \param incremental  if true, the module will not be finished
-    /// \param dist_func    the distribution function
-    /// \param resolver     the call resolver interface to be used
-    /// \param llvm_funcs   the generated LLVM functions
+    /// \param incremental           if true, the module will not be finished
+    /// \param dist_func             the distribution function
+    /// \param resolver              the call resolver interface to be used
+    /// \param llvm_funcs            the generated LLVM functions
+    /// \param next_arg_block_index  the next argument block index to use, if an argument block
+    ///                              is used by the function
     ///
     /// \returns The LLVM module containing the generated functions for this material
     ///          or NULL on compilation errors.
@@ -1010,7 +1112,8 @@ public:
         bool                        incremental,
         Distribution_function const &dist_func,
         ICall_name_resolver const   *resolver,
-        Function_vector             &llvm_funcs);
+        Function_vector             &llvm_funcs,
+        size_t                      next_arg_block_index);
 
     /// Compile an environment lambda function into an LLVM Module and return the LLVM function.
     ///
@@ -1044,22 +1147,27 @@ public:
 
     /// Compile a switch lambda function into an LLVM Module and return the LLVM function.
     ///
-    /// \param incremental  if true, the module will not be finished
-    /// \param lambda       the lambda function
-    /// \param resolver     the call resolver interface to be used
+    /// \param incremental           if true, the module will not be finished
+    /// \param lambda                the lambda function
+    /// \param resolver              the call resolver interface to be used
+    /// \param next_arg_block_index  the next argument block index to use, if an argument block
+    ///                              is used by the function
     ///
     /// \returns The LLVM function for this lambda function or NULL on compilation errors.
     llvm::Function *compile_switch_lambda(
         bool                      incremental,
         Lambda_function const     &lambda,
-        ICall_name_resolver const *resolver);
+        ICall_name_resolver const *resolver,
+        size_t                    next_arg_block_index);
 
     /// Compile a generic lambda function into an LLVM Module and return the LLVM function.
     ///
-    /// \param incremental  if true, the module will not be finished
-    /// \param lambda       the lambda function
-    /// \param resolver     the call resolver interface to be used
-    /// \param transformer  if non-NULL, a DAG call transformer
+    /// \param incremental           if true, the module will not be finished
+    /// \param lambda                the lambda function
+    /// \param resolver              the call resolver interface to be used
+    /// \param transformer           if non-NULL, a DAG call transformer
+    /// \param next_arg_block_index  the next argument block index to use, if an argument block
+    ///                              is used by the function
     ///
     /// \return the compiled function or NULL on compilation errors
     ///
@@ -1068,7 +1176,8 @@ public:
         bool                      incremental,
         Lambda_function const     &lambda,
         ICall_name_resolver const *resolver,
-        ILambda_call_transformer  *transformer);
+        ILambda_call_transformer  *transformer,
+        size_t                    next_arg_block_index);
 
     /// Retrieve the LLVM module.
     llvm::Module const *get_llvm_module() const { return m_module; }
@@ -1089,7 +1198,10 @@ public:
     llvm::DIBuilder *get_debug_info_builder() const { return m_di_builder; }
 
     /// Get the debug info file entry.
-    llvm::DIFile &get_debug_info_file_entry() { return m_di_file; }
+    llvm::DIFile *get_debug_info_file_entry() { return m_di_file; }
+
+    /// Returns true if full debug info should be generated.
+    bool generate_full_debug_info() const { return m_enable_full_debug; }
 
     /// Returns true if the LLVM code is optimized.
     bool is_optimized() const { return m_opt_level > 0; }
@@ -1128,7 +1240,7 @@ public:
 
     /// Returns true if the render state includes the uniform state.
     bool state_include_uniform_state() const {
-        return m_type_mapper.state_include_uniform_state();
+        return m_type_mapper.state_includes_uniform_state();
     }
 
     /// Create resource attribute lookup tables for a lambda function if necessary.
@@ -1200,20 +1312,77 @@ public:
         llvm::BasicBlock                   *true_bb,
         llvm::BasicBlock                   *false_bb);
 
+    /// Translate a DAG parameter into LLVM IR
+    ///
+    /// \param ctx         the current function context
+    /// \param param_node  the DAG parameter node to translate
+    Expression_result translate_parameter(
+        Function_context             &ctx,
+        mi::mdl::DAG_parameter const *param_node);
+
+    /// Translate a part of a DAG parameter for HLSL into LLVM IR.
+    ///
+    /// \param ctx         the current function context
+    /// \param param_type  the type of the part to translate
+    /// \param cur_offs    the current offset, will be updated
+    llvm::Value *translate_parameter_hlsl_value(
+        Function_context             &ctx,
+        mi::mdl::IType const         *param_type,
+        int                          &cur_offs);
+
+    /// Translate a parameter offset into LLVM IR by adding the argument block offset of the state.
+    ///
+    /// \param ctx       the current function context
+    /// \param cur_offs  the current offset
+    llvm::Value *translate_parameter_hlsl_offset(
+        Function_context &ctx,
+        int               cur_offs);
+
+    /// Translate a part of the RO-data-segment for HLSL into LLVM IR.
+    ///
+    /// \param ctx         the current function context
+    /// \param param_type  the type of the part to translate
+    /// \param cur_offs    the current offset, will be updated
+    /// \param add_val     additional value added to the offset, if non-NULL
+    llvm::Value *translate_ro_data_segment_hlsl_value(
+        Function_context             &ctx,
+        mi::mdl::IType const         *param_type,
+        int                          &cur_offs,
+        llvm::Value                  *add_val);
+
+    /// Translate a RO-data-segment offset into LLVM IR by adding the RO-data-segment offset
+    /// of the state.
+    ///
+    /// \param ctx       the current function context
+    /// \param cur_offs  the current offset
+    /// \param add_val   additional value added to the offset, if non-NULL
+    llvm::Value *translate_ro_data_segment_hlsl_offset(
+        Function_context &ctx,
+        int               cur_offs,
+        llvm::Value      *add_val);
+
     /// Retrieve the LLVM context data for a MDL function instance, create it if not available.
     ///
-    /// \param owner        the owner of the definition
-    /// \param inst         the function instance
-    /// \param module_name  the name of the owner module if owner is NULL
+    /// \param owner         the owner of the definition
+    /// \param inst          the function instance
+    /// \param module_name   the name of the owner module if owner is NULL
+    /// \param is_prototype  true if this should just declare a prototype
     LLVM_context_data *get_or_create_context_data(
         mi::mdl::IModule const  *owner,
         Function_instance const &inst,
-        char const              *module_name = NULL);
+        char const              *module_name = NULL,
+        bool                    is_prototype = false);
 
     /// Retrieve the LLVM context data for a MDL function instance, return NULL if not available.
     ///
     /// \param func_instance  the function instance
     LLVM_context_data *get_context_data(
+        Function_instance const &func_instance);
+
+    /// Retrieve the LLVM function for a MDL function instance, return NULL if not available.
+    ///
+    /// \param func_instance  the function instance
+    llvm::Function *get_function(
         Function_instance const &func_instance);
 
     /// Retrieve the LLVM context data for a lambda function, create it if not available.
@@ -1240,6 +1409,9 @@ public:
         Internal_function const *int_func,
         llvm::Function *func);
 
+    /// Returns true if the module stack is empty.
+    bool module_stack_empty() const { return m_module_stack.empty(); }
+
     /// Get the top level module on the stack.
     ///
     /// \note Does NOT increase the reference count of the returned
@@ -1258,6 +1430,28 @@ public:
     /// \param code         will be filled with the PTX code
     void ptx_compile(llvm::Module *module, string &code);
 
+    /// Compile the given module into HLSL code.
+    ///
+    /// \param module       the LLVM module to JIT compile
+    /// \param code         will be filled with the HLSL code
+    void hlsl_compile(llvm::Module *module, string &code);
+
+    /// Get the HLSL function suffix for the texture type in the first parameter of the given
+    /// function definition.
+    ///
+    /// \param tex_func_def  the definition of the texture function
+    ///
+    /// \returns the function suffix to use for this function, like "_2d"
+    char const *get_hlsl_tex_type_func_suffix(IDefinition const *tex_func_def);
+
+    /// Get the intrinsic LLVM function for a MDL function for HLSL code.
+    ///
+    /// \param def            the definition of the MDL function
+    /// \param return_derivs  if true, derivatives will be generated for the return value
+    ///
+    /// \returns the requested function or NULL if no special handling for HLSL is required
+    llvm::Function *get_hlsl_intrinsic_function(IDefinition const *def, bool return_derivs);
+
     /// Compile the given module into LLVM-IR code.
     ///
     /// \param module       the LLVM module to JIT compile
@@ -1269,6 +1463,24 @@ public:
     /// \param module       the LLVM module to JIT compile
     /// \param code         will be filled with the LLVM-BC code
     void llvm_bc_compile(llvm::Module *module, string &code);
+
+    /// Get the current number of exported functions.
+    size_t get_current_exported_function_count() const {
+        return m_exported_func_list.size();
+    }
+
+    /// Get the exported function with the given index.
+    Exported_function *get_current_exported_function(size_t index) {
+        if (index >= m_exported_func_list.size())
+            return nullptr;
+        return &m_exported_func_list[index];
+    }
+
+    /// Fill the function information in the given code object with the info about the generated
+    /// exported functions.
+    ///
+    /// \param code   the generated code executable object to fill
+    void fill_function_info(IGenerated_code_executable *code);
 
     /// Set a call transformer for DAG calls.
     ///
@@ -1445,6 +1657,12 @@ public:
     /// \param manag  the manager
     void set_resource_manag(IResource_manager *manag) { m_res_manager = manag; }
 
+    /// Add a string constant mapping to the string table.
+    ///
+    /// \param s   the string constant to add
+    /// \param id  the assigned ID
+    void add_string_constant(char const *s, Type_mapper::Tag id);
+
     /// Register all native runtime functions with the Jitted_code object.
     /// Should only be called by the Jitted_code constructor.
     ///
@@ -1501,19 +1719,23 @@ private:
 
     /// Declares an LLVM function from a MDL function instance.
     ///
-    /// \param owner        the MDL owner module of the function
-    /// \param inst         the function instance
-    /// \param name_prefix  the name prefix for this function
+    /// \param owner         the MDL owner module of the function
+    /// \param inst          the function instance
+    /// \param name_prefix   the name prefix for this function
+    /// \param is_prototype  true if this should just declare a prototype
     LLVM_context_data *declare_function(
-        mi::mdl::IModule const *owner,
+        mi::mdl::IModule const  *owner,
         Function_instance const &inst,
-        char const             *name_prefix);
+        char const              *name_prefix,
+        bool                     is_prototype);
 
     /// Declares an LLVM function from a internal function instance.
     ///
-    /// \param inst         the function instance
+    /// \param inst          the function instance
+    /// \param is_prototype  true if this should just declare a prototype
     LLVM_context_data *declare_internal_function(
-        Function_instance const &inst);
+        Function_instance const &inst,
+        bool                     is_prototype);
 
     /// Declares an LLVM function from a lambda function.
     ///
@@ -1660,6 +1882,17 @@ private:
         mi::mdl::IType_matrix const *m_type,
         llvm::Value                 *matrix_ptr,
         llvm::Value                 *index);
+
+    /// If bounds check exceptions are disabled and instancing is enabled,
+    /// returns a select operation returning index 0 if the index is out of bounds.
+    /// Otherwise just returns the index.
+    ///
+    /// \param index  the index
+    /// \param bound  the upper bound to check the index against
+    llvm::Value *adapt_index_for_bounds_check(
+        Function_context  &ctx,
+        llvm::Value       *index,
+        llvm::Value       *bound);
 
     /// Translate an l-value index expression to LLVM IR.
     ///
@@ -1814,6 +2047,26 @@ private:
         Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr);
 
+    /// Translate an MDL 1.5 cast expression.
+    ///
+    /// \param ctx            the function context
+    /// \param arg            the argument of the cast expression
+    /// \param res_type       the result type of the cast expression
+    Expression_result translate_cast_expression(
+        Function_context                 &ctx,
+        Expression_result                &arg,
+        mi::mdl::IType const             *res_type);
+
+    /// Translate an MDL 1.5 cast expression.
+    ///
+    /// \param ctx            the function context
+    /// \param un_expr        the expression to translate
+    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    Expression_result translate_cast_expression(
+        Function_context                 &ctx,
+        mi::mdl::IExpression_unary const *un_expr,
+        bool                             return_derivs);
+
     /// Translate a binary expression to LLVM IR.
     ///
     /// \param ctx       the function context
@@ -1959,15 +2212,71 @@ private:
 
     /// Generate a call to an expression lambda function.
     ///
-    /// \param ctx           the function context
-    /// \param lambda_index  the index of the precalculated lambda function
-    /// \param opt_dest_ptr  an optional destination pointer. The result will be converted
-    ///                      before writing it there, if necessary
+    /// \param ctx                 the function context
+    /// \param lambda_index        the index of the precalculated lambda function
+    /// \param opt_results_buffer  an optional results buffer. The result will be converted
+    ///                            before writing it there, if necessary
+    /// \param opt_result_index    the index of the result in the results buffer
     /// \returns the result pointer
     Expression_result generate_expr_lambda_call(
         Function_context &ctx,
         size_t           lambda_index,
-        llvm::Value      *opt_dest_ptr = NULL);
+        llvm::Value      *opt_results_ptr = NULL,
+        size_t           opt_result_index = ~0);
+
+    /// Store a value inside a float4 array at the given byte offset, updating the offset.
+    ///
+    /// \param ctx        the function context
+    /// \param val        the value to store
+    /// \param dest       the float4 array
+    /// \param dest_offs  the byte offset inside the float4 array, will be updated to point
+    ///                   after the written value
+    void store_to_float4_array_impl(
+        Function_context &ctx,
+        llvm::Value      *val,
+        llvm::Value      *dest,
+        unsigned         &dest_offs);
+
+    /// Store a value inside a float4 array at the given byte offset.
+    ///
+    /// \param ctx        the function context
+    /// \param val        the value to store
+    /// \param dest       the float4 array
+    /// \param dest_offs  the byte offset inside the float4 array
+    void store_to_float4_array(
+        Function_context &ctx,
+        llvm::Value      *val,
+        llvm::Value      *dest,
+        unsigned         dest_offs);
+
+    /// Load a value inside a float4 array at the given byte offset, updating the offset.
+    ///
+    /// \param ctx       the function context
+    /// \param val_type  the type of the value to load
+    /// \param src       the float4 array
+    /// \param src_offs  the byte offset inside the float4 array, will be updated to point
+    ///                  after the written value
+    ///
+    /// \returns the loaded value
+    llvm::Value *load_from_float4_array_impl(
+        Function_context &ctx,
+        llvm::Type       *val_type,
+        llvm::Value      *src,
+        unsigned         &src_offs);
+
+    /// Load a value inside a float4 array at the given byte offset.
+    ///
+    /// \param ctx       the function context
+    /// \param val_type  the type of the value to load
+    /// \param src       the float4 array
+    /// \param src_offs  the byte offset inside the float4 array
+    ///
+    /// \returns the loaded value
+    llvm::Value *load_from_float4_array(
+        Function_context &ctx,
+        llvm::Type       *val_type,
+        llvm::Value      *src,
+        unsigned         src_offs);
 
     /// Translate a precalculated lambda function to LLVM IR.
     ///
@@ -2353,6 +2662,17 @@ private:
     /// Initialize the current LLVM module with user-specified LLVM implementations.
     bool init_user_modules();
 
+    /// Declare an user-provided HLSL read function, which gets an int offset as parameter.
+    ///
+    /// \param ret_type  the type the function should return
+    /// \param name      the name of the function
+    llvm::Function *declare_hlsl_read_func(
+        llvm::Type *ret_type,
+        char const *name);
+
+    /// Initialize types and functions needed for HLSL.
+    void init_hlsl_code_gen();
+
     /// Finalize compilation of the current module that was created by create_module().
     ///
     /// \returns the LLVM module (that was create using create_module()) or NULL on error;
@@ -2362,10 +2682,10 @@ private:
     /// JIT compile all functions of the given module.
     ///
     /// \param module  the LLVM module to JIT compile
-    void jit_compile(llvm::Module *module);
+    MDL_JIT_module_key jit_compile(llvm::Module *module);
 
     /// Get the address of a JIT compiled LLVM function.
-    void *get_entry_point(llvm::Function *func);
+    void *get_entry_point(MDL_JIT_module_key module_key, llvm::Function *func);
 
     /// Get the number of error messages.
     int get_error_message_count();
@@ -2414,14 +2734,14 @@ private:
     ///
     /// \param arena_builder        an arena builder
     /// \param code_gen             the code generator to be used
-    /// \param ptx_mode             True if PTX is targeted
+    /// \param target_lang          the language that will be targeted
     /// \param fast_math            True, if fast-math is enabled
     /// \param has_texture_handler  True, if a texture handler interface is available
     /// \param internal_space       the internal space
     static MDL_runtime_creator *create_mdl_runtime(
         mi::mdl::Arena_builder &arena_builder,
         LLVM_code_generator    *code_gen,
-        bool                   ptx_mode,
+        Target_language        target_lang,
         bool                   fast_math,
         bool                   has_texture_handler,
         char const             *internal_space);
@@ -2455,6 +2775,39 @@ private:
         char const *fname,
         int        line);
 
+
+    /// Specifies, whether an resource data parameter should be provided to subfunctions
+    /// which use resources.
+    bool target_uses_resource_data_parameter() const {
+        return m_target_lang != TL_HLSL || m_hlsl_use_resource_data;
+    }
+
+    /// Specifies, whether an exception state parameter should be provided to subfunctions
+    /// which could cause exceptions.
+    bool target_uses_exception_state_parameter() const {
+        return m_target_lang != TL_HLSL;
+    }
+
+    /// Returns true if the target supports sret parameters for lambda functions.
+    bool target_supports_sret_for_lambda() const {
+        return m_target_lang != TL_HLSL;
+    }
+
+    /// Returns true if the target supports an captured arguments parameter.
+    bool target_supports_captured_argument_parameter() const {
+        return m_target_lang != TL_HLSL;
+    }
+
+    /// Returns true if the target supports an lambda results parameter.
+    bool target_supports_lambda_results_parameter() const {
+        return m_target_lang != TL_HLSL;
+    }
+
+    /// Returns true if the target supports pointers.
+    bool target_supports_pointers() const {
+        return m_target_lang != TL_HLSL;
+    }
+
     /// Find the definition of a signature of a standard library function.
     ///
     /// \param module_name  the absolute name of a standard library module
@@ -2480,12 +2833,6 @@ private:
     /// \param table  the table data
     void add_bsdf_measurement_attribute_table(
         Bsdf_measurement_table const &table);
-
-    /// Add a string constant mapping to the string table.
-    ///
-    /// \param s   the string constant to add
-    /// \param id  the assigned ID
-    void add_string_constant(char const *s, Type_mapper::Tag id);
 
     /// Get the number of string constants.
     size_t get_string_constant_count() const { return m_string_table.size(); }
@@ -2523,18 +2870,12 @@ private:
     ///
     /// \param[in]  llvm_context     the context for the loader
     /// \param[out] min_ptx_version  if non-zero, the minimum PTX version required for the library
-    static llvm::Module *load_libdevice(
+    std::unique_ptr<llvm::Module> load_libdevice(
         llvm::LLVMContext &llvm_context,
         unsigned          &min_ptx_version);
 
     /// Prepare the internal functions.
     void prepare_internal_functions();
-
-    /// Prepare types and prototypes in the current LLVM module used by libbsdf.
-    ///
-    /// \param compiler  the MDL compiler
-    /// \param libbsdf   the libbsdf LLVM module
-    void prepare_libbsdf_prototypes(llvm::Module *libbsdf);
 
     /// Create the BSDF function types using the BSDF data types from the already linked libbsdf
     /// module.
@@ -2551,7 +2892,7 @@ private:
     /// Load the libbsdf LLVM module.
     ///
     /// \param llvm_context  the context for the loader
-    llvm::Module *load_libbsdf(llvm::LLVMContext &llvm_context);
+    std::unique_ptr<llvm::Module> load_libbsdf(llvm::LLVMContext &llvm_context);
 
     /// Determines the semantics for a libbsdf df function name.
     ///
@@ -2565,7 +2906,9 @@ private:
     ///
     /// \param sema          the semantics of the df function
     /// \param df_param_idx  the parameter index of the df function
-    bool is_libbsdf_array_parameter(IDefinition::Semantics sema, int df_param_idx);
+    bool is_libbsdf_array_parameter(
+        IDefinition::Semantics sema,
+        int                    df_param_idx);
 
     /// Translate a potential runtime call in a libbsdf function to a call to the according
     /// intrinsic, converting the arguments as necessary.
@@ -2576,9 +2919,9 @@ private:
     ///
     /// \returns false if there was any error
     bool translate_libbsdf_runtime_call(
-        llvm::CallInst *call,
+        llvm::CallInst             *call,
         llvm::BasicBlock::iterator &ii,
-        Function_context &ctx);
+        Function_context           &ctx);
 
     /// Transitively walk over the uses of the given argument and mark any calls as DF calls,
     /// storing the provided parameter index as "libbsdf.bsdf_param" or "libbsdf.edf_param" 
@@ -2588,9 +2931,9 @@ private:
     /// \param df_param_idx    the DF parameter index of the argument
     /// \param kind            kind of distribution function TK_BSDF, TK_EDF, ...
     void mark_df_calls(
-        llvm::Argument *arg,        
-        int df_param_idx,
-        IType::Kind kind);
+        llvm::Argument *arg,
+        int            df_param_idx,
+        IType::Kind    kind);
 
     /// Load and link libbsdf into the current LLVM module.
     /// It maps the types from libbsdf to our types and resolves referenced API functions
@@ -2598,6 +2941,9 @@ private:
     ///
     /// \returns false if there was any error.
     bool load_and_link_libbsdf();
+
+    /// Returns the set of context data flags to use for functions used with distribution functions.
+    LLVM_context_data::Flags get_df_function_flags();
 
     /// Clear the DAG-to-LLVM-IR node map.
     void clear_dag_node_map() { m_node_value_map.clear(); }
@@ -2612,6 +2958,11 @@ private:
     ///
     /// \param name  a valid call mode name
     static Function_context::Tex_lookup_call_mode parse_call_mode(char const *name);
+
+    /// Get a unique string value object used to represent the string of the value.
+    ///
+    /// \param s  the string value object
+    mi::mdl::IValue_string const *get_internalized_string(mi::mdl::IValue_string const *s);
 
 private:
     /// The memory arena used to allocate context data on.
@@ -2674,11 +3025,14 @@ private:
     /// The current module.
     llvm::Module *m_module;
 
+    /// List of functions exported by the module.
+    Exported_function_list m_exported_func_list;
+
     /// A user-specified LLVM implementation of the state module.
     BinaryOptionData m_user_state_module;
 
     /// The LLVM function pass manager for the current module.
-    llvm::OwningPtr<llvm::legacy::FunctionPassManager> m_func_pass_manager;
+    std::unique_ptr<llvm::legacy::FunctionPassManager> m_func_pass_manager;
 
     /// If true, fast-math transformations are enabled.
     bool m_fast_math;
@@ -2691,6 +3045,9 @@ private:
 
     /// If true, reciprocal math transformations are enabled (i.e. a/b = a * 1/b).
     bool m_reciprocal_math;
+
+    /// If true, pass a user defined resource data struct to all resource callbacks.
+    bool m_hlsl_use_resource_data;
 
 
     /// The runtime creator.
@@ -2706,7 +3063,7 @@ private:
     llvm::DIBuilder *m_di_builder;
 
     /// DIFile object corresponding to the source file where the current function was defined.
-    llvm::DIFile m_di_file;
+    llvm::DIFile *m_di_file;
 
     /// If non-NULL, this matrix will be used to implement world-to-object
     /// state::transform_*() calls.
@@ -2825,6 +3182,15 @@ private:
     /// Map large constants to llvm global constants.
     Global_const_map m_global_const_map;
 
+    typedef hash_map<
+        char const *,
+        mi::mdl::IValue_string const*,
+        cstring_hash,
+        cstring_equal_to>::Type Internalized_string_map;
+
+    /// Map from cstrings to the IValue_string representatives.
+    Internalized_string_map m_internalized_string_map;
+
     /// The RO segment once created.
     unsigned char *m_ro_segment;
 
@@ -2844,6 +3210,36 @@ private:
 
     /// The type of all captured arguments if any.
     llvm::StructType *m_captured_args_type;
+
+    /// The HLSL function asint().
+    llvm::Function *m_hlsl_func_argblock_as_int;
+
+    /// The HLSL function asuint().
+    llvm::Function *m_hlsl_func_argblock_as_uint;
+
+    /// The HLSL function asfloat().
+    llvm::Function *m_hlsl_func_argblock_as_float;
+
+    /// The HLSL function asdouble().
+    llvm::Function *m_hlsl_func_argblock_as_double;
+
+    /// A helper function to get an bool from the argument block.
+    llvm::Function *m_hlsl_func_argblock_as_bool;
+
+    /// A helper function to get an int from the read-only data segment.
+    llvm::Function *m_hlsl_func_rodata_as_int;
+
+    /// A helper function to get an uint from the read-only data segment.
+    llvm::Function *m_hlsl_func_rodata_as_uint;
+
+    /// A helper function to get an float from the read-only data segment.
+    llvm::Function *m_hlsl_func_rodata_as_float;
+
+    /// A helper function to get an double from the read-only data segment.
+    llvm::Function *m_hlsl_func_rodata_as_double;
+
+    /// A helper function to get an bool from the read-only data segment.
+    llvm::Function *m_hlsl_func_rodata_as_bool;
 
     /// Optimization level.
     unsigned m_opt_level;
@@ -2866,8 +3262,14 @@ private:
     /// The render state usage for the currently compiled entity.
     State_usage m_render_state_usage;
 
-    /// If true, generate debug info.
-    bool m_enable_debug;
+    /// The target language.
+    Target_language m_target_lang;
+
+    /// If true, generate full debug info.
+    bool m_enable_full_debug;
+
+    /// If true, generate debug info for types only.
+    bool m_enable_type_debug;
 
     /// If true, all exported functions are entry points.
     bool m_exported_funcs_are_entries;
@@ -2880,9 +3282,6 @@ private:
 
     /// If true, the state is used in the generated code.
     bool m_uses_state_param;
-
-    /// If true, we are compiling for PTX.
-    bool m_ptx_mode;
 
     /// If true, MDL names are mangled.
     bool m_mangle_name;
@@ -2949,6 +3348,9 @@ private:
     /// Array which maps expression lambda indices to texture result indices.
     /// For expression lambdas without a texture result entry the array contains -1.
     mi::mdl::vector<int>::Type m_texture_result_indices;
+
+    /// Array which maps expression lambda indices to texture result offsets.
+    mi::mdl::vector<unsigned>::Type m_texture_result_offsets;
 
     /// A float3 struct type used in libbsdf.
     llvm::StructType *m_float3_struct_type;
@@ -3048,6 +3450,9 @@ private:
     /// The internal df::light_profile_pdf(int,float2) function,
     /// only available for libbsdf.
     Internal_function *m_int_func_df_light_profile_pdf;
+
+    /// The next ID used to create unique function names for cloned LLVM functions.
+    unsigned m_next_func_name_id;
 };
 
 /// copysignf implementation for windows runtime.

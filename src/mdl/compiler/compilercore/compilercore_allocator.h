@@ -762,6 +762,9 @@ bool operator!=(Mi_allocator<T> const& left, Mi_allocator<U> const& right)
 template<typename T, typename A = IAllocator>
 class VLA {
 public:
+    typedef T       *iterator;
+    typedef T const *const_iterator;
+
     /// Construct a new VLA of size n, allocated with the allocator alloc.
     VLA(A *alloc, size_t n)
     : m_alloc(alloc)
@@ -797,6 +800,18 @@ public:
     /// Get the allocator.
     A *get_allocator() const { return m_alloc; }
 
+    /// Return iterator to beginning.
+    iterator begin() { return data(); }
+
+    /// Return iterator to beginning.
+    const_iterator begin() const { return data(); }
+
+    /// Return iterator to end.
+    iterator end() { return data() + m_size; }
+
+    /// Return iterator to end.
+    const_iterator end() const { return data() + m_size; }
+
 private:
     A * const    m_alloc;
     T * const    m_data;
@@ -810,6 +825,9 @@ private:
 template<typename T, size_t N, typename A = IAllocator>
 class Small_VLA {
 public:
+    typedef T       *iterator;
+    typedef T const *const_iterator;
+
     /// Construct a new VLA of size n, using the internal space or allocated with the
     /// allocator alloc if the size is too large.
     Small_VLA(A *alloc, size_t n)
@@ -854,6 +872,18 @@ public:
 
     /// Get the allocator.
     A *get_allocator() { return m_alloc; }
+
+    /// Return iterator to beginning.
+    iterator begin() { return data(); }
+
+    /// Return iterator to beginning.
+    const_iterator begin() const { return data(); }
+
+    /// Return iterator to end.
+    iterator end() { return data() + m_size; }
+
+    /// Return iterator to end.
+    const_iterator end() const { return data() + m_size; }
 
 private:
     A            *m_alloc;

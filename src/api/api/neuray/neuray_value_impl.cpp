@@ -389,6 +389,12 @@ mi::neuraylib::IValue_string* Value_factory::create_string( const char* value) c
     return new Value_string( this, result_int.get(), /*owner*/ 0);
 }
 
+mi::neuraylib::IValue_string_localized* Value_factory::create_string_localized( const char* value, const char* original) const
+{
+    mi::base::Handle<MDL::IValue_string_localized> result_int( m_vf->create_string_localized( value, original));
+    return new Value_string_localized( this, result_int.get(), /*owner*/ 0);
+}
+
 mi::neuraylib::IValue_vector* Value_factory::create_vector(
     const mi::neuraylib::IType_vector* type) const
 {
@@ -600,6 +606,10 @@ mi::neuraylib::IValue* Value_factory::create(
             return new Value_double( this, v.get(), owner);
         }
         case MDL::IValue::VK_STRING: {
+            mi::base::Handle<MDL::IValue_string_localized> v_localized( value->get_interface<MDL::IValue_string_localized>());
+            if( v_localized) {
+                return new Value_string_localized( this, v_localized.get(), owner);
+            }
             mi::base::Handle<MDL::IValue_string> v( value->get_interface<MDL::IValue_string>());
             return new Value_string( this, v.get(), owner);
         }

@@ -46,7 +46,7 @@ class raw_dbg_ostream : public raw_ostream {
   static size_t const BufSize = 256;
 
   /// write_impl - See raw_ostream::write_impl.
-  virtual void write_impl(const char *Ptr, size_t Size) LLVM_OVERRIDE
+  virtual void write_impl(const char *Ptr, size_t Size) override
   {
     pos += Size;
 
@@ -70,10 +70,10 @@ class raw_dbg_ostream : public raw_ostream {
 
   /// current_pos - Return the current position within the stream, not
   /// counting the bytes currently in the buffer.
-  virtual uint64_t current_pos() const LLVM_OVERRIDE { return 0; }
+  virtual uint64_t current_pos() const override { return 0; }
 
   /// preferred_buffer_size - Determine an efficient buffer size.
-  virtual size_t preferred_buffer_size() const LLVM_OVERRIDE {
+  virtual size_t preferred_buffer_size() const override {
     // BUFSIZ is intended to be a reasonable default.
     return BUFSIZ;
   }

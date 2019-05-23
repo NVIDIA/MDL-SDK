@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This program executes the YAMLParser on differntly sized YAML texts and
+// This program executes the YAMLParser on differently sized YAML texts and
 // outputs the run time.
 //
 //===----------------------------------------------------------------------===//
@@ -19,9 +19,10 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/Timer.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
+#include <system_error>
 
 using namespace llvm;
 
@@ -52,6 +53,10 @@ static cl::opt<unsigned>
                   "Do not use more megabytes of memory"),
                 cl::init(1000));
 
+cl::opt<cl::boolOrDefault>
+    UseColor("use-color", cl::desc("Emit colored output (default=autodetect)"),
+             cl::init(cl::BOU_UNSET));
+
 struct indent {
   unsigned distance;
   indent(unsigned d) : distance(d) {}
@@ -63,13 +68,13 @@ static raw_ostream &operator <<(raw_ostream &os, const indent &in) {
   return os;
 }
 
-/// \brief Pretty print a tag by replacing tag:yaml.org,2002: with !!.
+/// Pretty print a tag by replacing tag:yaml.org,2002: with !!.
 static std::string prettyTag(yaml::Node *N) {
   std::string Tag = N->getVerbatimTag();
   if (StringRef(Tag).startswith("tag:yaml.org,2002:")) {
     std::string Ret = "!!";
     Ret += StringRef(Tag).substr(18);
-    return llvm_move(Ret);
+    return Ret;
   }
   std::string Ret = "!<";
   Ret += Tag;
@@ -91,6 +96,8 @@ static void dumpNode( yaml::Node *n
     SmallString<32> Storage;
     StringRef Val = sn->getValue(Storage);
     outs() << prettyTag(n) << " \"" << yaml::escape(Val) << "\"";
+  } else if (yaml::BlockScalarNode *BN = dyn_cast<yaml::BlockScalarNode>(n)) {
+    outs() << prettyTag(n) << " \"" << yaml::escape(BN->getValue()) << "\"";
   } else if (yaml::SequenceNode *sn = dyn_cast<yaml::SequenceNode>(n)) {
     outs() << prettyTag(n) << " [\n";
     ++Indent;
@@ -117,7 +124,7 @@ static void dumpNode( yaml::Node *n
     outs() << indent(Indent) << "}";
   } else if (yaml::AliasNode *an = dyn_cast<yaml::AliasNode>(n)){
     outs() << "*" << an->getName();
-  } else if (dyn_cast<yaml::NullNode>(n)) {
+  } else if (isa<yaml::NullNode>(n)) {
     outs() << prettyTag(n) << " null";
   }
 }
@@ -136,10 +143,10 @@ static void dumpStream(yaml::Stream &stream) {
   }
 }
 
-static void benchmark( llvm::TimerGroup &Group
-                     , llvm::StringRef Name
-                     , llvm::StringRef JSONText) {
-  llvm::Timer BaseLine((Name + ": Loop").str(), Group);
+static void benchmark(llvm::TimerGroup &Group, llvm::StringRef Name,
+                      llvm::StringRef Description, llvm::StringRef JSONText) {
+  llvm::Timer BaseLine((Name + ".loop").str(), (Description + ": Loop").str(),
+                       Group);
   BaseLine.startTimer();
   char C = 0;
   for (llvm::StringRef::iterator I = JSONText.begin(),
@@ -148,14 +155,16 @@ static void benchmark( llvm::TimerGroup &Group
   BaseLine.stopTimer();
   volatile char DontOptimizeOut = C; (void)DontOptimizeOut;
 
-  llvm::Timer Tokenizing((Name + ": Tokenizing").str(), Group);
+  llvm::Timer Tokenizing((Name + ".tokenizing").str(),
+                         (Description + ": Tokenizing").str(), Group);
   Tokenizing.startTimer();
   {
     yaml::scanTokens(JSONText);
   }
   Tokenizing.stopTimer();
 
-  llvm::Timer Parsing((Name + ": Parsing").str(), Group);
+  llvm::Timer Parsing((Name + ".parsing").str(),
+                      (Description + ": Parsing").str(), Group);
   Parsing.startTimer();
   {
     llvm::SourceMgr SM;
@@ -187,30 +196,39 @@ static std::string createJSONText(size_t MemoryMB, unsigned ValueSize) {
 
 int main(int argc, char **argv) {
   llvm::cl::ParseCommandLineOptions(argc, argv);
+  bool ShowColors = UseColor == cl::BOU_UNSET
+                        ? sys::Process::StandardOutHasColors()
+                        : UseColor == cl::BOU_TRUE;
   if (Input.getNumOccurrences()) {
-    OwningPtr<MemoryBuffer> Buf;
-    if (MemoryBuffer::getFileOrSTDIN(Input, Buf))
+    ErrorOr<std::unique_ptr<MemoryBuffer>> BufOrErr =
+        MemoryBuffer::getFileOrSTDIN(Input);
+    if (!BufOrErr)
       return 1;
+    MemoryBuffer &Buf = *BufOrErr.get();
 
     llvm::SourceMgr sm;
     if (DumpTokens) {
-      yaml::dumpTokens(Buf->getBuffer(), outs());
+      yaml::dumpTokens(Buf.getBuffer(), outs());
     }
 
     if (DumpCanonical) {
-      yaml::Stream stream(Buf->getBuffer(), sm);
+      yaml::Stream stream(Buf.getBuffer(), sm, ShowColors);
       dumpStream(stream);
+      if (stream.failed())
+        return 1;
     }
   }
 
   if (Verify) {
-    llvm::TimerGroup Group("YAML parser benchmark");
-    benchmark(Group, "Fast", createJSONText(10, 500));
+    llvm::TimerGroup Group("yaml", "YAML parser benchmark");
+    benchmark(Group, "Fast", "Fast", createJSONText(10, 500));
   } else if (!DumpCanonical && !DumpTokens) {
-    llvm::TimerGroup Group("YAML parser benchmark");
-    benchmark(Group, "Small Values", createJSONText(MemoryLimitMB, 5));
-    benchmark(Group, "Medium Values", createJSONText(MemoryLimitMB, 500));
-    benchmark(Group, "Large Values", createJSONText(MemoryLimitMB, 50000));
+    llvm::TimerGroup Group("yaml", "YAML parser benchmark");
+    benchmark(Group, "Small", "Small Values", createJSONText(MemoryLimitMB, 5));
+    benchmark(Group, "Medium", "Medium Values",
+              createJSONText(MemoryLimitMB, 500));
+    benchmark(Group, "Large", "Large Values",
+              createJSONText(MemoryLimitMB, 50000));
   }
 
   return 0;

@@ -32,7 +32,6 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/MDBuilder.h>
-#include <llvm/DebugInfo.h>
 
 #include <mi/mdl/mdl_statements.h>
 #include <mi/mdl/mdl_types.h>
@@ -47,6 +46,7 @@ class Constant;
 class ConstantInt;
 class ConstantFP;
 class DIBuilder;
+class DIFile;
 class Function;
 class Type;
 class Value;
@@ -187,6 +187,9 @@ public:
     /// Get the first (real) parameter of the current function.
     llvm::Function::arg_iterator get_first_parameter();
 
+    /// Returns true if the current function uses an exec_ctx parameter.
+    bool has_exec_ctx_parameter() const;
+
     /// Get the exec_ctx parameter of the current function.
     llvm::Value *get_exec_ctx_parameter();
 
@@ -283,7 +286,9 @@ public:
     /// \param type   the LLVM type of the local
     /// \param name   its name
     llvm::Value *create_local(llvm::Type *type, char const *name) {
-        return new llvm::AllocaInst(type, 0, name, m_function->front().begin());
+        const llvm::DataLayout &DL = m_function->getParent()->getDataLayout();
+        return new llvm::AllocaInst(
+            type, DL.getAllocaAddrSpace(), nullptr, name, &*m_function->front().begin());
     }
 
     /// Create a new local array variable and return its address.
@@ -292,8 +297,13 @@ public:
     /// \param array_size  the size of the array
     /// \param name        its name
     llvm::Value *create_local(llvm::Type *type, unsigned array_size, char const *name) {
+        const llvm::DataLayout &DL = m_function->getParent()->getDataLayout();
         return new llvm::AllocaInst(
-            type, get_constant(int(array_size)), name, m_function->front().begin());
+            type,
+            DL.getAllocaAddrSpace(),
+            get_constant(int(array_size)),
+            name,
+            &*m_function->front().begin());
     }
 
     /// Creates a void return at the current block.
@@ -838,6 +848,9 @@ public:
     /// \param int_val  the integer value to compare to
     bool is_constant_value(llvm::Value *val, int int_val);
 
+    /// Get the code generator.
+    LLVM_code_generator &get_code_gen() { return m_code_gen; }
+
 private:
     /// Pushes a break destination on the break stack.
     void push_break(llvm::BasicBlock *dest);
@@ -860,7 +873,7 @@ private:
     void pop_block_scope();
 
     /// Get the current LLVM debug info scope.
-    llvm::DIScope get_debug_info_scope();
+    llvm::DIScope *get_debug_info_scope();
 
     /// Creates a new Basic Block with the given name inside the given function.
     ///
@@ -893,8 +906,8 @@ private:
 
 private:
     // Not to be implemented
-    Function_context(Function_context const &) LLVM_DELETED_FUNCTION;
-    Function_context &operator=(Function_context const &) LLVM_DELETED_FUNCTION;
+    Function_context(Function_context const &) MDL_DELETED_FUNCTION;
+    Function_context &operator=(Function_context const &) MDL_DELETED_FUNCTION;
 
 private:
     typedef mi::mdl::ptr_hash_map<
@@ -931,7 +944,7 @@ private:
     llvm::DIBuilder *m_di_builder;
 
     /// The debug info for the current file if any.
-    llvm::DIFile m_di_file;
+    llvm::DIFile *m_di_file;
 
     /// The current function.
     llvm::Function *m_function;
@@ -970,6 +983,9 @@ private:
     /// If true, the function gets optimized when the destructor is called.
     bool m_optimize_on_finalize;
 
+    /// If true, generate full debug info.
+    bool m_full_debug_info;
+
     typedef stack<llvm::BasicBlock *>::Type BB_stack;
 
     /// The break stack.
@@ -978,10 +994,10 @@ private:
     /// The continue stack.
     BB_stack m_continue_stack;
 
-    typedef stack<llvm::DILexicalBlock>::Type DILB_stack;
+    typedef stack<llvm::DILexicalBlock *>::Type DILB_stack;
 
     /// The lexical block for the current function.
-    llvm::DISubprogram m_di_function;
+    llvm::DISubprogram *m_di_function;
 
     /// The stack for debug info lexical blocks.
     DILB_stack m_dilb_stack;

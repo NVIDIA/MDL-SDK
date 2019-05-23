@@ -127,7 +127,7 @@ ILibrary* Link_module_impl::load_library( const char* path)
 
     if( !handle) {
         LPTSTR buffer = 0;
-        LPTSTR message = TEXT("unknown failure");
+        LPCTSTR message = TEXT("unknown failure");
         DWORD error_code = GetLastError();
         if( FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,

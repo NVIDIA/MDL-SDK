@@ -162,6 +162,10 @@ public:
             // all *_isvalid functions are supported, but strict
             strict = true;
             break;
+        case mi::mdl::IDefinition::DS_CONV_OPERATOR:
+            // type conversion is supported, but strict
+            strict = true;
+            break;
         default:
             if (mi::mdl::semantic_is_operator(sema)) {
                 // operators are constexpr, some are non-strict
@@ -206,6 +210,11 @@ public:
                 // valid resource
                 return m_value_fact.create_bool(true);
             }
+            break;
+        case mi::mdl::IDefinition::DS_CONV_OPERATOR:
+        case mi::mdl::IDefinition::DS_CONV_CONSTRUCTOR:
+            ASSERT(M_MDLC, n_args == 1);
+            return values[0]->convert(&m_value_fact, def->get_mdl_return_type(m_trans));
         default:
             break;
         }
@@ -233,6 +242,10 @@ public:
             case mi::mdl::IExpression::OK_POST_DECREMENT:
                 // these should not occur here
                 ASSERT(M_MDLC, !"unexpected increment/decrement operators");
+                return m_value_fact.create_bad();
+            case mi::mdl::IExpression::OK_CAST:
+                // unfortunately the interface does not give the MDL result type,
+                // however, the DAR-IR always handles casts
                 return m_value_fact.create_bad();
 
             // binary ops
@@ -1029,6 +1042,8 @@ public:
             return m_type_fact.create_bsdf_measurement();
         case MI::MDL::IType::TK_BSDF:
             return m_type_fact.create_bsdf();
+        case MI::MDL::IType::TK_HAIR_BSDF:
+            return m_type_fact.create_hair_bsdf();
         case MI::MDL::IType::TK_EDF:
             return m_type_fact.create_edf();
         case MI::MDL::IType::TK_VDF:

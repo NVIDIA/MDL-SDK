@@ -80,6 +80,10 @@ public:
 
     bool utf8_match(char const *file_mask, char const *file_name) const;
 
+    bool get_implicit_cast_enabled() const;
+
+    void set_implicit_cast_enabled(bool v);
+
 private:
 
     /// Pointer to the MDL interface.
@@ -96,6 +100,9 @@ private:
 
     /// The code cache used for JIT-generated source code.
     mi::mdl::ICode_cache *m_code_cache;
+
+    /// Flag that indicates weather the integration should insert casts when needed (and possible).
+    bool m_implicit_cast_enabled;
 };
 
 } // namespace MDLC

@@ -153,6 +153,23 @@ public:
     /// Flush stream.
     void flush() MDL_FINAL { }
 
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    bool unput(char c) MDL_FINAL
+    {
+        string &s = get_string_buf();
+        size_t l = s.size();
+        if (l > 0 && s[l - 1] == c) {
+            s.erase(s.begin() + l - 1);
+            return true;
+        }
+        return false;
+    }
+
     /// Replay the captured input on another output stream.
     void replay(IOutput_stream *out) const
     {
@@ -376,6 +393,7 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
     m_priority_map[IExpression::OK_SELECT]                          = prio;
     m_priority_map[IExpression::OK_ARRAY_INDEX]                     = prio;
     m_priority_map[IExpression::OK_CALL]                            = prio;
+    m_priority_map[IExpression::OK_CAST]                            = prio;
     ++prio;
 
     // HIGH priority
@@ -683,10 +701,11 @@ restart:
             }
             break;
         }
-    case IType::TK_BSDF:     tn = "bsdf"; break;
-    case IType::TK_EDF:      tn = "edf"; break;
-    case IType::TK_VDF:      tn = "vdf"; break;
-    case IType::TK_STRUCT:   sym = cast<IType_struct>(type)->get_symbol(); break;
+    case IType::TK_BSDF:      tn = "bsdf"; break;
+    case IType::TK_HAIR_BSDF: tn = "hair_bsdf"; break;
+    case IType::TK_EDF:       tn = "edf"; break;
+    case IType::TK_VDF:       tn = "vdf"; break;
+    case IType::TK_STRUCT:    sym = cast<IType_struct>(type)->get_symbol(); break;
 
     case IType::TK_VECTOR:
         {
@@ -1166,8 +1185,9 @@ void Printer::print(IExpression const *expr, int priority)
             IExpression_unary const     *u = cast<IExpression_unary>(expr);
             IExpression_unary::Operator op = u->get_operator();
             int                         op_priority = get_priority(op);
+            IExpression const           *arg = u->get_argument();
 
-            if (op_priority <= priority)
+            if (op_priority < priority)
                 print("(");
 
             char const *prefix = NULL, *postfix = NULL;
@@ -1196,18 +1216,66 @@ void Printer::print(IExpression const *expr, int priority)
             case IExpression_unary::OK_POST_DECREMENT:
                 postfix = "--";
                 break;
+            case IExpression_unary::OK_CAST:
+                keyword("cast");
+                prefix = "<";
+                postfix = ")";
+                break;
             }
-            
-            if (prefix != NULL)
+
+            if (prefix != NULL) {
                 print(prefix);
 
-            IExpression const *arg = u->get_argument();
-            print(arg, op_priority);
+                if (op == IExpression_unary::OK_CAST) {
+                    IType_name const *tn = u->get_type_name();
+
+                    print(tn);
+                    print(">(");
+                }
+            }
+
+            int prio_ofs = 0;
+            switch (op) {
+            case IExpression_unary::OK_BITWISE_COMPLEMENT:
+            case IExpression_unary::OK_LOGICAL_NOT:
+            case IExpression_unary::OK_CAST:
+                // right-associative
+                break;
+            case IExpression_unary::OK_POSITIVE:
+            case IExpression_unary::OK_NEGATIVE:
+            case IExpression_unary::OK_PRE_INCREMENT:
+            case IExpression_unary::OK_PRE_DECREMENT:
+                // right-associative
+                if (IExpression_unary const *un_arg = as<IExpression_unary>(arg)) {
+                    IExpression_unary::Operator un_op = un_arg->get_operator();
+                    if (
+                        (un_op == op) ||
+                        (op == IExpression_unary::OK_POSITIVE &&
+                         un_op == IExpression_unary::OK_PRE_INCREMENT) ||
+                        (op == IExpression_unary::OK_NEGATIVE &&
+                         un_op == IExpression_unary::OK_PRE_DECREMENT) ||
+                        (op == IExpression_unary::OK_PRE_INCREMENT &&
+                         un_op == IExpression_unary::OK_POSITIVE) ||
+                        (op == IExpression_unary::OK_PRE_DECREMENT &&
+                         un_op == IExpression_unary::OK_NEGATIVE))
+                    {
+                        // ensure parenthesis
+                        prio_ofs = 1;
+                    }
+                }
+                break;
+            case IExpression_unary::OK_POST_INCREMENT:
+            case IExpression_unary::OK_POST_DECREMENT:
+                // left associative
+                prio_ofs = 1;
+            }
+
+            print(arg, op_priority + prio_ofs);
 
             if (postfix != NULL)
                 print(postfix);
 
-            if (op_priority <= priority)
+            if (op_priority < priority)
                 print(")");
             break;
         }
@@ -1462,17 +1530,32 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
             print(")");
 
             IStatement const *t_stmt = i->get_then_statement();
-            if (is<IStatement_compound>(t_stmt)) {
+            bool is_block = is<IStatement_compound>(t_stmt);
+
+            if (is_block) {
                 print(" ");
                 print(t_stmt, /*is_toplevel=*/false);
             } else {
+                bool need_extra_block = false;
+                if (is<IStatement_if>(t_stmt)) {
+                    need_extra_block = true;
+                    print(" {");
+                }
                 ++m_indent;
                 print(t_stmt);
                 --m_indent;
+                if (need_extra_block) {
+                    nl();
+                    print('}');
+                }
             }
 
             if (IStatement const *e_stmt = i->get_else_statement()) {
-                print(" ");
+                if (is_block) {
+                    print(" ");
+                } else {
+                    nl();
+                }
                 keyword("else");
                 if (is<IStatement_compound>(e_stmt) || is<IStatement_if>(e_stmt)) {
                     print(" ");
@@ -1762,7 +1845,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                     print(", ");
                 print(parameter);
             }
-            print(");");
+            print(")");
+
+            print_anno_block(d->get_annotations(), " ");
+
+            print(";");
             break;
         }
     case IDeclaration::DK_CONSTANT:
@@ -2445,6 +2532,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_5:
                 print(" Since MDL 1.5");
                 break;
+            case IMDL::MDL_VERSION_1_6:
+                print(" Since MDL 1.6");
+                break;
             }
             switch (rem) {
             case IMDL::MDL_VERSION_1_0:
@@ -2463,6 +2553,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_5:
                 print(" Removed in MDL 1.5");
+                break;
+            case IMDL::MDL_VERSION_1_6:
+                print(" Removed in MDL 1.6");
                 break;
             }
             print(insert ? " */" : "\n");

@@ -195,6 +195,27 @@ const mi::IString* Compiled_material_impl::get_connected_function_db_name(
     return result;
 }
 
+mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
+{
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity opacity = get_db_element()->get_opacity();
+    switch (opacity) {
+    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE:
+        return mi::neuraylib::OPACITY_OPAQUE;
+    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT:
+        return mi::neuraylib::OPACITY_TRANSPARENT;
+    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN:
+        return mi::neuraylib::OPACITY_UNKNOWN;
+    default:
+        break;
+    }
+    return mi::neuraylib::OPACITY_UNKNOWN;
+}
+
+bool Compiled_material_impl::get_cutout_opacity(mi::Float32 *cutout_opacity) const
+{
+    return get_db_element()->get_cutout_opacity(cutout_opacity);
+}
+
 void Compiled_material_impl::swap( MDL::Mdl_compiled_material& rhs)
 {
     get_db_element()->swap( rhs);

@@ -16,7 +16,24 @@
 ;===------------------------------------------------------------------------===;
 
 [component_0]
-type = OptionalLibrary
+type = Library
 name = LTO
 parent = Libraries
-required_libraries = Analysis BitReader BitWriter Core IPO Linker MC MCParser Scalar Support Target Vectorize
+required_libraries =
+ AggressiveInstCombine
+ Analysis
+ BitReader
+ BitWriter
+ CodeGen
+ Core
+ IPO
+ InstCombine
+ Linker
+ MC
+ ObjCARC
+ Object
+ Passes
+ Scalar
+ Support
+ Target
+ TransformUtils

@@ -16,7 +16,7 @@
 ;===------------------------------------------------------------------------===;
 
 [component_0]
-type = OptionalLibrary
+type = Library
 name = ObjCARC
 parent = Transforms
 library_name = ObjCARCOpts

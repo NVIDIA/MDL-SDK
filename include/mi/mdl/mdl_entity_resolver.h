@@ -38,6 +38,18 @@
 namespace mi {
 namespace mdl {
 
+// forward
+class IInput_stream;
+class Thread_context;
+
+// Supported UDIM modes for texture resources.
+enum UDIM_mode {
+    NO_UDIM = 0,
+    UM_MARI,   // "<UDIM>"     UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
+    UM_ZBRUSH, // "<UVTILE0>"  0-based (Zbrush), expands to "_u0_v0" for the first tile
+    UM_MUDBOX, // "<UVTILE1>"  1-based (Mudbox), expands to "_u1_v1" for the first tile
+};
+
 /// A resource reader.
 ///
 /// This interface is returned by the entity resolver and allows read-access to resources files
@@ -88,6 +100,24 @@ public:
     virtual char const *get_mdl_url() const = 0;
 };
 
+/// An interface describing an module import result.
+class IMDL_import_result : public
+    mi::base::Interface_declare<0xb7b3de9d,0xa9ce,0x4e19,0x93,0x87,0x46,0x13,0x69,0xdb,0xf0,0xef,
+    mi::base::IInterface>
+{
+public:
+    /// Return the absolute MDL name of the found entity, or NULL, if the entity could not
+    /// be resolved.
+    virtual char const *get_absolute_name() const = 0;
+
+    /// Return the OS-dependent file name of the found entity, or NULL, if the entity could not
+    /// be resolved.
+    virtual char const *get_file_name() const = 0;
+
+    /// Return an input stream to the given entity if found, NULL otherwise.
+    virtual IInput_stream *open(Thread_context &ctx) const = 0;
+};
+
 /// An interface describing an ordered set of resolved resources.
 ///
 /// While most resources in MDL can be mapped to exactly one entity, some resources
@@ -97,6 +127,19 @@ class IMDL_resource_set : public
     mi::base::IInterface>
 {
 public:
+    /// Get the MDL URL mask of the ordered set.
+    ///
+    /// \returns the MDL URL mask of the set
+    virtual char const *get_mdl_url_mask() const = 0;
+
+    /// Get the file name mask of the ordered set.
+    ///
+    /// \returns the file name mask of the set
+    ///
+    /// \note If this resource is inside an MDL archive, the returned name
+    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
+    virtual char const *get_filename_mask() const = 0;
+
     /// Get the number of resolved entities.
     virtual size_t get_count() const = 0;
 
@@ -132,6 +175,9 @@ public:
     ///
     /// \returns an reader for the i'th entry of the set or NULL if the index is out of range.
     virtual IMDL_resource_reader *open_reader(size_t i) const = 0;
+
+    /// Get the UDIM mode for this set.
+    virtual UDIM_mode get_udim_mode() const = 0;
 };
 
 /// An interface for resolving MDL entities.
@@ -189,11 +235,18 @@ public:
 
     /// Resolve a module name.
     ///
-    /// \param name  an MDL module name
+    /// \param mdl_name          the (weak-)relative or absolute MDL module name to resolve
+    /// \param owner_file_path   if non-NULL, the file path of the owner
+    /// \param owner_name        if non-NULL, the absolute name of the owner
+    /// \param pos               if non-NULL, the position of the import statement for error
+    ///                          messages
     ///
     /// \return the absolute module name or NULL if this name could not be resolved
-    virtual char const *resolve_module_name(
-        char const *name) = 0;
+    virtual IMDL_import_result *resolve_module(
+        char const     *mdl_name,
+        char const     *owner_file_path,
+        char const     *owner_name,
+        Position const *pos) = 0;
 
     /// Access messages of last resolver operation.
     virtual Messages const &access_messages() const = 0;

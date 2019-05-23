@@ -60,7 +60,10 @@ Mdl_compiled_material::Mdl_compiled_material()
   : m_mdl_meters_per_scene_unit( 1.0f),   // avoid warning
     m_mdl_wavelength_min( 0.0f),
     m_mdl_wavelength_max( 0.0f),
-    m_properties( 0)  // avoid ubsan warning with swap() and temporaries
+    m_properties( 0),  // avoid ubsan warning with swap() and temporaries
+    m_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_cutout_opacity( -1.0f),
+    m_has_cutout_opacity( false)
 {
     m_tf = get_type_factory();
     m_vf = get_value_factory();
@@ -74,12 +77,16 @@ Mdl_compiled_material::Mdl_compiled_material(
     const char* module_name,
     mi::Float32 mdl_meters_per_scene_unit,
     mi::Float32 mdl_wavelength_min,
-    mi::Float32 mdl_wavelength_max)
-  : m_mdl_meters_per_scene_unit( mdl_meters_per_scene_unit),
-    m_mdl_wavelength_min( mdl_wavelength_min),
-    m_mdl_wavelength_max( mdl_wavelength_max),
-    m_properties( instance->get_properties()),
-    m_internal_space( instance->get_internal_space())
+    mi::Float32 mdl_wavelength_max,
+    bool load_resources)
+    : m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit),
+    m_mdl_wavelength_min(mdl_wavelength_min),
+    m_mdl_wavelength_max(mdl_wavelength_max),
+    m_properties(instance->get_properties()),
+    m_internal_space(instance->get_internal_space()),
+    m_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_cutout_opacity(-1.0f),
+    m_has_cutout_opacity(false)
 {
     m_tf = get_type_factory();
     m_vf = get_value_factory();
@@ -92,7 +99,8 @@ Mdl_compiled_material::Mdl_compiled_material(
         /*create_direct_calls*/ true,
         module_filename,
         module_name,
-        /*prototype_tag*/ DB::Tag());
+        /*prototype_tag*/ DB::Tag(),
+        load_resources);
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
     mi::base::Handle<IExpression> body(
@@ -118,7 +126,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         const char* name = instance->get_parameter_name( i);
         const mi::mdl::IValue* mdl_argument = instance->get_parameter_default( i);
         mi::base::Handle<const IValue> argument( mdl_value_to_int_value(
-            m_vf.get(), transaction, 0, mdl_argument, module_filename, module_name));
+            m_vf.get(), transaction, 0, mdl_argument, module_filename, module_name, load_resources));
         ASSERT( M_SCENE, argument);
         m_arguments->add_value( name, argument.get());
     }
@@ -130,6 +138,13 @@ Mdl_compiled_material::Mdl_compiled_material(
         h = instance->get_slot_hash(
             static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Slot>( i));
         m_slot_hashes[i] = convert_hash( *h);
+    }
+
+    m_opacity = instance->get_opacity();
+    m_has_cutout_opacity = false;
+    if (mi::mdl::IValue_float const *v_cutout = instance->get_cutout_opacity()) {
+        m_has_cutout_opacity = true;
+        m_cutout_opacity = v_cutout->get_value();
     }
 }
 
@@ -241,6 +256,8 @@ mi::base::Uuid Mdl_compiled_material::get_slot_hash( mi::Uint32 slot) const
             return m_slot_hashes[T::MS_GEOMETRY_CUTOUT_OPACITY];
         case mi::neuraylib::SLOT_GEOMETRY_NORMAL:
             return m_slot_hashes[T::MS_GEOMETRY_NORMAL];
+        case mi::neuraylib::SLOT_HAIR:
+            return m_slot_hashes[T::MS_HAIR];
         default:
             return mi::base::Uuid();
     }
@@ -275,6 +292,9 @@ void Mdl_compiled_material::swap( Mdl_compiled_material& other)
     std::swap( m_mdl_wavelength_max, other.m_mdl_wavelength_max);
     std::swap( m_properties, other.m_properties);
     std::swap( m_internal_space, other.m_internal_space);
+    std::swap( m_opacity, other.m_opacity);
+    std::swap( m_cutout_opacity, other.m_cutout_opacity);
+    std::swap( m_has_cutout_opacity, other.m_has_cutout_opacity);
 }
 
 const IExpression* Mdl_compiled_material::lookup_sub_expression(
@@ -366,6 +386,20 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     return call_tag;
 }
 
+mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity Mdl_compiled_material::get_opacity() const
+{
+    return m_opacity;
+}
+
+bool Mdl_compiled_material::get_cutout_opacity(mi::Float32* cutout_opacity) const
+{
+    if( cutout_opacity) {
+        *cutout_opacity = m_cutout_opacity;
+        return m_has_cutout_opacity;
+    }
+    return false;
+}
+
 namespace {
 
 void write( SERIAL::Serializer* serializer, const mi::base::Uuid& uuid)
@@ -404,6 +438,9 @@ const SERIAL::Serializable* Mdl_compiled_material::serialize(
     serializer->write( m_mdl_wavelength_max);
     serializer->write( m_properties);
     serializer->write( m_internal_space);
+    serializer->write( static_cast<mi::Uint32>( m_opacity));
+    serializer->write( m_cutout_opacity);
+    serializer->write( m_has_cutout_opacity);
     return this + 1;
 }
 
@@ -426,6 +463,13 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     deserializer->read( &m_mdl_wavelength_max);
     deserializer->read( &m_properties);
     deserializer->read( &m_internal_space);
+
+    mi::Uint32 opacity_as_uint32;
+    deserializer->read(&opacity_as_uint32);
+    m_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
+
+    deserializer->read( &m_cutout_opacity);
+    deserializer->read( &m_has_cutout_opacity);
     return this + 1;
 }
 
@@ -461,7 +505,18 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     s << "Wavelength max: " << m_mdl_wavelength_max << std::endl;
     s << "Properties: " << m_properties << std::endl;
     s << "Internal space: " << m_internal_space << std::endl;
-    LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
+
+    const char *opacity_str = m_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
+        "opaque" : (mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT ? "transparent" : "unknown");
+    s << "Opacity: " << opacity_str << std::endl;
+
+    if (m_has_cutout_opacity) {
+        s << "Cutout_opacity: " << m_cutout_opacity << std::endl;
+    } else {
+        s << "Cutout_opacity: <Unknown>" << std::endl;
+    }
+
+    LOG::mod_log->info(M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 
 size_t Mdl_compiled_material::get_size() const

@@ -42,6 +42,9 @@
 
 // Command line options structure.
 struct Options {
+    // The CUDA device ID.
+    int cuda_device;
+
     // An result output file name.
     std::string outputfile;
 
@@ -68,7 +71,8 @@ struct Options {
 
     // The constructor.
     Options()
-        : outputfile()
+        : cuda_device(0)
+        , outputfile()
         , material_pattern(0)
         , res_x(700)
         , res_y(520)
@@ -95,7 +99,7 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
         "example_execution_cuda_derivatives.ptx" : "example_execution_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + ptx_name).c_str(),
+        (get_executable_folder() + "/" + ptx_name).c_str(),
         "evaluate_mat_expr",
         &cuda_function);
 
@@ -153,6 +157,7 @@ void usage(char const *prog_name)
     std::cout
         << "Usage: " << prog_name << " [options] [(<material_pattern | (<material_name1> ...)]\n"
         << "Options:\n"
+        << "  --device <id>       run on CUDA device <id> (default: 0)\n"
         << "  --res <x> <y>       resolution (default: 700x520)\n"
         << "  --cc                use class compilation\n"
         << "  --noaa              disable pixel oversampling\n"
@@ -187,6 +192,8 @@ int main(int argc, char* argv[])
         if (opt[0] == '-') {
             if (strcmp(opt, "-o") == 0 && i < argc - 1) {
                 options.outputfile = argv[++i];
+            } else if (strcmp(opt, "--device") == 0 && i < argc - 2) {
+                options.cuda_device = atoi(argv[++i]);
             } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
                 options.res_x = std::max(atoi(argv[++i]), 1);
                 options.res_y = std::max(atoi(argv[++i]), 1);
@@ -271,7 +278,7 @@ int main(int argc, char* argv[])
                 if ((options.material_pattern & (1 << i)) != 0) {
                     mc.add_material_subexpr(
                         options.material_names[i],
-                        "surface.scattering.tint", "tint",
+                        "surface.scattering.tint", ("tint_" + to_string(i)).c_str(),
                         options.use_class_compilation);
                 }
             }
@@ -284,7 +291,7 @@ int main(int argc, char* argv[])
                 neuray->get_api_component<mi::neuraylib::IImage_api>());
 
             // Bake the material sub-expressions into a canvas
-            CUcontext cuda_context = init_cuda();
+            CUcontext cuda_context = init_cuda(options.cuda_device);
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 bake_expression_cuda_ptx(
                     transaction.get(),

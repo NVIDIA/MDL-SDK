@@ -71,6 +71,7 @@
 #include <mdl/compiler/compilercore/compilercore_file_resolution.h>
 #include <mdl/compiler/compilercore/compilercore_file_utils.h>
 #include <mdl/compiler/compilercore/compilercore_zip_utils.h>
+#include <mdl/compiler/compilercore/compilercore_encapsulator.h>
 
 #include "neuray_transaction_impl.h"
 #include "neuray_expression_impl.h"
@@ -209,18 +210,18 @@ void add_error_message(
     context->set_result(result);
 }
 
-mi::mdl::File_resolver::UDIM_mode get_uvtile_marker(const std::string& str)
+mi::mdl::UDIM_mode get_uvtile_marker(const std::string& str)
 {
     if (str.find("<UDIM>") != std::string::npos)
-        return mi::mdl::File_resolver::UM_MARI;
+        return mi::mdl::UM_MARI;
 
     if (str.find("<UVTILE0>") != std::string::npos)
-        return mi::mdl::File_resolver::UM_ZBRUSH;
+        return mi::mdl::UM_ZBRUSH;
 
     if (str.find("<UVTILE1>") != std::string::npos)
-        return mi::mdl::File_resolver::UM_MUDBOX;
+        return mi::mdl::UM_MUDBOX;
 
-    return mi::mdl::File_resolver::NO_UDIM;
+    return mi::mdl::NO_UDIM;
 }
 
 std::string replace_uvtile_base(
@@ -230,17 +231,14 @@ std::string replace_uvtile_base(
 {
     // get everything before the mask
     size_t p_base_name = mdle_name_mask.rfind('<');
-    mi::mdl::File_resolver::UDIM_mode udim_mode = get_uvtile_marker(mdle_name_mask);
+    mi::mdl::UDIM_mode udim_mode = get_uvtile_marker(mdle_name_mask);
     std::string result;
 
-    switch (udim_mode)
-    {
-        case mi::mdl::File_resolver::NO_UDIM:
-        {
+    switch (udim_mode) {
+        case mi::mdl::NO_UDIM:
             result = mdle_name_mask;
             break;
-        }
-        case mi::mdl::File_resolver::UM_MARI:
+        case mi::mdl::UM_MARI:
         {
             // find second last dot to replace mask and extension
             size_t p = resolved_file_name.rfind('.');
@@ -258,8 +256,8 @@ std::string replace_uvtile_base(
             result.append(resolved_mask_and_ext);
             break;
         }
-        case mi::mdl::File_resolver::UM_ZBRUSH:
-        case mi::mdl::File_resolver::UM_MUDBOX:
+        case mi::mdl::UM_ZBRUSH:
+        case mi::mdl::UM_MUDBOX:
         {
             // find second last _ to replace mask and extension
             size_t p = resolved_file_name.rfind('_');
@@ -484,21 +482,24 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_additional_data_reader(
     // resolved / absolute file path
     mi::mdl::string absolute_path(m_mdl->get_mdl_allocator());
 
-    // try to resolve from mdl search paths first
-    mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
-        path, /*owner_file_path*/ NULL, /*owner_name*/ NULL, /*pos*/ 0));
-    if (res_set && res_set->get_count() > 0) {
-        absolute_path = res_set->get_filename(0);
-    // as fall-back, check the file system
+    // if the path is an absolute file system path use that
+    if (mi::mdl::is_path_absolute(path)) {
+        absolute_path = path;
     } else {
-        // add the current working directory if necessary
-        if (mi::mdl::is_path_absolute(path)) {
-            absolute_path = path;
-        } else {
-            absolute_path = mi::mdl::join_path(
-                mi::mdl::get_cwd(m_mdl->get_mdl_allocator()),
-                mi::mdl::convert_slashes_to_os_separators(absolute_path));
-        }
+        // try to resolve from mdl search paths next
+        mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
+            path, /*owner_file_path*/ NULL, /*owner_name*/ NULL, /*pos*/ 0));
+
+        if (res_set && res_set->get_count() > 0)
+            absolute_path = res_set->get_filename(0);
+    }
+
+    // as fall-back, check the file system for relative paths 
+    if(absolute_path.empty()) {
+        // add the current working directory
+        absolute_path = mi::mdl::join_path(
+            mi::mdl::get_cwd(m_mdl->get_mdl_allocator()),
+            mi::mdl::convert_slashes_to_os_separators(absolute_path));
     }
 
     mi::mdl::MDL_zip_container_error_code  err;
@@ -689,15 +690,14 @@ mi::Sint32 Mdle_api_impl::export_mdle(
             assert(false); // handled above
     }
 
-    // force experimental to true for now
-    mdl_context->set_option(MDL_CTX_OPTION_EXPERIMENTAL, true);
-
     // create a new module builder
     MDL::Mdl_module_builder builder(
         imdl.get(),
         db_transaction,
-        "::main",
+        "::tmp_mdle_export",
         mi::mdl::IMDL::MDL_LATEST_VERSION,
+        m_mdlc_module->get_implicit_cast_enabled(),
+        /*inline_mdle=*/false,
         mdl_context);
     if (mdl_context->get_error_messages_count() != 0)
         return -1;
@@ -722,6 +722,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // add (filtered) annotations
     //---------------------------------------------------------------------------------------------
+    bool has_origin = false;
     for(size_t a = 0; annotations_int && a < annotations_int->get_size(); ++a) {
         
         mi::base::Handle<const MI::MDL::IAnnotation> anno(annotations_int->get_annotation(a));
@@ -735,7 +736,28 @@ mi::Sint32 Mdle_api_impl::export_mdle(
             continue;
         }
 
+        if (strcmp(anno->get_name(), "::anno::origin(string)") == 0) {
+            has_origin = true;
+        }
+
         // add the annotation
+        if (!builder.add_annotation(index, anno.get(), mdl_context))
+            return -1;
+    }
+    if (!has_origin) { 
+        // add origin annotation
+        std::string definiton_name = db_transaction->tag_to_name(prototype_tag);
+        definiton_name = definiton_name.substr(definiton_name.find("::"));// strip mdl::/mdle:: prefix
+        definiton_name = definiton_name.substr(0, definiton_name.rfind("(")); // strip signature
+
+        mi::base::Handle<MI::MDL::IValue> anno_value(
+            vf.create_string(definiton_name.c_str()));
+        mi::base::Handle<MI::MDL::IExpression> anno_expr(ef.create_constant(anno_value.get()));
+        mi::base::Handle<MI::MDL::IExpression_list> anno_expr_list(ef.create_expression_list());
+        anno_expr_list->add_expression("name", anno_expr.get());
+
+        mi::base::Handle<MI::MDL::IAnnotation> anno(ef.create_annotation(
+            "::anno::origin(string)", anno_expr_list.get()));
         if (!builder.add_annotation(index, anno.get(), mdl_context))
             return -1;
     }
@@ -908,6 +930,122 @@ mi::neuraylib::IReader* Mdle_api_impl::get_user_file(
         reader->get_interface<mi::mdl::IMDL_resource_reader>());
     ASSERT(M_NEURAY_API, file_random_access.get());
     return MDL::get_reader(file_random_access.get());
+}
+
+mi::Sint32 Mdle_api_impl::compare_mdle(
+    const char* mdle_file_name_a,
+    const char* mdle_file_name_b,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
+    mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
+    mi::mdl::MDL_zip_container_mdle* mdle_a = NULL;
+    mi::mdl::MDL_zip_container_mdle* mdle_b = NULL;
+
+    auto after_cleanup = [&](bool result) 
+    {
+        if (mdle_a) mdle_a->close();
+        if (mdle_b) mdle_b->close();
+
+        MI::MDL::report_messages(encapsulator->access_messages(), mdl_context);
+        return (result && mdl_context->get_error_messages_count() == 0) ? 0 : -1;
+    };
+
+    // open mdle files
+    mdle_a = encapsulator->open_encapsulated_module(mdle_file_name_a);
+    if (!mdle_a) return after_cleanup(false);
+
+    mdle_b = encapsulator->open_encapsulated_module(mdle_file_name_b);
+    if (!mdle_b) return after_cleanup(false);
+
+    unsigned char hash_a[16];
+    if (!mdle_a->get_hash(hash_a))
+    {
+        mi::mdl::string message("MDLE comparison failed.", imdl->get_mdl_allocator());
+        message.append(" Failed to get hash of '");
+        message.append(mdle_file_name_a);
+        message.append("'.");
+        add_error_message(mdl_context, message.c_str(), -1);
+        return after_cleanup(false);
+    }
+    unsigned char hash_b[16];
+    if (!mdle_b->get_hash(hash_b))
+    {
+        mi::mdl::string message("MDLE comparison failed.", imdl->get_mdl_allocator());
+        message.append(" Failed to get hash of '");
+        message.append(mdle_file_name_b);
+        message.append("'.");
+        add_error_message(mdl_context, message.c_str(), -1);
+        return after_cleanup(false);
+    }
+
+    // compare the hashes
+    for (size_t i = 0; i < 16; ++i)
+    {
+        if (hash_a[i] != hash_b[i])
+        {
+            mi::mdl::string message("MDLE comparison failed.", imdl->get_mdl_allocator());
+            message.append(" Hash of '");
+            message.append(mdle_file_name_a);
+            message.append("' does not match the hash of '");
+            message.append(mdle_file_name_b);
+            message.append("'.");
+            add_error_message(mdl_context, message.c_str(), -1);
+            return after_cleanup(false);
+        }
+    }
+
+    return after_cleanup(true);
+}
+
+mi::Sint32 Mdle_api_impl::get_hash(
+    const char* mdle_file_name,
+    mi::base::Uuid& hash,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+
+    mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
+    mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
+    mi::mdl::MDL_zip_container_mdle* mdle = NULL;
+
+    // reset
+    hash.m_id1 = 0;
+    hash.m_id2 = 0;
+    hash.m_id3 = 0;
+    hash.m_id4 = 0;
+
+    // open mdle file
+    mdle = encapsulator->open_encapsulated_module(mdle_file_name);
+    if (!mdle) {
+        MI::MDL::report_messages(encapsulator->access_messages(), mdl_context);
+        return -1;
+    }
+
+    // get hash
+    unsigned char h[16];
+    if (!mdle->get_hash(h))
+    {
+        mi::mdl::string message("Failed to get hash of '", imdl->get_mdl_allocator());
+        message.append(mdle_file_name);
+        message.append("'.");
+        add_error_message(mdl_context, message.c_str(), -1);
+        mdle->close();
+
+        return -1;
+    }
+    mdle->close();
+
+    // convert
+    hash.m_id1 = (h[0]  << 24) | (h[1]  << 16) | (h[2]  << 8) | h[3];
+    hash.m_id2 = (h[4]  << 24) | (h[5]  << 16) | (h[6]  << 8) | h[7];
+    hash.m_id3 = (h[8]  << 24) | (h[9]  << 16) | (h[10] << 8) | h[11];
+    hash.m_id4 = (h[12] << 24) | (h[13] << 16) | (h[14] << 8) | h[15];
+
+    return 0;
 }
 
 mi::Sint32 Mdle_api_impl::start()

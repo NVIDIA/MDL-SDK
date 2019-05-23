@@ -31,8 +31,11 @@
 if(NOT MDL_ENABLE_CUDA_EXAMPLES)
     message(WARNING "Examples that require CUDA are disabled. Enable the option 'MDL_ENABLE_CUDA_EXAMPLES' to re-enable them.")
 else()
-    # use the c++ compiler as host compiler
-    set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE STRING "")
+    # use the c++ compiler as host compiler (setting this does not work with apple clang 9.x)
+    if(NOT MACOSX)
+        set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE STRING "")
+    endif()
+
     # try to enable cuda, can fail even though the compiler is found (see error message of second call)
     message(STATUS "If you don't want or can't to use CUDA based examples, please disable 'MDL_ENABLE_CUDA_EXAMPLES'.")
     enable_language(CUDA OPTIONAL)

@@ -45,6 +45,8 @@ namespace base { class ILogger; }
 class IMap;
 class IString;
 
+namespace mdl { class IEntity_resolver; }
+
 namespace neuraylib {
 
 class IBsdf_isotropic_data;
@@ -55,6 +57,7 @@ class IFunction_call;
 class ILink_unit;
 class IMdl_backend;
 class IMdl_execution_context;
+class IMdl_entity_resolver;
 class ITarget_code;
 class ITarget_argument_block;
 class ITransaction;
@@ -304,12 +307,13 @@ public:
     /// its imported modules, as well as for all material and function definitions contained in
     /// these modules.
     ///
-    /// The method can also be for builtin modules for which the first step, locating the module on
-    /// disk, is skipped.
+    /// The method can also be used for builtin modules for which the first step, locating the
+    /// module on disk, is skipped.
     ///
     /// \param transaction   The transaction to be used.
     /// \param module_name   The fully-qualified MDL name of the MDL module (including package
-    ///                      names, starting with "::").
+    ///                      names, starting with "::") or an MDLE filepath (absolute or relative
+    ///                      to the current working directory).
     /// \param context       The execution context can be used to pass options to control the
     ///                      behavior of the MDL compiler. The following options are supported
     ///                      by this operation:
@@ -328,6 +332,32 @@ public:
     ///                            already in use.
     ///                      - -4: Initialization of an imported module failed.
     virtual Sint32 load_module(
+        ITransaction* transaction, const char* module_name, IMdl_execution_context* context = 0) = 0;
+
+    /// Gets the database name of a loaded module.
+    ///
+    /// After successfully loading a module using #load_module() or #load_module_from_string() it is
+    /// often required to query the module or contained elements from the database. Therefore,
+    /// the database name is required, which is returned by this method.
+    ///
+    /// While for MDL modules the database name can be computed by simply pre-pending the prefix
+    /// "mdl::" to the fully qualified module name, for MDLE, obtaining the database name is more
+    /// involved: here, the DB name contains the absolute, normalized file path of the MDLE file.
+    /// Normalized means that there are no occurrences of '../' and '/' is used as path separator,
+    /// independent of the platform. Furthermore must the normalized path start with a leading
+    /// forward slash, which has to be added in case there is none already.
+    ///
+    /// \param transaction   The transaction to be used for checking if the module is loaded.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::") or an MDLE filename (absolute or relative
+    ///                      to the current working directory).
+    /// \param context       The execution context can be used to pass options to control the
+    ///                      behavior of the MDL compiler. Messages like errors or warnings are also
+    ///                      stored in the context. Can be \c NULL.
+    /// \return              The database name of the module that was loaded using the provided
+    ///                      \p module_name. NULL in case the module was not found or the
+    ///                      provided \p module_name was not a valid module name.
+    virtual const char* get_module_db_name(
         ITransaction* transaction, const char* module_name, IMdl_execution_context* context = 0) = 0;
 
     /// Loads an MDL module from memory into the database.
@@ -752,9 +782,10 @@ public:
     /// Currently available MDL backends.
     enum Mdl_backend_kind {
         MB_CUDA_PTX,          ///< Generate CUDA PTX code.
-        MB_LLVM_IR,           ///< Generate LLVM IR (LLVM 3.4 compatible).
+        MB_LLVM_IR,           ///< Generate LLVM IR (LLVM 7.0 compatible).
         MB_GLSL,              ///< \if MDL_SOURCE_RELEASE Reserved \else Generate GLSL code \endif.
         MB_NATIVE,            ///< Generate native code.
+        MB_HLSL,              ///< \if MDL_SOURCE_RELEASE Reserved \else Generate HLSL code \endif.
         MB_FORCE_32_BIT = 0xffffffffU //   Undocumented, for alignment only
     };
 
@@ -766,6 +797,10 @@ public:
     virtual IMdl_backend* get_backend( Mdl_backend_kind kind) = 0;
 
     //@}
+
+    virtual IMdl_entity_resolver* get_entity_resolver() const = 0;
+
+    virtual void set_external_resolver(mdl::IEntity_resolver *resolver) const = 0;
 };
 
 mi_static_assert( sizeof( IMdl_compiler::Mdl_backend_kind)== sizeof( Uint32));
@@ -838,6 +873,12 @@ public:
     ///   * \c "vtable": generate calls through a vtable call (default)
     ///   * \c "direct_call": generate direct function calls
     ///   * \c "optix_cp": generate calls through OptiX bindless callable programs
+    ///
+    /// The following options are supported by the HLSL backend only:
+    /// - \c "hlsl_use_resource_data": If enabled, an extra user define resource data struct is
+    ///   passed to all resource callbacks.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     ///
     /// \param name       The name of the option.
@@ -987,12 +1028,12 @@ public:
     ///                                    #mi::neuraylib::IMdl_execution_context which can be used
     ///                                    to pass compilation options to the MDL compiler. The
     ///                                    following options are supported by this operation:
-    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                    - Float32 "meters_per_scene_unit": The conversion
     ///                                      ratio between meters and scene units for this
-    ///                                      material. Default: 1.0f;
-    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                      material. Default: 1.0f.
+    ///                                    - Float32 "wavelength_min": The smallest
     ///                                      supported wavelength. Default: 380.0f.
-    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
     ///                                    During material translation, messages like errors and
     ///                                    warnings will be passed to the context for
@@ -1837,7 +1878,9 @@ public:
     enum Prototype_language {
         SL_CUDA,
         SL_PTX,
-        SL_GLSL              // \if MDL_SOURCE_RELEASE Reserved\else GLSL\endif.
+        SL_HLSL,
+        SL_GLSL,             // \if MDL_SOURCE_RELEASE Reserved\else GLSL\endif.
+        SL_NUM_LANGUAGES
     };
 
     /// Possible kinds of distribution functions.
@@ -1855,10 +1898,19 @@ public:
         FK_LAMBDA,
         FK_SWITCH_LAMBDA,
         FK_ENVIRONMENT,
+        FK_CONST,
         FK_DF_INIT,
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
         FK_DF_PDF
+    };
+
+    /// Possible texture gamma modes.
+    enum Gamma_mode {
+        GM_GAMMA_DEFAULT,
+        GM_GAMMA_LINEAR,
+        GM_GAMMA_SRGB,
+        GM_GAMMA_UNKNOWN
     };
 
     typedef Uint32 State_usage;
@@ -1890,8 +1942,31 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The name of the DB element associated the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range.
+    ///                   index, or \c NULL if \p index is out of range or the texture does not
+    ///                   exist. in the database.
     virtual const char* get_texture( Size index) const = 0;
+
+    /// Returns the mdl url of a texture resource used by the target code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The mdl url of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    virtual const char* get_texture_url(Size index) const = 0;
+    
+    /// Returns the owner module name of a relative texture url.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The owner module name of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   module is not provided.
+    virtual const char* get_texture_owner_module(Size index) const = 0;
+
+    /// Returns the gamma mode of a texture resource used by the target code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The gamma of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    virtual Gamma_mode get_texture_gamma(Size index) const = 0;
 
     /// Returns the texture shape of a given texture resource used by the target code.
     ///
@@ -2370,12 +2445,12 @@ public:
     ///                                   #mi::neuraylib::IMdl_execution_context which can be used
     ///                                   to pass compilation options to the MDL compiler. The 
     ///                                   following options are supported for this operation:
-    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                    - Float32 "meters_per_scene_unit": The conversion
     ///                                      ratio between meters and scene units for this
-    ///                                      material. Default: 1.0f;
-    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                      material. Default: 1.0f.
+    ///                                    - Float32 "wavelength_min": The smallest
     ///                                      supported wavelength. Default: 380.0f.
-    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
     ///                                   During material compilation messages like errors and 
     ///                                   warnings will be passed to the context for

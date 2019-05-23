@@ -45,7 +45,7 @@ End-user Options
 
  Generate code at different optimization levels.  These correspond to the
  ``-O0``, ``-O1``, ``-O2``, and ``-O3`` optimization levels used by
- :program:`llvm-gcc` and :program:`clang`.
+ :program:`clang`.
 
 .. option:: -mtriple=<target triple>
 
@@ -112,11 +112,6 @@ End-user Options
  optimizations allow the code generator to make use of some instructions which
  would otherwise not be usable (such as ``fsin`` on X86).
 
-.. option:: --enable-correct-eh-support
-
- Instruct the **lowerinvoke** pass to insert code for correct exception
- handling support.  This is expensive and is by default omitted for efficiency.
-
 .. option:: --stats
 
  Print statistics recorded by code-generation passes.
@@ -131,6 +126,20 @@ End-user Options
  Dynamically load ``dso_path`` (a path to a dynamically shared object) that
  implements an LLVM target.  This will permit the target name to be used with
  the :option:`-march` option so that code can be generated for that target.
+
+.. option:: -meabi=[default|gnu|4|5]
+
+ Specify which EABI version should conform to.  Valid EABI versions are *gnu*,
+ *4* and *5*.  Default value (*default*) depends on the triple.
+
+.. option:: -stack-size-section
+
+ Emit the .stack_sizes section which contains stack size metadata. The section
+ contains an array of pairs of function symbol values (pointer size) and stack
+ sizes (unsigned LEB128). The stack size values only include the space allocated
+ in the function prologue. Functions with dynamic stack allocations are not
+ included.
+
 
 Tuning/Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

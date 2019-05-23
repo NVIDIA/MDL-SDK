@@ -1,0 +1,223 @@
+/******************************************************************************
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_dxr Example for a Microsoft DXR-based MDL-enabled path tracer
+
+<div align="right">
+    [\link mi_neuray_example_mdle Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+This example demonstrates how to integrate MDL into a real-time path tracer that is able to render
+scenes provided in the [glTF](https://www.khronos.org/gltf/) format. 
+The rendering framework is based on Microsoft DirectX Raytracing (DXR) and utilizes the
+MDL HLSL backend to generate HLSL code for evaluating expressions and distribution functions
+directly inside shaders.
+
+\section example_dxr_new New Topics
+
+  - Integration of MDL in a real-time renderer
+  - Using the glTF metallic-roughness support material, as well as other MDL materials and MDLE
+
+\section example_dxr_descr Detailed Description
+
+<dl>
+    <dt><b>The Examples Rendering Framework</b></dt>
+    <dd><br>
+        In order to illustrate the use of MDL in the context of real-time rendering and
+        in scenes consisting of multiple objects with different materials, at least a small rendering framework
+        that handles scene loading and the main application loop is required.
+        To concentrate on the MDL features, most parts of the low-level Direct3D API have been hidden behind classes
+        that provide a more abstract view, which in turn makes it easier to communicate how MDL fits into the bigger picture.
+        To get started with DXR and for more detailed information on the Direct3D API
+        it is recommended to look into other resources such as the
+        [NVIDIA DX12 Raytracing tutorial](https://developer.nvidia.com/rtx/raytracing/dxr/DX12-Raytracing-tutorial-Part-1)
+        and the [Microsoft DirectX-Graphics-Samples](https://github.com/Microsoft/DirectX-Graphics-Samples).
+
+        The parts of the framework that are important for the MDL integration can be found in a few source files:
+        <tt>mdl_d3d12/mdl_material.h</tt>, <tt>mdl_d3d12/mdl_material.cpp</tt>, and <tt>example_dxr.cpp</tt>.
+        While the latter contains the main application that triggers the scene loading,
+        the pipeline setup as well as the update and rendering loop, the first two files define classes
+        for the MDL SDK interface, the MDL target code with a link unit and most importantly the \c Mdl_material class
+        which handles the loading and parameterization of the scenes materials.
+
+        The essential parts of the renderer are implemented in HLSL.
+        In the hit shaders (<tt>content/mdl_hit_programs.hlsl</tt>), the material is evaluated for the current
+        intersection of the ray with the surface. Afterwards, the direction for the next segment of the ray path is computed.
+        The interface for the evaluation corresponds to the one in the [\link mi_neuray_example_df_cuda df_cuda example\endlink].
+        The required glue-code and the runtime functions for HLSL can be found in the <tt>content/mdl_target_code_types.hlsl</tt>
+        and <tt>content/mdl_renderer_runtime.hlsl</tt>.
+        
+        The actual renderer will not have to call the contained functions directly, they are referenced by the generated code.
+        Instead, the entry points into the generated code have to be invoked by the renderer. For instance:
+\code{.unparsed}
+
+        mdl_bsdf_evaluate(            // defined in the generated target code
+          scattering_function_index,  // returned by link_unit::add_material(...)
+                                      // and passed to shader in constant buffer
+          eval_data,                  // local in/output struct prepared by the renderer
+          mdl_state);                 // contains information about the hit point and the material
+
+\endcode
+        The generated code is written to the binary directory for debugging and inspection purposes: <tt>link_unit_source.hlsl</tt>
+
+        Material parameters are mapped to a \c [dear imgui](https://github.com/ocornut/imgui) user interface,
+        just like in the [\link mi_neuray_example_df_cuda df_cuda example\endlink], so they can be changed at runtime.
+        See <tt>mdl_d3d12/mdl_material_info.h</tt>, <tt>gui.h</tt>, and <tt>gui.cpp</tt> for more details.
+    </dd>
+
+    <dt><b>Specifying MDL Materials in glTF scenes</b></dt>
+    <dd><br>
+        At this point, the glTF scene format contains no explicit support for MDL.
+        However, it provides a set of parameters that are intended to be used in physically-based rendering (PBR)
+        and is therefore compatible with MDL. Here is an example for an glTF material node:
+\code{.unparsed}
+
+{
+    "name": "ShaderBall",
+    "doubleSided": true,
+    "emissiveFactor": [ 0.0, 0.0, 0.0 ],
+    "normalTexture": {
+        "index": 1,
+        "scale": 1,
+        "texCoord": 0
+    },
+    "pbrMetallicRoughness": {
+        "baseColorFactor": [ 1.0, 1.0, 1.0, 1.0 ],
+        "baseColorTexture": {
+            "index": 2,
+            "texCoord": 0
+        },
+        "metallicFactor": 1.0,
+        "roughnessFactor": 1.0,
+        "metallicRoughnessTexture": {
+            "index": 0,
+            "texCoord": 0
+        }
+    }
+}
+
+\endcode
+        Note, that textures are defined separately. They are referenced by the \c index property.
+        While loading the scene, these parameters are parsed, the texture file paths are resolved and
+        the support material defined in the provided <tt>gltf_support.mdl</tt> is parameterized accordingly.
+
+        To avoid the creation of redundant HLSL code \c class-compilation is used, which allows to change parameters at runtime.
+        For each scene material that uses the glTF_support material the same HLSL code is executed,
+        but the individual parameter sets, the \c argument \c blocks, are bound as buffers to the graphics pipeline.
+
+        The possibilities of this standard material are limited.
+        Glass for instance can not be described properly without an index of refraction (IOR).
+        To overcome this limitation without introducing an MDL extension to glFT,
+        an arbitrary MDL material can be assigned by setting the \c name property of the glTF material node
+        to a fully qualified absolute MDL material identifier like this:
+\code{.unparsed}
+
+{
+    "name": "::nvidia::sdk_examples::tutorials::dxr_sphere_mat"
+}
+
+\endcode
+        All other material properties are ignored in that case. This means that the selected MDL material must provide default values for all its parameters.
+
+        The Example also supports the MDL encapsulated format. In this case, the file path of the MDLE has to be specified
+        in the \c name property of the glTF material node. This file path can either be absolute or relative to the \c .glft scene file:
+\code{.unparsed}
+
+{
+    "name": "glass.mdle"
+}
+
+\endcode
+    </dd>
+
+    <dt><b>Running the example</b></dt>
+    <dd><br>
+        When running the DXR example, a simple sphere with an MDL material is rendered.
+        Moving the mouse while pressing the left or the middle mouse button allows to rotate or pan the camera,
+        while scrolling allows to move forward and back.
+        Pressing \c space reveals the user interface that allows to change parameters of the material, the camera and the renderer.
+        Pressing \c print writes a screenshot into the current working directory.
+
+        To load a different scene, the DXR example is started from the command line with an glTF file to load:
+\code{.unparsed}
+
+dxr.exe some_folder/my_scene.gltf
+
+\endcode
+        Various interesting scenes can be found online, for instance on [sketchfab.com](https://sketchfab.com/), so give it a try.
+
+        There are further options that can be used with the DXR example. Here are a few commonly used ones:
+
+        - -h | \--help<br>
+          Shows all options with a short explanation.
+
+        - --mdl_path \<value\><br>
+          By default, the example uses three default search paths.
+          On the Windows platform this is the admin-space search path,
+          e.g., <em>C:\\ProgramData\\NVIDIA Corporation\\mdl</em> and the
+          user-space search path <em>\%USERPROFILE%\\Documents\\mdl</em> as well as scene folder that contains the loaded glTF. 
+          By passing the command line option --mdl_path \<value\>, this default behavior can be changed.
+          The option can appear multiple times.
+
+        - --hdr \<filename\><br>
+          Path of an \c .hdr environment map that is used for image-based lighting and as background.
+          The path can be absolute or relative to the scene file.
+
+        - --mat \<qualified_name\><br>
+          Override all materials in the scene using a qualified material name or an MDLE path.
+    </dd>
+
+    <dt><b>Restrictions</b></dt>
+    <dd><br>
+        The DXR example is a prototype renderer with certain limitations:
+
+        - The encoding of MDL material qualifiers into the name property has obviously limitations.
+          All names starting with `::` literal are interpreted as MDL names and all names ending with
+          `.mdle` are interpreted as file paths, which both are unlikely but not impossible to appear by accident.
+
+        - From an MDL perspective, the lack of specifying MDL material parameters in glTF is also a limitation.
+
+        - Many existing glTF scenes make use of extensions like 
+        [KHR_materials_pbrSpecularGlossiness](https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_pbrSpecularGlossiness). There are no support material for such extensions yet.
+
+        - The example is based on a very simple path tracer.
+          Multiple importance sampling (MIS) is only used to sample the BSDFs and the environment light.
+          Emissive surfaces however are only hit by chance and the progressive rendering requires more time to converge.
+
+        - The example does not include support for measured BSDFs and light profiles.
+    </dd>
+</dl>
+
+
+<div align="right">
+    [\link mi_neuray_example_mdle Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

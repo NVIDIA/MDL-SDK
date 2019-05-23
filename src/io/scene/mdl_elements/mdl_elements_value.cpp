@@ -116,6 +116,14 @@ mi::Size Value_string::get_memory_consumption() const
         + dynamic_memory_consumption( m_value);
 }
 
+mi::Size Value_string_localized::get_memory_consumption() const
+{
+    return sizeof(*this)
+        + dynamic_memory_consumption( m_type)
+        + dynamic_memory_consumption( m_value)
+        + dynamic_memory_consumption( m_original_value);
+}
+
 Value_vector::Value_vector( const Type* type, const IValue_factory* value_factory)
   : Base( type)
 {
@@ -614,6 +622,12 @@ IValue_string* Value_factory::create_string( const char* value) const
     return new Value_string( type.get(), value);
 }
 
+IValue_string_localized* Value_factory::create_string_localized( const char* value, const char* original_value) const
+{
+    mi::base::Handle<const IType_string> type( m_type_factory->create_string());
+    return new Value_string_localized( type.get(), value, original_value);
+}
+
 IValue_vector* Value_factory::create_vector( const IType_vector* type) const
 {
     return type ? new Value_vector( type, this) : 0;
@@ -644,6 +658,20 @@ IValue_struct* Value_factory::create_struct( const IType_struct* type) const
 IValue_texture* Value_factory::create_texture( const IType_texture* type, DB::Tag value) const
 {
     return type ? new Value_texture( type, value) : 0;
+}
+
+IValue_texture* Value_factory::create_texture(
+    const IType_texture* type,
+    DB::Tag value,
+    const char *unresolved_mdl_url,
+    const char *owner_module,
+    mi::Float32 gamma) const
+{
+    if (!type)
+        return 0;
+
+    Value_texture *tex = new Value_texture(type, value, unresolved_mdl_url, owner_module, gamma);
+    return tex;
 }
 
 IValue_light_profile* Value_factory::create_light_profile( DB::Tag value) const
@@ -727,6 +755,7 @@ IValue* Value_factory::create( const IType* type) const
         case IType::TK_BSDF_MEASUREMENT:
             return value_factory->create_bsdf_measurement( DB::Tag());
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF: {
             mi::base::Handle<const IType_reference> type_reference(
@@ -789,6 +818,11 @@ IValue* Value_factory::clone( const IValue* value) const
             return create_double( value_double->get_value());
         }
         case IValue::VK_STRING: {
+            mi::base::Handle<const IValue_string_localized> value_string_localized(
+                value->get_interface<IValue_string_localized>());
+            if( value_string_localized) {
+                return create_string_localized( value_string_localized->get_value(), value_string_localized->get_original_value());
+            }
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
             return create_string( value_string->get_value());
@@ -821,7 +855,12 @@ IValue* Value_factory::clone( const IValue* value) const
                 value->get_type<IType_texture>());
             mi::base::Handle<const IValue_texture> value_texture(
                 value->get_interface<IValue_texture>());
-            return create_texture( type_texture.get(), value_texture->get_value());
+            return create_texture(
+                type_texture.get(),
+                value_texture->get_value(),
+                value_texture->get_unresolved_mdl_url(),
+                value_texture->get_owner_module(),
+                /*value_texture->get_gamma()*/ 0.0f);
         }
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(
@@ -981,6 +1020,23 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
             return 0;
         }
         case IValue::VK_STRING: {
+            mi::base::Handle<const IValue_string_localized> lhs_string_localized(
+                lhs->get_interface<IValue_string_localized>());
+            if( lhs_string_localized) {
+                mi::base::Handle<const IValue_string_localized> rhs_string_localized(
+                    rhs->get_interface<IValue_string_localized>());
+                const char* lhs_value = lhs_string_localized->get_value();
+                const char* rhs_value = rhs_string_localized->get_value();
+                mi::Sint32 result = strcmp( lhs_value, rhs_value);
+                if (result < 0) return -1;
+                if (result > 0) return +1;
+                const char* lhs_original_value = lhs_string_localized->get_original_value();
+                const char* rhs_original_value = rhs_string_localized->get_original_value();
+                result = strcmp( lhs_original_value, rhs_original_value);
+                if( result < 0) return -1;
+                if( result > 0) return +1;
+                return 0;
+            }
             mi::base::Handle<const IValue_string> lhs_string(
                 lhs->get_interface<IValue_string>());
             mi::base::Handle<const IValue_string> rhs_string(
@@ -1123,6 +1179,14 @@ void Value_factory::dump_static(
             return;
         }
         case IValue::VK_STRING: {
+            mi::base::Handle<const IValue_string_localized> value_string_localized(
+                value->get_interface<IValue_string_localized>());
+            if( value_string_localized) {
+                s << "\"" << value_string_localized->get_value() << "\"";
+                s << ", ";
+                s << "\"" << value_string_localized->get_original_value() << "\"";
+                return;
+            }
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
             s << "\"" << value_string->get_value() << "\"";
@@ -1299,8 +1363,17 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             return;
         }
         case IValue::VK_STRING: {
+            mi::base::Handle<const IValue_string_localized> value_string_localized(
+                value->get_interface<IValue_string_localized>());
+            if ( value_string_localized) {
+                serializer->write( true);// this is a localized string
+                serializer->write( value_string_localized->get_value());
+                serializer->write( value_string_localized->get_original_value());
+                return;
+            }
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
+            serializer->write( false);// this is not a localized string
             serializer->write( value_string->get_value());
             return;
         }
@@ -1433,8 +1506,18 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             return create_double( value);
         }
         case IValue::VK_STRING: {
+            bool localized;
+            deserializer->read( &localized);
             char* value;
-            deserializer->read( &value);
+            deserializer->read(&value);
+            if( localized) {
+                char* value_original;
+                deserializer->read( &value_original);
+                IValue_string* result = create_string_localized( value, value_original);
+                deserializer->release( value);
+                deserializer->release( value_original);
+                return result;
+            }
             IValue_string* result = create_string( value);
             deserializer->release( value);
             return result;

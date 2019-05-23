@@ -7,12 +7,25 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Utils/GlobalStatus.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/Transforms/Utils/GlobalStatus.h"
+#include "llvm/IR/Use.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/AtomicOrdering.h"
+#include "llvm/Support/Casting.h"
+#include <algorithm>
+#include <cassert>
 
 using namespace llvm;
 
@@ -20,11 +33,10 @@ using namespace llvm;
 /// and release, then return AcquireRelease.
 ///
 static AtomicOrdering strongerOrdering(AtomicOrdering X, AtomicOrdering Y) {
-  if (X == Acquire && Y == Release)
-    return AcquireRelease;
-  if (Y == Acquire && X == Release)
-    return AcquireRelease;
-  return (AtomicOrdering)std::max(X, Y);
+  if ((X == AtomicOrdering::Acquire && Y == AtomicOrdering::Release) ||
+      (Y == AtomicOrdering::Acquire && X == AtomicOrdering::Release))
+    return AtomicOrdering::AcquireRelease;
+  return (AtomicOrdering)std::max((unsigned)X, (unsigned)Y);
 }
 
 /// It is safe to destroy a constant iff it is only used by constants itself.
@@ -35,9 +47,11 @@ bool llvm::isSafeToDestroyConstant(const Constant *C) {
   if (isa<GlobalValue>(C))
     return false;
 
-  for (Value::const_use_iterator UI = C->use_begin(), E = C->use_end(); UI != E;
-       ++UI)
-    if (const Constant *CU = dyn_cast<Constant>(*UI)) {
+  if (isa<ConstantData>(C))
+    return false;
+
+  for (const User *U : C->users())
+    if (const Constant *CU = dyn_cast<Constant>(U)) {
       if (!isSafeToDestroyConstant(CU))
         return false;
     } else
@@ -46,11 +60,14 @@ bool llvm::isSafeToDestroyConstant(const Constant *C) {
 }
 
 static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
-                             SmallPtrSet<const PHINode *, 16> &PhiUsers) {
-  for (Value::const_use_iterator UI = V->use_begin(), E = V->use_end(); UI != E;
-       ++UI) {
-    const User *U = *UI;
-    if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(U)) {
+                             SmallPtrSetImpl<const Value *> &VisitedUsers) {
+  if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(V))
+    if (GV->isExternallyInitialized())
+      GS.StoredType = GlobalStatus::StoredOnce;
+
+  for (const Use &U : V->uses()) {
+    const User *UR = U.getUser();
+    if (const ConstantExpr *CE = dyn_cast<ConstantExpr>(UR)) {
       GS.HasNonInstructionUser = true;
 
       // If the result of the constantexpr isn't pointer type, then we won't
@@ -58,12 +75,13 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
       if (!isa<PointerType>(CE->getType()))
         return true;
 
-      if (analyzeGlobalAux(CE, GS, PhiUsers))
+      // FIXME: Do we need to add constexpr selects to VisitedUsers?
+      if (analyzeGlobalAux(CE, GS, VisitedUsers))
         return true;
-    } else if (const Instruction *I = dyn_cast<Instruction>(U)) {
+    } else if (const Instruction *I = dyn_cast<Instruction>(UR)) {
       if (!GS.HasMultipleAccessingFunctions) {
         const Function *F = I->getParent()->getParent();
-        if (GS.AccessingFunction == 0)
+        if (!GS.AccessingFunction)
           GS.AccessingFunction = F;
         else if (GS.AccessingFunction != F)
           GS.HasMultipleAccessingFunctions = true;
@@ -100,7 +118,7 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
               }
             }
 
-            if (StoredVal == GV->getInitializer()) {
+            if (GV->hasInitializer() && StoredVal == GV->getInitializer()) {
               if (GS.StoredType < GlobalStatus::InitializerStored)
                 GS.StoredType = GlobalStatus::InitializerStored;
             } else if (isa<LoadInst>(StoredVal) &&
@@ -120,20 +138,18 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
             GS.StoredType = GlobalStatus::Stored;
           }
         }
-      } else if (isa<BitCastInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
+      } else if (isa<BitCastInst>(I) || isa<GetElementPtrInst>(I)) {
+        // Skip over bitcasts and GEPs; we don't care about the type or offset
+        // of the pointer.
+        if (analyzeGlobalAux(I, GS, VisitedUsers))
           return true;
-      } else if (isa<GetElementPtrInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
-          return true;
-      } else if (isa<SelectInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
-          return true;
-      } else if (const PHINode *PN = dyn_cast<PHINode>(I)) {
-        // PHI nodes we can check just like select or GEP instructions, but we
-        // have to be careful about infinite recursion.
-        if (PhiUsers.insert(PN)) // Not already visited.
-          if (analyzeGlobalAux(I, GS, PhiUsers))
+      } else if (isa<SelectInst>(I) || isa<PHINode>(I)) {
+        // Look through selects and PHIs to find if the pointer is
+        // conditionally accessed. Make sure we only visit an instruction
+        // once; otherwise, we can get infinite recursion or exponential
+        // compile time.
+        if (VisitedUsers.insert(I).second)
+          if (analyzeGlobalAux(I, GS, VisitedUsers))
             return true;
       } else if (isa<CmpInst>(I)) {
         GS.IsCompared = true;
@@ -149,14 +165,14 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
         if (MSI->isVolatile())
           return true;
         GS.StoredType = GlobalStatus::Stored;
-      } else if (ImmutableCallSite C = I) {
-        if (!C.isCallee(UI))
+      } else if (auto C = ImmutableCallSite(I)) {
+        if (!C.isCallee(&U))
           return true;
         GS.IsLoaded = true;
       } else {
         return true; // Any other non-load instruction might take address!
       }
-    } else if (const Constant *C = dyn_cast<Constant>(U)) {
+    } else if (const Constant *C = dyn_cast<Constant>(UR)) {
       GS.HasNonInstructionUser = true;
       // We might have a dead and dangling constant hanging off of here.
       if (!isSafeToDestroyConstant(C))
@@ -171,13 +187,9 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
   return false;
 }
 
-bool GlobalStatus::analyzeGlobal(const Value *V, GlobalStatus &GS) {
-  SmallPtrSet<const PHINode *, 16> PhiUsers;
-  return analyzeGlobalAux(V, GS, PhiUsers);
-}
+GlobalStatus::GlobalStatus() = default;
 
-GlobalStatus::GlobalStatus()
-    : IsCompared(false), IsLoaded(false), StoredType(NotStored),
-      StoredOnceValue(0), AccessingFunction(0),
-      HasMultipleAccessingFunctions(false), HasNonInstructionUser(false),
-      Ordering(NotAtomic) {}
+bool GlobalStatus::analyzeGlobal(const Value *V, GlobalStatus &GS) {
+  SmallPtrSet<const Value *, 16> VisitedUsers;
+  return analyzeGlobalAux(V, GS, VisitedUsers);
+}

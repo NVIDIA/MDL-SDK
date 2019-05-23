@@ -319,6 +319,13 @@ public:
     /// \param resolver  the call name resolver
     void initialize_derivative_infos(ICall_name_resolver const *resolver) MDL_FINAL;
 
+    /// Returns true, if the attributes in the resource attribute table are valid.
+    /// If false, only the indices are valid.
+    bool has_resource_attributes() const MDL_FINAL;
+
+    /// Sets whether the resource attribute table contains valid attributes.
+    void set_has_resource_attributes(bool avail) MDL_FINAL;
+
     // --------------- non-interface members ---------------
 
     /// Get the derivative information if they have been initialized.
@@ -491,6 +498,11 @@ private:
     /// The resource attribute map.
     Resource_attr_map m_resource_attr_map;
 
+    /// True, if the attributes in the resource attribute map are valid.
+    /// If resolving resources is disabled, the resource attribute map will only be used
+    /// for managing the resource indices.
+    bool m_has_resource_attributes;
+
     /// The execution context of this lambda function.
     Lambda_execution_context m_context;
 
@@ -554,19 +566,21 @@ public:
     /// Any material parameters must already be registered in the main DF lambda at this point.
     /// The DAG nodes must already be owned by the main DF lambda.
     ///
-    /// \param material_constructor     the DAG node of the material constructor
-    /// \param path                     the path of the distribution function
-    /// \param include_geometry_normal  if true, the geometry normal will be handled
-    /// \param calc_derivative_infos    if true, derivative information will be calculated
-    /// \param name_resolver            the call name resolver
+    /// \param material_constructor       the DAG node of the material constructor
+    /// \param path                       the path of the distribution function
+    /// \param include_geometry_normal    if true, the geometry normal will be handled
+    /// \param calc_derivative_infos      if true, derivative information will be calculated
+    /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
+    ///                                   values
+    /// \param name_resolver              the call name resolver
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
-    ///     (Currently only BSDFs are supported)
     Error_code initialize(
         DAG_node const            *material_constructor,
         char const                *df_path,
         bool                       include_geometry_normal,
         bool                       calc_derivative_infos,
+        bool                       allow_double_expr_lambdas,
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
     /// Get the main DF function representing a DF DAG call.

@@ -67,13 +67,18 @@ licenses, and/or restrictions:
   [src/base/lib/tinyxml2/tinyxml2.cpp](src/base/lib/tinyxml2/tinyxml2.cpp)
   [examples/thirdparty/tinyxml2/include/tinyxml2.h](examples/thirdparty/tinyxml2/include/tinyxml2.h)
   [examples/thirdparty/tinyxml2/src/tinyxml2.cpp](examples/thirdparty/tinyxml2/src/tinyxml2.cpp)
-* Dear ImGui with stb: [examples/thirdparty/imgui](examples/thirdparty/imgui) (2)
+* Dear ImGui with stb: [examples/thirdparty/imgui/LICENSE.txt](examples/thirdparty/imgui/LICENSE.txt) (2)
+* D3DX12 Helper Library: [examples/thirdparty/d3dx12/license.txt](examples/thirdparty/d3dx12/license.txt) (2)
+* fx-gltf: [examples/thirdparty/gltf/fx/license.txt](examples/thirdparty/gltf/fx/license.txt) (2)
+* nlohmann/json: [examples/thirdparty/gltf/nlohmann/license.txt](examples/thirdparty/gltf/nlohmann/license.txt) (2)
+
 
 The documentation uses the following web fonts, CSS, and JavaScript frameworks with 
 additional or alternate copyrights, licenses, and/or restrictions:
 
 * jQuery v3.2.1: [doc/js/jquery/jquery-3.2.1.min.js](doc/js/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
-* jQuery UI v1.12.1: [doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt)
+* jQuery UI v1.12.1: [doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt),
+  [doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt)
 * normalize.css v1.1.3: [doc/core_definitions/kt_css/normalize.css](doc/core_definitions/kt_css/normalize.css),
   [doc/base_module/kt_css/normalize.css](doc/base_module/kt_css/normalize.css)
 * Libre Baskerville: [doc/css/librebaskerville/LICENSE-LibreBaskerville.txt](doc/css/librebaskerville/LICENSE-LibreBaskerville.txt)
@@ -85,5 +90,5 @@ additional or alternate copyrights, licenses, and/or restrictions:
 (1) Coco/R is only used for code generation in the build process and is not
     integrated by itself in the MDL SDK binaries.
 
-(2) Dear ImgUi and stb are only used in the examples and are not integrated 
-    by themselves in the MDL SDK binaries.
+(2) Dear ImgUi, stb, D3DX12, fx-gltf, and nlohmann/json are only used in the examples 
+    and are not integrated by themselves in the MDL SDK binaries.

@@ -42,47 +42,53 @@
 
 # list of llvm Libraries we need
 set(_LLVM_LIB_NAMES 
-    LLVMAnalysis
-    LLVMAsmParser
-    LLVMAsmPrinter
-    LLVMBitReader
-    LLVMBitWriter
-    LLVMCodeGen
-    LLVMCore
-    LLVMDebugInfo
-    LLVMExecutionEngine
-    LLVMInstCombine
-    LLVMInstrumentation
-    LLVMipa
-    LLVMipo
-    LLVMIRReader
-    LLVMJIT
     LLVMLinker
-    LLVMMC
-    LLVMMCDisassembler
-    LLVMMCJIT
-    LLVMMCParser
-    LLVMNVPTXAsmPrinter
+    LLVMipo
+    LLVMVectorize
+    LLVMBitWriter
     LLVMNVPTXCodeGen
     LLVMNVPTXDesc
     LLVMNVPTXInfo
-    LLVMObject
-    LLVMOption
-    LLVMRuntimeDyld
-    LLVMScalarOpts
-    LLVMSelectionDAG
-    LLVMSupport
+    LLVMNVPTXAsmPrinter
     LLVMTableGen
-    LLVMTarget
-    LLVMTransformUtils
-    LLVMVectorize
-    LLVMX86AsmParser
-    LLVMX86AsmPrinter
-    LLVMX86CodeGen
-    LLVMX86Desc
+    LLVMDebugInfoDWARF
+    LLVMDebugInfoPDB
+    LLVMOption
     LLVMX86Disassembler
+    LLVMX86AsmParser
+    LLVMX86CodeGen
+    LLVMGlobalISel
+    LLVMSelectionDAG
+    LLVMAsmPrinter
+    LLVMDebugInfoCodeView
+    LLVMX86Desc
+    LLVMDemangle
     LLVMX86Info
+    LLVMX86AsmPrinter
     LLVMX86Utils
+    LLVMIRReader
+    LLVMBitReader
+    LLVMAsmParser
+    LLVMMCDisassembler
+    LLVMMCParser
+    LLVMInstrumentation
+    LLVMMCJIT
+    LLVMOrcJIT
+    LLVMCodeGen
+    LLVMScalarOpts
+    LLVMInstCombine
+    LLVMAggressiveInstCombine
+    LLVMTransformUtils
+    LLVMAnalysis
+    LLVMProfileData
+    LLVMRuntimeDyld
+    LLVMExecutionEngine
+    LLVMTarget
+    LLVMMC
+    LLVMObject
+    LLVMCore
+    LLVMBinaryFormat
+    LLVMSupport
     )
     
 target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
@@ -97,7 +103,7 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
     # since we simply link all llvm libs, the transitive dependencies are covered
     foreach(_LIB ${_LLVM_LIB_NAMES})
         list(APPEND _STATIC_LIB_FILE_LIST $<TARGET_FILE:${_LIB}>)
-        add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} ${_LIB}) # add dependency manually
+        # add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} ${_LIB}) # add dependency manually
     endforeach()
 
     target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
@@ -106,4 +112,6 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
             ${_STATIC_LIB_FILE_LIST}
             ${LINKER_END_GROUP}
         )
+
+    add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl-jit-llvm) # add dependency manually
 endif()

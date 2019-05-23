@@ -12,11 +12,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MCJIT_TEST_API_COMMON_H
-#define MCJIT_TEST_API_COMMON_H
+#ifndef LLVM_UNITTESTS_EXECUTIONENGINE_MCJIT_MCJITTESTAPICOMMON_H
+#define LLVM_UNITTESTS_EXECUTIONENGINE_MCJIT_MCJITTESTAPICOMMON_H
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetSelect.h"
 
@@ -39,10 +42,14 @@ protected:
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
 
-#ifdef LLVM_ON_WIN32
+    // FIXME: It isn't at all clear why this is necesasry, but without it we
+    // fail to initialize the AssumptionCacheTracker.
+    initializeAssumptionCacheTrackerPass(*PassRegistry::getPassRegistry());
+
+#ifdef _WIN32
     // On Windows, generate ELF objects by specifying "-elf" in triple
     HostTriple += "-elf";
-#endif // LLVM_ON_WIN32
+#endif // _WIN32
     HostTriple = Triple::normalize(HostTriple);
   }
 
@@ -50,19 +57,17 @@ protected:
   bool ArchSupportsMCJIT() {
     Triple Host(HostTriple);
     // If ARCH is not supported, bail
-    if (std::find(SupportedArchs.begin(), SupportedArchs.end(), Host.getArch())
-        == SupportedArchs.end())
+    if (!is_contained(SupportedArchs, Host.getArch()))
       return false;
 
     // If ARCH is supported and has no specific sub-arch support
-    if (std::find(HasSubArchs.begin(), HasSubArchs.end(), Host.getArch())
-        == HasSubArchs.end())
+    if (!is_contained(HasSubArchs, Host.getArch()))
       return true;
 
     // If ARCH has sub-arch support, find it
     SmallVectorImpl<std::string>::const_iterator I = SupportedSubArchs.begin();
     for(; I != SupportedSubArchs.end(); ++I)
-      if (Host.getArchName().startswith(I->c_str()))
+      if (Host.getArchName().startswith(*I))
         return true;
 
     return false;
@@ -71,10 +76,14 @@ protected:
   /// Returns true if the host OS is known to support MCJIT
   bool OSSupportsMCJIT() {
     Triple Host(HostTriple);
-    if (std::find(UnsupportedOSs.begin(), UnsupportedOSs.end(), Host.getOS())
-        == UnsupportedOSs.end()) {
+
+    if (find(UnsupportedEnvironments, Host.getEnvironment()) !=
+        UnsupportedEnvironments.end())
+      return false;
+
+    if (!is_contained(UnsupportedOSs, Host.getOS()))
       return true;
-    }
+
     return false;
   }
 
@@ -83,9 +92,10 @@ protected:
   SmallVector<Triple::ArchType, 1> HasSubArchs;
   SmallVector<std::string, 2> SupportedSubArchs; // We need to own the memory
   SmallVector<Triple::OSType, 4> UnsupportedOSs;
+  SmallVector<Triple::EnvironmentType, 1> UnsupportedEnvironments;
 };
 
 } // namespace llvm
 
-#endif // MCJIT_TEST_API_COMMON_H
+#endif
 

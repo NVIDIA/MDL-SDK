@@ -130,6 +130,12 @@ T const *impl_cast(I const *);
 template <typename T, typename I>
 T *impl_cast(I *);
 
+template <typename T, typename I>
+T const &impl_cast(I const &);
+
+template <typename T, typename I>
+T &impl_cast(I &);
+
 template<>
 inline Definition const *impl_cast(IDefinition const *t) {
     return static_cast<const Definition *>(t);
@@ -180,6 +186,16 @@ static inline bool is_material_type(IType const *type)
 {
     if (IType_struct const *s_type = as<IType_struct>(type))
         return s_type->get_predefined_id() == IType_struct::SID_MATERIAL;
+    return false;
+}
+
+/// Check if the given type is the material type or a material subtype.
+///
+/// \param type  the type to check
+static inline bool is_material_type_or_sub_type(IType const *type)
+{
+    if (IType_struct const *s_type = as<IType_struct>(type))
+        return s_type->get_predefined_id() != IType_struct::SID_USER;
     return false;
 }
 

@@ -1,5 +1,5 @@
 ====================================
-Getting Started with the LLVM System  
+Getting Started with the LLVM System
 ====================================
 
 .. contents::
@@ -38,6 +38,9 @@ Here's the short story for getting up and running quickly with LLVM:
 #. Read the documentation.
 #. Read the documentation.
 #. Remember that you were warned twice about reading the documentation.
+
+   * In particular, the *relative paths specified are important*.
+
 #. Checkout LLVM:
 
    * ``cd where-you-want-llvm-to-live``
@@ -49,11 +52,42 @@ Here's the short story for getting up and running quickly with LLVM:
    * ``cd llvm/tools``
    * ``svn co http://llvm.org/svn/llvm-project/cfe/trunk clang``
 
-#. Checkout Compiler-RT:
+#. Checkout Extra Clang Tools **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/tools/clang/tools``
+   * ``svn co http://llvm.org/svn/llvm-project/clang-tools-extra/trunk extra``
+
+#. Checkout LLD linker **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/tools``
+   * ``svn co http://llvm.org/svn/llvm-project/lld/trunk lld``
+
+#. Checkout Polly Loop Optimizer **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/tools``
+   * ``svn co http://llvm.org/svn/llvm-project/polly/trunk polly``
+
+#. Checkout Compiler-RT (required to build the sanitizers) **[Optional]**:
 
    * ``cd where-you-want-llvm-to-live``
    * ``cd llvm/projects``
    * ``svn co http://llvm.org/svn/llvm-project/compiler-rt/trunk compiler-rt``
+
+#. Checkout Libomp (required for OpenMP support) **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/projects``
+   * ``svn co http://llvm.org/svn/llvm-project/openmp/trunk openmp``
+
+#. Checkout libcxx and libcxxabi **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/projects``
+   * ``svn co http://llvm.org/svn/llvm-project/libcxx/trunk libcxx``
+   * ``svn co http://llvm.org/svn/llvm-project/libcxxabi/trunk libcxxabi``
 
 #. Get the Test Suite Source Code **[Optional]**
 
@@ -63,45 +97,63 @@ Here's the short story for getting up and running quickly with LLVM:
 
 #. Configure and build LLVM and Clang:
 
-   * ``cd where-you-want-to-build-llvm``
-   * ``mkdir build`` (for building without polluting the source dir)
+   *Warning:* Make sure you've checked out *all of* the source code
+   before trying to configure with cmake.  cmake does not pickup newly
+   added source directories in incremental builds.
+
+   The build uses `CMake <CMake.html>`_. LLVM requires CMake 3.4.3 to build. It
+   is generally recommended to use a recent CMake, especially if you're
+   generating Ninja build files. This is because the CMake project is constantly
+   improving the quality of the generators, and the Ninja generator gets a lot
+   of attention.
+
+   * ``cd where you want to build llvm``
+   * ``mkdir build``
    * ``cd build``
-   * ``../llvm/configure [options]``
-     Some common options:
+   * ``cmake -G <generator> [options] <path to llvm sources>``
 
-     * ``--prefix=directory`` --- Specify for *directory* the full pathname of
-       where you want the LLVM tools and libraries to be installed (default
-       ``/usr/local``).
+     Some common generators are:
 
-     * ``--enable-optimized`` --- Compile with optimizations enabled (default
-       is NO).
+     * ``Unix Makefiles`` --- for generating make-compatible parallel makefiles.
+     * ``Ninja`` --- for generating `Ninja <https://ninja-build.org>`_
+       build files. Most llvm developers use Ninja.
+     * ``Visual Studio`` --- for generating Visual Studio projects and
+       solutions.
+     * ``Xcode`` --- for generating Xcode projects.
 
-     * ``--enable-assertions`` --- Compile with assertion checks enabled
-       (default is YES).
+     Some Common options:
 
-   * ``make [-j]`` --- The ``-j`` specifies the number of jobs (commands) to run
-     simultaneously.  This builds both LLVM and Clang for Debug+Asserts mode.
-     The ``--enable-optimized`` configure option is used to specify a Release
-     build.
+     * ``-DCMAKE_INSTALL_PREFIX=directory`` --- Specify for *directory* the full
+       pathname of where you want the LLVM tools and libraries to be installed
+       (default ``/usr/local``).
 
-   * ``make check-all`` --- This run the regression tests to ensure everything
-     is in working order.
+     * ``-DCMAKE_BUILD_TYPE=type`` --- Valid options for *type* are Debug,
+       Release, RelWithDebInfo, and MinSizeRel. Default is Debug.
 
-   * ``make update`` --- This command is used to update all the svn repositories
-     at once, rather then having to ``cd`` into the individual repositories and
-     running ``svn update``.
+     * ``-DLLVM_ENABLE_ASSERTIONS=On`` --- Compile with assertion checks enabled
+       (default is Yes for Debug builds, No for all other build types).
 
-   * It is also possible to use CMake instead of the makefiles. With CMake it is
-     possible to generate project files for several IDEs: Xcode, Eclipse CDT4,
-     CodeBlocks, Qt-Creator (use the CodeBlocks generator), KDevelop3.
+   * Run your build tool of choice!
+
+     * The default target (i.e. ``make``) will build all of LLVM
+
+     * The ``check-all`` target (i.e. ``make check-all``) will run the
+       regression tests to ensure everything is in working order.
+
+     * CMake will generate build targets for each tool and library, and most
+       LLVM sub-projects generate their own ``check-<project>`` target.
+
+     * Running a serial build will be *slow*.  Make sure you run a
+       parallel build; for ``make``, use ``make -j``.
+
+   * For more information see `CMake <CMake.html>`_
 
    * If you get an "internal compiler error (ICE)" or test failures, see
-     `below`.
+     `below`_.
 
 Consult the `Getting Started with LLVM`_ section for detailed information on
-configuring and compiling LLVM.  See `Setting Up Your Environment`_ for tips
-that simplify working with the Clang front end and LLVM tools.  Go to `Program
-Layout`_ to learn about the layout of the source code tree.
+configuring and compiling LLVM.  Go to `Directory Layout`_ to learn about the
+layout of the source code tree.
 
 Requirements
 ============
@@ -113,83 +165,43 @@ software you will need.
 Hardware
 --------
 
-LLVM is known to work on the following platforms:
+LLVM is known to work on the following host platforms:
 
-+-----------------+----------------------+-------------------------+
-|OS               |  Arch                | Compilers               |
-+=================+======================+=========================+
-|AuroraUX         | x86\ :sup:`1`        | GCC                     |
-+-----------------+----------------------+-------------------------+
-|Linux            | x86\ :sup:`1`        | GCC                     |
-+-----------------+----------------------+-------------------------+
-|Linux            | amd64                | GCC                     |
-+-----------------+----------------------+-------------------------+
-|Linux            | ARM\ :sup:`13`       | GCC                     |
-+-----------------+----------------------+-------------------------+
-|Solaris          | V9 (Ultrasparc)      | GCC                     |
-+-----------------+----------------------+-------------------------+
-|FreeBSD          | x86\ :sup:`1`        | GCC                     |
-+-----------------+----------------------+-------------------------+
-|FreeBSD          | amd64                | GCC                     |
-+-----------------+----------------------+-------------------------+
-|MacOS X\ :sup:`2`| PowerPC              | GCC                     |
-+-----------------+----------------------+-------------------------+
-|MacOS X\ :sup:`9`| x86                  | GCC                     |
-+-----------------+----------------------+-------------------------+
-|Cygwin/Win32     | x86\ :sup:`1, 8, 11` | GCC 3.4.X, binutils 2.20|
-+-----------------+----------------------+-------------------------+
-
-LLVM has partial support for the following platforms:
-
-+-------------------+----------------------+-------------------------------------------+
-|OS                 |  Arch                | Compilers                                 |
-+===================+======================+===========================================+
-| Windows           | x86\ :sup:`1`        | Visual Studio 2000 or higher\ :sup:`4,5`  |
-+-------------------+----------------------+-------------------------------------------+
-| AIX\ :sup:`3,4`   | PowerPC              | GCC                                       |
-+-------------------+----------------------+-------------------------------------------+
-| Linux\ :sup:`3,5` | PowerPC              | GCC                                       |
-+-------------------+----------------------+-------------------------------------------+
-| Linux\ :sup:`7`   | Alpha                | GCC                                       |
-+-------------------+----------------------+-------------------------------------------+
-| Linux\ :sup:`7`   | Itanium (IA-64)      | GCC                                       |
-+-------------------+----------------------+-------------------------------------------+
-| HP-UX\ :sup:`7`   | Itanium (IA-64)      | HP aCC                                    |
-+-------------------+----------------------+-------------------------------------------+
-| Windows x64       | x86-64               | mingw-w64's GCC-4.5.x\ :sup:`12`          |
-+-------------------+----------------------+-------------------------------------------+
+================== ===================== =============
+OS                 Arch                  Compilers
+================== ===================== =============
+Linux              x86\ :sup:`1`         GCC, Clang
+Linux              amd64                 GCC, Clang
+Linux              ARM\ :sup:`4`         GCC, Clang
+Linux              PowerPC               GCC, Clang
+Solaris            V9 (Ultrasparc)       GCC
+FreeBSD            x86\ :sup:`1`         GCC, Clang
+FreeBSD            amd64                 GCC, Clang
+NetBSD             x86\ :sup:`1`         GCC, Clang
+NetBSD             amd64                 GCC, Clang
+MacOS X\ :sup:`2`  PowerPC               GCC
+MacOS X            x86                   GCC, Clang
+Cygwin/Win32       x86\ :sup:`1, 3`      GCC
+Windows            x86\ :sup:`1`         Visual Studio
+Windows x64        x86-64                Visual Studio
+================== ===================== =============
 
 .. note::
 
   #. Code generation supported for Pentium processors and up
   #. Code generation supported for 32-bit ABI only
-  #. No native code generation
-  #. Build is not complete: one or more tools do not link or function
-  #. The GCC-based C/C++ frontend does not build
-  #. The port is done using the MSYS shell.
-  #. Native code generation exists but is not complete.
-  #. Binutils 2.20 or later is required to build the assembler generated by LLVM properly.
-  #. Xcode 2.5 and gcc 4.0.1 (Apple Build 5370) will trip internal LLVM assert
-     messages when compiled for Release at optimization levels greater than 0
-     (i.e., ``-O1`` and higher).  Add ``OPTIMIZE_OPTION="-O0"`` to the build
-     command line if compiling for LLVM Release or bootstrapping the LLVM
-     toolchain.
-  #. For MSYS/MinGW on Windows, be sure to install the MSYS version of the perl
-     package, and be sure it appears in your path before any Windows-based
-     versions such as Strawberry Perl and ActivePerl, as these have
-     Windows-specifics that will cause the build to fail.
   #. To use LLVM modules on Win32-based system, you may configure LLVM
-     with ``--enable-shared``.
-  #. To compile SPU backend, you need to add ``LDFLAGS=-Wl,--stack,16777216`` to
-     configure.
+     with ``-DBUILD_SHARED_LIBS=On``.
   #. MCJIT not working well pre-v7, old JIT engine not supported any more.
 
-Note that you will need about 1-3 GB of space for a full LLVM build in Debug
-mode, depending on the system (it is so large because of all the debugging
-information and the fact that the libraries are statically linked into multiple
-tools).  If you do not need many of the tools and you are space-conscious, you
-can pass ``ONLY_TOOLS="tools you need"`` to make.  The Release build requires
-considerably less space.
+Note that Debug builds require a lot of time and disk space.  An LLVM-only build
+will need about 1-3 GB of space.  A full build of LLVM and Clang will need around
+15-20 GB of disk space.  The exact space requirements will vary by system.  (It
+is so large because of all the debugging information and the fact that the
+libraries are statically linked into multiple tools).
+
+If you are space-constrained, you can build only selected tools or only
+selected targets.  The Release build requires considerably less space.
 
 The LLVM suite *may* compile on other platforms, but it is not guaranteed to do
 so.  If compilation is successful, the LLVM utilities should be able to
@@ -206,44 +218,23 @@ for the software package that LLVM depends on. The Version column provides
 "known to work" versions of the package. The Notes column describes how LLVM
 uses the package and provides other details.
 
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| Package                                                      | Version         | Notes                                       |
-+==============================================================+=================+=============================================+
-| `GNU Make <http://savannah.gnu.org/projects/make>`_          | 3.79, 3.79.1    | Makefile/build processor                    |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `GCC <http://gcc.gnu.org/>`_                                 | 3.4.2           | C/C++ compiler\ :sup:`1`                    |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `TeXinfo <http://www.gnu.org/software/texinfo/>`_            | 4.5             | For building the CFE                        |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `SVN <http://subversion.tigris.org/project_packages.html>`_  | >=1.3           | Subversion access to LLVM\ :sup:`2`         |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `python <http://www.python.org/>`_                           | >=2.5           | Automated test suite\ :sup:`3`              |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `GNU M4 <http://savannah.gnu.org/projects/m4>`_              | 1.4             | Macro processor for configuration\ :sup:`4` |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `GNU Autoconf <http://www.gnu.org/software/autoconf/>`_      | 2.60            | Configuration script builder\ :sup:`4`      |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `GNU Automake <http://www.gnu.org/software/automake/>`_      | 1.9.6           | aclocal macro generator\ :sup:`4`           |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `libtool <http://savannah.gnu.org/projects/libtool>`_        | 1.5.22          | Shared library manager\ :sup:`4`            |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
-| `zlib <http://zlib.net>`_                                    | >=1.2.3.4       | Compression library\ :sup:`5`               |
-+--------------------------------------------------------------+-----------------+---------------------------------------------+
+=========================================================== ============ ==========================================
+Package                                                     Version      Notes
+=========================================================== ============ ==========================================
+`GNU Make <http://savannah.gnu.org/projects/make>`_         3.79, 3.79.1 Makefile/build processor
+`GCC <http://gcc.gnu.org/>`_                                >=4.8.0      C/C++ compiler\ :sup:`1`
+`python <http://www.python.org/>`_                          >=2.7        Automated test suite\ :sup:`2`
+`zlib <http://zlib.net>`_                                   >=1.2.3.4    Compression library\ :sup:`3`
+=========================================================== ============ ==========================================
 
 .. note::
 
    #. Only the C and C++ languages are needed so there's no need to build the
       other languages for LLVM's purposes. See `below` for specific version
       info.
-   #. You only need Subversion if you intend to build from the latest LLVM
-      sources. If you're working from a release distribution, you don't need
-      Subversion.
    #. Only needed if you want to run the automated test suite in the
       ``llvm/test`` directory.
-   #. If you want to make changes to the configure scripts, you will need GNU
-      autoconf (2.60), and consequently, GNU M4 (version 1.4 or higher). You
-      will also need automake (1.9.6). We only use aclocal from that package.
-   #. Optional, adds compression/uncompression capabilities to selected LLVM
+   #. Optional, adds compression / uncompression capabilities to selected LLVM
       tools.
 
 Additionally, your compilation host is expected to have the usual plethora of
@@ -255,14 +246,14 @@ Unix utilities. Specifically:
 * **chmod** --- change permissions on a file
 * **cat** --- output concatenation utility
 * **cp** --- copy files
-* **date** --- print the current date/time 
+* **date** --- print the current date/time
 * **echo** --- print to standard output
 * **egrep** --- extended regular expression search utility
 * **find** --- find files/dirs in a file system
 * **grep** --- regular expression search utility
 * **gzip** --- gzip command for distribution generation
 * **gunzip** --- gunzip command for distribution checking
-* **install** --- install directories/files 
+* **install** --- install directories/files
 * **mkdir** --- create a directory
 * **mv** --- move (rename) files
 * **ranlib** --- symbol table builder for archive libraries
@@ -277,95 +268,32 @@ Unix utilities. Specifically:
 .. _below:
 .. _check here:
 
-Broken versions of GCC and other tools
---------------------------------------
+Host C++ Toolchain, both Compiler and Standard Library
+------------------------------------------------------
 
 LLVM is very demanding of the host C++ compiler, and as such tends to expose
-bugs in the compiler.  In particular, several versions of GCC crash when trying
-to compile LLVM.  We routinely use GCC 4.2 (and higher) or Clang.  Other
-versions of GCC will probably work as well.  GCC versions listed here are known
-to not work.  If you are using one of these versions, please try to upgrade your
-GCC to something more recent.  If you run into a problem with a version of GCC
-not listed here, please `let us know <mailto:llvmdev@cs.uiuc.edu>`_.  Please use
-the "``gcc -v``" command to find out which version of GCC you are using.
+bugs in the compiler. We are also planning to follow improvements and
+developments in the C++ language and library reasonably closely. As such, we
+require a modern host C++ toolchain, both compiler and standard library, in
+order to build LLVM.
 
-**GCC versions prior to 3.0**: GCC 2.96.x and before had several problems in the
-STL that effectively prevent it from compiling LLVM.
+For the most popular host toolchains we check for specific minimum versions in
+our build systems:
 
-**GCC 3.2.2 and 3.2.3**: These versions of GCC fails to compile LLVM with a
-bogus template error.  This was fixed in later GCCs.
+* Clang 3.1
+* GCC 4.8
+* Visual Studio 2015 (Update 3)
 
-**GCC 3.3.2**: This version of GCC suffered from a `serious bug
-<http://gcc.gnu.org/PR13392>`_ which causes it to crash in the
-"``convert_from_eh_region_ranges_1``" GCC function.
+Anything older than these toolchains *may* work, but will require forcing the
+build system with a special option and is not really a supported host platform.
+Also note that older versions of these compilers have often crashed or
+miscompiled LLVM.
 
-**Cygwin GCC 3.3.3**: The version of GCC 3.3.3 commonly shipped with Cygwin does
-not work.
+For less widely used host toolchains such as ICC or xlC, be aware that a very
+recent version may be required to support all of the C++ features used in LLVM.
 
-**SuSE GCC 3.3.3**: The version of GCC 3.3.3 shipped with SuSE 9.1 (and possibly
-others) does not compile LLVM correctly (it appears that exception handling is
-broken in some cases).  Please download the FSF 3.3.3 or upgrade to a newer
-version of GCC.
-
-**GCC 3.4.0 on linux/x86 (32-bit)**: GCC miscompiles portions of the code
-generator, causing an infinite loop in the llvm-gcc build when built with
-optimizations enabled (i.e. a release build).
-
-**GCC 3.4.2 on linux/x86 (32-bit)**: GCC miscompiles portions of the code
-generator at -O3, as with 3.4.0.  However gcc 3.4.2 (unlike 3.4.0) correctly
-compiles LLVM at -O2.  A work around is to build release LLVM builds with
-"``make ENABLE_OPTIMIZED=1 OPTIMIZE_OPTION=-O2 ...``"
-
-**GCC 3.4.x on X86-64/amd64**: GCC `miscompiles portions of LLVM
-<http://llvm.org/PR1056>`__.
-
-**GCC 3.4.4 (CodeSourcery ARM 2005q3-2)**: this compiler miscompiles LLVM when
-building with optimizations enabled.  It appears to work with "``make
-ENABLE_OPTIMIZED=1 OPTIMIZE_OPTION=-O1``" or build a debug build.
-
-**IA-64 GCC 4.0.0**: The IA-64 version of GCC 4.0.0 is known to miscompile LLVM.
-
-**Apple Xcode 2.3**: GCC crashes when compiling LLVM at -O3 (which is the
-default with ENABLE_OPTIMIZED=1.  To work around this, build with
-"``ENABLE_OPTIMIZED=1 OPTIMIZE_OPTION=-O2``".
-
-**GCC 4.1.1**: GCC fails to build LLVM with template concept check errors
-compiling some files.  At the time of this writing, GCC mainline (4.2) did not
-share the problem.
-
-**GCC 4.1.1 on X86-64/amd64**: GCC `miscompiles portions of LLVM
-<http://llvm.org/PR1063>`__ when compiling llvm itself into 64-bit code.  LLVM
-will appear to mostly work but will be buggy, e.g. failing portions of its
-testsuite.
-
-**GCC 4.1.2 on OpenSUSE**: Seg faults during libstdc++ build and on x86_64
-platforms compiling md5.c gets a mangled constant.
-
-**GCC 4.1.2 (20061115 (prerelease) (Debian 4.1.1-21)) on Debian**: Appears to
-miscompile parts of LLVM 2.4. One symptom is ValueSymbolTable complaining about
-symbols remaining in the table on destruction.
-
-**GCC 4.1.2 20071124 (Red Hat 4.1.2-42)**: Suffers from the same symptoms as the
-previous one. It appears to work with ENABLE_OPTIMIZED=0 (the default).
-
-**Cygwin GCC 4.3.2 20080827 (beta) 2**: Users `reported
-<http://llvm.org/PR4145>`_ various problems related with link errors when using
-this GCC version.
-
-**Debian GCC 4.3.2 on X86**: Crashes building some files in LLVM 2.6.
-
-**GCC 4.3.3 (Debian 4.3.3-10) on ARM**: Miscompiles parts of LLVM 2.6 when
-optimizations are turned on. The symptom is an infinite loop in
-``FoldingSetImpl::RemoveNode`` while running the code generator.
-
-**SUSE 11 GCC 4.3.4**: Miscompiles LLVM, causing crashes in ValueHandle logic.
-
-**GCC 4.3.5 and GCC 4.4.5 on ARM**: These can miscompile ``value >> 1`` even at
-``-O0``. A test failure in ``test/Assembler/alignstack.ll`` is one symptom of
-the problem.
-
-**GCC 4.6.3 on ARM**: Miscompiles ``llvm-readobj`` at ``-O3``. A test failure
-in ``test/Object/readobj-shared-object.test`` is one symptom of the problem.
+We track certain versions of software that are *known* to fail when used as
+part of the host toolchain. These even include linkers at times.
 
 **GNU ld 2.16.X**. Some 2.16.X versions of the ld linker will produce very long
 warning messages complaining that some "``.gnu.linkonce.t.*``" symbol was
@@ -383,13 +311,92 @@ intermittent failures when building LLVM with position independent code.  The
 symptom is an error about cyclic dependencies.  We recommend upgrading to a
 newer version of Gold.
 
-**Clang 3.0 with libstdc++ 4.7.x**: a few Linux distributions (Ubuntu 12.10,
-Fedora 17) have both Clang 3.0 and libstdc++ 4.7 in their repositories.  Clang
-3.0 does not implement a few builtins that are used in this library.  We
-recommend using the system GCC to compile LLVM and Clang in this case.
+Getting a Modern Host C++ Toolchain
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Clang 3.0 on Mageia 2**.  There's a packaging issue: Clang can not find at
-least some (``cxxabi.h``) libstdc++ headers.
+This section mostly applies to Linux and older BSDs. On Mac OS X, you should
+have a sufficiently modern Xcode, or you will likely need to upgrade until you
+do. Windows does not have a "system compiler", so you must install either Visual
+Studio 2015 or a recent version of mingw64. FreeBSD 10.0 and newer have a modern
+Clang as the system compiler.
+
+However, some Linux distributions and some other or older BSDs sometimes have
+extremely old versions of GCC. These steps attempt to help you upgrade you
+compiler even on such a system. However, if at all possible, we encourage you
+to use a recent version of a distribution with a modern system compiler that
+meets these requirements. Note that it is tempting to install a prior
+version of Clang and libc++ to be the host compiler, however libc++ was not
+well tested or set up to build on Linux until relatively recently. As
+a consequence, this guide suggests just using libstdc++ and a modern GCC as the
+initial host in a bootstrap, and then using Clang (and potentially libc++).
+
+The first step is to get a recent GCC toolchain installed. The most common
+distribution on which users have struggled with the version requirements is
+Ubuntu Precise, 12.04 LTS. For this distribution, one easy option is to install
+the `toolchain testing PPA`_ and use it to install a modern GCC. There is
+a really nice discussions of this on the `ask ubuntu stack exchange`_. However,
+not all users can use PPAs and there are many other distributions, so it may be
+necessary (or just useful, if you're here you *are* doing compiler development
+after all) to build and install GCC from source. It is also quite easy to do
+these days.
+
+.. _toolchain testing PPA:
+  https://launchpad.net/~ubuntu-toolchain-r/+archive/test
+.. _ask ubuntu stack exchange:
+  http://askubuntu.com/questions/271388/how-to-install-gcc-4-8-in-ubuntu-12-04-from-the-terminal
+
+Easy steps for installing GCC 4.8.2:
+
+.. code-block:: console
+
+  % wget https://ftp.gnu.org/gnu/gcc/gcc-4.8.2/gcc-4.8.2.tar.bz2
+  % wget https://ftp.gnu.org/gnu/gcc/gcc-4.8.2/gcc-4.8.2.tar.bz2.sig
+  % wget https://ftp.gnu.org/gnu/gnu-keyring.gpg
+  % signature_invalid=`gpg --verify --no-default-keyring --keyring ./gnu-keyring.gpg gcc-4.8.2.tar.bz2.sig`
+  % if [ $signature_invalid ]; then echo "Invalid signature" ; exit 1 ; fi
+  % tar -xvjf gcc-4.8.2.tar.bz2
+  % cd gcc-4.8.2
+  % ./contrib/download_prerequisites
+  % cd ..
+  % mkdir gcc-4.8.2-build
+  % cd gcc-4.8.2-build
+  % $PWD/../gcc-4.8.2/configure --prefix=$HOME/toolchains --enable-languages=c,c++
+  % make -j$(nproc)
+  % make install
+
+For more details, check out the excellent `GCC wiki entry`_, where I got most
+of this information from.
+
+.. _GCC wiki entry:
+  http://gcc.gnu.org/wiki/InstallingGCC
+
+Once you have a GCC toolchain, configure your build of LLVM to use the new
+toolchain for your host compiler and C++ standard library. Because the new
+version of libstdc++ is not on the system library search path, you need to pass
+extra linker flags so that it can be found at link time (``-L``) and at runtime
+(``-rpath``). If you are using CMake, this invocation should produce working
+binaries:
+
+.. code-block:: console
+
+  % mkdir build
+  % cd build
+  % CC=$HOME/toolchains/bin/gcc CXX=$HOME/toolchains/bin/g++ \
+    cmake .. -DCMAKE_CXX_LINK_FLAGS="-Wl,-rpath,$HOME/toolchains/lib64 -L$HOME/toolchains/lib64"
+
+If you fail to set rpath, most LLVM binaries will fail on startup with a message
+from the loader similar to ``libstdc++.so.6: version `GLIBCXX_3.4.20' not
+found``. This means you need to tweak the -rpath linker flag.
+
+When you build Clang, you will need to give *it* access to modern C++11
+standard library in order to use it as your new host in part of a bootstrap.
+There are two easy ways to do this, either build (and install) libc++ along
+with Clang and then use it with the ``-stdlib=libc++`` compile and link flag,
+or install Clang into the same prefix (``$HOME/toolchains`` above) as GCC.
+Clang will look within its own prefix for libstdc++ and use it if found. You
+can also add an explicit prefix for Clang to look in for a GCC toolchain with
+the ``--gcc-toolchain=/opt/my/gcc/prefix`` flag, passing it to both compile and
+link commands when using your just-built-Clang to bootstrap.
 
 .. _Getting Started with LLVM:
 
@@ -422,22 +429,6 @@ appropriate pathname on your local system.  All these paths are absolute:
   object files and compiled programs will be placed.  It can be the same as
   SRC_ROOT).
 
-.. _Setting Up Your Environment:
-
-Setting Up Your Environment
----------------------------
-
-In order to compile and use LLVM, you may need to set some environment
-variables.
-
-``LLVM_LIB_SEARCH_PATH=/path/to/your/bitcode/libs``
-
-  [Optional] This environment variable helps LLVM linking tools find the
-  locations of your bitcode libraries. It is provided only as a convenience
-  since you can specify the paths using the -L options of the tools and the
-  C/C++ front-end will automatically use the bitcode files installed in its
-  ``lib`` directory.
-
 Unpacking the LLVM Archives
 ---------------------------
 
@@ -468,40 +459,20 @@ follows:
 
 * ``cd where-you-want-llvm-to-live``
 * Read-Only: ``svn co http://llvm.org/svn/llvm-project/llvm/trunk llvm``
-* Read-Write:``svn co https://user@llvm.org/svn/llvm-project/llvm/trunk llvm``
+* Read-Write: ``svn co https://user@llvm.org/svn/llvm-project/llvm/trunk llvm``
 
 This will create an '``llvm``' directory in the current directory and fully
 populate it with the LLVM source code, Makefiles, test directories, and local
 copies of documentation files.
 
 If you want to get a specific release (as opposed to the most recent revision),
-you can checkout it from the '``tags``' directory (instead of '``trunk``'). The
+you can check it out from the '``tags``' directory (instead of '``trunk``'). The
 following releases are located in the following subdirectories of the '``tags``'
 directory:
 
-* Release 3.3: **RELEASE_33/final**
-* Release 3.2: **RELEASE_32/final**
-* Release 3.1: **RELEASE_31/final**
-* Release 3.0: **RELEASE_30/final**
-* Release 2.9: **RELEASE_29/final**
-* Release 2.8: **RELEASE_28**
-* Release 2.7: **RELEASE_27**
-* Release 2.6: **RELEASE_26**
-* Release 2.5: **RELEASE_25**
-* Release 2.4: **RELEASE_24**
-* Release 2.3: **RELEASE_23**
-* Release 2.2: **RELEASE_22**
-* Release 2.1: **RELEASE_21**
-* Release 2.0: **RELEASE_20**
-* Release 1.9: **RELEASE_19**
-* Release 1.8: **RELEASE_18**
-* Release 1.7: **RELEASE_17**
-* Release 1.6: **RELEASE_16**
-* Release 1.5: **RELEASE_15**
-* Release 1.4: **RELEASE_14**
-* Release 1.3: **RELEASE_13**
-* Release 1.2: **RELEASE_12**
-* Release 1.1: **RELEASE_11**
+* Release 3.5.0 and later: **RELEASE_350/final** and so on
+* Release 2.9 through 3.4: **RELEASE_29/final** and so on
+* Release 1.1 through 2.8: **RELEASE_11** and so on
 * Release 1.0: **RELEASE_1**
 
 If you would like to get the LLVM test suite (a separate package as of 1.4), you
@@ -513,8 +484,7 @@ get it from the Subversion repository:
   % svn co http://llvm.org/svn/llvm-project/test-suite/trunk test-suite
 
 By placing it in the ``llvm/projects``, it will be automatically configured by
-the LLVM configure script as well as automatically updated when you run ``svn
-update``.
+the LLVM cmake configuration.
 
 Git Mirror
 ----------
@@ -522,33 +492,56 @@ Git Mirror
 Git mirrors are available for a number of LLVM subprojects. These mirrors sync
 automatically with each Subversion commit and contain all necessary git-svn
 marks (so, you can recreate git-svn metadata locally). Note that right now
-mirrors reflect only ``trunk`` for each project. You can do the read-only Git
-clone of LLVM via:
+mirrors reflect only ``trunk`` for each project.
+
+.. note::
+
+  On Windows, first you will want to do ``git config --global core.autocrlf
+  false`` before you clone. This goes a long way toward ensuring that
+  line-endings will be handled correctly (the LLVM project mostly uses Linux
+  line-endings).
+
+You can do the read-only Git clone of LLVM via:
 
 .. code-block:: console
 
-  % git clone http://llvm.org/git/llvm.git
+  % git clone https://git.llvm.org/git/llvm.git/
 
 If you want to check out clang too, run:
 
 .. code-block:: console
 
   % cd llvm/tools
-  % git clone http://llvm.org/git/clang.git
+  % git clone https://git.llvm.org/git/clang.git/
 
-If you want to check out compiler-rt too, run:
+If you want to check out compiler-rt (required to build the sanitizers), run:
 
 .. code-block:: console
 
   % cd llvm/projects
-  % git clone http://llvm.org/git/compiler-rt.git
+  % git clone https://git.llvm.org/git/compiler-rt.git/
+
+If you want to check out libomp (required for OpenMP support), run:
+
+.. code-block:: console
+
+  % cd llvm/projects
+  % git clone https://git.llvm.org/git/openmp.git/
+
+If you want to check out libcxx and libcxxabi (optional), run:
+
+.. code-block:: console
+
+  % cd llvm/projects
+  % git clone https://git.llvm.org/git/libcxx.git/
+  % git clone https://git.llvm.org/git/libcxxabi.git/
 
 If you want to check out the Test Suite Source Code (optional), run:
 
 .. code-block:: console
 
   % cd llvm/projects
-  % git clone http://llvm.org/git/test-suite.git
+  % git clone https://git.llvm.org/git/test-suite.git/
 
 Since the upstream repository is in Subversion, you should use ``git
 pull --rebase`` instead of ``git pull`` to avoid generating a non-linear history
@@ -613,6 +606,8 @@ Then, your .git/config should have [imap] sections.
   ; example for Traditional Chinese
         folder = "[Gmail]/&g0l6Pw-"
 
+.. _developers-work-with-git-svn:
+
 For developers to work with git-svn
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -620,7 +615,7 @@ To set up clone from which you can submit code using ``git-svn``, run:
 
 .. code-block:: console
 
-  % git clone http://llvm.org/git/llvm.git
+  % git clone https://git.llvm.org/git/llvm.git/
   % cd llvm
   % git svn init https://llvm.org/svn/llvm-project/llvm/trunk --username=<username>
   % git config svn-remote.svn.fetch :refs/remotes/origin/master
@@ -628,13 +623,13 @@ To set up clone from which you can submit code using ``git-svn``, run:
 
   # If you have clang too:
   % cd tools
-  % git clone http://llvm.org/git/clang.git
+  % git clone https://git.llvm.org/git/clang.git/
   % cd clang
   % git svn init https://llvm.org/svn/llvm-project/cfe/trunk --username=<username>
   % git config svn-remote.svn.fetch :refs/remotes/origin/master
   % git svn rebase -l
 
-Likewise for compiler-rt and test-suite.
+Likewise for compiler-rt, libomp and test-suite.
 
 To update this clone without generating git-svn tags that conflict with the
 upstream Git repo, run:
@@ -648,7 +643,7 @@ upstream Git repo, run:
      git checkout master &&
      git svn rebase -l)
 
-Likewise for compiler-rt and test-suite.
+Likewise for compiler-rt, libomp and test-suite.
 
 This leaves your working directories on their master branches, so you'll need to
 ``checkout`` each working branch individually and ``rebase`` it on top of its
@@ -692,79 +687,144 @@ about files with uncommitted changes. The fix is to rebuild the metadata:
 
 Please, refer to the Git-SVN manual (``man git-svn``) for more information.
 
+For developers to work with a git monorepo
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+   This set-up is using an unofficial mirror hosted on GitHub, use with caution.
+
+To set up a clone of all the llvm projects using a unified repository:
+
+.. code-block:: console
+
+  % export TOP_LEVEL_DIR=`pwd`
+  % git clone https://github.com/llvm-project/llvm-project-20170507/ llvm-project
+  % cd llvm-project
+  % git config branch.master.rebase true
+
+You can configure various build directory from this clone, starting with a build
+of LLVM alone:
+
+.. code-block:: console
+
+  % cd $TOP_LEVEL_DIR
+  % mkdir llvm-build && cd llvm-build
+  % cmake -GNinja ../llvm-project/llvm
+
+Or lldb:
+
+.. code-block:: console
+
+  % cd $TOP_LEVEL_DIR
+  % mkdir lldb-build && cd lldb-build
+  % cmake -GNinja ../llvm-project/llvm -DLLVM_ENABLE_PROJECTS=lldb
+
+Or a combination of multiple projects:
+
+.. code-block:: console
+
+  % cd $TOP_LEVEL_DIR
+  % mkdir clang-build && cd clang-build
+  % cmake -GNinja ../llvm-project/llvm -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi"
+
+A helper script is provided in ``llvm/utils/git-svn/git-llvm``. After you add it
+to your path, you can push committed changes upstream with ``git llvm push``.
+
+.. code-block:: console
+
+  % export PATH=$PATH:$TOP_LEVEL_DIR/llvm-project/llvm/utils/git-svn/
+  % git llvm push
+
+While this is using SVN under the hood, it does not require any interaction from
+you with git-svn.
+After a few minutes, ``git pull`` should get back the changes as they were
+committed. Note that a current limitation is that ``git`` does not directly
+record file rename, and thus it is propagated to SVN as a combination of
+delete-add instead of a file rename.
+
+The SVN revision of each monorepo commit can be found in the commit notes.  git
+does not fetch notes by default. The following commands will fetch the notes and
+configure git to fetch future notes. Use ``git notes show $commit`` to look up
+the SVN revision of a git commit. The notes show up ``git log``, and searching
+the log is currently the recommended way to look up the git commit for a given
+SVN revision.
+
+.. code-block:: console
+
+  % git config --add remote.origin.fetch +refs/notes/commits:refs/notes/commits
+  % git fetch
+
+If you are using `arc` to interact with Phabricator, you need to manually put it
+at the root of the checkout:
+
+.. code-block:: console
+
+  % cd $TOP_LEVEL_DIR
+  % cp llvm/.arcconfig ./
+  % mkdir -p .git/info/
+  % echo .arcconfig >> .git/info/exclude
+
+
 Local LLVM Configuration
 ------------------------
 
 Once checked out from the Subversion repository, the LLVM suite source code must
-be configured via the ``configure`` script.  This script sets variables in the
-various ``*.in`` files, most notably ``llvm/Makefile.config`` and
-``llvm/include/Config/config.h``.  It also populates *OBJ_ROOT* with the
-Makefiles needed to begin building LLVM.
+be configured before being built. This process uses CMake.
+Unlinke the normal ``configure`` script, CMake
+generates the build files in whatever format you request as well as various
+``*.inc`` files, and ``llvm/include/Config/config.h``.
 
-The following environment variables are used by the ``configure`` script to
-configure the build system:
+Variables are passed to ``cmake`` on the command line using the format
+``-D<variable name>=<value>``. The following variables are some common options
+used by people developing LLVM.
 
-+------------+-----------------------------------------------------------+
-| Variable   | Purpose                                                   |
-+============+===========================================================+
-| CC         | Tells ``configure`` which C compiler to use.  By default, |
-|            | ``configure`` will check ``PATH`` for ``clang`` and GCC C |
-|            | compilers (in this order).  Use this variable to override |
-|            | ``configure``\'s  default behavior.                       |
-+------------+-----------------------------------------------------------+
-| CXX        | Tells ``configure`` which C++ compiler to use.  By        |
-|            | default, ``configure`` will check ``PATH`` for            |
-|            | ``clang++`` and GCC C++ compilers (in this order).  Use   |
-|            | this variable to override  ``configure``'s default        |
-|            | behavior.                                                 |
-+------------+-----------------------------------------------------------+
-
-The following options can be used to set or enable LLVM specific options:
-
-``--enable-optimized``
-
-  Enables optimized compilation (debugging symbols are removed and GCC
-  optimization flags are enabled). Note that this is the default setting if you
-  are using the LLVM distribution. The default behavior of an Subversion
-  checkout is to use an unoptimized build (also known as a debug build).
-
-``--enable-debug-runtime``
-
-  Enables debug symbols in the runtime libraries. The default is to strip debug
-  symbols from the runtime libraries.
-
-``--enable-jit``
-
-  Compile the Just In Time (JIT) compiler functionality.  This is not available
-  on all platforms.  The default is dependent on platform, so it is best to
-  explicitly enable it if you want it.
-
-``--enable-targets=target-option``
-
-  Controls which targets will be built and linked into llc. The default value
-  for ``target_options`` is "all" which builds and links all available targets.
-  The value "host-only" can be specified to build only a native compiler (no
-  cross-compiler targets available). The "native" target is selected as the
-  target of the build host. You can also specify a comma separated list of
-  target names that you want available in llc. The target names use all lower
-  case. The current set of targets is:
-
-    ``arm, cpp, hexagon, mips, mipsel, msp430, powerpc, ptx, sparc, spu,
-    systemz, x86, x86_64, xcore``.
-
-``--enable-doxygen``
-
-  Look for the doxygen program and enable construction of doxygen based
-  documentation from the source code. This is disabled by default because
-  generating the documentation can take a long time and producess 100s of
-  megabytes of output.
-
-``--with-udis86``
-
-  LLVM can use external disassembler library for various purposes (now it's used
-  only for examining code produced by JIT). This option will enable usage of
-  `udis86 <http://udis86.sourceforge.net/>`_ x86 (both 32 and 64 bits)
-  disassembler library.
++-------------------------+----------------------------------------------------+
+| Variable                | Purpose                                            |
++=========================+====================================================+
+| CMAKE_C_COMPILER        | Tells ``cmake`` which C compiler to use. By        |
+|                         | default, this will be /usr/bin/cc.                 |
++-------------------------+----------------------------------------------------+
+| CMAKE_CXX_COMPILER      | Tells ``cmake`` which C++ compiler to use. By      |
+|                         | default, this will be /usr/bin/c++.                |
++-------------------------+----------------------------------------------------+
+| CMAKE_BUILD_TYPE        | Tells ``cmake`` what type of build you are trying  |
+|                         | to generate files for. Valid options are Debug,    |
+|                         | Release, RelWithDebInfo, and MinSizeRel. Default   |
+|                         | is Debug.                                          |
++-------------------------+----------------------------------------------------+
+| CMAKE_INSTALL_PREFIX    | Specifies the install directory to target when     |
+|                         | running the install action of the build files.     |
++-------------------------+----------------------------------------------------+
+| LLVM_TARGETS_TO_BUILD   | A semicolon delimited list controlling which       |
+|                         | targets will be built and linked into llc. This is |
+|                         | equivalent to the ``--enable-targets`` option in   |
+|                         | the configure script. The default list is defined  |
+|                         | as ``LLVM_ALL_TARGETS``, and can be set to include |
+|                         | out-of-tree targets. The default value includes:   |
+|                         | ``AArch64, AMDGPU, ARM, BPF, Hexagon, Mips,        |
+|                         | MSP430, NVPTX, PowerPC, Sparc, SystemZ, X86,       |
+|                         | XCore``.                                           |
++-------------------------+----------------------------------------------------+
+| LLVM_ENABLE_DOXYGEN     | Build doxygen-based documentation from the source  |
+|                         | code This is disabled by default because it is     |
+|                         | slow and generates a lot of output.                |
++-------------------------+----------------------------------------------------+
+| LLVM_ENABLE_SPHINX      | Build sphinx-based documentation from the source   |
+|                         | code. This is disabled by default because it is    |
+|                         | slow and generates a lot of output. Sphinx version |
+|                         | 1.5 or later recommended.                          |
++-------------------------+----------------------------------------------------+
+| LLVM_BUILD_LLVM_DYLIB   | Generate libLLVM.so. This library contains a       |
+|                         | default set of LLVM components that can be         |
+|                         | overridden with ``LLVM_DYLIB_COMPONENTS``. The     |
+|                         | default contains most of LLVM and is defined in    |
+|                         | ``tools/llvm-shlib/CMakelists.txt``.               |
++-------------------------+----------------------------------------------------+
+| LLVM_OPTIMIZED_TABLEGEN | Builds a release tablegen that gets used during    |
+|                         | the LLVM build. This can dramatically speed up     |
+|                         | debug builds.                                      |
++-------------------------+----------------------------------------------------+
 
 To configure LLVM, follow these steps:
 
@@ -774,47 +834,52 @@ To configure LLVM, follow these steps:
 
      % cd OBJ_ROOT
 
-#. Run the ``configure`` script located in the LLVM source tree:
+#. Run the ``cmake``:
 
    .. code-block:: console
 
-     % SRC_ROOT/configure --prefix=/install/path [other options]
+     % cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/install/path
+       [other options] SRC_ROOT
 
 Compiling the LLVM Suite Source Code
 ------------------------------------
 
-Once you have configured LLVM, you can build it.  There are three types of
-builds:
+Unlike with autotools, with CMake your build type is defined at configuration.
+If you want to change your build type, you can re-run cmake with the following
+invocation:
 
-Debug Builds
+   .. code-block:: console
 
-  These builds are the default when one is using an Subversion checkout and
-  types ``gmake`` (unless the ``--enable-optimized`` option was used during
-  configuration).  The build system will compile the tools and libraries with
-  debugging information.  To get a Debug Build using the LLVM distribution the
-  ``--disable-optimized`` option must be passed to ``configure``.
+     % cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=type SRC_ROOT
 
-Release (Optimized) Builds
+Between runs, CMake preserves the values set for all options. CMake has the
+following build types defined:
 
-  These builds are enabled with the ``--enable-optimized`` option to
-  ``configure`` or by specifying ``ENABLE_OPTIMIZED=1`` on the ``gmake`` command
-  line.  For these builds, the build system will compile the tools and libraries
-  with GCC optimizations enabled and strip debugging information from the
-  libraries and executables it generates.  Note that Release Builds are default
-  when using an LLVM distribution.
+Debug
 
-Profile Builds
+  These builds are the default. The build system will compile the tools and
+  libraries unoptimized, with debugging information, and asserts enabled.
 
-  These builds are for use with profiling.  They compile profiling information
-  into the code for use with programs like ``gprof``.  Profile builds must be
-  started by specifying ``ENABLE_PROFILING=1`` on the ``gmake`` command line.
+Release
+
+  For these builds, the build system will compile the tools and libraries
+  with optimizations enabled and not generate debug info. CMakes default
+  optimization level is -O3. This can be configured by setting the
+  ``CMAKE_CXX_FLAGS_RELEASE`` variable on the CMake command line.
+
+RelWithDebInfo
+
+  These builds are useful when debugging. They generate optimized binaries with
+  debug information. CMakes default optimization level is -O2. This can be
+  configured by setting the ``CMAKE_CXX_FLAGS_RELWITHDEBINFO`` variable on the
+  CMake command line.
 
 Once you have LLVM configured, you can build it by entering the *OBJ_ROOT*
 directory and issuing the following command:
 
 .. code-block:: console
 
-  % gmake
+  % make
 
 If the build fails, please `check here`_ to see if you are using a version of
 GCC that is known not to compile LLVM.
@@ -825,110 +890,51 @@ command:
 
 .. code-block:: console
 
-  % gmake -j2
+  % make -j2
 
 There are several special targets which are useful when working with the LLVM
 source code:
 
-``gmake clean``
+``make clean``
 
   Removes all files generated by the build.  This includes object files,
   generated C/C++ files, libraries, and executables.
 
-``gmake dist-clean``
-
-  Removes everything that ``gmake clean`` does, but also removes files generated
-  by ``configure``.  It attempts to return the source tree to the original state
-  in which it was shipped.
-
-``gmake install``
+``make install``
 
   Installs LLVM header files, libraries, tools, and documentation in a hierarchy
-  under ``$PREFIX``, specified with ``./configure --prefix=[dir]``, which
+  under ``$PREFIX``, specified with ``CMAKE_INSTALL_PREFIX``, which
   defaults to ``/usr/local``.
 
-``gmake -C runtime install-bytecode``
+``make docs-llvm-html``
 
-  Assuming you built LLVM into $OBJDIR, when this command is run, it will
-  install bitcode libraries into the GCC front end's bitcode library directory.
-  If you need to update your bitcode libraries, this is the target to use once
-  you've built them.
-
-Please see the `Makefile Guide <MakefileGuide.html>`_ for further details on
-these ``make`` targets and descriptions of other targets available.
-
-It is also possible to override default values from ``configure`` by declaring
-variables on the command line.  The following are some examples:
-
-``gmake ENABLE_OPTIMIZED=1``
-
-  Perform a Release (Optimized) build.
-
-``gmake ENABLE_OPTIMIZED=1 DISABLE_ASSERTIONS=1``
-
-  Perform a Release (Optimized) build without assertions enabled.
- 
-``gmake ENABLE_OPTIMIZED=0``
-
-  Perform a Debug build.
-
-``gmake ENABLE_PROFILING=1``
-
-  Perform a Profiling build.
-
-``gmake VERBOSE=1``
-
-  Print what ``gmake`` is doing on standard output.
-
-``gmake TOOL_VERBOSE=1``
-
-  Ask each tool invoked by the makefiles to print out what it is doing on 
-  the standard output. This also implies ``VERBOSE=1``.
-
-Every directory in the LLVM object tree includes a ``Makefile`` to build it and
-any subdirectories that it contains.  Entering any directory inside the LLVM
-object tree and typing ``gmake`` should rebuild anything in or below that
-directory that is out of date.
-
-This does not apply to building the documentation.
-LLVM's (non-Doxygen) documentation is produced with the
-`Sphinx <http://sphinx-doc.org/>`_ documentation generation system.
-There are some HTML documents that have not yet been converted to the new
-system (which uses the easy-to-read and easy-to-write
-`reStructuredText <http://sphinx-doc.org/rest.html>`_ plaintext markup
-language).
-The generated documentation is built in the ``SRC_ROOT/docs`` directory using
-a special makefile.
-For instructions on how to install Sphinx, see
-`Sphinx Introduction for LLVM Developers
-<http://lld.llvm.org/sphinx_intro.html>`_.
-After following the instructions there for installing Sphinx, build the LLVM
-HTML documentation by doing the following:
-
-.. code-block:: console
-
-  $ cd SRC_ROOT/docs
-  $ make -f Makefile.sphinx
-
-This creates a ``_build/html`` sub-directory with all of the HTML files, not
-just the generated ones.
-This directory corresponds to ``llvm.org/docs``.
-For example, ``_build/html/SphinxQuickstartTemplate.html`` corresponds to
-``llvm.org/docs/SphinxQuickstartTemplate.html``.
-The :doc:`SphinxQuickstartTemplate` is useful when creating a new document.
+  If configured with ``-DLLVM_ENABLE_SPHINX=On``, this will generate a directory
+  at ``OBJ_ROOT/docs/html`` which contains the HTML formatted documentation.
 
 Cross-Compiling LLVM
 --------------------
 
 It is possible to cross-compile LLVM itself. That is, you can create LLVM
 executables and libraries to be hosted on a platform different from the platform
-where they are built (a Canadian Cross build). To configure a cross-compile,
-supply the configure script with ``--build`` and ``--host`` options that are
-different. The values of these options must be legal target triples that your
-GCC compiler supports.
+where they are built (a Canadian Cross build). To generate build files for
+cross-compiling CMake provides a variable ``CMAKE_TOOLCHAIN_FILE`` which can
+define compiler flags and variables used during the CMake test operations.
 
-The result of such a build is executables that are not runnable on on the build
-host (--build option) but can be executed on the compile host (--host option).
+The result of such a build is executables that are not runnable on the build
+host but can be executed on the target. As an example the following CMake
+invocation can generate build files targeting iOS. This will work on Mac OS X
+with the latest Xcode:
+
+.. code-block:: console
+
+  % cmake -G "Ninja" -DCMAKE_OSX_ARCHITECTURES="armv7;armv7s;arm64"
+    -DCMAKE_TOOLCHAIN_FILE=<PATH_TO_LLVM>/cmake/platforms/iOS.cmake
+    -DCMAKE_BUILD_TYPE=Release -DLLVM_BUILD_RUNTIME=Off -DLLVM_INCLUDE_TESTS=Off
+    -DLLVM_INCLUDE_EXAMPLES=Off -DLLVM_ENABLE_BACKTRACES=Off [options]
+    <PATH_TO_LLVM>
+
+Note: There are some additional flags that need to be passed when building for
+iOS due to limitations in the iOS SDK.
 
 Check :doc:`HowToCrossCompileLLVM` and `Clang docs on how to cross-compile in general
 <http://clang.llvm.org/docs/CrossCompilation.html>`_ for more information
@@ -941,52 +947,31 @@ The LLVM build system is capable of sharing a single LLVM source tree among
 several LLVM builds.  Hence, it is possible to build LLVM for several different
 platforms or configurations using the same source tree.
 
-This is accomplished in the typical autoconf manner:
-
 * Change directory to where the LLVM object files should live:
 
   .. code-block:: console
 
     % cd OBJ_ROOT
 
-* Run the ``configure`` script found in the LLVM source directory:
+* Run ``cmake``:
 
   .. code-block:: console
 
-    % SRC_ROOT/configure
+    % cmake -G "Unix Makefiles" SRC_ROOT
 
-The LLVM build will place files underneath *OBJ_ROOT* in directories named after
-the build type:
+The LLVM build will create a structure underneath *OBJ_ROOT* that matches the
+LLVM source tree. At each level where source files are present in the source
+tree there will be a corresponding ``CMakeFiles`` directory in the *OBJ_ROOT*.
+Underneath that directory there is another directory with a name ending in
+``.dir`` under which you'll find object files for each source.
 
-Debug Builds with assertions enabled (the default)
+For example:
 
-  Tools
+  .. code-block:: console
 
-    ``OBJ_ROOT/Debug+Asserts/bin``
-
-  Libraries
-
-    ``OBJ_ROOT/Debug+Asserts/lib``
-
-Release Builds
-
-  Tools
-
-    ``OBJ_ROOT/Release/bin``
-
-  Libraries
-
-    ``OBJ_ROOT/Release/lib``
-
-Profile Builds
-
-  Tools
-
-    ``OBJ_ROOT/Profile/bin``
-
-  Libraries
-
-    ``OBJ_ROOT/Profile/lib``
+    % cd llvm_build_dir
+    % find lib/Support/ -name APFloat*
+    lib/Support/CMakeFiles/LLVMSupport.dir/APFloat.cpp.o
 
 Optional Configuration Items
 ----------------------------
@@ -1014,8 +999,8 @@ use this command instead of the 'echo' command above:
 .. _Program Layout:
 .. _general layout:
 
-Program Layout
-==============
+Directory Layout
+================
 
 One useful source of information about the LLVM source base is the LLVM `doxygen
 <http://www.doxygen.org/>`_ documentation available at
@@ -1025,29 +1010,27 @@ layout:
 ``llvm/examples``
 -----------------
 
-This directory contains some simple examples of how to use the LLVM IR and JIT.
+Simple examples using the LLVM IR and JIT.
 
 ``llvm/include``
 ----------------
 
-This directory contains public header files exported from the LLVM library. The
-three main subdirectories of this directory are:
+Public header files exported from the LLVM library. The three main subdirectories:
 
 ``llvm/include/llvm``
 
-  This directory contains all of the LLVM specific header files.  This directory
-  also has subdirectories for different portions of LLVM: ``Analysis``,
-  ``CodeGen``, ``Target``, ``Transforms``, etc...
+  All LLVM-specific header files, and  subdirectories for different portions of
+  LLVM: ``Analysis``, ``CodeGen``, ``Target``, ``Transforms``, etc...
 
 ``llvm/include/llvm/Support``
 
-  This directory contains generic support libraries that are provided with LLVM
-  but not necessarily specific to LLVM. For example, some C++ STL utilities and
-  a Command Line option processing library store their header files here.
+  Generic support libraries provided with LLVM but not necessarily specific to
+  LLVM. For example, some C++ STL utilities and a Command Line option processing
+  library store header files here.
 
 ``llvm/include/llvm/Config``
 
-  This directory contains header files configured by the ``configure`` script.
+  Header files configured by the ``configure`` script.
   They wrap "standard" UNIX and C header files.  Source code can include these
   header files which automatically take care of the conditional #includes that
   the ``configure`` script generates.
@@ -1055,104 +1038,76 @@ three main subdirectories of this directory are:
 ``llvm/lib``
 ------------
 
-This directory contains most of the source files of the LLVM system. In LLVM,
-almost all code exists in libraries, making it very easy to share code among the
-different `tools`_.
+Most source files are here. By putting code in libraries, LLVM makes it easy to
+share code among the `tools`_.
 
-``llvm/lib/VMCore/``
+``llvm/lib/IR/``
 
-  This directory holds the core LLVM source files that implement core classes
-  like Instruction and BasicBlock.
+  Core LLVM source files that implement core classes like Instruction and
+  BasicBlock.
 
 ``llvm/lib/AsmParser/``
 
-  This directory holds the source code for the LLVM assembly language parser
-  library.
+  Source code for the LLVM assembly language parser library.
 
 ``llvm/lib/Bitcode/``
 
-  This directory holds code for reading and write LLVM bitcode.
+  Code for reading and writing bitcode.
 
 ``llvm/lib/Analysis/``
 
-  This directory contains a variety of different program analyses, such as
-  Dominator Information, Call Graphs, Induction Variables, Interval
-  Identification, Natural Loop Identification, etc.
+  A variety of program analyses, such as Call Graphs, Induction Variables,
+  Natural Loop Identification, etc.
 
 ``llvm/lib/Transforms/``
 
-  This directory contains the source code for the LLVM to LLVM program
-  transformations, such as Aggressive Dead Code Elimination, Sparse Conditional
-  Constant Propagation, Inlining, Loop Invariant Code Motion, Dead Global
-  Elimination, and many others.
+  IR-to-IR program transformations, such as Aggressive Dead Code Elimination,
+  Sparse Conditional Constant Propagation, Inlining, Loop Invariant Code Motion,
+  Dead Global Elimination, and many others.
 
 ``llvm/lib/Target/``
 
-  This directory contains files that describe various target architectures for
-  code generation.  For example, the ``llvm/lib/Target/X86`` directory holds the
-  X86 machine description while ``llvm/lib/Target/ARM`` implements the ARM
-  backend.
-    
+  Files describing target architectures for code generation.  For example,
+  ``llvm/lib/Target/X86`` holds the X86 machine description.
+
 ``llvm/lib/CodeGen/``
 
-  This directory contains the major parts of the code generator: Instruction
-  Selector, Instruction Scheduling, and Register Allocation.
+  The major parts of the code generator: Instruction Selector, Instruction
+  Scheduling, and Register Allocation.
 
 ``llvm/lib/MC/``
 
-  (FIXME: T.B.D.)
-
-``llvm/lib/Debugger/``
-
-  This directory contains the source level debugger library that makes it
-  possible to instrument LLVM programs so that a debugger could identify source
-  code locations at which the program is executing.
+  (FIXME: T.B.D.)  ....?
 
 ``llvm/lib/ExecutionEngine/``
 
-  This directory contains libraries for executing LLVM bitcode directly at
-  runtime in both interpreted and JIT compiled fashions.
+  Libraries for directly executing bitcode at runtime in interpreted and
+  JIT-compiled scenarios.
 
 ``llvm/lib/Support/``
 
-  This directory contains the source code that corresponds to the header files
-  located in ``llvm/include/ADT/`` and ``llvm/include/Support/``.
+  Source code that corresponding to the header files in ``llvm/include/ADT/``
+  and ``llvm/include/Support/``.
 
 ``llvm/projects``
 -----------------
 
-This directory contains projects that are not strictly part of LLVM but are
-shipped with LLVM. This is also the directory where you should create your own
-LLVM-based projects. See ``llvm/projects/sample`` for an example of how to set
-up your own project.
-
-``llvm/runtime``
-----------------
-
-This directory contains libraries which are compiled into LLVM bitcode and used
-when linking programs with the Clang front end.  Most of these libraries are
-skeleton versions of real libraries; for example, libc is a stripped down
-version of glibc.
-
-Unlike the rest of the LLVM suite, this directory needs the LLVM GCC front end
-to compile.
+Projects not strictly part of LLVM but shipped with LLVM. This is also the
+directory for creating your own LLVM-based projects which leverage the LLVM
+build system.
 
 ``llvm/test``
 -------------
 
-This directory contains feature and regression tests and other basic sanity
-checks on the LLVM infrastructure. These are intended to run quickly and cover a
-lot of territory without being exhaustive.
+Feature and regression tests and other sanity checks on LLVM infrastructure. These
+are intended to run quickly and cover a lot of territory without being exhaustive.
 
 ``test-suite``
 --------------
 
-This is not a directory in the normal llvm module; it is a separate Subversion
-module that must be checked out (usually to ``projects/test-suite``).  This
-module contains a comprehensive correctness, performance, and benchmarking test
-suite for LLVM. It is a separate Subversion module because not every LLVM user
-is interested in downloading or building such a comprehensive test suite. For
-further details on this test suite, please see the :doc:`Testing Guide
+A comprehensive correctness, performance, and benchmarking test suite for LLVM.
+Comes in a separate Subversion module because not every LLVM user is interested
+in such a comprehensive suite. For details see the :doc:`Testing Guide
 <TestingGuide>` document.
 
 .. _tools:
@@ -1160,7 +1115,7 @@ further details on this test suite, please see the :doc:`Testing Guide
 ``llvm/tools``
 --------------
 
-The **tools** directory contains the executables built out of the libraries
+Executables built out of the libraries
 above, which form the main part of the user interface.  You can always get help
 for a tool by typing ``tool_name -help``.  The following is a brief introduction
 to the most important tools.  More detailed information is in
@@ -1178,7 +1133,7 @@ the `Command Guide <CommandGuide/index.html>`_.
 
   The archiver produces an archive containing the given LLVM bitcode files,
   optionally with an index for faster lookup.
-  
+
 ``llvm-as``
 
   The assembler transforms the human readable LLVM assembly to LLVM bitcode.
@@ -1191,7 +1146,7 @@ the `Command Guide <CommandGuide/index.html>`_.
 
   ``llvm-link``, not surprisingly, links multiple LLVM modules into a single
   program.
-  
+
 ``lli``
 
   ``lli`` is the LLVM interpreter, which can directly execute LLVM bitcode
@@ -1203,77 +1158,72 @@ the `Command Guide <CommandGuide/index.html>`_.
 ``llc``
 
   ``llc`` is the LLVM backend compiler, which translates LLVM bitcode to a
-  native code assembly file or to C code (with the ``-march=c`` option).
+  native code assembly file.
 
 ``opt``
 
   ``opt`` reads LLVM bitcode, applies a series of LLVM to LLVM transformations
-  (which are specified on the command line), and then outputs the resultant
-  bitcode.  The '``opt -help``' command is a good way to get a list of the
+  (which are specified on the command line), and outputs the resultant
+  bitcode.   '``opt -help``'  is a good way to get a list of the
   program transformations available in LLVM.
 
-  ``opt`` can also be used to run a specific analysis on an input LLVM bitcode
-  file and print out the results.  It is primarily useful for debugging
+  ``opt`` can also  run a specific analysis on an input LLVM bitcode
+  file and print  the results.  Primarily useful for debugging
   analyses, or familiarizing yourself with what an analysis does.
 
 ``llvm/utils``
 --------------
 
-This directory contains utilities for working with LLVM source code, and some of
-the utilities are actually required as part of the build process because they
-are code generators for parts of LLVM infrastructure.
+Utilities for working with LLVM source code; some are part of the build process
+because they are code generators for parts of the infrastructure.
 
 
 ``codegen-diff``
 
-  ``codegen-diff`` is a script that finds differences between code that LLC
-  generates and code that LLI generates. This is a useful tool if you are
+  ``codegen-diff`` finds differences between code that LLC
+  generates and code that LLI generates. This is useful if you are
   debugging one of them, assuming that the other generates correct output. For
   the full user manual, run ```perldoc codegen-diff'``.
 
 ``emacs/``
 
-  The ``emacs`` directory contains syntax-highlighting files which will work
-  with Emacs and XEmacs editors, providing syntax highlighting support for LLVM
-  assembly files and TableGen description files. For information on how to use
-  the syntax files, consult the ``README`` file in that directory.
+   Emacs and XEmacs syntax highlighting  for LLVM   assembly files and TableGen
+   description files.  See the ``README`` for information on using them.
 
 ``getsrcs.sh``
 
-  The ``getsrcs.sh`` script finds and outputs all non-generated source files,
-  which is useful if one wishes to do a lot of development across directories
-  and does not want to individually find each file. One way to use it is to run,
-  for example: ``xemacs `utils/getsources.sh``` from the top of your LLVM source
+  Finds and outputs all non-generated source files,
+  useful if one wishes to do a lot of development across directories
+  and does not want to find each file. One way to use it is to run,
+  for example: ``xemacs `utils/getsources.sh``` from the top of the LLVM source
   tree.
 
 ``llvmgrep``
 
-  This little tool performs an ``egrep -H -n`` on each source file in LLVM and
+  Performs an ``egrep -H -n`` on each source file in LLVM and
   passes to it a regular expression provided on ``llvmgrep``'s command
-  line. This is a very efficient way of searching the source base for a
+  line. This is an efficient way of searching the source base for a
   particular regular expression.
 
 ``makellvm``
 
-  The ``makellvm`` script compiles all files in the current directory and then
+  Compiles all files in the current directory, then
   compiles and links the tool that is the first argument. For example, assuming
-  you are in the directory ``llvm/lib/Target/Sparc``, if ``makellvm`` is in your
-  path, simply running ``makellvm llc`` will make a build of the current
+  you are in  ``llvm/lib/Target/Sparc``, if ``makellvm`` is in your
+  path,  running ``makellvm llc`` will make a build of the current
   directory, switch to directory ``llvm/tools/llc`` and build it, causing a
   re-linking of LLC.
 
 ``TableGen/``
 
-  The ``TableGen`` directory contains the tool used to generate register
+  Contains the tool used to generate register
   descriptions, instruction set descriptions, and even assemblers from common
   TableGen description files.
 
 ``vim/``
 
-  The ``vim`` directory contains syntax-highlighting files which will work with
-  the VIM editor, providing syntax highlighting support for LLVM assembly files
-  and TableGen description files. For information on how to use the syntax
-  files, consult the ``README`` file in that directory.
+  vim syntax-highlighting for LLVM assembly files
+  and TableGen description files. See the    ``README`` for how to use them.
 
 .. _simple example:
 
@@ -1322,7 +1272,7 @@ Example with clang
    .. code-block:: console
 
       % ./hello
- 
+
    and
 
    .. code-block:: console

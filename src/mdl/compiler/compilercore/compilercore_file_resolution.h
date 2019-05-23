@@ -65,13 +65,6 @@ class File_resolver {
     typedef map<string, bool>::Type String_map;
 
 public:
-    enum UDIM_mode {
-        NO_UDIM = 0,
-        UM_MARI,   // "<UDIM>"     UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
-        UM_ZBRUSH, // "<UVTILE0>"  0-based (Zbrush), expands to "_u0_v0" for the first tile
-        UM_MUDBOX, // "<UVTILE1>"  1-based (Mudbox), expands to "_u1_v1" for the first tile
-    };
-
     // The file resolver produces compiler messages.
     static char const MESSAGE_CLASS = 'C';
 
@@ -83,9 +76,9 @@ public:
     ///                                This may be NULL or "" for the top-level import.
     /// \param owner_filename          Absolute filename of the owner MDL module.
     ///                                This may be NULL or "" for the top-level import.
-    /// \returns                       The absolute name of the module
-    ///                                or "" if the module does not exist.
-    string resolve_import(
+    /// \returns                       An import result interface or NULL
+    ///                                if the module does not exist.
+    IMDL_import_result *resolve_import(
         Position const &pos,
         char const     *import_name,
         char const     *owner_name,
@@ -93,22 +86,17 @@ public:
 
     /// Resolve a resource (file) name to the corresponding absolute file path.
     ///
-    /// \param[out] abs_file_name   The absolute MDL file name of the resource.
     /// \param[in]  pos             The position of the referencing MDL statement.
     /// \param[in]  file_name       The (possible relative) resource name.
     /// \param[in]  owner_name      The absolute name of the owner MDL module.
     /// \param[in]  owner_filename  Absolute filename of the owner MDL module.
-    /// \param[out] udim_mode       If != NO_UDIM the returned file name is a mask.
     ///
-    /// \returns                    The absolute name of the module
-    ///                             or "" if the module does not exist.
-    string resolve_resource(
-        string         &abs_file_name,
+    /// \returns                    The resource set or NULL if the resource does not exist.
+    IMDL_resource_set *resolve_resource(
         Position const &pos,
         char const     *import_name,
         char const     *owner_name,
-        char const     *owner_filename,
-        UDIM_mode      &udim_mode);
+        char const     *owner_filename);
 
     /// Open an input stream to the modules source.
     /// \param  module_name             The absolute module name.
@@ -145,15 +133,17 @@ public:
 public:
     /// Constructor.
     ///
-    /// \param compiler      the MDL compiler
-    /// \param module_cache  the module cache if any (used only for is-string-module checks)
-    /// \param search_path   the search path helper to use
-    /// \param sp_lock       the lock for search path access
-    /// \param msgs          compiler messages to append
-    /// \param front_path    if non-NULL, search this MDL path first
+    /// \param compiler           the MDL compiler
+    /// \param module_cache       the module cache if any (used only for is-string-module checks)
+    /// \param external_resolver  if valid, the external entity resolver to be used
+    /// \param search_path        the search path helper to use
+    /// \param sp_lock            the lock for search path access
+    /// \param msgs               compiler messages to append
+    /// \param front_path         if non-NULL, search this MDL path first
     File_resolver(
         MDL const                                &compiler,
         IModule_cache                            *module_cache,
+        mi::base::Handle<IEntity_resolver> const &external_resolver,
         mi::base::Handle<IMDL_search_path> const &search_path,
         mi::base::Lock                           &sp_lock,
         Messages_impl                            &msgs,
@@ -455,6 +445,9 @@ private:
     /// Position of the import statement.
     Position const *m_pos;
 
+    /// The external entity resolver if any.
+    mi::base::Handle<IEntity_resolver> m_external_resolver;
+
     /// The search path helper.
     mi::base::Handle<IMDL_search_path> m_search_path;
 
@@ -583,8 +576,7 @@ private:
     /// If non-null, this is an container.
     MDL_zip_container *m_container;
 
-    union
-    {
+    union {
         FILE                   *fp;
         MDL_zip_container_file *z_fp;
     } u;
@@ -593,14 +585,27 @@ private:
     bool m_owns_container;
 };
 
-
-
 /// Implementation of the IMDL_resource_set interface.
 class MDL_resource_set : public Allocator_interface_implement<IMDL_resource_set>
 {
     typedef Allocator_interface_implement<IMDL_resource_set> Base;
     friend class Allocator_builder;
 public:
+    /// Get the MDL URL mask of the ordered set.
+    ///
+    /// \returns the MDL URL mask of the set
+    char const *get_mdl_url_mask() const MDL_FINAL;
+
+    /// Get the file name mask of the ordered set.
+    ///
+    /// \param i  the index
+    ///
+    /// \returns the file name mask of the set
+    ///
+    /// \note If this resource is inside an MDL archive, the returned name
+    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
+    char const *get_filename_mask() const MDL_FINAL;
+
     /// Get the number of resolved file names.
     size_t get_count() const MDL_FINAL;
 
@@ -634,6 +639,9 @@ public:
     /// \returns an reader for the i'th entry of the set or NULL if the index is out of range.
     IMDL_resource_reader *open_reader(size_t i) const MDL_FINAL;
 
+    /// Get the UDIM mode for this set.
+    UDIM_mode get_udim_mode() const MDL_FINAL;
+
     /// Create a resource set from a file mask.
     ///
     /// \param alloc      the allocator
@@ -641,10 +649,10 @@ public:
     /// \param filename   the file name
     /// \param udim_mode  the UDIM mode
     static MDL_resource_set *from_mask(
-        IAllocator               *alloc,
-        char const               *url,
-        char const               *file_mask,
-        File_resolver::UDIM_mode udim_mode);
+        IAllocator *alloc,
+        char const *url,
+        char const *file_mask,
+        UDIM_mode  udim_mode);
 
 private:
     /// Create a resource set from a file mask describing files on disk.
@@ -654,10 +662,10 @@ private:
     /// \param filename   the file name
     /// \param udim_mode  the UDIM mode
     static MDL_resource_set *from_mask_file(
-        IAllocator               *alloc,
-        char const               *url,
-        char const               *file_mask,
-        File_resolver::UDIM_mode udim_mode);
+        IAllocator *alloc,
+        char const *url,
+        char const *file_mask,
+        UDIM_mode  udim_mode);
 
     /// Parse a file name and enter it into a resource set.
     ///
@@ -669,13 +677,13 @@ private:
     /// \param sep        the separator to be used between prefix and file name
     /// \param udim_mode  the UDIM mode
     static void parse_u_v(
-        MDL_resource_set         *s,
-        char const               *name,
-        size_t                   ofs,
-        char const               *url,
-        string const             &prefix,
-        char                     sep,
-        File_resolver::UDIM_mode udim_mode);
+        MDL_resource_set *s,
+        char const       *name,
+        size_t           ofs,
+        char const       *url,
+        string const     &prefix,
+        char             sep,
+        UDIM_mode        udim_mode);
 
     /// Create a resource set from a file mask describing files on a container.
     ///
@@ -686,12 +694,12 @@ private:
     /// \param filename         the file name
     /// \param udim_mode        the UDIM mode
     static MDL_resource_set *from_mask_container(
-        IAllocator               *alloc,
-        char const               *url,
-        char const               *container_name,
-        File_handle::Kind        container_kind,
-        char const               *file_mask,
-        File_resolver::UDIM_mode udim_mode);
+        IAllocator        *alloc,
+        char const        *url,
+        char const        *container_name,
+        File_handle::Kind container_kind,
+        char const        *file_mask,
+        UDIM_mode         udim_mode);
 
 private:
     /// Constructor from one file name/url pair (typical case).
@@ -704,11 +712,15 @@ private:
         char const *url,
         char const *filename);
 
-    /// Empty constructor.
+    /// Empty constructor from masks.
     ///
-    /// \param alloc the allocator
-    explicit MDL_resource_set(
-        IAllocator *alloc);
+    /// \param alloc      the allocator
+    /// \param udim_mode  the UDIM mode
+    MDL_resource_set(
+        IAllocator *alloc,
+        UDIM_mode  udim_mode,
+        char const *url_mask,
+        char const *filename_mask);
 
 private:
     /// The arena for allocation data.
@@ -737,8 +749,53 @@ private:
     /// The file name list.
     Entry_vec m_entries;
 
-    /// True if this is a UDIM set.
-    bool m_is_udim_set;
+    /// The UDIM mode.
+    UDIM_mode m_udim_mode;
+
+    /// The url mask.
+    string m_url_mask;
+
+    /// The filename mask.
+    string m_filename_mask;
+};
+
+// ------------------------------------------------------------------------
+
+/// Implementation of the IMDL_import_result interface.
+class MDL_import_result : public Allocator_interface_implement<IMDL_import_result>
+{
+    typedef Allocator_interface_implement<IMDL_import_result> Base;
+    friend class Allocator_builder;
+
+public:
+    /// Return the absolute MDL name of the found entity, or NULL, if the entity could not
+    /// be resolved.
+    char const *get_absolute_name() const MDL_FINAL;
+
+    /// Return the OS-dependent file name of the found entity, or NULL, if the entity could not
+    /// be resolved.
+    char const *get_file_name() const MDL_FINAL;
+
+    /// Return an input stream to the given entity if found, NULL otherwise.
+    IInput_stream *open(Thread_context &ctx) const MDL_FINAL;
+
+private:
+    /// Constructor.
+    ///
+    /// \param alloc         the allocator
+    /// \param abs_name      the absolute name of the resolved import
+    /// \param os_file_name  the OS dependent file name of the resolved module.
+    MDL_import_result(
+        IAllocator   *alloc,
+        string const &abs_name,
+        string const &os_file_name);
+
+private:
+    /// The absolute MDL name of the import.
+    string const m_abs_name;
+
+    /// The OS-dependent file name of the resolved module.
+    string const m_os_file_name;
 };
 
 // ------------------------------------------------------------------------
@@ -781,7 +838,6 @@ public:
     /// \param f                 the file handle
     /// \param filename          the file name
     /// \param mdl_url           the MDL url
-    ///                          if this object is destroyed
     explicit File_resource_reader(
         IAllocator  *alloc,
         File_handle *f,
@@ -899,7 +955,7 @@ public:
     ///                          messages
     ///
     /// \return the set of resolved resources or NULL if this name could not be resolved
-    MDL_resource_set *resolve_resource_file_name(
+    IMDL_resource_set *resolve_resource_file_name(
         char const     *file_path,
         char const     *owner_file_path,
         char const     *owner_name,
@@ -923,11 +979,18 @@ public:
 
     /// Resolve a module name.
     ///
-    /// \param name  an MDL module name
+    /// \param mdl               the (weak-)relative or absolute MDL module name to resolve
+    /// \param owner_file_path   if non-NULL, the file path of the owner
+    /// \param owner_name        if non-NULL, the absolute name of the owner
+    /// \param pos               if non-NULL, the position of the import statement for error
+    ///                          messages
     ///
-    /// \return the absolute module name of NULL if this name could not be resolved
-    char const *resolve_module_name(
-        char const *name) MDL_FINAL;
+    /// \return the absolute module name or NULL if this name could not be resolved
+    IMDL_import_result *resolve_module(
+        char const     *mdl_name,
+        char const     *owner_file_path,
+        char const     *owner_name,
+        Position const *pos) MDL_FINAL;
 
     /// Access messages of last resolver operation.
     Messages const &access_messages() const MDL_FINAL;
@@ -938,16 +1001,17 @@ public:
 private:
     /// Constructor.
     ///
-    /// \param alloc         the allocator
-    /// \param compiler      the MDL compiler interface
-    /// \param module_cache  the module cache if any
-    /// \param search_path   the search path to use
+    /// \param alloc              the allocator
+    /// \param compiler           the MDL compiler interface
+    /// \param module_cache       the module cache if any
+    /// \param external_resolver  the external entity resolver if any
+    /// \param search_path        the search path to use
     Entity_resolver(
         IAllocator                               *alloc,
         MDL const                                *compiler,
         IModule_cache                            *module_cache,
+        mi::base::Handle<IEntity_resolver> const &external_resolver,
         mi::base::Handle<IMDL_search_path> const &search_path);
-
 
 private:
     /// Messages if any.
@@ -955,12 +1019,6 @@ private:
 
     /// The used file resolver.
     File_resolver m_resolver;
-
-    /// The search path.
-    mi::base::Handle<IMDL_search_path> m_search_path;
-
-    /// Temporary storage for the resolve_module_name() result.
-    string m_tmp;
 };
 
 /// Open a resource file read-only.

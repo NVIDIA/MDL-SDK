@@ -112,7 +112,7 @@ BSDF_INLINE float2 process_ior(Data *data)
         data->ior1 = get_material_ior();
     if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
         data->ior2 = get_material_ior();
-    
+
     float2 ior = make_float2(
         (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0),
         (data->ior2.x + data->ior2.y + data->ior2.z) * (float)(1.0 / 3.0));
@@ -175,14 +175,14 @@ BSDF_INLINE float eval_oren_nayar(
 {
     const float nk1 = math::dot(k1, normal);
     const float nk2 = math::dot(k2, normal);
-    
+
     const float3 kp1 = k1 - normal * nk1;
     const float3 kp2 = k2 - normal * nk2;
 
     const float sigma2 = roughness * roughness;
     const float A = 1.0f - (sigma2 / (sigma2 * 2.0f + 0.66f));
     const float B = 0.45f * sigma2 / (sigma2 + 0.09f);
-    
+
     // projection might give null-length vectors kp1 or/and kp2, check to avoid division by zero
     const float sl = math::dot(kp1, kp1) * math::dot(kp2, kp2);
     return A + (sl == 0.f ? 0.f : B *
@@ -264,8 +264,9 @@ BSDF_INLINE float custom_curve_factor(
     if (exponent == 5.0f) {
         const float f2 = f * f;
         f5 = f2 * f2 * f;
-    } else
+    } else {
         f5 = math::pow(f, exponent);
+    }
     return normal_reflectivity + (grazing_reflectivity - normal_reflectivity) * f5;
 }
 
@@ -281,8 +282,9 @@ BSDF_INLINE float3 custom_curve_factor(
     if (exponent == 5.0f) {
         const float f2 = f * f;
         f5 = f2 * f2 * f;
-    } else
+    } else {
         f5 = math::pow(f, exponent);
+    }
     return normal_reflectivity + (grazing_reflectivity - normal_reflectivity) * f5;
 }
 
@@ -365,19 +367,17 @@ BSDF_INLINE float3 compute_half_vector(
     const bool thin_walled)
 {
     float3 h;
-    if (transmission)
-    {
-        if (thin_walled)
+    if (transmission) {
+        if (thin_walled) {
             h = k1 + (shading_normal * (nk2 + nk2) + k2); // use corresponding reflection direction
-        else
-        {
+        } else {
             h = k2 * ior.y + k1 * ior.x; // points into thicker medium
             if (ior.y > ior.x)
                 h *= -1.0f; // make pointing to outgoing direction's medium
         }
-    }
-    else
+    } else {
         h = k1 + k2;
+    }
     return math::normalize(h);
 }
 
@@ -469,8 +469,8 @@ BSDF_INLINE float erff(const float a)
     #define fmaf(a,b,c) (a * b + c)
     t = math::abs(a);
     s = a * a;
-    if (t > 0.921875f)
-    { // 0.99527 ulp
+    if (t > 0.921875f) {
+        // 0.99527 ulp
         r = fmaf(0x1.222900p-16f, t, -0x1.91d2ccp-12f); // 1.72948930e-5, -3.83208680e-4
         u = fmaf(0x1.fd1336p-09f, t, -0x1.8d6300p-06f); // 3.88393435e-3, -2.42545605e-2
         r = fmaf(r, s, u);
@@ -481,9 +481,8 @@ BSDF_INLINE float erff(const float a)
         r = math::exp(-r);
         r = 1.0f - r;
         r = copysignf(r, a);
-    }
-    else
-    { // 0.99993 ulp
+    } else {
+        // 0.99993 ulp
         r = -0x1.3a1a82p-11f;  // -5.99104969e-4
         r = fmaf(r, s, 0x1.473f48p-08f); //  4.99339588e-3
         r = fmaf(r, s, -0x1.b68bd2p-06f); // -2.67667342e-2
@@ -501,7 +500,7 @@ BSDF_INLINE float erfinvf(const float x)
 {
     float w, p;
     w = -math::log((1.0f - x) * (1.0f + x));
-    if ( w < 5.000000f ) {
+    if (w < 5.000000f) {
         w = w - 2.500000f;
         p =   2.81022636e-08f;
         p =   3.43273939e-07f + p*w;
@@ -512,8 +511,7 @@ BSDF_INLINE float erfinvf(const float x)
         p =   -0.00417768164f + p*w;
         p =      0.246640727f + p*w;
         p =       1.50140941f + p*w;
-    }
-    else {
+    } else {
         w = math::sqrt(w) - 3.000000f;
         p =  -0.000200214257f;
         p =   0.000100950558f + p*w;
@@ -551,7 +549,7 @@ BSDF_INLINE float3 hvd_beckmann_sample_vndf(
         // "sample11()" as in "An Improved Visible Normal Sampling Routine for the Beckmann
         // Distribution" by Wenzel Jakob
         const float inv_sqrt_pi = 1.0f / math::sqrt((float)M_PI);
-        
+
         const float tan_theta = math::tan(theta);
         const float cot_theta = 1.0f / tan_theta;
 
@@ -598,7 +596,7 @@ BSDF_INLINE float3 hvd_beckmann_sample_vndf(
     // unstretch
     slope_x *= roughness.x;
     slope_y *= roughness.y;
-   
+
     const float f = 1.0f / math::sqrt(slope_x * slope_x + slope_y * slope_y + 1.0f);
     return make_float3(-slope_x * f, f, -slope_y * f);
 }
@@ -664,7 +662,7 @@ BSDF_INLINE float3 hvd_ggx_sample_vndf(
 
     const float a = 1.0f / (1.0f + v.y);
     const float r = math::sqrt(xi.x);
-    
+
     const float phi = (xi.y < a) ?
         xi.y / a * (float)M_PI : (float)M_PI + (xi.y - a) / (1.0f - a) * (float)M_PI;
     float sp, cp;
@@ -707,7 +705,7 @@ BSDF_INLINE float2 sample_disk_distribution(
 }
 
 // evaluate a (1 - f)^n distribution on the unit disk
-BSDF_INLINE float eval_disk_distribution( 
+BSDF_INLINE float eval_disk_distribution(
     const float x,
     const float y,
     const float2 &exponent)
@@ -816,8 +814,7 @@ BSDF_INLINE float3 compute_interference_factor(
         {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
         {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
 
-    for (unsigned int i = 0; i < 16; ++i)
-    {
+    for (unsigned int i = 0; i < 16; ++i) {
         const float lambda = lambda_min + (float)(i) * lambda_step;
         const float angle = float(2.0 * M_PI) * phase_shift_dist / lambda;
 
@@ -866,7 +863,7 @@ BSDF_INLINE float3 thin_film_factor(
     const float3 h = compute_half_vector(
         k1, k2, normal, ior, nk1, nk2,
         transmission, thin_walled);
-    
+
     const float kh = math::abs(math::dot(k1, h));
 
     //!! clamped to avoid total internal reflection
@@ -875,7 +872,7 @@ BSDF_INLINE float3 thin_film_factor(
     const float costheta_refr = refraction_cosine(kh, eta);
     const float phase_shift_dist = 2.0f * coating_ior * costheta_refr * coating_thickness;
     const float coating_fresnel = ior_fresnel(1.0f / eta, kh);
-    
+
     return compute_interference_factor(coating_fresnel, 1.0f - coating_fresnel, phase_shift_dist);
 }
 
@@ -892,9 +889,58 @@ BSDF_INLINE float3 measured_curve_factor(
 
     const float cw1 = f1 - (float)idx0;
     const float cw0 = 1.0f - cw1;
-    
+
     return values[idx0] * cw0 + values[idx1] * cw1;
 }
 
+BSDF_INLINE float3 measured_curve_factor_eval(
+    const float cosine,
+    const float3 * values,
+    const unsigned int num_values)
+{
+    if (num_values == 0)
+        return make_float3(0, 0, 0);
+    else
+        return math::saturate(measured_curve_factor(cosine, values, num_values));
+}
+
+BSDF_INLINE float measured_curve_factor_estimate(
+    const float cosine,
+    const float3 * values,
+    const unsigned int num_values)
+{
+    if (num_values == 0)
+        return 0;
+    else
+        return math::luminance(math::saturate(measured_curve_factor(
+            cosine, values, num_values)));
+}
+
+BSDF_INLINE float3 color_measured_curve_factor_eval(
+    const float cosine,
+    const float3 * values,
+    const unsigned int num_values,
+    const float3 &weight)
+{
+    if (num_values == 0)
+        return make_float3(0, 0, 0);
+    else
+        return math::saturate(weight) *
+            math::saturate(measured_curve_factor(cosine, values, num_values));
+}
+
+BSDF_INLINE float color_measured_curve_factor_estimate(
+    const float cosine,
+    const float3 * values,
+    const unsigned int num_values,
+    const float3 &weight)
+{
+    if (num_values == 0)
+        return 0;
+    else
+        return math::luminance(
+            math::saturate(weight) *
+            math::saturate(measured_curve_factor(cosine, values, num_values)));
+}
 
 #endif // MDL_LIBBSDF_UTILITIES_H

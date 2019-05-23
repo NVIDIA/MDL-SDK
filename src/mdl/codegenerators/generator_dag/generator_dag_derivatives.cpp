@@ -984,6 +984,7 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
 
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_FUNCTION:

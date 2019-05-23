@@ -76,6 +76,7 @@ char const *MDL::option_warn                          = MDL_OPTION_WARN;
 char const *MDL::option_opt_level                     = MDL_OPTION_OPT_LEVEL;
 char const *MDL::option_strict                        = MDL_OPTION_STRICT;
 char const *MDL::option_experimental_features         = MDL_OPTION_EXPERIMENTAL_FEATURES;
+char const *MDL::option_resolve_resources             = MDL_OPTION_RESOLVE_RESOURCES;
 char const *MDL::option_limits_float_min              = MDL_OPTION_LIMITS_FLOAT_MIN;
 char const *MDL::option_limits_float_max              = MDL_OPTION_LIMITS_FLOAT_MAX;
 char const *MDL::option_limits_double_min             = MDL_OPTION_LIMITS_DOUBLE_MIN;
@@ -207,6 +208,7 @@ void Scanner::initialize_mdl_keywords()
     keywords.set(L"intensity_mode", Parser::_IDENT);
     keywords.set(L"intensity_radiant_exitance", Parser::_IDENT);
     keywords.set(L"intensity_power", Parser::_IDENT);
+    keywords.set(L"cast", Parser::_IDENT);
 
     // the "reserved" identifier is not really reserved
     keywords.set(L"reserved", Parser::_IDENT);
@@ -313,6 +315,11 @@ void Scanner::set_mdl_version(int major, int minor)
         // enable MDL 1.3 keywords
         keywords.set(L"module", Parser::_MODULE);
     }
+    if (HAS_VERSION(1, 5)) {
+        // enable MDL 1.5 keywords
+        keywords.set(L"cast", Parser::_CAST);
+        keywords.set(L"hair_bsdf", Parser::_HAIR_BSDF);
+    }
 }
 
 namespace {
@@ -368,6 +375,7 @@ MDL::MDL(IAllocator *alloc)
 , m_builtin_modules(alloc)
 , m_builtin_semantics(0, Sema_map::hasher(), Sema_map::key_equal(), alloc)
 , m_search_path(m_builder.create<Empty_search_path>(alloc))
+, m_external_resolver()
 , m_global_lock()
 , m_search_path_lock()
 , m_weak_module_lock()
@@ -873,6 +881,11 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER;
     m_builtin_semantics["::df::fresnel_factor"] =
         IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR;
+    m_builtin_semantics["::df::measured_factor"] =
+        IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR;
+    m_builtin_semantics["::df::chiang_hair_bsdf"] =
+        IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF;
+
 
     // debug module
     m_builtin_semantics["::debug::breakpoint"] =
@@ -927,6 +940,8 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_MODIFIED_ANNOTATION;
     m_builtin_semantics["::anno::key_words"] =
         IDefinition::DS_KEYWORDS_ANNOTATION;
+    m_builtin_semantics["::anno::origin"] =
+        IDefinition::DS_ORIGIN_ANNOTATION;
 }
 
 // Create all options (and default values) of the compiler.
@@ -947,6 +962,8 @@ void MDL::create_options()
         "Enables strict MDL compliance");
     m_options.add_option(option_experimental_features, "false",
         "Enables undocumented experimental MDL features");
+    m_options.add_option(option_resolve_resources, "true",
+        "Controls resource resolution.");
 
     m_options.add_option(option_limits_float_min, STR(FLT_MIN),
         "The smallest positive normalized float value supported by the current platform");
@@ -1015,7 +1032,7 @@ Module *MDL::load_module(
         }
     }
 
-    module->analyze(cache, ctx);
+    module->analyze(cache, ctx, get_compiler_bool_option(ctx, option_resolve_resources, true));
 
     return module;
 }
@@ -1110,6 +1127,7 @@ Module const *MDL::compile_module(
     File_resolver resolver(
         *this,
         module_cache,
+        m_external_resolver,
         m_search_path,
         m_search_path_lock,
         ctx.access_messages_impl(),
@@ -1122,13 +1140,14 @@ Module const *MDL::compile_module(
         resolver.set_module_replacement(repl_module_name, repl_file_name);
     }
 
-    string mname(resolve_import(
+    mi::base::Handle<IMDL_import_result> result(resolve_import(
         resolver, module_name, /*owner_module=*/NULL, /*pos=*/NULL));
-    if (mname.empty()) {
+    if (!result.is_valid_interface()) {
         // name could not be resolved
         return NULL;
     }
 
+    string mname(result->get_absolute_name(), get_allocator());
     if (Module const *std_mod = find_builtin_module(mname)) {
         // it's a standard module
         std_mod->retain();
@@ -1149,7 +1168,7 @@ Module const *MDL::compile_module(
         }
     }
 
-    mi::base::Handle<IInput_stream> input(resolver.open(mname.c_str()));
+    mi::base::Handle<IInput_stream> input(result->open(ctx));
 
     if (! input) {
         // FIXME: add an error ??
@@ -1181,6 +1200,7 @@ Module const *MDL::compile_module_from_stream(
     File_resolver resolver(
         *this,
         module_cache,
+        m_external_resolver,
         m_search_path,
         m_search_path_lock,
         ctx.access_messages_impl(),
@@ -1744,6 +1764,7 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
             FORBIDDEN("half4x2", 2);
             FORBIDDEN("half4x3", 2);
             FORBIDDEN("half4x4", 2);
+            FORBIDDEN("hair_bsdf", 2);  // MDL 1.5+
         }
         break;
     case 'i':
@@ -1882,7 +1903,12 @@ bool MDL::is_valid_mdl_identifier(char const *ident) const
 IEntity_resolver *MDL::create_entity_resolver(
     IModule_cache *module_cache) const
 {
-    return m_builder.create<Entity_resolver>(get_allocator(), this, module_cache, m_search_path);
+    return m_builder.create<Entity_resolver>(
+        get_allocator(),
+        this,
+        module_cache,
+        m_external_resolver,
+        m_search_path);
 }
 
 // Create an MDL archive tool using this compiler.
@@ -1918,6 +1944,12 @@ IMDL_module_transformer *MDL::create_module_transformer()
     return m_builder.create<MDL_module_transformer>(get_allocator(), this);
 }
 
+// Sets a resolver interface that will be used to lookup MDL modules and resources.
+void MDL::set_external_entity_resolver(IEntity_resolver *resolver)
+{
+    m_external_resolver = mi::base::make_handle_dup(resolver);
+}
+
 // Check if the compiler supports a requested MDL version.
 bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_experimental_features)
 {
@@ -1941,9 +1973,12 @@ bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_
             version = MDL_VERSION_1_4;
             return true;
         case 5:
+            version = MDL_VERSION_1_5;
+            return true;
+        case 6:
             if (!enable_experimental_features)
                 return false;
-            version = MDL_VERSION_1_5;
+            version = MDL_VERSION_1_6;
             return true;
         }
     }
@@ -2003,7 +2038,7 @@ IDefinition const *MDL::find_stdlib_signature(
 }
 
 // Resolve an import (module) name to the corresponding absolute module name.
-string MDL::resolve_import(
+IMDL_import_result *MDL::resolve_import(
     File_resolver  &resolver,
     char const     *import_name,
     Module         *owner_module,
@@ -2021,11 +2056,15 @@ string MDL::resolve_import(
     if (pos == NULL)
         pos = &zero_pos;
 
-    string abs_name = resolver.resolve_import(
-        *pos, import_name, owner_name, owner_filename);
-    if (!abs_name.empty()) {
+    mi::base::Handle<IMDL_import_result> res(resolver.resolve_import(
+        *pos,
+        import_name,
+        owner_name,
+        owner_filename));
+    if (res.is_valid_interface()) {
         // found
-        return abs_name;
+        res->retain();
+        return res.get();
     }
 
     // could be a builtin module, check that
@@ -2035,7 +2074,11 @@ string MDL::resolve_import(
     s += import_name;
     if (Module const *mod = find_builtin_module(s)) {
         // found
-        return string(mod->get_name(), get_allocator());
+        Allocator_builder builder(get_allocator());
+        return builder.create<MDL_import_result>(
+            get_allocator(),
+            string(mod->get_name(), get_allocator()),
+            string(mod->get_filename(), get_allocator()));
     }
 
     // not found
@@ -2064,7 +2107,7 @@ string MDL::resolve_import(
         pos,
         os->get_data());
 
-    return string(get_allocator());
+    return NULL;
 }
 
 // Get an option value.

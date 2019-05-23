@@ -1,4 +1,4 @@
-//===-- llvm/BasicBlock.h - Represent a basic block in the VM ---*- C++ -*-===//
+//===- llvm/BasicBlock.h - Represent a basic block in the VM ----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,47 +14,34 @@
 #ifndef LLVM_IR_BASICBLOCK_H
 #define LLVM_IR_BASICBLOCK_H
 
+#include "llvm-c/Types.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/ilist.h"
+#include "llvm/ADT/ilist_node.h"
+#include "llvm/ADT/iterator.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/SymbolTableListTraits.h"
+#include "llvm/IR/Value.h"
 #include "llvm/Support/CBindingWrapping.h"
-#include "llvm/Support/DataTypes.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
+#include <cassert>
+#include <cstddef>
+#include <iterator>
 
 namespace llvm {
 
+class CallInst;
+class Function;
 class LandingPadInst;
-class TerminatorInst;
 class LLVMContext;
-class BlockAddress;
+class Module;
+class PHINode;
+class TerminatorInst;
+class ValueSymbolTable;
 
-template<> struct ilist_traits<Instruction>
-  : public SymbolTableListTraits<Instruction, BasicBlock> {
-
-  /// \brief Return a node that marks the end of a list.
-  ///
-  /// The sentinel is relative to this instance, so we use a non-static
-  /// method.
-  Instruction *createSentinel() const {
-    // Since i(p)lists always publicly derive from their corresponding traits,
-    // placing a data member in this class will augment the i(p)list.  But since
-    // the NodeTy is expected to be publicly derive from ilist_node<NodeTy>,
-    // there is a legal viable downcast from it to NodeTy. We use this trick to
-    // superimpose an i(p)list with a "ghostly" NodeTy, which becomes the
-    // sentinel. Dereferencing the sentinel is forbidden (save the
-    // ilist_node<NodeTy>), so no one will ever notice the superposition.
-    return static_cast<Instruction*>(&Sentinel);
-  }
-  static void destroySentinel(Instruction*) {}
-
-  Instruction *provideInitialHead() const { return createSentinel(); }
-  Instruction *ensureHead(Instruction*) const { return createSentinel(); }
-  static void noteHead(Instruction*, Instruction*) {}
-private:
-  mutable ilist_half_node<Instruction> Sentinel;
-};
-
-/// \brief LLVM Basic Block Representation
+/// LLVM Basic Block Representation
 ///
 /// This represents a single basic block in LLVM. A basic block is simply a
 /// container of instructions that execute sequentially. Basic blocks are Values
@@ -69,122 +56,206 @@ private:
 /// occur because it may be useful in the intermediate stage of constructing or
 /// modifying a program. However, the verifier will ensure that basic blocks
 /// are "well formed".
-class BasicBlock : public Value, // Basic blocks are data objects also
-                   public ilist_node<BasicBlock> {
-  friend class BlockAddress;
+class BasicBlock final : public Value, // Basic blocks are data objects also
+                         public ilist_node_with_parent<BasicBlock, Function> {
 public:
-  typedef iplist<Instruction> InstListType;
+  using InstListType = SymbolTableList<Instruction>;
+
 private:
+  friend class BlockAddress;
+  friend class SymbolTableListTraits<BasicBlock>;
+
   InstListType InstList;
   Function *Parent;
 
   void setParent(Function *parent);
-  friend class SymbolTableListTraits<BasicBlock, Function>;
 
-  BasicBlock(const BasicBlock &) LLVM_DELETED_FUNCTION;
-  void operator=(const BasicBlock &) LLVM_DELETED_FUNCTION;
-
-  /// \brief Constructor.
+  /// Constructor.
   ///
   /// If the function parameter is specified, the basic block is automatically
   /// inserted at either the end of the function (if InsertBefore is null), or
   /// before the specified basic block.
   explicit BasicBlock(LLVMContext &C, const Twine &Name = "",
-                      Function *Parent = 0, BasicBlock *InsertBefore = 0);
+                      Function *Parent = nullptr,
+                      BasicBlock *InsertBefore = nullptr);
+
 public:
-  /// \brief Get the context in which this basic block lives.
+  BasicBlock(const BasicBlock &) = delete;
+  BasicBlock &operator=(const BasicBlock &) = delete;
+  ~BasicBlock();
+
+  /// Get the context in which this basic block lives.
   LLVMContext &getContext() const;
 
   /// Instruction iterators...
-  typedef InstListType::iterator iterator;
-  typedef InstListType::const_iterator const_iterator;
-  typedef InstListType::reverse_iterator reverse_iterator;
-  typedef InstListType::const_reverse_iterator const_reverse_iterator;
+  using iterator = InstListType::iterator;
+  using const_iterator = InstListType::const_iterator;
+  using reverse_iterator = InstListType::reverse_iterator;
+  using const_reverse_iterator = InstListType::const_reverse_iterator;
 
-  /// \brief Creates a new BasicBlock.
+  /// Creates a new BasicBlock.
   ///
   /// If the Parent parameter is specified, the basic block is automatically
   /// inserted at either the end of the function (if InsertBefore is 0), or
   /// before the specified basic block.
   static BasicBlock *Create(LLVMContext &Context, const Twine &Name = "",
-                            Function *Parent = 0,BasicBlock *InsertBefore = 0) {
+                            Function *Parent = nullptr,
+                            BasicBlock *InsertBefore = nullptr) {
     return new BasicBlock(Context, Name, Parent, InsertBefore);
   }
-  ~BasicBlock();
 
-  /// \brief Return the enclosing method, or null if none.
+  /// Return the enclosing method, or null if none.
   const Function *getParent() const { return Parent; }
         Function *getParent()       { return Parent; }
 
-  /// \brief Returns the terminator instruction if the block is well formed or
-  /// null if the block is not well formed.
-  TerminatorInst *getTerminator();
-  const TerminatorInst *getTerminator() const;
+  /// Return the module owning the function this basic block belongs to, or
+  /// nullptr if the function does not have a module.
+  ///
+  /// Note: this is undefined behavior if the block does not have a parent.
+  const Module *getModule() const;
+  Module *getModule() {
+    return const_cast<Module *>(
+                            static_cast<const BasicBlock *>(this)->getModule());
+  }
 
-  /// \brief Returns a pointer to the first instruction in this block that is
-  /// not a PHINode instruction.
+  /// Returns the terminator instruction if the block is well formed or null
+  /// if the block is not well formed.
+  const TerminatorInst *getTerminator() const LLVM_READONLY;
+  TerminatorInst *getTerminator() {
+    return const_cast<TerminatorInst *>(
+                        static_cast<const BasicBlock *>(this)->getTerminator());
+  }
+
+  /// Returns the call instruction calling \@llvm.experimental.deoptimize
+  /// prior to the terminating return instruction of this basic block, if such
+  /// a call is present.  Otherwise, returns null.
+  const CallInst *getTerminatingDeoptimizeCall() const;
+  CallInst *getTerminatingDeoptimizeCall() {
+    return const_cast<CallInst *>(
+         static_cast<const BasicBlock *>(this)->getTerminatingDeoptimizeCall());
+  }
+
+  /// Returns the call instruction marked 'musttail' prior to the terminating
+  /// return instruction of this basic block, if such a call is present.
+  /// Otherwise, returns null.
+  const CallInst *getTerminatingMustTailCall() const;
+  CallInst *getTerminatingMustTailCall() {
+    return const_cast<CallInst *>(
+           static_cast<const BasicBlock *>(this)->getTerminatingMustTailCall());
+  }
+
+  /// Returns a pointer to the first instruction in this block that is not a
+  /// PHINode instruction.
   ///
   /// When adding instructions to the beginning of the basic block, they should
   /// be added before the returned value, not before the first instruction,
   /// which might be PHI. Returns 0 is there's no non-PHI instruction.
-  Instruction* getFirstNonPHI();
-  const Instruction* getFirstNonPHI() const {
-    return const_cast<BasicBlock*>(this)->getFirstNonPHI();
+  const Instruction* getFirstNonPHI() const;
+  Instruction* getFirstNonPHI() {
+    return const_cast<Instruction *>(
+                       static_cast<const BasicBlock *>(this)->getFirstNonPHI());
   }
 
-  /// \brief Returns a pointer to the first instruction in this block that is not
-  /// a PHINode or a debug intrinsic.
-  Instruction* getFirstNonPHIOrDbg();
-  const Instruction* getFirstNonPHIOrDbg() const {
-    return const_cast<BasicBlock*>(this)->getFirstNonPHIOrDbg();
+  /// Returns a pointer to the first instruction in this block that is not a
+  /// PHINode or a debug intrinsic.
+  const Instruction* getFirstNonPHIOrDbg() const;
+  Instruction* getFirstNonPHIOrDbg() {
+    return const_cast<Instruction *>(
+                  static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbg());
   }
 
-  /// \brief Returns a pointer to the first instruction in this block that is not
-  /// a PHINode, a debug intrinsic, or a lifetime intrinsic.
-  Instruction* getFirstNonPHIOrDbgOrLifetime();
-  const Instruction* getFirstNonPHIOrDbgOrLifetime() const {
-    return const_cast<BasicBlock*>(this)->getFirstNonPHIOrDbgOrLifetime();
+  /// Returns a pointer to the first instruction in this block that is not a
+  /// PHINode, a debug intrinsic, or a lifetime intrinsic.
+  const Instruction* getFirstNonPHIOrDbgOrLifetime() const;
+  Instruction* getFirstNonPHIOrDbgOrLifetime() {
+    return const_cast<Instruction *>(
+        static_cast<const BasicBlock *>(this)->getFirstNonPHIOrDbgOrLifetime());
   }
 
-  /// \brief Returns an iterator to the first instruction in this block that is
+  /// Returns an iterator to the first instruction in this block that is
   /// suitable for inserting a non-PHI instruction.
   ///
   /// In particular, it skips all PHIs and LandingPad instructions.
-  iterator getFirstInsertionPt();
-  const_iterator getFirstInsertionPt() const {
-    return const_cast<BasicBlock*>(this)->getFirstInsertionPt();
+  const_iterator getFirstInsertionPt() const;
+  iterator getFirstInsertionPt() {
+    return static_cast<const BasicBlock *>(this)
+                                          ->getFirstInsertionPt().getNonConst();
   }
 
-  /// \brief Unlink 'this' from the containing function, but do not delete it.
+  /// Return a const iterator range over the instructions in the block, skipping
+  /// any debug instructions.
+  iterator_range<filter_iterator<BasicBlock::const_iterator,
+                                 std::function<bool(const Instruction &)>>>
+  instructionsWithoutDebug() const;
+
+  /// Return an iterator range over the instructions in the block, skipping any
+  /// debug instructions.
+  iterator_range<filter_iterator<BasicBlock::iterator,
+                                 std::function<bool(Instruction &)>>>
+  instructionsWithoutDebug();
+
+  /// Unlink 'this' from the containing function, but do not delete it.
   void removeFromParent();
 
-  /// \brief Unlink 'this' from the containing function and delete it.
-  void eraseFromParent();
+  /// Unlink 'this' from the containing function and delete it.
+  ///
+  // \returns an iterator pointing to the element after the erased one.
+  SymbolTableList<BasicBlock>::iterator eraseFromParent();
 
-  /// \brief Unlink this basic block from its current function and insert it
-  /// into the function that \p MovePos lives in, right before \p MovePos.
+  /// Unlink this basic block from its current function and insert it into
+  /// the function that \p MovePos lives in, right before \p MovePos.
   void moveBefore(BasicBlock *MovePos);
 
-  /// \brief Unlink this basic block from its current function and insert it
+  /// Unlink this basic block from its current function and insert it
   /// right after \p MovePos in the function \p MovePos lives in.
   void moveAfter(BasicBlock *MovePos);
 
+  /// Insert unlinked basic block into a function.
+  ///
+  /// Inserts an unlinked basic block into \c Parent.  If \c InsertBefore is
+  /// provided, inserts before that basic block, otherwise inserts at the end.
+  ///
+  /// \pre \a getParent() is \c nullptr.
+  void insertInto(Function *Parent, BasicBlock *InsertBefore = nullptr);
 
-  /// \brief Return this block if it has a single predecessor block. Otherwise
-  /// return a null pointer.
-  BasicBlock *getSinglePredecessor();
-  const BasicBlock *getSinglePredecessor() const {
-    return const_cast<BasicBlock*>(this)->getSinglePredecessor();
+  /// Return the predecessor of this block if it has a single predecessor
+  /// block. Otherwise return a null pointer.
+  const BasicBlock *getSinglePredecessor() const;
+  BasicBlock *getSinglePredecessor() {
+    return const_cast<BasicBlock *>(
+                 static_cast<const BasicBlock *>(this)->getSinglePredecessor());
   }
 
-  /// \brief Return this block if it has a unique predecessor block. Otherwise return a null pointer.
+  /// Return the predecessor of this block if it has a unique predecessor
+  /// block. Otherwise return a null pointer.
   ///
   /// Note that unique predecessor doesn't mean single edge, there can be
   /// multiple edges from the unique predecessor to this block (for example a
   /// switch statement with multiple cases having the same destination).
-  BasicBlock *getUniquePredecessor();
-  const BasicBlock *getUniquePredecessor() const {
-    return const_cast<BasicBlock*>(this)->getUniquePredecessor();
+  const BasicBlock *getUniquePredecessor() const;
+  BasicBlock *getUniquePredecessor() {
+    return const_cast<BasicBlock *>(
+                 static_cast<const BasicBlock *>(this)->getUniquePredecessor());
+  }
+
+  /// Return the successor of this block if it has a single successor.
+  /// Otherwise return a null pointer.
+  ///
+  /// This method is analogous to getSinglePredecessor above.
+  const BasicBlock *getSingleSuccessor() const;
+  BasicBlock *getSingleSuccessor() {
+    return const_cast<BasicBlock *>(
+                   static_cast<const BasicBlock *>(this)->getSingleSuccessor());
+  }
+
+  /// Return the successor of this block if it has a unique successor.
+  /// Otherwise return a null pointer.
+  ///
+  /// This method is analogous to getUniquePredecessor above.
+  const BasicBlock *getUniqueSuccessor() const;
+  BasicBlock *getUniqueSuccessor() {
+    return const_cast<BasicBlock *>(
+                   static_cast<const BasicBlock *>(this)->getUniqueSuccessor());
   }
 
   //===--------------------------------------------------------------------===//
@@ -207,28 +278,72 @@ public:
   inline const Instruction       &back() const { return InstList.back();  }
   inline       Instruction       &back()       { return InstList.back();  }
 
-  /// \brief Return the underlying instruction list container.
+  /// Iterator to walk just the phi nodes in the basic block.
+  template <typename PHINodeT = PHINode, typename BBIteratorT = iterator>
+  class phi_iterator_impl
+      : public iterator_facade_base<phi_iterator_impl<PHINodeT, BBIteratorT>,
+                                    std::forward_iterator_tag, PHINodeT> {
+    friend BasicBlock;
+
+    PHINodeT *PN;
+
+    phi_iterator_impl(PHINodeT *PN) : PN(PN) {}
+
+  public:
+    // Allow default construction to build variables, but this doesn't build
+    // a useful iterator.
+    phi_iterator_impl() = default;
+
+    // Allow conversion between instantiations where valid.
+    template <typename PHINodeU, typename BBIteratorU>
+    phi_iterator_impl(const phi_iterator_impl<PHINodeU, BBIteratorU> &Arg)
+        : PN(Arg.PN) {}
+
+    bool operator==(const phi_iterator_impl &Arg) const { return PN == Arg.PN; }
+
+    PHINodeT &operator*() const { return *PN; }
+
+    using phi_iterator_impl::iterator_facade_base::operator++;
+    phi_iterator_impl &operator++() {
+      assert(PN && "Cannot increment the end iterator!");
+      PN = dyn_cast<PHINodeT>(std::next(BBIteratorT(PN)));
+      return *this;
+    }
+  };
+  using phi_iterator = phi_iterator_impl<>;
+  using const_phi_iterator =
+      phi_iterator_impl<const PHINode, BasicBlock::const_iterator>;
+
+  /// Returns a range that iterates over the phis in the basic block.
+  ///
+  /// Note that this cannot be used with basic blocks that have no terminator.
+  iterator_range<const_phi_iterator> phis() const {
+    return const_cast<BasicBlock *>(this)->phis();
+  }
+  iterator_range<phi_iterator> phis();
+
+  /// Return the underlying instruction list container.
   ///
   /// Currently you need to access the underlying instruction list container
   /// directly if you want to modify it.
   const InstListType &getInstList() const { return InstList; }
         InstListType &getInstList()       { return InstList; }
 
-  /// \brief Returns a pointer to a member of the instruction list.
-  static iplist<Instruction> BasicBlock::*getSublistAccess(Instruction*) {
+  /// Returns a pointer to a member of the instruction list.
+  static InstListType BasicBlock::*getSublistAccess(Instruction*) {
     return &BasicBlock::InstList;
   }
 
-  /// \brief Returns a pointer to the symbol table if one exists.
+  /// Returns a pointer to the symbol table if one exists.
   ValueSymbolTable *getValueSymbolTable();
 
-  /// \brief Methods for support type inquiry through isa, cast, and dyn_cast.
-  static inline bool classof(const Value *V) {
+  /// Methods for support type inquiry through isa, cast, and dyn_cast.
+  static bool classof(const Value *V) {
     return V->getValueID() == Value::BasicBlockVal;
   }
 
-  /// \brief Cause all subinstructions to "let go" of all the references that
-  /// said subinstructions are maintaining.
+  /// Cause all subinstructions to "let go" of all the references that said
+  /// subinstructions are maintaining.
   ///
   /// This allows one to 'delete' a whole class at a time, even though there may
   /// be circular references... first all references are dropped, and all use
@@ -237,16 +352,17 @@ public:
   /// except operator delete.
   void dropAllReferences();
 
-  /// \brief Notify the BasicBlock that the predecessor \p Pred is no longer
-  /// able to reach it.
+  /// Notify the BasicBlock that the predecessor \p Pred is no longer able to
+  /// reach it.
   ///
   /// This is actually not used to update the Predecessor list, but is actually
   /// used to update the PHI nodes that reside in the block.  Note that this
   /// should be called while the predecessor still refers to this block.
   void removePredecessor(BasicBlock *Pred, bool DontDeleteUselessPHIs = false);
 
-  /// \brief Split the basic block into two basic blocks at the specified
-  /// instruction.
+  bool canSplitPredecessors() const;
+
+  /// Split the basic block into two basic blocks at the specified instruction.
   ///
   /// Note that all instructions BEFORE the specified iterator stay as part of
   /// the original basic block, an unconditional branch is added to the original
@@ -262,27 +378,41 @@ public:
   /// Also note that this doesn't preserve any passes. To split blocks while
   /// keeping loop information consistent, use the SplitBlock utility function.
   BasicBlock *splitBasicBlock(iterator I, const Twine &BBName = "");
+  BasicBlock *splitBasicBlock(Instruction *I, const Twine &BBName = "") {
+    return splitBasicBlock(I->getIterator(), BBName);
+  }
 
-  /// \brief Returns true if there are any uses of this basic block other than
+  /// Returns true if there are any uses of this basic block other than
   /// direct branches, switches, etc. to it.
   bool hasAddressTaken() const { return getSubclassDataFromValue() != 0; }
 
-  /// \brief Update all phi nodes in this basic block's successors to refer to
-  /// basic block \p New instead of to it.
+  /// Update all phi nodes in this basic block's successors to refer to basic
+  /// block \p New instead of to it.
   void replaceSuccessorsPhiUsesWith(BasicBlock *New);
 
-  /// \brief Return true if this basic block is a landing pad.
+  /// Return true if this basic block is an exception handling block.
+  bool isEHPad() const { return getFirstNonPHI()->isEHPad(); }
+
+  /// Return true if this basic block is a landing pad.
   ///
   /// Being a ``landing pad'' means that the basic block is the destination of
   /// the 'unwind' edge of an invoke instruction.
   bool isLandingPad() const;
 
-  /// \brief Return the landingpad instruction associated with the landing pad.
-  LandingPadInst *getLandingPadInst();
+  /// Return the landingpad instruction associated with the landing pad.
   const LandingPadInst *getLandingPadInst() const;
+  LandingPadInst *getLandingPadInst() {
+    return const_cast<LandingPadInst *>(
+                    static_cast<const BasicBlock *>(this)->getLandingPadInst());
+  }
+
+  /// Return true if it is legal to hoist instructions into this block.
+  bool isLegalToHoistInto() const;
+
+  Optional<uint64_t> getIrrLoopHeaderWeight() const;
 
 private:
-  /// \brief Increment the internal refcount of the number of BlockAddresses
+  /// Increment the internal refcount of the number of BlockAddresses
   /// referencing this BasicBlock by \p Amt.
   ///
   /// This is almost always 0, sometimes one possibly, but almost never 2, and
@@ -292,8 +422,9 @@ private:
     assert((int)(signed char)getSubclassDataFromValue() >= 0 &&
            "Refcount wrap-around");
   }
-  /// \brief Shadow Value::setValueSubclassData with a private forwarding method
-  /// so that any future subclasses cannot accidentally use it.
+
+  /// Shadow Value::setValueSubclassData with a private forwarding method so
+  /// that any future subclasses cannot accidentally use it.
   void setValueSubclassData(unsigned short D) {
     Value::setValueSubclassData(D);
   }
@@ -302,6 +433,10 @@ private:
 // Create wrappers for C Binding types (see CBindingWrapping.h).
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(BasicBlock, LLVMBasicBlockRef)
 
-} // End llvm namespace
+/// Advance \p It while it points to a debug instruction and return the result.
+/// This assumes that \p It is not at the end of a block.
+BasicBlock::iterator skipDebugIntrinsics(BasicBlock::iterator It);
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_IR_BASICBLOCK_H

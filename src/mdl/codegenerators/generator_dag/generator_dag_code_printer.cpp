@@ -293,6 +293,9 @@ void DAG_code_printer::print_sema(IDefinition::Semantics sema) const
             case IExpression::OK_POST_DECREMENT:
                 s = "post-decrement operator";
                 break;
+            case IExpression::OK_CAST:
+                s = "cast<> operator";
+                break;
 
             // binary
             case IExpression::OK_SELECT:
@@ -508,9 +511,10 @@ void DAG_code_printer::print_mdl_type(
             }
             return;
         }
-    case IType::TK_BSDF:     keyword("bsdf"); break;
-    case IType::TK_EDF:      keyword("edf"); break;
-    case IType::TK_VDF:      keyword("vdf"); break;
+    case IType::TK_BSDF:      keyword("bsdf"); break;
+    case IType::TK_HAIR_BSDF: keyword("hair_bsdf"); break;
+    case IType::TK_EDF:       keyword("edf"); break;
+    case IType::TK_VDF:       keyword("vdf"); break;
     case IType::TK_STRUCT:
         {
             IType_struct const *s_type = cast<IType_struct>(type);

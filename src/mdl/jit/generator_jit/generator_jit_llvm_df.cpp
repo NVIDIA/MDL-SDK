@@ -31,9 +31,11 @@
 
 #include <algorithm>
 
+#include <llvm/ADT/SetVector.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/Cloning.h>
-#include <llvm/Linker.h>
+#include <llvm/Linker/Linker.h>
 
 #include "mdl/compiler/compilercore/compilercore_errors.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_lambda_function.h"
@@ -251,6 +253,7 @@ public:
         Distribution_function const &dist_func,
         mi::mdl::vector<int>::Type &lambda_result_indices,
         mi::mdl::vector<int>::Type &texture_result_indices,
+        mi::mdl::vector<unsigned>::Type &texture_result_offsets,
         llvm::SmallVector<unsigned, 8> &lambda_result_exprs_init,
         llvm::SmallVector<unsigned, 8> &lambda_result_exprs_others,
         llvm::SmallVector<unsigned, 8> &texture_result_exprs)
@@ -263,6 +266,7 @@ public:
       , m_dist_func(dist_func)
       , m_lambda_result_indices(lambda_result_indices)
       , m_texture_result_indices(texture_result_indices)
+      , m_texture_result_offsets(texture_result_offsets)
       , m_lambda_infos(alloc)
       , m_lambda_slots(alloc)
       , m_lambda_result_exprs_init(lambda_result_exprs_init)
@@ -278,13 +282,16 @@ public:
         m_lambda_result_indices.resize(expr_lambda_count, -1);
         m_texture_result_indices.clear();
         m_texture_result_indices.resize(expr_lambda_count, -1);
+        m_texture_result_offsets.clear();
 
         m_lambda_infos.reserve(expr_lambda_count);
     }
 
     /// Schedule the lambda functions and assign them to texture result and lambda result slots
     /// if necessary.
-    void schedule_lambdas()
+    ///
+    /// \param ignore_lambda_results  if true, no lambda results calculations will be scheduled
+    void schedule_lambdas(bool ignore_lambda_results)
     {
         size_t expr_lambda_count = m_dist_func.get_expr_lambda_count();
 
@@ -404,6 +411,10 @@ public:
                 }
             }
         }
+
+        // if we should not schedule lambda results, we're done here
+        if (ignore_lambda_results)
+            return;
 
         // if geometry.normal has to be calculated, collect required lambda results
         // for use in the bsdf init function
@@ -577,6 +588,7 @@ private:
             m_texture_result_exprs.push_back(unsigned(expr_index));
             m_texture_result_indices[expr_index] =
                 int(m_texture_result_types.size() - 1);
+            m_texture_result_offsets.push_back(unsigned(new_offs));
             return true;
         }
         return false;
@@ -635,6 +647,9 @@ private:
     /// Array which maps expression lambda indices to texture result indices.
     /// For expression lambdas without a texture result entry the array contains -1.
     mi::mdl::vector<int>::Type &m_texture_result_indices;
+
+    /// Array which maps expression lambda indices to texture result offsets.
+    mi::mdl::vector<unsigned>::Type &m_texture_result_offsets;
 
     /// The list of expression lambda infos.
     mi::mdl::vector<Lambda_info>::Type m_lambda_infos;
@@ -787,12 +802,12 @@ public:
 
         llvm::IRBuilder<> builder(start_block);
         llvm::SwitchInst *switch_inst =
-            builder.CreateSwitch(--switch_func->arg_end(), end_block, num_funcs);
+            builder.CreateSwitch(switch_func->arg_end() - 1, end_block, num_funcs);
 
         // collect the arguments for the DF functions to be called (without the index argument)
         llvm::SmallVector<llvm::Value *, 8> arg_values;
         for (llvm::Function::arg_iterator ai = switch_func->arg_begin(),
-                ae = --switch_func->arg_end(); ai != ae; ++ai)
+                ae = switch_func->arg_end() - 1; ai != ae; ++ai)
         {
             arg_values.push_back(ai);
         }
@@ -833,56 +848,6 @@ private:
 };
 
 
-// Prepare types and prototypes in the current LLVM module used by libbsdf.
-void LLVM_code_generator::prepare_libbsdf_prototypes(llvm::Module *libbsdf)
-{
-    // prepare float3 type
-    llvm::Type *members_float3_struct[] = {
-        m_type_mapper.get_float_type(),        // x
-        m_type_mapper.get_float_type(),        // y
-        m_type_mapper.get_float_type(),        // z
-    };
-    m_float3_struct_type = llvm::StructType::create(
-        m_llvm_context, members_float3_struct, "struct.float3", /*is_packed=*/false);
-
-
-    // declare a dummy function in both the current and the libbsdf module with all non-basic
-    // types (except the special BSDF type) used by BSDF function parameters to ensure proper
-    // type mapping when linking libbsdf. Currently this is only:
-    //  - float3
-    //  - color -> float3
-    llvm::Type *ret_tp = m_type_mapper.get_void_type();
-    llvm::Type *arg_types[] = {
-        m_float3_struct_type,
-    };
-
-    llvm::Function::Create(
-        llvm::FunctionType::get(ret_tp, arg_types, false),
-        llvm::GlobalValue::ExternalLinkage,
-        "dummy_function_for_linking",
-        m_module);
-
-    // find the libbsdf types by using prototypes:
-    //   define void @black_bsdf_sample(%struct.BSDF_sample_data* %a, %struct.State %b,
-    //       %struct.float3* %c)
-    //
-    // we cannot use libbsdf->getTypeByName() because it will just ask the context which
-    // has the names of all modules
-    llvm::Function *func = libbsdf->getFunction("black_bsdf_sample");
-    MDL_ASSERT(func && "libbsdf must contain a black_bsdf_sample function!");
-    llvm::Type *libbsdf_float3 = func->getFunctionType()->getParamType(2)->getPointerElementType();
-
-    llvm::Type *arg_types_libbsdf[] = {
-        libbsdf_float3,
-    };
-
-    llvm::Function::Create(
-        llvm::FunctionType::get(ret_tp, arg_types_libbsdf, false),
-        llvm::GlobalValue::ExternalLinkage,
-        "dummy_function_for_linking",
-        libbsdf);
-}
-
 // Create the BSDF function types using the BSDF data types from the already linked libbsdf
 // module.
 void LLVM_code_generator::create_bsdf_function_types()
@@ -896,7 +861,11 @@ void LLVM_code_generator::create_bsdf_function_types()
     // create function types for the BSDF functions
 
     llvm::Type *ret_tp = m_type_mapper.get_void_type();
-    llvm::Type *exec_ctx_ptr_type = m_type_mapper.get_exec_ctx_ptr_type();
+    llvm::Type *second_param_type;
+    if (target_supports_lambda_results_parameter())
+        second_param_type = m_type_mapper.get_exec_ctx_ptr_type();
+    else
+        second_param_type = m_type_mapper.get_state_ptr_type(m_state_mode);
     llvm::Type *float3_struct_ptr_type = Type_mapper::get_ptr(m_float3_struct_type);
 
     // BSDF_API void diffuse_reflection_bsdf_sample(
@@ -904,7 +873,7 @@ void LLVM_code_generator::create_bsdf_function_types()
 
     llvm::Type *arg_types_sample[] = {
         Type_mapper::get_ptr(m_type_bsdf_sample_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -915,7 +884,7 @@ void LLVM_code_generator::create_bsdf_function_types()
 
     llvm::Type *arg_types_eval[] = {
         Type_mapper::get_ptr(m_type_bsdf_evaluate_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -926,7 +895,7 @@ void LLVM_code_generator::create_bsdf_function_types()
 
     llvm::Type *arg_types_pdf[] = {
         Type_mapper::get_ptr(m_type_bsdf_pdf_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -947,7 +916,11 @@ void LLVM_code_generator::create_edf_function_types()
     // create function types for the EDF functions
 
     llvm::Type *ret_tp = m_type_mapper.get_void_type();
-    llvm::Type *exec_ctx_ptr_type = m_type_mapper.get_exec_ctx_ptr_type();
+    llvm::Type *second_param_type;
+    if (target_supports_lambda_results_parameter())
+        second_param_type = m_type_mapper.get_exec_ctx_ptr_type();
+    else
+        second_param_type = m_type_mapper.get_state_ptr_type(m_state_mode);
     llvm::Type *float3_struct_ptr_type = Type_mapper::get_ptr(m_float3_struct_type);
 
     // BSDF_API void diffuse_reflection_edf_sample(
@@ -955,7 +928,7 @@ void LLVM_code_generator::create_edf_function_types()
 
     llvm::Type *arg_types_sample[] = {
         Type_mapper::get_ptr(m_type_edf_sample_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -966,7 +939,7 @@ void LLVM_code_generator::create_edf_function_types()
 
     llvm::Type *arg_types_eval[] = {
         Type_mapper::get_ptr(m_type_edf_evaluate_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -977,7 +950,7 @@ void LLVM_code_generator::create_edf_function_types()
 
     llvm::Type *arg_types_pdf[] = {
         Type_mapper::get_ptr(m_type_edf_pdf_data),
-        exec_ctx_ptr_type,
+        second_param_type,
         float3_struct_ptr_type
     };
 
@@ -989,7 +962,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     bool                        incremental,
     Distribution_function const &dist_func,
     ICall_name_resolver const   *resolver,
-    Function_vector             &llvm_funcs)
+    Function_vector             &llvm_funcs,
+    size_t                      next_arg_block_index)
 {
     m_dist_func = &dist_func;
 
@@ -1010,6 +984,10 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
             drop_llvm_module(m_module);
             m_dist_func = NULL;
             return NULL;
+        }
+
+        if (m_target_lang == TL_HLSL) {
+            init_hlsl_code_gen();
         }
     }
 
@@ -1038,11 +1016,13 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         *m_dist_func,
         m_lambda_result_indices,
         m_texture_result_indices,
+        m_texture_result_offsets,
         lambda_result_exprs_init,
         lambda_result_exprs_others,
         texture_result_exprs);
 
-    lambda_sched.schedule_lambdas();
+    // for HLSL, we don't support lambda results
+    lambda_sched.schedule_lambdas(/*ignore_lambda_results=*/ m_target_lang == TL_HLSL);
 
     m_texture_results_struct_type = lambda_sched.create_texture_results_type();
     m_lambda_results_struct_type = lambda_sched.create_lambda_results_type();
@@ -1063,8 +1043,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         reset_lambda_state();
 
-        // generic functions return the result by reference
-        m_lambda_force_sret         = true;
+        // generic functions return the result by reference if supported
+        m_lambda_force_sret         = target_supports_sret_for_lambda();
 
         // generic functions always includes a render state in its interface
         m_lambda_force_render_state = true;
@@ -1079,6 +1059,11 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         // force expression lambda function to be internal
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
+
+        // if the result is not returned as an out parameter, mark the lambda function as read-only
+        if ((flags & LLVM_context_data::FL_SRET) == 0) {
+            func->setOnlyReadsMemory();
+        }
 
         // ensure the function is finished by putting it into a block
         {
@@ -1107,6 +1092,16 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     llvm::Twine base_name(root_lambda->get_name());
     Function_instance inst(get_allocator(), root_lambda);
 
+    IGenerated_code_executable::Distribution_kind dist_kind =
+        IGenerated_code_executable::DK_INVALID;
+    switch (root_lambda->get_body()->get_type()->get_kind()) {
+    case IType::TK_BSDF: dist_kind = IGenerated_code_executable::DK_BSDF; break;
+    case IType::TK_EDF:  dist_kind = IGenerated_code_executable::DK_EDF; break;
+    default:
+        MDL_ASSERT(!"Unexpected root lambda type kind");
+        break;
+    }
+
     // create one LLVM function for each distribution function state
     for (int i = DFSTATE_INIT; i < DFSTATE_END_STATE; ++i)
     {
@@ -1124,6 +1119,27 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         // set proper function name according to distribution function state
         func->setName(base_name + get_dist_func_state_suffix());
+
+        // remember function as an exported function
+        IGenerated_code_executable::Function_kind func_kind =
+            IGenerated_code_executable::FK_INVALID;
+        switch (i) {
+        case DFSTATE_INIT:     func_kind = IGenerated_code_executable::FK_DF_INIT;     break;
+        case DFSTATE_SAMPLE:   func_kind = IGenerated_code_executable::FK_DF_SAMPLE;   break;
+        case DFSTATE_EVALUATE: func_kind = IGenerated_code_executable::FK_DF_EVALUATE; break;
+        case DFSTATE_PDF:      func_kind = IGenerated_code_executable::FK_DF_PDF;      break;
+        default:
+            MDL_ASSERT(!"Unexpected DF state");
+            break;
+        }
+
+        m_exported_func_list.push_back(
+            Exported_function(
+                get_allocator(),
+                func,
+                dist_kind,
+                func_kind,
+                m_captured_args_type != NULL ? next_arg_block_index : ~0));
 
         Function_context context(alloc, *this, inst, func, flags);
 
@@ -1585,7 +1601,11 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
     } else {
         if (p_data->has_state_param()) {
             // pass state parameter
-            llvm_args.push_back(ctx.get_state_parameter(exec_ctx));
+            llvm::Value *state = ctx.get_state_parameter(exec_ctx);
+            if (use_state_from_this) {
+                state = ctx->CreateBitCast(state, m_type_mapper.get_state_ptr_type(m_state_mode));
+            }
+            llvm_args.push_back(state);
         }
 
         if (p_data->has_resource_data_param()) {
@@ -1593,7 +1613,7 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             llvm_args.push_back(ctx.get_resource_data_parameter(exec_ctx));
         }
 
-        if (p_data->has_exc_state_param()) {
+        if (target_uses_exception_state_parameter() && p_data->has_exc_state_param()) {
             // pass exc_state_param parameter
             llvm_args.push_back(ctx.get_exc_state_parameter(exec_ctx));
         }
@@ -1686,7 +1706,7 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
     }
 
     // Remove old call and let iterator point to instruction before old call
-    ii = ii->getParent()->getInstList().erase(call)->getPrevNode();
+    ii = --ii->getParent()->getInstList().erase(call);
     return true;
 }
 
@@ -1710,15 +1730,16 @@ void LLVM_code_generator::mark_df_calls(
         visited.insert(cur);
 
         int num_stores = 0;
-        for (llvm::Value::use_iterator ui = cur->use_begin(), ue = cur->use_end(); ui != ue; ++ui)
+        for (auto user : cur->users())
         {
-            if (llvm::StoreInst *inst = llvm::dyn_cast<llvm::StoreInst>(*ui)) {
+            if (llvm::StoreInst *inst = llvm::dyn_cast<llvm::StoreInst>(user)) {
                 // for stores, also follow the variable which is written
                 worklist.push_back(inst->getPointerOperand());
                 ++num_stores;
-            } else if (llvm::CallInst *inst = llvm::dyn_cast<llvm::CallInst>(*ui)) {
+            } else if (llvm::CallInst *inst = llvm::dyn_cast<llvm::CallInst>(user)) {
                 // found a call, store the parameter index as metadata
-                llvm::Value *param_idx = llvm::ConstantInt::get(int_type, df_param_idx);
+                llvm::Metadata *param_idx = llvm::ConstantAsMetadata::get(
+                    llvm::ConstantInt::get(int_type, df_param_idx));
                 llvm::MDNode *md = llvm::MDNode::get(m_llvm_context, param_idx);
                 switch (kind)
                 {
@@ -1734,7 +1755,7 @@ void LLVM_code_generator::mark_df_calls(
                 
             } else {
                 // for all other uses, just follow the use
-                worklist.push_back(*ui);
+                worklist.push_back(user);
             }
         }
 
@@ -1743,10 +1764,27 @@ void LLVM_code_generator::mark_df_calls(
     }
 }
 
+// Returns the set of context data flags to use for functions used with distribution functions.
+LLVM_context_data::Flags LLVM_code_generator::get_df_function_flags()
+{
+    LLVM_context_data::Flags flags = LLVM_context_data::FL_HAS_STATE;
+    //if (target_supports_sret_for_lambda())
+        flags |= LLVM_context_data::FL_SRET;  // will be mapped to inout
+    if (target_uses_resource_data_parameter())
+        flags |= LLVM_context_data::FL_HAS_RES;
+    if (target_uses_exception_state_parameter())
+        flags |= LLVM_context_data::FL_HAS_EXC;
+    if (target_supports_captured_argument_parameter())
+        flags |= LLVM_context_data::FL_HAS_CAP_ARGS;
+    if (target_supports_lambda_results_parameter())
+        flags |= LLVM_context_data::FL_HAS_EXEC_CTX | LLVM_context_data::FL_HAS_LMBD_RES;
+    return flags;
+}
+
 // Load and link libbsdf into the current LLVM module.
 bool LLVM_code_generator::load_and_link_libbsdf()
 {
-    llvm::Module *libbsdf = load_libbsdf(m_llvm_context);
+    std::unique_ptr<llvm::Module> libbsdf(load_libbsdf(m_llvm_context));
     MDL_ASSERT(libbsdf != NULL);
 
     // clear target triple to avoid LLVM warning on console about mixing different targets
@@ -1755,30 +1793,31 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     // try to avoid.
     libbsdf->setTargetTriple("");
 
-    prepare_libbsdf_prototypes(libbsdf);
+    // also avoid LLVM warning on console about mixing different data layouts
+    libbsdf->setDataLayout(m_module->getDataLayout());
 
     // collect all functions available before linking
     ptr_hash_set<llvm::Function>::Type old_funcs(get_allocator());
-    for (llvm::Module::iterator FI = m_module->begin(), FE = m_module->end(); FI != FE; ++FI) {
-        old_funcs.insert(&*FI);
+    for (llvm::Function &f : m_module->functions()) {
+        old_funcs.insert(&f);
     }
 
     std::string errorInfo;
-    if (llvm::Linker::LinkModules(m_module, libbsdf, llvm::Linker::DestroySource, &errorInfo)) {
+    if (llvm::Linker::linkModules(*m_module, std::move(libbsdf))) {
         // true means linking has failed
-        error(LINKING_LIBBSDF_FAILED, errorInfo);
+        error(LINKING_LIBBSDF_FAILED, "unknown linker error");
         MDL_ASSERT(!"Linking libbsdf failed");
         return false;
     }
 
+    m_float3_struct_type = m_module->getTypeByName("struct.float3");
+
     // find all functions which were added by linking the libbsdf module
-    ptr_hash_set<llvm::Function>::Type libbsdf_funcs(get_allocator());
-    for (llvm::Module::iterator FI = m_module->begin(), FE = m_module->end(); FI != FE; ++FI) {
-        libbsdf_funcs.insert(&*FI);
-    }
-    for (ptr_hash_set<llvm::Function>::Type::const_iterator FI = old_funcs.begin(),
-            FE = old_funcs.end(); FI != FE; ++FI) {
-        libbsdf_funcs.erase(*FI);
+    llvm::SetVector<llvm::Function *> libbsdf_funcs;
+    for (llvm::Function &f : m_module->functions()) {
+        // did not exist before linking already -> libbsdf function
+        if (old_funcs.count(&f) == 0)
+            libbsdf_funcs.insert(&f);
     }
 
     create_bsdf_function_types();
@@ -1788,16 +1827,10 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     m_edf_param_metadata_id = m_llvm_context.getMDKindID("libbsdf.edf_param");
 
     llvm::Type *int_type = m_type_mapper.get_int_type();
+    unsigned alloca_addr_space = m_module->getDataLayout().getAllocaAddrSpace();
 
     // iterate over all functions added from the libbsdf module
-    for (ptr_hash_set<llvm::Function>::Type::const_iterator FI = libbsdf_funcs.begin(),
-            FE = libbsdf_funcs.end(); FI != FE; ++FI) {
-        llvm::Function *func = *FI;
-
-        // disable all alignment settings on functions, as PTX does not support them
-        // (this is fixed in LLVM release 3.7 (svn commit 232004))
-        func->setAlignment(0);
-
+    for (llvm::Function *func : libbsdf_funcs) {
         // skip function declarations
         if (func->isDeclaration())
             continue;
@@ -1811,15 +1844,13 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 get_allocator(),
                 *this,
                 func,
-                LLVM_context_data::FL_SRET | LLVM_context_data::FL_HAS_STATE |
-                LLVM_context_data::FL_HAS_RES | LLVM_context_data::FL_HAS_EXC |
-                LLVM_context_data::FL_HAS_CAP_ARGS | LLVM_context_data::FL_HAS_EXEC_CTX,
+                get_df_function_flags(),  // note, the lambda results are not really used
                 false);  // don't optimize, because of parameter handling via uninitialized allocas
 
             // search for all CallInst instructions and link runtime function calls to the
             // corresponding intrinsics
             for (llvm::Function::iterator BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
-                for (llvm::BasicBlock::iterator II = *BI->begin(); II != *BI->end(); ++II) {
+                for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
                     if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(II)) {
                         if (!translate_libbsdf_runtime_call(call, II, ctx))
                             return false;
@@ -1829,8 +1860,8 @@ bool LLVM_code_generator::load_and_link_libbsdf()
         }
 
         // check whether this is a BSDF API function, for which we need to update the prototype
-        if (func->getArgumentList().size() >= 3) {
-            llvm::Function::arg_iterator func_arg_it = *func->arg_begin();
+        if (func->arg_size() >= 3) {
+            llvm::Function::arg_iterator func_arg_it = func->arg_begin();
             llvm::Value *first_arg = func_arg_it++;
 
             // is the type of the first parameter one of the BSDF data types?
@@ -1904,8 +1935,8 @@ bool LLVM_code_generator::load_and_link_libbsdf()
 
                     llvm::Function *old_func = func;
 
-                    llvm::Function::arg_iterator old_arg_it  = *old_func->arg_begin();
-                    llvm::Function::arg_iterator old_arg_end = *old_func->arg_end();
+                    llvm::Function::arg_iterator old_arg_it  = old_func->arg_begin();
+                    llvm::Function::arg_iterator old_arg_end = old_func->arg_end();
                     llvm::Value *df_data          = old_arg_it++;
                     llvm::Value *exec_ctx         = old_arg_it++;
                     llvm::Value *inherited_normal = old_arg_it++;
@@ -1936,7 +1967,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                         exec_ctx_param,
                         exec_ctx->getType(),
                         "exec_ctx_cast",
-                        param_init_insert_point));
+                        &*param_init_insert_point));
                     inherited_normal->replaceAllUsesWith(inherited_normal_param);
 
                     // introduce local variables for all used DF parameters
@@ -1969,8 +2000,9 @@ bool LLVM_code_generator::load_and_link_libbsdf()
 
                             arg_val = arg_var = new llvm::AllocaInst(
                                 elem_type,
+                                alloca_addr_space,
                                 df_arg,
-                                new_func->getEntryBlock().begin());
+                                &*new_func->getEntryBlock().begin());
 
                             if (elem_type->isStructTy() &&
                                 elem_type->getStructName() == df_struct_name.c_str())
@@ -1989,15 +2021,17 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                             // and replace the argument by the load, not the alloca
                             arg_var = new llvm::AllocaInst(
                                 old_arg_it->getType(),
+                                alloca_addr_space,
                                 df_arg_var,
-                                new_func->getEntryBlock().begin());
+                                &*new_func->getEntryBlock().begin());
                             arg_val = new llvm::LoadInst(
-                                arg_var, df_arg, param_init_insert_point);
+                                arg_var, df_arg, &*param_init_insert_point);
                         }
 
                         // do we need to set metadata?
                         if (arg_var != NULL) {
-                            llvm::Value *param_idx = llvm::ConstantInt::get(int_type, cur_df_idx);
+                            llvm::ConstantAsMetadata *param_idx = llvm::ConstantAsMetadata::get(
+                                llvm::ConstantInt::get(int_type, cur_df_idx));
                             llvm::MDNode *md = llvm::MDNode::get(m_llvm_context, param_idx);
 
                             switch (df_kind)
@@ -2017,7 +2051,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                         old_arg_it->replaceAllUsesWith(arg_val);
                     }
 
-                    func->eraseFromParent();
+                    old_func->eraseFromParent();
                 }
             }
         }
@@ -2030,35 +2064,60 @@ bool LLVM_code_generator::load_and_link_libbsdf()
 Expression_result LLVM_code_generator::generate_expr_lambda_call(
     Function_context &ctx,
     size_t           lambda_index,
-    llvm::Value *opt_dest_ptr)
+    llvm::Value      *opt_results_buffer,
+    size_t           opt_result_index)
 {
     mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
         m_dist_func->get_expr_lambda(lambda_index));
     Lambda_function const *expr_lambda_impl = impl_cast<Lambda_function>(expr_lambda.get());
 
-    // expression and special lambdas always return by reference via first parameter
+    // expression and special lambdas always return by reference via first parameter,
+    // if supported by the target
 
     llvm::Function *func = m_dist_func_lambda_map[expr_lambda.get()];
     llvm::Type *lambda_retptr_type = func->getFunctionType()->getParamType(0);
     llvm::Type *lambda_res_type = lambda_retptr_type->getPointerElementType();
     llvm::Type *dest_type = NULL;
     llvm::Value *res_pointer;
-    if (opt_dest_ptr != NULL &&
+
+    llvm::Value *opt_dest_ptr = NULL;
+    if (opt_results_buffer != NULL && m_target_lang != TL_HLSL) {
+        opt_dest_ptr = ctx.create_simple_gep_in_bounds(
+            opt_results_buffer, ctx.get_constant(int(opt_result_index)));
+    }
+
+    if (!target_supports_sret_for_lambda())
+        res_pointer = NULL;
+    else if (opt_dest_ptr != NULL &&
             (dest_type = opt_dest_ptr->getType()->getPointerElementType()) == lambda_res_type)
         res_pointer = opt_dest_ptr;
     else
         res_pointer = ctx.create_local(lambda_res_type, "res_buf");
 
     llvm::SmallVector<llvm::Value *, 6> lambda_args;
-    lambda_args.push_back(res_pointer);
+    if (res_pointer)
+        lambda_args.push_back(res_pointer);
     lambda_args.push_back(ctx.get_state_parameter());
-    lambda_args.push_back(ctx.get_resource_data_parameter());
-    lambda_args.push_back(ctx.get_exc_state_parameter());
-    lambda_args.push_back(ctx.get_cap_args_parameter());
-    if (expr_lambda_impl->uses_lambda_results())
+    if (target_uses_resource_data_parameter())
+        lambda_args.push_back(ctx.get_resource_data_parameter());
+    if (target_uses_exception_state_parameter())
+        lambda_args.push_back(ctx.get_exc_state_parameter());
+    if (target_supports_captured_argument_parameter())
+        lambda_args.push_back(ctx.get_cap_args_parameter());
+    if (target_supports_lambda_results_parameter() && expr_lambda_impl->uses_lambda_results())
         lambda_args.push_back(ctx.get_lambda_results_parameter());
 
-    ctx->CreateCall(func, lambda_args);
+    llvm::CallInst *call = ctx->CreateCall(func, lambda_args);
+    if (res_pointer == NULL) {
+        if (opt_results_buffer != NULL && m_target_lang == TL_HLSL) {
+            store_to_float4_array(
+                ctx,
+                call,
+                opt_results_buffer,
+                m_texture_result_offsets[opt_result_index]);
+        }
+        return Expression_result::value(call);
+    }
 
     if (opt_dest_ptr != NULL && dest_type != lambda_res_type) {
         llvm::Value *res = ctx->CreateLoad(res_pointer);
@@ -2067,6 +2126,194 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
     }
 
     return Expression_result::ptr(res_pointer);
+}
+
+// Store a value inside a float4 array at the given byte offset, updating the offset.
+void LLVM_code_generator::store_to_float4_array_impl(
+    Function_context &ctx,
+    llvm::Value *val,
+    llvm::Value *dest,
+    unsigned &dest_offs)
+{
+    llvm::Type *val_type = val->getType();
+
+    if (llvm::IntegerType *it = llvm::dyn_cast<llvm::IntegerType>(val_type)) {
+        if (it->getBitWidth() > 8)
+            dest_offs = (dest_offs + 3) & ~3;
+
+        llvm::Value *access[] = {
+            ctx.get_constant(int(0)),
+            ctx.get_constant(int(dest_offs >> 4)),     // float4 index
+            ctx.get_constant(int(dest_offs >> 2) & 3)  // float index within float4
+        };
+
+        llvm::Value *ptr = ctx->CreateInBoundsGEP(dest, access);
+
+        // store i1 and i8 in one byte per value, as specified by the data layout
+        if (it->getBitWidth() <= 8) {
+            // only modify the bits corresponding to the data offset
+            llvm::IntegerType *i32_type = llvm::IntegerType::get(m_llvm_context, 32);
+            val = ctx->CreateZExt(val, i32_type);
+            ptr = ctx->CreatePointerCast(ptr, i32_type->getPointerTo());
+            llvm::Value *data = ctx->CreateLoad(ptr);
+            data = ctx->CreateAnd(
+                data,
+                ctx.get_constant(int(~(0xff << ((dest_offs & 3) * 8)))));
+            if ((dest_offs & 3) != 0)
+                val = ctx->CreateShl(val, (dest_offs & 3) * 8);
+            data = ctx->CreateOr(data, val);
+            ctx->CreateStore(data, ptr);
+            ++dest_offs;
+            return;
+        }
+
+        ptr = ctx->CreatePointerCast(ptr, it->getPointerTo());
+        ctx->CreateStore(val, ptr);
+        dest_offs += 4;
+        return;
+    }
+
+    if (val_type->isFloatTy()) {
+        dest_offs = (dest_offs + 3) & ~3;
+        llvm::Value *access[] = {
+            ctx.get_constant(int(0)),
+            ctx.get_constant(int(dest_offs >> 4)),     // float4 index
+            ctx.get_constant(int(dest_offs >> 2) & 3)  // float index within float4
+        };
+
+        llvm::Value *ptr = ctx->CreateInBoundsGEP(dest, access);
+        ctx->CreateStore(val, ptr);
+        dest_offs += 4;
+        return;
+    }
+
+    if (llvm::isa<llvm::CompositeType>(val_type)) {
+        size_t size = size_t(
+            ctx.get_code_gen().get_target_layout_data()->getTypeAllocSize(val_type));
+        unsigned compound_start_offs = dest_offs;
+
+        uint64_t n;
+        if (llvm::StructType *st = llvm::dyn_cast<llvm::StructType>(val_type)) {
+            n = st->getNumElements();
+        } else {
+            n = llvm::cast<llvm::SequentialType>(val_type)->getNumElements();
+        }
+
+        for (uint64_t i = 0; i < n; ++i) {
+            llvm::Value *elem = ctx.create_extract(val, unsigned(i));
+            store_to_float4_array_impl(ctx, elem, dest, dest_offs);
+        }
+
+        // compound values might have an higher alignment then the sum of its components
+        dest_offs = compound_start_offs + size;
+        return;
+    }
+
+    // TODO: bool, enum, double (, string?)
+    MDL_ASSERT(!"not supported");
+}
+
+// Store a value inside a float4 array at the given byte offset.
+void LLVM_code_generator::store_to_float4_array(
+    Function_context &ctx,
+    llvm::Value *val,
+    llvm::Value *dest,
+    unsigned dest_offs)
+{
+    // call wrapped function with a copy of the offset, so only the copy is changed
+    store_to_float4_array_impl(ctx, val, dest, dest_offs);
+}
+
+// Load a value inside a float4 array at the given byte offset, updating the offset.
+llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
+    Function_context &ctx,
+    llvm::Type       *val_type,
+    llvm::Value      *src,
+    unsigned         &src_offs)
+{
+    if (llvm::IntegerType *it = llvm::dyn_cast<llvm::IntegerType>(val_type)) {
+        if (it->getBitWidth() > 8)
+            src_offs = (src_offs + 3) & ~3;
+
+        llvm::Value *access[] = {
+            ctx.get_constant(int(0)),
+            ctx.get_constant(int(src_offs >> 4)),     // float4 index
+            ctx.get_constant(int(src_offs >> 2) & 3)  // float index within float4
+        };
+
+        llvm::Value *ptr = ctx->CreateInBoundsGEP(src, access);
+
+        // load i1 and i8 from one byte per value, as specified by the data layout
+        if (it->getBitWidth() <= 8) {
+            llvm::IntegerType *i32_type = llvm::IntegerType::get(m_llvm_context, 32);
+            ptr = ctx->CreatePointerCast(ptr, i32_type->getPointerTo());
+            llvm::Value *val = ctx->CreateLoad(ptr);
+
+            if ((src_offs & 3) != 0)
+                val = ctx->CreateLShr(val, (src_offs & 3) * 8);
+            val = ctx->CreateTrunc(val, it);
+            ++src_offs;
+            return val;
+        }
+
+        ptr = ctx->CreatePointerCast(ptr, it->getPointerTo());
+        llvm::Value *elem = ctx->CreateLoad(ptr);
+        src_offs += 4;
+        return elem;
+    }
+
+    if (val_type->isFloatTy()) {
+        src_offs = (src_offs + 3) & ~3;
+        llvm::Value *access[] = {
+            ctx.get_constant(int(0)),
+            ctx.get_constant(int(src_offs >> 4)),     // float4 index
+            ctx.get_constant(int(src_offs >> 2) & 3)  // float index within float4
+        };
+
+        llvm::Value *ptr = ctx->CreateInBoundsGEP(src, access);
+        llvm::Value *elem = ctx->CreateLoad(ptr);
+        src_offs += 4;
+        return elem;
+    }
+
+    if (llvm::CompositeType *ct = llvm::dyn_cast<llvm::CompositeType>(val_type)) {
+        size_t size = size_t(
+            ctx.get_code_gen().get_target_layout_data()->getTypeAllocSize(val_type));
+        unsigned compound_start_offs = src_offs;
+
+        uint64_t n;
+        if (llvm::StructType *st = llvm::dyn_cast<llvm::StructType>(val_type)) {
+            n = st->getNumElements();
+        } else {
+            n = llvm::cast<llvm::SequentialType>(val_type)->getNumElements();
+        }
+
+        llvm::Value *res = llvm::UndefValue::get(val_type);
+        for (uint64_t i = 0; i < n; ++i) {
+            llvm::Value *elem = load_from_float4_array_impl(
+                ctx, ct->getTypeAtIndex(unsigned(i)), src, src_offs);
+            res = ctx.create_insert(res, elem, unsigned(i));
+        }
+
+        // compound values might have an higher alignment then the sum of its components
+        src_offs = compound_start_offs + size;
+        return res;
+    }
+
+    // TODO: bool, enum, double (, string?)
+    MDL_ASSERT(!"not supported");
+    return llvm::UndefValue::get(val_type);
+}
+
+// Load a value inside a float4 array at the given byte offset.
+llvm::Value *LLVM_code_generator::load_from_float4_array(
+    Function_context &ctx,
+    llvm::Type       *val_type,
+    llvm::Value      *src,
+    unsigned         src_offs)
+{
+    // call wrapped function with a copy of the offset, so only the copy is changed
+    return load_from_float4_array_impl(ctx, val_type, src, src_offs);
 }
 
 // Translate a precalculated lambda function to LLVM IR.
@@ -2087,15 +2334,26 @@ Expression_result LLVM_code_generator::translate_precalculated_lambda(
 
     // is the result available in the texture results from the MDL SDK state
     else if (m_texture_result_indices[lambda_index] != -1) {
-        res = Expression_result::ptr(ctx->CreateConstGEP2_32(
-            get_texture_results(ctx),
-            0,
-            unsigned(m_texture_result_indices[lambda_index])));
+        if (m_target_lang == TL_HLSL) {
+            res = Expression_result::value(load_from_float4_array(
+                ctx,
+                m_texture_results_struct_type->getElementType(
+                    m_texture_result_indices[lambda_index]),
+                get_texture_results(ctx),
+                m_texture_result_offsets[m_texture_result_indices[lambda_index]]));
+        } else {
+            res = Expression_result::ptr(ctx->CreateConstGEP2_32(
+                nullptr,
+                get_texture_results(ctx),
+                0,
+                unsigned(m_texture_result_indices[lambda_index])));
+        }
     }
 
     // was the result locally precalculated?
     else if (m_lambda_result_indices[lambda_index] != -1) {
         res = Expression_result::ptr(ctx->CreateConstGEP2_32(
+            nullptr,
             ctx->CreateBitCast(
                 ctx.get_lambda_results_parameter(),
                 m_type_mapper.get_ptr(m_lambda_results_struct_type)),
@@ -2141,7 +2399,8 @@ int LLVM_code_generator::get_metadata_df_param_id(
 
     if (md == NULL) return -1;
 
-    llvm::ConstantInt *param_idx_val = llvm::dyn_cast<llvm::ConstantInt>(md->getOperand(0));
+    llvm::ConstantInt *param_idx_val =
+        llvm::mdconst::dyn_extract<llvm::ConstantInt>(md->getOperand(0));
     if (param_idx_val == NULL) {
         MDL_ASSERT(!"Invalid BSDF alloca parameter metadata");
         return -1;
@@ -2161,9 +2420,8 @@ bool LLVM_code_generator::rewrite_weight_memcpy_addr(
     //   call void @llvm.memcpy.p0i8.p0i8.i64(i8* <Y>, i8* <C>, i64 12, i32 4, i1 false)
 
     // ensure, that all usages of this cast are memcpys of a weight
-    for (llvm::Value::use_iterator cast_ui = addr_bitcast->use_begin(),
-            cast_ue = addr_bitcast->use_end(); cast_ui != cast_ue; ++cast_ui) {
-        llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(*cast_ui);
+    for (auto cast_user : addr_bitcast->users()) {
+        llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(cast_user);
         if (call == NULL) {
             MDL_ASSERT(
                 !"Unsupported usage of color_xDF_component parameter with bitcast");
@@ -2188,7 +2446,7 @@ bool LLVM_code_generator::rewrite_weight_memcpy_addr(
     llvm::Value *null_val = llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type());
     llvm::Value *idxs[] = { null_val, index };
     llvm::GetElementPtrInst *weight_ptr = llvm::GetElementPtrInst::Create(
-        weight_array, idxs, "", addr_bitcast);
+        nullptr, weight_array, idxs, "", addr_bitcast);
     llvm::Value *new_cast = llvm::BitCastInst::Create(
         llvm::Instruction::BitCast, weight_ptr, addr_bitcast->getType(), "", weight_ptr);
     addr_bitcast->replaceAllUsesWith(new_cast);
@@ -2210,14 +2468,13 @@ void LLVM_code_generator::rewrite_df_component_usages(
     // These rewrites are performed:
     //  - bsdf_component[i].weight -> weights[i]
     //  - bsdf_component[i].component.sample() -> df_func(...) or df_func(..., i)
-    for (llvm::Value::use_iterator ui = inst->use_begin(),
-            ue = inst->use_end(); ui != ue; ++ui) {
-        llvm::GetElementPtrInst *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(*ui);
+    for (auto user : inst->users()) {
+        llvm::GetElementPtrInst *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(user);
         if (gep == NULL) {
             // check for
             //   <C> = bitcast %struct.color_BSDF_component* <X> to i8*
             //   call void @llvm.memcpy.p0i8.p0i8.i64(i8* <Y>, i8* <C>, i64 12, i32 4, i1 false)
-            llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(*ui);
+            llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(user);
             if (cast == NULL) {
                 MDL_ASSERT(!"Unsupported usage of color_xDF_component parameter");
                 continue;
@@ -2235,9 +2492,8 @@ void LLVM_code_generator::rewrite_df_component_usages(
             //   <C> = bitcast %struct.color_BSDF_component* <X> to i8*
             //   call void @llvm.memcpy.p0i8.p0i8.i64(i8* <Y>, i8* <C>, i64 12, i32 4, i1 false)
 
-            for (llvm::Value::use_iterator gep_ui = gep->use_begin(),
-                    gep_ue = gep->use_end(); gep_ui != gep_ue; ++gep_ui) {
-                llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(*gep_ui);
+            for (auto gep_user : gep->users()) {
+                llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(gep_user);
                 if (cast == NULL) {
                     MDL_ASSERT(!"Unsupported gep usage of color_xDF_component parameter");
                     continue;
@@ -2269,14 +2525,14 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     component_idx_val,
                     col_comp_idx_val
                 };
-                new_gep = llvm::GetElementPtrInst::Create(weight_array, idxs, "", gep);
+                new_gep = llvm::GetElementPtrInst::Create(nullptr, weight_array, idxs, "", gep);
             } else {
                 // replace by access on same index of weight array (can be float or color)
                 llvm::Value *idxs[] = {
                     llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type()),
                     component_idx_val
                 };
-                new_gep = llvm::GetElementPtrInst::Create(weight_array, idxs, "", gep);
+                new_gep = llvm::GetElementPtrInst::Create(nullptr, weight_array, idxs, "", gep);
             }
             gep->replaceAllUsesWith(new_gep);
             continue;
@@ -2290,14 +2546,12 @@ void LLVM_code_generator::rewrite_df_component_usages(
             //  - %funcptr = load %elemptr
             //  - call %funcptr
             // So iterate over all usages of the gep and the loads
-            for (llvm::Value::use_iterator gep_ui = gep->use_begin(),
-                    gep_ue = gep->use_end(); gep_ui != gep_ue; ++gep_ui) {
-                llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(*gep_ui);
+            for (auto gep_user : gep->users()) {
+                llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(gep_user);
                 MDL_ASSERT(load);
 
-                for (llvm::Value::use_iterator load_ui = load->use_begin(),
-                        load_ue = load->use_end(); load_ui != load_ue; ++load_ui) {
-                    llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(*load_ui);
+                for (auto load_user : load->users()) {
+                    llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(load_user);
                     MDL_ASSERT(call);
                     MDL_ASSERT(call->getType() != llvm::IntegerType::get(m_llvm_context, 1) &&
                         "bsdfs in bsdf_component currently don't support is_black()");
@@ -2315,7 +2569,8 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     // call it with state parameters added
                     llvm::SmallVector<llvm::Value *, 7> llvm_args;
                     llvm_args.push_back(call->getArgOperand(0));     // res_pointer
-                    llvm_args.push_back(ctx.get_exec_ctx_parameter());
+                    llvm_args.push_back(ctx.has_exec_ctx_parameter() ?
+                        ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
                     llvm_args.push_back(call->getArgOperand(2));     // inherited_normal parameter
                     if (comp_info.is_switch_function())
                         llvm_args.push_back(idx_val);                // BSDF function index
@@ -2674,10 +2929,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
             get_allocator(),
             *this,
             func,
-            LLVM_context_data::FL_SRET | LLVM_context_data::FL_HAS_STATE |
-            LLVM_context_data::FL_HAS_RES | LLVM_context_data::FL_HAS_EXC |
-            LLVM_context_data::FL_HAS_CAP_ARGS | LLVM_context_data::FL_HAS_LMBD_RES |
-            LLVM_context_data::FL_HAS_EXEC_CTX,
+            get_df_function_flags(),
             true);
 
         ctx->SetInsertPoint(body_bb);
@@ -2709,7 +2961,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
 
         llvm::Value *llvm_args[] = {
             func->arg_begin(),            // res_pointer
-            ctx.get_exec_ctx_parameter(),
+            ctx.has_exec_ctx_parameter() ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter(),
             ctx.get_first_parameter()   // inherited_normal parameter
         };
 
@@ -2806,28 +3058,20 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     }
 
     llvm::ValueToValueMapTy ValueMap;
-    llvm::Function *bsdf_func = llvm::CloneFunction(
-        df_lib_func,
-        ValueMap,
-        false);          // ModuleLevelChanges
-
-    m_module->getFunctionList().push_back(bsdf_func);
+    llvm::Function *bsdf_func = llvm::CloneFunction(df_lib_func, ValueMap);
 
     Function_context ctx(
         get_allocator(),
         *this,
         bsdf_func,
-        LLVM_context_data::FL_SRET | LLVM_context_data::FL_HAS_STATE |
-        LLVM_context_data::FL_HAS_RES | LLVM_context_data::FL_HAS_EXC |
-        LLVM_context_data::FL_HAS_CAP_ARGS | LLVM_context_data::FL_HAS_LMBD_RES |
-        LLVM_context_data::FL_HAS_EXEC_CTX,
+        get_df_function_flags(),
         true);
 
     llvm::SmallVector<llvm::Instruction *, 16> delete_list;
 
     // process all calls to BSDF parameter accessors
     for (llvm::Function::iterator BI = bsdf_func->begin(), BE = bsdf_func->end(); BI != BE; ++BI) {
-        for (llvm::BasicBlock::iterator II = *BI->begin(); II != *BI->end(); ++II) {
+        for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
             if (llvm::AllocaInst *inst = llvm::dyn_cast<llvm::AllocaInst>(II)) {
                 llvm::Type *elem_type = inst->getAllocatedType();
 
@@ -2886,7 +3130,8 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                         // call it with state parameters added
                         llvm::Value *llvm_args[] = {
                             call->getArgOperand(0),  // res_pointer
-                            ctx.get_exec_ctx_parameter(),
+                            ctx.has_exec_ctx_parameter() ? ctx.get_exec_ctx_parameter()
+                                : ctx.get_state_parameter(),
                             call->getArgOperand(2)   // inherited_normal parameter
                         };
                         llvm::CallInst::Create(param_bsdf_func, llvm_args, "", call);
@@ -2977,19 +3222,18 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     );
 
     // allocate the lambda results struct and make it available in the context
-    llvm::Value *lambda_results = ctx.create_local(m_lambda_results_struct_type, "lambda_results");
-    ctx.override_lambda_results(
-        ctx->CreateBitCast(lambda_results, m_type_mapper.get_void_ptr_type()));
+    llvm::Value *lambda_results = NULL;
+    if (target_supports_lambda_results_parameter()) {
+        lambda_results = ctx.create_local(m_lambda_results_struct_type, "lambda_results");
+        ctx.override_lambda_results(
+            ctx->CreateBitCast(lambda_results, m_type_mapper.get_void_ptr_type()));
+    }
 
     // calculate all required non-constant expression lambdas
     for (size_t i = 0, n = lambda_result_exprs.size(); i < n; ++i) {
         size_t expr_index = lambda_result_exprs[i];
 
-        llvm::Value *dest_ptr = ctx->CreateConstGEP2_32(
-            lambda_results,
-            0,
-            unsigned(m_lambda_result_indices[expr_index]));
-        generate_expr_lambda_call(ctx, expr_index, dest_ptr);
+        generate_expr_lambda_call(ctx, expr_index, lambda_results, i);
     }
 
     // get the current normal
@@ -3003,23 +3247,26 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     ctx.convert_and_store(normal, normal_buf);
 
     // create and initialize execution context
-    llvm::Value *exec_ctx = ctx.create_local(
-        m_type_mapper.get_exec_ctx_type(), "exec_ctx");
-    ctx->CreateStore(
-        ctx.get_state_parameter(),
-        ctx.create_simple_gep_in_bounds(exec_ctx, 0u));
-    ctx->CreateStore(
-        ctx.get_resource_data_parameter(),
-        ctx.create_simple_gep_in_bounds(exec_ctx, 1u));
-    ctx->CreateStore(
-        ctx.get_exc_state_parameter(),
-        ctx.create_simple_gep_in_bounds(exec_ctx, 2u));
-    ctx->CreateStore(
-        ctx.get_cap_args_parameter(),
-        ctx.create_simple_gep_in_bounds(exec_ctx, 3u));
-    ctx->CreateStore(
-        ctx.get_lambda_results_parameter(),  // actually our overridden local struct
-        ctx.create_simple_gep_in_bounds(exec_ctx, 4u));
+    llvm::Value *exec_ctx = nullptr;
+    if (target_supports_lambda_results_parameter()) {
+        exec_ctx = ctx.create_local(
+            m_type_mapper.get_exec_ctx_type(), "exec_ctx");
+        ctx->CreateStore(
+            ctx.get_state_parameter(),
+            ctx.create_simple_gep_in_bounds(exec_ctx, 0u));
+        ctx->CreateStore(
+            ctx.get_resource_data_parameter(),
+            ctx.create_simple_gep_in_bounds(exec_ctx, 1u));
+        ctx->CreateStore(
+            ctx.get_exc_state_parameter(),
+            ctx.create_simple_gep_in_bounds(exec_ctx, 2u));
+        ctx->CreateStore(
+            ctx.get_cap_args_parameter(),
+            ctx.create_simple_gep_in_bounds(exec_ctx, 3u));
+        ctx->CreateStore(
+            ctx.get_lambda_results_parameter(),  // actually our overridden local struct
+            ctx.create_simple_gep_in_bounds(exec_ctx, 4u));
+    }
 
     // recursively instantiate the DF
     llvm::Function *df_func = instantiate_df(body);
@@ -3031,7 +3278,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     // call the instantiated distribution function
     llvm::Value *df_args[] = {
         ctx.get_function()->arg_begin(),  // result pointer
-        exec_ctx,
+        exec_ctx ? exec_ctx : ctx.get_state_parameter(),
         normal_buf
     };
     llvm::CallInst *callinst = ctx->CreateCall(df_func, df_args);
@@ -3046,12 +3293,17 @@ void LLVM_code_generator::translate_distribution_function_init(
     llvm::SmallVector<unsigned, 8> const &lambda_result_exprs)
 {
     // allocate the lambda results struct and make it available in the context
-    llvm::Value *lambda_results = ctx.create_local(m_lambda_results_struct_type, "lambda_results");
-    ctx.override_lambda_results(
-        ctx->CreateBitCast(lambda_results, m_type_mapper.get_void_ptr_type()));
+    llvm::Value *lambda_results = NULL;
+    if (target_supports_lambda_results_parameter()) {
+        lambda_results = ctx.create_local(m_lambda_results_struct_type, "lambda_results");
+        ctx.override_lambda_results(
+            ctx->CreateBitCast(lambda_results, m_type_mapper.get_void_ptr_type()));
+    }
 
     // call state::get_texture_results()
-    llvm::Value *texture_results = get_texture_results(ctx);
+    llvm::Value *texture_results = NULL;
+    if (texture_result_exprs.size() != 0)
+        texture_results = get_texture_results(ctx);
 
     // calculate the normal from geometry.normal
     llvm::Value *normal = NULL;
@@ -3067,9 +3319,7 @@ void LLVM_code_generator::translate_distribution_function_init(
             size_t expr_index = texture_result_exprs[i];
             if (expr_index > geometry_normal_index) continue;
 
-            llvm::Value *dest_ptr = ctx.create_simple_gep_in_bounds(
-                texture_results, ctx.get_constant(int(i)));
-            generate_expr_lambda_call(ctx, expr_index, dest_ptr);
+            generate_expr_lambda_call(ctx, expr_index, texture_results, i);
         }
 
         // calculate all non-constant expression lambdas required to calculate geometry.normal
@@ -3079,8 +3329,7 @@ void LLVM_code_generator::translate_distribution_function_init(
             size_t expr_index = lambda_result_exprs[i];
             if (expr_index > geometry_normal_index) continue;
 
-            llvm::Value *dest_ptr = ctx->CreateConstGEP2_32(lambda_results, 0, unsigned(i));
-            generate_expr_lambda_call(ctx, expr_index, dest_ptr);
+            generate_expr_lambda_call(ctx, expr_index, lambda_results, i);
         }
 
         normal = translate_precalculated_lambda(
@@ -3104,9 +3353,7 @@ void LLVM_code_generator::translate_distribution_function_init(
         // already processed during geometry.normal evaluation?
         if (geometry_normal_index != ~0 && expr_index <= geometry_normal_index) continue;
 
-        llvm::Value *dest_ptr = ctx.create_simple_gep_in_bounds(
-            texture_results, ctx.get_constant(int(i)));
-        generate_expr_lambda_call(ctx, expr_index, dest_ptr);
+        generate_expr_lambda_call(ctx, expr_index, texture_results, i);
     }
 }
 

@@ -582,6 +582,9 @@ private:
         case IExpression_unary::OK_POST_DECREMENT:
             // these operators are not supported in the DAG representation
             return;
+
+        case IExpression_unary::OK_CAST:
+            break;
         }
 
         string name(m_dag_builder.get_unary_name(expr));
@@ -1271,8 +1274,10 @@ DAG_dependence_graph::DAG_dependence_graph(
         }
 
         if (module->is_builtins()) {
-            // Generate the array constructor
+            // Generate the array constructor.
             create_dag_array_constructor(int_type);
+            // Generate the cast operator.
+            create_dag_cast_operator(int_type);
         }
     }
 
@@ -1964,6 +1969,25 @@ void DAG_dependence_graph::create_dag_array_constructor(IType const *int_type)
         Array_ref<Dependence_node::Parameter>(),
         Dependence_node::FL_IS_EXPORTED);
     m_exported_nodes.push_back(n);
+}
+
+// Create the one-and-only cast operator.
+void DAG_dependence_graph::create_dag_cast_operator(IType const *int_type)
+{
+    MDL_ASSERT(m_is_builtins);
+
+    // Create the magic cast operator. There is only one.
+    Dependence_node *n = get_node(
+        "operator_cast()",
+        /*dag_alias_name=*/NULL,
+        /*dag_preset_name=*/NULL,
+        operator_to_semantic(IExpression::OK_CAST),
+        // Arg, no way to express "Any type" here, but we need one return type.
+        int_type,
+        Array_ref<Dependence_node::Parameter>(),
+        Dependence_node::FL_IS_EXPORTED);
+    m_exported_nodes.push_back(n);
+
 }
 
 } // mdl

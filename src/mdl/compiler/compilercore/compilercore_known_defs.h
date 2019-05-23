@@ -1334,6 +1334,13 @@ BUILTIN_TYPE_BEGIN(bsdf, 0)
     CONSTRUCTOR(IMPLICIT, bsdf, ARG1(ARG(bsdf, value,)), DS_COPY_CONSTRUCTOR, 0)
 BUILTIN_TYPE_END(bsdf)
 
+BUILTIN_TYPE_BEGIN(hair_bsdf, 0)
+    // default constructor
+    CONSTRUCTOR(IMPLICIT, hair_bsdf, ARG0(), DS_INVALID_REF_CONSTRUCTOR, 0)
+    // copy constructor
+    CONSTRUCTOR(IMPLICIT, hair_bsdf, ARG1(ARG(hair_bsdf, value,)), DS_COPY_CONSTRUCTOR, 0)
+BUILTIN_TYPE_END(hair_bsdf)
+
 BUILTIN_TYPE_BEGIN(edf, 0)
     // default constructor
     CONSTRUCTOR(IMPLICIT, edf, ARG0(), DS_INVALID_REF_CONSTRUCTOR, 0)
@@ -1504,8 +1511,9 @@ BUILTIN_TYPE_BEGIN(material, 0)
     FIELD(material, uniform, color,             ior,         0) // = color(1.0);
     FIELD(material,        , material_volume,   volume,      0) // = material_volume();
     FIELD(material,        , material_geometry, geometry,    0) // = material_geometry();
+    FIELD(material,        , hair_bsdf,         hair,        SINCE_1_5) // = hair_bsdf();
 
-    // default constructor
+    // default constructor until MDL 1.5
     CONSTRUCTOR(IMPLICIT, material,
         ARG6(
             UDEFARG(bool,              thin_walled,, EXPR_LITERAL(false)),
@@ -1514,7 +1522,18 @@ BUILTIN_TYPE_BEGIN(material, 0)
             UDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
             DEFARG(material_volume,    volume,,      EXPR_CONSTRUCTOR(material_volume)),
             DEFARG(material_geometry,  geometry,,    EXPR_CONSTRUCTOR(material_geometry))
-        ), DS_ELEM_CONSTRUCTOR, 0)
+        ), DS_ELEM_CONSTRUCTOR, REMOVED_1_5)
+    // default constructor from MDL 1.5
+    CONSTRUCTOR(IMPLICIT, material,
+        ARG7(
+            UDEFARG(bool,              thin_walled,, EXPR_LITERAL(false)),
+            DEFARG(material_surface,   surface,,     EXPR_CONSTRUCTOR(material_surface)),
+            DEFARG(material_surface,   backface,,    EXPR_CONSTRUCTOR(material_surface)),
+            UDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
+            DEFARG(material_volume,    volume,,      EXPR_CONSTRUCTOR(material_volume)),
+            DEFARG(material_geometry,  geometry,,    EXPR_CONSTRUCTOR(material_geometry)),
+            DEFARG(hair_bsdf,          hair,,        EXPR_CONSTRUCTOR(hair_bsdf))
+        ), DS_ELEM_CONSTRUCTOR, SINCE_1_5)
     // copy constructor
     CONSTRUCTOR(IMPLICIT, material,
         ARG1(

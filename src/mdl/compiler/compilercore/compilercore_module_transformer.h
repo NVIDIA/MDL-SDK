@@ -63,6 +63,7 @@ public:
     /// \param module              The current module.
     /// \param target_module       The target module.
     /// \param is_root_module      True, if 'module' is the root module of the traversal.
+    /// \param inline_mdle         True, if only MDLE definitions should be inlined.
     /// \param references          A map holding the references that have already been cloned.
     /// \param imports             A set holding standard modules to be imported.
     /// \param visible_definitions Definitions visible at the interface of the root module.
@@ -72,9 +73,12 @@ public:
         Module const                              *module,
         Module                                    *target_module,
         bool                                      is_root_module,
+        bool                                      inline_mdle,
         Reference_map                             &references,
         Import_set                                &imports,
-        Def_set                                   &visible_definitions);
+        Def_set                                   &visible_definitions,
+        int&                                      counter
+    );
 
     ~Module_inliner();
 
@@ -95,11 +99,6 @@ public:
     IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL;
 
 protected:
-
-    /// Visit a declaration and all its children.
-    ///
-    /// \param decl  the declaration
-    void _visit(IDeclaration const *decl);
 
     /// Called, before an annotation block is visited.
     ///
@@ -184,12 +183,22 @@ private:
         IAnnotation_block const *anno_block);
 
     /// Clones parameter annotations.
+    ///
+    /// \param anno_block   the annotation block to clone
+    /// \param display_name if non-NULL, add a display_name annotation
+    ///
     /// For non-root material parameters, annotations are dropped, except for anno::unused,
     /// description and display_name. if no display name exists in the original annotation
     /// block, but the passed display_name is non-NULL, a new annotation is added.
     IAnnotation_block const *clone_parameter_annotations(
         IAnnotation_block const *anno_block,
         char const              *display_name);
+
+    /// Clones an annotation block completely.
+    ///
+    /// \param anno_block   the annotation block to clone
+    IAnnotation_block const *clone_annotations(
+        IAnnotation_block const *anno_block);
 
     /// Clones a function declaration.
     ///
@@ -255,14 +264,20 @@ private:
     IExpression_reference *simple_name_to_reference(
         ISimple_name const* name);
 
-    /// Creates a display name annotation from the given name.
-    IAnnotation *create_display_name(char const *name) const;
+    /// Creates a one parameter "::anno" string annotation annotation.
+    /// \param anno_name    annotation name
+    /// \param value        annotation value
+    IAnnotation *create_string_anno(
+        char const *anno_name,
+        char const *value) const;
 
     /// Adds the given entity to the import set.
     void register_import(char const *module_name, char const *symbol_name);
 
     /// Handles a type.
     void do_type(IType const *t);
+
+    bool needs_inline(IModule const *module) const;
 
 private:
     /// The current module.
@@ -273,6 +288,9 @@ private:
 
     /// True, if the current module is the root of the traversal.
     bool m_is_root;
+
+    /// True, if only MDLE definitions are supposed to be inlined.
+    bool m_inline_mdle;
 
     /// Map holding the inlined functions and its new symbol.
     Reference_map &m_references;
@@ -296,6 +314,8 @@ private:
 
     /// True, if non-root definition parameter defaults are to be kept
     bool m_keep_non_root_parameter_defaults;
+
+    int& m_counter;
 };
 
 /// Helper class which traverses a module to find all imported entities
@@ -366,6 +386,17 @@ public:
     /// The annotation "origin(string)" holds the original full qualified name.
     IModule const *inline_imports(IModule const *module) MDL_FINAL;
 
+    /// Inline all MDLE imports of a module, creating a new one.
+    ///
+    /// \param module       the module
+    ///
+    /// This function inlines ALL MDLE imports and produces a new module.
+    /// The imported functions, materials, and types are renamed and only exported if visible
+    /// in the interface.
+    ///
+    /// The annotation "origin(string)" holds the original full qualified name.
+    IModule const *inline_mdle(IModule const *module) MDL_FINAL;
+
     /// Access messages of the last operation.
     Messages const &access_messages() const MDL_FINAL;
 
@@ -389,6 +420,13 @@ protected:
     /// \param code    the error code
     /// \param params  additional parameters
     void warning(int code, Error_params const &params);
+
+    /// Inlines the given module.
+    ///
+    /// \param module       the module
+    /// \param inline_mdle  true, if only MDLE definitions should be inlined
+    /// \return the inlined module or NULL in case of failure.
+    IModule const *inline_module(IModule const *imodule, bool inline_mdle);
 
 private:
     /// The MDL compiler.

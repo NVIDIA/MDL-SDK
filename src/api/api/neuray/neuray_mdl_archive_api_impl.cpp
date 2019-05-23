@@ -473,6 +473,7 @@ const char* Manifest_impl::convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_3: return "1.3";
         case mi::mdl::IMDL::MDL_VERSION_1_4: return "1.4";
         case mi::mdl::IMDL::MDL_VERSION_1_5: return "1.5";
+        case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
     }
 
     ASSERT( M_NEURAY_API, false);

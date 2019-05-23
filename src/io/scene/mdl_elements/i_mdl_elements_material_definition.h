@@ -74,6 +74,7 @@ public:
     /// \param material_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
     /// \param module_name            The fully-qualified MDL module name.
+    /// \param load_resources         True, if resources are supposed to be loaded into the DB.
     Mdl_material_definition(
         DB::Transaction* transaction,
         DB::Tag module_tag,
@@ -81,7 +82,8 @@ public:
         const mi::mdl::IGenerated_code_dag* code_dag,
         mi::Uint32 material_index,
         const char* module_filename,
-        const char* module_name);
+        const char* module_name,
+        bool load_resources);
 
     // methods corresponding to mi::neuraylib::IMaterial_definition
 

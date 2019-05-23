@@ -1791,6 +1791,9 @@ void Archive_extractor::handle_file_error(
     case EC_INVALID_HEADER_VERSION:
         error(MDR_INVALID_HEADER_VERSION, Error_params(m_alloc).add(archive_name));
         return;
+    case EC_PRE_RELEASE_VERSION:
+        error(MDR_PRE_RELEASE_VERSION, Error_params(m_alloc).add(archive_name));
+        return;
     case EC_INTERNAL_ERROR:
         error(INTERNAL_ARCHIVER_ERROR, Error_params(m_alloc).add(archive_name));
         return;
@@ -2084,7 +2087,8 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
     MDL_zip_container_error_code  &err,
     bool                            with_manifest)
 {
-    zip_t* za = MDL_zip_container::open(alloc, path, err, header_supported_read_version);
+    MDL_zip_container_header header_info = header_supported_read_version;
+    zip_t* za = MDL_zip_container::open(alloc, path, err, header_info);
 
     if (err != EC_OK)
         return NULL;
@@ -2124,6 +2128,9 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
             return NULL;
         }
     }
+
+    if(archiv)
+        archiv->m_header = header_info;
     return archiv;
 }
 
@@ -2292,6 +2299,8 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
             ver = IMDL::MDL_VERSION_1_4;
         else if (v == "1.5")
             ver = IMDL::MDL_VERSION_1_5;
+        else if (v == "1.6")
+            ver = IMDL::MDL_VERSION_1_6;
         else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }

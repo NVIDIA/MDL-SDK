@@ -99,6 +99,9 @@ typedef Float3_struct tct_float3;
 typedef Float4_struct tct_float4;
 #endif
 
+/// A bool.
+typedef bool       tct_bool;
+
 /// An int.
 typedef int        tct_int;
 
@@ -477,16 +480,45 @@ struct Texture_handler_vtable_impl {
 
     /// Implementation of \c resolution_2d() function needed by generated code,
     /// which retrieves the width and height of the given texture.
+    /// Will only be called for texture_2d and texture_cube textures.
     void (*m_tex_resolution_2d)(
         tct_int                    result[2],
         Texture_handler_base const *self,
         tct_uint                   texture_idx,
         tct_int const              uv_tile[2]);
 
+    /// Implementation of \c resolution_3d() function needed by generated code,
+    /// which retrieves the width, height and depth of the given texture.
+    /// Will only be called for texture_3d textures.
+    void (*m_tex_resolution_3d)(
+        tct_int                    result[3],
+        Texture_handler_base const *self,
+        tct_uint                   texture_idx);
+
+    /// Implementation of \c texture_isvalid() for any texture type.
+    tct_bool (*m_tex_texture_isvalid)(
+        Texture_handler_base const *self,
+        tct_uint                   texture_idx);
+
+    /// Implementation of \c light_profile_power() for a light profile.
+    tct_float (*m_df_light_profile_power)(
+        Texture_handler_base const *self,
+        tct_uint                   light_profile_index);
+
+    /// Implementation of \c light_profile_maximum() for a light profile.
+    tct_float (*m_df_light_profile_maximum)(
+        Texture_handler_base const *self,
+        tct_uint                   light_profile_index);
+
+    /// Implementation of \c light_profile_isvalid() for a light profile.
+    tct_bool (*m_df_light_profile_isvalid)(
+        Texture_handler_base const *self,
+        tct_uint                   light_profile_index);
+
     /// Implementation of \c light_profile_evaluate() for a light profile.
     tct_float (*m_df_light_profile_evaluate)(
         Texture_handler_base const *self,
-        tct_uint                   resource_idx,
+        tct_uint                   light_profile_index,
         tct_float const            theta_phi[2]);       //!< theta in [0, pi/2] and phi in [-pi, pi]
 
     /// Implementation of \c light_profile_sample() for a light profile.
@@ -494,14 +526,19 @@ struct Texture_handler_vtable_impl {
         tct_float                  result[3],           /*!< output: theta in [0, pi/2],
                                                              phi in [-pi, pi], and pdf */
         Texture_handler_base const *self,
-        tct_uint                   resource_idx,
+        tct_uint                   light_profile_index,
         tct_float const            xi[3]);
 
     /// Implementation of \c light_profile_pdf() for a light profile.
     tct_float (*m_df_light_profile_pdf)(
         Texture_handler_base const *self,
-        tct_uint                   resource_idx,
+        tct_uint                   light_profile_index,
         tct_float const            theta_phi[2]);       //!< theta in [0, pi/2] and phi in [-pi, pi]
+
+    /// Implementation of \c bsdf_measurement_isvalid() for an MBSDF.
+    tct_bool (*m_df_bsdf_measurement_isvalid)(
+        Texture_handler_base const *self,
+        tct_uint                   bsdf_measurement_index);
 
     /// Implementation of \c bsdf_measurement_resolution() function needed by generated code,
     /// which retrieves the angular and chromatic resolution of the given MBSDF.
@@ -510,14 +547,14 @@ struct Texture_handler_vtable_impl {
     void (*m_df_bsdf_measurement_resolution)(
         tct_uint                    result[3],
         Texture_handler_base const  *self,
-        tct_uint                    resource_idx,
+        tct_uint                    bsdf_measurement_index,
         Mbsdf_part                  part);              //!< reflection or transmission
 
     /// Implementation of \c bsdf_measurement_evaluate() for an MBSDF.
     void (*m_df_bsdf_measurement_evaluate)(
         tct_float                   result[3],
         Texture_handler_base const  *self,
-        tct_uint                    resource_idx,
+        tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi_in[2],    //!< theta in [0, pi/2] and phi in [-pi, pi]
         tct_float const             theta_phi_out[2],   //!< theta in [0, pi/2] and phi in [-pi, pi]
         Mbsdf_part                  part);              //!< reflection or transmission
@@ -527,7 +564,7 @@ struct Texture_handler_vtable_impl {
         tct_float                   result[3],          /*!< output: theta in [0, pi/2],
                                                              phi in [-pi, pi], and pdf */
         Texture_handler_base const  *self,
-        tct_uint                    resource_idx,
+        tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi_out[2],   //!< theta in [0, pi/2] and phi in [-pi, pi]
         tct_float const             xi[3],              //!< uniform random values
         Mbsdf_part                  part);              //!< reflection or transmission
@@ -535,7 +572,7 @@ struct Texture_handler_vtable_impl {
     /// Implementation of \c bsdf_measurement_pdf() for an MBSDF.
     tct_float (*m_df_bsdf_measurement_pdf)(
         Texture_handler_base const  *self,
-        tct_uint                    resource_idx,
+        tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi_in[2],    //!< theta in [0, pi/2] and phi in [-pi, pi]
         tct_float const             theta_phi_out[2],   //!< theta in [0, pi/2] and phi in [-pi, pi]
         Mbsdf_part                  part);              //!< reflection or transmission
@@ -549,7 +586,7 @@ struct Texture_handler_vtable_impl {
                                                             [2] albedo trans. for theta_phi
                                                             [3] max albedo trans. global */
         Texture_handler_base const  *self,
-        tct_uint                    resource_idx,
+        tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi[2]);      //!< theta in [0, pi/2] and phi in [-pi, pi]
 };
 
@@ -689,7 +726,7 @@ typedef void (Lambda_const_function)(
 /// #mi::mdl::ICode_generator_jit::compile_into_switch_function(),
 /// #mi::mdl::ICode_generator_jit::compile_into_switch_function_for_gpu() and for switch lambdas via
 /// #mi::mdl::ICode_generator_jit::compile_into_llvm_ir() and
-/// #mi::mdl::ICode_generator_jit::compile_into_ptx().
+/// #mi::mdl::ICode_generator_jit::compile_into_source().
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
@@ -708,7 +745,7 @@ typedef void (Lambda_switch_function)(
 
 /// Signature of material expression functions created via
 /// #mi::mdl::ICode_generator_jit::compile_into_generic_function(),
-/// #mi::mdl::ICode_generator_jit::compile_into_ptx() and for generic lambdas via
+/// #mi::mdl::ICode_generator_jit::compile_into_source() and for generic lambdas via
 /// #mi::mdl::ICode_generator_jit::compile_into_llvm_ir() and #mi::mdl::ILink_unit::add().
 ///
 /// \param result           pointer to the result buffer which must be large enough for the result
@@ -728,7 +765,7 @@ typedef Material_expr_function Lambda_generic_function;
 
 /// Signature of material expression functions created via
 /// #mi::mdl::ICode_generator_jit::compile_into_generic_function(),
-/// #mi::mdl::ICode_generator_jit::compile_into_ptx() and for generic lambdas via
+/// #mi::mdl::ICode_generator_jit::compile_into_source() and for generic lambdas via
 /// #mi::mdl::ICode_generator_jit::compile_into_llvm_ir() and #mi::mdl::ILink_unit::add().
 ///
 /// \param result           pointer to the result buffer which must be large enough for the result

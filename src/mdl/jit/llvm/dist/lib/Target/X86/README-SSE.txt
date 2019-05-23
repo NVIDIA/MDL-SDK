@@ -93,36 +93,6 @@ The pattern isel got this one right.
 
 //===---------------------------------------------------------------------===//
 
-SSE should implement 'select_cc' using 'emulated conditional moves' that use
-pcmp/pand/pandn/por to do a selection instead of a conditional branch:
-
-double %X(double %Y, double %Z, double %A, double %B) {
-        %C = setlt double %A, %B
-        %z = fadd double %Z, 0.0    ;; select operand is not a load
-        %D = select bool %C, double %Y, double %z
-        ret double %D
-}
-
-We currently emit:
-
-_X:
-        subl $12, %esp
-        xorpd %xmm0, %xmm0
-        addsd 24(%esp), %xmm0
-        movsd 32(%esp), %xmm1
-        movsd 16(%esp), %xmm2
-        ucomisd 40(%esp), %xmm1
-        jb LBB_X_2
-LBB_X_1:
-        movsd %xmm0, %xmm2
-LBB_X_2:
-        movsd %xmm2, (%esp)
-        fldl (%esp)
-        addl $12, %esp
-        ret
-
-//===---------------------------------------------------------------------===//
-
 Lower memcpy / memset to a series of SSE 128 bit move instructions when it's
 feasible.
 
@@ -175,15 +145,15 @@ This is the llvm code after instruction scheduling:
 
 cond_next140 (0xa910740, LLVM BB @0xa90beb0):
 	%reg1078 = MOV32ri -3
-	%reg1079 = ADD32rm %reg1078, %reg1068, 1, %NOREG, 0
-	%reg1037 = MOV32rm %reg1024, 1, %NOREG, 40
+	%reg1079 = ADD32rm %reg1078, %reg1068, 1, %noreg, 0
+	%reg1037 = MOV32rm %reg1024, 1, %noreg, 40
 	%reg1080 = IMUL32rr %reg1079, %reg1037
-	%reg1081 = MOV32rm %reg1058, 1, %NOREG, 0
+	%reg1081 = MOV32rm %reg1058, 1, %noreg, 0
 	%reg1038 = LEA32r %reg1081, 1, %reg1080, -3
-	%reg1036 = MOV32rm %reg1024, 1, %NOREG, 32
+	%reg1036 = MOV32rm %reg1024, 1, %noreg, 32
 	%reg1082 = SHL32ri %reg1038, 4
 	%reg1039 = ADD32rr %reg1036, %reg1082
-	%reg1083 = MOVAPSrm %reg1059, 1, %NOREG, 0
+	%reg1083 = MOVAPSrm %reg1059, 1, %noreg, 0
 	%reg1034 = SHUFPSrr %reg1083, %reg1083, 170
 	%reg1032 = SHUFPSrr %reg1083, %reg1083, 0
 	%reg1035 = SHUFPSrr %reg1083, %reg1083, 255
@@ -196,32 +166,32 @@ cond_next140 (0xa910740, LLVM BB @0xa90beb0):
 Still ok. After register allocation:
 
 cond_next140 (0xa910740, LLVM BB @0xa90beb0):
-	%EAX = MOV32ri -3
-	%EDX = MOV32rm <fi#3>, 1, %NOREG, 0
-	ADD32rm %EAX<def&use>, %EDX, 1, %NOREG, 0
-	%EDX = MOV32rm <fi#7>, 1, %NOREG, 0
-	%EDX = MOV32rm %EDX, 1, %NOREG, 40
-	IMUL32rr %EAX<def&use>, %EDX
-	%ESI = MOV32rm <fi#5>, 1, %NOREG, 0
-	%ESI = MOV32rm %ESI, 1, %NOREG, 0
-	MOV32mr <fi#4>, 1, %NOREG, 0, %ESI
-	%EAX = LEA32r %ESI, 1, %EAX, -3
-	%ESI = MOV32rm <fi#7>, 1, %NOREG, 0
-	%ESI = MOV32rm %ESI, 1, %NOREG, 32
-	%EDI = MOV32rr %EAX
-	SHL32ri %EDI<def&use>, 4
-	ADD32rr %EDI<def&use>, %ESI
-	%XMM0 = MOVAPSrm %ECX, 1, %NOREG, 0
-	%XMM1 = MOVAPSrr %XMM0
-	SHUFPSrr %XMM1<def&use>, %XMM1, 170
-	%XMM2 = MOVAPSrr %XMM0
-	SHUFPSrr %XMM2<def&use>, %XMM2, 0
-	%XMM3 = MOVAPSrr %XMM0
-	SHUFPSrr %XMM3<def&use>, %XMM3, 255
-	SHUFPSrr %XMM0<def&use>, %XMM0, 85
-	%EBX = MOV32rr %EDI
-	AND32ri8 %EBX<def&use>, 15
-	CMP32ri8 %EBX, 0
+	%eax = MOV32ri -3
+	%edx = MOV32rm %stack.3, 1, %noreg, 0
+	ADD32rm %eax<def&use>, %edx, 1, %noreg, 0
+	%edx = MOV32rm %stack.7, 1, %noreg, 0
+	%edx = MOV32rm %edx, 1, %noreg, 40
+	IMUL32rr %eax<def&use>, %edx
+	%esi = MOV32rm %stack.5, 1, %noreg, 0
+	%esi = MOV32rm %esi, 1, %noreg, 0
+	MOV32mr %stack.4, 1, %noreg, 0, %esi
+	%eax = LEA32r %esi, 1, %eax, -3
+	%esi = MOV32rm %stack.7, 1, %noreg, 0
+	%esi = MOV32rm %esi, 1, %noreg, 32
+	%edi = MOV32rr %eax
+	SHL32ri %edi<def&use>, 4
+	ADD32rr %edi<def&use>, %esi
+	%xmm0 = MOVAPSrm %ecx, 1, %noreg, 0
+	%xmm1 = MOVAPSrr %xmm0
+	SHUFPSrr %xmm1<def&use>, %xmm1, 170
+	%xmm2 = MOVAPSrr %xmm0
+	SHUFPSrr %xmm2<def&use>, %xmm2, 0
+	%xmm3 = MOVAPSrr %xmm0
+	SHUFPSrr %xmm3<def&use>, %xmm3, 255
+	SHUFPSrr %xmm0<def&use>, %xmm0, 85
+	%ebx = MOV32rr %edi
+	AND32ri8 %ebx<def&use>, 15
+	CMP32ri8 %ebx, 0
 	JE mbb<cond_next204,0xa914d30>
 
 This looks really bad. The problem is shufps is a destructive opcode. Since it
@@ -491,11 +461,6 @@ Non-SSE4 insert into 16 x i8 is atrociously bad.
 
 <2 x i64> extract is substantially worse than <2 x f64>, even if the destination
 is memory.
-
-//===---------------------------------------------------------------------===//
-
-SSE4 extract-to-mem ops aren't being pattern matched because of the AssertZext
-sitting between the truncate and the extract.
 
 //===---------------------------------------------------------------------===//
 
@@ -792,25 +757,6 @@ cheaper to do fld1 than load from a constant pool for example, so
 
 //===---------------------------------------------------------------------===//
 
-The X86 backend should be able to if-convert SSE comparisons like "ucomisd" to
-"cmpsd".  For example, this code:
-
-double d1(double x) { return x == x ? x : x + x; }
-
-Compiles into:
-
-_d1:
-	ucomisd	%xmm0, %xmm0
-	jnp	LBB1_2
-	addsd	%xmm0, %xmm0
-	ret
-LBB1_2:
-	ret
-
-Also, the 'ret's should be shared.  This is PR6032.
-
-//===---------------------------------------------------------------------===//
-
 These should compile into the same code (PR6214): Perhaps instcombine should
 canonicalize the former into the later?
 
@@ -863,35 +809,6 @@ doing a shuffle from v[1] to v[0] then a float store.
 
 //===---------------------------------------------------------------------===//
 
-On SSE4 machines, we compile this code:
-
-define <2 x float> @test2(<2 x float> %Q, <2 x float> %R,
-       <2 x float> *%P) nounwind {
-  %Z = fadd <2 x float> %Q, %R
-
-  store <2 x float> %Z, <2 x float> *%P
-  ret <2 x float> %Z
-}
-
-into:
-
-_test2:                                 ## @test2
-## BB#0:
-	insertps	$0, %xmm2, %xmm2
-	insertps	$16, %xmm3, %xmm2
-	insertps	$0, %xmm0, %xmm3
-	insertps	$16, %xmm1, %xmm3
-	addps	%xmm2, %xmm3
-	movq	%xmm3, (%rdi)
-	movaps	%xmm3, %xmm0
-	pshufd	$1, %xmm3, %xmm1
-                                        ## kill: XMM1<def> XMM1<kill>
-	ret
-
-The insertps's of $0 are pointless complex copies.
-
-//===---------------------------------------------------------------------===//
-
 [UNSAFE FP]
 
 void foo(double, double, double);
@@ -920,14 +837,5 @@ double f (__m128d p) {
 
 similarly, v[0]-v[1] should match to hsubpd, and {v[0]-v[1], w[0]-w[1]} should
 turn into hsubpd also.
-
-//===---------------------------------------------------------------------===//
-
-define <2 x i32> @foo(<2 x double> %in) {
-  %x = fptosi <2 x double> %in to <2 x i32>
-  ret <2 x i32> %x
-}
-
-Should compile into cvttpd2dq instead of being scalarized into 2 cvttsd2si.
 
 //===---------------------------------------------------------------------===//

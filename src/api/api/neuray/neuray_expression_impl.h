@@ -470,6 +470,13 @@ public:
     const mi::IString* dump(
         const mi::neuraylib::IAnnotation_list* list, const char* name, mi::Size depth) const;
 
+    mi::neuraylib::IExpression* create_cast(
+        mi::neuraylib::IExpression* src_expr,
+        const mi::neuraylib::IType* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        mi::Sint32* errors) const;
+
     // internal methods
 
     /// Creates an direct call.

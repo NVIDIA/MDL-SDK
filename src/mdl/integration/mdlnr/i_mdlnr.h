@@ -119,6 +119,14 @@ public:
     ///
     /// \note supports only [0-9], [0-9]+, and -? regex so far
     virtual bool utf8_match(char const *file_mask, char const *file_name) const = 0;
+
+    /// Returns, whether casts for compatible types should be inserted by the integration
+    /// when needed.
+    virtual bool get_implicit_cast_enabled() const = 0;
+
+    /// Configures, whether casts for compatible types should be inserted by the integration
+    /// when needed.
+    virtual void set_implicit_cast_enabled(bool v) = 0;
 };
 
 } // namespace MDLC

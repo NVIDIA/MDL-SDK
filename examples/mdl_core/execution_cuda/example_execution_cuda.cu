@@ -85,7 +85,7 @@ extern __constant__ Mat_expr_func    *mdl_functions[];
 // The target code indices for the generated MDL sub-expression functions.
 // In contrast to the df_cuda sample, this example simply iterates over all generated expressions.
 // Therefore, no target_code_indices and function_indices are passed from the host side.
-// Instead, this additional array allows the mapping to target_code_index. 
+// Instead, this additional array allows the mapping to target_code_index.
 extern __constant__ unsigned int     mdl_target_code_indices[];
 
 // Identity matrix.
@@ -163,7 +163,7 @@ extern "C" __global__ void evaluate_mat_expr(
         /*object_to_world=*/  identity,
         /*object_id=*/        0
     };
-    
+
     Tex_handler tex_handler;
     tex_handler.vtable       = &TEX_VTABLE;   // only required in 'vtable' mode, otherwise NULL
     tex_handler.num_textures = tc_data_list[tc_idx].num_textures;

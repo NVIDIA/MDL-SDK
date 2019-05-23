@@ -19,7 +19,7 @@ section to narrow down the bug so that the person who fixes it will be able
 to find the problem more easily.
 
 Once you have a reduced test-case, go to `the LLVM Bug Tracking System
-<http://llvm.org/bugs/enter_bug.cgi>`_ and fill out the form with the
+<https://bugs.llvm.org/enter_bug.cgi>`_ and fill out the form with the
 necessary details (note that you don't need to pick a category, just use
 the "new-bugs" category if you're not sure).  The bug description should
 contain the following information:
@@ -38,20 +38,20 @@ Crashing Bugs
 
 More often than not, bugs in the compiler cause it to crash---often due to
 an assertion failure of some sort. The most important piece of the puzzle
-is to figure out if it is crashing in the GCC front-end or if it is one of
+is to figure out if it is crashing in the Clang front-end or if it is one of
 the LLVM libraries (e.g. the optimizer or code generator) that has
 problems.
 
 To figure out which component is crashing (the front-end, optimizer or code
-generator), run the ``llvm-gcc`` command line as you were when the crash
+generator), run the ``clang`` command line as you were when the crash
 occurred, but with the following extra command line options:
 
-* ``-O0 -emit-llvm``: If ``llvm-gcc`` still crashes when passed these
+* ``-O0 -emit-llvm``: If ``clang`` still crashes when passed these
   options (which disable the optimizer and code generator), then the crash
   is in the front-end.  Jump ahead to the section on :ref:`front-end bugs
   <front-end>`.
 
-* ``-emit-llvm``: If ``llvm-gcc`` crashes with this option (which disables
+* ``-emit-llvm``: If ``clang`` crashes with this option (which disables
   the code generator), you found an optimizer bug.  Jump ahead to
   `compile-time optimization bugs`_.
 
@@ -64,12 +64,12 @@ occurred, but with the following extra command line options:
 Front-end bugs
 --------------
 
-If the problem is in the front-end, you should re-run the same ``llvm-gcc``
+If the problem is in the front-end, you should re-run the same ``clang``
 command that resulted in the crash, but add the ``-save-temps`` option.
 The compiler will crash again, but it will leave behind a ``foo.i`` file
 (containing preprocessed C source code) and possibly ``foo.s`` for each
 compiled ``foo.c`` file. Send us the ``foo.i`` file, along with the options
-you passed to ``llvm-gcc``, and a brief description of the error it caused.
+you passed to ``clang``, and a brief description of the error it caused.
 
 The `delta <http://delta.tigris.org/>`_ tool helps to reduce the
 preprocessed file down to the smallest amount of code that still replicates
@@ -89,10 +89,10 @@ Then run:
 
 .. code-block:: bash
 
-   opt -std-compile-opts -debug-pass=Arguments foo.bc -disable-output
+   opt -O3 -debug-pass=Arguments foo.bc -disable-output
 
 This command should do two things: it should print out a list of passes, and
-then it should crash in the same way as llvm-gcc.  If it doesn't crash, please
+then it should crash in the same way as clang.  If it doesn't crash, please
 follow the instructions for a `front-end bug`_.
 
 If this does crash, then you should be able to debug this with the following
@@ -111,9 +111,9 @@ submit the "foo.bc" file and the list of passes printed by ``opt``.
 Code generator bugs
 -------------------
 
-If you find a bug that crashes llvm-gcc in the code generator, compile your
+If you find a bug that crashes clang in the code generator, compile your
 source file to a .bc file by passing "``-emit-llvm -c -o foo.bc``" to
-llvm-gcc (in addition to the options you already pass).  Once your have
+clang (in addition to the options you already pass).  Once your have
 foo.bc, one of the following commands should fail:
 
 #. ``llc foo.bc``
@@ -138,7 +138,7 @@ the "foo.bc" file and the option that llc crashes with.
 Miscompilations
 ===============
 
-If llvm-gcc successfully produces an executable, but that executable
+If clang successfully produces an executable, but that executable
 doesn't run right, this is either a bug in the code or a bug in the
 compiler.  The first thing to check is to make sure it is not using
 undefined behavior (e.g. reading a variable before it is defined). In

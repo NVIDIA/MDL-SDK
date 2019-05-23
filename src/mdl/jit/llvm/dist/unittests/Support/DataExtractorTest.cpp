@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "gtest/gtest.h"
 #include "llvm/Support/DataExtractor.h"
+#include "gtest/gtest.h"
 using namespace llvm;
 
 namespace {
@@ -94,7 +94,7 @@ TEST(DataExtractorTest, Strings) {
 
   EXPECT_EQ(stringData, DE.getCStr(&offset));
   EXPECT_EQ(11U, offset);
-  EXPECT_EQ(NULL, DE.getCStr(&offset));
+  EXPECT_EQ(nullptr, DE.getCStr(&offset));
   EXPECT_EQ(11U, offset);
 }
 

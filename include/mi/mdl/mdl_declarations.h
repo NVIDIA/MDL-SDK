@@ -167,6 +167,12 @@ public:
     /// \param name  the name of this annotation
     virtual void set_name(ISimple_name const *name) = 0;
 
+    /// Get the annotation block of this annotation declaration if any.
+    virtual IAnnotation_block const *get_annotations() const = 0;
+
+    /// Set the annotation block of this annotation declaration.
+    virtual void set_annotations(IAnnotation_block const *annos) = 0;
+
     /// Get the definition of this declaration if already set.
     virtual IDefinition const *get_definition() const = 0;
 
@@ -662,6 +668,7 @@ public:
     /// Create a new annotation declaration.
     ///
     /// \param name             The name of the annotation.
+    /// \param annotations      The annotations of this declaration.
     /// \param exported         Flag to indicate if this declaration is exported.
     /// \param start_line       The line on which the declaration begins.
     /// \param start_column     The column on which the declaration begins.
@@ -669,12 +676,13 @@ public:
     /// \param end_column       The column on which the declaration ends.
     /// \returns                The created declaration.
     virtual IDeclaration_annotation *create_annotation(
-        ISimple_name const *name = NULL,
-        bool               exported = false,
-        int                start_line = 0,
-        int                start_column = 0,
-        int                end_line = 0,
-        int                end_column = 0) = 0;
+        ISimple_name const      *name = NULL,
+        IAnnotation_block const *annotations = NULL,
+        bool                    exported = false,
+        int                     start_line = 0,
+        int                     start_column = 0,
+        int                     end_line = 0,
+        int                     end_column = 0) = 0;
 
     /// Create a new constant declaration.
     ///

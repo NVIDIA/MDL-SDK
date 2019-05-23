@@ -7,16 +7,35 @@
 //
 //===----------------------------------------------------------------------===//
 /// \file
-/// \brief Common declarations for yaml2obj
+/// Common declarations for yaml2obj
 //===----------------------------------------------------------------------===//
-#ifndef LLVM_TOOLS_YAML2OBJ_H
-#define LLVM_TOOLS_YAML2OBJ_H
+#ifndef LLVM_TOOLS_YAML2OBJ_YAML2OBJ_H
+#define LLVM_TOOLS_YAML2OBJ_YAML2OBJ_H
 
 namespace llvm {
-  class raw_ostream;
-  class MemoryBuffer;
+class raw_ostream;
+
+namespace COFFYAML {
+struct Object;
 }
-int yaml2coff(llvm::raw_ostream &Out, llvm::MemoryBuffer *Buf);
-int yaml2elf(llvm::raw_ostream &Out, llvm::MemoryBuffer *Buf);
+
+namespace ELFYAML {
+struct Object;
+}
+
+namespace WasmYAML {
+struct Object;
+}
+
+namespace yaml {
+class Input;
+struct YamlObjectFile;
+}
+}
+
+int yaml2coff(llvm::COFFYAML::Object &Doc, llvm::raw_ostream &Out);
+int yaml2elf(llvm::ELFYAML::Object &Doc, llvm::raw_ostream &Out);
+int yaml2macho(llvm::yaml::YamlObjectFile &Doc, llvm::raw_ostream &Out);
+int yaml2wasm(llvm::WasmYAML::Object &Doc, llvm::raw_ostream &Out);
 
 #endif

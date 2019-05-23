@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "gtest/gtest.h"
 #include "llvm/ADT/DenseMap.h"
+#include "gtest/gtest.h"
 #include <map>
 #include <set>
 
@@ -30,7 +30,7 @@ uint32_t *getTestValue(int i, uint32_t **) {
   return &dummy_arr1[i];
 }
 
-/// \brief A test class that tries to check that construction and destruction
+/// A test class that tries to check that construction and destruction
 /// occur correctly.
 class CtorTester {
   static std::set<CtorTester *> Constructed;
@@ -46,6 +46,7 @@ public:
   CtorTester(const CtorTester &Arg) : Value(Arg.Value) {
     EXPECT_TRUE(Constructed.insert(this).second);
   }
+  CtorTester &operator=(const CtorTester &) = default;
   ~CtorTester() {
     EXPECT_EQ(1u, Constructed.erase(this));
   }
@@ -92,9 +93,9 @@ protected:
 };
 
 template <typename T>
-typename T::key_type *const DenseMapTest<T>::dummy_key_ptr = 0;
+typename T::key_type *const DenseMapTest<T>::dummy_key_ptr = nullptr;
 template <typename T>
-typename T::mapped_type *const DenseMapTest<T>::dummy_value_ptr = 0;
+typename T::mapped_type *const DenseMapTest<T>::dummy_value_ptr = nullptr;
 
 // Register these types for testing.
 typedef ::testing::Types<DenseMap<uint32_t, uint32_t>,
@@ -119,7 +120,7 @@ TYPED_TEST(DenseMapTest, EmptyIntMapTest) {
   // Lookup tests
   EXPECT_FALSE(this->Map.count(this->getKey()));
   EXPECT_TRUE(this->Map.find(this->getKey()) == this->Map.end());
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) || defined(__clang__)
   EXPECT_EQ(typename TypeParam::mapped_type(),
             this->Map.lookup(this->getKey()));
 #else
@@ -209,6 +210,34 @@ TYPED_TEST(DenseMapTest, CopyConstructorTest) {
   EXPECT_EQ(this->getValue(), copyMap[this->getKey()]);
 }
 
+// Test copy constructor method where SmallDenseMap isn't small.
+TYPED_TEST(DenseMapTest, CopyConstructorNotSmallTest) {
+  for (int Key = 0; Key < 5; ++Key)
+    this->Map[this->getKey(Key)] = this->getValue(Key);
+  TypeParam copyMap(this->Map);
+
+  EXPECT_EQ(5u, copyMap.size());
+  for (int Key = 0; Key < 5; ++Key)
+    EXPECT_EQ(this->getValue(Key), copyMap[this->getKey(Key)]);
+}
+
+// Test copying from a default-constructed map.
+TYPED_TEST(DenseMapTest, CopyConstructorFromDefaultTest) {
+  TypeParam copyMap(this->Map);
+
+  EXPECT_TRUE(copyMap.empty());
+}
+
+// Test copying from an empty map where SmallDenseMap isn't small.
+TYPED_TEST(DenseMapTest, CopyConstructorFromEmptyTest) {
+  for (int Key = 0; Key < 5; ++Key)
+    this->Map[this->getKey(Key)] = this->getValue(Key);
+  this->Map.clear();
+  TypeParam copyMap(this->Map);
+
+  EXPECT_TRUE(copyMap.empty());
+}
+
 // Test assignment operator method
 TYPED_TEST(DenseMapTest, AssignmentTest) {
   this->Map[this->getKey()] = this->getValue();
@@ -216,6 +245,27 @@ TYPED_TEST(DenseMapTest, AssignmentTest) {
 
   EXPECT_EQ(1u, copyMap.size());
   EXPECT_EQ(this->getValue(), copyMap[this->getKey()]);
+
+  // test self-assignment.
+  copyMap = static_cast<TypeParam &>(copyMap);
+  EXPECT_EQ(1u, copyMap.size());
+  EXPECT_EQ(this->getValue(), copyMap[this->getKey()]);
+}
+
+TYPED_TEST(DenseMapTest, AssignmentTestNotSmall) {
+  for (int Key = 0; Key < 5; ++Key)
+    this->Map[this->getKey(Key)] = this->getValue(Key);
+  TypeParam copyMap = this->Map;
+
+  EXPECT_EQ(5u, copyMap.size());
+  for (int Key = 0; Key < 5; ++Key)
+    EXPECT_EQ(this->getValue(Key), copyMap[this->getKey(Key)]);
+
+  // test self-assignment.
+  copyMap = static_cast<TypeParam &>(copyMap);
+  EXPECT_EQ(5u, copyMap.size());
+  for (int Key = 0; Key < 5; ++Key)
+    EXPECT_EQ(this->getValue(Key), copyMap[this->getKey(Key)]);
 }
 
 // Test swap method
@@ -289,6 +339,163 @@ TYPED_TEST(DenseMapTest, ConstIteratorTest) {
   EXPECT_TRUE(cit == cit2);
 }
 
+namespace {
+// Simple class that counts how many moves and copy happens when growing a map
+struct CountCopyAndMove {
+  static int Move;
+  static int Copy;
+  CountCopyAndMove() {}
+
+  CountCopyAndMove(const CountCopyAndMove &) { Copy++; }
+  CountCopyAndMove &operator=(const CountCopyAndMove &) {
+    Copy++;
+    return *this;
+  }
+  CountCopyAndMove(CountCopyAndMove &&) { Move++; }
+  CountCopyAndMove &operator=(const CountCopyAndMove &&) {
+    Move++;
+    return *this;
+  }
+};
+int CountCopyAndMove::Copy = 0;
+int CountCopyAndMove::Move = 0;
+
+} // anonymous namespace
+
+// Test for the default minimum size of a DenseMap
+TEST(DenseMapCustomTest, DefaultMinReservedSizeTest) {
+  // IF THIS VALUE CHANGE, please update InitialSizeTest, InitFromIterator, and
+  // ReserveTest as well!
+  const int ExpectedInitialBucketCount = 64;
+  // Formula from DenseMap::getMinBucketToReserveForEntries()
+  const int ExpectedMaxInitialEntries = ExpectedInitialBucketCount * 3 / 4 - 1;
+
+  DenseMap<int, CountCopyAndMove> Map;
+  // Will allocate 64 buckets
+  Map.reserve(1);
+  unsigned MemorySize = Map.getMemorySize();
+  CountCopyAndMove::Copy = 0;
+  CountCopyAndMove::Move = 0;
+  for (int i = 0; i < ExpectedMaxInitialEntries; ++i)
+    Map.insert(std::pair<int, CountCopyAndMove>(std::piecewise_construct,
+                                                std::forward_as_tuple(i),
+                                                std::forward_as_tuple()));
+  // Check that we didn't grow
+  EXPECT_EQ(MemorySize, Map.getMemorySize());
+  // Check that move was called the expected number of times
+  EXPECT_EQ(ExpectedMaxInitialEntries, CountCopyAndMove::Move);
+  // Check that no copy occurred
+  EXPECT_EQ(0, CountCopyAndMove::Copy);
+
+  // Adding one extra element should grow the map
+  Map.insert(std::pair<int, CountCopyAndMove>(
+      std::piecewise_construct,
+      std::forward_as_tuple(ExpectedMaxInitialEntries),
+      std::forward_as_tuple()));
+  // Check that we grew
+  EXPECT_NE(MemorySize, Map.getMemorySize());
+  // Check that move was called the expected number of times
+  //  This relies on move-construction elision, and cannot be reliably tested.
+  //   EXPECT_EQ(ExpectedMaxInitialEntries + 2, CountCopyAndMove::Move);
+  // Check that no copy occurred
+  EXPECT_EQ(0, CountCopyAndMove::Copy);
+}
+
+// Make sure creating the map with an initial size of N actually gives us enough
+// buckets to insert N items without increasing allocation size.
+TEST(DenseMapCustomTest, InitialSizeTest) {
+  // Test a few different sizes, 48 is *not* a random choice: we need a value
+  // that is 2/3 of a power of two to stress the grow() condition, and the power
+  // of two has to be at least 64 because of minimum size allocation in the
+  // DenseMap (see DefaultMinReservedSizeTest). 66 is a value just above the
+  // 64 default init.
+  for (auto Size : {1, 2, 48, 66}) {
+    DenseMap<int, CountCopyAndMove> Map(Size);
+    unsigned MemorySize = Map.getMemorySize();
+    CountCopyAndMove::Copy = 0;
+    CountCopyAndMove::Move = 0;
+    for (int i = 0; i < Size; ++i)
+      Map.insert(std::pair<int, CountCopyAndMove>(std::piecewise_construct,
+                                                  std::forward_as_tuple(i),
+                                                  std::forward_as_tuple()));
+    // Check that we didn't grow
+    EXPECT_EQ(MemorySize, Map.getMemorySize());
+    // Check that move was called the expected number of times
+    EXPECT_EQ(Size, CountCopyAndMove::Move);
+    // Check that no copy occurred
+    EXPECT_EQ(0, CountCopyAndMove::Copy);
+  }
+}
+
+// Make sure creating the map with a iterator range does not trigger grow()
+TEST(DenseMapCustomTest, InitFromIterator) {
+  std::vector<std::pair<int, CountCopyAndMove>> Values;
+  // The size is a random value greater than 64 (hardcoded DenseMap min init)
+  const int Count = 65;
+  for (int i = 0; i < Count; i++)
+    Values.emplace_back(i, CountCopyAndMove());
+
+  CountCopyAndMove::Move = 0;
+  CountCopyAndMove::Copy = 0;
+  DenseMap<int, CountCopyAndMove> Map(Values.begin(), Values.end());
+  // Check that no move occurred
+  EXPECT_EQ(0, CountCopyAndMove::Move);
+  // Check that copy was called the expected number of times
+  EXPECT_EQ(Count, CountCopyAndMove::Copy);
+}
+
+// Make sure reserve actually gives us enough buckets to insert N items
+// without increasing allocation size.
+TEST(DenseMapCustomTest, ReserveTest) {
+  // Test a few different size, 48 is *not* a random choice: we need a value
+  // that is 2/3 of a power of two to stress the grow() condition, and the power
+  // of two has to be at least 64 because of minimum size allocation in the
+  // DenseMap (see DefaultMinReservedSizeTest). 66 is a value just above the
+  // 64 default init.
+  for (auto Size : {1, 2, 48, 66}) {
+    DenseMap<int, CountCopyAndMove> Map;
+    Map.reserve(Size);
+    unsigned MemorySize = Map.getMemorySize();
+    CountCopyAndMove::Copy = 0;
+    CountCopyAndMove::Move = 0;
+    for (int i = 0; i < Size; ++i)
+      Map.insert(std::pair<int, CountCopyAndMove>(std::piecewise_construct,
+                                                  std::forward_as_tuple(i),
+                                                  std::forward_as_tuple()));
+    // Check that we didn't grow
+    EXPECT_EQ(MemorySize, Map.getMemorySize());
+    // Check that move was called the expected number of times
+    EXPECT_EQ(Size, CountCopyAndMove::Move);
+    // Check that no copy occurred
+    EXPECT_EQ(0, CountCopyAndMove::Copy);
+  }
+}
+
+// Make sure DenseMap works with StringRef keys.
+TEST(DenseMapCustomTest, StringRefTest) {
+  DenseMap<StringRef, int> M;
+
+  M["a"] = 1;
+  M["b"] = 2;
+  M["c"] = 3;
+
+  EXPECT_EQ(3u, M.size());
+  EXPECT_EQ(1, M.lookup("a"));
+  EXPECT_EQ(2, M.lookup("b"));
+  EXPECT_EQ(3, M.lookup("c"));
+
+  EXPECT_EQ(0, M.lookup("q"));
+
+  // Test the empty string, spelled various ways.
+  EXPECT_EQ(0, M.lookup(""));
+  EXPECT_EQ(0, M.lookup(StringRef()));
+  EXPECT_EQ(0, M.lookup(StringRef("a", 0)));
+  M[""] = 42;
+  EXPECT_EQ(42, M.lookup(""));
+  EXPECT_EQ(42, M.lookup(StringRef()));
+  EXPECT_EQ(42, M.lookup(StringRef("a", 0)));
+}
+
 // Key traits that allows lookup with either an unsigned or char* key;
 // In the latter case, "a" == 0, "b" == 1 and so on.
 struct TestDenseMapInfo {
@@ -317,7 +524,7 @@ TEST(DenseMapCustomTest, FindAsTest) {
   EXPECT_EQ(3u, map.size());
 
   // Normal lookup tests
-  EXPECT_EQ(1, map.count(1));
+  EXPECT_EQ(1u, map.count(1));
   EXPECT_EQ(1u, map.find(0)->second);
   EXPECT_EQ(2u, map.find(1)->second);
   EXPECT_EQ(3u, map.find(2)->second);
@@ -363,4 +570,28 @@ TEST(DenseMapCustomTest, SmallDenseMapGrowTest) {
   EXPECT_TRUE(map.find(32) == map.end());
 }
 
+TEST(DenseMapCustomTest, TryEmplaceTest) {
+  DenseMap<int, std::unique_ptr<int>> Map;
+  std::unique_ptr<int> P(new int(2));
+  auto Try1 = Map.try_emplace(0, new int(1));
+  EXPECT_TRUE(Try1.second);
+  auto Try2 = Map.try_emplace(0, std::move(P));
+  EXPECT_FALSE(Try2.second);
+  EXPECT_EQ(Try1.first, Try2.first);
+  EXPECT_NE(nullptr, P);
+}
+
+TEST(DenseMapCustomTest, ConstTest) {
+  // Test that const pointers work okay for count and find, even when the
+  // underlying map is a non-const pointer.
+  DenseMap<int *, int> Map;
+  int A;
+  int *B = &A;
+  const int *C = &A;
+  Map.insert({B, 0});
+  EXPECT_EQ(Map.count(B), 1u);
+  EXPECT_EQ(Map.count(C), 1u);
+  EXPECT_NE(Map.find(B), Map.end());
+  EXPECT_NE(Map.find(C), Map.end());
+}
 }

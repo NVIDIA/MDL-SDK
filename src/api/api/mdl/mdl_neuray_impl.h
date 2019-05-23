@@ -62,6 +62,7 @@ class Factory_impl;
 class Image_api_impl;
 class Mdl_archive_api_impl;
 class Mdl_compatibility_api_impl;
+class Mdl_configuration_impl;
 class Mdl_discovery_api_impl;
 class Mdl_evaluator_api_impl;
 class Mdl_factory_impl;
@@ -145,6 +146,7 @@ private:
     Mdl_compiler_impl* m_mdl_compiler_impl;
     NEURAY::Mdl_archive_api_impl* m_mdl_archive_api_impl;
     NEURAY::Mdl_compatibility_api_impl* m_mdl_compatibility_api_impl;
+    NEURAY::Mdl_configuration_impl* m_mdl_configuration_impl;
     NEURAY::Mdl_discovery_api_impl* m_mdl_discovery_api_impl;
     NEURAY::Mdl_evaluator_api_impl* m_mdl_evaluator_api_impl;
     NEURAY::Mdl_factory_impl* m_mdl_factory_impl;

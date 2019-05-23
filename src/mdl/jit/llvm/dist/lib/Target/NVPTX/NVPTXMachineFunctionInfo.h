@@ -2,7 +2,7 @@
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -11,6 +11,9 @@
 // dependent information
 //
 //===----------------------------------------------------------------------===//
+
+#ifndef LLVM_LIB_TARGET_NVPTX_NVPTXMACHINEFUNCTIONINFO_H
+#define LLVM_LIB_TARGET_NVPTX_NVPTXMACHINEFUNCTIONINFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
 
@@ -44,3 +47,5 @@ public:
   }
 };
 }
+
+#endif

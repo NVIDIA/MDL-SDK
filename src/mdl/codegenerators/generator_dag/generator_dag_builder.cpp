@@ -121,19 +121,7 @@ public:
         if (m_call_evaluator == NULL)
             return false;
 
-        switch (semantic) {
-        case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_POWER:
-        case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:
-        case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
-        case IDefinition::DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID:
-        case IDefinition::DS_INTRINSIC_TEX_WIDTH:
-        case IDefinition::DS_INTRINSIC_TEX_HEIGHT:
-        case IDefinition::DS_INTRINSIC_TEX_DEPTH:
-        case IDefinition::DS_INTRINSIC_TEX_TEXTURE_ISVALID:
-            return true;
-        default:
-            return false;
-        }
+        return m_call_evaluator->is_evaluate_intrinsic_function_enabled(semantic);
     }
 
     /// Handle intrinsic call evaluation.
@@ -319,6 +307,7 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
         case IExpression_unary::OK_LOGICAL_NOT:
         case IExpression_unary::OK_POSITIVE:
         case IExpression_unary::OK_NEGATIVE:
+        case IExpression_unary::OK_CAST:
             return false;
 
         case IExpression_unary::OK_PRE_INCREMENT:
@@ -1107,6 +1096,8 @@ const char *DAG_builder::unary_op_to_name(IExpression_unary::Operator op)
         return "operator+";
     case IExpression_unary::OK_NEGATIVE:
         return "operator-";
+    case IExpression_unary::OK_CAST:
+        return "operator_cast";
 
     // Note: the following operators should not appear in the DAG
     // because there is no assignment
@@ -3097,6 +3088,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
         }
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_TEXTURE:
@@ -3118,6 +3110,11 @@ IValue_resource const *DAG_builder::process_resource_urls(
 {
     char const *url = res->get_string_value();
     if (url != NULL && url[0] != '\0') {
+
+        for (int i = 0; i < strlen(url); ++i) {
+            if (url[i] == '|') // special marker for non-resolved  weak rel. paths, keep it.
+                return res;
+        }
         // non-empty URL, check if relative
         if (url[0] != '/') {
             // found a relative url. We might be in the context of a module PA::A, but compile

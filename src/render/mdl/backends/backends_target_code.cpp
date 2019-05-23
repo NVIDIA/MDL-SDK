@@ -113,7 +113,6 @@ Target_code::Target_code(
     m_code(),
     m_code_segments(),
     m_code_segment_descriptions(),
-    m_callable_function_map(),
     m_callable_function_infos(),
     m_texture_table(),
     m_light_profile_table(),
@@ -150,7 +149,6 @@ Target_code::Target_code(
     m_code(),
     m_code_segments(),
     m_code_segment_descriptions(),
-    m_callable_function_map(),
     m_callable_function_infos(),
     m_texture_table(),
     m_light_profile_table(),
@@ -202,6 +200,28 @@ void Target_code::finalize(
         char const *src = code->get_source_code(size);
 
         m_code = std::string(src, size);
+    }
+
+    // copy function infos to target code
+    for (size_t i = 0, n = code->get_function_count(); i < n; ++i) {
+        m_callable_function_infos.push_back(
+            Callable_function_info(
+                code->get_function_name(i),
+                Distribution_kind(code->get_distribution_kind(i)),
+                Function_kind(code->get_function_kind(i)),
+                code->get_function_arg_block_layout_index(i)));
+        Callable_function_info &info = m_callable_function_infos.back();
+        for (mi::mdl::IGenerated_code_executable::Prototype_language lang =
+                mi::mdl::IGenerated_code_executable::Prototype_language(0);
+            lang < mi::mdl::IGenerated_code_executable::PL_NUM_LANGUAGES;
+            lang = mi::mdl::IGenerated_code_executable::Prototype_language(lang + 1))
+        {
+            char const *prototype = code->get_function_prototype(i, lang);
+            if (prototype == NULL)
+                info.m_prototypes.push_back(std::string());
+            else
+                info.m_prototypes.push_back(prototype);
+        }
     }
 }
 
@@ -278,6 +298,36 @@ const char* Target_code::get_texture( mi::Size index) const
         return m_texture_table[ index].get_db_name();
     }
     return NULL;
+}
+
+const char* Target_code::get_texture_url(mi::Size index) const
+{
+    if (index < m_texture_table.size()) {
+        return m_texture_table[index].get_mdl_url();
+    }
+    return NULL;
+}
+
+const char* Target_code::get_texture_owner_module(mi::Size index) const
+{
+    if (index < m_texture_table.size()) {
+        return m_texture_table[index].get_owner();
+    }
+    return NULL;
+}
+
+mi::neuraylib::ITarget_code::Gamma_mode Target_code::get_texture_gamma(mi::Size index) const
+{
+    if (index < m_texture_table.size()) {
+        float gamma = m_texture_table[index].get_gamma();
+        if (gamma == 0.0f)
+            return mi::neuraylib::ITarget_code::GM_GAMMA_DEFAULT;
+        else if (gamma == 1.0f)
+            return mi::neuraylib::ITarget_code::GM_GAMMA_LINEAR;
+        else if (gamma == 2.2f)
+            return mi::neuraylib::ITarget_code::GM_GAMMA_SRGB;
+    }
+    return mi::neuraylib::ITarget_code::GM_GAMMA_UNKNOWN;
 }
 
 Target_code::Texture_shape Target_code::get_texture_shape( mi::Size index) const
@@ -561,15 +611,9 @@ size_t Target_code::add_function(
     Function_kind kind,
     mi::Size arg_block_index)
 {
-    Function_map::iterator it = m_callable_function_map.find( name);
-
-    if( it != m_callable_function_map.end()) {
-        return it->second;
-    }
     size_t idx = m_callable_function_infos.size();
     m_callable_function_infos.push_back( 
         Callable_function_info( name, dist_kind, kind, arg_block_index));
-    m_callable_function_map[ name] = idx;
     return idx;
 }
 
@@ -586,16 +630,26 @@ void Target_code::set_function_prototype(
     m_callable_function_infos[ index].m_prototypes[ lang] = prototype;
 }
 
-
 void Target_code::add_texture_index(
     size_t index,
     const std::string& name,
+    const std::string& mdl_url,
+    float gamma,
     Texture_shape shape)
 {
     if( index >= m_texture_table.size()) {
-        m_texture_table.resize( index + 1, Texture_info( "", Texture_shape_invalid));
+        m_texture_table.resize( index + 1, Texture_info( "", "", "", 0.0f, Texture_shape_invalid));
     }
-    m_texture_table[ index] = Texture_info( name, shape);
+    std::string owner, url;
+    size_t p = mdl_url.find('|');
+    if (p != std::string::npos) {
+        owner = mdl_url.substr(0, p);
+        url = mdl_url.substr(p + 1);
+    }
+    else
+        url = mdl_url;
+
+    m_texture_table[ index] = Texture_info( name, url, owner, gamma, shape);
 }
 
 // Registers a used light profile index.
@@ -828,16 +882,33 @@ mi::Uint32 Target_code::get_known_resource_index(
         return m_native_code->get_known_resource_index(tag.get_uint());
     }
 
-    char const *name = transaction->tag_to_name(tag);
-    if (name == NULL) name = "";
+    char const *db_name = transaction->tag_to_name(tag);
+    if (db_name == NULL) db_name = "";
 
     switch (resource->get_kind()) {
     case MDL::IValue::VK_TEXTURE:
     {
+        char const *mdl_url = resource->get_unresolved_mdl_url();
+        if (mdl_url == NULL) mdl_url = "";
+
         // skip first texture, which is always the invalid resource
         for (mi::Size i = 1, n = get_texture_count(); i < n; ++i) {
-            if (strcmp(get_texture(i), name) == 0)
-                return mi::Uint32(i);
+            const char *texture_db_name = get_texture(i);
+            if (texture_db_name) {
+                if (strcmp(texture_db_name, db_name) == 0)
+                    return mi::Uint32(i);
+            } else {
+                const char *texture_mdl_url = get_texture_url(i);
+                const char *owner_module = get_texture_owner_module(i);
+                if (owner_module) {
+                    std::string url(owner_module);
+                    url += "|";
+                    url += texture_mdl_url;
+                    if (strcmp(url.c_str(), mdl_url) == 0)
+                        return mi::Uint32(i);
+                } else if (texture_mdl_url && strcmp(texture_mdl_url, mdl_url) == 0)
+                    return mi::Uint32(i);
+            }
         }
         return 0;
     }
@@ -846,18 +917,22 @@ mi::Uint32 Target_code::get_known_resource_index(
     {
         // skip first light profile, which is always the invalid resource
         for (mi::Size i = 1, n = get_light_profile_count(); i < n; ++i) {
-            if (strcmp(get_light_profile(i), name) == 0)
-                return mi::Uint32(i);
+            const char *lp_db_name = get_light_profile(i);
+            if (lp_db_name)
+                if (strcmp(lp_db_name, db_name) == 0)
+                    return mi::Uint32(i);
         }
         return 0;
     }
 
     case MDL::IValue::VK_BSDF_MEASUREMENT:
     {
-        // skip first light profile, which is always the invalid resource
+        // skip first bsdf measurement, which is always the invalid resource
         for (mi::Size i = 1, n = get_bsdf_measurement_count(); i < n; ++i) {
-            if (strcmp(get_bsdf_measurement(i), name) == 0)
-                return mi::Uint32(i);
+            const char *bm_db_name = get_bsdf_measurement(i);
+            if (bm_db_name)
+                if (strcmp(bm_db_name, db_name) == 0)
+                    return mi::Uint32(i);
         }
 
         return 0;

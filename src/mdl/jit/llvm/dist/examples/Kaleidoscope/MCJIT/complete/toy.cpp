@@ -1,7 +1,5 @@
 #include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/Verifier.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/ObjectCache.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
@@ -9,15 +7,16 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include <cctype>
 #include <cstdio>
@@ -38,7 +37,7 @@ namespace {
               cl::value_desc("input IR file name"));
 
   cl::opt<bool>
-  VerboseOutput("verbose", 
+  VerboseOutput("verbose",
                 cl::desc("Enable verbose output (results, IR, etc.) to stderr"),
                 cl::init(false));
 
@@ -51,10 +50,6 @@ namespace {
   DumpModulesOnExit("dump-modules",
                   cl::desc("Dump IR from modules to stderr on shutdown"),
                   cl::init(false));
-
-  cl::opt<bool> UseMCJIT(
-    "use-mcjit", cl::desc("Use the MCJIT execution engine"),
-    cl::init(true));
 
   cl::opt<bool> EnableLazyCompilation(
     "enable-lazy-compilation", cl::desc("Enable lazy compilation when using the MCJIT engine"),
@@ -739,7 +734,7 @@ public:
         // This file isn't in our cache
         return NULL;
       }
-      OwningPtr<MemoryBuffer> IRObjectBuffer;
+      std::unique_ptr<MemoryBuffer> IRObjectBuffer;
       MemoryBuffer::getFile(IRCacheFile.c_str(), IRObjectBuffer, -1, false);
       // MCJIT will want to write into this buffer, and we don't want that
       // because the file has probably just been mmapped.  Instead we make
@@ -793,96 +788,6 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// Helper class for JIT execution engine
-//===----------------------------------------------------------------------===//
-
-class JITHelper : public BaseHelper {
-public:
-  JITHelper(LLVMContext &Context) {
-    // Make the module, which holds all the code.
-    if (!InputIR.empty()) {
-      TheModule = parseInputIR(InputIR, Context);
-    } else {
-      TheModule = new Module("my cool jit", Context);
-    }
-
-    // Create the JIT.  This takes ownership of the module.
-    std::string ErrStr;
-    TheExecutionEngine = EngineBuilder(TheModule).setErrorStr(&ErrStr).create();
-    if (!TheExecutionEngine) {
-      fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());
-      exit(1);
-    }
-
-    TheFPM = new FunctionPassManager(TheModule);
-
-    // Set up the optimizer pipeline.  Start with registering info about how the
-    // target lays out data structures.
-    TheFPM->add(new DataLayout(*TheExecutionEngine->getDataLayout()));
-    // Provide basic AliasAnalysis support for GVN.
-    TheFPM->add(createBasicAliasAnalysisPass());
-    // Promote allocas to registers.
-    TheFPM->add(createPromoteMemoryToRegisterPass());
-    // Do simple "peephole" optimizations and bit-twiddling optzns.
-    TheFPM->add(createInstructionCombiningPass());
-    // Reassociate expressions.
-    TheFPM->add(createReassociatePass());
-    // Eliminate Common SubExpressions.
-    TheFPM->add(createGVNPass());
-    // Simplify the control flow graph (deleting unreachable blocks, etc).
-    TheFPM->add(createCFGSimplificationPass());
-
-    TheFPM->doInitialization();
-  }
-
-  virtual ~JITHelper() {
-    if (TheFPM)
-      delete TheFPM;
-    if (TheExecutionEngine)
-      delete TheExecutionEngine;
-  }
-
-  virtual Function *getFunction(const std::string FnName) {
-    assert(TheModule);
-    return TheModule->getFunction(FnName);
-  }
-
-  virtual Module *getModuleForNewFunction() {
-    assert(TheModule);
-    return TheModule;
-  }
-
-  virtual void *getPointerToFunction(Function* F) {
-    assert(TheExecutionEngine);
-    return TheExecutionEngine->getPointerToFunction(F);
-  }
-
-  virtual void *getPointerToNamedFunction(const std::string &Name) {
-    return TheExecutionEngine->getPointerToNamedFunction(Name);
-  }
-
-  virtual void runFPM(Function &F) {
-    assert(TheFPM);
-    TheFPM->run(F);
-  }
-
-  virtual void closeCurrentModule() {
-    // This should never be called for JIT
-    assert(false);
-  }
-
-  virtual void dump() {
-    assert(TheModule);
-    TheModule->dump();
-  }
-
-private:
-  Module *TheModule;
-  ExecutionEngine *TheExecutionEngine;
-  FunctionPassManager *TheFPM;
-};
-
-//===----------------------------------------------------------------------===//
 // MCJIT helper class
 //===----------------------------------------------------------------------===//
 
@@ -925,8 +830,8 @@ private:
 
 class HelpingMemoryManager : public SectionMemoryManager
 {
-  HelpingMemoryManager(const HelpingMemoryManager&) LLVM_DELETED_FUNCTION;
-  void operator=(const HelpingMemoryManager&) LLVM_DELETED_FUNCTION;
+  HelpingMemoryManager(const HelpingMemoryManager&) = delete;
+  void operator=(const HelpingMemoryManager&) = delete;
 
 public:
   HelpingMemoryManager(MCJITHelper *Helper) : MasterHelper(Helper) {}
@@ -1034,7 +939,6 @@ ExecutionEngine *MCJITHelper::compileModule(Module *M) {
   std::string ErrStr;
   ExecutionEngine *EE = EngineBuilder(M)
                             .setErrorStr(&ErrStr)
-                            .setUseMCJIT(true)
                             .setMCJITMemoryManager(new HelpingMemoryManager(this))
                             .create();
   if (!EE) {
@@ -1162,7 +1066,8 @@ void MCJITHelper::dump()
 //===----------------------------------------------------------------------===//
 
 static BaseHelper *TheHelper;
-static IRBuilder<> Builder(getGlobalContext());
+static LLVMContext TheContext;
+static IRBuilder<> Builder(TheContext);
 static std::map<std::string, AllocaInst*> NamedValues;
 
 Value *ErrorV(const char *Str) { Error(Str); return 0; }
@@ -1173,12 +1078,11 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
                                           const std::string &VarName) {
   IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
                  TheFunction->getEntryBlock().begin());
-  return TmpB.CreateAlloca(Type::getDoubleTy(getGlobalContext()), 0,
-                           VarName.c_str());
+  return TmpB.CreateAlloca(Type::getDoubleTy(TheContext), 0, VarName.c_str());
 }
 
 Value *NumberExprAST::Codegen() {
-  return ConstantFP::get(getGlobalContext(), APFloat(Val));
+  return ConstantFP::get(TheContext, APFloat(Val));
 }
 
 Value *VariableExprAST::Codegen() {
@@ -1194,10 +1098,8 @@ Value *UnaryExprAST::Codegen() {
   Value *OperandV = Operand->Codegen();
   if (OperandV == 0) return 0;
   Function *F;
-  if (UseMCJIT)
-    F = TheHelper->getFunction(MakeLegalFunctionName(std::string("unary")+Opcode));
-  else
-    F = TheHelper->getFunction(std::string("unary")+Opcode);
+  F = TheHelper->getFunction(
+      MakeLegalFunctionName(std::string("unary") + Opcode));
   if (F == 0)
     return ErrorV("Unknown unary operator");
 
@@ -1211,7 +1113,7 @@ Value *BinaryExprAST::Codegen() {
     // This assume we're building without RTTI because LLVM builds that way by
     // default.  If you build LLVM with RTTI this can be changed to a
     // dynamic_cast for automatic error checking.
-    VariableExprAST *LHSE = reinterpret_cast<VariableExprAST*>(LHS);
+    VariableExprAST *LHSE = static_cast<VariableExprAST*>(LHS);
     if (!LHSE)
       return ErrorV("destination of '=' must be a variable");
     // Codegen the RHS.
@@ -1238,18 +1140,14 @@ Value *BinaryExprAST::Codegen() {
   case '<':
     L = Builder.CreateFCmpULT(L, R, "cmptmp");
     // Convert bool 0/1 to double 0.0 or 1.0
-    return Builder.CreateUIToFP(L, Type::getDoubleTy(getGlobalContext()),
-                                "booltmp");
+    return Builder.CreateUIToFP(L, Type::getDoubleTy(TheContext), "booltmp");
   default: break;
   }
 
   // If it wasn't a builtin binary operator, it must be a user defined one. Emit
   // a call to it.
   Function *F;
-  if (UseMCJIT)
-    F = TheHelper->getFunction(MakeLegalFunctionName(std::string("binary")+Op));
-  else
-    F = TheHelper->getFunction(std::string("binary")+Op);
+  F = TheHelper->getFunction(MakeLegalFunctionName(std::string("binary")+Op));
   assert(F && "binary operator not found!");
 
   Value *Ops[] = { L, R };
@@ -1283,17 +1181,16 @@ Value *IfExprAST::Codegen() {
   if (CondV == 0) return 0;
 
   // Convert condition to a bool by comparing equal to 0.0.
-  CondV = Builder.CreateFCmpONE(CondV,
-                              ConstantFP::get(getGlobalContext(), APFloat(0.0)),
-                                "ifcond");
+  CondV = Builder.CreateFCmpONE(
+      CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
 
   Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
   // Create blocks for the then and else cases.  Insert the 'then' block at the
   // end of the function.
-  BasicBlock *ThenBB = BasicBlock::Create(getGlobalContext(), "then", TheFunction);
-  BasicBlock *ElseBB = BasicBlock::Create(getGlobalContext(), "else");
-  BasicBlock *MergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
+  BasicBlock *ThenBB = BasicBlock::Create(TheContext, "then", TheFunction);
+  BasicBlock *ElseBB = BasicBlock::Create(TheContext, "else");
+  BasicBlock *MergeBB = BasicBlock::Create(TheContext, "ifcont");
 
   Builder.CreateCondBr(CondV, ThenBB, ElseBB);
 
@@ -1321,8 +1218,7 @@ Value *IfExprAST::Codegen() {
   // Emit merge block.
   TheFunction->getBasicBlockList().push_back(MergeBB);
   Builder.SetInsertPoint(MergeBB);
-  PHINode *PN = Builder.CreatePHI(Type::getDoubleTy(getGlobalContext()), 2,
-                                  "iftmp");
+  PHINode *PN = Builder.CreatePHI(Type::getDoubleTy(TheContext), 2, "iftmp");
 
   PN->addIncoming(ThenV, ThenBB);
   PN->addIncoming(ElseV, ElseBB);
@@ -1364,7 +1260,7 @@ Value *ForExprAST::Codegen() {
 
   // Make the new basic block for the loop header, inserting after current
   // block.
-  BasicBlock *LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+  BasicBlock *LoopBB = BasicBlock::Create(TheContext, "loop", TheFunction);
 
   // Insert an explicit fall through from the current block to the LoopBB.
   Builder.CreateBr(LoopBB);
@@ -1390,7 +1286,7 @@ Value *ForExprAST::Codegen() {
     if (StepVal == 0) return 0;
   } else {
     // If not specified, use 1.0.
-    StepVal = ConstantFP::get(getGlobalContext(), APFloat(1.0));
+    StepVal = ConstantFP::get(TheContext, APFloat(1.0));
   }
 
   // Compute the end condition.
@@ -1404,12 +1300,12 @@ Value *ForExprAST::Codegen() {
   Builder.CreateStore(NextVar, Alloca);
 
   // Convert condition to a bool by comparing equal to 0.0.
-  EndCond = Builder.CreateFCmpONE(EndCond,
-                              ConstantFP::get(getGlobalContext(), APFloat(0.0)),
-                                  "loopcond");
+  EndCond = Builder.CreateFCmpONE(
+      EndCond, ConstantFP::get(TheContext, APFloat(0.0)), "loopcond");
 
   // Create the "after loop" block and insert it.
-  BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+  BasicBlock *AfterBB =
+      BasicBlock::Create(TheContext, "afterloop", TheFunction);
 
   // Insert the conditional branch into the end of LoopEndBB.
   Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
@@ -1425,7 +1321,7 @@ Value *ForExprAST::Codegen() {
 
 
   // for expr always returns 0.0.
-  return Constant::getNullValue(Type::getDoubleTy(getGlobalContext()));
+  return Constant::getNullValue(Type::getDoubleTy(TheContext));
 }
 
 Value *VarExprAST::Codegen() {
@@ -1448,7 +1344,7 @@ Value *VarExprAST::Codegen() {
       InitVal = Init->Codegen();
       if (InitVal == 0) return 0;
     } else { // If not specified, use 0.0.
-      InitVal = ConstantFP::get(getGlobalContext(), APFloat(0.0));
+      InitVal = ConstantFP::get(TheContext, APFloat(0.0));
     }
 
     AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarName);
@@ -1476,16 +1372,12 @@ Value *VarExprAST::Codegen() {
 
 Function *PrototypeAST::Codegen() {
   // Make the function type:  double(double,double) etc.
-  std::vector<Type*> Doubles(Args.size(),
-                             Type::getDoubleTy(getGlobalContext()));
-  FunctionType *FT = FunctionType::get(Type::getDoubleTy(getGlobalContext()),
-                                       Doubles, false);
+  std::vector<Type *> Doubles(Args.size(), Type::getDoubleTy(TheContext));
+  FunctionType *FT =
+      FunctionType::get(Type::getDoubleTy(TheContext), Doubles, false);
 
   std::string FnName;
-  if (UseMCJIT)
-    FnName = MakeLegalFunctionName(Name);
-  else
-    FnName = Name;
+  FnName = MakeLegalFunctionName(Name);
 
   Module* M = TheHelper->getModuleForNewFunction();
   Function *F = Function::Create(FT, Function::ExternalLinkage, FnName, M);
@@ -1547,7 +1439,7 @@ Function *FunctionAST::Codegen() {
     BinopPrecedence[Proto->getOperatorName()] = Proto->getBinaryPrecedence();
 
   // Create a new basic block to start insertion into.
-  BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", TheFunction);
+  BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
   Builder.SetInsertPoint(BB);
 
   // Add all arguments to the symbol table and create their allocas.
@@ -1559,10 +1451,6 @@ Function *FunctionAST::Codegen() {
 
     // Validate the generated code, checking for consistency.
     verifyFunction(*TheFunction);
-
-    // Optimize the function.
-    if (!UseMCJIT)
-      TheHelper->runFPM(*TheFunction);
 
     return TheFunction;
   }
@@ -1581,12 +1469,13 @@ Function *FunctionAST::Codegen() {
 
 static void HandleDefinition() {
   if (FunctionAST *F = ParseDefinition()) {
-    if (UseMCJIT && EnableLazyCompilation)
+    if (EnableLazyCompilation)
       TheHelper->closeCurrentModule();
     Function *LF = F->Codegen();
     if (LF && VerboseOutput) {
       fprintf(stderr, "Read function definition:");
-      LF->dump();
+      LF->print(errs());
+      fprintf(stderr, "\n");
     }
   } else {
     // Skip token for error recovery.
@@ -1599,7 +1488,8 @@ static void HandleExtern() {
     Function *F = P->Codegen();
     if (F && VerboseOutput) {
       fprintf(stderr, "Read extern: ");
-      F->dump();
+      F->print(errs());
+      fprintf(stderr, "\n");
     }
   } else {
     // Skip token for error recovery.
@@ -1671,11 +1561,9 @@ double printlf() {
 
 int main(int argc, char **argv) {
   InitializeNativeTarget();
-  if (UseMCJIT) {
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
-  }
-  LLVMContext &Context = getGlobalContext();
+  InitializeNativeTargetAsmPrinter();
+  InitializeNativeTargetAsmParser();
+  LLVMContext &Context = TheContext;
 
   cl::ParseCommandLineOptions(argc, argv,
                               "Kaleidoscope example program\n");
@@ -1690,10 +1578,7 @@ int main(int argc, char **argv) {
   BinopPrecedence['*'] = 40;  // highest.
 
   // Make the Helper, which holds all the code.
-  if (UseMCJIT)
-    TheHelper = new MCJITHelper(Context);
-  else
-    TheHelper = new JITHelper(Context);
+  TheHelper = new MCJITHelper(Context);
 
   // Prime the first token.
   if (!SuppressPrompts)

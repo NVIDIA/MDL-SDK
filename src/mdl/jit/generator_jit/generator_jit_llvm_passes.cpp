@@ -36,8 +36,10 @@
 
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Module.h>
-#include <llvm/PassManager.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/PassRegistry.h>
+
+#include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 
 #include "generator_jit_llvm_passes.h"
 
@@ -52,10 +54,10 @@ class DeleteUnusedLibDevice : public llvm::ModulePass
 {
 public:
     /// Run the pass on the given module.
-    bool runOnModule(llvm::Module &M) LLVM_FINAL {
+    bool runOnModule(llvm::Module &M) MDL_FINAL {
         bool changed = false;
         for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end;) {
-            llvm::Function *F = it;
+            llvm::Function *F = &*it;
             ++it;
 
             // intrinsics are not in the call graph, do not try to remove them neither remove
@@ -73,8 +75,8 @@ public:
 
     /// Check if the given Function is from libDevice.
     bool isLibDeviceFunc(llvm::Function const *F) {
-        llvm::AttributeSet Attr = F->getAttributes();
-        if (!Attr.hasAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline))
+        llvm::AttributeList Attr = F->getAttributes();
+        if (!Attr.hasAttribute(llvm::AttributeList::FunctionIndex, llvm::Attribute::AlwaysInline))
             return false;
 
         if (!F->getName().startswith("__nv_"))

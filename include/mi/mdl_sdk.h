@@ -73,9 +73,11 @@
 #include <mi/neuraylib/imatrix.h>
 #include <mi/neuraylib/imdl_archive_api.h>
 #include <mi/neuraylib/imdl_compatibility_api.h>
+#include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/imdl_compiler.h>
 #include <mi/neuraylib/imdl_execution_context.h>
 #include <mi/neuraylib/imdl_discovery_api.h>
+#include <mi/neuraylib/imdl_entity_resolver.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/imdl_factory.h>
 #include <mi/neuraylib/imdl_i18n_configuration.h>

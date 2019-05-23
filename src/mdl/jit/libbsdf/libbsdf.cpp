@@ -38,13 +38,13 @@ namespace
 {
     template<typename DF_sample_data>
     BSDF_INLINE float3 get_df_over_pdf(const DF_sample_data* data);
-    template<> BSDF_INLINE float3 get_df_over_pdf(const BSDF_sample_data* data) { 
+    template<> BSDF_INLINE float3 get_df_over_pdf(const BSDF_sample_data* data) {
         return data->bsdf_over_pdf; }
-    template<> BSDF_INLINE float3 get_df_over_pdf(const EDF_sample_data* data) { 
+    template<> BSDF_INLINE float3 get_df_over_pdf(const EDF_sample_data* data) {
         return data->edf_over_pdf; }
     template<typename DF_sample_data>
     BSDF_INLINE void set_df_over_pdf(DF_sample_data* data, float3 df_over_pdf);
-    template<> BSDF_INLINE void set_df_over_pdf(BSDF_sample_data* data, float3 df_over_pdf) { 
+    template<> BSDF_INLINE void set_df_over_pdf(BSDF_sample_data* data, float3 df_over_pdf) {
         data->bsdf_over_pdf = df_over_pdf; }
     template<> BSDF_INLINE void set_df_over_pdf(EDF_sample_data* data, float3 df_over_pdf) {
         data->edf_over_pdf = df_over_pdf;}
@@ -120,7 +120,7 @@ BSDF_INLINE void diffuse_sample(
     const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
 
     const float sign = transmit ? -1.0f : 1.0f;
-    
+
     data->k2 = math::normalize(
         g.x_axis * cosh.x + sign * g.n.shading_normal * cosh.y + g.z_axis * cosh.z);
 
@@ -294,9 +294,8 @@ BSDF_INLINE void specular_sample(
         data->k2 = (nk1 + nk1) * n.shading_normal - data->k1;
 
         data->event_type = BSDF_EVENT_SPECULAR_REFLECTION;
-    }
-    else // refraction
-    {
+    } else {
+        // refraction
         // total internal reflection should only be triggered for scatter_transmit
         // (since we should fall in the code-path above otherwise)
         bool tir = false;
@@ -317,7 +316,6 @@ BSDF_INLINE void specular_sample(
         return;
     }
 }
-    
 
 BSDF_API void specular_bsdf_sample(
     BSDF_sample_data *data,
@@ -410,25 +408,21 @@ BSDF_INLINE void microfacet_sample(
     }
 
     const bool thin_walled = get_material_thin_walled();
-    if (data->xi.z < f_refl)
-    {
+    if (data->xi.z < f_refl) {
         // BRDF: reflect
         data->k2 = (2.0f * kh) * h - data->k1;
         data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
-    }
-    else
-    {
+    } else {
         bool tir = false;
         if (thin_walled) {
             // pseudo-BTDF: flip a reflected reflection direction to the back side
             data->k2 = (2.0f * kh) * h - data->k1;
             data->k2 = math::normalize(
                 data->k2 - 2.0f * g.n.shading_normal * math::dot(data->k2, g.n.shading_normal));
-        }
-        else
+        } else {
             // BTDF: refract
             data->k2 = refract(data->k1, h, ior.x / ior.y, kh, tir);
-
+        }
         data->event_type = tir ? BSDF_EVENT_GLOSSY_REFLECTION : BSDF_EVENT_GLOSSY_TRANSMISSION;
         if (tir && (mode == scatter_transmit)) {
             absorb(data);
@@ -458,7 +452,7 @@ BSDF_INLINE void microfacet_sample(
         k10, kh,
         make_float3(math::dot(data->k2, g.x_axis), nk2, math::dot(data->k1, g.z_axis)), k2h,
         refraction);
-    
+
     if (G12 <= 0.0f) {
         absorb(data);
         return;
@@ -557,8 +551,7 @@ BSDF_INLINE float microfacet_evaluate(
         // refraction pdf and BTDF
         const float tmp = k1h * ior.x - k2h * ior.y;
         data->pdf *= k1h * k2h / (nk1 * nh * tmp * tmp);
-    }
-    else {
+    } else {
         // reflection pdf and BRDF (and pseudo-BTDF for thin-walled)
         data->pdf *= 0.25f / (nk1 * nh);
     }
@@ -603,7 +596,8 @@ BSDF_INLINE float microfacet_evaluate(
 // Distribution of Visible Normals")
 class Vcavities_masking {
 public:
-    BSDF_INLINE float3 flip(const float3 &h, const float3 &k, const float xi) const {
+    BSDF_INLINE float3 flip(const float3 &h, const float3 &k, const float xi) const
+    {
         const float a = h.y * k.y;
         const float b = h.x * k.x + h.z * k.z;
         const float kh   = math::max(a + b, 0.0f);
@@ -612,8 +606,7 @@ public:
         if (xi < kh_f / (kh + kh_f)) {
             return make_float3(-h.x, h.y, -h.z);
         }
-        else
-            return h;
+        return h;
     }
 
     BSDF_INLINE float shadow_mask(
@@ -621,7 +614,8 @@ public:
         const float nh,
         const float3 &k1, const float k1h,
         const float3 &k2, const float k2h,
-        const bool refraction) const {
+        const bool refraction) const
+    {
         G1 = microfacet_mask_v_cavities(nh, k1h, k1.y);
         G2 = microfacet_mask_v_cavities(nh, k2h, k2.y);
         return refraction ?  math::max(G1 + G2 - 1.0f, 0.0f) : math::min(G1, G2);
@@ -1459,22 +1453,18 @@ BSDF_INLINE void measured_sample(
         scale = math::min(scale, 1.0f / max_albedos.w);
 
     const float sum = max_albedos.x + max_albedos.z;
-    if (sum == 0.0f || scale == 0.0f)
-    {
+    if (sum == 0.0f || scale == 0.0f) {
         absorb(data);
         return;
     }
 
     Mbsdf_part selected_part;
     float prob = max_albedos.x / sum;
-    if (data->xi.z < prob)
-    {
+    if (data->xi.z < prob) {
         data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
         selected_part = Mbsdf_part::mbsdf_data_reflection;
         data->xi.z /= prob;
-    }
-    else
-    {
+    } else {
         data->event_type = BSDF_EVENT_GLOSSY_TRANSMISSION;
         selected_part = Mbsdf_part::mbsdf_data_transmission;
         data->xi.z = (data->xi.z - prob) / (1.0f - prob);
@@ -1492,8 +1482,8 @@ BSDF_INLINE void measured_sample(
 
     // transform to world
     float2 incoming_polar_sin, incoming_polar_cos;
-    math::sincos(make<float2>(incoming_polar_pdf.x, incoming_polar_pdf.y), 
-                 &incoming_polar_sin, 
+    math::sincos(make<float2>(incoming_polar_pdf.x, incoming_polar_pdf.y),
+                 &incoming_polar_sin,
                  &incoming_polar_cos);
     data->k2 = math::normalize(
         g.x_axis            * incoming_polar_sin.x * incoming_polar_cos.y   +
@@ -1501,7 +1491,7 @@ BSDF_INLINE void measured_sample(
         g.z_axis            * incoming_polar_sin.x * incoming_polar_sin.y);
 
     // check for valid a result and sampling beneath the surface
-    if (incoming_polar_pdf.x < 0.0f || 
+    if (incoming_polar_pdf.x < 0.0f ||
         incoming_polar_cos.x <= 0.0f || math::dot(data->k2, g.n.geometry_normal) * sign <= 0.0f)
     {
         absorb(data);
@@ -1544,8 +1534,7 @@ BSDF_INLINE void measured_evaluate(
     // local (tangent) space
     float3 x_axis, z_axis;
     float3 y_axis = n.shading_normal;
-    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis))
-    {
+    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis)) {
         absorb(data);
         return;
     }
@@ -1584,8 +1573,7 @@ BSDF_INLINE void measured_evaluate(
         math::atan2(outgoing.z, outgoing.x));
 
     // filter rays below the surface
-    if (incoming.y < 0.0f || outgoing.y < 0.0f)
-    {
+    if (incoming.y < 0.0f || outgoing.y < 0.0f) {
         absorb(data);
         return;
     }
@@ -1598,18 +1586,14 @@ BSDF_INLINE void measured_evaluate(
     const float sum = max_albedos.x + max_albedos.z;
     Mbsdf_part selected_part;
     float prob = max_albedos.x / sum;
-    if (backside_eval)
-    {
+    if (backside_eval) {
         selected_part = Mbsdf_part::mbsdf_data_transmission;
         prob = (1.0f - prob);
-    }
-    else
-    {
+    } else {
         selected_part = Mbsdf_part::mbsdf_data_reflection;
     }
 
-    if (prob == 0.0f)
-    {
+    if (prob == 0.0f) {
         absorb(data);
         return;
     }
@@ -1628,7 +1612,7 @@ BSDF_INLINE void measured_evaluate(
         selected_part);
 
     data->bsdf = (scale * incoming.y) * state->bsdf_measurement_evaluate(
-        measurement_id, 
+        measurement_id,
         incoming_polar,
         outgoing_polar,
         selected_part);
@@ -1660,8 +1644,7 @@ BSDF_INLINE void measured_pdf(
     // local (tangent) space
     float3 x_axis, z_axis;
     float3 y_axis = n.shading_normal;
-    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis))
-    {
+    if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis)) {
         absorb(data);
         return;
     }
@@ -1701,8 +1684,7 @@ BSDF_INLINE void measured_pdf(
         math::atan2(outgoing.z, outgoing.x));
 
     // filter rays below the surface
-    if (incoming.y < 0.0f || outgoing.y < 0.0f)
-    {
+    if (incoming.y < 0.0f || outgoing.y < 0.0f) {
         absorb(data);
         return;
     }
@@ -1715,18 +1697,14 @@ BSDF_INLINE void measured_pdf(
     const float sum = max_albedos.x + max_albedos.z;
     Mbsdf_part selected_part;
     float prob = max_albedos.x / sum;
-    if (backside_eval)
-    {
+    if (backside_eval) {
         selected_part = Mbsdf_part::mbsdf_data_transmission;
         prob = (1.0f - prob);
-    }
-    else
-    {
+    } else {
         selected_part = Mbsdf_part::mbsdf_data_reflection;
     }
 
-    if (prob == 0.0f)
-    {
+    if (prob == 0.0f) {
         absorb(data);
         return;
     }
@@ -2128,8 +2106,7 @@ BSDF_API void weighted_layer_sample(
 {
     weight = math::saturate(weight);
 
-    if (data->xi.z < weight)
-    {
+    if (data->xi.z < weight) {
         data->xi.z /= weight;
 
         layer.sample(data, state, normal);
@@ -2141,9 +2118,7 @@ BSDF_API void weighted_layer_sample(
             base.pdf(&pdf_data, state, inherited_normal);
             data->pdf = pdf_data.pdf * (1.0f - weight) + data->pdf * weight;
         }
-    }
-    else
-    {
+    } else {
         data->xi.z = (data->xi.z - weight) / (1.0f - weight);
 
         base.sample(data, state, inherited_normal);
@@ -2230,8 +2205,7 @@ BSDF_API void color_weighted_layer_sample(
     weight = math::saturate(weight);
     const float p = math::average(weight);
 
-    if (data->xi.z < p)
-    {
+    if (data->xi.z < p) {
         const float p_inv = 1.0f / p;
         data->xi.z *= p_inv;
 
@@ -2246,9 +2220,7 @@ BSDF_API void color_weighted_layer_sample(
             base.pdf(&pdf_data, state, inherited_normal);
             data->pdf = pdf_data.pdf * (1.0f - p) + data->pdf * p;
         }
-    }
-    else
-    {
+    } else {
         const float p_inv = 1.0f / (1.0f - p);
         data->xi.z = (data->xi.z - p) * p_inv;
 
@@ -2342,7 +2314,7 @@ BSDF_INLINE void curve_layer_sample(
 {
     weight = math::saturate(weight);
 
-    const float nk1 = math::dot(data->k1, layer_normal);
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float estimated_curve_factor = c.estimate(nk1);
 
     const bool no_base = base.is_black();
@@ -2398,10 +2370,10 @@ BSDF_INLINE void curve_layer_evaluate(
 {
     weight = math::saturate(weight);
 
-    const float nk1 = math::dot(data->k1, layer_normal);
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
 
-    const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+    const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;    
     const float2 ior = process_ior(data);
     const float3 h = compute_half_vector(
         data->k1, data->k2, layer_normal, ior, nk1, nk2,
@@ -2445,7 +2417,7 @@ BSDF_INLINE void curve_layer_pdf(
     if (base.is_black())
         return;
 
-    const float nk1 = math::dot(data->k1, layer_normal);
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float prob_layer = weight * c.estimate(nk1);
     const float pdf_layer = data->pdf * prob_layer;
 
@@ -2837,6 +2809,10 @@ BSDF_API void color_custom_curve_layer_pdf(
 // )
 /////////////////////////////////////////////////////////////////////
 
+// The HLSL backend does not support storing pointers, so we cannot use the
+// templated curve_layer functions, but need to duplicate their code.
+#if 0
+
 class Measured_curve_eval {
 public:
     Measured_curve_eval(
@@ -2918,6 +2894,145 @@ BSDF_API void measured_curve_layer_pdf(
         c, data, state, weight, layer, base, shading_normal, inherited_normal, geometry_normal);
 }
 
+#else
+
+BSDF_API void measured_curve_layer_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    weight = math::saturate(weight);
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float estimated_curve_factor = measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
+
+    const bool no_base = base.is_black();
+
+    const float prob_layer = no_base ? 1.0f : estimated_curve_factor * weight;
+    const bool sample_layer = no_base || (data->xi.z < prob_layer);
+    if (sample_layer) {
+        data->xi.z /= prob_layer;
+        layer.sample(data, state, layer_normal);
+    } else {
+        data->xi.z = (1.0f - data->xi.z) / (1.0f - prob_layer);
+        base.sample(data, state, base_normal);
+    }
+
+    if (data->event_type == BSDF_EVENT_ABSORB)
+        return;
+
+    const float nk2 = math::abs(math::dot(data->k2, layer_normal));
+    const float2 ior = process_ior(data);
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, layer_normal, ior, nk1, nk2,
+        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0, get_material_thin_walled());
+
+    BSDF_pdf_data pdf_data = to_pdf_data(data);
+    if (sample_layer) {
+        const float kh = math::abs(math::dot(data->k1, h));
+        const float3 curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
+        data->bsdf_over_pdf *= curve_factor * weight / prob_layer;
+
+        base.pdf(&pdf_data, state, base_normal);
+        data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
+    } else {
+        const float3 w_base =
+            make_float3(1.0f, 1.0f, 1.0f) - weight * math::max(
+                measured_curve_factor_eval(nk1, curve_values, num_curve_values),
+                measured_curve_factor_eval(nk2, curve_values, num_curve_values));
+        data->bsdf_over_pdf *= w_base / (1.0f - prob_layer);
+
+        layer.pdf(&pdf_data, state, layer_normal);
+        data->pdf = pdf_data.pdf * prob_layer + data->pdf * (1.0f - prob_layer);
+    }
+}
+
+BSDF_API void measured_curve_layer_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    weight = math::saturate(weight);
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float nk2 = math::abs(math::dot(data->k2, layer_normal));
+
+    const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+    const float2 ior = process_ior(data);
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, layer_normal, ior, nk1, nk2,
+        backside_eval, get_material_thin_walled());
+
+    const float kh = math::abs(math::dot(data->k1, h));
+    const float3 curve_factor = measured_curve_factor_eval(kh, curve_values, num_curve_values);
+    const float3 cf1 = measured_curve_factor_eval(nk1, curve_values, num_curve_values);
+    const float3 cf2 = measured_curve_factor_eval(nk2, curve_values, num_curve_values);
+
+    layer.evaluate(data, state, layer_normal);
+    data->bsdf *= (weight * curve_factor);
+    if (base.is_black())
+        return;
+
+    const float3 bsdf_layer = data->bsdf;
+    const float prob_layer = weight * measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
+    const float pdf_layer = data->pdf * prob_layer;
+
+    base.evaluate(data, state, base_normal);
+    data->pdf = (1.0f - prob_layer) * data->pdf + pdf_layer;
+    data->bsdf = (1.0f - weight * math::max(cf1, cf2)) * data->bsdf + bsdf_layer;
+}
+
+BSDF_API void measured_curve_layer_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    weight = math::saturate(weight);
+
+    layer.pdf(data, state, layer_normal);
+    if (base.is_black())
+        return;
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float prob_layer = weight * measured_curve_factor_estimate(nk1, curve_values, num_curve_values);
+    const float pdf_layer = data->pdf * prob_layer;
+
+    base.pdf(data, state, base_normal);
+    data->pdf = (1.0f - prob_layer) * data->pdf + pdf_layer;
+}
+
+#endif
+
 /////////////////////////////////////////////////////////////////////
 // bsdf color_measured_curve_layer(
 //     color[<N>] curve_values,
@@ -2927,6 +3042,10 @@ BSDF_API void measured_curve_layer_pdf(
 //     float3  normal               = state->normal()
 // )
 /////////////////////////////////////////////////////////////////////
+
+// The HLSL backend does not support storing pointers, so we cannot use the
+// templated curve_layer functions, but need to duplicate their code.
+#if 0
 
 class Color_measured_curve_eval {
 public:
@@ -3011,6 +3130,153 @@ BSDF_API void color_measured_curve_layer_pdf(
         c, data, state, 1.0f, layer, base, shading_normal, inherited_normal, geometry_normal);
 }
 
+#else
+
+BSDF_API void color_measured_curve_layer_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    const float3 &color_weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    const float weight = 1.0f;
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float estimated_curve_factor = color_measured_curve_factor_estimate(
+        nk1, curve_values, num_curve_values, color_weight);
+
+    const bool no_base = base.is_black();
+
+    const float prob_layer = no_base ? 1.0f : estimated_curve_factor * weight;
+    const bool sample_layer = no_base || (data->xi.z < prob_layer);
+    if (sample_layer) {
+        data->xi.z /= prob_layer;
+        layer.sample(data, state, layer_normal);
+    } else {
+        data->xi.z = (1.0f - data->xi.z) / (1.0f - prob_layer);
+        base.sample(data, state, base_normal);
+    }
+
+    if (data->event_type == BSDF_EVENT_ABSORB)
+        return;
+
+    const float nk2 = math::abs(math::dot(data->k2, layer_normal));
+    const float2 ior = process_ior(data);
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, layer_normal, ior, nk1, nk2,
+        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0, get_material_thin_walled());
+
+    BSDF_pdf_data pdf_data = to_pdf_data(data);
+    if (sample_layer) {
+        const float kh = math::abs(math::dot(data->k1, h));
+        const float3 curve_factor = color_measured_curve_factor_eval(
+            kh, curve_values, num_curve_values, color_weight);
+        data->bsdf_over_pdf *= curve_factor * weight / prob_layer;
+
+        base.pdf(&pdf_data, state, base_normal);
+        data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
+    } else {
+        const float3 w_base =
+            make_float3(1.0f, 1.0f, 1.0f) - weight * math::max(
+                color_measured_curve_factor_eval(
+                    nk1, curve_values, num_curve_values, color_weight),
+                color_measured_curve_factor_eval(
+                    nk2, curve_values, num_curve_values, color_weight));
+        data->bsdf_over_pdf *= w_base / (1.0f - prob_layer);
+
+        layer.pdf(&pdf_data, state, layer_normal);
+        data->pdf = pdf_data.pdf * prob_layer + data->pdf * (1.0f - prob_layer);
+    }
+}
+
+BSDF_API void color_measured_curve_layer_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    const float3 &color_weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    const float weight = 1.0f;
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float nk2 = math::abs(math::dot(data->k2, layer_normal));
+
+    const bool backside_eval = math::dot(data->k2, geometry_normal) < 0.0f;
+    const float2 ior = process_ior(data);
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, layer_normal, ior, nk1, nk2,
+        backside_eval, get_material_thin_walled());
+
+    const float kh = math::abs(math::dot(data->k1, h));
+    const float3 curve_factor = color_measured_curve_factor_eval(
+            kh, curve_values, num_curve_values, color_weight);
+    const float3 cf1 = color_measured_curve_factor_eval(
+            nk1, curve_values, num_curve_values, color_weight);
+    const float3 cf2 = color_measured_curve_factor_eval(
+            nk2, curve_values, num_curve_values, color_weight);
+
+    layer.evaluate(data, state, layer_normal);
+    data->bsdf *= (weight * curve_factor);
+    if (base.is_black())
+        return;
+
+    const float3 bsdf_layer = data->bsdf;
+    const float prob_layer = weight * color_measured_curve_factor_estimate(
+            nk1, curve_values, num_curve_values, color_weight);
+    const float pdf_layer = data->pdf * prob_layer;
+
+    base.evaluate(data, state, base_normal);
+    data->pdf = (1.0f - prob_layer) * data->pdf + pdf_layer;
+    data->bsdf = (1.0f - weight * math::max(cf1, cf2)) * data->bsdf + bsdf_layer;
+}
+
+BSDF_API void color_measured_curve_layer_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &base_normal,
+    const float3 *curve_values,
+    const unsigned int num_curve_values,
+    const float3 &color_weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal)
+{
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    const float weight = 1.0f;
+
+    layer.pdf(data, state, layer_normal);
+    if (base.is_black())
+        return;
+
+    const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
+    const float prob_layer = weight * color_measured_curve_factor_estimate(
+            nk1, curve_values, num_curve_values, color_weight);
+    const float pdf_layer = data->pdf * prob_layer;
+
+    base.pdf(data, state, base_normal);
+    data->pdf = (1.0f - prob_layer) * data->pdf + pdf_layer;
+}
+
+#endif
 
 /////////////////////////////////////////////////////////////////////
 // df normalized_mix(
@@ -3361,7 +3627,7 @@ BSDF_INLINE void color_normalized_mix_df_sample(
     if (data->event_type == 0) // BSDF_EVENT_ABSORB or EDF_NO_EMISSION or ...
         return;
 
-    set_df_over_pdf(data, get_df_over_pdf<TDF_sample_data>(data) * 
+    set_df_over_pdf(data, get_df_over_pdf<TDF_sample_data>(data) *
                     math::saturate(components[sampled_idx].weight) /
                     (math::max(w_sum, make_float3(1.0f, 1.0f, 1.0f)) * p));
 
@@ -3881,7 +4147,7 @@ BSDF_API void black_edf_pdf(
 /////////////////////////////////////////////////////////////////////
 // EDF Utilities
 /////////////////////////////////////////////////////////////////////
-namespace 
+namespace
 {
     // compute cosine between outgoing direction and main direction (normal)
     // returns true if the cosine is between 0.0 and 1.0
@@ -3937,7 +4203,7 @@ namespace
         // transform to world
         out_world_dir = math::normalize(
             x_axis * sin_theta * cos_phi +
-            shading_normal * cos_theta + 
+            shading_normal * cos_theta +
             z_axis * sin_theta * sin_phi);
         return true;
     }
@@ -4031,7 +4297,7 @@ namespace
     inline float spot_edf_prepare_spread(float spread)
     {
         // limit spread to meaningful range
-        spread = math::clamp(spread, 0.0f, float(2.0 * M_PI)); 
+        spread = math::clamp(spread, 0.0f, float(2.0 * M_PI));
 
         // spread - Angle of the cone to which the cosine distribution is restricted.
         //          The hemispherical domain for the distribution is rescaled to this cone.
@@ -4064,19 +4330,15 @@ BSDF_API void spot_edf_sample(
     const float phi = (float) (2.0 * M_PI) * data->xi.x;
     const float cos_theta = s + (1.0f - s) * math::pow(1.0f - data->xi.y, 1.0f / (k + 1.0f));
     const float sin_theta = math::sin(math::acos(cos_theta));
-    if ((cos_theta - s) < 0.0f)
-    {
+    if ((cos_theta - s) < 0.0f) {
         no_emission(data);
         return;
     }
 
-    if (global_distribution)
-    {
+    if (global_distribution) {
         no_emission(data);
         return;
-    }
-    else
-    {
+    } else {
         // transform to world  coordinates
         if (!edf_compute_outgoing_direction(data, state, inherited_normal,
             sin_theta, cos_theta, math::sin(phi), math::cos(phi), data->k1))
@@ -4086,8 +4348,7 @@ BSDF_API void spot_edf_sample(
         }
 
         // check for lower hemisphere sample
-        if (math::dot(data->k1, state->geometry_normal()) <= 0.0f)
-        {
+        if (math::dot(data->k1, state->geometry_normal()) <= 0.0f) {
             no_emission(data);
             return;
         }
@@ -4116,17 +4377,15 @@ BSDF_API void spot_edf_evaluate(
 
     // get angle to the main emission direction
     float cos_theta;
-    if (global_distribution)
-    {    
+    if (global_distribution) {
         no_emission(data);
         return;
-    }
-    else
+    } else {
         edf_compute_cos(data->k1, state, inherited_normal, cos_theta);
+    }
 
     // lobe cut off because of the spread
-    if ((cos_theta - s) < 0.0f)
-    {
+    if ((cos_theta - s) < 0.0f) {
         no_emission(data);
         return;
     }
@@ -4136,12 +4395,9 @@ BSDF_API void spot_edf_evaluate(
 
     // normalization term
     float normalization;
-    if (global_distribution)
-    {
-    }
-    else
-    {
-        //edf *= cos_theta; // projection 
+    if (global_distribution) {
+    } else {
+        //edf *= cos_theta; // projection
         normalization = (k*k + 3.0f*k + 2.0f) / (2.0f * (float) M_PI * (k + 1 - k * s - s * s));
     }
 
@@ -4165,13 +4421,12 @@ BSDF_API void spot_edf_pdf(
 
     // get angle to the main emission direction
     float cos_theta;
-    if (global_distribution)
-    {
+    if (global_distribution) {
         no_emission(data);
         return;
-    }
-    else
+    } else {
         edf_compute_cos(data->k1, state, inherited_normal, cos_theta);
+    }
 
     data->pdf = spot_edf_pdf(s, k, cos_theta);
 }
@@ -4192,8 +4447,7 @@ BSDF_INLINE void lightprofile_sample(
 {
     // sample and check for valid a result
     float3 polar_pdf = state->light_profile_sample(light_profile_id, data->xi);
-    if (polar_pdf.x < 0.0f) 
-    {
+    if (polar_pdf.x < 0.0f) {
         no_emission(data);
         return;
     }
@@ -4204,13 +4458,10 @@ BSDF_INLINE void lightprofile_sample(
 
     // local to world space
     float scale;
-    if (global_distribution)
-    {
+    if (global_distribution)  {
         no_emission(data);
         return;
-    }
-    else
-    {
+    } else {
         data->k1 = math::normalize(
             g.x_axis            * sin_theta_phi.x * cos_theta_phi.y +
             g.n.shading_normal  * cos_theta_phi.x +
@@ -4218,8 +4469,7 @@ BSDF_INLINE void lightprofile_sample(
 
         // check for lower hemisphere sample
         scale = math::dot(data->k1, state->geometry_normal());
-        if (scale <= 0.0f)
-        {
+        if (scale <= 0.0f) {
             no_emission(data);
             return;
         }
@@ -4253,7 +4503,7 @@ BSDF_API void measured_edf_sample(
     g.n.shading_normal = inherited_normal;
     g.n.geometry_normal = math::dot(state->geometry_normal(), inherited_normal) > 0 ?
         state->geometry_normal() : -state->geometry_normal();
-    
+
     get_bumped_basis(g.x_axis, g.z_axis, tangent_u, inherited_normal);
 
     lightprofile_sample(data, state, g, light_profile_id, multiplier,
@@ -4273,13 +4523,10 @@ BSDF_INLINE void lightprofile_eval_and_pdf(
 {
     float2 outgoing_polar;
     float cos;
-    if (global_distribution)
-    {
+    if (global_distribution) {
         no_emission(data);
         return;
-    }
-    else
-    {
+    } else {
         // internal to local (assuming an orthonormal base)
         const float3 outgoing = math::normalize(make_float3(
             math::dot(data->k1, g.x_axis),
@@ -4315,11 +4562,10 @@ BSDF_API void measured_edf_evaluate(
 
     Geometry g;
     g.n.shading_normal = inherited_normal;
-    g.n.geometry_normal = state->geometry_normal() * 
+    g.n.geometry_normal = state->geometry_normal() *
         (math::dot(state->geometry_normal(), inherited_normal) > 0.0f ? 1.0f : -1.0f);
 
-    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f)
-    {
+    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f) {
         no_emission(data);
         return;
     }
@@ -4346,8 +4592,7 @@ BSDF_API void measured_edf_pdf(
     g.n.geometry_normal = state->geometry_normal() *
         (math::dot(state->geometry_normal(), inherited_normal) > 0.0f ? 1.0f : -1.0f);
 
-    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f)
-    {
+    if (!global_distribution && math::dot(data->k1, g.n.geometry_normal) <= 0.0f) {
         no_emission(data);
         return;
     }

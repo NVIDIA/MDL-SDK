@@ -43,39 +43,6 @@ class MDL;
 class IModule;
 class Jitted_code;
 
-/// Structure containing information about a function in a link unit.
-struct Link_unit_jit_function_info
-{
-    Link_unit_jit_function_info(
-        string const &name,
-        llvm::Function *func,
-        ILink_unit::Distribution_kind dist_kind,
-        ILink_unit::Function_kind kind,
-        size_t arg_block_index)
-    : m_name(name)
-    , m_func(func)
-    , m_dist_kind(dist_kind)
-    , m_kind(kind)
-    , m_arg_block_index(arg_block_index)
-    {}
-
-    /// The name of the function.
-    string m_name;
-
-    /// The LLVM function.
-    llvm::Function *m_func;
-
-    /// The kind of the function.
-    ILink_unit::Distribution_kind m_dist_kind;
-
-    /// The kind of the function.
-    ILink_unit::Function_kind m_kind;
-
-    /// The index of the target argument block associated with this function, or ~0 if not used.
-    size_t m_arg_block_index;
-};
-
-
 ///
 /// Implementation of the Link unit for the JIT code generator
 ///
@@ -86,9 +53,10 @@ class Link_unit_jit : public Allocator_interface_implement<ILink_unit>
 public:
     /// Possible targets for the generated code.
     enum Target_kind {
-        TK_CUDA_PTX,      ///< Generate CUDA PTX code.
-        TK_LLVM_IR,       ///< Generate LLVM IR (LLVM 3.4 compatible)
-        TK_NATIVE         ///< Generate native code
+        TK_PTX,      ///< Generate CUDA PTX code.
+        TK_LLVM_IR,  ///< Generate LLVM IR (LLVM 7.0 compatible)
+        TK_NATIVE,   ///< Generate native code
+        TK_HLSL      ///< Generate HLSL code.
     };
 
     typedef Type_mapper::Type_mapping_mode Type_mapping_mode;
@@ -105,11 +73,11 @@ public:
     ///
     /// \return true on success
     bool add(
-        ILambda_function const    *lambda,
-        ICall_name_resolver const *name_resolver,
-        Function_kind              kind,
-        size_t                    *arg_block_index,
-        size_t                    *function_index) MDL_FINAL;
+        ILambda_function const                    *lambda,
+        ICall_name_resolver const                 *name_resolver,
+        IGenerated_code_executable::Function_kind  kind,
+        size_t                                    *arg_block_index,
+        size_t                                    *function_index) MDL_FINAL;
 
     /// Add a distribution function to this link unit.
     ///
@@ -147,14 +115,14 @@ public:
     /// \param i  the index of the function
     ///
     /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
-    Distribution_kind get_distribution_kind(size_t i) const MDL_FINAL;
+    IGenerated_code_executable::Distribution_kind get_distribution_kind(size_t i) const MDL_FINAL;
 
     /// Returns the function kind of the i'th function inside this link unit.
     ///
     /// \param i  the index of the function
     ///
     /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
-    Function_kind get_function_kind(size_t i) const MDL_FINAL;
+    IGenerated_code_executable::Function_kind get_function_kind(size_t i) const MDL_FINAL;
 
     /// Get the index of the target argument block layout for the i'th function inside this link
     /// unit if used.
@@ -176,6 +144,17 @@ public:
 
     /// Access messages.
     Messages const &access_messages() const MDL_FINAL;
+
+    /// Returns the prototype of the i'th function inside this link unit.
+    ///
+    /// \param index   the index of the function.
+    /// \param lang    the language to use for the prototype.
+    ///
+    /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
+    ///         for this target code.
+    const char* get_function_prototype(
+        size_t index,
+        IGenerated_code_executable::Prototype_language lang) const MDL_FINAL;
 
     /// Get the target kind.
     Target_kind get_target_kind() const { return m_target_kind; }
@@ -275,11 +254,6 @@ private:
 
     /// The resource manager for the unit.
     IResource_manager *m_res_manag;
-
-    typedef vector<Link_unit_jit_function_info>::Type Func_info_vec;
-
-    /// Function infos of all externally visible functions inside this link unit.
-    Func_info_vec m_func_infos;
 
     typedef vector<mi::base::Handle<mi::mdl::IGenerated_code_value_layout> >::Type Layout_vec;
 
@@ -434,7 +408,26 @@ public:
         unsigned                  num_texture_results,
         bool                      enable_simd) MDL_FINAL;
 
-    /// Compile a lambda function into a PTX using the JIT.
+    /// Fill a code object from a code cache entry.
+    ///
+    /// \param code   the code object to fill
+    /// \param entry  the code cache entry
+    void fill_code_from_cache(Generated_code_source *code, ICode_cache::Entry const *entry);
+
+    /// Enter a code object into the code cache.
+    ///
+    /// \param code        the code object
+    /// \param code_cache  the code cache where a new entry shall be inserted
+    /// \param cache_key   the key to use when entering the code object into the cache
+    void enter_code_into_cache(
+        Generated_code_source *code,
+        ICode_cache *code_cache,
+        unsigned char const cache_key[16]);
+
+    /// Compile a lambda function into PTX or HLSL using the JIT.
+    ///
+    /// The generated function will have the signature #mi::mdl::Lambda_generic_function or
+    /// #mi::mdl::Lambda_switch_function depending on the type of the lambda.
     ///
     /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
@@ -442,17 +435,20 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param ptx_output           true: generate PTX, false: generate LLVM-IR (prepared for PTX)
+    /// \param comp_mode            the compilation mode deciding the target language,
+    ///                             must be PTX or HLSL
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
-    IGenerated_code_executable *compile_into_ptx(
+    virtual IGenerated_code_executable *compile_into_source(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
         unsigned                  sm_version,
-        bool                      ptx_output) MDL_FINAL;
+        Compilation_mode          comp_mode,
+        bool                      llvm_ir_output) MDL_FINAL;
 
     /// Compile a distribution function into native code using the JIT.
     ///
@@ -473,7 +469,7 @@ public:
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results) MDL_FINAL;
 
-    /// Compile a distribution function into a PTX using the JIT.
+    /// Compile a distribution function into PTX or HLSL using the JIT.
     ///
     /// Currently only BSDFs are supported.
     /// For a BSDF, it results in four functions, with their names built from the name of the
@@ -485,7 +481,9 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param ptx_output           true: generate PTX, false: generate LLVM-IR (prepared for PTX)
+    /// \param comp_mode            the compilation mode deciding the target language,
+    ///                             must be PTX or HLSL
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled distribution function or NULL on compilation errors
     IGenerated_code_executable *compile_distribution_function_gpu(
@@ -494,7 +492,8 @@ public:
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results,
         unsigned                     sm_version,
-        bool                         ptx_output) MDL_FINAL;
+        Compilation_mode             comp_mode,
+        bool                         llvm_ir_output) MDL_FINAL;
 
     /// Get the device library for PTX compilation.
     ///

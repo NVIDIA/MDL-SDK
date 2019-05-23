@@ -210,7 +210,7 @@ char const *get_error_template(
         case FORBIDDEN_RETURN_TYPE:
             return "forbidden return type '$0' for function '$1'";
         case CALLED_OBJECT_NOT_A_FUNCTION:
-            return "called object '$0' is not a function";
+            return "called object $0$1$2is not a function";
         case POS_ARGUMENT_AFTER_NAMED:
             return "positional argument $0 after named argument '$1' is forbidden";
         case NO_MATCHING_OVERLOAD:
@@ -568,6 +568,29 @@ char const *get_error_template(
                    "archive '$1' conflicts with $2 '$3', both locations are ignored";
         case MATERIAL_PTR_USED:
             return "Missing parentheses on material instance";
+        case CAST_TYPES_UNRELATED:
+            return "Cannot cast '$0' into '$1$2', different type kinds";
+        case CAST_MISSING_ENUM_VALUE_SRC:
+            return "Cannot cast '$0' into '$1', missing enum value '$2 = $3' in source type";
+        case CAST_MISSING_ENUM_VALUE_DST:
+            return "Cannot cast '$0' into '$1', missing enum value '$2 = $3' in destination type";
+        case CAST_STRUCT_FIELD_COUNT:
+            return "Cannot cast '$0' into '$1', different number of fields";
+        case CAST_STRUCT_FIELD_INCOMPATIBLE:
+            return "Cannot cast '$0' into '$1', fields '$2' and '$3' are incompatible";
+        case CAST_ARRAY_ELEMENT_INCOMPATIBLE:
+            return "Cannot cast '$0' into '$1$2', element types are incompatible";
+        case CAST_ARRAY_DEFERRED_TO_IMM:
+            return "Cannot cast '$0' into '$1', deferred sized array cannot be casted to immediate";
+        case CAST_ARRAY_IMM_TO_DEFERRED:
+            return "Cannot cast '$0' into '$1', immediate sized array cannot be casted to deferred";
+        case CAST_ARRAY_DIFFERENT_LENGTH:
+            return "Cannot cast '$0' into '$1', different array size";
+        case FORBIDDEN_ANNOTATION_PARAMETER_TYPE:
+            return "annotation parameters of type '$0' are forbidden";
+        case ANNOS_ON_ANNO_DECL_NOT_SUPPORTED:
+            return "Annotations on annotation declarations are forbidden in MDL $0.$1 "
+                "and will be ignored";
 
         // ------------------------------------------------------------- //
         case INTERNAL_COMPILER_ERROR:
@@ -637,6 +660,8 @@ char const *get_error_template(
             return "File/directory '$1' in directory '$0' will be ignored";
         case MDR_INVALID_HEADER:
             return "Header of MDL archive '$0' is invalid";
+        case MDR_PRE_RELEASE_VERSION:
+            return "Header of MDL archive '$0' contains a pre-release version";
         case MDR_INVALID_HEADER_VERSION:
             return "Header version of MDL archive'$0' is invalid";
 
@@ -681,6 +706,8 @@ char const *get_error_template(
             return "Header of MDLE file '$0' is invalid";
         case MDLE_INVALID_HEADER_VERSION:
             return "Header version of MDLE file '$0' is invalid";
+        case MDLE_PRE_RELEASE_VERSION:
+            return "Header of MDLE file '$0' contains a pre-release version";
         case MDLE_FAILED_TO_ADD_ZIP_COMMENT:
             return "Filed to add zip comment to MDLE file '$0'";
 
@@ -697,6 +724,10 @@ char const *get_error_template(
             return "linking libdevice failed: $0";
         case LINKING_LIBBSDF_FAILED:
             return "linking libbsdf failed: $0";
+        case PARSING_LIBDEVICE_MODULE_FAILED:
+            return "parsing the libdevice module failed";
+        case PARSING_LIBBSDF_MODULE_FAILED:
+            return "parsing the libbsdf module failed";
         case PARSING_STATE_MODULE_FAILED:
             return "parsing the user-specified state module failed";
         case DEMANGLING_NAME_OF_EXTERNAL_FUNCTION_FAILED:
@@ -819,25 +850,27 @@ ISymbol const *Error_params::get_symbol_arg(size_t index) const {
 }
 
 // Add a type argument.
-Error_params &Error_params::add(IType const *type)
+Error_params &Error_params::add(IType const *type, bool suppress_prefix)
 {
     Entry e;
-    e.kind   = EK_TYPE;
-    e.u.type = type;
+    e.kind                   = EK_TYPE;
+    e.u.type.type            = type;
+    e.u.type.suppress_prefix = suppress_prefix;
 
     m_args.push_back(e);
     return *this;
 }
 
 // Return the type argument of given index.
-IType const *Error_params::get_type_arg(size_t index) const
+IType const *Error_params::get_type_arg(size_t index, bool &suppress_prefix) const
 {
     Entry const &e = m_args.at(index);
 
     if (e.kind == EK_ARRAY_TYPE)
         return e.u.a_type.e_type;
     MDL_ASSERT(e.kind == EK_TYPE);
-    return e.u.type;
+    suppress_prefix = e.u.type.suppress_prefix;
+    return e.u.type.type;
 }
 
 // Add an array type argument.
@@ -1379,7 +1412,9 @@ static void print_error_param(
     case Error_params::EK_TYPE:
         {
             // type param
-            IType const *type = params.get_type_arg(idx);
+            bool suppress_prefix = false;
+            IType const *type = params.get_type_arg(idx, suppress_prefix);
+
             switch (type->get_kind()) {
             case IType::TK_STRUCT:
                 {
@@ -1387,13 +1422,14 @@ static void print_error_param(
                     if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL) {
                         printer->print("material");
                         return;
-                    }
-                    else
+                    } else if (!suppress_prefix) {
                         printer->print("struct ");
+                    }
                 }
                 break;
             case IType::TK_ENUM:
-                printer->print("enum ");
+                if (!suppress_prefix)
+                    printer->print("enum ");
                 break;
             default:
                 break;
@@ -1404,7 +1440,9 @@ static void print_error_param(
     case Error_params::EK_ARRAY_TYPE:
         {
             // type param
-            IType const *type = params.get_type_arg(idx);
+            bool suppress_prefix = false;
+            IType const *type = params.get_type_arg(idx, suppress_prefix);
+
             switch (type->get_kind()) {
             case IType::TK_STRUCT:
                 {
@@ -1413,12 +1451,7 @@ static void print_error_param(
                         printer->print("material");
                         return;
                     }
-                    else
-                        printer->print("struct ");
                 }
-                break;
-            case IType::TK_ENUM:
-                printer->print("enum ");
                 break;
             default:
                 break;
@@ -1514,6 +1547,7 @@ static void print_error_param(
             case IExpression::OK_PRE_DECREMENT:               s = "--"; break;
             case IExpression::OK_POST_INCREMENT:              s = "++"; break;
             case IExpression::OK_POST_DECREMENT:              s = "--"; break;
+            case IExpression::OK_CAST:                        s = "cast<>"; break;
 
             // binary
             case IExpression::OK_SELECT:                      s = "."; break;
@@ -1704,6 +1738,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_3: s = "1.3"; break;
             case IMDL::MDL_VERSION_1_4: s = "1.4"; break;
             case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
+            case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
             }
             printer->print(s);
         }

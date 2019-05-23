@@ -42,6 +42,8 @@
 #include <map>
 using namespace llvm;
 
+#define DEBUG_TYPE "dag-delta"
+
 namespace {
 
 class DAGDeltaAlgorithmImpl {
@@ -60,9 +62,6 @@ private:
   typedef std::set<change_ty>::iterator succ_closure_iterator_ty;
 
   DAGDeltaAlgorithm &DDA;
-
-  const changeset_ty &Changes;
-  const std::vector<edge_ty> &Dependencies;
 
   std::vector<change_ty> Roots;
 
@@ -97,7 +96,7 @@ private:
     assert(PredClosure.count(Node) && "Invalid node!");
     return PredClosure[Node].end();
   }
-  
+
   succ_iterator_ty succ_begin(change_ty Node) {
     assert(Successors.count(Node) && "Invalid node!");
     return Successors[Node].begin();
@@ -125,21 +124,20 @@ private:
   /// ExecuteOneTest - Execute a single test predicate on the change set \p S.
   bool ExecuteOneTest(const changeset_ty &S) {
     // Check dependencies invariant.
-    DEBUG({
-        for (changeset_ty::const_iterator it = S.begin(),
-               ie = S.end(); it != ie; ++it)
-          for (succ_iterator_ty it2 = succ_begin(*it),
-                 ie2 = succ_end(*it); it2 != ie2; ++it2)
-            assert(S.count(*it2) && "Attempt to run invalid changeset!");
-      });
+    LLVM_DEBUG({
+      for (changeset_ty::const_iterator it = S.begin(), ie = S.end(); it != ie;
+           ++it)
+        for (succ_iterator_ty it2 = succ_begin(*it), ie2 = succ_end(*it);
+             it2 != ie2; ++it2)
+          assert(S.count(*it2) && "Attempt to run invalid changeset!");
+    });
 
     return DDA.ExecuteOneTest(S);
   }
 
 public:
-  DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
-                        const changeset_ty &_Changes,
-                        const std::vector<edge_ty> &_Dependencies);
+  DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &DDA, const changeset_ty &Changes,
+                        const std::vector<edge_ty> &Dependencies);
 
   changeset_ty Run();
 
@@ -162,31 +160,27 @@ class DeltaActiveSetHelper : public DeltaAlgorithm {
 
 protected:
   /// UpdatedSearchState - Callback used when the search state changes.
-  virtual void UpdatedSearchState(const changeset_ty &Changes,
-                                  const changesetlist_ty &Sets) LLVM_OVERRIDE {
+  void UpdatedSearchState(const changeset_ty &Changes,
+                                  const changesetlist_ty &Sets) override {
     DDAI.UpdatedSearchState(Changes, Sets, Required);
   }
 
-  virtual bool ExecuteOneTest(const changeset_ty &S) LLVM_OVERRIDE {
+  bool ExecuteOneTest(const changeset_ty &S) override {
     return DDAI.GetTestResult(S, Required);
   }
 
 public:
-  DeltaActiveSetHelper(DAGDeltaAlgorithmImpl &_DDAI,
-                       const changeset_ty &_Required)
-    : DDAI(_DDAI), Required(_Required) {}
+  DeltaActiveSetHelper(DAGDeltaAlgorithmImpl &DDAI,
+                       const changeset_ty &Required)
+      : DDAI(DDAI), Required(Required) {}
 };
 
 }
 
-DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
-                                             const changeset_ty &_Changes,
-                                             const std::vector<edge_ty>
-                                               &_Dependencies)
-  : DDA(_DDA),
-    Changes(_Changes),
-    Dependencies(_Dependencies)
-{
+DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(
+    DAGDeltaAlgorithm &DDA, const changeset_ty &Changes,
+    const std::vector<edge_ty> &Dependencies)
+    : DDA(DDA) {
   for (changeset_ty::const_iterator it = Changes.begin(),
          ie = Changes.end(); it != ie; ++it) {
     Predecessors.insert(std::make_pair(*it, std::vector<change_ty>()));
@@ -211,7 +205,7 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
     Worklist.pop_back();
 
     std::set<change_ty> &ChangeSuccs = SuccClosure[Change];
-    for (pred_iterator_ty it = pred_begin(Change), 
+    for (pred_iterator_ty it = pred_begin(Change),
            ie = pred_end(Change); it != ie; ++it) {
       SuccClosure[*it].insert(Change);
       SuccClosure[*it].insert(ChangeSuccs.begin(), ChangeSuccs.end());
@@ -228,62 +222,70 @@ DAGDeltaAlgorithmImpl::DAGDeltaAlgorithmImpl(DAGDeltaAlgorithm &_DDA,
     for (succ_closure_iterator_ty it2 = succ_closure_begin(*it),
            ie2 = succ_closure_end(*it); it2 != ie2; ++it2)
       PredClosure[*it2].insert(*it);
-  
+
   // Dump useful debug info.
-  DEBUG({
-      llvm::errs() << "-- DAGDeltaAlgorithmImpl --\n";
-      llvm::errs() << "Changes: [";
-      for (changeset_ty::const_iterator it = Changes.begin(),
-             ie = Changes.end(); it != ie; ++it) {
-        if (it != Changes.begin()) llvm::errs() << ", ";
-        llvm::errs() << *it;
+  LLVM_DEBUG({
+    llvm::errs() << "-- DAGDeltaAlgorithmImpl --\n";
+    llvm::errs() << "Changes: [";
+    for (changeset_ty::const_iterator it = Changes.begin(), ie = Changes.end();
+         it != ie; ++it) {
+      if (it != Changes.begin())
+        llvm::errs() << ", ";
+      llvm::errs() << *it;
 
-        if (succ_begin(*it) != succ_end(*it)) {
-          llvm::errs() << "(";
-          for (succ_iterator_ty it2 = succ_begin(*it),
-                 ie2 = succ_end(*it); it2 != ie2; ++it2) {
-            if (it2 != succ_begin(*it)) llvm::errs() << ", ";
-            llvm::errs() << "->" << *it2;
-          }
-          llvm::errs() << ")";
+      if (succ_begin(*it) != succ_end(*it)) {
+        llvm::errs() << "(";
+        for (succ_iterator_ty it2 = succ_begin(*it), ie2 = succ_end(*it);
+             it2 != ie2; ++it2) {
+          if (it2 != succ_begin(*it))
+            llvm::errs() << ", ";
+          llvm::errs() << "->" << *it2;
         }
+        llvm::errs() << ")";
+      }
+    }
+    llvm::errs() << "]\n";
+
+    llvm::errs() << "Roots: [";
+    for (std::vector<change_ty>::const_iterator it = Roots.begin(),
+                                                ie = Roots.end();
+         it != ie; ++it) {
+      if (it != Roots.begin())
+        llvm::errs() << ", ";
+      llvm::errs() << *it;
+    }
+    llvm::errs() << "]\n";
+
+    llvm::errs() << "Predecessor Closure:\n";
+    for (changeset_ty::const_iterator it = Changes.begin(), ie = Changes.end();
+         it != ie; ++it) {
+      llvm::errs() << format("  %-4d: [", *it);
+      for (pred_closure_iterator_ty it2 = pred_closure_begin(*it),
+                                    ie2 = pred_closure_end(*it);
+           it2 != ie2; ++it2) {
+        if (it2 != pred_closure_begin(*it))
+          llvm::errs() << ", ";
+        llvm::errs() << *it2;
       }
       llvm::errs() << "]\n";
+    }
 
-      llvm::errs() << "Roots: [";
-      for (std::vector<change_ty>::const_iterator it = Roots.begin(),
-             ie = Roots.end(); it != ie; ++it) {
-        if (it != Roots.begin()) llvm::errs() << ", ";
-        llvm::errs() << *it;
+    llvm::errs() << "Successor Closure:\n";
+    for (changeset_ty::const_iterator it = Changes.begin(), ie = Changes.end();
+         it != ie; ++it) {
+      llvm::errs() << format("  %-4d: [", *it);
+      for (succ_closure_iterator_ty it2 = succ_closure_begin(*it),
+                                    ie2 = succ_closure_end(*it);
+           it2 != ie2; ++it2) {
+        if (it2 != succ_closure_begin(*it))
+          llvm::errs() << ", ";
+        llvm::errs() << *it2;
       }
       llvm::errs() << "]\n";
+    }
 
-      llvm::errs() << "Predecessor Closure:\n";
-      for (changeset_ty::const_iterator it = Changes.begin(),
-             ie = Changes.end(); it != ie; ++it) {
-        llvm::errs() << format("  %-4d: [", *it);
-        for (pred_closure_iterator_ty it2 = pred_closure_begin(*it),
-               ie2 = pred_closure_end(*it); it2 != ie2; ++it2) {
-          if (it2 != pred_closure_begin(*it)) llvm::errs() << ", ";
-          llvm::errs() << *it2;
-        }
-        llvm::errs() << "]\n";
-      }
-      
-      llvm::errs() << "Successor Closure:\n";
-      for (changeset_ty::const_iterator it = Changes.begin(),
-             ie = Changes.end(); it != ie; ++it) {
-        llvm::errs() << format("  %-4d: [", *it);
-        for (succ_closure_iterator_ty it2 = succ_closure_begin(*it),
-               ie2 = succ_closure_end(*it); it2 != ie2; ++it2) {
-          if (it2 != succ_closure_begin(*it)) llvm::errs() << ", ";
-          llvm::errs() << *it2;
-        }
-        llvm::errs() << "]\n";
-      }
-
-      llvm::errs() << "\n\n";
-    });
+    llvm::errs() << "\n\n";
+  });
 }
 
 bool DAGDeltaAlgorithmImpl::GetTestResult(const changeset_ty &Changes,
@@ -318,10 +320,10 @@ DAGDeltaAlgorithmImpl::Run() {
   // Invariant:  CurrentSet intersect Required == {}
   // Invariant:  Required == (Required union succ*(Required))
   while (!CurrentSet.empty()) {
-    DEBUG({
-        llvm::errs() << "DAG_DD - " << CurrentSet.size() << " active changes, "
-                     << Required.size() << " required changes\n";
-      });
+    LLVM_DEBUG({
+      llvm::errs() << "DAG_DD - " << CurrentSet.size() << " active changes, "
+                   << Required.size() << " required changes\n";
+    });
 
     // Minimize the current set of changes.
     DeltaActiveSetHelper Helper(*this, Required);

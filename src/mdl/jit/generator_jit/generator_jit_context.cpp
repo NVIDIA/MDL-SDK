@@ -30,12 +30,13 @@
 
 #include <cstdio>
 
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Function.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/Function.h>
 #include <llvm/IR/InlineAsm.h>
-#include <llvm/DebugInfo.h>
-#include <llvm/DIBuilder.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 #include <mi/mdl/mdl_definitions.h>
@@ -78,9 +79,10 @@ Function_context::Function_context(
 , m_code_gen(code_gen)
 , m_flags(flags)
 , m_optimize_on_finalize(true)
+, m_full_debug_info(code_gen.generate_full_debug_info())
 , m_break_stack(BB_stack::container_type(alloc))
 , m_continue_stack(BB_stack::container_type(alloc))
-, m_di_function()
+, m_di_function(NULL)
 , m_dilb_stack(DILB_stack::container_type(alloc))
 , m_accesible_parameters(alloc)
 {
@@ -92,20 +94,28 @@ Function_context::Function_context(
         m_array_size_map[ai.get_deferred_size()] = ai.get_immediate_size();
     }
 
+    mi::mdl::IDefinition const *func_def = func_inst.get_def();
+
     // set fast-math flags
     llvm::FastMathFlags FMF;
-    if (code_gen.is_fast_math_enabled()) {
-        FMF.setUnsafeAlgebra();
-    } else if (code_gen.is_finite_math_enabled()) {
-        FMF.setNoNaNs();
-        FMF.setNoInfs();
+    if (func_def != NULL &&
+            (func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISNAN ||
+            func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISFINITE) ) {
+        // isnan and isfinite may not use fast-math, otherwise functions will be optimized away
+    } else {
+        if (code_gen.is_fast_math_enabled()) {
+            FMF.setFast();
+        } else if (code_gen.is_finite_math_enabled()) {
+            FMF.setNoNaNs();
+            FMF.setNoInfs();
+        }
     }
 
     if (code_gen.is_reciprocal_math_enabled()) {
         FMF.setAllowReciprocal();
     }
 
-    m_ir_builder.SetFastMathFlags(FMF);
+    m_ir_builder.setFastMathFlags(FMF);
 
     // create the body block and jump from start to it
     llvm::BasicBlock *body_bb = create_bb("body");
@@ -124,14 +134,13 @@ Function_context::Function_context(
         m_retval_adr = create_local(ret_tp, "return_value");
     }
 
-    mi::mdl::IDefinition const *func_def = func_inst.get_def();
     if (func_def == NULL) {
         // debug info is not possible without a definition
         m_di_builder = NULL;
     } else {
         // generate debug info
         if (m_di_builder != NULL) {
-            llvm::DIFile &di_file = code_gen.get_debug_info_file_entry();
+            llvm::DIFile *di_file = code_gen.get_debug_info_file_entry();
 
             unsigned start_line = 0;
             if (mi::mdl::Position const *pos = func_def->get_position()) {
@@ -156,7 +165,7 @@ Function_context::Function_context(
                 di_file = m_di_file;
             }
 
-            llvm::DICompositeType di_func_type = m_type_mapper.get_debug_info_type(
+            llvm::DISubroutineType *di_func_type = m_type_mapper.get_debug_info_type(
                 m_di_builder, m_di_file, cast<mi::mdl::IType_function>(func_def->get_type()));
 
             m_di_function = m_di_builder->createFunction(
@@ -171,9 +180,8 @@ Function_context::Function_context(
                     /*assume local*/true,
                 /*isDefinition=*/true,
                 start_line,
-                llvm::DIDescriptor::FlagPrototyped,
-                code_gen.is_optimized(),
-                func);
+                llvm::DINode::FlagPrototyped,
+                code_gen.is_optimized());
         }
     }
     // create the function scope
@@ -210,6 +218,7 @@ Function_context::Function_context(
  , m_code_gen(code_gen)
  , m_flags(flags)
  , m_optimize_on_finalize(optimize_on_finalize)
+ , m_full_debug_info(code_gen.generate_full_debug_info())
  , m_break_stack(BB_stack::container_type(alloc))
  , m_continue_stack(BB_stack::container_type(alloc))
  , m_di_function()
@@ -219,7 +228,7 @@ Function_context::Function_context(
     // set fast-math flags
     llvm::FastMathFlags FMF;
     if (code_gen.is_fast_math_enabled()) {
-        FMF.setUnsafeAlgebra();
+        FMF.setFast();
     } else if (code_gen.is_finite_math_enabled()) {
         FMF.setNoNaNs();
         FMF.setNoInfs();
@@ -229,7 +238,7 @@ Function_context::Function_context(
         FMF.setAllowReciprocal();
     }
 
-    m_ir_builder.SetFastMathFlags(FMF);
+    m_ir_builder.setFastMathFlags(FMF);
 
     // set the cursor to the first instruction after all Alloca instructions
     llvm::BasicBlock::iterator param_init_insert_point = func->front().begin();
@@ -241,14 +250,14 @@ Function_context::Function_context(
         llvm::Value *null_val = llvm::ConstantInt::getNullValue(
             llvm::Type::getInt1Ty(m_llvm_context));
         m_ir_builder.CreateAdd(null_val, null_val, "nop");
-        m_body_start_point = m_ir_builder.GetInsertPoint();
+        m_body_start_point = &*m_ir_builder.GetInsertPoint();
     } else {
-        m_body_start_point = param_init_insert_point;
+        m_body_start_point = &*param_init_insert_point;
         m_ir_builder.SetInsertPoint(m_body_start_point);
     }
 
     // debug info is not possible without a definition
-    m_di_builder = NULL;
+    m_full_debug_info = false;
 }
 
  // Destructor, closes the last scope and fills the end block, if the context was not
@@ -293,13 +302,12 @@ Function_context::~Function_context()
             // This step is necessary, because it might contain several terminators.
             llvm::BasicBlock &BB = *m_unreachable_bb;
 
-            for (llvm::BasicBlock::iterator it = BB.begin(); it != BB.end();) {
-                llvm::Instruction *Inst = it++;
-                Inst->dropAllReferences();
+            for (llvm::Instruction &inst : BB) {
+                inst.dropAllReferences();
             }
             for (llvm::BasicBlock::iterator it = BB.begin(); it != BB.end();) {
-                llvm::Instruction *Inst = it++;
-                Inst->eraseFromParent();
+                llvm::Instruction &Inst = *it++;
+                Inst.eraseFromParent();
             }
 
             // finally, place an unreachable instruction here
@@ -348,6 +356,12 @@ llvm::Function::arg_iterator Function_context::get_first_parameter()
     }
    return arg_it;
 }
+
+// Returns true if the current function uses an exec_ctx parameter.
+bool Function_context::has_exec_ctx_parameter() const {
+    return (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) != 0;
+}
+
 
 // Get the exec_ctx parameter of the current function.
 llvm::Value *Function_context::get_exec_ctx_parameter()
@@ -441,7 +455,9 @@ llvm::Value *Function_context::get_cap_args_parameter(llvm::Value *exec_ctx)
     if (m_flags & LLVM_context_data::FL_HAS_RES) {
         ++arg_it;
     }
-    if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+    if (m_code_gen.target_uses_exception_state_parameter() &&
+            (m_flags & LLVM_context_data::FL_HAS_EXC) != 0)
+    {
         ++arg_it;
     }
     return arg_it;
@@ -470,7 +486,9 @@ llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ct
     if (m_flags & LLVM_context_data::FL_HAS_RES) {
         ++arg_it;
     }
-    if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+    if (m_code_gen.target_uses_exception_state_parameter() &&
+            (m_flags & LLVM_context_data::FL_HAS_EXC) != 0)
+    {
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
@@ -512,7 +530,9 @@ llvm::Value *Function_context::get_object_id_value()
             if (m_flags & LLVM_context_data::FL_HAS_RES) {
                 ++arg_it;
             }
-            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+            if (m_code_gen.target_uses_exception_state_parameter() &&
+                (m_flags & LLVM_context_data::FL_HAS_EXC) != 0)
+            {
                 ++arg_it;
             }
             if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
@@ -548,7 +568,9 @@ llvm::Value *Function_context::get_w2o_transform_value()
             if (m_flags & LLVM_context_data::FL_HAS_RES) {
                 ++arg_it;
             }
-            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+            if (m_code_gen.target_uses_exception_state_parameter() &&
+                (m_flags & LLVM_context_data::FL_HAS_EXC) != 0)
+            {
                 ++arg_it;
             }
             if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
@@ -587,7 +609,9 @@ llvm::Value *Function_context::get_o2w_transform_value()
             if (m_flags & LLVM_context_data::FL_HAS_RES) {
                 ++arg_it;
             }
-            if (m_flags & LLVM_context_data::FL_HAS_EXC) {
+            if (m_code_gen.target_uses_exception_state_parameter() &&
+                (m_flags & LLVM_context_data::FL_HAS_EXC) != 0)
+            {
                 ++arg_it;
             }
             if (m_flags & LLVM_context_data::FL_HAS_CAP_ARGS) {
@@ -831,6 +855,10 @@ llvm::ConstantFP *Function_context::get_constant(double d)
 // Convert a string value.
 llvm::Value *Function_context::get_constant(mi::mdl::IValue_string const *s)
 {
+    // get unique value instance for the value of the string, as string value objects from the AST
+    // would be different from ones from the DAG (like parameters)
+    s = m_code_gen.get_internalized_string(s);
+
     LLVM_code_generator::Global_const_map::iterator it = m_code_gen.m_global_const_map.find(s);
     if (it == m_code_gen.m_global_const_map.end()) {
         llvm::Value *v = NULL;
@@ -874,7 +902,7 @@ llvm::Constant *Function_context::get_constant(llvm::Type *type, int v)
         llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(type);
 
         llvm::Constant *c = get_constant(v_tp->getElementType(), v);
-        return llvm::ConstantVector::getSplat(v_tp->getNumElements(), c);
+        return llvm::ConstantVector::getSplat(unsigned(v_tp->getNumElements()), c);
     }
     MDL_ASSERT(!"Cannot create constant of unexpected type");
     return NULL;
@@ -897,7 +925,7 @@ llvm::Constant *Function_context::get_constant(llvm::Type *type, double v)
         llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(type);
 
         llvm::Constant *c = get_constant(v_tp->getElementType(), v);
-        return llvm::ConstantVector::getSplat(v_tp->getNumElements(), c);
+        return llvm::ConstantVector::getSplat(unsigned(v_tp->getNumElements()), c);
     }
     MDL_ASSERT(!"Cannot create constant of unexpected type");
     return NULL;
@@ -1299,80 +1327,144 @@ llvm::Value *Function_context::create_mul_state_V3xM(
     bool ignore_translation,
     bool transposed)
 {
-    // non-transposed:
-    // res.x = lhs_V.x * rhs_M[0].x + lhs_V.y * rhs_M[0].y + lhs_V.z * rhs_M[0].z + rhs_M[0].w
-    // res.y = lhs_V.x * rhs_M[1].x + lhs_V.y * rhs_M[1].y + lhs_V.z * rhs_M[1].z + rhs_M[1].w
-    // res.z = lhs_V.x * rhs_M[2].x + lhs_V.y * rhs_M[2].y + lhs_V.z * rhs_M[2].z + rhs_M[2].w
+    // Note: the state contains matrices in row-major order, while the matrices in MDL
+    //       are stored in column-major order
     //
     // transposed:
     // res.x = lhs_V.x * rhs_M[0].x + lhs_V.y * rhs_M[1].x + lhs_V.z * rhs_M[2].x
     // res.y = lhs_V.x * rhs_M[0].y + lhs_V.y * rhs_M[1].y + lhs_V.z * rhs_M[2].y
     // res.z = lhs_V.x * rhs_M[0].z + lhs_V.y * rhs_M[1].z + lhs_V.z * rhs_M[2].z
     //
+    // non-transposed:
+    // res.x = lhs_V.x * rhs_M[0].x + lhs_V.y * rhs_M[0].y + lhs_V.z * rhs_M[0].z + rhs_M[0].w
+    // res.y = lhs_V.x * rhs_M[1].x + lhs_V.y * rhs_M[1].y + lhs_V.z * rhs_M[1].z + rhs_M[1].w
+    // res.z = lhs_V.x * rhs_M[2].x + lhs_V.y * rhs_M[2].y + lhs_V.z * rhs_M[2].z + rhs_M[2].w
+    //
     // If ignore_translation is true, the rhs_M[*].w part is ignored.
     // For the transposed case, ignore_translation must always be set, because the last row of the
     // state matrices is always implied to be (0, 0, 0, 1) and does not need to be provided.
 
-    if (llvm::isa<llvm::ArrayType>(res_type)) {
-        llvm::Value *res = llvm::ConstantAggregateZero::get(res_type);
+    if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(rhs_M->getType())) {
+        llvm::Value *res = llvm::UndefValue::get(res_type);
 
-        if (transposed) {
-            MDL_ASSERT(ignore_translation && "using translation component not supported for "
-                "transposed matrices");
+        if (llvm::VectorType *vt = llvm::dyn_cast<llvm::VectorType>(arr_tp->getElementType())) {
+            // "arrays of vectors" mode
 
-            for (int i = 2; i >= 0; --i) {
-                unsigned idxes[] = { unsigned(i) };
+            llvm::Type *vt_e_tp = vt->getElementType();
 
-                llvm::Value *idx = get_constant(i);
-                llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
-                llvm::Value *row = m_ir_builder.CreateLoad(ptr);
-                llvm::Value *v   = m_ir_builder.CreateExtractValue(lhs_V, idxes);
+            if (transposed) {
+                llvm::Value *res_elems[3] = {
+                    llvm::Constant::getNullValue(vt_e_tp),
+                    llvm::Constant::getNullValue(vt_e_tp),
+                    llvm::Constant::getNullValue(vt_e_tp)
+                };
 
-                for (unsigned j = 0; j < 3; ++j) {
-                    unsigned comp[] = { j };
-                    llvm::Value *c = m_ir_builder.CreateExtractValue(row, comp);
-                    llvm::Value *t = m_ir_builder.CreateFMul(v, c);
-                    c = m_ir_builder.CreateExtractValue(res, comp);
-                    t = m_ir_builder.CreateFAdd(t, c);
-                    res = m_ir_builder.CreateInsertValue(res, t, comp);
+                for (unsigned k = 0; k < 3; ++k) {
+                    llvm::Value *b_row = m_ir_builder.CreateExtractValue(rhs_M, { k });
+                    llvm::Value *a = m_ir_builder.CreateExtractElement(lhs_V, k);
+
+                    for (unsigned m = 0; m < 3; ++m) {
+                        llvm::Value *b = m_ir_builder.CreateExtractElement(b_row, m);
+
+                        res_elems[m] = m_ir_builder.CreateFAdd(
+                            res_elems[m], m_ir_builder.CreateFMul(a, b));
+                    }
+                }
+
+                for (unsigned k = 0; k < 3; ++k) {
+                    res = m_ir_builder.CreateInsertElement(res, res_elems[k], k);
+                }
+            } else {
+                for (unsigned k = 0; k < 3; ++k) {
+                    llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
+                    llvm::Value *b_row = m_ir_builder.CreateExtractValue(rhs_M, { k });
+
+                    for (unsigned m = 0; m < 3; ++m) {
+                        llvm::Value *a = m_ir_builder.CreateExtractElement(lhs_V, m);
+                        llvm::Value *b = m_ir_builder.CreateExtractElement(b_row, m);
+
+                        tmp = m_ir_builder.CreateFAdd(tmp, m_ir_builder.CreateFMul(a, b));
+                    }
+
+                    // add translation component, if requested
+                    if (!ignore_translation) {
+                        tmp = m_ir_builder.CreateFAdd(
+                            tmp, m_ir_builder.CreateExtractElement(b_row, 3));
+                    }
+
+                    res = m_ir_builder.CreateInsertElement(res, tmp, k);
                 }
             }
         } else {
-            llvm::Value *row[3];
-            unsigned w[] = { 3 };
-            for (int i = 0; i < 3; ++i) {
-                unsigned idxes[] = { unsigned(i) };
-                llvm::Value *idx = get_constant(i);
-                llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
-                row[i] = m_ir_builder.CreateLoad(ptr);
+            // "arrays of arrays" mode
+            llvm::ArrayType *ar_col_tp = llvm::cast<llvm::ArrayType>(arr_tp->getElementType());
+            llvm::Type *ar_e_tp = ar_col_tp->getElementType();
 
-                // use translation component? -> initialize result with it
-                if (!ignore_translation) {
-                    llvm::Value *v = m_ir_builder.CreateExtractValue(row[i], w);
-                    res = m_ir_builder.CreateInsertValue(res, v, idxes);
+            if (transposed) {
+                MDL_ASSERT(ignore_translation && "using translation component not supported for "
+                    "transposed matrices");
+
+                llvm::Value *res_elems[3] = {
+                    llvm::Constant::getNullValue(ar_e_tp),
+                    llvm::Constant::getNullValue(ar_e_tp),
+                    llvm::Constant::getNullValue(ar_e_tp)
+                };
+
+                for (unsigned k = 0; k < 3; ++k) {
+                    unsigned idxes[] = { k };
+
+                    llvm::Value *idx = get_constant(int(k));
+                    llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                    llvm::Value *b_row = m_ir_builder.CreateLoad(ptr);
+
+                    llvm::Value *a = m_ir_builder.CreateExtractValue(lhs_V, idxes);
+
+                    for (unsigned m = 0; m < 3; ++m) {
+                        unsigned comp[] = { m };
+                        llvm::Value *b = m_ir_builder.CreateExtractValue(b_row, comp);
+
+                        res_elems[m] = m_ir_builder.CreateFAdd(
+                            res_elems[m], m_ir_builder.CreateFMul(a, b));
+                    }
                 }
-            }
 
-            for (int i = 2; i >= 0; --i) {
-                unsigned idxes[] = { unsigned(i) };
+                for (unsigned k = 0; k < 3; ++k) {
+                    unsigned idxes[] = { k };
+                    res = m_ir_builder.CreateInsertValue(res, res_elems[k], idxes);
+                }
+            } else {
+                for (unsigned k = 0; k < 3; ++k) {
+                    llvm::Value *tmp = llvm::Constant::getNullValue(ar_e_tp);
+                    unsigned idxes[] = { k };
+                    llvm::Value *idx = get_constant(int(k));
+                    llvm::Value *ptr = m_ir_builder.CreateInBoundsGEP(rhs_M, idx);
+                    llvm::Value *b_row = m_ir_builder.CreateLoad(ptr);
 
-                llvm::Value *v = m_ir_builder.CreateExtractValue(lhs_V, idxes);
-                for (unsigned j = 0; j < 3; ++j) {
-                    unsigned comp[] = { j };
-                    llvm::Value *c = m_ir_builder.CreateExtractValue(row[j], idxes);
-                    llvm::Value *t = m_ir_builder.CreateFMul(v, c);
-                    c = m_ir_builder.CreateExtractValue(res, comp);
-                    t = m_ir_builder.CreateFAdd(t, c);
-                    res = m_ir_builder.CreateInsertValue(res, t, comp);
+                    for (unsigned m = 0; m < 3; ++m) {
+                        unsigned comp[] = { m };
+                        llvm::Value *a = m_ir_builder.CreateExtractValue(lhs_V, comp);
+                        llvm::Value *b = m_ir_builder.CreateExtractValue(b_row, comp);
+
+                        tmp = m_ir_builder.CreateFAdd(tmp, m_ir_builder.CreateFMul(a, b));
+                    }
+
+                    // add translation component, if requested
+                    if (!ignore_translation) {
+                        unsigned comp[] = { 3 };
+                        tmp = m_ir_builder.CreateFAdd(
+                            tmp, m_ir_builder.CreateExtractValue(b_row, comp));
+                    }
+
+                    res = m_ir_builder.CreateInsertValue(res, tmp, idxes);
                 }
             }
         }
 
         return res;
     } else {
-        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_type);
-        llvm::Value      *res  = llvm::ConstantAggregateZero::get(res_type);
+        llvm::Value *res = llvm::ConstantAggregateZero::get(res_type);
 
+        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_type);
         llvm::Value *idx, *ptr, *v;
 
         if (transposed) {
@@ -1607,7 +1699,7 @@ llvm::Value *Function_context::create_cross(llvm::Value *lhs, llvm::Value *rhs)
     static int const yzx[] = { 1, 2, 0 };
     llvm::Value *shuffle_yzx = get_shuffle(yzx);
 
-    static int zxy[] = { 2, 0, 1 };
+    static int const zxy[] = { 2, 0, 1 };
     llvm::Value *shuffle_zxy = get_shuffle(zxy);
 
     llvm::Value *undef = llvm::UndefValue::get(lhs->getType());
@@ -1629,7 +1721,7 @@ llvm::Value *Function_context::create_vector_splat(llvm::VectorType *res_type, l
 {
     llvm::Value *res = llvm::UndefValue::get(res_type);
 
-    for (unsigned i = 0, n = res_type->getNumElements(); i < n; ++i) {
+    for (unsigned i = 0, n = unsigned(res_type->getNumElements()); i < n; ++i) {
         llvm::Value *idx = get_constant(int(i));
         res = m_ir_builder.CreateInsertElement(res, v, idx);
     }
@@ -1660,7 +1752,7 @@ llvm::Value *Function_context::create_splat(llvm::Type *res_type, llvm::Value *v
 unsigned Function_context::get_num_elements(llvm::Value *val)
 {
     if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(val->getType()))
-        return v_tp->getNumElements();
+        return unsigned(v_tp->getNumElements());
     else
         return unsigned(llvm::cast<llvm::ArrayType>(val->getType())->getNumElements());
 }
@@ -1731,7 +1823,7 @@ void Function_context::create_oob_exception_call(
 
     // call the out-of-bounds function
     llvm::Function *oob_func = m_code_gen.get_out_of_bounds();
-    m_ir_builder.CreateCall5(oob_func, get_exc_state_parameter(), index, bound, f, l);
+    m_ir_builder.CreateCall(oob_func, { get_exc_state_parameter(), index, bound, f, l });
 }
 
 // Creates a bounds check using an exception.
@@ -1811,7 +1903,7 @@ void Function_context::create_div_exception_call(
 
     // call the div-by-zero function
     llvm::Function *dbz_func = m_code_gen.get_div_by_zero();
-    m_ir_builder.CreateCall3(dbz_func, get_exc_state_parameter(), f, l);
+    m_ir_builder.CreateCall(dbz_func, { get_exc_state_parameter(), f, l });
 }
 
 // Creates a div-by-zero check using an exception.
@@ -1908,7 +2000,7 @@ void Function_context::pop_continue()
 void Function_context::push_block_scope(mi::mdl::Position const *pos)
 {
     if (m_di_builder != NULL) {
-        llvm::DIScope parentScope;
+        llvm::DIScope *parentScope;
 
         if (!m_dilb_stack.empty())
             parentScope = m_dilb_stack.top();
@@ -1925,7 +2017,7 @@ void Function_context::push_block_scope(mi::mdl::Position const *pos)
             start_column = pos->get_start_column();
         }
 
-        llvm::DILexicalBlock lexicalBlock = m_di_builder->createLexicalBlock(
+        llvm::DILexicalBlock *lexicalBlock = m_di_builder->createLexicalBlock(
             parentScope,
             m_di_file,
             start_line,
@@ -1943,7 +2035,7 @@ void Function_context::pop_block_scope()
 }
 
 // Get the current LLVM debug info scope.
-llvm::DIScope Function_context::get_debug_info_scope()
+llvm::DIScope *Function_context::get_debug_info_scope()
 {
     return m_dilb_stack.top();
 }
@@ -1952,7 +2044,7 @@ llvm::DIScope Function_context::get_debug_info_scope()
 void Function_context::set_curr_pos(mi::mdl::Position const &pos)
 {
     m_curr_pos = &pos;
-    if (m_di_builder != NULL) {
+    if (m_full_debug_info) {
         m_ir_builder.SetCurrentDebugLocation(
             llvm::DebugLoc::get(
                 m_curr_pos->get_start_line(),
@@ -1982,28 +2074,52 @@ void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
 
     bool is_parameter = var_def->get_kind() == mi::mdl::IDefinition::DK_PARAMETER;
 
-    llvm::DIScope scope = is_parameter ? m_di_function : get_debug_info_scope();
-    llvm::DIType diType =
-        m_type_mapper.get_debug_info_type(m_di_builder, scope, var_def->get_type());
+    llvm::DIScope *scope  = is_parameter ? m_di_function : get_debug_info_scope();
+    llvm::DIType  *diType = m_type_mapper.get_debug_info_type(
+        m_di_builder,
+        m_code_gen.get_debug_info_file_entry(),
+        scope,
+        var_def->get_type());
 
-    unsigned start_line = 0;
-    if (pos != NULL) {
-        start_line = pos->get_start_line();
+    if (!m_full_debug_info) {
+        m_di_builder->retainType(diType);
+        return;
     }
 
-    llvm::DIVariable var = m_di_builder->createLocalVariable(
-        is_parameter ? llvm::dwarf::DW_TAG_arg_variable : llvm::dwarf::DW_TAG_auto_variable,
-        scope,
-        var_def->get_symbol()->get_name(),
-        m_di_file,
-        start_line,
-        diType,
-        true, // preserve even in optimized builds
-        /*Flags=*/0,
-        is_parameter ? var_def->get_parameter_index() : 0);
-    MDL_ASSERT(var.Verify());
+    unsigned start_line = 0;
+    unsigned start_column = 0;
+    if (pos != NULL) {
+        start_line = pos->get_start_line();
+        start_column = pos->get_start_column();
+    }
+    llvm::DebugLoc debug_loc = llvm::DebugLoc::get(start_line, start_column, scope);
 
-    m_di_builder->insertDeclare(var_adr, var, m_ir_builder.GetInsertBlock());
+    llvm::DILocalVariable *var;
+    if (is_parameter)
+        var = m_di_builder->createParameterVariable(
+            scope,
+            var_def->get_symbol()->get_name(),
+            var_def->get_parameter_index() + 1,  // first parameter has index one
+            m_di_file,
+            start_line,
+            diType,
+            true);  // preserve even in optimized builds
+    else
+        var = m_di_builder->createAutoVariable(
+            scope,
+            var_def->get_symbol()->get_name(),
+            m_di_file,
+            start_line,
+            diType,
+            true);  // preserve even in optimized builds
+    MDL_ASSERT(var);
+
+    m_di_builder->insertDeclare(
+        var_adr,
+        var,
+        m_di_builder->createExpression(),
+        debug_loc,
+        m_ir_builder.GetInsertBlock());
 }
 
 // Make the given function/material parameter accessible.
@@ -2247,7 +2363,8 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             // converting derivative values between array and vector representations
             llvm::Value *res = llvm::UndefValue::get(dst_type);
             for (unsigned i = 0, n = src_type->getStructNumElements(); i < n; ++i) {
-                llvm::Value *src_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(ptr, 0, i);
+                llvm::Value *src_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(
+                    nullptr, ptr, 0, i);
                 unsigned idxs[] = { i };
                 llvm::Value *cur_elem = load_and_convert(
                     dst_type->getStructElementType(i), src_elem_ptr);
@@ -2285,6 +2402,34 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             // as the types are different, one is a struct and one is an array.
             // The struct type could have any custom alignment, so load them by elements.
 
+            // special case: float3x3 array of vectors to float3x3 struct (same for double)
+            if (llvm::isa<llvm::ArrayType>(src_type) &&
+                    llvm::isa<llvm::VectorType>(src_type->getArrayElementType()) &&
+                    llvm::isa<llvm::StructType>(dst_type)) {
+                unsigned cols = get_type_num_elements(src_type);
+                unsigned rows = get_type_num_elements(src_type->getArrayElementType());
+                MDL_ASSERT(
+                    get_type_num_elements(dst_type) == cols &&
+                    get_type_num_elements(dst_type->getStructElementType(0)) == rows &&
+                    src_type->getArrayElementType()->getVectorElementType() ==
+                        dst_type->getStructElementType(0)->getStructElementType(0));
+
+                llvm::Value *a = m_ir_builder.CreateLoad(ptr);
+                llvm::Value *res = llvm::UndefValue::get(dst_type);
+
+                for (unsigned i = 0; i < cols; ++i) {
+                    unsigned col_idx[] = { i };
+                    for (unsigned j = 0; j < rows; ++j) {
+                        unsigned idxs[] = { i, j };
+                        llvm::Value *col = m_ir_builder.CreateExtractValue(a, col_idx);
+                        llvm::Value *v =
+                            m_ir_builder.CreateExtractElement(col, get_constant(int(j)));
+                        res = m_ir_builder.CreateInsertValue(res, v, idxs);
+                    }
+                }
+                return res;
+            }
+
             // we only check the type of the first element of the struct...
             MDL_ASSERT(
                 get_type_num_elements(src_type) == get_type_num_elements(dst_type) &&
@@ -2314,8 +2459,7 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 llvm::Value *res = llvm::UndefValue::get(dst_type);
 
                 for (unsigned i = 0; i < 3; ++i) {
-                    for (unsigned j = 0; j < 3; ++j)
-                    {
+                    for (unsigned j = 0; j < 3; ++j) {
                         unsigned idxs[] = { i, j };
                         llvm::Value *v = m_ir_builder.CreateExtractElement(
                             a, get_constant(int(i * 3 + j)));
@@ -2421,7 +2565,8 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
             // converting derivative values between array and vector representations
             llvm::StoreInst *last_store = NULL;
             for (unsigned i = 0, n = src_type->getStructNumElements(); i < n; ++i) {
-                llvm::Value *dst_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(ptr, 0, i);
+                llvm::Value *dst_elem_ptr = m_ir_builder.CreateConstInBoundsGEP2_32(
+                    nullptr, ptr, 0, i);
                 unsigned idxs[] = { i };
                 llvm::Value *src_elem = m_ir_builder.CreateExtractValue(value, idxs);
                 last_store = convert_and_store(src_elem, dst_elem_ptr);
@@ -2554,6 +2699,8 @@ llvm::Value *Function_context::get_tex_lookup_func(
     mi::mdl::Type_mapper::Tex_handler_vtable_index index)
 {
 
+#define ARGS2(a,b)               "(" #a ", " #b ")"
+#define ARGS3(a,b,c)             "(" #a ", " #b ", " #c ")"
 #define ARGS4(a,b,c,d)           "(" #a ", " #b ", " #c ", " #d ")"
 #define ARGS5(a,b,c,d,e)         "(" #a ", " #b ", " #c ", " #d ", " #e ")"
 #define ARGS6(a,b,c,d,e,f)       "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ")"
@@ -2654,14 +2801,23 @@ llvm::Value *Function_context::get_tex_lookup_func(
 #define ARGS_resolution_2d \
     ARGS4(int result[2], Core_tex_handler const *self, unsigned texture_idx, int const uv_tile[2])
 
+#define ARGS_resolution_3d \
+    ARGS3(int result[3], Core_tex_handler const *self, unsigned texture_idx)
+
+#define ARGS_texture_isvalid \
+    ARGS2(Core_tex_handler const *self, unsigned texture_idx)
+
+#define ARGS_mbsdf_isvalid \
+    ARGS2(Core_tex_handler const *self, unsigned bsdf_measurement_index)
+
 #define ARGS_mbsdf_resolution \
-    ARGS4(int result[3], Core_tex_handler const *self, unsigned texture_idx, int part)
+    ARGS4(int result[3], Core_tex_handler const *self, unsigned bsdf_measurement_index, int part)
 
 #define ARGS_mbsdf_evaluate \
     ARGS6( \
         float result[3], \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned bsdf_measurement_index, \
         float const theta_phi_in[2], \
         float const theta_phi_out[2], \
         int part)
@@ -2670,7 +2826,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
     ARGS6( \
         float result[3], \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned bsdf_measurement_index, \
         float const theta_phi_out[2], \
         float const xi[3], \
         int part)
@@ -2679,7 +2835,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
     ARGS6( \
         float *result, \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned bsdf_measurement_index, \
         float const theta_phi_in[2], \
         float const theta_phi_out[2], \
         int part)
@@ -2688,28 +2844,37 @@ llvm::Value *Function_context::get_tex_lookup_func(
     ARGS4( \
         float result[4], \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned bsdf_measurement_index, \
         float const theta_phi[2])
+
+#define ARGS_light_profile_power \
+    ARGS2(Core_tex_handler const *self, unsigned light_profile_index)
+
+#define ARGS_light_profile_maximum \
+    ARGS2(Core_tex_handler const *self, unsigned light_profile_index)
+
+#define ARGS_light_profile_isvalid \
+    ARGS2(Core_tex_handler const *self, unsigned light_profile_index)
 
 #define ARGS_light_profile_evaluate \
     ARGS4( \
         float *result, \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned light_profile_index, \
         float const theta_phi[2])
 
 #define ARGS_light_profile_sample \
     ARGS4( \
         float result[3], \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned light_profile_index, \
         float const xi[3])
 
 #define ARGS_light_profile_pdf \
     ARGS4( \
         float *result, \
         Core_tex_handler const *self, \
-        unsigned resource_idx, \
+        unsigned light_profile_index, \
         float const theta_phi[2])
 
     typedef struct {
@@ -2727,14 +2892,20 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "tex_lookup_float4_cube",             OCP(ARGS_lookup_float4_cube) },
         { "tex_lookup_float3_cube",             OCP(ARGS_lookup_float3_cube) },
         { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
+        { "tex_resolution_3d",                  OCP(ARGS_resolution_3d) },
+        { "tex_texture_isvalid",                OCP(ARGS_texture_isvalid) },
+        { "df_light_profile_power",             OCP(ARGS_light_profile_power) },
+        { "df_light_profile_maximum",           OCP(ARGS_light_profile_maximum) },
+        { "df_light_profile_isvalid",           OCP(ARGS_light_profile_isvalid) },
+        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
+        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
+        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) },
+        { "df_bsdf_measurement_isvalid",        OCP(ARGS_mbsdf_isvalid) },
         { "df_bsdf_measurement_resolution",     OCP(ARGS_mbsdf_resolution) },
         { "df_bsdf_measurement_evaluate",       OCP(ARGS_mbsdf_evaluate) },
         { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
-        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
-        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
-        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
-        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) }
+        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) }
     };
 
     static Runtime_functions names_deriv[] = {
@@ -2747,14 +2918,20 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "tex_lookup_float4_cube",             OCP(ARGS_lookup_float4_cube) },
         { "tex_lookup_float3_cube",             OCP(ARGS_lookup_float3_cube) },
         { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
+        { "tex_resolution_3d",                  OCP(ARGS_resolution_3d) },
+        { "tex_texture_isvalid",                OCP(ARGS_texture_isvalid) },
+        { "df_light_profile_power",             OCP(ARGS_light_profile_power) },
+        { "df_light_profile_maximum",           OCP(ARGS_light_profile_maximum) },
+        { "df_light_profile_isvalid",           OCP(ARGS_light_profile_isvalid) },
+        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
+        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
+        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) },
+        { "df_bsdf_measurement_isvalid",        OCP(ARGS_mbsdf_isvalid) },
         { "df_bsdf_measurement_resolution",     OCP(ARGS_mbsdf_resolution) },
         { "df_bsdf_measurement_evaluate",       OCP(ARGS_mbsdf_evaluate) },
         { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
-        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
-        { "df_light_profile_evaluate",          OCP(ARGS_light_profile_evaluate) },
-        { "df_light_profile_sample",            OCP(ARGS_light_profile_sample) },
-        { "df_light_profile_pdf",               OCP(ARGS_light_profile_pdf) }
+        { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) }
     };
 
     Runtime_functions *names = m_code_gen.is_texruntime_with_derivs()
@@ -2769,12 +2946,15 @@ llvm::Value *Function_context::get_tex_lookup_func(
 #undef ARGS_texel_2d
 #undef ARGS_lookup_float3_2d
 #undef ARGS_lookup_float4_2d
+#undef ARGS_mbsdf_isvalid
 #undef ARGS_mbsdf_resolution
-#undef ARGS_mbsdf_lookup_float
-#undef ARGS_mbsdf_lookup_float3
+#undef ARGS_mbsdf_evaluate
 #undef ARGS_mbsdf_sample
 #undef ARGS_mbsdf_pdf
 #undef ARGS_mbsdf_albedos
+#undef ARGS_light_profile_power
+#undef ARGS_light_profile_maximum
+#undef ARGS_light_profile_isvalid
 #undef ARGS_light_profile_evaluate
 #undef ARGS_light_profile_sample
 #undef ARGS_light_profile_pdf
@@ -2834,9 +3014,10 @@ llvm::Value *Function_context::get_tex_lookup_func(
                 llvm::StructType *tp   = m_type_mapper.get_optix_typeinfo_type();
                 llvm::Constant   *init = llvm::ConstantStruct::get(
                     tp,
-                    get_constant(/*_OPTIX_VARIABLE=*/0x796152),
-                    get_constant(/*sizeof(rtCallableProgramId<T>)=*/4),
-                    NULL
+                    {
+                        get_constant(/*_OPTIX_VARIABLE=*/0x796152),
+                        get_constant(/*sizeof(rtCallableProgramId<T>)=*/4)
+                    }
                     );
 
                 new llvm::GlobalVariable(
@@ -2950,7 +3131,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
                     /*is_packed=*/false);
 
                 llvm::Constant *init = llvm::ConstantStruct::get(
-                    tp, llvm::ConstantInt::get(int_tp, 0), NULL);
+                    tp, { llvm::ConstantInt::get(int_tp, 0) });
 
                 m_code_gen.m_optix_cps[index] = new llvm::GlobalVariable(
                     *m_code_gen.m_module,
@@ -3026,6 +3207,9 @@ int Function_context::get_dbg_curr_line()
 // Get the current file name (computed from current position debug info)
 char const *Function_context::get_dbg_curr_filename()
 {
+    if (m_code_gen.module_stack_empty())
+        return "<unknown>";
+
     mi::mdl::IModule const *mod = m_code_gen.tos_module();
     char const *fname = mod->get_filename();
     if (fname != NULL && fname[0] == '\0')

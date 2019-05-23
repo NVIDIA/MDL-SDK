@@ -2,7 +2,7 @@
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -16,11 +16,11 @@
 
 #include "NVPTX.h"
 #include "NVPTXUtilities.h"
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
-#include "llvm/Analysis/ConstantFolding.h"
 
 using namespace llvm;
 
@@ -31,9 +31,9 @@ private:
   SmallVector<Instruction*, 4> InstrToDelete;
 
 public:
-  NVPTXImageOptimizer(NVVMAnnotations &NVVM);
+  NVPTXImageOptimizer();
 
-  bool runOnFunction(Function &F);
+  bool runOnFunction(Function &F) override;
 
 private:
   bool replaceIsTypePSampler(Instruction &I);
@@ -41,17 +41,18 @@ private:
   bool replaceIsTypePTexture(Instruction &I);
   Value *cleanupValue(Value *V);
   void replaceWith(Instruction *From, ConstantInt *To);
-
-  NVVMAnnotations &NVVM;
 };
 }
 
 char NVPTXImageOptimizer::ID = 0;
 
-NVPTXImageOptimizer::NVPTXImageOptimizer(NVVMAnnotations &NVVM)
-  : FunctionPass(ID), NVVM(NVVM) {}
+NVPTXImageOptimizer::NVPTXImageOptimizer()
+  : FunctionPass(ID) {}
 
 bool NVPTXImageOptimizer::runOnFunction(Function &F) {
+  if (skipFunction(F))
+    return false;
+
   bool Changed = false;
   InstrToDelete.clear();
 
@@ -91,13 +92,11 @@ bool NVPTXImageOptimizer::runOnFunction(Function &F) {
 
 bool NVPTXImageOptimizer::replaceIsTypePSampler(Instruction &I) {
   Value *TexHandle = cleanupValue(I.getOperand(0));
-  if (NVVM.isSampler(*TexHandle)) {
+  if (isSampler(*TexHandle)) {
     // This is an OpenCL sampler, so it must be a samplerref
     replaceWith(&I, ConstantInt::getTrue(I.getContext()));
     return true;
-  } else if (NVVM.isImageWriteOnly(*TexHandle) ||
-             NVVM.isImageReadWrite(*TexHandle) ||
-             NVVM.isImageReadOnly(*TexHandle)) {
+  } else if (isImage(*TexHandle)) {
     // This is an OpenCL image, so it cannot be a samplerref
     replaceWith(&I, ConstantInt::getFalse(I.getContext()));
     return true;
@@ -109,14 +108,14 @@ bool NVPTXImageOptimizer::replaceIsTypePSampler(Instruction &I) {
 
 bool NVPTXImageOptimizer::replaceIsTypePSurface(Instruction &I) {
   Value *TexHandle = cleanupValue(I.getOperand(0));
-  if (NVVM.isImageReadWrite(*TexHandle) ||
-      NVVM.isImageWriteOnly(*TexHandle)) {
+  if (isImageReadWrite(*TexHandle) ||
+      isImageWriteOnly(*TexHandle)) {
     // This is an OpenCL read-only/read-write image, so it must be a surfref
     replaceWith(&I, ConstantInt::getTrue(I.getContext()));
     return true;
-  } else if (NVVM.isImageReadOnly(*TexHandle) ||
-             NVVM.isSampler(*TexHandle)) {
-    // This is an OpenCL read-only/ image or sampler, so it cannot be
+  } else if (isImageReadOnly(*TexHandle) ||
+             isSampler(*TexHandle)) {
+    // This is an OpenCL read-only/ imageor sampler, so it cannot be
     // a surfref
     replaceWith(&I, ConstantInt::getFalse(I.getContext()));
     return true;
@@ -128,13 +127,13 @@ bool NVPTXImageOptimizer::replaceIsTypePSurface(Instruction &I) {
 
 bool NVPTXImageOptimizer::replaceIsTypePTexture(Instruction &I) {
   Value *TexHandle = cleanupValue(I.getOperand(0));
-  if (NVVM.isImageReadOnly(*TexHandle)) {
+  if (isImageReadOnly(*TexHandle)) {
     // This is an OpenCL read-only image, so it must be a texref
     replaceWith(&I, ConstantInt::getTrue(I.getContext()));
     return true;
-  } else if (NVVM.isImageWriteOnly(*TexHandle) ||
-             NVVM.isImageReadWrite(*TexHandle) ||
-             NVVM.isSampler(*TexHandle)) {
+  } else if (isImageWriteOnly(*TexHandle) ||
+             isImageReadWrite(*TexHandle) ||
+             isSampler(*TexHandle)) {
     // This is an OpenCL read-write/write-only image or a sampler, so it
     // cannot be a texref
     replaceWith(&I, ConstantInt::getFalse(I.getContext()));
@@ -148,7 +147,7 @@ bool NVPTXImageOptimizer::replaceIsTypePTexture(Instruction &I) {
 void NVPTXImageOptimizer::replaceWith(Instruction *From, ConstantInt *To) {
   // We implement "poor man's DCE" here to make sure any code that is no longer
   // live is actually unreachable and can be trivially eliminated by the
-  // unreachable block elimiation pass.
+  // unreachable block elimination pass.
   for (CallInst::use_iterator UI = From->use_begin(), UE = From->use_end();
        UI != UE; ++UI) {
     if (BranchInst *BI = dyn_cast<BranchInst>(*UI)) {
@@ -175,6 +174,6 @@ Value *NVPTXImageOptimizer::cleanupValue(Value *V) {
   return V;
 }
 
-FunctionPass *llvm::createNVPTXImageOptimizerPass(NVVMAnnotations &NVVM) {
-  return new NVPTXImageOptimizer(NVVM);
+FunctionPass *llvm::createNVPTXImageOptimizerPass() {
+  return new NVPTXImageOptimizer();
 }

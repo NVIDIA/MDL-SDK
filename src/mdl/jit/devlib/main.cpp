@@ -28,26 +28,27 @@
 
 #include "pch.h"
 
+#include <memory>
 #include <string>
 #include <set>
 
 #include <cstdlib>
 #include <cstdio>
 
-#include <llvm/ADT/OwningPtr.h>
 #include <llvm/Analysis/CallGraph.h>
-#include <llvm/Analysis/Verifier.h>
-#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/system_error.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Threading.h>
 #include <llvm/Transforms/IPO.h>
-#include <llvm/PassManager.h>
 #include <llvm/PassRegistry.h>
 
 namespace llvm {
@@ -73,10 +74,8 @@ public:
 
         // rename functions from the root set
         bool changed = false;
-        for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end; ++it) {
-            llvm::Function *F = it;
-
-            StringRef const name = F->getName();
+        for (auto &F : M.functions()) {
+            StringRef const name = F.getName();
 
             if (m_roots->find(name.str()) != m_roots->end()) {
                 // found a root, start marking
@@ -84,7 +83,7 @@ public:
                     // ensure that the name is copied here, or it will be deleted BEFORE
                     // it is entered into the symbol table
                     std::string n_name = name.substr(5).str();
-                    F->setName(n_name); // skip the "__nv_"
+                    F.setName(n_name); // skip the "__nv_"
                     changed = true;
                 }
             }
@@ -126,7 +125,7 @@ public:
 
     virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const
     {
-        AU.addRequired<llvm::CallGraph>();
+        AU.addRequired<llvm::CallGraphWrapperPass>();
     }
 
     virtual bool runOnModule(llvm::Module &M) {
@@ -134,17 +133,15 @@ public:
             // no root set, do not change anything
             return false;
         }
-        llvm::CallGraph &CG = getAnalysis<llvm::CallGraph>();
+        llvm::CallGraph &CG = getAnalysis<llvm::CallGraphWrapperPass>().getCallGraph();
 
         // mark the rootset and all functions called from it
-        for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end; ++it) {
-            llvm::Function *F = it;
-
-            std::string const &name = F->getName().str();
+        for (auto &F : M.functions()) {
+            StringRef const name = F.getName();
 
             if (m_roots->find(name) != m_roots->end()) {
                 // found a root, start marking
-                llvm::CallGraphNode const *node = CG[F];
+                llvm::CallGraphNode const *node = CG[&F];
                 visit(node);
             }
         }
@@ -154,20 +151,19 @@ public:
         bool changed = false;
         llvm::CallGraphNode *external_node = CG.getExternalCallingNode();
 
-        for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end; ++it) {
-            llvm::Function *F = it;
-
+        for (auto &F : M.functions()) {
             // intrinsics are not in the call graph, do not try to remove them
             // neither remove address taken functions, should not happen in our case but ...
-            if (!F->isIntrinsic() &&
-                !F->hasAddressTaken() &&
-                m_marker.find(F) == m_marker.end()) {
-                llvm::CallGraphNode *node = CG[F];
+            if (!F.isIntrinsic() &&
+                !F.hasAddressTaken() &&
+                m_marker.find(&F) == m_marker.end())
+            {
+                llvm::CallGraphNode *node = CG[&F];
                 node->removeAllCalledFunctions();
 
                 // the removed functions could be external visible, in that case, remove them
                 // from the external node
-                if (!F->hasLocalLinkage()) {
+                if (!F.hasLocalLinkage()) {
                     external_node->removeAnyCallEdgeTo(node);
                 }
                 changed = true;
@@ -179,7 +175,7 @@ public:
 
         // now delete
         for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end;) {
-            llvm::Function *F = it;
+            llvm::Function *F = &*it;
 
             ++it;
             if (!F->isIntrinsic() &&
@@ -250,46 +246,44 @@ INITIALIZE_PASS(NvRename, "nv-rename",
 
 INITIALIZE_PASS_BEGIN(DeleteUnused, "delete-unused",
                       "Delete unused functions from a module", false, false)
-INITIALIZE_PASS_DEPENDENCY(CallGraph)
+INITIALIZE_PASS_DEPENDENCY(CallGraphWrapperPass)
 INITIALIZE_PASS_END(DeleteUnused, "delete-unused",
                       "Delete unused functions from a module", false, false)
 
 /// Load a libdevice file.
-llvm::Module *load_libdevice(char const *filename, llvm::LLVMContext &context)
+std::unique_ptr<llvm::Module> load_libdevice(char const *filename, llvm::LLVMContext &context)
 {
-    std::string error;
-    llvm::OwningPtr<llvm::MemoryBuffer> buf;
-    llvm::error_code res = llvm::MemoryBuffer::getFile(
-        filename, buf, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
-    if (res) {
-        fprintf(stderr, "Error reading file: %s\n", res.message().c_str());
+    auto buf = llvm::MemoryBuffer::getFile(
+        filename, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
+    if (buf.getError()) {
+        fprintf(stderr, "Error reading file: %s\n", buf.getError().message().c_str());
         return NULL;
     }
 
-    llvm::Module *mod = llvm::ParseBitcodeFile(buf.get(), context, &error);
-    if (mod == NULL) {
-        fprintf(stderr, "Error parsing file: %s\n", error.c_str());
+    auto mod = llvm::parseBitcodeFile(*buf.get(), context);
+    if (!mod) {
+        fprintf(stderr, "Error parsing file: %s\n", filename);
         return NULL;
     }
-    return mod;
+    return std::move(mod.get());
 }
 
 /// Write a libdevice file.
 void write_libdevice(llvm::Module const *libdevice, char const *filename)
 {
-    std::string error;
-    llvm::raw_fd_ostream Out(filename, error, llvm::sys::fs::F_Binary);
-    if (!error.empty()) {
-        fprintf(stderr, "Error writing file: %s\n", error.c_str());
+    std::error_code error;
+    llvm::raw_fd_ostream Out(filename, error, llvm::sys::fs::OpenFlags::F_None);
+    if (error) {
+        fprintf(stderr, "Error writing file: %s\n", error.message().c_str());
         return;
     }
-    llvm::WriteBitcodeToFile(libdevice, Out);
+    llvm::WriteBitcodeToFile(*libdevice, Out);
 }
 
 /// Process the library.
 void process(llvm::Module *module)
 {
-    llvm::PassManager mpm;
+    llvm::legacy::PassManager mpm;
     DeleteUnused::String_set roots;
 
     roots.insert("__nvvm_reflect");
@@ -379,17 +373,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    llvm::llvm_start_multithreaded();
-
     // initialize our pass, it is not yet known to LLVM
     llvm::initializeDeleteUnusedPass(*llvm::PassRegistry::getPassRegistry());
 
     char const *infilename  = argv[1];
     char const *outfilename = argv[2];
 
-    llvm::OwningPtr<llvm::Module> libdevice(load_libdevice(infilename, llvm::getGlobalContext()));
+    llvm::LLVMContext llvm_context;
+    std::unique_ptr<llvm::Module> libdevice(load_libdevice(infilename, llvm_context));
 
-    if (!libdevice.isValid()) {
+    if (!libdevice) {
         fprintf(stderr, "Could not load '%s'.\n", infilename);
         return EXIT_FAILURE;
     }
@@ -397,8 +390,6 @@ int main(int argc, char *argv[])
     process(libdevice.get());
 
     write_libdevice(libdevice.get(), outfilename);
-
-    llvm::llvm_stop_multithreaded();
 
     return EXIT_SUCCESS;
 }

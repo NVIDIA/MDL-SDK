@@ -101,25 +101,25 @@ public:
 /// Options for module loading
 /// - "internal_space": Set the internal space of the backend. Possible values: "coordinate_world",
 ///   "coordinate_object". Default: "coordinate_world".
-/// - "experimental": If \c true, enables undocumented experimental MDL features.
+/// - "experimental": If \c true, enables undocumented experimental MDL features. Default: false.
 ///
 /// Options for MDL export
 /// - "bundle_resources": If \c true, referenced resources are exported into the same directory as
 ///   the module, even if they can be found via the module search path. Default: false.
 ///
 /// Options for material compilation
-/// - "mdl_meters_per_scene_unit": The conversion ratio between meters and scene units for this
-///   material. Default: 1.0f;
-/// - "mdl_wavelength_min":  The smallest supported wavelength. Default: 380.0f.
-/// - "mdl_wavelength_max":  The largest supported wavelength. Default: 780.0f.
+/// - "meters_per_scene_unit": The conversion ratio between meters and scene units for this
+///   material. Default: 1.0f.
+/// - "wavelength_min": The smallest supported wavelength. Default: 380.0f.
+/// - "wavelength_max": The largest supported wavelength. Default: 780.0f.
 ///
 /// Options for code generation
-/// - "mdl_meters_per_scene_unit": The conversion ratio between meters and scene units for this
-///   material. Default: 1.0f;
-/// - "mdl_wavelength_min":  The smallest supported wavelength. Default: 380.0f.
-/// - "mdl_wavelength_max":  The largest supported wavelength. Default: 780.0f.
+/// - "meters_per_scene_unit": The conversion ratio between meters and scene units for this
+///   material. Default: 1.0f.
+/// - "wavelength_min": The smallest supported wavelength. Default: 380.0f.
+/// - "wavelength_max": The largest supported wavelength. Default: 780.0f.
 /// - "include_geometry_normal": If true, the \c "geometry.normal" field will be applied to the
-///   MDL state prior to evaluation of the given DF (default: true).
+///   MDL state prior to evaluation of the given DF. Default: true.
 
 class IMdl_execution_context: public
     base::Interface_declare<0x28eb1f99,0x138f,0x4fa2,0xb5,0x39,0x17,0xb4,0xae,0xfb,0x1b,0xca>

@@ -76,6 +76,7 @@ public:
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
     /// \param name                   The fully-qualified MDL module name.
+    /// \param load_resources         True, if resources are supposed to be loaded into the DB.
     Mdl_function_definition(
         DB::Transaction* transaction,
         DB::Tag module_tag,
@@ -83,7 +84,8 @@ public:
         const mi::mdl::IGenerated_code_dag* code_dag,
         mi::Uint32 function_index,
         const char* module_filename,
-        const char* module_name);
+        const char* module_name,
+        bool load_resources);
 
     // methods corresponding to mi::neuraylib::IFunction_definition
 
@@ -134,7 +136,8 @@ public:
 
     /// Internal variant of #create_function_call().
     ///
-    /// See #create_array_constructor_call_internal() for array constructors.
+    /// See #create_array_constructor_call_internal() for array constructors and
+    /// #create_cast_call_internal for cast operators.
     ///
     /// \param allow_ek_parameter If set to \c true, expressions of type EK_PARAMETER are also
     ///                           permitted as arguments. This flag may only be set by the MDL
@@ -147,6 +150,16 @@ public:
        bool allow_ek_parameter = false,
        bool immutable = false,
        mi::Sint32* errors = 0) const;
+
+    /// Internal variant of #create_function_call(), special case for cast operators
+    ///
+    /// \param immutable          If set to \c true, the created function call is flagged as
+    ///                           immutable.
+    Mdl_function_call* create_cast_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable = false,
+        mi::Sint32* errors = 0) const;
 
     /// Internal variant of #create_function_call(), special case for array constructors
     ///

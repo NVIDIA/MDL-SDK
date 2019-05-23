@@ -275,6 +275,19 @@ void Optimizer::run_on_function(
                         }
                     }
                 }
+                // optimize enable_if expressions
+                if (IAnnotation_block const *block = param->get_annotations()) {
+                    for (int j = 0, m = block->get_annotation_count(); j < m; ++j) {
+                        if (IAnnotation_enable_if const *ei =
+                            as<IAnnotation_enable_if>(block->get_annotation(j))) {
+                            IExpression const *expr = ei->get_expression();
+                            IExpression const *n_expr = (this->*expr_func)(expr);
+                            if (n_expr != NULL) {
+                                const_cast<IAnnotation_enable_if *>(ei)->set_expression(n_expr);
+                            }
+                        }
+                    }
+                }
             }
 
             // optimize the function body
@@ -770,6 +783,7 @@ static bool has_side_effect(IExpression const *expr)
             case IExpression_unary::OK_LOGICAL_NOT:
             case IExpression_unary::OK_POSITIVE:
             case IExpression_unary::OK_NEGATIVE:
+            case IExpression_unary::OK_CAST:
                 return has_side_effect(unary->get_argument());
             case IExpression_unary::OK_PRE_INCREMENT:
             case IExpression_unary::OK_PRE_DECREMENT:
@@ -930,6 +944,28 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
 
             case IExpression_unary::OK_POSITIVE:
                 return arg;
+
+            case IExpression_unary::OK_CAST:
+                {
+                    IType const *dst_type = unary->get_type()->skip_type_alias();
+                    IType const *src_type = arg->get_type()->skip_type_alias();
+
+                    if (src_type == dst_type) {
+                        // cast to itself
+                        return arg;
+                    }
+                    if (IExpression_unary const *uarg = as<IExpression_unary>(arg)) {
+                        IExpression const *arg      = uarg->get_argument();
+                        IType const       *src_type = arg->get_type()->skip_type_alias();
+
+                        if (src_type == dst_type) {
+                            // cast to type and back to itself
+                            return arg;
+                        }
+                    }
+                }
+                break;
+
             default:
                 break;
             }

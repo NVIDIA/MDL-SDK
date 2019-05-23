@@ -143,7 +143,7 @@ namespace mi {
                 if (logger) {
                     DWORD error_code = GetLastError();
                     LPTSTR buffer = 0;
-                    LPTSTR message = TEXT("unknown failure");
+                    LPCTSTR message = TEXT("unknown failure");
                     if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER 
                         | FORMAT_MESSAGE_FROM_SYSTEM 
                         | FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -163,7 +163,7 @@ namespace mi {
                 if (logger) {
                     DWORD error_code = GetLastError();
                     LPTSTR buffer = 0;
-                    LPTSTR message = TEXT("unknown failure");
+                    LPCTSTR message = TEXT("unknown failure");
                     if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER 
                         | FORMAT_MESSAGE_FROM_SYSTEM 
                         | FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
@@ -230,7 +230,7 @@ namespace mi {
             int result = FreeLibrary((HMODULE)m_dso_handle);
             if (m_logger && result == 0) {
                 LPTSTR buffer = 0;
-                LPTSTR message = TEXT("unknown failure");
+                LPCTSTR message = TEXT("unknown failure");
                 DWORD error_code = GetLastError();
                 if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
                     FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,

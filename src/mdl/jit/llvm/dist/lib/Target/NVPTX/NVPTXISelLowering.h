@@ -12,17 +12,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef NVPTXISELLOWERING_H
-#define NVPTXISELLOWERING_H
+#ifndef LLVM_LIB_TARGET_NVPTX_NVPTXISELLOWERING_H
+#define LLVM_LIB_TARGET_NVPTX_NVPTXISELLOWERING_H
 
 #include "NVPTX.h"
-#include "NVPTXSubtarget.h"
 #include "llvm/CodeGen/SelectionDAG.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 namespace NVPTXISD {
-enum NodeType {
+enum NodeType : unsigned {
   // Start the numbering from where ISD NodeType finishes.
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   Wrapper,
@@ -35,7 +34,9 @@ enum NodeType {
   DeclareRet,
   DeclareScalarRet,
   PrintCall,
+  PrintConvergentCall,
   PrintCallUni,
+  PrintConvergentCallUni,
   CallArgBegin,
   CallArg,
   LastCallArg,
@@ -55,6 +56,7 @@ enum NodeType {
   MUL_WIDE_SIGNED,
   MUL_WIDE_UNSIGNED,
   IMAD,
+  SETP_F16X2,
   Dummy,
 
   LoadV2 = ISD::FIRST_TARGET_MEMORY_OPCODE,
@@ -72,7 +74,7 @@ enum NodeType {
   StoreParamV2,
   StoreParamV4,
   StoreParamS32, // to sext and store a <32bit value, not used currently
-  StoreParamU32, // to zext and store a <32bit value, not used currently 
+  StoreParamU32, // to zext and store a <32bit value, not used currently
   StoreRetval,
   StoreRetvalV2,
   StoreRetvalV4,
@@ -430,94 +432,131 @@ enum NodeType {
 };
 }
 
-class NVVMAnnotations;
+class NVPTXSubtarget;
 
 //===--------------------------------------------------------------------===//
 // TargetLowering Implementation
 //===--------------------------------------------------------------------===//
 class NVPTXTargetLowering : public TargetLowering {
 public:
-  explicit NVPTXTargetLowering(NVPTXTargetMachine &TM, NVVMAnnotations &Annos);
-  virtual SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const;
+  explicit NVPTXTargetLowering(const NVPTXTargetMachine &TM,
+                               const NVPTXSubtarget &STI);
+  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerGlobalAddress(const GlobalValue *GV, int64_t Offset,
-                             SelectionDAG &DAG) const;
 
-  virtual const char *getTargetNodeName(unsigned Opcode) const;
-
-  bool isTypeSupportedInIntrinsic(MVT VT) const;
+  const char *getTargetNodeName(unsigned Opcode) const override;
 
   bool getTgtMemIntrinsic(IntrinsicInfo &Info, const CallInst &I,
-                          unsigned Intrinsic) const;
+                          MachineFunction &MF,
+                          unsigned Intrinsic) const override;
 
   /// isLegalAddressingMode - Return true if the addressing mode represented
   /// by AM is legal for this target, for a load/store of the specified type
   /// Used to guide target specific optimizations, like loop strength
   /// reduction (LoopStrengthReduce.cpp) and memory optimization for
   /// address mode (CodeGenPrepare.cpp)
-  virtual bool isLegalAddressingMode(const AddrMode &AM, Type *Ty) const;
+  bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
+                             unsigned AS,
+                             Instruction *I = nullptr) const override;
 
-  /// getFunctionAlignment - Return the Log2 alignment of this function.
-  virtual unsigned getFunctionAlignment(const Function *F) const;
+  bool isTruncateFree(Type *SrcTy, Type *DstTy) const override {
+    // Truncating 64-bit to 32-bit is free in SASS.
+    if (!SrcTy->isIntegerTy() || !DstTy->isIntegerTy())
+      return false;
+    return SrcTy->getPrimitiveSizeInBits() == 64 &&
+           DstTy->getPrimitiveSizeInBits() == 32;
+  }
 
-  EVT getSetCCResultType(LLVMContext &Ctx, EVT VT) const LLVM_OVERRIDE {
+  EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Ctx,
+                         EVT VT) const override {
     if (VT.isVector())
       return EVT::getVectorVT(Ctx, MVT::i1, VT.getVectorNumElements());
     return MVT::i1;
   }
 
-  ConstraintType getConstraintType(const std::string &Constraint) const;
+  ConstraintType getConstraintType(StringRef Constraint) const override;
   std::pair<unsigned, const TargetRegisterClass *>
-  getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const;
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                               StringRef Constraint, MVT VT) const override;
 
-  virtual SDValue LowerFormalArguments(
-      SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-      const SmallVectorImpl<ISD::InputArg> &Ins, SDLoc dl, SelectionDAG &DAG,
-      SmallVectorImpl<SDValue> &InVals) const;
+  SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
+                               bool isVarArg,
+                               const SmallVectorImpl<ISD::InputArg> &Ins,
+                               const SDLoc &dl, SelectionDAG &DAG,
+                               SmallVectorImpl<SDValue> &InVals) const override;
 
-  virtual SDValue
-  LowerCall(CallLoweringInfo &CLI, SmallVectorImpl<SDValue> &InVals) const;
+  SDValue LowerCall(CallLoweringInfo &CLI,
+                    SmallVectorImpl<SDValue> &InVals) const override;
 
-  std::string getPrototype(Type *, const ArgListTy &,
+  std::string getPrototype(const DataLayout &DL, Type *, const ArgListTy &,
                            const SmallVectorImpl<ISD::OutputArg> &,
                            unsigned retAlignment,
-                           const ImmutableCallSite *CS,
-                           unsigned uniqueCallSite) const;
+                           ImmutableCallSite CS) const;
 
-  virtual SDValue
-  LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-              const SmallVectorImpl<ISD::OutputArg> &Outs,
-              const SmallVectorImpl<SDValue> &OutVals, SDLoc dl,
-              SelectionDAG &DAG) const;
+  SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
+                      const SmallVectorImpl<ISD::OutputArg> &Outs,
+                      const SmallVectorImpl<SDValue> &OutVals, const SDLoc &dl,
+                      SelectionDAG &DAG) const override;
 
-  virtual void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
-                                            std::vector<SDValue> &Ops,
-                                            SelectionDAG &DAG) const;
+  void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                    std::vector<SDValue> &Ops,
+                                    SelectionDAG &DAG) const override;
 
-  NVPTXTargetMachine *nvTM;
+  const NVPTXTargetMachine *nvTM;
 
   // PTX always uses 32-bit shift amounts
-  virtual MVT getScalarShiftAmountTy(EVT LHSTy) const { return MVT::i32; }
-
-  virtual bool shouldSplitVectorElementType(EVT VT) const;
-
-  bool allowFMA(MachineFunction &MF, CodeGenOpt::Level OptLevel) const;
-
-  virtual bool isFMAFasterThanFMulAndFAdd(EVT) const {
-    return true;
+  MVT getScalarShiftAmountTy(const DataLayout &, EVT) const override {
+    return MVT::i32;
   }
 
+  TargetLoweringBase::LegalizeTypeAction
+  getPreferredVectorAction(EVT VT) const override;
+
+  // Get the degree of precision we want from 32-bit floating point division
+  // operations.
+  //
+  //  0 - Use ptx div.approx
+  //  1 - Use ptx.div.full (approximate, but less so than div.approx)
+  //  2 - Use IEEE-compliant div instructions, if available.
+  int getDivF32Level() const;
+
+  // Get whether we should use a precise or approximate 32-bit floating point
+  // sqrt instruction.
+  bool usePrecSqrtF32() const;
+
+  // Get whether we should use instructions that flush floating-point denormals
+  // to sign-preserving zero.
+  bool useF32FTZ(const MachineFunction &MF) const;
+
+  SDValue getSqrtEstimate(SDValue Operand, SelectionDAG &DAG, int Enabled,
+                          int &ExtraSteps, bool &UseOneConst,
+                          bool Reciprocal) const override;
+
+  unsigned combineRepeatedFPDivisors() const override { return 2; }
+
+  bool allowFMA(MachineFunction &MF, CodeGenOpt::Level OptLevel) const;
+  bool allowUnsafeFPMath(MachineFunction &MF) const;
+
+  bool isFMAFasterThanFMulAndFAdd(EVT) const override { return true; }
+
+  bool enableAggressiveFMAFusion(EVT VT) const override { return true; }
+
+  // The default is to transform llvm.ctlz(x, false) (where false indicates that
+  // x == 0 is not undefined behavior) into a branch that checks whether x is 0
+  // and avoids calling ctlz in that case.  We have a dedicated ctlz
+  // instruction, so we say that ctlz is cheap to speculate.
+  bool isCheapToSpeculateCtlz() const override { return true; }
+
 private:
-  const NVPTXSubtarget &nvptxSubtarget; // cache the subtarget here
-  NVVMAnnotations &NVVM;
+  const NVPTXSubtarget &STI; // cache the subtarget here
+  mutable unsigned uniqueCallSite;
 
-  SDValue getExtSymb(SelectionDAG &DAG, const char *name, int idx,
-                     EVT = MVT::i32) const;
   SDValue getParamSymbol(SelectionDAG &DAG, int idx, EVT) const;
-  SDValue getParamHelpSymbol(SelectionDAG &DAG, int idx);
 
+  SDValue LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerCONCAT_VECTORS(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerLOADi1(SDValue Op, SelectionDAG &DAG) const;
@@ -529,13 +568,15 @@ private:
   SDValue LowerShiftRightParts(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerShiftLeftParts(SDValue Op, SelectionDAG &DAG) const;
 
-  virtual void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
-                                  SelectionDAG &DAG) const;
-  virtual SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const LLVM_OVERRIDE;
+  SDValue LowerSelect(SDValue Op, SelectionDAG &DAG) const;
 
-  unsigned getArgumentAlignment(SDValue Callee, const ImmutableCallSite *CS,
-                                Type *Ty, unsigned Idx) const;
+  void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
+                          SelectionDAG &DAG) const override;
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
+  unsigned getArgumentAlignment(SDValue Callee, ImmutableCallSite CS, Type *Ty,
+                                unsigned Idx, const DataLayout &DL) const;
 };
 } // namespace llvm
 
-#endif // NVPTXISELLOWERING_H
+#endif

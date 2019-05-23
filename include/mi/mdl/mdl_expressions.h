@@ -79,7 +79,8 @@ public:
         OK_PRE_DECREMENT,                       ///< The pre-decrement operator.
         OK_POST_INCREMENT,                      ///< The post-increment operator.
         OK_POST_DECREMENT,                      ///< The post-decrement operator.
-        OK_UNARY_LAST = OK_POST_DECREMENT,
+        OK_CAST,                                ///< The cast operator.
+        OK_UNARY_LAST = OK_CAST,
 
         // binary
         OK_BINARY_FIRST,
@@ -246,7 +247,8 @@ public:
         OK_PRE_INCREMENT        = IExpression::OK_PRE_INCREMENT,
         OK_PRE_DECREMENT        = IExpression::OK_PRE_DECREMENT,
         OK_POST_INCREMENT       = IExpression::OK_POST_INCREMENT,
-        OK_POST_DECREMENT       = IExpression::OK_POST_DECREMENT
+        OK_POST_DECREMENT       = IExpression::OK_POST_DECREMENT,
+        OK_CAST                 = IExpression::OK_CAST
     };
 
     /// The kind of this subclass.
@@ -267,6 +269,14 @@ public:
     ///
     /// \param expr  the new argument expression.
     virtual void set_argument(IExpression const *expr) = 0;
+
+    /// Get the typename (only for cast expressions).
+    virtual IType_name const *get_type_name() const = 0;
+
+    /// Set the typename (only for cast expressions).
+    ///
+    /// \param tn  the type name
+    virtual void set_type_name(IType_name const *tn) = 0;
 };
 
 /// A binary expression inside the MDL AST.

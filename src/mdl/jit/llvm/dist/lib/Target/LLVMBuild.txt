@@ -15,8 +15,12 @@
 ;
 ;===------------------------------------------------------------------------===;
 
+; Please keep these as one per line so that out-of-tree merges
+; will typically require only insertion of a line.
 [common]
-subdirectories = NVPTX X86
+subdirectories =
+ NVPTX
+ X86
 
 ; This is a special group whose required libraries are extended (by llvm-build)
 ; with the best execution engine (the native JIT, if available, or the
@@ -45,7 +49,7 @@ parent = Libraries
 type = Library
 name = Target
 parent = Libraries
-required_libraries = Core MC Support
+required_libraries = Analysis Core MC Support
 
 ; This is a special group whose required libraries are extended (by llvm-build)
 ; with every built target, which makes it easy for tools to include every

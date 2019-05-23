@@ -272,7 +272,7 @@ BSDF_INLINE typename convert_base<TInput, TTargetElement>::TARGET_TYPE to(const 
 namespace
 {
     template<typename TTarget, typename TComponent>
-    BSDF_INLINE void set_compenent(
+    BSDF_INLINE void set_component(
         TTarget& target,
         unsigned target_index,
         const TComponent& arg)
@@ -283,7 +283,7 @@ namespace
     }
 
     template<typename TTarget, typename TComponentFirst, typename... TComponentRest>
-    BSDF_INLINE void set_compenent(
+    BSDF_INLINE void set_component(
         TTarget& target,
         unsigned target_index,
         const TComponentFirst& first,
@@ -293,7 +293,7 @@ namespace
         TTargetElement* dst_ptr = reinterpret_cast<TTargetElement*>(&target);
         dst_ptr[target_index] = TTargetElement(first);
 
-        set_compenent(target, target_index + 1u, args...);
+        set_component(target, target_index + 1u, args...);
     }
 }
 
@@ -310,9 +310,9 @@ BSDF_INLINE TTarget make(const TComponent& ... args)
     TTarget res;
     if (arg_size == 1)
         for (unsigned i = 0; i < vector_size; ++i)
-            set_compenent(res, i, args...);
+            set_component(res, i, args...);
     else
-        set_compenent(res, 0u, args...);
+        set_component(res, 0u, args...);
 
     return res;
 }
@@ -609,41 +609,41 @@ public:
     float3 call_lambda_float3(int index) const;
 
     uint3 bsdf_measurement_resolution(
-        int resource_index, 
+        int bsdf_measurement_index,
         int part) const;
 
     float3 bsdf_measurement_evaluate(
-        int resource_index, 
+        int bsdf_measurement_index,
         const float2& theta_phi_in,
         const float2& theta_phi_out, 
         int part) const;
 
     float3 bsdf_measurement_sample(
-        int resource_index, 
+        int bsdf_measurement_index,
         const float2& theta_phi_out,
         const float3& xi,
         int part) const;
 
     float bsdf_measurement_pdf(
-        int resource_index, 
+        int bsdf_measurement_index,
         const float2& theta_phi_in,
         const float2& theta_phi_out, 
         int part) const;
 
     float4 bsdf_measurement_albedos(
-        int resource_index, 
+        int bsdf_measurement_index,
         const float2& theta_phi) const;
 
     float light_profile_evaluate(
-        int resource_index, 
+        int light_profile_index,
         const float2& theta_phi) const;
 
     float3 light_profile_sample(
-        int resource_index, 
+        int light_profile_index,
         const float3& xi) const;
 
     float light_profile_pdf(
-        int resource_index, 
+        int light_profile_index,
         const float2& theta_phi) const;
 };
 

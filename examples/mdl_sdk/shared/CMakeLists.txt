@@ -65,6 +65,15 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
     )
 
+# make sure the plugins are build before samples are build
+if(TARGET shaders-plugin-dds)
+    add_dependencies(${PROJECT_NAME} shaders-plugin-dds)
+endif()
+
+if(TARGET shaders-plugin-freeimage)
+    add_dependencies(${PROJECT_NAME} shaders-plugin-freeimage)
+endif()
+
 # add include directories
 target_include_directories(${PROJECT_NAME}
     INTERFACE

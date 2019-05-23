@@ -18,22 +18,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "pre-RA-sched"
-#include "llvm/CodeGen/SchedulerRegistry.h"
 #include "ScheduleDAGSDNodes.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LatencyPriorityQueue.h"
 #include "llvm/CodeGen/ResourcePriorityQueue.h"
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
+#include "llvm/CodeGen/SchedulerRegistry.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <climits>
 using namespace llvm;
+
+#define DEBUG_TYPE "pre-RA-sched"
 
 STATISTIC(NumNoops , "Number of noops inserted");
 STATISTIC(NumStalls, "Number of pipeline stalls");
@@ -70,17 +72,16 @@ public:
                   AliasAnalysis *aa,
                   SchedulingPriorityQueue *availqueue)
     : ScheduleDAGSDNodes(mf), AvailableQueue(availqueue), AA(aa) {
-
-    const TargetMachine &tm = mf.getTarget();
-    HazardRec = tm.getInstrInfo()->CreateTargetHazardRecognizer(&tm, this);
+    const TargetSubtargetInfo &STI = mf.getSubtarget();
+    HazardRec = STI.getInstrInfo()->CreateTargetHazardRecognizer(&STI, this);
   }
 
-  ~ScheduleDAGVLIW() {
+  ~ScheduleDAGVLIW() override {
     delete HazardRec;
     delete AvailableQueue;
   }
 
-  void Schedule();
+  void Schedule() override;
 
 private:
   void releaseSucc(SUnit *SU, const SDep &D);
@@ -92,9 +93,8 @@ private:
 
 /// Schedule - Schedule the DAG using list scheduling.
 void ScheduleDAGVLIW::Schedule() {
-  DEBUG(dbgs()
-        << "********** List Scheduling BB#" << BB->getNumber()
-        << " '" << BB->getName() << "' **********\n");
+  LLVM_DEBUG(dbgs() << "********** List Scheduling " << printMBBReference(*BB)
+                    << " '" << BB->getName() << "' **********\n");
 
   // Build the scheduling graph.
   BuildSchedGraph(AA);
@@ -120,7 +120,7 @@ void ScheduleDAGVLIW::releaseSucc(SUnit *SU, const SDep &D) {
     dbgs() << "*** Scheduling failed! ***\n";
     SuccSU->dump(this);
     dbgs() << " has been released too many times!\n";
-    llvm_unreachable(0);
+    llvm_unreachable(nullptr);
   }
 #endif
   assert(!D.isWeak() && "unexpected artificial DAG edge");
@@ -151,8 +151,8 @@ void ScheduleDAGVLIW::releaseSuccessors(SUnit *SU) {
 /// count of its successors. If a successor pending count is zero, add it to
 /// the Available queue.
 void ScheduleDAGVLIW::scheduleNodeTopDown(SUnit *SU, unsigned CurCycle) {
-  DEBUG(dbgs() << "*** Scheduling [" << CurCycle << "]: ");
-  DEBUG(SU->dump(this));
+  LLVM_DEBUG(dbgs() << "*** Scheduling [" << CurCycle << "]: ");
+  LLVM_DEBUG(SU->dump(this));
 
   Sequence.push_back(SU);
   assert(CurCycle >= SU->getDepth() && "Node scheduled above its depth!");
@@ -204,12 +204,12 @@ void ScheduleDAGVLIW::listScheduleTopDown() {
     // don't advance the hazard recognizer.
     if (AvailableQueue->empty()) {
       // Reset DFA state.
-      AvailableQueue->scheduledNode(0);
+      AvailableQueue->scheduledNode(nullptr);
       ++CurCycle;
       continue;
     }
 
-    SUnit *FoundSUnit = 0;
+    SUnit *FoundSUnit = nullptr;
 
     bool HasNoopHazards = false;
     while (!AvailableQueue->empty()) {
@@ -246,7 +246,7 @@ void ScheduleDAGVLIW::listScheduleTopDown() {
     } else if (!HasNoopHazards) {
       // Otherwise, we have a pipeline stall, but no other problem, just advance
       // the current cycle and try again.
-      DEBUG(dbgs() << "*** Advancing cycle, no work to do\n");
+      LLVM_DEBUG(dbgs() << "*** Advancing cycle, no work to do\n");
       HazardRec->AdvanceCycle();
       ++NumStalls;
       ++CurCycle;
@@ -254,9 +254,9 @@ void ScheduleDAGVLIW::listScheduleTopDown() {
       // Otherwise, we have no instructions to issue and we have instructions
       // that will fault if we don't do this right.  This is the case for
       // processors without pipeline interlocks and other cases.
-      DEBUG(dbgs() << "*** Emitting noop\n");
+      LLVM_DEBUG(dbgs() << "*** Emitting noop\n");
       HazardRec->EmitNoop();
-      Sequence.push_back(0);   // NULL here means noop
+      Sequence.push_back(nullptr);   // NULL here means noop
       ++NumNoops;
       ++CurCycle;
     }

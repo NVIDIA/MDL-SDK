@@ -197,6 +197,7 @@ COMPILER mdl
         case _MATERIAL_GEOMETRY:
         case _MATERIAL_SURFACE:
         case _MATERIAL_VOLUME:
+        case _HAIR_BSDF:
             x = scanner->Peek();
             if (x->kind == _LEFT_SQUARE_BRACKET)
                 return skip_square_brackets(x);
@@ -251,6 +252,7 @@ COMPILER mdl
         case _MINUS:
         case _INC_OP:
         case _DEC_OP:
+        case _CAST:
         // start of primary expression (subset of unary)
         case _TRUE:
         case _FALSE:
@@ -310,6 +312,7 @@ COMPILER mdl
         case _MATERIAL_GEOMETRY:
         case _MATERIAL_SURFACE:
         case _MATERIAL_VOLUME:
+        case _HAIR_BSDF:
         case _IDENT:
             return true;
         case _LEFT_PARENTHESIS:
@@ -1040,6 +1043,7 @@ TOKENS
     BANG = '!' .
     INC_OP = "++" .
     DEC_OP = "--" .
+    CAST = "cast" .
 
     LEFT_SQUARE_BRACKET = '[' .
 
@@ -1132,6 +1136,8 @@ TOKENS
     TRUE = "true" .
 
     FALSE = "false" .
+
+    HAIR_BSDF = "hair_bsdf" . // MDL 1.5+
 
 // The following token is not a reserved MDL keyword, but ensures that the R_RESERVED token
 // is defined. The reserved set is dynamic and set depending on the MDL version.
@@ -1469,6 +1475,7 @@ relative_type<IType_name *prefix,IType_name *&name>
                                                                                     /// @break
     | "intensity_radiant_exitance"          (. name = to_type(prefix, t); .)
     | "intensity_power"                     (. name = to_type(prefix, t); .)
+    | "hair_bsdf"                           (. name = to_type(prefix, t); .)
                                                                                     /// @break
     | IDENT                                 (. name = to_type(prefix, t); .)
         [
@@ -1714,7 +1721,10 @@ global_declaration<bool exported, IDeclaration const *&declaration>
 
 annotation_declaration<bool exported, IDeclaration const *&declaration>
     =
-                                                (.  declaration = ERR_DECL; .)
+                                                (.
+                                                   declaration = ERR_DECL;
+                                                   IAnnotation_block *annos = NULL;
+                                                .)
     "annotation"
                                                 (.
                                                     ISimple_name const *annotation_name = NULL;
@@ -1724,12 +1734,14 @@ annotation_declaration<bool exported, IDeclaration const *&declaration>
                                                 .)
         simple_name<annotation_name>
         parameter_list<parameters>
+        [ annotation_block<annos> ]
         SYNC ';'
                                                 (.
                                                     IDeclaration_annotation *annotation
                                                         = m_declaration_factory
                                                             ->create_annotation(
                                                                 annotation_name,
+                                                                annos,
                                                                 exported,
                                                                 sl,
                                                                 sc,
@@ -2710,14 +2722,43 @@ primary_expression<IExpression const *&exp>
                                             (. mark_parenthesis(exp); .)
     .
 
+cast_expression<IExpression const *&exp>
+    =
+                                            (.
+                                                int sl = t->line;
+                                                int sc = t->col;
+                                            .)
+        CAST '<'                            (.  IExpression const *right     = ERR_EXPR;
+                                                IType_name        *type_name = ERR_TYPE; .)
+        type<type_name>
+        '>' '('
+        unary_expression<right>
+                                            (.
+                                                IExpression_unary *un_exp = create_unary(
+                                                    IExpression_unary::OK_CAST, check_expr(right));
+                                                Position &pos = un_exp->access_position();
+                                                pos.set_start_line(sl);
+                                                pos.set_start_column(sc);
+                                                un_exp->set_type_name(type_name);
+                                                exp = un_exp;
+                                            .)
+        ')'
+    .
+
 postfix_expression<IExpression const *&exp>
     =                                       (.  exp = ERR_EXPR;
+                                                int sl = 0;
+                                                int sc = 0;
                                             .)
-    primary_expression<exp>                                                     /// @break@tab
+        (
+            primary_expression<exp>
+        |
+            cast_expression<exp>
+        )
                                             (.
                                                 Position const &pos = exp->access_position();
-                                                int sl = pos.get_start_line();
-                                                int sc = pos.get_start_column();
+                                                sl = pos.get_start_line();
+                                                sc = pos.get_start_column();
                                             .)
         { "++"                                                                  /// @break
                                             (.

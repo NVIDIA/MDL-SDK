@@ -1,4 +1,4 @@
-/*===-- linker_ocaml.c - LLVM Ocaml Glue ------------------------*- C++ -*-===*\
+/*===-- linker_ocaml.c - LLVM OCaml Glue ------------------------*- C++ -*-===*\
 |*                                                                            *|
 |*                     The LLVM Compiler Infrastructure                       *|
 |*                                                                            *|
@@ -15,40 +15,19 @@
 |*                                                                            *|
 \*===----------------------------------------------------------------------===*/
 
+#include "llvm-c/Core.h"
 #include "llvm-c/Linker.h"
 #include "caml/alloc.h"
 #include "caml/memory.h"
 #include "caml/fail.h"
+#include "caml/callback.h"
 
-static value llvm_linker_error_exn;
+void llvm_raise(value Prototype, char *Message);
 
-CAMLprim value llvm_register_linker_exns(value Error) {
-  llvm_linker_error_exn = Field(Error, 0);
-  register_global_root(&llvm_linker_error_exn);
-  return Val_unit;
-}
-
-static void llvm_raise(value Prototype, char *Message) {
-  CAMLparam1(Prototype);
-  CAMLlocal1(CamlMessage);
-
-  CamlMessage = copy_string(Message);
-  LLVMDisposeMessage(Message);
-
-  raise_with_arg(Prototype, CamlMessage);
-  abort(); /* NOTREACHED */
-#ifdef CAMLnoreturn
-  CAMLnoreturn; /* Silences warnings, but is missing in some versions. */
-#endif
-}
-
-/* llmodule -> llmodule -> Mode.t -> unit
-   raises Error msg on error */
-CAMLprim value llvm_link_modules(LLVMModuleRef Dst, LLVMModuleRef Src, value Mode) {
-  char* Message;
-
-  if (LLVMLinkModules(Dst, Src, Int_val(Mode), &Message))
-    llvm_raise(llvm_linker_error_exn, Message);
+/* llmodule -> llmodule -> unit */
+CAMLprim value llvm_link_modules(LLVMModuleRef Dst, LLVMModuleRef Src) {
+  if (LLVMLinkModules2(Dst, Src))
+    llvm_raise(*caml_named_value("Llvm_linker.Error"), LLVMCreateMessage("Linking failed"));
 
   return Val_unit;
 }

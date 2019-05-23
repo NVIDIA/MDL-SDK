@@ -350,6 +350,7 @@ static IType const *needs_uniform_condition(IType const *type)
         case IType::TK_BSDF_MEASUREMENT:
         case IType::TK_LIGHT_PROFILE:
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
         case IType::TK_VDF:
         case IType::TK_EDF:
             // resource types require a uniform condition

@@ -93,7 +93,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 
     // version string
     std::stringstream output;
-    output << "mdl 1.4;\n\n";
+    output << "mdl 1.5;\n\n";
 
     // add required includes
     size_t last_sep_pos = std::string::npos;
@@ -329,9 +329,10 @@ void Compiled_material_traverser_print::visit_begin(
                             ctx->m_imports.insert(function_name.substr(0, pos_dot));
                         }
                     }
-                    // ternary operator can have non build-in types in the signature and we don't
-                    // need an import for them
-                    else if (is_ternary_operator(semantic))
+                    // - ternary operator can have non build-in types in the signature and we don't
+                    //   need an import for them
+                    // - the index operator can introduce no new type as the array type is known
+                    else if (is_ternary_operator(semantic) || is_array_index_operator(semantic))
                     {
                         // nothing to do
                     }
@@ -1081,6 +1082,9 @@ const std::string Compiled_material_traverser_print::type_to_string(
 
         case mi::neuraylib::IType::TK_VDF:
             return "vdf";
+
+        case mi::neuraylib::IType::TK_HAIR_BSDF:
+            return "hair_bsdf";
 
         default:
             break;

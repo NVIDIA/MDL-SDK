@@ -44,9 +44,9 @@ def Reserved : ReservationKind<1>;
 // the execution of an instruction.  Cycles represents the number of
 // discrete time slots needed to complete the stage.  Units represent
 // the choice of functional units that can be used to complete the
-// stage.  Eg. IntUnit1, IntUnit2. NextCycles indicates how many
-// cycles should elapse from the start of this stage to the start of
-// the next stage in the itinerary.  For example:
+// stage.  Eg. IntUnit1, IntUnit2. TimeInc indicates how many cycles
+// should elapse from the start of this stage to the start of the next
+// stage in the itinerary.  For example:
 //
 // A stage is specified in one of two ways:
 //
@@ -92,7 +92,7 @@ def NoItinerary : InstrItinClass;
 //
 // OperandCycles are optional "cycle counts". They specify the cycle after
 // instruction issue the values which correspond to specific operand indices
-// are defined or read. Bypasses are optional "pipeline forwarding pathes", if
+// are defined or read. Bypasses are optional "pipeline forwarding paths", if
 // a def by an instruction is available on a specific bypass and the use can
 // read from the same bypass, then the operand use latency is reduced by one.
 //
@@ -134,3 +134,19 @@ class ProcessorItineraries<list<FuncUnit> fu, list<Bypass> bp,
 // info. Subtargets using NoItineraries can bypass the scheduler's
 // expensive HazardRecognizer because no reservation table is needed.
 def NoItineraries : ProcessorItineraries<[], [], []>;
+
+//===----------------------------------------------------------------------===//
+// Combo Function Unit data - This is a map of combo function unit names to
+// the list of functional units that are included in the combination.
+//
+class ComboFuncData<FuncUnit ComboFunc, list<FuncUnit> funclist> {
+  FuncUnit TheComboFunc = ComboFunc;
+  list<FuncUnit> FuncList = funclist;
+}
+
+//===----------------------------------------------------------------------===//
+// Combo Function Units - This is a list of all combo function unit data.
+class ComboFuncUnits<list<ComboFuncData> cfd> {
+  list<ComboFuncData> CFD = cfd;
+}
+

@@ -83,6 +83,7 @@ zip_int64_t Layered_zip_source::callback(
 
             res = zip_source_write(src, &self->m_header.prefix, 4);
             res = zip_source_write(src, version, 4);
+            res = zip_source_write(src, self->m_header.hash, 16); // zeros at this point
             ze = *zip_source_error(src);
             return res;
         }
@@ -493,9 +494,10 @@ MDL_zip_container_header::MDL_zip_container_header(
     , major_version_max(major_max)
     , minor_version_max(minor_max)
 {
-    memset((void*)(&this->prefix[0]), 0, 4);
+    memset((void*) (&this->prefix[0]), 0, 4);
     MDL_ASSERT(prefix_size <= 4);
-    memcpy((void*)(&this->prefix[0]), prefix, prefix_size);
+    memcpy((void*) (&this->prefix[0]), prefix, prefix_size);
+    memset((void*) (&this->hash[0]), 0, 16);
 }
 
 /// Copy constructor.
@@ -507,6 +509,24 @@ MDL_zip_container_header::MDL_zip_container_header(const MDL_zip_container_heade
     , minor_version_max(to_copy.minor_version_max)
 {
     memcpy((void*) &prefix[0], to_copy.prefix, 4);
+    memcpy((void*) &hash[0], to_copy.hash, 16);
+}
+
+MDL_zip_container_header& MDL_zip_container_header::operator=(
+    const MDL_zip_container_header &to_copy)
+{
+    // check for self-assignment
+    if (&to_copy == this)
+        return *this;
+
+    major_version_min = to_copy.major_version_min;
+    minor_version_min = to_copy.minor_version_min;
+    major_version_max = to_copy.major_version_max;
+    minor_version_max = to_copy.minor_version_max;
+    memcpy((void*) &prefix[0], to_copy.prefix, 4);
+    memcpy((void*) &hash[0], to_copy.hash, 16);
+
+    return *this;
 }
 
 // Constructor.
@@ -518,6 +538,7 @@ MDL_zip_container::MDL_zip_container(
     : m_alloc(alloc)
     , m_path(path, alloc)
     , m_za(za)
+    , m_header("\0\0\0\0", 4, 0, 0)
 //    , m_manifest(with_manifest ? parse_manifest() : NULL)
 {
 }
@@ -532,7 +553,7 @@ zip_t *MDL_zip_container::open(
     IAllocator                      *alloc,
     char const                      *path,
     MDL_zip_container_error_code    &err,
-    const MDL_zip_container_header  &expected_header_info)
+    MDL_zip_container_header        &header_info)
 {
     err = EC_OK;
     FILE *fp = fopen_utf8(alloc, path, "rb");
@@ -552,7 +573,7 @@ zip_t *MDL_zip_container::open(
     vector<unsigned char>::Type header(alloc);
     header.resize(8);
 
-    if (fread(header.data(), 8, 1, fp) != 1) {
+    if (fread(header.data(), 1, 8, fp) != 8) {
         err = EC_IO_ERROR;
         fclose(fp);
         return NULL;
@@ -560,7 +581,7 @@ zip_t *MDL_zip_container::open(
 
     // check header prefix
     for (size_t i = 0; i < 4; ++i) {
-        if (header[i] != expected_header_info.prefix[i]) {
+        if (header[i] != header_info.prefix[i]) {
             // not valid MDL archive header
             err = EC_INVALID_HEADER;
             fclose(fp);
@@ -572,15 +593,38 @@ zip_t *MDL_zip_container::open(
     uint16_t major = (header[4] << 8) + header[5];
     uint16_t minor = (header[6] << 8) + header[7];
     uint32_t mask = (major << 16) + minor;
-    uint32_t mask_min =( expected_header_info.major_version_min << 16) 
-                      + expected_header_info.minor_version_min;
-    uint32_t mask_max = (expected_header_info.major_version_max << 16) 
-                      + expected_header_info.minor_version_max;
+    uint32_t mask_min =( header_info.major_version_min << 16) 
+                      + header_info.minor_version_min;
+    uint32_t mask_max = (header_info.major_version_max << 16) 
+                      + header_info.minor_version_max;
 
     if (mask < mask_min || mask > mask_max) {
         err = EC_INVALID_HEADER_VERSION;
         fclose(fp);
         return NULL;
+    }
+
+    // write the read version number
+    header_info.major_version_max = major;
+    header_info.major_version_min = major;
+    header_info.minor_version_max = minor;
+    header_info.minor_version_min = minor;
+
+    // MDLE format version
+    if (strncmp(header_info.prefix, "MDLE", 4) == 0)
+    {
+        // since MDLE version 0.2 there is a 16 byte MD5 hash in the header
+        if (mask >= 2) {
+            if (fread(header_info.hash, 1, 16, fp) != 16) {
+                err = EC_IO_ERROR;
+                fclose(fp);
+                return NULL;
+            }
+        }
+        // version below 1.0
+        if (major < 1) {
+            err = EC_PRE_RELEASE_VERSION;
+        }
     }
 
     zip_error_t error;

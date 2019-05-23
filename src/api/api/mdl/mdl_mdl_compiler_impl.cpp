@@ -37,6 +37,7 @@
 #include "mdl_mdl_compiler_impl.h"
 #include "mdl_mdl_backend_impl.h"
 #include "mdl_neuray_impl.h"
+#include "mdl_mdl_entity_resolver_impl.h"
 
 #include "neuray_impexp_utilities.h"
 #include "neuray_lightprofile_impl.h"
@@ -51,6 +52,7 @@
 #include <mi/neuraylib/imap.h>
 #include <mi/neuraylib/inumber.h>
 #include <mi/mdl/mdl_modules.h>
+#include <mi/mdl/mdl_entity_resolver.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
@@ -209,6 +211,23 @@ mi::Sint32 Mdl_compiler_impl::load_module(
 
     MDL::Execution_context default_context;
     return MDL::Mdl_module::create_module(
+        db_transaction, module_name, unwrap_and_clear(context, default_context));
+}
+
+const char* Mdl_compiler_impl::get_module_db_name(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    if (!transaction || !module_name)
+        return NULL;
+
+    NEURAY::Transaction_impl* transaction_impl
+        = static_cast<NEURAY::Transaction_impl*>(transaction);
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+
+    MDL::Execution_context default_context;
+    return MDL::Mdl_module::get_module_db_name(
         db_transaction, module_name, unwrap_and_clear(context, default_context));
 }
 
@@ -393,7 +412,8 @@ mi::neuraylib::IMdl_backend* Mdl_compiler_impl::get_backend( Mdl_backend_kind ki
     switch( kind) {
         case MB_LLVM_IR:
         case MB_CUDA_PTX:
-        case MB_NATIVE: {
+        case MB_NATIVE:
+        case MB_HLSL: {
             mi::base::Handle<mi::mdl::ICode_generator> generator(
                 compiler->load_code_generator( "jit"));
             if( !generator)
@@ -414,6 +434,15 @@ mi::neuraylib::IMdl_backend* Mdl_compiler_impl::get_backend( Mdl_backend_kind ki
     }
 
     return 0;
+}
+
+mi::neuraylib::IMdl_entity_resolver* Mdl_compiler_impl::get_entity_resolver() const
+{
+    return nullptr;
+}
+
+void Mdl_compiler_impl::set_external_resolver(mi::mdl::IEntity_resolver *resolver) const
+{
 }
 
 mi::Sint32 Mdl_compiler_impl::start()
@@ -463,6 +492,17 @@ public:
     {
         if( !m_writer->flush())
             m_error = true;
+    }
+
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    virtual bool unput(char c) {
+        // unsupported
+        return false;
     }
 
     /// Check error status.

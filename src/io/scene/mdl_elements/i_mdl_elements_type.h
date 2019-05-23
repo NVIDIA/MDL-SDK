@@ -72,6 +72,7 @@ public:
         TK_LIGHT_PROFILE,
         TK_BSDF_MEASUREMENT,
         TK_BSDF,
+        TK_HAIR_BSDF,
         TK_EDF,
         TK_VDF,
         TK_FORCE_32_BIT = 0xffffffffU
@@ -404,6 +405,14 @@ public:
     static const Kind s_kind = TK_BSDF;
 };
 
+class IType_hair_bsdf : public
+    mi::base::Interface_declare<0xeb5cd213,0x1484,0x4db4,0xaf,0xdb,0xd6,0xf2,0x91,0x9b,0xd1,0xff,
+                                IType_df>
+{
+public:
+    static const Kind s_kind = TK_HAIR_BSDF;
+};
+
 class IType_edf : public
     mi::base::Interface_declare<0x13671528,0xe45b,0x4186,0xb0,0x89,0x4a,0x26,0xef,0x9f,0x45,0x79,
                                 IType_df>
@@ -507,6 +516,8 @@ public:
 
     virtual const IType_bsdf* create_bsdf() const = 0;
 
+    virtual const IType_hair_bsdf* create_hair_bsdf() const = 0;
+
     virtual const IType_edf* create_edf() const = 0;
 
     virtual const IType_vdf* create_vdf() const = 0;
@@ -520,6 +531,8 @@ public:
     virtual mi::Sint32 compare( const IType* lhs, const IType* rhs) const = 0;
 
     virtual mi::Sint32 compare( const IType_list* lhs, const IType_list* rhs) const = 0;
+
+    virtual mi::Sint32 is_compatible(const IType* src, const IType* dst) const = 0;
 
     virtual const mi::IString* dump( const IType* type, mi::Size depth = 0) const = 0;
 

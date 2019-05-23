@@ -29,7 +29,11 @@
 /*! \page mi_neuray_example_traversal Example for Traversing Compiled Materials
 
 <div align="right">
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling_glsl Previous\endlink]
+\else
     [\link mi_neuray_example_user_state_module Previous\endlink]
+\endif
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_discovery Next\endlink]
 </div>
@@ -225,7 +229,11 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
 \include traversal/compiled_material_traverser_base.h
 
 <div align="right">
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling_glsl Previous\endlink]
+\else
     [\link mi_neuray_example_user_state_module Previous\endlink]
+\endif
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_discovery Next\endlink]
 </div>

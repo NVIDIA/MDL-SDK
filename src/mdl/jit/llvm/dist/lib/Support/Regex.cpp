@@ -12,18 +12,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Regex.h"
-#include "regex_impl.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include <string>
+
+// Important this comes last because it defines "_REGEX_H_". At least on
+// Darwin, if included before any header that (transitively) includes
+// xlocale.h, this will cause trouble, because of missing regex-related types.
+#include "regex_impl.h"
+
 using namespace llvm;
+
+Regex::Regex() : preg(nullptr), error(REG_BADPAT) {}
 
 Regex::Regex(StringRef regex, unsigned Flags) {
   unsigned flags = 0;
   preg = new llvm_regex();
   preg->re_endp = regex.end();
-  if (Flags & IgnoreCase) 
+  if (Flags & IgnoreCase)
     flags |= REG_ICASE;
   if (Flags & Newline)
     flags |= REG_NEWLINE;
@@ -32,17 +39,26 @@ Regex::Regex(StringRef regex, unsigned Flags) {
   error = llvm_regcomp(preg, regex.data(), flags|REG_PEND);
 }
 
-Regex::~Regex() {
-  llvm_regfree(preg);
-  delete preg;
+Regex::Regex(Regex &&regex) {
+  preg = regex.preg;
+  error = regex.error;
+  regex.preg = nullptr;
+  regex.error = REG_BADPAT;
 }
 
-bool Regex::isValid(std::string &Error) {
+Regex::~Regex() {
+  if (preg) {
+    llvm_regfree(preg);
+    delete preg;
+  }
+}
+
+bool Regex::isValid(std::string &Error) const {
   if (!error)
     return true;
-  
-  size_t len = llvm_regerror(error, preg, NULL, 0);
-  
+
+  size_t len = llvm_regerror(error, preg, nullptr, 0);
+
   Error.resize(len - 1);
   llvm_regerror(error, preg, &Error[0], len);
   return false;
@@ -55,6 +71,9 @@ unsigned Regex::getNumMatches() const {
 }
 
 bool Regex::match(StringRef String, SmallVectorImpl<StringRef> *Matches){
+  if (error)
+    return false;
+
   unsigned nmatch = Matches ? preg->re_nsub+1 : 0;
 
   // pmatch needs to have at least one element.
@@ -77,7 +96,7 @@ bool Regex::match(StringRef String, SmallVectorImpl<StringRef> *Matches){
 
   if (Matches) { // match position requested
     Matches->clear();
-    
+
     for (unsigned i = 0; i != nmatch; ++i) {
       if (pm[i].rm_so == -1) {
         // this group didn't match
@@ -157,7 +176,7 @@ std::string Regex::sub(StringRef Repl, StringRef String,
           RefValue < Matches.size())
         Res += Matches[RefValue];
       else if (Error && Error->empty())
-        *Error = "invalid backreference string '" + Ref.str() + "'";
+        *Error = ("invalid backreference string '" + Twine(Ref) + "'").str();
       break;
     }
     }
@@ -169,9 +188,23 @@ std::string Regex::sub(StringRef Repl, StringRef String,
   return Res;
 }
 
+// These are the special characters matched in functions like "p_ere_exp".
+static const char RegexMetachars[] = "()^$|*+?.[]\\{}";
+
 bool Regex::isLiteralERE(StringRef Str) {
   // Check for regex metacharacters.  This list was derived from our regex
   // implementation in regcomp.c and double checked against the POSIX extended
   // regular expression specification.
-  return Str.find_first_of("()^$|*+?.[]\\{}") == StringRef::npos;
+  return Str.find_first_of(RegexMetachars) == StringRef::npos;
+}
+
+std::string Regex::escape(StringRef String) {
+  std::string RegexStr;
+  for (unsigned i = 0, e = String.size(); i != e; ++i) {
+    if (strchr(RegexMetachars, String[i]))
+      RegexStr += '\\';
+    RegexStr += String[i];
+  }
+
+  return RegexStr;
 }

@@ -65,6 +65,15 @@ int main( int /*argc*/, char* /*argv*/[])
         mi::base::Handle < mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
 
+        mi::base::Handle<mi::neuraylib::IType_factory> type_factory(
+            mdl_factory->create_type_factory(transaction.get()));
+
+        mi::base::Handle<mi::neuraylib::IValue_factory> value_factory(
+            mdl_factory->create_value_factory(transaction.get()));
+
+        mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
+            mdl_factory->create_expression_factory(transaction.get()));
+
         // Load the module "tutorials". 
         // There is no need to configure any module search paths since
         // the mdl example folder is by default in the search path.
@@ -87,15 +96,6 @@ int main( int /*argc*/, char* /*argv*/[])
         
         {
             // change a default values
-
-            mi::base::Handle<mi::neuraylib::IType_factory> type_factory(
-                mdl_factory->create_type_factory(transaction.get()));
-
-            mi::base::Handle<mi::neuraylib::IValue_factory> value_factory(
-                mdl_factory->create_value_factory(transaction.get()));
-
-            mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
-                mdl_factory->create_expression_factory(transaction.get()));
 
             // create a new set of named parameters
             mi::base::Handle<mi::neuraylib::IExpression_list> defaults(
@@ -190,7 +190,8 @@ int main( int /*argc*/, char* /*argv*/[])
             check_success(material_definition);
 
             // use the material ...
-            std::cerr << "Successfully created and loaded " << mdle_file_name << std::endl << std::endl;
+            std::cerr << "Successfully created and loaded " << mdle_file_name << std::endl 
+                      << std::endl;
 
             // access the user file
             mi::base::Handle<mi::neuraylib::IReader> reader(
@@ -202,7 +203,8 @@ int main( int /*argc*/, char* /*argv*/[])
             char* content = new char[file_size + 1];
             content[file_size] = '\0';
             reader->read(content, file_size);
-            std::cerr << "content of the readme.txt:" << std::endl << content << std::endl << std::endl;
+            std::cerr << "content of the readme.txt:" << std::endl << content << std::endl 
+                      << std::endl;
         }
 
         // ----------------------------------------------------------------------------------------
@@ -216,7 +218,37 @@ int main( int /*argc*/, char* /*argv*/[])
 
             // specify the material/function that will become the "main" of the MDLE
             mi::base::Handle<mi::IString> prototype(data->get_value<mi::IString>("prototype_name"));
-            prototype->set_c_str("mdl::nvidia::sdk_examples::tutorials::example_function(color,float)");
+            prototype->set_c_str(
+                "mdl::nvidia::sdk_examples::tutorials::example_function(color,float)");
+
+            {
+                // set parameters, the 'example_function' has no defaults
+
+                // create a new set of named parameters
+                mi::base::Handle<mi::neuraylib::IExpression_list> defaults(
+                    expression_factory->create_expression_list());
+
+                // set a new tint value
+                mi::base::Handle<mi::neuraylib::IValue_color> tint_value(
+                    value_factory->create_color(1.0f, 0.66f, 0.33f));
+
+                mi::base::Handle<mi::neuraylib::IExpression_constant> tint_expr(
+                    expression_factory->create_constant(tint_value.get()));
+
+                defaults->add_expression("tint", tint_expr.get());
+
+                // set a new distance value
+                mi::base::Handle<mi::neuraylib::IValue_float> distance_value(
+                    value_factory->create_float(0.5f));
+
+                mi::base::Handle<mi::neuraylib::IExpression_constant> distance_expr(
+                    expression_factory->create_constant(distance_value.get()));
+
+                defaults->add_expression("distance", distance_expr.get());
+
+                // pass the defaults the Mdle_data struct
+                data->set_value("defaults", defaults.get());
+            }
 
             // start the actual export
             mdle_api->export_mdle(transaction.get(), mdle_file_name2, data.get(), context.get());
@@ -246,10 +278,26 @@ int main( int /*argc*/, char* /*argv*/[])
             check_success(function_definition);
 
             // use the function ...
-            std::cerr << "Successfully created and loaded " << mdle_file_name2 << std::endl << std::endl;
+            std::cerr << "Successfully created and loaded " << mdle_file_name2 << std::endl 
+                      << std::endl;
         }
-        
 
+        {
+            // since the same MDLE can be stored at various different places with different name
+            // it could be valuable to check if the content of two MDLE is equal
+            std::string mdle_path_a = get_working_directory() + "/" + mdle_file_name;
+            std::string mdle_path_b = get_working_directory() + "/" + mdle_file_name2;
+
+            // comparing an MDLE with itself should work
+            mi::Sint32 res = mdle_api->compare_mdle(mdle_path_a.c_str(), mdle_path_a.c_str(), NULL);
+            std::cerr << "Comparing " << mdle_file_name << " with " << mdle_file_name
+                      << " resulted in: " << std::to_string(res) << std::endl;
+
+            // this will fail
+            res = mdle_api->compare_mdle(mdle_path_a.c_str(), mdle_path_b.c_str(), NULL);
+            std::cerr << "Comparing " << mdle_file_name << " with " << mdle_file_name2
+                << " resulted in: " << std::to_string(res) << std::endl;
+        }
 
 
         // ----------------------------------------------------------------------------------------

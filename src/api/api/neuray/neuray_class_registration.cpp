@@ -283,6 +283,14 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     decl->add_member( "Interface",  "annotations");
     factory->register_structure_decl( "Material_data", decl.get());
 
+    decl = factory->create_type_instance<mi::IStructure_decl>(0, "Structure_decl", 0, 0);
+    decl->add_member("String", "definition_name");
+    decl->add_member("String", "prototype_name");
+    decl->add_member("Interface", "parameters");
+    decl->add_member("Interface", "annotations");
+    decl->add_member("Interface", "return_annotations");
+    factory->register_structure_decl("Mdl_data", decl.get());
+
     decl = factory->create_type_instance<mi::IStructure_decl>( 0, "Structure_decl", 0, 0);
     decl->add_member( "String",  "path");
     decl->add_member( "String",  "name");
@@ -337,6 +345,7 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
 
     factory->unregister_structure_decl( "Manifest_field");
     factory->unregister_structure_decl( "Material_data");
+    factory->unregister_structure_decl( "Function_data");
     factory->unregister_structure_decl( "Parameter_data");
     factory->unregister_structure_decl( "Preset_data");
     factory->unregister_structure_decl( "Variant_data");
@@ -352,6 +361,8 @@ bool Class_registration::is_predefined_structure_declaration( const char* name)
     if( strcmp( name, "Manifest_field") == 0)
         return true;
     if( strcmp( name, "Material_data") == 0)
+        return true;
+    if (strcmp(name, "Function_data") == 0)
         return true;
     if( strcmp( name, "Parameter_data") == 0)
         return true;

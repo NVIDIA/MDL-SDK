@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeGenTarget.h"
+#include "WebAssemblyDisassemblerEmitter.h"
 #include "X86DisassemblerTables.h"
 #include "X86RecognizableInstr.h"
 #include "llvm/TableGen/Error.h"
@@ -74,8 +75,8 @@ using namespace llvm::X86Disassembler;
 ///     accurate.  Sometimes they are not.
 /// (3) to fix the tables to reflect the actual context (for example, required
 ///     prefixes), and possibly to add a new context by editing
-///     lib/Target/X86/X86DisassemblerDecoderCommon.h.  This is unlikely to be
-///     the cause.
+///     include/llvm/Support/X86DisassemblerDecoderCommon.h.  This is unlikely
+///     to be the cause.
 ///
 /// DisassemblerEmitter.cpp contains the implementation for the emitter,
 ///   which simply pulls out instructions from the CodeGenTarget and pushes them
@@ -96,41 +97,52 @@ using namespace llvm::X86Disassembler;
 namespace llvm {
 
 extern void EmitFixedLenDecoder(RecordKeeper &RK, raw_ostream &OS,
-                                std::string PredicateNamespace,
-                                std::string GPrefix,
-                                std::string GPostfix,
-                                std::string ROK,
-                                std::string RFail,
-                                std::string L);
+                                const std::string &PredicateNamespace,
+                                const std::string &GPrefix,
+                                const std::string &GPostfix,
+                                const std::string &ROK,
+                                const std::string &RFail, const std::string &L);
 
 void EmitDisassembler(RecordKeeper &Records, raw_ostream &OS) {
   CodeGenTarget Target(Records);
-  emitSourceFileHeader(" * " + Target.getName() + " Disassembler", OS);
+  emitSourceFileHeader(" * " + Target.getName().str() + " Disassembler", OS);
 
   // X86 uses a custom disassembler.
   if (Target.getName() == "X86") {
     DisassemblerTables Tables;
 
-    const std::vector<const CodeGenInstruction*> &numberedInstructions =
+    ArrayRef<const CodeGenInstruction*> numberedInstructions =
       Target.getInstructionsByEnumValue();
 
     for (unsigned i = 0, e = numberedInstructions.size(); i != e; ++i)
       RecognizableInstr::processInstr(Tables, *numberedInstructions[i], i);
 
-    if (Tables.hasConflicts())
-      PrintFatalError(Target.getTargetRecord()->getLoc(),
-                      "Primary decode conflict");
+    if (Tables.hasConflicts()) {
+      PrintError(Target.getTargetRecord()->getLoc(), "Primary decode conflict");
+      return;
+    }
 
     Tables.emit(OS);
     return;
   }
 
+  // WebAssembly has variable length opcodes, so can't use EmitFixedLenDecoder
+  // below (which depends on a Size table-gen Record), and also uses a custom
+  // disassembler.
+  if (Target.getName() == "WebAssembly") {
+    emitWebAssemblyDisassemblerTables(OS, Target.getInstructionsByEnumValue());
+    return;
+  }
+
   // ARM and Thumb have a CHECK() macro to deal with DecodeStatuses.
-  if (Target.getName() == "ARM" ||
-      Target.getName() == "Thumb" || 
-      Target.getName() == "AArch64") {
-    EmitFixedLenDecoder(Records, OS, Target.getName() == "AArch64" ? "AArch64" : "ARM",
-                        "if (!Check(S, ", ")) return MCDisassembler::Fail;",
+  if (Target.getName() == "ARM" || Target.getName() == "Thumb" ||
+      Target.getName() == "AArch64" || Target.getName() == "ARM64") {
+    std::string PredicateNamespace = Target.getName();
+    if (PredicateNamespace == "Thumb")
+      PredicateNamespace = "ARM";
+
+    EmitFixedLenDecoder(Records, OS, PredicateNamespace,
+                        "if (!Check(S, ", "))",
                         "S", "MCDisassembler::Fail",
                         "  MCDisassembler::DecodeStatus S = "
                           "MCDisassembler::Success;\n(void)S;");
@@ -138,8 +150,7 @@ void EmitDisassembler(RecordKeeper &Records, raw_ostream &OS) {
   }
 
   EmitFixedLenDecoder(Records, OS, Target.getName(),
-                      "if (", " == MCDisassembler::Fail)"
-                       " return MCDisassembler::Fail;",
+                      "if (", " == MCDisassembler::Fail)",
                       "MCDisassembler::Success", "MCDisassembler::Fail", "");
 }
 

@@ -189,6 +189,7 @@ void Code_checker::check_type(IType const *type)
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:

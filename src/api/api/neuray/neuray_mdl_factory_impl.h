@@ -81,6 +81,12 @@ public:
         const char* module_name,
         const mi::IArray* material_data);
 
+    mi::Sint32 create_materials(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const mi::IArray* mdl_data,
+        mi::neuraylib::IMdl_execution_context *context);
+
     mi::neuraylib::IValue_texture* create_texture(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,

@@ -220,8 +220,9 @@ std::string to_string(T val)
 
 // Initialize CUDA.
 CUcontext init_cuda(
+    int ordinal
 #ifdef OPENGL_INTEROP
-    const bool opengl_interop
+    , const bool opengl_interop
 #endif
     )
 {
@@ -237,8 +238,10 @@ CUcontext init_cuda(
     }
     else
 #endif
-        // Use first device
-        check_cuda_success(cuDeviceGet(&cu_device, 0));
+    {
+        // Use given device
+        check_cuda_success(cuDeviceGet(&cu_device, ordinal));
+    }
 
     check_cuda_success(cuCtxCreate(&cu_context, 0, cu_device));
 
@@ -1473,26 +1476,30 @@ mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
     const std::string& material_name)
 {
     std::string module_name;
-    std::string material_db_name;
+    std::string function_name;
 
     if (is_mdle_name(material_name)) {
         module_name = material_name;
-        // unify path
-        std::replace(module_name.begin(), module_name.end(), '\\', '/');
-        material_db_name = mdle_to_db_name(module_name);
+        function_name = "main";
     }
     else {
         // strip away the material name
         size_t p = material_name.rfind("::");
+        check_success(p != std::string::npos && p != 0 && "provided material name is invalid");
         module_name = material_name.substr(0, p);
-        
-        const char *prefix = (material_name.find("::") == 0) ? "mdl" : "mdl::";
-        material_db_name = prefix + material_name;
+        function_name = material_name.substr(p + 2);
     }
 
     // Load mdl module.
     check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str(), m_context.get()) >= 0);
     print_messages(m_context.get());
+
+    // get db name
+    const char* module_db_name = m_mdl_compiler->get_module_db_name(
+        m_transaction.get(), module_name.c_str(), m_context.get());
+    print_messages(m_context.get());
+
+    std::string material_db_name = std::string(module_db_name) + "::" + function_name;
 
     // Create a material instance from the material definition
     // with the default arguments.

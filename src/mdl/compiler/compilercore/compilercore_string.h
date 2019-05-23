@@ -343,7 +343,9 @@ public:
             len = Traits::length(ptr + off);
         }
 
-        this->reserve(std::max(this->m_size + len, 2*this->m_size));
+        if (this->m_size + len > this->m_reserved_size)
+            this->reserve(std::max(this->m_size + len, 2*this->m_size));
+
         Traits::copy(this->m_buf + this->m_size, ptr + off, len);
         this->m_size += len;
         this->m_buf[this->m_size] = CharT(0);
@@ -565,6 +567,14 @@ public:
         this->m_buf[0] = CharT(0);
     }
 
+    pointer begin() throw() { return this->m_buf; }
+
+    const_pointer begin() const throw() { return this->m_buf; }
+
+    pointer end() throw() { return this->m_buf + this->m_size; }
+
+    const_pointer end() const throw() { return this->m_buf + this->m_size; }
+
     pointer data() throw() { return this->m_buf; }
 
     const_pointer data() const throw() { return this->m_buf; }
@@ -581,9 +591,13 @@ public:
         if (first != last) {
             // The move includes the terminating _CharT().
             this->m_size -= (last - first);
-            Traits::move(first, last, this->m_size + 1);
+            Traits::move(first, last, last - first);
         }
         return first;
+    }
+
+    CharT *erase(CharT *first) {
+        return this->erase(first, this->end());
     }
 
     void resize(size_type n, CharT ch)

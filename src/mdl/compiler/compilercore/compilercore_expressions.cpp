@@ -322,6 +322,14 @@ public:
     /// Set the argument.
     void set_argument(IExpression const *expr) MDL_FINAL { m_expr = expr; }
 
+    /// Get the typename (only for cast expressions).
+    IType_name const *get_type_name() const MDL_FINAL { return m_type_name; }
+
+    /// Set the typename (only for cast expressions).
+    ///
+    /// \param tn  the type name
+    void set_type_name(IType_name const *tn) MDL_FINAL { m_type_name = tn; }
+
     /// Fold this unary expression into a constant value if possible.
     ///
     /// \param module   The module of this expression.
@@ -349,6 +357,16 @@ public:
         case OK_POST_DECREMENT:
             // these cannot be folded
             break;
+
+        case OK_CAST:
+            {
+                IType const *type = get_type();
+                if (type != NULL) {
+                    // type must be set
+                    return val->convert(factory, type);
+                }
+                return factory->create_bad();
+            }
         }
         return factory->create_bad();
     }
@@ -363,12 +381,17 @@ public:
 
     /// Constructor.
     ///
-    /// \param op   the operator
-    /// \param exp  the single argument expression
-    explicit Expression_unary(Operator op, const IExpression *expr)
+    /// \param op    the operator
+    /// \param expr  the single argument expression
+    /// \param tn    the cast operator type name
+    explicit Expression_unary(
+        Operator          op,
+        IExpression const *expr,
+        IType_name const  *tn = NULL)
     : Base()
     , m_op(op)
     , m_expr(expr)
+    , m_type_name(tn)
     {
     }
 
@@ -378,6 +401,9 @@ private:
 
     /// the operand
     IExpression const *m_expr;
+
+    /// the type name of a cast operator-
+    IType_name const *m_type_name;
 };
 
 /// Implementation of the binary expression.

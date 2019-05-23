@@ -49,10 +49,10 @@ public:
     static std::string replace(const std::string& input,
                                char old, char with);
 
-    // splits a string into chunks based on a seperator character 
+    // splits a string into chunks based on a separator character 
     static std::vector<std::string> split(const std::string& input, char sep);
 
-    // splits a string into chunks based on a seperator substring 
+    // splits a string into chunks based on a separator substring 
     static std::vector<std::string> split(const std::string& input, const std::string& sep);
 };
 

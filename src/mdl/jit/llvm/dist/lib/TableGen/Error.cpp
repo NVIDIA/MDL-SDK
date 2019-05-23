@@ -14,6 +14,8 @@
 
 #include "llvm/TableGen/Error.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/Signals.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 
@@ -38,6 +40,10 @@ static void PrintMessage(ArrayRef<SMLoc> Loc, SourceMgr::DiagKind Kind,
                         "instantiated from multiclass");
 }
 
+void PrintNote(ArrayRef<SMLoc> NoteLoc, const Twine &Msg) {
+  PrintMessage(NoteLoc, SourceMgr::DK_Note, Msg);
+}
+
 void PrintWarning(ArrayRef<SMLoc> WarningLoc, const Twine &Msg) {
   PrintMessage(WarningLoc, SourceMgr::DK_Warning, Msg);
 }
@@ -46,9 +52,7 @@ void PrintWarning(const char *Loc, const Twine &Msg) {
   SrcMgr.PrintMessage(SMLoc::getFromPointer(Loc), SourceMgr::DK_Warning, Msg);
 }
 
-void PrintWarning(const Twine &Msg) {
-  errs() << "warning:" << Msg << "\n";
-}
+void PrintWarning(const Twine &Msg) { WithColor::warning() << Msg << "\n"; }
 
 void PrintError(ArrayRef<SMLoc> ErrorLoc, const Twine &Msg) {
   PrintMessage(ErrorLoc, SourceMgr::DK_Error, Msg);
@@ -58,18 +62,20 @@ void PrintError(const char *Loc, const Twine &Msg) {
   SrcMgr.PrintMessage(SMLoc::getFromPointer(Loc), SourceMgr::DK_Error, Msg);
 }
 
-void PrintError(const Twine &Msg) {
-  errs() << "error:" << Msg << "\n";
+void PrintError(const Twine &Msg) { WithColor::error() << Msg << "\n"; }
+
+void PrintFatalError(const Twine &Msg) {
+  PrintError(Msg);
+  // The following call runs the file cleanup handlers.
+  sys::RunInterruptHandlers();
+  std::exit(1);
 }
 
-void PrintFatalError(const std::string &Msg) {
-  PrintError(Twine(Msg));
-  ::exit(1);
-}
-
-void PrintFatalError(ArrayRef<SMLoc> ErrorLoc, const std::string &Msg) {
+void PrintFatalError(ArrayRef<SMLoc> ErrorLoc, const Twine &Msg) {
   PrintError(ErrorLoc, Msg);
-  ::exit(1);
+  // The following call runs the file cleanup handlers.
+  sys::RunInterruptHandlers();
+  std::exit(1);
 }
 
 } // end namespace llvm

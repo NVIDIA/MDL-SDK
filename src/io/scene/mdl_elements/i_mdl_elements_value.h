@@ -186,6 +186,16 @@ public:
     virtual void set_value( const char* value) = 0;
 };
 
+class IValue_string_localized : public
+    mi::base::Interface_declare<0x9f699d83, 0xe6be, 0x41f9, 0xbe, 0x76, 0xef, 0x95, 0x55, 0x1e, 0xbe, 0xdb,
+    IValue_string>
+{
+public:
+    virtual const char* get_original_value() const = 0;
+    
+    virtual void set_original_value( const char* value) = 0;
+};
+
 class IValue_compound : public
     mi::base::Interface_declare<0xce8262f5,0x37c2,0x4472,0xb9,0xde,0x22,0x9e,0x42,0x6b,0x48,0x8f,
                                 IValue>
@@ -351,6 +361,14 @@ public:
 
     virtual void set_value( DB::Tag value) = 0;
 
+    virtual const char* get_unresolved_mdl_url() const = 0;
+
+    virtual void set_unresolved_mdl_url(const char *url) = 0;
+
+    virtual const char *get_owner_module() const = 0;
+
+    virtual void set_owner_module(const char *module) = 0;
+
     virtual const char* get_file_path( DB::Transaction* transaction) const = 0;
 };
 
@@ -362,6 +380,11 @@ public:
     static const Kind s_kind = VK_TEXTURE;
 
     virtual const IType_texture* get_type() const = 0;
+
+    virtual Float32 get_gamma() const = 0;
+
+    virtual void set_gamma(mi::Float32 gamma) = 0;
+
 };
 
 class IValue_light_profile : public
@@ -444,6 +467,8 @@ public:
 
     virtual IValue_string* create_string( const char* value = "") const = 0;
 
+    virtual IValue_string_localized* create_string_localized( const char* value = "", const char* original_value = "") const = 0;
+
     virtual IValue_vector* create_vector( const IType_vector* type) const = 0;
 
     virtual IValue_matrix* create_matrix( const IType_matrix* type) const = 0;
@@ -457,7 +482,16 @@ public:
 
     virtual IValue_struct* create_struct( const IType_struct* type) const = 0;
 
-    virtual IValue_texture* create_texture( const IType_texture* type, DB::Tag value) const = 0;
+    virtual IValue_texture* create_texture(
+        const IType_texture* type,
+        DB::Tag value) const = 0;
+
+    virtual IValue_texture* create_texture(
+        const IType_texture* type,
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module,
+        mi::Float32 gamma) const = 0;
 
     virtual IValue_light_profile* create_light_profile( DB::Tag value) const = 0;
 

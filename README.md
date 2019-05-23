@@ -120,7 +120,7 @@ libraries. These additional libraries are:
     [glfw.org](http://www.glfw.org/download.html).  
     Mac OS X: Install the *glfw* package using brew.
 
--   **NVIDIA CUDA Toolkit** *(9.0 or 9.2)*  
+-   **NVIDIA CUDA Toolkit** *(9.0 or later)*  
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
@@ -128,6 +128,10 @@ libraries. These additional libraries are:
     Please follow the instructions on the [Qt Website](https://www.qt.io/)  
     To build with Qt 5.10.1 on Linux, your system's GLIBC needs to be release 
     2.14 or later.
+
+-   **DirectX Raytracing support**
+    To build the DXR example, Windows 10 version 1809 and the corresponding 
+    SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
 
 <a name="doc-build-tools"></a>
 Required tools to build the documentation:
@@ -161,7 +165,8 @@ Required tools to build the documentation:
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 14 2015 Win64` and click
+    Generator. Select `Visual Studio 14 2015 Win64` (for newer CMake versions
+    select `x64` as platform), enter `host=x64` as toolset and click
     `Finish`.  CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -199,6 +204,10 @@ Required tools to build the documentation:
     -   **Qt5_DIR** in Ungrouped Entries,  
         for example: *C:/Qt/5.10.1/msvc2015_64*
 
+    Note: when you installed a new Visual Studio version after installing CUDA,
+    you may have to reinstall CUDA to register it correctly with Visual Studio.
+    Otherwise, CMake won't find the CUDA compiler.
+
 6.  When all dependencies have been resolved or the corresponding examples 
     have been disabled as indicated in the CMake error messages, the log 
     will show that the configuration is done.
@@ -210,7 +219,12 @@ Required tools to build the documentation:
     You can also open the Visual Studio solution directly from the build 
     directory.
 
-7.  Use Visual Studio to build the MDL SDK library, MDL Core library,
+7.  For Visual Studio 2015, you may have to adapt the `Target Platform Version` under
+    `General` in the `dxr` project properties to `10.0.17763.0` to avoid getting
+    build errors. For newer Visual Studio versions, CMake will use the correct
+    platform version.
+
+8.  Use Visual Studio to build the MDL SDK library, the MDL Core library,
     and the examples. When running the examples using the Visual Studio debugger,
     you can provide additional command line arguments by specifying them in the
     individual Visual Studio project settings.
@@ -443,6 +457,9 @@ select particular logging information:
 
 -   **MDL_ENABLE_CUDA_EXAMPLES**  
     [ON/OFF] enable/disable examples that require CUDA.
+
+-   **MDL_ENABLE_D3D12_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require D3D12 (Windows only).
 
 -   **MDL_ENABLE_OPENGL_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OpenGL.

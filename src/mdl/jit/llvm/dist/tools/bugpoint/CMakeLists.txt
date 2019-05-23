@@ -1,10 +1,25 @@
-if (LLVM_INCLUDE_OBJC)
-  set(LLVM_LINK_COMPONENTS asmparser instrumentation scalaropts ipo
-    linker bitreader bitwriter irreader vectorize objcarcopts)
-else ()
-  set(LLVM_LINK_COMPONENTS asmparser instrumentation scalaropts ipo
-    linker bitreader bitwriter irreader vectorize)
-endif ()
+set(LLVM_LINK_COMPONENTS
+  ${LLVM_TARGETS_TO_BUILD}
+  Analysis
+  BitWriter
+  CodeGen
+  Core
+  IPO
+  IRReader
+  AggressiveInstCombine
+  InstCombine
+  Instrumentation
+  Linker
+  ObjCARCOpts
+  ScalarOpts
+  Support
+  Target
+  TransformUtils
+  Vectorize
+  )
+
+# Support plugins.
+set(LLVM_NO_DEAD_STRIP 1)
 
 add_llvm_tool(bugpoint
   BugDriver.cpp
@@ -16,5 +31,14 @@ add_llvm_tool(bugpoint
   OptimizerDriver.cpp
   ToolRunner.cpp
   bugpoint.cpp
+
+  DEPENDS
+  intrinsics_gen
   )
-set_target_properties(bugpoint PROPERTIES ENABLE_EXPORTS 1)
+export_executable_symbols(bugpoint)
+
+if(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
+  target_link_libraries(bugpoint PRIVATE Polly)
+  # Ensure LLVMTarget can resolve dependences in Polly.
+  target_link_libraries(bugpoint PRIVATE LLVMTarget)
+endif(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)

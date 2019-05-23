@@ -62,7 +62,7 @@ export material carpaint_red(
 export material carpaint_green(
     uniform float coat_ior = 1.5
     [[
-        anno::display_name("coat ior"),
+        anno::display_name("Coat ior"),
         anno::soft_range(1.0, 4.0),
         anno::description("Describes the directional dependence of the reflection of an analytical clear coat component.")
     ]]
@@ -87,7 +87,7 @@ export material carpaint_green(
 export material carpaint_blue(
     uniform float coat_ior = 1.5
     [[
-        anno::display_name("coat ior"),
+        anno::display_name("Coat ior"),
         anno::soft_range(1.0, 4.0),
         anno::description("Describes the directional dependence of the reflection of an analytical clear coat component.")
     ]]

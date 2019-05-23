@@ -7,18 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/SmallString.h"
+#include "llvm/Support/YAMLParser.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/YAMLParser.h"
 #include "gtest/gtest.h"
 
 namespace llvm {
 
 static void SuppressDiagnosticsOutput(const SMDiagnostic &, void *) {
-  // Prevent SourceMgr from writing errors to stderr 
+  // Prevent SourceMgr from writing errors to stderr
   // to reduce noise in unit test runs.
 }
 
@@ -130,6 +129,45 @@ TEST(YAMLParser, ParsesArrayOfArrays) {
   ExpectParseSuccess("Array of arrays", "[[]]");
 }
 
+TEST(YAMLParser, ParsesBlockLiteralScalars) {
+  ExpectParseSuccess("Block literal scalar", "test: |\n  Hello\n  World\n");
+  ExpectParseSuccess("Block literal scalar EOF", "test: |\n  Hello\n  World");
+  ExpectParseSuccess("Empty block literal scalar header EOF", "test: | ");
+  ExpectParseSuccess("Empty block literal scalar", "test: |\ntest2: 20");
+  ExpectParseSuccess("Empty block literal scalar 2", "- | \n  \n\n \n- 42");
+  ExpectParseSuccess("Block literal scalar in sequence",
+                     "- |\n  Testing\n  Out\n\n- 22");
+  ExpectParseSuccess("Block literal scalar in document",
+                     "--- |\n  Document\n...");
+  ExpectParseSuccess("Empty non indented lines still count",
+                     "- |\n  First line\n \n\n  Another line\n\n- 2");
+  ExpectParseSuccess("Comment in block literal scalar header",
+                     "test: | # Comment \n  No Comment\ntest 2: | # Void");
+  ExpectParseSuccess("Chomping indicators in block literal scalar header",
+                     "test: |- \n  Hello\n\ntest 2: |+ \n\n  World\n\n\n");
+  ExpectParseSuccess("Indent indicators in block literal scalar header",
+                     "test: |1 \n  \n Hello \n  World\n");
+  ExpectParseSuccess("Chomping and indent indicators in block literals",
+                     "test: |-1\n Hello\ntest 2: |9+\n         World");
+  ExpectParseSuccess("Trailing comments in block literals",
+                     "test: |\n  Content\n # Trailing\n  #Comment\ntest 2: 3");
+  ExpectParseError("Invalid block scalar header", "test: | failure");
+  ExpectParseError("Invalid line indentation", "test: |\n  First line\n Error");
+  ExpectParseError("Long leading space line", "test: |\n   \n  Test\n");
+}
+
+TEST(YAMLParser, NullTerminatedBlockScalars) {
+  SourceMgr SM;
+  yaml::Stream Stream("test: |\n  Hello\n  World\n", SM);
+  yaml::Document &Doc = *Stream.begin();
+  yaml::MappingNode *Map = cast<yaml::MappingNode>(Doc.getRoot());
+  StringRef Value =
+      cast<yaml::BlockScalarNode>(Map->begin()->getValue())->getValue();
+
+  EXPECT_EQ(Value, "Hello\nWorld\n");
+  EXPECT_EQ(Value.data()[Value.size()], '\0');
+}
+
 TEST(YAMLParser, HandlesEndOfFileGracefully) {
   ExpectParseError("In string starting with EOF", "[\"");
   ExpectParseError("In string hitting EOF", "[\"   ");
@@ -139,6 +177,11 @@ TEST(YAMLParser, HandlesEndOfFileGracefully) {
   ExpectParseError("In array hitting EOF", "[[] ");
   ExpectParseError("In array hitting EOF", "[[]");
   ExpectParseError("In object hitting EOF", "{\"\"");
+}
+
+TEST(YAMLParser, HandlesNullValuesInKeyValueNodesGracefully) {
+  ExpectParseError("KeyValueNode with null key", "? \"\n:");
+  ExpectParseError("KeyValueNode with null value", "test: '");
 }
 
 // Checks that the given string can be parsed into an identical string inside
@@ -210,10 +253,83 @@ TEST(YAMLParser, DiagnosticFilenameFromBufferID) {
 
   // When we construct a YAML stream over a named buffer,
   // we get its ID as filename in diagnostics.
-  MemoryBuffer* Buffer = MemoryBuffer::getMemBuffer("[]", "buffername.yaml");
-  yaml::Stream Stream(Buffer, SM);
+  std::unique_ptr<MemoryBuffer> Buffer =
+      MemoryBuffer::getMemBuffer("[]", "buffername.yaml");
+  yaml::Stream Stream(Buffer->getMemBufferRef(), SM);
   Stream.printError(Stream.begin()->getRoot(), "Hello, World!");
   EXPECT_EQ("buffername.yaml", GeneratedDiag.getFilename());
+}
+
+TEST(YAMLParser, SameNodeIteratorOperatorNotEquals) {
+  SourceMgr SM;
+  yaml::Stream Stream("[\"1\", \"2\"]", SM);
+
+  yaml::SequenceNode *Node = dyn_cast<yaml::SequenceNode>(
+                                              Stream.begin()->getRoot());
+
+  auto Begin = Node->begin();
+  auto End = Node->end();
+
+  EXPECT_TRUE(Begin != End);
+  EXPECT_FALSE(Begin != Begin);
+  EXPECT_FALSE(End != End);
+}
+
+TEST(YAMLParser, SameNodeIteratorOperatorEquals) {
+  SourceMgr SM;
+  yaml::Stream Stream("[\"1\", \"2\"]", SM);
+
+  yaml::SequenceNode *Node = dyn_cast<yaml::SequenceNode>(
+                                              Stream.begin()->getRoot());
+
+  auto Begin = Node->begin();
+  auto End = Node->end();
+
+  EXPECT_FALSE(Begin == End);
+  EXPECT_TRUE(Begin == Begin);
+  EXPECT_TRUE(End == End);
+}
+
+TEST(YAMLParser, DifferentNodesIteratorOperatorNotEquals) {
+  SourceMgr SM;
+  yaml::Stream Stream("[\"1\", \"2\"]", SM);
+  yaml::Stream AnotherStream("[\"1\", \"2\"]", SM);
+
+  yaml::SequenceNode *Node = dyn_cast<yaml::SequenceNode>(
+                                                  Stream.begin()->getRoot());
+  yaml::SequenceNode *AnotherNode = dyn_cast<yaml::SequenceNode>(
+                                              AnotherStream.begin()->getRoot());
+
+  auto Begin = Node->begin();
+  auto End = Node->end();
+
+  auto AnotherBegin = AnotherNode->begin();
+  auto AnotherEnd = AnotherNode->end();
+
+  EXPECT_TRUE(Begin != AnotherBegin);
+  EXPECT_TRUE(Begin != AnotherEnd);
+  EXPECT_FALSE(End != AnotherEnd);
+}
+
+TEST(YAMLParser, DifferentNodesIteratorOperatorEquals) {
+  SourceMgr SM;
+  yaml::Stream Stream("[\"1\", \"2\"]", SM);
+  yaml::Stream AnotherStream("[\"1\", \"2\"]", SM);
+
+  yaml::SequenceNode *Node = dyn_cast<yaml::SequenceNode>(
+                                                    Stream.begin()->getRoot());
+  yaml::SequenceNode *AnotherNode = dyn_cast<yaml::SequenceNode>(
+                                             AnotherStream.begin()->getRoot());
+
+  auto Begin = Node->begin();
+  auto End = Node->end();
+
+  auto AnotherBegin = AnotherNode->begin();
+  auto AnotherEnd = AnotherNode->end();
+
+  EXPECT_FALSE(Begin == AnotherBegin);
+  EXPECT_FALSE(Begin == AnotherEnd);
+  EXPECT_TRUE(End == AnotherEnd);
 }
 
 } // end namespace llvm

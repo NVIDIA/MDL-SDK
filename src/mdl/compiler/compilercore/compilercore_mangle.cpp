@@ -231,7 +231,7 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
         prefix += 2;
 
     // if the prefix starts with a '/', it is a file name (MDLe) that needs encoding
-    if (prefix[0] == '/') {
+    if (prefix[0] == '/' || (isalpha(prefix[0]) && prefix[1] == ':' && prefix[2] == '/')) {
 
         // process characters one by one
         for (; prefix[0] != '\0';) {
@@ -617,6 +617,9 @@ void MDL_name_mangler::mangle_type(IType_reference const *type)
     switch (type->get_kind()) {
     case IType::TK_BSDF:
         mangle_source_name("bsdf");
+        break;
+    case IType::TK_HAIR_BSDF:
+        mangle_source_name("hair_bsdf");
         break;
     case IType::TK_VDF:
         mangle_source_name("vdf");
@@ -1081,6 +1084,9 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
             break;
         case IMDL::MDL_VERSION_1_5:
             result += "$1.4";
+            break;
+        case IMDL::MDL_VERSION_1_6:
+            result += "$1.5";
             break;
         }
     }

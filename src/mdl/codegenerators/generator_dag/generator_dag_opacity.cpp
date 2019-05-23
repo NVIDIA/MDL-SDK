@@ -39,7 +39,7 @@ namespace mdl {
 namespace {
 
 /// Helper class to check the opacity of a material instance.
-class Opacity_checker {
+class Opacity_analyzer {
     // Must be kept in sync with ::df module
     enum scatter_mode {
         scatter_reflect,
@@ -48,17 +48,13 @@ class Opacity_checker {
     };
 
 public:
-    enum Result {
-        unknown,
-        transparent,
-        opaque
-    };
+    typedef IGenerated_code_dag::IMaterial_instance::Opacity Result;
 
     /// Constructor.
     ///
     /// \param alloc     the allocator
     /// \param material  the material instance construction
-    Opacity_checker(
+    Opacity_analyzer(
         IAllocator     *alloc,
         DAG_call const *material)
     : m_alloc(alloc)
@@ -66,10 +62,8 @@ public:
     {
     }
 
-    /// Check if the given instance is opaque.
-    ///
-    /// \returns true if the material passed all checks
-    Result is_opaque()
+    /// Get the cutout opacity of the material instance if it is constant, NULL otherwise.
+    IValue_float const *get_cutout_opacity()
     {
         // must be a material constructor
         MDL_ASSERT(m_constructor->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR);
@@ -80,43 +74,61 @@ public:
 
         if (v == NULL) {
             // cannot analyze
-            return unknown;
+            return NULL;
         }
-        IValue_float const *f_value = cast<IValue_float>(v);
+        return cast<IValue_float>(v);
+    }
+
+    /// Analyze if the given instance is opaque or transparent.
+    ///
+    /// \returns opaque      if the material instance has a cutout_opacity of 1.0
+    ///          transparent if the material instance has a cutout opacity < 1.0
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze()
+    {
+        IValue_float const *f_value = get_cutout_opacity();
+        if (f_value == NULL) {
+            // cannot analyze
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+        }
         if (f_value->get_value() < 1.0f) {
             // not opaque
-            return transparent;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
         }
 
-        // We do not allow different transmission of front and back-side of an MDl material.
+        // We do not allow different transmission of front and back-side of an MDL material.
         // Hence it is enough to analyze the front-side.
         DAG_node const *frontside = skip_temp(m_constructor->get_argument("surface"));
         if (is<DAG_constant>(frontside)) {
             // only ONE invalid BSDF, this IS opaque
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *fs = as<DAG_call>(frontside);
         if (fs == NULL) {
             // a parameter, cannot decide
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         DAG_node const *scattering = skip_temp(fs->get_argument("scattering"));
         if (is<DAG_constant>(scattering)) {
             // only ONE invalid BSDF, this IS opaque
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *sc = as<DAG_call>(scattering);
         if (sc == NULL) {
             // a parameter, cannot decide
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
 
-        return is_bsdf_opaque(sc);
+        return analyze_bsdf(sc);
     }
 
 private:
     /// Skip a temporary.
+    ///
+    /// \param expr  the DAG node
+    ///
+    /// \return expr if the node is not a temporary, its value otherwise
     DAG_node const *skip_temp(DAG_node const *expr)
     {
         if (DAG_temporary const *temp = as<DAG_temporary>(expr)) {
@@ -125,24 +137,28 @@ private:
         return expr;
     }
 
-    /// Check if a bsdf mixer is opaque.
+    /// Analyze if a bsdf mixer is opaque or transparent.
     ///
     /// \param bsdf  a DAG expression representing the BSDF
-    Result is_bsdf_mixer_opaque(DAG_call const *bsdf)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_bsdf_mixer(DAG_call const *bsdf)
     {
-        DAG_node const *components = skip_temp(bsdf->get_argument("component"));
+        DAG_node const *components = skip_temp(bsdf->get_argument("components"));
         if (is<DAG_constant>(components)) {
             // can contain only invalid refs
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *arr = as<DAG_call>(components);
         if (arr == NULL) {
             // a parameter, cannot decide
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
         if (arr->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
             // not an array constructor, unsupported
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         int n = arr->get_argument_count();
@@ -156,52 +172,64 @@ private:
             DAG_call const *elem_const = as<DAG_call>(elem);
             if (elem_const == NULL) {
                 // a parameter, cannot decide
-                return unknown;
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
             }
             if (elem_const->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
                 // not a struct constructor, cannot decide
-                return unknown;
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
             }
 
             DAG_node const *bsdf = elem_const->get_argument("component");
-            Result res = is_bsdf_opaque(bsdf);
-            if (res != opaque)
-                return unknown;
+            Result res = analyze_bsdf(bsdf);
+            if (res != IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE)
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         // all good
-        return opaque;
+        return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
     }
 
-    /// Check if a bsdf layerer is opaque.
+    /// Analyze if a bsdf layerer is opaque or transparent.
     ///
     /// \param bsdf  a DAG expression representing the BSDF
-    Result is_bsdf_layerer_opaque(DAG_call const *bsdf)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_bsdf_layerer(DAG_call const *bsdf)
     {
         DAG_node const *lower_layer = skip_temp(bsdf->get_argument("base"));
         DAG_node const *upper_layer = skip_temp(bsdf->get_argument("layer"));
 
-        Result low_res = is_bsdf_opaque(lower_layer);
-        Result up_res  = is_bsdf_opaque(upper_layer);
+        Result low_res = analyze_bsdf(lower_layer);
+        Result up_res  = analyze_bsdf(upper_layer);
 
         if (low_res == up_res)
             return low_res;
-        return unknown;
+        return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
     }
 
-    /// Check if a bsdf modifier is opaque.
+    /// Analyze if a bsdf modifier is opaque or transparent.
     ///
     /// \param bsdf  a DAG expression representing the BSDF
-    Result is_bsdf_modifier_opaque(DAG_call const *bsdf)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_bsdf_modifier(DAG_call const *bsdf)
     {
         DAG_node const *base = skip_temp(bsdf->get_argument("base"));
-        return is_bsdf_opaque(base);
+        return analyze_bsdf(base);
     }
 
-    /// Check if a glossy bsdf is opaque.
+    /// Analyze if a glossy bsdf is opaque or transparent.
     ///
     /// \param bsdf  a DAG expression representing the BSDF
-    Result is_glossy_bsdf_opaque(DAG_call const *bsdf)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_glossy_bsdf(DAG_call const *bsdf)
     {
         // MaterialLayerBSDF_DBSDF
         int refl_type = scatter_reflect;
@@ -215,43 +243,51 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
 
+            has_mode = true;
+            break;
+
+
         case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
             break;
 
         default:
             MDL_ASSERT(!"unhandled glossy BSDF");
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         if (has_mode) {
             IValue const *v = get_value(bsdf, "mode");
             if (v == NULL) {
-                return unknown;
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
             }
             IValue_int_valued const *i_v = cast<IValue_int_valued>(v);
             refl_type = static_cast<scatter_mode>(i_v->get_value());
         }
 
         if (refl_type == scatter_transmit || refl_type == scatter_reflect_transmit) {
-            return transparent;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
         }
-        return opaque;
+        return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
     }
 
-    /// Check if an elemental bsdf is opaque.
+    /// Analyze if an elemental bsdf is opaque or transparent.
     ///
     /// \param bsdf  a DAG expression representing the BSDF
-    Result is_elemental_bsdf_opaque(DAG_call const *bsdf)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_elemental_bsdf(DAG_call const *bsdf)
     {
         switch (bsdf->get_semantic()) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
             // MaterialLayerBSDF_DiffuseRefl
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
 
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
             // MaterialLayerBSDF_DiffuseTrans;
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
 
         case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
@@ -262,35 +298,52 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
 
+            return analyze_glossy_bsdf(bsdf);
+
         case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+
         default:
             MDL_ASSERT(!"unhandled BSDF");
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
     }
 
-    /// Check if the given BSDF is opaque.
+    /// Analyze if the given BSDF is opaque or transparent.
     ///
     /// \param node  a DAG expression representing the BSDF
-    Result is_bsdf_opaque(DAG_node const *node)
+    ///
+    /// \returns opaque      if the material instance is opaque for sure
+    ///          transparent if the material instance is transparent for sure
+    ///          unknown     otherwise (might depend on parameters)
+    Result analyze_bsdf(DAG_node const *node)
     {
         node = skip_temp(node);
         if (is<DAG_constant>(node)) {
             // invalid ref, this IS opaque
-            return opaque;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *bsdf = as<DAG_call>(node);
         if (bsdf == NULL)
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
 
         IDefinition::Semantics sema = bsdf->get_semantic();
+
+        if (semantic_is_operator(sema) && semantic_to_operator(sema) == IExpression::OK_TERNARY) {
+            Result t_res = analyze_bsdf(bsdf->get_argument(1));
+            Result f_res = analyze_bsdf(bsdf->get_argument(2));
+
+            if (t_res == f_res)
+                return t_res;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+        }
+
         switch (sema) {
         case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
         case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
-            return is_bsdf_mixer_opaque(bsdf);
+            return analyze_bsdf_mixer(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
@@ -300,14 +353,15 @@ private:
         case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
-            return is_bsdf_layerer_opaque(bsdf);
+            return analyze_bsdf_layerer(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_TINT:
         case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
         case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
-            return is_bsdf_modifier_opaque(bsdf);
+        case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+            return analyze_bsdf_modifier(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
@@ -321,29 +375,12 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
 
+            return analyze_elemental_bsdf(bsdf);
+
         default:
             MDL_ASSERT(!"unhandled BSDF");
-            return unknown;
+            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
         }
-    }
-
-    /// Find the field index of a struct type.
-    ///
-    /// \param  s_type the struct type
-    /// \param  name   the field name
-    ///
-    /// \return the index or -1 if the index was not found
-    int find_field(IType_struct const *s_tp, char const *name)
-    {
-        for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-            IType const *f_type;
-            ISymbol const *f_sym;
-
-            s_tp->get_field(i, f_type, f_sym);
-            if (strcmp(f_sym->get_name(), name) == 0)
-                return i;
-        }
-        return -1;
     }
 
     /// Get a value from a constant by an absolute path.
@@ -354,15 +391,7 @@ private:
     {
         for (size_t i = 0, n = path.size(); i < n; ++i) {
             IValue_struct const *s_value = cast<IValue_struct>(value);
-            IType_struct const  *s_type  = s_value->get_type();
-
-            int idx = find_field(s_type, path[i]);
-            if (idx < 0) {
-                MDL_ASSERT(!"wrong access path");
-                return NULL;
-            }
-
-            value = s_value->get_value(i);
+            value = s_value->get_value(path[i]);
         }
         return value;
     }
@@ -419,12 +448,21 @@ private:
 
 }  // anonymous
 
-// Returns true if this instance is opaque.
-bool Generated_code_dag::Material_instance::is_opaque() const
+// Returns the opacity of this instance.
+IGenerated_code_dag::IMaterial_instance::Opacity
+Generated_code_dag::Material_instance::get_opacity() const
 {
     DAG_call const *expr = get_constructor();
 
-    return Opacity_checker(get_allocator(), expr).is_opaque() == Opacity_checker::opaque;
+    return Opacity_analyzer(get_allocator(), expr).analyze();
+}
+
+// Returns the cutout opacity of this instance if it is constant.
+IValue_float const *Generated_code_dag::Material_instance::get_cutout_opacity() const
+{
+    DAG_call const *expr = get_constructor();
+
+    return Opacity_analyzer(get_allocator(), expr).get_cutout_opacity();
 }
 
 }  // mdl

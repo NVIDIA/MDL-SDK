@@ -343,7 +343,7 @@ public:
 
         // not supported in this example
         std::cerr << "warning: Light profiles are not supported by the MDL Core examples.\n"
-                     "         However, the loaded material references the light profile:\n" 
+                     "         However, the loaded material references the light profile:\n"
                   << "         " << lp->get_string_value() << "\n";
         (void) t;
     }
@@ -577,13 +577,6 @@ private:
 class Ptx_code
 {
 public:
-    /// Language to use for the callable function prototype.
-    enum Prototype_language {
-        SL_CUDA,
-        SL_PTX,
-        SL_GLSL
-    };
-
     /// Constructor.
     Ptx_code(
         mi::mdl::IGenerated_code_executable  *code,
@@ -616,12 +609,14 @@ public:
     }
 
     /// Get the kind of the i'th callable function.
-    mi::mdl::ILink_unit::Function_kind get_callable_function_kind(size_t index) const {
+    mi::mdl::IGenerated_code_executable::Function_kind
+    get_callable_function_kind(size_t index) const {
         return m_link_unit->get_function_kind(index);
     }
 
     /// Get the DF kind of the i'th callable function.
-    mi::mdl::ILink_unit::Distribution_kind get_callable_function_df_kind(size_t index) const {
+    mi::mdl::IGenerated_code_executable::Distribution_kind
+    get_callable_function_df_kind(size_t index) const {
         return m_link_unit->get_distribution_kind(index);
     }
 
@@ -636,46 +631,11 @@ public:
     }
 
     /// Get the prototype of the i'th callable function in the given language.
-    std::string get_callable_function_prototype(size_t index, Prototype_language lang) const {
-        char const *func_name = m_link_unit->get_function_name(index);
-        if (func_name == nullptr)
-            return std::string();
-
-        if (lang == SL_PTX) {
-            std::string p(".extern .func ");
-            p += func_name;
-
-            switch (m_link_unit->get_function_kind(index)) {
-            case mi::mdl::ILink_unit::FK_DF_INIT:
-                p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d);";
-                break;
-            case mi::mdl::ILink_unit::FK_SWITCH_LAMBDA:
-                p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d, .param .b64 e, "
-                    ".param .b64 f);";
-                break;
-            default:
-                p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d, .param .b64 e);";
-                break;
-            }
-            return p;
-        } else if (lang == SL_CUDA) {
-            std::string p("extern ");
-            p += func_name;
-
-            switch (m_link_unit->get_function_kind(index)) {
-            case mi::mdl::ILink_unit::FK_DF_INIT:
-                p += "(void *, void *, void *, void *);";
-                break;
-            case mi::mdl::ILink_unit::FK_SWITCH_LAMBDA:
-                p += "(void *, void *, void *, void *, void *, int);";
-                break;
-            default:
-                p += "(void *, void *, void *, void *, void *);";
-                break;
-            }
-            return p;
-        } else
-            return std::string();  // not supported
+    std::string get_callable_function_prototype(
+        size_t index,
+        mi::mdl::IGenerated_code_executable::Prototype_language lang) const
+    {
+        return std::string(m_link_unit->get_function_prototype(index, lang));
     }
 
     /// Get the list of argument block indices per material.
@@ -1325,6 +1285,57 @@ void Material_gpu_context::update_device_argument_block(size_t i)
 //
 //------------------------------------------------------------------------------
 
+struct Target_function_description
+{
+    Target_function_description(const char* expression_path = NULL,
+                                const char* base_function_name = NULL)
+        : path(expression_path)
+        , base_fname(base_function_name)
+        , argument_block_index(~0)
+        , function_index(~0)
+        , distribution_kind(mi::mdl::IGenerated_code_executable::DK_INVALID)
+        , return_code(~0) // not processed
+    {
+    }
+
+    /// The path from the material root to the expression that should be translated,
+    /// e.g., \c "surface.scattering".
+    const char* path;
+
+    /// The base name of the generated functions.
+    /// If \c NULL is passed, the function name will be 'lambda' followed by an increasing
+    /// counter. Note, that this counter is tracked per link unit. That means, you need to
+    /// provide functions names when using multiple link units in order to avoid collisions.
+    const char* base_fname;
+
+    /// The index of argument block that belongs to the compiled material the function is
+    /// generated from or ~0 if none of the added function required arguments.
+    /// It allows to get the layout and a writable pointer to argument data. This is an output
+    /// parameter which is available after adding the function to the link unit.
+    size_t argument_block_index;
+
+    /// The index of the generated function for accessing the callable function information of
+    /// the link unit or ~0 if the selected function is an invalid distribution function.
+    /// ~0 is not an error case, it just means, that evaluating the function will result in 0.
+    /// In case the function is a distribution function, the returned index will be the
+    /// index of the \c init function, while \c sample, \c evaluate, and \c pdf will be
+    /// accessible by the consecutive indices, i.e., function_index + 1, function_index + 2,
+    /// function_index + 3. This is an output parameter which is available after adding the
+    /// function to the link unit.
+    size_t function_index;
+
+    /// Return the distribution kind of this function (or NONE in case expressions). This is
+    /// an output parameter which is available after adding the function to the link unit.
+    mi::mdl::IGenerated_code_executable::Distribution_kind distribution_kind;
+
+    /// Return code of the processing of the function:
+    /// -   0  Success
+    /// -  ~0  Function not processed
+    /// -  -1  An error occurred while processing the function.
+    int return_code;
+};
+
+
 class Material_ptx_compiler : public Material_compiler {
 public:
     /// Constructor.
@@ -1399,11 +1410,11 @@ public:
         bool                           class_compilation = false);
 
     /// Add (multiple) MDL distribution function and expressions of a material to this link unit.
-    /// For each distribution function it results in four functions, suffixed with \c "_init", 
+    /// For each distribution function it results in four functions, suffixed with \c "_init",
     /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a
     /// a list of \c Target_function_descriptions. Each of them needs to define the \c path, the root
     /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application, 
+    /// the list will contain information for later usage in the application,
     /// e.g., the \c argument_block_index and the \c function_index.
     ///
     /// \param material_name                mdl path of the material to generate from
@@ -1411,10 +1422,10 @@ public:
     /// \param description_count            number of descriptions passed
     /// \param class_compilation            if true, use class compilation
     bool add_material(
-        const std::string                                  &material_name,
-        mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
-        size_t                                              description_count,
-        bool                                                class_compilation = false);
+        const std::string             &material_name,
+        Target_function_description   *function_descriptions,
+        size_t                         description_count,
+        bool                           class_compilation = false);
 
 
     /// Generate CUDA PTX target code for the current link unit.
@@ -1555,7 +1566,7 @@ bool Material_ptx_compiler::add_material_subexpr(
     const char                    *fname,
     bool                           class_compilation)
 {
-    mi::mdl::ILink_unit::Target_function_description desc;
+    Target_function_description desc;
     desc.path = path;
     desc.base_fname = fname;
     add_material(material_name, &desc, 1, class_compilation);
@@ -1569,7 +1580,7 @@ bool Material_ptx_compiler::add_material_df(
     char const                    *base_fname,
     bool                           class_compilation)
 {
-    mi::mdl::ILink_unit::Target_function_description desc;
+    Target_function_description desc;
     desc.path = path;
     desc.base_fname = base_fname;
     add_material(material_name, &desc, 1, class_compilation);
@@ -1604,10 +1615,10 @@ namespace
 
 // Add (multiple) MDL distribution function and expressions of a material to this link unit.
 bool Material_ptx_compiler::add_material(
-    const std::string                                  &material_name,
-    mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
-    size_t                                              description_count,
-    bool                                                class_compilation)
+    const std::string             &material_name,
+    Target_function_description   *function_descriptions,
+    size_t                         description_count,
+    bool                           class_compilation)
 {
     // Load the given module and create a material instance
     mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> mat_instance(
@@ -1615,7 +1626,7 @@ bool Material_ptx_compiler::add_material(
     if (!mat_instance)
         return false;
 
-    // argument block index for the entire material 
+    // argument block index for the entire material
     // (initialized by the first function that requires material arguments)
     size_t arg_block_index = size_t(~0);
 
@@ -1652,7 +1663,7 @@ bool Material_ptx_compiler::add_material(
 
         std::string function_name = sstr.str();
         std::replace(function_name.begin(), function_name.end(), '.', '_');
-            
+
         switch (expr_node->get_type()->get_kind())
         {
             case mi::mdl::IType::TK_BSDF:
@@ -1664,22 +1675,22 @@ bool Material_ptx_compiler::add_material(
                 {
                     case mi::mdl::IType::TK_BSDF:
                         function_descriptions[i].distribution_kind
-                            = mi::mdl::ILink_unit::DK_BSDF;
+                            = mi::mdl::IGenerated_code_executable::DK_BSDF;
                         break;
 
                     case mi::mdl::IType::TK_EDF:
                         function_descriptions[i].distribution_kind
-                            = mi::mdl::ILink_unit::DK_EDF;
+                            = mi::mdl::IGenerated_code_executable::DK_EDF;
                         break;
 
                     // case mi::mdl::IType::TK_VDF:
                     //     function_descriptions[i].distribution_kind
-                    //       = mi::mdl::ILink_unit::DK_VDF;
+                    //       = mi::mdl::IGenerated_code_executable::DK_VDF;
                     //     break;
 
                     default:
                         function_descriptions[i].distribution_kind =
-                            mi::mdl::ILink_unit::DK_INVALID;
+                            mi::mdl::IGenerated_code_executable::DK_INVALID;
                         function_descriptions[i].return_code = -1;
                         return false;
                 }
@@ -1690,7 +1701,7 @@ bool Material_ptx_compiler::add_material(
                 mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
 
                 // check if the distribution function is the default one, e.g. 'bsdf()'
-                // if that's the case we don't need to translate as the evaluation of the function 
+                // if that's the case we don't need to translate as the evaluation of the function
                 // will result in zero
                 if (expr_node->get_kind() == mi::mdl::DAG_node::EK_CONSTANT &&
                     mi::mdl::as<mi::mdl::DAG_constant>(expr_node)->get_value()->get_kind()
@@ -1716,7 +1727,7 @@ bool Material_ptx_compiler::add_material(
                     main_df->set_parameter_mapping(i, idx);
                 }
 
-                // Import full material into the main lambda 
+                // Import full material into the main lambda
                 mi::mdl::DAG_node const *material_constructor =
                     main_df->import_expr(mat_instance->get_constructor());
 
@@ -1726,6 +1737,7 @@ bool Material_ptx_compiler::add_material(
                         function_descriptions[i].path,
                         /*include_geometry_normal=*/ true,
                         /*calc_derivatives=*/ m_enable_derivatives,
+                        /*allow_double_expr_lambdas=*/ false,
                         &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
                     return false;
 
@@ -1781,13 +1793,14 @@ bool Material_ptx_compiler::add_material(
                 collect_material_argument_resources(mat_instance.get(), lambda.get());
 
                 // set further infos that are passed back
-                function_descriptions[i].distribution_kind = mi::mdl::ILink_unit::DK_NONE;
+                function_descriptions[i].distribution_kind =
+                    mi::mdl::IGenerated_code_executable::DK_NONE;
 
                 // Add the lambda function to the link unit
                 if (!m_link_unit->add(
                     lambda.get(),
                     &m_module_manager,
-                    mi::mdl::ILink_unit::FK_LAMBDA,
+                    mi::mdl::IGenerated_code_executable::FK_LAMBDA,
                     &arg_block_index,
                     &function_descriptions[i].function_index))
                 {
@@ -1869,7 +1882,7 @@ std::string generate_func_array_ptx(
     {
         Ptx_code const *target_code = target_codes[tc_index].get();
 
-        // in case of multiple target codes, we need to address the functions by a pair of 
+        // in case of multiple target codes, we need to address the functions by a pair of
         // target_code_index and function_index.
         // the elements in the resulting function array can then be index by offset + func_index.
         if (!tc_offsets.empty())
@@ -1901,7 +1914,7 @@ std::string generate_func_array_ptx(
 
             // Add prototype declaration
             src += target_code->get_callable_function_prototype(
-                func_index, Ptx_code::SL_PTX);
+                func_index, mi::mdl::IGenerated_code_executable::PL_PTX);
             src += '\n';
         }
     }
@@ -2126,11 +2139,11 @@ bool export_image_rgbf(
                 for (unsigned x = 0; x < width; x++)
                 {
                     // convert and scale to the range [0..255]
-                    dst_pixel[FI_RGBA_RED] = 
+                    dst_pixel[FI_RGBA_RED] =
                         (char)(std::max(0.f, std::min(src_pixel->red, 1.f)) * 255.0f);
-                    dst_pixel[FI_RGBA_GREEN] = 
+                    dst_pixel[FI_RGBA_GREEN] =
                         (char)(std::max(0.f, std::min(src_pixel->green, 1.f)) * 255.0f);
-                    dst_pixel[FI_RGBA_BLUE] = 
+                    dst_pixel[FI_RGBA_BLUE] =
                         (char)(std::max(0.f, std::min(src_pixel->blue, 1.f)) * 255.0f);
                     dst_pixel[FI_RGBA_ALPHA] = 255;
 
@@ -2151,7 +2164,7 @@ bool export_image_rgbf(
             res = FreeImage_Save(fif, dib, path) != 0;
             break;
     }
-    
+
     FreeImage_Unload(dib);
     return res;
 }

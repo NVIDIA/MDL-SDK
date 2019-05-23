@@ -114,9 +114,9 @@ mi::Sint32 Link_unit::deprecated_add_environment(
     mi::Float32                         mdl_wavelength_max)
 {
     MDL::Execution_context context;
-    context.set_option("mdl_meters_per_scene_unit", mdl_meters_per_scene_unit);
-    context.set_option("mdl_wavelength_min", mdl_wavelength_min);
-    context.set_option("mdl_wavelength_max", mdl_wavelength_max);
+    context.set_option(MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, mdl_meters_per_scene_unit);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MIN, mdl_wavelength_min);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MAX, mdl_wavelength_max);
 
     m_link_unit.add_environment(unwrap(call), fname, &context);
     return context.get_result();
@@ -188,7 +188,7 @@ mi::Sint32 Link_unit::deprecated_add_material(
 
     mi::Sint32 result = m_link_unit.add_material(
         unwrap(material),
-        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        function_descriptions,
         static_cast<size_t>(description_count),
         &context);
 
@@ -209,7 +209,7 @@ mi::Sint32 Link_unit::add_material(
 {
     return m_link_unit.add_material(
         unwrap(material),
-        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        function_descriptions,
         static_cast<size_t>(description_count),
         unwrap_and_clear(context));
 }
@@ -252,9 +252,9 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::deprecated_translate_enviro
         return NULL;
     }
     MDL::Execution_context context;
-    context.set_option("mdl_meters_per_scene_unit", mdl_meters_per_scene_unit);
-    context.set_option("mdl_wavelength_min", mdl_wavelength_min);
-    context.set_option("mdl_wavelength_max", mdl_wavelength_max);
+    context.set_option(MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, mdl_meters_per_scene_unit);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MIN, mdl_wavelength_min);
+    context.set_option(MDL_CTX_OPTION_WAVELENGTH_MAX, mdl_wavelength_max);
 
     DB::Transaction *db_transaction = unwrap(transaction);
     MDL::Mdl_function_call const *db_function_call = unwrap(function_call);
@@ -486,7 +486,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
 
     if (link_unit.add_material(
         unwrap(material),
-        reinterpret_cast<mi::mdl::ILink_unit::Target_function_description*>(function_descriptions),
+        function_descriptions,
         static_cast<size_t>(description_count),
         wrapped_context)) {
 

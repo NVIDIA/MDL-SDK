@@ -63,6 +63,7 @@ OPERATOR_SYM_UNARY(sym_pre_increment, OK_PRE_INCREMENT, "operator++")
 OPERATOR_SYM_UNARY(sym_pre_decrement, OK_PRE_DECREMENT, "operator--")
 OPERATOR_SYM_UNARY(sym_post_increment, OK_POST_INCREMENT, "operator++")
 OPERATOR_SYM_UNARY(sym_post_decrement, OK_POST_DECREMENT, "operator--")
+OPERATOR_SYM_UNARY(sym_cast, OK_CAST, "operator_cast")
 
 // binary operator
 OPERATOR_SYM_BINARY(sym_select, OK_SELECT, "operator.")
@@ -165,6 +166,7 @@ PREDEF_SYM(sym_material_geometry, SYM_TYPE_MATERIAL_GEOMETRY, "material_geometry
 PREDEF_SYM(sym_material, SYM_TYPE_MATERIAL, "material")
 PREDEF_SYM(sym_tex_gamma_mode, SYM_TYPE_TEX_GAMMA_MODE, "::tex::gamma_mode")
 PREDEF_SYM(sym_intensity_mode, SYM_TYPE_INTENSITY_MODE, "intensity_mode")
+PREDEF_SYM(sym_hair_bsdf, SYM_TYPE_HAIR_BSDF, "hair_bsdf")
 
 // enum values
 PREDEF_SYM(sym_enum_gamma_default, SYM_ENUM_GAMMA_DEFAULT, "gamma_default")
@@ -195,6 +197,7 @@ PREDEF_SYM(sym_field_surface, SYM_FIELD_SURFACE, "surface")
 PREDEF_SYM(sym_field_thin_walled, SYM_FIELD_THIN_WALLED, "thin_walled")
 PREDEF_SYM(sym_field_volume, SYM_FIELD_VOLUME, "volume")
 PREDEF_SYM(sym_field_mode, SYM_FIELD_MODE, "mode")
+PREDEF_SYM(sym_field_hair, SYM_FIELD_HAIR, "hair")
 
 // constants
 PREDEF_SYM(sym_cnst_true, SYM_CNST_TRUE, "true")

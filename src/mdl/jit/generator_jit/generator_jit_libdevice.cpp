@@ -29,12 +29,13 @@
 #include "pch.h"
 
 
-#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
 
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 #include "mdl/compiler/compilercore/compilercore_assert.h"
+#include "mdl/compiler/compilercore/compilercore_errors.h"
 
 #include "generator_jit_llvm.h"
 
@@ -88,7 +89,7 @@ unsigned char const *LLVM_code_generator::get_libdevice(
 }
 
 // Load libdevice.
-llvm::Module *LLVM_code_generator::load_libdevice(
+std::unique_ptr<llvm::Module> LLVM_code_generator::load_libdevice(
     llvm::LLVMContext &llvm_context,
     unsigned          &min_ptx_version)
 {
@@ -96,11 +97,17 @@ llvm::Module *LLVM_code_generator::load_libdevice(
 
     unsigned char const *data = get_libdevice(size, min_ptx_version);
 
-    llvm::MemoryBuffer *mem = llvm::MemoryBuffer::getMemBuffer(
-        llvm::StringRef((char const *)data, size), "libdevice", /*RequiresNullTerminator=*/false);
-    llvm::Module *module = llvm::ParseBitcodeFile(mem, llvm_context);
-    delete mem;
-    return module;
+    std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
+        llvm::StringRef((char const *)data, size),
+        "libdevice",
+        /*RequiresNullTerminator=*/ false));
+    auto module = llvm::parseBitcodeFile(*mem.get(), llvm_context);
+    if (!module) {
+        error(PARSING_LIBDEVICE_MODULE_FAILED, Error_params(get_allocator()));
+        MDL_ASSERT(!"Parsing libdevice failed");
+        return nullptr;
+    }
+    return std::move(module.get());
 }
 
 }  // mdl

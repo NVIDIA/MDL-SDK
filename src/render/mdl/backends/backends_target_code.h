@@ -155,6 +155,28 @@ public:
     ///                   index, or \c NULL if \p index is out of range.
     const char* get_texture(Size index) const NEURAY_OVERRIDE;
 
+    /// Returns the mdl url of a texture resource used by the target code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The mdl url of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    const char* get_texture_url(Size index) const NEURAY_OVERRIDE;
+
+    /// Returns the owner module name of a relative texture url.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The owner module name of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   module is not provided.
+    const char* get_texture_owner_module(Size index) const NEURAY_OVERRIDE;
+
+    /// Returns the gamma mode of a texture resource used by the target code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The gamma of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    mi::neuraylib::ITarget_code::Gamma_mode get_texture_gamma(Size index) const NEURAY_OVERRIDE;
+
     /// Returns the texture shape of a given texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
@@ -516,10 +538,17 @@ public:
 
     /// Registers a used texture index.
     ///
-    /// \param index  the texture index as used in compiled code
-    /// \param name   the name of the DB element this index refers to.
-    /// \param shape  the texture shape of the texture
-    void add_texture_index( size_t index, const std::string& name, Texture_shape shape);
+    /// \param index    the texture index as used in compiled code
+    /// \param name     the name of the DB element this index refers to.
+    /// \param mdl_url  the mdl url.
+    /// \param gamma    texture gamma
+    /// \param shape    the texture shape of the texture
+    void add_texture_index(
+        size_t index, 
+        const std::string& name,
+        const std::string& mdl_url,
+        float gamma,
+        Texture_shape shape);
 
     /// Registers a used light profile index.
     ///
@@ -597,30 +626,46 @@ private:
     /// The code segments descriptions if any.
     std::vector<std::string> m_code_segment_descriptions;
 
-    typedef std::map<std::string, size_t> Function_map;
-
-    /// The map of callable functions (to ensure that m_callable_functions contains unique entries).
-    Function_map m_callable_function_map;
-
     /// The list of all callable function infos.
     std::vector<Callable_function_info> m_callable_function_infos;
 
     /// Helper value type for texture entries.
     struct Texture_info {
         /// Constructor.
-        Texture_info(std::string const &db_name, Texture_shape shape)
-        : m_db_name(db_name), m_texture_shape(shape)
-        {
-        }
-
-        /// Constructor.
-        Texture_info(char const *db_name, Texture_shape shape)
-        : m_db_name(db_name), m_texture_shape(shape)
+        Texture_info(
+            std::string const &db_name,
+            std::string const &mdl_url,
+            std::string const &owner,
+            float gamma,
+            Texture_shape shape)
+        : m_db_name(db_name)
+        , m_mdl_url(mdl_url)
+        , m_owner_module(owner)
+        , m_gamma(gamma)
+        , m_texture_shape(shape)
         {
         }
 
         /// Get the database name of the texture.
-        char const *get_db_name() const { return m_db_name.c_str(); }
+        char const *get_db_name() const 
+        {
+            return m_db_name.c_str();
+        }
+
+        /// Get the mdl url of the texture.
+        char const *get_mdl_url() const
+        { 
+            return m_mdl_url.c_str();
+        }
+
+        /// Get the owner module name of the texture.
+        char const *get_owner() const
+        {
+            return m_owner_module.c_str();
+        }
+
+        /// Get the texture gamma
+        float get_gamma() const { return m_gamma; }
 
         /// Get the texture shape of the texture.
         Texture_shape get_texture_shape() const { return m_texture_shape; }
@@ -628,6 +673,15 @@ private:
     private:
         /// The db name of the texture.
         std::string  m_db_name;
+
+        /// The mdl url of the texture.
+        std::string  m_mdl_url;
+
+        /// The owner module name of the texture.
+        std::string m_owner_module;
+
+        /// Texture gamma.
+        float m_gamma;
 
         /// The shape of the texture.
         Texture_shape   m_texture_shape;

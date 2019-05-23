@@ -30,16 +30,22 @@
 #define MDL_GENERATOR_JIT_TYPE_MAP_H 1
 
 #include <cstring>
+
+#include <mi/mdl/mdl_types.h>
+
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
 #include <mdl/compiler/compilercore/compilercore_hash_ptr.h>
 #include <mdl/compiler/compilercore/compilercore_cstring_hash.h>
 
-#include <llvm/DebugInfo.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
 
 namespace llvm {
-    class DataLayout;
     class DIBuilder;
+    class DIFile;
+    class DIScope;
+    class DISubroutineType;
+    class DIType;
     class LLVMContext;
 }
 
@@ -59,9 +65,10 @@ public:
 
     /// State mappings.
     enum State_mapping {
-        SM_USE_BITANGENT         = 1 << 0,  ///< Use bitangent instead of tangent_u and tangent_v.
-        SM_INCLUDE_UNIFORM_STATE = 1 << 1,  ///< Include the uniform state.
-        SM_USE_DERIVATIVES       = 1 << 2,  ///< Use derivative types.
+        SM_USE_BITANGENT          = 1 << 0,  ///< Use bitangent instead of tangent_u and tangent_v.
+        SM_INCLUDE_UNIFORM_STATE  = 1 << 1,  ///< Include the uniform state.
+        SM_USE_DERIVATIVES        = 1 << 2,  ///< Use derivative types.
+        SM_INCLUDE_ARG_BLOCK_OFFS = 1 << 3,  ///< Include an argument block offset.
     };
 
     /// Supported state subsets.
@@ -89,11 +96,19 @@ public:
 
         TM_STRINGS_ARE_IDS   = 16,    ///< Map strings to IDs
 
+        TM_NO_REFERENCE      = 32,    ///< never pass-by-reference/reference return
+
+        TM_NO_POINTER_SUPPORT = 64,   ///< The target does not support pointers
+
         /// The mode for native x86 compilation.
         TM_NATIVE_X86 = TM_BIG_VECTORS | TM_BIG_VECTOR_RETURN | TM_BOOL1_SUPPORTED,
 
         /// The mode for PTX compilation.
-        TM_PTX        = TM_BIG_VECTORS
+        TM_PTX        = TM_BIG_VECTORS,
+
+        /// The mode for HLSL compilation.
+        TM_HLSL       = TM_SMALL_VECTORS | TM_NO_REFERENCE | TM_NO_POINTER_SUPPORT |
+                        TM_BOOL1_SUPPORTED
     };
 
     /// array_desc<T> access indexes.
@@ -123,6 +138,9 @@ public:
         STATE_CORE_W2O_TRANSFORM,       ///< The world-to-object transform matrix.
         STATE_CORE_O2W_TRANSFORM,       ///< The object-to-world transform matrix.
         STATE_CORE_OBJECT_ID,           ///< Result of state::object_id().
+
+        // only available for HLSL
+        STATE_CORE_ARG_BLOCK_OFFSET,    ///< The argument block offset.
     };
 
     /// Exception state access index.
@@ -153,51 +171,61 @@ public:
         THV_tex_lookup_float4_cube,         ///< tex_lookup_float4_cube()
         THV_tex_lookup_float3_cube,         ///< tex_lookup_float3_cube()
         THV_tex_resolution_2d,              ///< tex_resolution_2d()
+        THV_tex_resolution_3d,              ///< tex_resolution_3d()
+        THV_tex_texture_isvalid,            ///< tex_texture_isvalid()
+        THV_light_profile_power,            ///< df_light_profile_power()
+        THV_light_profile_maximum,          ///< df_light_profile_maximum()
+        THV_light_profile_isvalid,          ///< df_light_profile_isvalid()
+        THV_light_profile_evaluate,         ///< df_light_profile_evaluate()
+        THV_light_profile_sample,           ///< df_light_profile_sample()
+        THV_light_profile_pdf,              ///< df_light_profile_pdf()
+        THV_bsdf_measurement_isvalid,       ///< df_bsdf_measurement_isvalid()
         THV_bsdf_measurement_resolution,    ///< df_bsdf_measurement_resolution()
         THV_bsdf_measurement_evaluate,      ///< df_bsdf_measurement_evaluate()
         THV_bsdf_measurement_sample,        ///< df_bsdf_measurement_sample()
         THV_bsdf_measurement_pdf,           ///< df_bsdf_measurement_pdf()
         THV_bsdf_measurement_albedos,       ///< df_bsdf_measurement_albedos()
-        THV_light_profile_evaluate,         ///< df_light_profile_evaluate()
-        THV_light_profile_sample,           ///< df_light_profile_sample()
-        THV_light_profile_pdf,              ///< df_light_profile_pdf()
         THV_LAST
     };
 
     /// Texture_attritube_entry access index.
     enum Texture_attribute_entry_index {
-        TAE_VALID  = 0,
-        TAE_WIDTH  = 1,
-        TAE_HEIGHT = 2,
-        TAE_DEPTH  = 3
+        TAE_ISVALID  = 0,
+        TAE_WIDTH    = 1,
+        TAE_HEIGHT   = 2,
+        TAE_DEPTH    = 3
     };
 
     /// Light_profile_attritube_entry access index.
     enum Light_profile_attribute_entry_index {
-        LAE_VALID   = 0,
-        LAE_POWER   = 1,
-        LAE_MAXIMUM = 2
+        LAE_ISVALID  = 0,
+        LAE_POWER    = 1,
+        LAE_MAXIMUM  = 2
     };
 
     /// Bsdf_measuremente_attritube_entry access index.
     enum Bsdf_measurement_attribute_entry_index {
-        BAE_VALID   = 0
+        BAE_ISVALID  = 0
     };
 
 public:
     /// Constructor.
     ///
-    /// \param alloc          the allocator
-    /// \param context        the LLVM context to be used inside type construction
-    /// \param data_layout    LLVM data layout info for the JIT mode
-    /// \param state_mapping  how to map the MDL state
-    /// \param tm_mode        the type mapping mode
+    /// \param alloc                the allocator
+    /// \param context              the LLVM context to be used inside type construction
+    /// \param data_layout          LLVM data layout info for the JIT mode
+    /// \param state_mapping        how to map the MDL state
+    /// \param tm_mode              the type mapping mode
+    /// \param num_texture_spaces   the number of supported texture spaces
+    /// \param num_texture_results  the number of texture result entries
     Type_mapper(
         IAllocator             *alloc,
         llvm::LLVMContext      &context,
         llvm::DataLayout const *data_layout,
         unsigned               state_mapping,
-        Type_mapping_mode      tm_mode);
+        Type_mapping_mode      tm_mode,
+        unsigned               num_texture_spaces,
+        unsigned               num_texture_results);
 
     /// Get the LLVM context of this type mapper
     llvm::LLVMContext &get_llvm_context() const { return m_context; }
@@ -207,20 +235,35 @@ public:
         return (m_tm_mode & TM_STRINGS_ARE_IDS) != 0;
     }
 
+    /// Returns true if the API structs don't contain any pointers.
+    bool target_supports_pointers() const {
+        return (m_tm_mode & TM_NO_POINTER_SUPPORT) == 0;
+    }
+
+    /// Returns true if the functions may use sret parameters.
+    bool may_use_sret() const {
+        return (m_tm_mode & TM_NO_REFERENCE) == 0;
+    }
+
+    /// Checks if bitangents are used.
+    bool use_bitangents() const {
+        return (m_state_mapping & SM_USE_BITANGENT) != 0;
+    }
+
+    /// Checks if the render state includes the uniform state.
+    bool state_includes_uniform_state() const {
+        return (m_state_mapping & SM_INCLUDE_UNIFORM_STATE) != 0;
+    }
+
     /// Returns true if derivatives are used.
     bool use_derivatives() const {
         return (m_state_mapping & SM_USE_DERIVATIVES) != 0;
     }
 
-    /// Get the index of a state field in the current state struct.
-    ///
-    /// \param state_field    the requested state field
-    /// \param state_mapping  how to map the MDL state
-    ///
-    /// \return the index of the state field inside the state struct depending on state options
-    static int get_state_index(
-        State_field state_field,
-        unsigned    state_mapping);
+    /// Returns true if the state includes an argument block offset.
+    bool state_includes_arg_block_offset() const {
+        return (m_state_mapping & SM_INCLUDE_ARG_BLOCK_OFFS) != 0;
+    }
 
     /// Get the index of a state field in the current state struct.
     ///
@@ -402,7 +445,7 @@ public:
     /// Get the LLVM derivative type for float2.
     llvm::StructType *get_deriv_float2_type() const { return m_type_deriv_float2; }
 
-        /// Get the LLVM derivative type for float[2].
+    /// Get the LLVM derivative type for float[2].
     llvm::StructType *get_deriv_arr_float_2_type() const { return m_type_deriv_arr_float_2; }
 
     /// Get the LLVM derivative type for float3.
@@ -483,11 +526,13 @@ public:
     /// Get the debug info type for an MDL type.
     ///
     /// \param diBuilder   the debug info builder
+    /// \param file        the file of this type
     /// \param scope       the scope for this type
     /// \param type        the MDL type
-    llvm::DIType get_debug_info_type(
+    llvm::DIType *get_debug_info_type(
         llvm::DIBuilder      *diBuilder,
-        llvm::DIDescriptor   scope,
+        llvm::DIFile         *file,
+        llvm::DIScope        *scope,
         mi::mdl::IType const *type) const;
 
     /// Get the debug info type for an MDL function type type.
@@ -495,55 +540,43 @@ public:
     /// \param diBuilder   the debug info builder
     /// \param file        the file of this function type
     /// \param type        the MDL function type
-    llvm::DICompositeType get_debug_info_type(
+    llvm::DISubroutineType *get_debug_info_type(
         llvm::DIBuilder               *diBuilder,
-        llvm::DIFile                  file,
+        llvm::DIFile                  *file,
         mi::mdl::IType_function const *type) const;
-
-    /// Checks if bitangents are used.
-    bool is_bitangents_used() const {
-        return (m_state_mapping & SM_USE_BITANGENT) != 0;
-    }
-
-    /// Checks if the render state includes the uniform state.
-    bool state_include_uniform_state() const {
-        return (m_state_mapping & SM_INCLUDE_UNIFORM_STATE) != 0;
-    }
 
 private:
     /// Construct the State type for the environment context.
     ///
     /// \param context        the LLVM context this type is build belongs to
-    /// \param data_layout    LLVM data layout info for the JIT mode
     /// \param float3_type    the LLVM float3 type
-    /// \param state_mapping  how to map the MDL state
-    static llvm::StructType *construct_state_environment_type(
+    llvm::StructType *construct_state_environment_type(
         llvm::LLVMContext      &context,
-        llvm::DataLayout const *data_layout,
-        llvm::Type             *float3_type,
-        unsigned               state_mapping);
+        llvm::Type             *float3_type);
 
     /// Construct the State type for the iray core context.
     ///
     /// \param context           the LLVM context this type is build belongs to
-    /// \param data_layout       LLVM data layout info for the JIT mode
     /// \param int_type          the LLVM integer type
     /// \param float3_type       the LLVM float3 type
     /// \param float4_type       the LLVM float4 type
     /// \param float_type        the LLVM float type
     /// \param byte_ptr_type     the LLVM byte * type
     /// \param deriv_float3_type the LLVM derivative float3 type
-    /// \param state_mapping     how to map the MDL state
-    static llvm::StructType *construct_state_core_type(
+    /// \param float4x4_type     the LLVM float4x4 type
+    /// \param num_texture_spaces   the number of supported texture spaces
+    /// \param num_texture_results  the number of texture result entries
+    llvm::StructType *construct_state_core_type(
         llvm::LLVMContext      &context,
-        llvm::DataLayout const *data_layout,
         llvm::Type             *int_type,
         llvm::Type             *float3_type,
         llvm::Type             *float4_type,
         llvm::Type             *float_type,
         llvm::Type             *byte_ptr_type,
         llvm::Type             *deriv_float3_type,
-        unsigned               state_mapping);
+        llvm::Type             *float4x4_type,
+        unsigned               num_texture_spaces,
+        unsigned               num_texture_results);
 
     /// Construct the exception state type.
     ///
@@ -558,12 +591,8 @@ private:
     /// Construct the Res_data_pair type.
     ///
     /// \param context        the LLVM context this type is build belongs to
-    /// \param data_layout    LLVM data layout info for the JIT mode
-    /// \param void_ptr_type  the LLVM void * type
-    static llvm::StructType *construct_res_data_pair_type(
-        llvm::LLVMContext      &context,
-        llvm::DataLayout const *data_layout,
-        llvm::Type             *void_ptr_type);
+    llvm::StructType *construct_res_data_pair_type(
+        llvm::LLVMContext      &context);
 
     /// Construct the exec_ctx type.
     static llvm::StructType *construct_exec_ctx_type(
@@ -603,6 +632,9 @@ private:
 
     /// The context all types belong too.
     llvm::LLVMContext &m_context;
+
+    /// The used data layout.
+    llvm::DataLayout m_data_layout;
 
     /// The type mapping mode.
     Type_mapping_mode m_tm_mode;

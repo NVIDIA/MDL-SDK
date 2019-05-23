@@ -85,7 +85,8 @@ Mdl_material_definition::Mdl_material_definition(
     const mi::mdl::IGenerated_code_dag* code_dag,
     mi::Uint32 material_index,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    bool load_resources)
 : m_tf( get_type_factory())
 , m_vf( get_value_factory())
 , m_ef( get_expression_factory())
@@ -125,7 +126,8 @@ Mdl_material_definition::Mdl_material_definition(
         /*create_direct_calls*/ false,
         module_filename,
         module_name,
-        m_prototype_tag);
+        m_prototype_tag,
+        load_resources);
 
     // material annotations
     mi::Uint32 annotation_count = code_dag->get_material_annotation_count( material_index);
@@ -319,24 +321,36 @@ Mdl_material_instance* Mdl_material_definition::create_material_instance_interna
         return NULL;
     }
 
+    std::vector<bool> needs_cast(m_parameter_types->get_size(), false);
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    bool allow_cast = mdlc_module->get_implicit_cast_enabled();
+
     // check that the provided arguments are parameters of the material definition and that their
     // types match the expected types
     if( arguments) {
         mi::Size n = arguments->get_size();
         for( mi::Size i = 0; i < n; ++i) {
             const char* name = arguments->get_name( i);
-            mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( name));
+            mi::Size parameter_index = get_parameter_index(name);
+            mi::base::Handle<const IType> expected_type(m_parameter_types->get_type(parameter_index));
             if( !expected_type) {
                 *errors = -1;
                 return NULL;
             }
             mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
             mi::base::Handle<const IType> actual_type( argument->get_type());
-            if( !argument_type_matches_parameter_type(
-                m_tf.get(), actual_type.get(), expected_type.get())) {
+            bool needs_cast_tmp = false;
+            if (!argument_type_matches_parameter_type(
+                m_tf.get(),
+                actual_type.get(),
+                expected_type.get(),
+                allow_cast,
+                needs_cast_tmp)) {
                 *errors = -2;
                 return NULL;
             }
+            needs_cast[parameter_index] = needs_cast_tmp;
+
             bool actual_type_varying
                 = (actual_type->get_all_type_modifiers()   & IType::MK_VARYING) != 0;
             bool expected_type_uniform
@@ -369,9 +383,25 @@ Mdl_material_instance* Mdl_material_definition::create_material_instance_interna
         if( argument) {
             // use provided argument
             mi::base::Handle<IExpression> argument_copy( m_ef->clone(
-                argument.get(), /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
+                argument.get(), transaction, /*copy_immutable_calls=*/!immutable));
             ASSERT( M_SCENE, argument_copy);
+
+            if (needs_cast[i]) {
+                mi::base::Handle<const IType> expected_type(
+                    m_parameter_types->get_type(i));
+                mi::Sint32 errors = 0;
+                argument_copy = m_ef->create_cast(
+                    transaction,
+                    argument_copy.get(),
+                    expected_type.get(),
+                    /*db_element_name=*/nullptr,
+                    /*force_cast=*/false,
+                    /*direct_call=*/false,
+                    &errors);
+                ASSERT(M_SCENE, argument_copy); // should always succeed.
+            }
             argument = argument_copy;
+
         } else {
             // no argument provided, use default
             mi::base::Handle<const IExpression> default_( m_defaults->get_expression( name));

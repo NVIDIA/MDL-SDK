@@ -4,11 +4,18 @@
 # targets as well. Currently, there is no support for such a build strategy.
 
 set(LLVM_LINK_COMPONENTS
-  DebugInfo
+  DebugInfoDWARF
+  DebugInfoPDB
+  Demangle
   Object
+  Support
+  Symbolize
   )
 
 add_llvm_tool(llvm-symbolizer
-  LLVMSymbolize.cpp
   llvm-symbolizer.cpp
   )
+
+if(LLVM_INSTALL_BINUTILS_SYMLINKS)
+  add_llvm_tool_symlink(addr2line llvm-symbolizer)
+endif()

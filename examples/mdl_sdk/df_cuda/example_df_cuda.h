@@ -75,6 +75,7 @@ struct Df_cuda_material
         , edf(make_invalid())
         , emission_intensity(make_invalid())
         , volume_absorption(make_invalid())
+        , thin_walled(make_invalid())
     {
     }
 
@@ -95,6 +96,9 @@ struct Df_cuda_material
 
     // pair of target_code_index and function_index for volume absorption
     uint2 volume_absorption;
+
+    // pair of target_code_index and function_index for thin_walled
+    uint2 thin_walled;
 };
 
 

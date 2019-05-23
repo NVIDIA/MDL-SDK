@@ -18,24 +18,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "NVPTX.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
 
 using namespace llvm;
 
 namespace {
-/// \brief NVPTXAssignValidGlobalNames
+/// NVPTXAssignValidGlobalNames
 class NVPTXAssignValidGlobalNames : public ModulePass {
 public:
   static char ID;
   NVPTXAssignValidGlobalNames() : ModulePass(ID) {}
 
-  virtual bool runOnModule(Module &M);
+  bool runOnModule(Module &M) override;
 
-  /// \brief Clean up the name to remove symbols invalid in PTX.
+  /// Clean up the name to remove symbols invalid in PTX.
   std::string cleanUpName(StringRef Name);
 };
 }
@@ -50,17 +51,21 @@ INITIALIZE_PASS(NVPTXAssignValidGlobalNames, "nvptx-assign-valid-global-names",
                 "Assign valid PTX names to globals", false, false)
 
 bool NVPTXAssignValidGlobalNames::runOnModule(Module &M) {
-  for (Module::global_iterator GV = M.global_begin(), E = M.global_end();
-    GV != E; ++GV) {
+  for (GlobalVariable &GV : M.globals()) {
     // We are only allowed to rename local symbols.
-    if (GV->hasLocalLinkage()) {
+    if (GV.hasLocalLinkage()) {
       // setName doesn't do extra work if the name does not change.
       // Note: this does not create collisions - if setName is asked to set the
       // name to something that already exists, it adds a proper postfix to
       // avoid collisions.
-      GV->setName(cleanUpName(GV->getName()));
+      GV.setName(cleanUpName(GV.getName()));
     }
   }
+
+  // Do the same for local functions.
+  for (Function &F : M.functions())
+    if (F.hasLocalLinkage())
+      F.setName(cleanUpName(F.getName()));
 
   return true;
 }

@@ -107,6 +107,8 @@ public:
         TK_BSDF_MEASUREMENT,
         /// The \c bsdf type. See #mi::neuraylib::IType_bsdf.
         TK_BSDF,
+        /// The \c hair_bsdf type. See #mi::neuraylib::IType_hair_bsdf.
+        TK_HAIR_BSDF,
         /// The \c edf type. See #mi::neuraylib::IType_edf.
         TK_EDF,
         /// The \c vdf type. See #mi::neuraylib::IType_vdf.
@@ -347,6 +349,8 @@ public:
 };
 
 /// The type of kind color.
+///
+/// The color is represented as a compound of 3 elements of type #mi::neuraylib::IType_float.
 class IType_color : public
     mi::base::Interface_declare<0xedb16770,0xdf70,0x4def,0x83,0xa5,0xc4,0x4f,0xcd,0x09,0x47,0x0f,
                                 neuraylib::IType_compound>
@@ -516,6 +520,16 @@ public:
     static const Kind s_kind = TK_BSDF;
 };
 
+/// The type of kind bsdf.
+class IType_hair_bsdf : public
+    mi::base::Interface_declare<0x8eac6c90,0x2b8f,0x4650,0x8b,0x93,0x88,0xe0,0x42,0xff,0x19,0x9c,
+    neuraylib::IType_df>
+{
+public:
+    /// The kind of this subclass.
+    static const Kind s_kind = TK_HAIR_BSDF;
+};
+
 /// The type of kind edf.
 class IType_edf : public
     mi::base::Interface_declare<0x3e3ce697,0xa2a7,0x43ef,0xa2,0xec,0x52,0x5a,0x4c,0x27,0x8f,0xeb,
@@ -678,6 +692,9 @@ public:
     /// Creates a new instance of the type bsdf.
     virtual const IType_bsdf* create_bsdf() const = 0;
 
+    /// Creates a new instance of the type hair_bsdf.
+    virtual const IType_hair_bsdf* create_hair_bsdf() const = 0;
+
     /// Creates a new instance of the type edf.
     virtual const IType_edf* create_edf() const = 0;
 
@@ -732,6 +749,29 @@ public:
     /// \param rhs   The right-hand side operand for the comparison.
     /// \return      -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
     virtual Sint32 compare( const IType_list* lhs, const IType_list* rhs) const = 0;
+
+    /// Checks, if two instances of #mi::neuraylib::IType are compatible, meaning that \p src
+    /// can be casted to \p dst.
+    /// 
+    /// \p src is compatible with and therefore can be casted to \p dst, if
+    /// - \p src and \p dst are of identical type (see #mi::neuraylib::IType_factory::compare()).
+    /// - \p src and \p dst are of type #mi::neuraylib::IType_struct, have the same number of
+    ///   fields and all fields are compatible.
+    /// - \p src and \p dst are of type #mi::neuraylib::IType_enum and both enumeration types have
+    ///   the same set of numerical enumeration values. The name of the enumeration values, their
+    ///   order, or whether multiple enumeration value names share the same numerical value
+    ///   do not matter.
+    /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays have the same size
+    ///   and their element types are compatible.
+    /// 
+    /// \param src The source type.
+    /// \param dst the target type to which src is intended to be compatible.
+    /// \return
+    ///           -  0 if \p src can be casted to \p dst, but \p src and \p dst are not of identical
+    ///                type.
+    ///           -  1 if \p src and \p dst are of identical type.
+    ///           - -1 if \p src cannot be casted to \p dst.
+    virtual Sint32 is_compatible(const IType* src, const IType* dst) const = 0;
 
     /// Returns a textual representation of a type.
     ///

@@ -1,0 +1,211 @@
+/******************************************************************************
+ * Copyright 2019 NVIDIA Corporation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.4;
+
+import anno::*;
+import base::*;
+import df::*;
+import math::*;
+import state::*;
+import tex::*;
+
+export enum gltf_alpha_mode {
+    opaque,
+    mask,
+    blend
+};
+
+float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff)
+{
+    switch (mode) {
+        case mask:
+            return alpha < cutoff ? 0.0 : 1.0;
+        case blend:
+            return alpha;
+        case opaque:
+            return 1.0;
+    }
+}
+
+export material gltf_material(
+    // base color
+    uniform texture_2d base_color_texture = texture_2d(),
+    uniform int base_color_texture_coord_index = 0,
+    uniform color base_color_factor = color(1.0), 
+
+    // metallic roughness
+    uniform texture_2d metallic_roughness_texture = texture_2d(),
+    uniform int metallic_roughness_texture_coord_index = 0,
+    uniform float metallic_factor = 1.0
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    uniform float roughness_factor = 1.0
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    // normal map
+    uniform texture_2d normal_texture = texture_2d(),
+    uniform int normal_texture_coord_index = 0,
+    uniform int normal_texture_tangent_index = 0,
+    uniform float normal_scale_factor = 1.0
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    // emission
+    uniform texture_2d emissive_texture = texture_2d(),
+    uniform int emissive_texture_coord_index = 0,
+    uniform color emissive_factor = color(1.0),
+
+    // ambient occlusion
+    uniform texture_2d occlusion_texture = texture_2d(),
+    uniform int occlusion_texture_coord_index = 0,
+    uniform float occlusion_strength = 1.0
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    // alpha
+    uniform float base_alpha = 1.0
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+
+    // alpha for gltf_alpha_mode::mask
+    uniform float alpha_cutoff  = 0.5
+    [[
+        anno::hard_range(0.0f, 1.0f)
+    ]],
+    uniform gltf_alpha_mode alpha_mode = opaque
+) [[
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("GLTF Material"),
+    anno::hidden(),
+    anno::description("Metallic-Roughness Material that takes the GLTF pbr model parameters as input.")
+]] = let {
+
+    // handling GLTF parameters
+    // ------------------------------------------------------------------------
+    float3 base_color_texture_coord = state::texture_coordinate(base_color_texture_coord_index);
+    float4 base_float4 = (tex::texture_isvalid(base_color_texture)
+        ? tex::lookup_float4(base_color_texture, float2(base_color_texture_coord.x, base_color_texture_coord.y))
+        : float4(1.0));
+    color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
+    float alpha = base_alpha * base_float4.w;
+
+    float3 metallic_roughness_texture_coord = state::texture_coordinate(metallic_roughness_texture_coord_index);
+    float3 metallic_roughness = float3(metallic_factor, roughness_factor, 0.0) *
+        (tex::texture_isvalid(metallic_roughness_texture) 
+            ? tex::lookup_float3(metallic_roughness_texture, float2(metallic_roughness_texture_coord.x, metallic_roughness_texture_coord.y))
+            : float3(1.0));
+
+    float metallic = metallic_roughness.x;
+    float roughness = metallic_roughness.y;
+
+    base::texture_coordinate_info normal_coordinate_info = base::texture_coordinate_info(
+        position: state::texture_coordinate(normal_texture_coord_index),
+        tangent_u: state::texture_tangent_u(normal_texture_tangent_index),
+        tangent_v: state::texture_tangent_v(normal_texture_tangent_index));
+        
+    float3 normal = tex::texture_isvalid(normal_texture)
+            ? base::tangent_space_normal_texture(
+                texture: normal_texture,
+                uvw: normal_coordinate_info,
+                factor: normal_scale_factor)
+            : state::normal();
+
+    float3 occlusion_texture_coord = state::texture_coordinate(occlusion_texture_coord_index);
+    float occlusion = math::lerp(
+        1.0,
+        (tex::texture_isvalid(occlusion_texture)
+            ? tex::lookup_float3(occlusion_texture, float2(occlusion_texture_coord.x, occlusion_texture_coord.y)).x
+            : 1.0),
+        occlusion_strength);         
+
+    float3 emissive_texture_coord = state::texture_coordinate(emissive_texture_coord_index);
+    color emissive_color = emissive_factor * 
+        (tex::texture_isvalid(emissive_texture)
+            ? color(tex::lookup_float3(emissive_texture, float2(emissive_texture_coord.x, emissive_texture_coord.y)))
+            : color(1.0));
+
+    // metallic roughness model
+    // ------------------------------------------------------------------------
+
+    // compute final roughness by squaring the "roughness" parameter 
+    float roughness2 = roughness * roughness;
+
+    // reduce the reflectivity at grazing angles to avoid "dark edges" 
+    // for high roughness due to the layering
+    float grazing_refl = math::max((1.0 - roughness), 0.0);
+
+    // for the dielectric component we layer the glossy component on top of the diffuse one,
+    // the glossy layer has no color tint
+    bsdf dielectric_component = df::custom_curve_layer(
+        weight: grazing_refl, // roughness is used to weight between diffuse and glossy
+        normal_reflectivity: 0.08,
+        grazing_reflectivity: grazing_refl,
+        layer: df::microfacet_ggx_vcavities_bsdf(roughness_u: roughness2),
+        base: df::diffuse_reflection_bsdf(tint: base_color * occlusion)
+        );
+
+    // the metallic component doesn't have a diffuse component, 
+    // it's only glossy base_color is applied to tint it
+    bsdf metallic_component = df::microfacet_ggx_vcavities_bsdf(
+        tint: base_color * occlusion, 
+        roughness_u: roughness2);
+
+    // final BSDF is a linear blend between dielectric and metallic component
+    bsdf dielectric_metal_mix = df::normalized_mix(
+        components:
+            df::bsdf_component[](
+                df::bsdf_component(
+                    component: metallic_component,
+                    weight: metallic),
+                df::bsdf_component(
+                    component: dielectric_component,
+                    weight: 1.0-metallic)
+            )
+        );
+
+} in material(
+    surface: material_surface(
+        scattering: dielectric_metal_mix,
+        emission:  material_emission (
+            emission: df::diffuse_edf(),
+            intensity: emissive_color
+        )
+    ),
+    geometry: material_geometry(
+        normal: normal,
+        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
+    )
+);

@@ -171,6 +171,8 @@ enum Version_flags {
     REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),
     SINCE_1_5   = IMDL::MDL_VERSION_1_5,
     REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
+    SINCE_1_6   = IMDL::MDL_VERSION_1_6,
+    REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),
 };
 
 // compilercore_known_defs.h is too big to be compiled in one function, use this class to split
@@ -482,10 +484,16 @@ private:
 
 // declare a constructor
 #define CONSTRUCTOR(kind, classname, args, sema, flags)                         \
-    if (available(flags)) {                                                     \
+    if (available(flags)) {                           \
         _FUNCTION(Definition::DK_CONSTRUCTOR, classname, classname, args, flags)\
         kind                                                                    \
         def->set_semantic(Definition::sema);                                    \
+    } else if (m_module.is_builtins()) {                                        \
+        /* ensure the builtins module has ALL constructors */                   \
+        _FUNCTION(Definition::DK_CONSTRUCTOR, classname, classname, args, flags)\
+        kind                                                                    \
+        def->set_semantic(Definition::sema);                                    \
+        def->set_flag(Definition::DEF_IGNORE_OVERLOAD);                         \
     }
 
 // declare a (data) field

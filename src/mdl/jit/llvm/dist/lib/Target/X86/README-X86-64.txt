@@ -103,20 +103,20 @@ LBB1_3:	## bb
   
 Before regalloc, we have:
 
-        %reg1025<def> = IMUL32rri8 %reg1024, 45, %EFLAGS<imp-def>
+        %reg1025 = IMUL32rri8 %reg1024, 45, implicit-def %eflags
         JMP mbb<bb2,0x203afb0>
     Successors according to CFG: 0x203afb0 (#3)
 
 bb1: 0x203af60, LLVM BB @0x1e02310, ID#2:
     Predecessors according to CFG: 0x203aec0 (#0)
-        %reg1026<def> = IMUL32rri8 %reg1024, 78, %EFLAGS<imp-def>
+        %reg1026 = IMUL32rri8 %reg1024, 78, implicit-def %eflags
     Successors according to CFG: 0x203afb0 (#3)
 
 bb2: 0x203afb0, LLVM BB @0x1e02340, ID#3:
     Predecessors according to CFG: 0x203af10 (#1) 0x203af60 (#2)
-        %reg1027<def> = PHI %reg1025, mbb<bb,0x203af10>,
+        %reg1027 = PHI %reg1025, mbb<bb,0x203af10>,
                             %reg1026, mbb<bb1,0x203af60>
-        %reg1029<def> = MOVZX64rr32 %reg1027
+        %reg1029 = MOVZX64rr32 %reg1027
 
 so we'd have to know that IMUL32rri8 leaves the high word zero extended and to
 be able to recognize the zero extend.  This could also presumably be implemented
@@ -170,7 +170,7 @@ generated for it.  The primary issue with the result is that it doesn't do any
 of the optimizations which are possible if we know the address of a va_list
 in the current function is never taken:
 1. We shouldn't spill the XMM registers because we only call va_arg with "int".
-2. It would be nice if we could scalarrepl the va_list.
+2. It would be nice if we could sroa the va_list.
 3. Probably overkill, but it'd be cool if we could peel off the first five
 iterations of the loop.
 

@@ -12,146 +12,185 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TARGET_TARGETLOWERINGOBJECTFILE_H
-#define LLVM_TARGET_TARGETLOWERINGOBJECTFILE_H
+#ifndef LLVM_CODEGEN_TARGETLOWERINGOBJECTFILE_H
+#define LLVM_CODEGEN_TARGETLOWERINGOBJECTFILE_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/SectionKind.h"
+#include <cstdint>
 
 namespace llvm {
-  class MachineModuleInfo;
-  class Mangler;
-  class MCContext;
-  class MCExpr;
-  class MCSection;
-  class MCSymbol;
-  class MCSymbolRefExpr;
-  class MCStreamer;
-  class GlobalValue;
-  class TargetMachine;
-  
-class TargetLoweringObjectFile : public MCObjectFileInfo {
-  MCContext *Ctx;
 
-  TargetLoweringObjectFile(
-    const TargetLoweringObjectFile&) LLVM_DELETED_FUNCTION;
-  void operator=(const TargetLoweringObjectFile&) LLVM_DELETED_FUNCTION;
+class GlobalValue;
+class MachineModuleInfo;
+class Mangler;
+class MCContext;
+class MCExpr;
+class MCSection;
+class MCSymbol;
+class MCSymbolRefExpr;
+class MCStreamer;
+class MCValue;
+class TargetMachine;
+
+class TargetLoweringObjectFile : public MCObjectFileInfo {
+  MCContext *Ctx = nullptr;
+
+  /// Name-mangler for global names.
+  Mangler *Mang = nullptr;
+
+protected:
+  bool SupportIndirectSymViaGOTPCRel = false;
+  bool SupportGOTPCRelWithOffset = true;
+
+  /// This section contains the static constructor pointer list.
+  MCSection *StaticCtorSection = nullptr;
+
+  /// This section contains the static destructor pointer list.
+  MCSection *StaticDtorSection = nullptr;
 
 public:
-  MCContext &getContext() const { return *Ctx; }
-
-  TargetLoweringObjectFile() : MCObjectFileInfo(), Ctx(0) {}
-  
+  TargetLoweringObjectFile() = default;
+  TargetLoweringObjectFile(const TargetLoweringObjectFile &) = delete;
+  TargetLoweringObjectFile &
+  operator=(const TargetLoweringObjectFile &) = delete;
   virtual ~TargetLoweringObjectFile();
-  
-  /// Initialize - this method must be called before any actual lowering is
-  /// done.  This specifies the current context for codegen, and gives the
-  /// lowering implementations a chance to set up their default sections.
+
+  MCContext &getContext() const { return *Ctx; }
+  Mangler &getMangler() const { return *Mang; }
+
+  /// This method must be called before any actual lowering is done.  This
+  /// specifies the current context for codegen, and gives the lowering
+  /// implementations a chance to set up their default sections.
   virtual void Initialize(MCContext &ctx, const TargetMachine &TM);
-  
-  virtual void emitPersonalityValue(MCStreamer &Streamer,
-                                    const TargetMachine &TM,
+
+  virtual void emitPersonalityValue(MCStreamer &Streamer, const DataLayout &TM,
                                     const MCSymbol *Sym) const;
 
-  /// emitModuleFlags - Emit the module flags that the platform cares about.
-  virtual void emitModuleFlags(MCStreamer &,
-                               ArrayRef<Module::ModuleFlagEntry>,
-                               Mangler *, const TargetMachine &) const {
-  }
+  /// Emit the module-level metadata that the platform cares about.
+  virtual void emitModuleMetadata(MCStreamer &Streamer, Module &M) const {}
 
-  /// shouldEmitUsedDirectiveFor - This hook allows targets to selectively
-  /// decide not to emit the UsedDirective for some symbols in llvm.used.
-  /// FIXME: REMOVE this (rdar://7071300)
-  virtual bool shouldEmitUsedDirectiveFor(const GlobalValue *GV,
-                                          Mangler *) const {
-    return GV != 0;
-  }
-  
-  /// getSectionForConstant - Given a constant with the SectionKind, return a
-  /// section that it should be placed in.
-  virtual const MCSection *getSectionForConstant(SectionKind Kind) const;
-  
-  /// getKindForGlobal - Classify the specified global variable into a set of
-  /// target independent categories embodied in SectionKind.
-  static SectionKind getKindForGlobal(const GlobalValue *GV,
+  /// Given a constant with the SectionKind, return a section that it should be
+  /// placed in.
+  virtual MCSection *getSectionForConstant(const DataLayout &DL,
+                                           SectionKind Kind,
+                                           const Constant *C,
+                                           unsigned &Align) const;
+
+  /// Classify the specified global variable into a set of target independent
+  /// categories embodied in SectionKind.
+  static SectionKind getKindForGlobal(const GlobalObject *GO,
                                       const TargetMachine &TM);
-  
-  /// SectionForGlobal - This method computes the appropriate section to emit
-  /// the specified global variable or function definition.  This should not
-  /// be passed external (or available externally) globals.
-  const MCSection *SectionForGlobal(const GlobalValue *GV,
-                                    SectionKind Kind, Mangler *Mang,
-                                    const TargetMachine &TM) const;
-  
-  /// SectionForGlobal - This method computes the appropriate section to emit
-  /// the specified global variable or function definition.  This should not
-  /// be passed external (or available externally) globals.
-  const MCSection *SectionForGlobal(const GlobalValue *GV,
-                                    Mangler *Mang,
-                                    const TargetMachine &TM) const {
-    return SectionForGlobal(GV, getKindForGlobal(GV, TM), Mang, TM);
+
+  /// This method computes the appropriate section to emit the specified global
+  /// variable or function definition. This should not be passed external (or
+  /// available externally) globals.
+  MCSection *SectionForGlobal(const GlobalObject *GO, SectionKind Kind,
+                              const TargetMachine &TM) const;
+
+  /// This method computes the appropriate section to emit the specified global
+  /// variable or function definition. This should not be passed external (or
+  /// available externally) globals.
+  MCSection *SectionForGlobal(const GlobalObject *GO,
+                              const TargetMachine &TM) const {
+    return SectionForGlobal(GO, getKindForGlobal(GO, TM), TM);
   }
 
-  /// getExplicitSectionGlobal - Targets should implement this method to assign
-  /// a section to globals with an explicit section specfied.  The
-  /// implementation of this method can assume that GV->hasSection() is true.
-  virtual const MCSection *
-  getExplicitSectionGlobal(const GlobalValue *GV, SectionKind Kind, 
-                           Mangler *Mang, const TargetMachine &TM) const = 0;
-  
-  /// getSpecialCasedSectionGlobals - Allow the target to completely override
-  /// section assignment of a global.
-  virtual const MCSection *
-  getSpecialCasedSectionGlobals(const GlobalValue *GV, Mangler *Mang,
-                                SectionKind Kind) const {
-    return 0;
-  }
-  
-  /// getTTypeGlobalReference - Return an MCExpr to use for a reference
-  /// to the specified global variable from exception handling information.
-  ///
-  virtual const MCExpr *
-  getTTypeGlobalReference(const GlobalValue *GV, Mangler *Mang,
-                          MachineModuleInfo *MMI, unsigned Encoding,
-                          MCStreamer &Streamer) const;
+  virtual void getNameWithPrefix(SmallVectorImpl<char> &OutName,
+                                 const GlobalValue *GV,
+                                 const TargetMachine &TM) const;
 
-  /// Return the MCSymbol for the specified global value.  This symbol is the
-  /// main label that is the address of the global
-  MCSymbol *getSymbol(Mangler &M, const GlobalValue *GV) const;
+  virtual MCSection *getSectionForJumpTable(const Function &F,
+                                            const TargetMachine &TM) const;
 
-  // getCFIPersonalitySymbol - The symbol that gets passed to .cfi_personality.
-  virtual MCSymbol *
-  getCFIPersonalitySymbol(const GlobalValue *GV, Mangler *Mang,
-                          MachineModuleInfo *MMI) const;
+  virtual bool shouldPutJumpTableInFunctionSection(bool UsesLabelDifference,
+                                                   const Function &F) const;
 
-  /// 
-  const MCExpr *
-  getTTypeReference(const MCSymbolRefExpr *Sym, unsigned Encoding,
-                    MCStreamer &Streamer) const;
+  /// Targets should implement this method to assign a section to globals with
+  /// an explicit section specfied. The implementation of this method can
+  /// assume that GO->hasSection() is true.
+  virtual MCSection *
+  getExplicitSectionGlobal(const GlobalObject *GO, SectionKind Kind,
+                           const TargetMachine &TM) const = 0;
 
-  virtual const MCSection *
-  getStaticCtorSection(unsigned Priority = 65535) const {
-    (void)Priority;
+  /// Return an MCExpr to use for a reference to the specified global variable
+  /// from exception handling information.
+  virtual const MCExpr *getTTypeGlobalReference(const GlobalValue *GV,
+                                                unsigned Encoding,
+                                                const TargetMachine &TM,
+                                                MachineModuleInfo *MMI,
+                                                MCStreamer &Streamer) const;
+
+  /// Return the MCSymbol for a private symbol with global value name as its
+  /// base, with the specified suffix.
+  MCSymbol *getSymbolWithGlobalValueBase(const GlobalValue *GV,
+                                         StringRef Suffix,
+                                         const TargetMachine &TM) const;
+
+  // The symbol that gets passed to .cfi_personality.
+  virtual MCSymbol *getCFIPersonalitySymbol(const GlobalValue *GV,
+                                            const TargetMachine &TM,
+                                            MachineModuleInfo *MMI) const;
+
+  const MCExpr *getTTypeReference(const MCSymbolRefExpr *Sym, unsigned Encoding,
+                                  MCStreamer &Streamer) const;
+
+  virtual MCSection *getStaticCtorSection(unsigned Priority,
+                                          const MCSymbol *KeySym) const {
     return StaticCtorSection;
   }
-  virtual const MCSection *
-  getStaticDtorSection(unsigned Priority = 65535) const {
-    (void)Priority;
+
+  virtual MCSection *getStaticDtorSection(unsigned Priority,
+                                          const MCSymbol *KeySym) const {
     return StaticDtorSection;
   }
 
-  /// \brief Create a symbol reference to describe the given TLS variable when
+  /// Create a symbol reference to describe the given TLS variable when
   /// emitting the address in debug info.
   virtual const MCExpr *getDebugThreadLocalSymbol(const MCSymbol *Sym) const;
 
+  virtual const MCExpr *lowerRelativeReference(const GlobalValue *LHS,
+                                               const GlobalValue *RHS,
+                                               const TargetMachine &TM) const {
+    return nullptr;
+  }
+
+  /// Target supports replacing a data "PC"-relative access to a symbol
+  /// through another symbol, by accessing the later via a GOT entry instead?
+  bool supportIndirectSymViaGOTPCRel() const {
+    return SupportIndirectSymViaGOTPCRel;
+  }
+
+  /// Target GOT "PC"-relative relocation supports encoding an additional
+  /// binary expression with an offset?
+  bool supportGOTPCRelWithOffset() const {
+    return SupportGOTPCRelWithOffset;
+  }
+
+  /// Get the target specific PC relative GOT entry relocation
+  virtual const MCExpr *getIndirectSymViaGOTPCRel(const MCSymbol *Sym,
+                                                  const MCValue &MV,
+                                                  int64_t Offset,
+                                                  MachineModuleInfo *MMI,
+                                                  MCStreamer &Streamer) const {
+    return nullptr;
+  }
+
+  virtual void emitLinkerFlagsForGlobal(raw_ostream &OS,
+                                        const GlobalValue *GV) const {}
+
+  virtual void emitLinkerFlagsForUsed(raw_ostream &OS,
+                                      const GlobalValue *GV) const {}
+
 protected:
-  virtual const MCSection *
-  SelectSectionForGlobal(const GlobalValue *GV, SectionKind Kind,
-                         Mangler *Mang, const TargetMachine &TM) const;
+  virtual MCSection *SelectSectionForGlobal(const GlobalObject *GO,
+                                            SectionKind Kind,
+                                            const TargetMachine &TM) const = 0;
 };
 
 } // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_TARGETLOWERINGOBJECTFILE_H

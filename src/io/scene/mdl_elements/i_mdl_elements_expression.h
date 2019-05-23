@@ -337,6 +337,15 @@ public:
         const char* name,
         mi::Size depth = 0) const = 0;
 
+    virtual IExpression* create_cast(
+        DB::Transaction* transaction,
+        IExpression* src_expr,
+        const IType* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        bool direct_call,
+        mi::Sint32* errors) const = 0;
+
     /// Serializes an expression to \p serializer.
     virtual void serialize( SERIAL::Serializer* serializer, const IExpression* expr) const = 0;
 

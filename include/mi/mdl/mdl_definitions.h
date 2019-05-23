@@ -147,8 +147,9 @@ public:
         DS_CREATED_ANNOTATION,                   ///< This is the created() annotation.
         DS_MODIFIED_ANNOTATION,                  ///< This is the modified() annotation.
         DS_KEYWORDS_ANNOTATION,                  ///< This is the key_words() annotation.
+        DS_ORIGIN_ANNOTATION,                    ///< This is the origin() annotation.
 
-        DS_ANNOTATION_LAST = DS_KEYWORDS_ANNOTATION,
+        DS_ANNOTATION_LAST = DS_ORIGIN_ANNOTATION,
 
         // operator semantics
         DS_OP_BASE = 0x0200,                     ///< Base offset for operator semantics.
@@ -309,7 +310,9 @@ public:
         DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER,
         DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER,
         DS_INTRINSIC_DF_FRESNEL_FACTOR,
-        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_FRESNEL_FACTOR,
+        DS_INTRINSIC_DF_MEASURED_FACTOR,
+        DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
+        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
 
         // debug module
         DS_INTRINSIC_DEBUG_FIRST = 0x0800,
@@ -533,6 +536,7 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
     case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF:
         return true;
 
     case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:

@@ -13,22 +13,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <algorithm>
 
-#define DEBUG_TYPE "x86-pad-short-functions"
 #include "X86.h"
 #include "X86InstrInfo.h"
+#include "X86Subtarget.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetSchedule.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "x86-pad-short-functions"
 
 STATISTIC(NumBBsPadded, "Number of basic blocks padded");
 
@@ -49,11 +49,16 @@ namespace {
   struct PadShortFunc : public MachineFunctionPass {
     static char ID;
     PadShortFunc() : MachineFunctionPass(ID)
-                   , Threshold(4), TM(0), TII(0) {}
+                   , Threshold(4) {}
 
-    virtual bool runOnMachineFunction(MachineFunction &MF);
+    bool runOnMachineFunction(MachineFunction &MF) override;
 
-    virtual const char *getPassName() const {
+    MachineFunctionProperties getRequiredProperties() const override {
+      return MachineFunctionProperties().set(
+          MachineFunctionProperties::Property::NoVRegs);
+    }
+
+    StringRef getPassName() const override {
       return "X86 Atom pad short functions";
     }
 
@@ -77,8 +82,7 @@ namespace {
     // VisitedBBs - Cache of previously visited BBs.
     DenseMap<MachineBasicBlock*, VisitedBBInfo> VisitedBBs;
 
-    const TargetMachine *TM;
-    const TargetInstrInfo *TII;
+    TargetSchedModel TSM;
   };
 
   char PadShortFunc::ID = 0;
@@ -91,21 +95,21 @@ FunctionPass *llvm::createX86PadShortFunctions() {
 /// runOnMachineFunction - Loop over all of the basic blocks, inserting
 /// NOOP instructions before early exits.
 bool PadShortFunc::runOnMachineFunction(MachineFunction &MF) {
-  const AttributeSet &FnAttrs = MF.getFunction()->getAttributes();
-  if (FnAttrs.hasAttribute(AttributeSet::FunctionIndex,
-                           Attribute::OptimizeForSize) ||
-      FnAttrs.hasAttribute(AttributeSet::FunctionIndex,
-                           Attribute::MinSize)) {
+  if (skipFunction(MF.getFunction()))
     return false;
-  }
 
-  TM = &MF.getTarget();
-  TII = TM->getInstrInfo();
+  if (MF.getFunction().optForSize())
+    return false;
+
+  if (!MF.getSubtarget<X86Subtarget>().padShortFunctions())
+    return false;
+
+  TSM.init(&MF.getSubtarget());
 
   // Search through basic blocks and mark the ones that have early returns
   ReturnBBs.clear();
   VisitedBBs.clear();
-  findReturns(MF.begin());
+  findReturns(&MF.front());
 
   bool MadeChange = false;
 
@@ -125,7 +129,7 @@ bool PadShortFunc::runOnMachineFunction(MachineFunction &MF) {
              "Basic block should contain at least a RET but is empty");
       MachineBasicBlock::iterator ReturnLoc = --MBB->end();
 
-      while (ReturnLoc->isDebugValue())
+      while (ReturnLoc->isDebugInstr())
         --ReturnLoc;
       assert(ReturnLoc->isReturn() && !ReturnLoc->isCall() &&
              "Basic block does not end with RET");
@@ -178,19 +182,17 @@ bool PadShortFunc::cyclesUntilReturn(MachineBasicBlock *MBB,
 
   unsigned int CyclesToEnd = 0;
 
-  for (MachineBasicBlock::iterator MBBI = MBB->begin();
-        MBBI != MBB->end(); ++MBBI) {
-    MachineInstr *MI = MBBI;
+  for (MachineInstr &MI : *MBB) {
     // Mark basic blocks with a return instruction. Calls to other
     // functions do not count because the called function will be padded,
     // if necessary.
-    if (MI->isReturn() && !MI->isCall()) {
+    if (MI.isReturn() && !MI.isCall()) {
       VisitedBBs[MBB] = VisitedBBInfo(true, CyclesToEnd);
       Cycles += CyclesToEnd;
       return true;
     }
 
-    CyclesToEnd += TII->getInstrLatency(TM->getInstrItineraryData(), MI);
+    CyclesToEnd += TSM.computeInstrLatency(&MI);
   }
 
   VisitedBBs[MBB] = VisitedBBInfo(false, CyclesToEnd);
@@ -204,9 +206,8 @@ void PadShortFunc::addPadding(MachineBasicBlock *MBB,
                               MachineBasicBlock::iterator &MBBI,
                               unsigned int NOOPsToAdd) {
   DebugLoc DL = MBBI->getDebugLoc();
+  unsigned IssueWidth = TSM.getIssueWidth();
 
-  while (NOOPsToAdd-- > 0) {
-    BuildMI(*MBB, MBBI, DL, TII->get(X86::NOOP));
-    BuildMI(*MBB, MBBI, DL, TII->get(X86::NOOP));
-  }
+  for (unsigned i = 0, e = IssueWidth * NOOPsToAdd; i != e; ++i)
+    BuildMI(*MBB, MBBI, DL, TSM.getInstrInfo()->get(X86::NOOP));
 }

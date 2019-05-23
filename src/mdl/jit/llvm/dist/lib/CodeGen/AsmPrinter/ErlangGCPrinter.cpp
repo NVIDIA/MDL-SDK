@@ -1,4 +1,4 @@
-//===-- ErlangGCPrinter.cpp - Erlang/OTP frametable emitter -----*- C++ -*-===//
+//===- ErlangGCPrinter.cpp - Erlang/OTP frametable emitter ----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,54 +13,53 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/GCs.h"
+#include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/CodeGen/GCMetadataPrinter.h"
+#include "llvm/CodeGen/GCStrategy.h"
+#include "llvm/CodeGen/GCs.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
-#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
 namespace {
 
-  class ErlangGCPrinter : public GCMetadataPrinter {
-  public:
-    void beginAssembly(AsmPrinter &AP);
-    void finishAssembly(AsmPrinter &AP);
-  };
+class ErlangGCPrinter : public GCMetadataPrinter {
+public:
+  void finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter &AP) override;
+};
 
-}
+} // end anonymous namespace
 
 static GCMetadataPrinterRegistry::Add<ErlangGCPrinter>
-X("erlang", "erlang-compatible garbage collector");
+    X("erlang", "erlang-compatible garbage collector");
 
-void llvm::linkErlangGCPrinter() { }
-
-void ErlangGCPrinter::beginAssembly(AsmPrinter &AP) { }
-
-void ErlangGCPrinter::finishAssembly(AsmPrinter &AP) {
-  MCStreamer &OS = AP.OutStreamer;
-  unsigned IntPtrSize = AP.TM.getDataLayout()->getPointerSize();
+void ErlangGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info,
+                                     AsmPrinter &AP) {
+  MCStreamer &OS = *AP.OutStreamer;
+  unsigned IntPtrSize = M.getDataLayout().getPointerSize();
 
   // Put this in a custom .note section.
-  AP.OutStreamer.SwitchSection(AP.getObjFileLowering().getContext()
-    .getELFSection(".note.gc", ELF::SHT_PROGBITS, 0,
-                   SectionKind::getDataRel()));
+  OS.SwitchSection(
+      AP.getObjFileLowering().getContext().getELFSection(".note.gc",
+                                                         ELF::SHT_PROGBITS, 0));
 
   // For each function...
-  for (iterator FI = begin(), FE = end(); FI != FE; ++FI) {
+  for (GCModuleInfo::FuncInfoVec::iterator FI = Info.funcinfo_begin(),
+                                           IE = Info.funcinfo_end();
+       FI != IE; ++FI) {
     GCFunctionInfo &MD = **FI;
-
+    if (MD.getStrategy().getName() != getStrategy().getName())
+      // this function is managed by some other GC
+      continue;
     /** A compact GC layout. Emit this data structure:
      *
      * struct {
@@ -78,7 +77,7 @@ void ErlangGCPrinter::finishAssembly(AsmPrinter &AP) {
 
     // Emit PointCount.
     OS.AddComment("safe point count");
-    AP.EmitInt16(MD.size());
+    AP.emitInt16(MD.size());
 
     // And each safe point...
     for (GCFunctionInfo::iterator PI = MD.begin(), PE = MD.end(); PI != PE;
@@ -86,7 +85,7 @@ void ErlangGCPrinter::finishAssembly(AsmPrinter &AP) {
       // Emit the address of the safe point.
       OS.AddComment("safe point address");
       MCSymbol *Label = PI->Label;
-      AP.EmitLabelPlusOffset(Label/*Hi*/, 0/*Offset*/, 4/*Size*/);
+      AP.EmitLabelPlusOffset(Label /*Hi*/, 0 /*Offset*/, 4 /*Size*/);
     }
 
     // Stack information never change in safe points! Only print info from the
@@ -95,26 +94,29 @@ void ErlangGCPrinter::finishAssembly(AsmPrinter &AP) {
 
     // Emit the stack frame size.
     OS.AddComment("stack frame size (in words)");
-    AP.EmitInt16(MD.getFrameSize() / IntPtrSize);
+    AP.emitInt16(MD.getFrameSize() / IntPtrSize);
 
     // Emit stack arity, i.e. the number of stacked arguments.
     unsigned RegisteredArgs = IntPtrSize == 4 ? 5 : 6;
-    unsigned StackArity = MD.getFunction().arg_size() > RegisteredArgs ?
-                          MD.getFunction().arg_size() - RegisteredArgs : 0;
+    unsigned StackArity = MD.getFunction().arg_size() > RegisteredArgs
+                              ? MD.getFunction().arg_size() - RegisteredArgs
+                              : 0;
     OS.AddComment("stack arity");
-    AP.EmitInt16(StackArity);
+    AP.emitInt16(StackArity);
 
     // Emit the number of live roots in the function.
     OS.AddComment("live root count");
-    AP.EmitInt16(MD.live_size(PI));
+    AP.emitInt16(MD.live_size(PI));
 
     // And for each live root...
     for (GCFunctionInfo::live_iterator LI = MD.live_begin(PI),
                                        LE = MD.live_end(PI);
-                                       LI != LE; ++LI) {
+         LI != LE; ++LI) {
       // Emit live root's offset within the stack frame.
       OS.AddComment("stack index (offset / wordsize)");
-      AP.EmitInt16(LI->StackOffset / IntPtrSize);
+      AP.emitInt16(LI->StackOffset / IntPtrSize);
     }
   }
 }
+
+void llvm::linkErlangGCPrinter() {}

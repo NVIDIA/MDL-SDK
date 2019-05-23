@@ -86,6 +86,7 @@ public:
         , light_profile_type(tf.create_light_profile())
         , color_type(tf.create_color())
         , bsdf_type(tf.create_bsdf())
+        , hair_bsdf_type(tf.create_hair_bsdf())
         , edf_type(tf.create_edf())
         , vdf_type(tf.create_vdf())
         , texture_2d_type(tf.create_texture(IType_texture::TS_2D))
@@ -228,6 +229,7 @@ public:
     IType_light_profile const    * const light_profile_type;
     IType_color const            * const color_type;
     IType_bsdf const             * const bsdf_type;
+    IType_hair_bsdf const        * const hair_bsdf_type;
     IType_edf const              * const edf_type;
     IType_vdf const              * const vdf_type;
     IType_texture const          * const texture_2d_type;

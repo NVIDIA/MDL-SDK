@@ -39,12 +39,12 @@ structure could look like. The #mi::neuraylib::IMdl_discovery_api is used to get
 holistic view of the modules that are installed on the system, independent of the of individually
 configured search paths.
 
-\section example_calls_new New Topics
+\section example_mdl_browser_new New Topics
 
   - Caching of information on packages, modules, and materials
   - Illustration of how we believe MDL materials should be presented to the user
 
-\section example_calls_descr Detailed Description
+\section example_mdl_browser_descr Detailed Description
 
 <dl>
     <dt><b>Discovering modules and caching of information</b></dt>

@@ -11,20 +11,17 @@
  var aspect=parseFloat($(this).children(".rimg-box").attr("data-aspect"));$(image).innerWidth(new_image_width);
  $(image).innerHeight(new_image_width/aspect);});}function adjust_slanted_header_table(){var angle=Math.PI/3;
  $("table").each(function(){var slant_select="td[data-slant='1'] div span";if($(slant_select).length==0)
- return;table=this;var max_slant_height=0;$(table).find(slant_select).each(function(){max_slant_height=Math.max
+ return;var max_slant_height=0;$(this).find(slant_select).each(function(){max_slant_height=Math.max
 (max_slant_height,$(this).outerWidth()* Math.sin(angle)-  $(this).closest("td").outerHeight());});
- var translate="translate3d(0px,"+max_slant_height+"px,0px)";var container=$(table).closest(".tablecontainer");
- if($(container).length==1){$(container).css("transform",translate);$(container).css("margin-bottom",max_slant_height+"px");}else{
- $(table).css("transform",translate);$(table).css("margin-bottom",(max_slant_height+10)+"px");}});}
- function adjust_footnotes(){$(".footnote .footnotetext").each(function(index){var left=$(this).parent().position().left;
- var c=$("#page_content");var half_width=$(c).width()/2.0;var mid=$(c).position().left+half_width;
- var max_width=400;if(left>mid){$(this).css("right","0em");$(this).css("left","auto");}else{
- $(this).css("left","0em");$(this).css("right","auto");}$(this).width(Math.min(max_width,half_width));});}
- function search_not_active(){return $(document.activeElement).attr('id')!='search_input';}function keypress(letter,id){
- $('html').keypress(function(event){if(search_not_active()){var uppercase=letter.charCodeAt();
- var lowercase=uppercase+32;if(event.which==uppercase || event.which==lowercase){$(id).trigger('click');}}});}
- function arrowpress(arrow,id){$('html').keydown(function(event){if(search_not_active()){
- if(event.which==arrow){$(id).trigger('click');}}});}function update_page_title(element){
+ $(this).find(".slant_spacer").height(max_slant_height+10);});}function adjust_footnotes(){$(".footnote .footnotetext").each(function(index){
+ var left=$(this).parent().position().left;var c=$("#page_content");var half_width=$(c).width()/2.0;
+ var mid=$(c).position().left+half_width;var max_width=400;if(left>mid){$(this).css("right","0em");
+ $(this).css("left","auto");}else{$(this).css("left","0em");$(this).css("right","auto");}
+ $(this).width(Math.min(max_width,half_width));});}function search_not_active(){return $(document.activeElement).attr('id')!='search_input';}
+ function keypress(letter,id){$('html').keypress(function(event){if(search_not_active()){
+ var uppercase=letter.charCodeAt();var lowercase=uppercase+32;if(event.which==uppercase || event.which==lowercase){
+ $(id).trigger('click');}}});}function arrowpress(arrow,id){$('html').keydown(function(event){
+ if(search_not_active()){if(event.which==arrow){$(id).trigger('click');}}});}function update_page_title(element){
  var element_text=$(element).text();if(element_text){var regex=/((?:Part)?[0-9.]*)(.*)/;
  var parts=regex.exec(element_text);var title;if(!parts[1])title=parts[2].trim();else title=parts[1]+" - "+parts[2];
  $("title").text(title);}}function highlight_visible_toc_sections(activate){if(typeof activate==="undefined")
@@ -78,7 +75,7 @@
  var current_width=current_navigation_width();var width=Math.min($("html").width()- minimum_content_width,current_width);
  $('#navigation').width(width);resize_content_width();set_annotate_max_width();set_code_comment_width();
  set_imagecode_width();}}function show_link_boxes(show){$("#page_content a,.panelink").each(function(){
- if(show){$(this).css("background-color","rgb(85%,90%,95%)"). css("color","black"). css("box-shadow","0em 0em 0em .15em rgb(85%,90%,95%)");}else{
+ if(show){$(this).css("background-color","rgb(85%,90%,95%)"). css("box-shadow","0em 0em 0em .15em rgb(85%,90%,95%)");}else{
  $(this).css("background-color","transparent").//"rgb(100%,100%,100%)"). css("color","#1A2680").
  css("box-shadow","none");}});}function check_visible_link_boxes(){if($("#page_content a,.panelink").length==0){
  $("#linkshow").hide();}else{$("#linkshow").show();show_link_boxes($("#linkshow").attr("data-show")==1);}}

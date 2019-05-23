@@ -87,6 +87,7 @@ function(TARGET_BUILD_SETUP)
                 "/MT$<$<CONFIG:Debug>:d>"
                 "/MP"
                 "/wd4267"   # Suppress Warning C4267	'argument': conversion from 'size_t' to 'int', possible loss of data
+                "/permissive-"  # show more errors
             )
     endif()
 
@@ -172,6 +173,53 @@ endfunction()
 
 # -------------------------------------------------------------------------------------------------
 # setup IDE specific stuff
+
+function(SETUP_IDE_FOLDERS)
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs FILES)
+    cmake_parse_arguments(SETUP_IDE_FOLDERS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - SETUP_IDE_FOLDERS_FILES
+
+    # keep the folder structure in visual studio
+    foreach(_SOURCE ${SETUP_IDE_FOLDERS_FILES})
+        string(FIND ${_SOURCE} "/" _POS REVERSE)
+
+        # file in project root
+        if(${_POS} EQUAL -1)
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
+
+        # generated files
+        math(EXPR _START ${_POS}-9)
+        if(${_START} GREATER 0)
+            string(SUBSTRING ${_SOURCE} ${_START} 9 FOLDER_PATH)
+            if(FOLDER_PATH STREQUAL "generated")
+                source_group("generated" FILES ${_SOURCE})
+                continue()
+            endif()
+        endif()
+
+        # relative files outside the current target
+        if(${_SOURCE} MATCHES "^../.*")
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
+
+        # absolute files (probably outside the current target)
+        if(IS_ABSOLUTE ${_SOURCE})
+            source_group("" FILES ${_SOURCE})
+            continue()
+        endif()
+
+        # files in folders
+        source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_SOURCE})
+    endforeach()
+endfunction()
+
+
 function(SETUP_IDE)
     set(options)
     set(oneValueArgs TARGET)
@@ -214,41 +262,7 @@ function(SETUP_IDE)
     endif()
 
     # keep the folder structure in visual studio
-    foreach(_SOURCE ${SETUP_IDE_SOURCES})
-        string(FIND ${_SOURCE} "/" _POS REVERSE)
-
-        # file in project root
-        if(${_POS} EQUAL -1)
-            source_group("" FILES ${_SOURCE})
-            continue()
-        endif()
-
-        # generated files
-        math(EXPR _START ${_POS}-9)
-        if(${_START} GREATER 0)
-            string(SUBSTRING ${_SOURCE} ${_START} 9 FOLDER_PATH)
-            if(FOLDER_PATH STREQUAL "generated")
-                source_group("generated" FILES ${_SOURCE})
-                continue()
-            endif()
-        endif()
-
-        # relative files outside the current target
-        if(${_SOURCE} MATCHES "^../.*")
-            source_group("" FILES ${_SOURCE})
-            continue()
-        endif()
-
-        # absolute files (probably outside the current target)
-        if(IS_ABSOLUTE ${_SOURCE})
-            source_group("" FILES ${_SOURCE})
-            continue()
-        endif()
-
-        # files in folders
-        source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_SOURCE})
-    endforeach()
-
+    setup_ide_folders(FILES ${SETUP_IDE_SOURCES})
 endfunction()
 
 # -------------------------------------------------------------------------------------------------
@@ -266,10 +280,13 @@ function(TARGET_PRINT_LOG_HEADER)
     MESSAGE(STATUS "")
     MESSAGE(STATUS "---------------------------------------------------------------------------------")
     MESSAGE(STATUS "PROJECT_NAME:     ${TARGET_PRINT_LOG_HEADER_TARGET}   (${TARGET_PRINT_LOG_HEADER_TYPE})")
-
+    
     if(TARGET_PRINT_LOG_HEADER_VERSION)
-        MESSAGE(STATUS "VERSION:          ${TARGET_PRINT_LOG_HEADER_VERSION}")
+    MESSAGE(STATUS "VERSION:          ${TARGET_PRINT_LOG_HEADER_VERSION}")
     endif()
+
+    MESSAGE(STATUS "SOURCE DIR:       ${CMAKE_CURRENT_SOURCE_DIR}")
+    MESSAGE(STATUS "BINARY DIR:       ${CMAKE_CURRENT_BINARY_DIR}")
 
 endfunction()
 
@@ -541,7 +558,7 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    set(options)
+    set(options WIN32)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -569,12 +586,23 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
     # list(APPEND CREATE_FROM_BASE_PRESET_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/pch.h)
 
+    # special executable
+    if(${CREATE_FROM_BASE_PRESET_WIN32})
+        set(EXEC_TYPE WIN32)
+    endif()
+
     # create target and alias
     if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
         add_library(${CREATE_FROM_BASE_PRESET_TARGET} ${CREATE_FROM_BASE_PRESET_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
         add_library(${CREATE_FROM_BASE_PRESET_NAMESPACE}::${CREATE_FROM_BASE_PRESET_TARGET} ALIAS ${CREATE_FROM_BASE_PRESET_TARGET})
     elseif(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE")
-        add_executable(${CREATE_FROM_BASE_PRESET_TARGET} ${CREATE_FROM_BASE_PRESET_SOURCES})
+        add_executable(${CREATE_FROM_BASE_PRESET_TARGET} ${EXEC_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
+
+        # inject compile constant that contains the binary name
+        target_compile_definitions(${PROJECT_NAME} 
+            PUBLIC
+                "BINARY_NAME=\"${CREATE_FROM_BASE_PRESET_OUTPUT_NAME}\""
+            )
     else()
         message(FATAL_ERROR "Unexpected Type for target '${CREATE_FROM_BASE_PRESET_TARGET}': ${CREATE_FROM_BASE_PRESET_TYPE}.")
     endif()
@@ -758,8 +786,11 @@ function(TARGET_ADD_CONTENT)
     cmake_parse_arguments(TARGET_ADD_CONTENT "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
     # dependency file
-    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/depends)
-    set(_DEP ${CMAKE_CURRENT_BINARY_DIR}/depends/content.d)
+    if(WINDOWS)
+        set(_DEP ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)/content.d)
+    else()
+        set(_DEP ${CMAKE_CURRENT_BINARY_DIR}/content.d)
+    endif()
 
     # add to project
     target_sources(${TARGET_ADD_CONTENT_TARGET}
@@ -770,25 +801,50 @@ function(TARGET_ADD_CONTENT)
 
     # do not compile and set group (visual studio)
     set_source_files_properties(${TARGET_ADD_CONTENT_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-    source_group("content" FILES ${TARGET_ADD_CONTENT_FILES} ${_DEP})
+    set_source_files_properties(${_DEP} PROPERTIES GENERATED TRUE)
+    setup_ide_folders(FILES ${TARGET_ADD_CONTENT_FILES} ${_DEP})
 
     # collect files
     foreach(_FILE ${TARGET_ADD_CONTENT_FILES})
         if(MDL_LOG_FILE_DEPENDENCIES)
             MESSAGE(STATUS "- content to copy:   ${_FILE}")
         endif()
-        list(APPEND _COPY_COMMAND COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE} $<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/${_FILE})
-        list(APPEND _COPY_COMMAND COMMAND ${CMAKE_COMMAND} -E echo "copy content file: ${_FILE}")
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE} $<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/${_FILE})
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E echo "update content file: ${_FILE}")
         list(APPEND _COPY_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE})
     endforeach()
 
-    # copy command
+    # delete dependency files of other configurations to enforce an update after the build type changed
+    if(WINDOWS)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Debug)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/Release)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/RelWithDebInfo)
+
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E echo "removing: "
+            $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Release/content.d>
+            $<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/content.d>
+            $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/content.d>
+            )
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E remove -f $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Release/content.d>$<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/content.d>$<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/content.d>)
+        
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E echo "removing: "
+            $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/content.d>
+            $<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/content.d>
+            $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Release/content.d>
+            )
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E remove -f $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/content.d>$<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/content.d>$<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Release/content.d>)
+    endif()
+
+    # copy on files changed
     add_custom_command(
-        OUTPUT ${_DEP}
-        ${_COPY_COMMAND}
+        OUTPUT 
+            ${_DEP}
+        DEPENDS 
+            ${_COPY_DEPENDS}
+
+        ${_COMMAND_LIST}
+        COMMAND ${CMAKE_COMMAND} -E echo "touching: " ${_DEP}
         COMMAND ${CMAKE_COMMAND} -E touch ${_DEP}
-        DEPENDS ${_COPY_DEPENDS}
-        VERBATIM
         )
 endfunction()
 
@@ -798,11 +854,14 @@ endfunction()
 function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
     set(options)
     set(oneValueArgs TARGET)
-    set(multiValueArgs PATHS)
+    set(multiValueArgs PATHS PATHS_DEBUG PATHS_RELEASE)
     cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_PATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
     # provides the following variables:
     # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET
     # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS
+    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_DEBUG
+    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELEASE
+    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELWITHDEBINFO
 
     if(NOT WINDOWS)
         return()
@@ -810,6 +869,9 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
 
     # read current property value
     get_property(_ENV_PATHS TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS)
+    get_property(_ENV_PATHS_DEBUG TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_DEBUG)
+    get_property(_ENV_PATHS_RELEASE TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELEASE)
+    get_property(_ENV_PATHS_RELWITHDEBINFO TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO)
     
     foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS})
         if(MDL_LOG_DEPENDENCIES)
@@ -818,8 +880,32 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
         list(APPEND _ENV_PATHS ${_PATH})
     endforeach()
 
+    foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_DEBUG})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- add property:   Visual Studio Debugger Environment path (Debug only): ${_PATH}")
+        endif()
+        list(APPEND _ENV_PATHS_DEBUG ${_PATH})
+    endforeach()
+
+    foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELEASE})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- add property:   Visual Studio Debugger Environment path (Release only): ${_PATH}")
+        endif()
+        list(APPEND _ENV_PATHS_RELEASE ${_PATH})
+    endforeach()
+
+    foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELWITHDEBINFO})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- add property:   Visual Studio Debugger Environment path (Release with debug info only): ${_PATH}")
+        endif()
+        list(APPEND _ENV_PATHS_RELWITHDEBINFO ${_PATH})
+    endforeach()
+
     # update property value
     set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS ${_ENV_PATHS})
+    set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_DEBUG ${_ENV_PATHS_DEBUG})
+    set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELEASE ${_ENV_PATHS_RELEASE})
+    set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO ${_ENV_PATHS_RELWITHDEBINFO})
 endfunction()
 
 # -------------------------------------------------------------------------------------------------
@@ -843,12 +929,24 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         message(STATUS "- writing file:   Visual Studio user settings: ${SETTINGS_FILE}")
     endif()
 
-    get_property(_PATHS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS)
+    get_property(_ENV_PATHS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS)
+    get_property(_ENV_PATHS_DEBUG TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_DEBUG)
+    get_property(_ENV_PATHS_RELEASE TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELEASE)
+    get_property(_ENV_PATHS_RELWITHDEBINFO TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO)
+
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SETTINGS_FILE}
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"	
         "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n"
-        "   <PropertyGroup>\n"
-        "       <LocalDebuggerEnvironment>PATH=${_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "   <PropertyGroup Condition=\"'$(Configuration)'=='Debug'\">\n"
+        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_DEBUG};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
+        "   </PropertyGroup>\n"
+        "   <PropertyGroup Condition=\"'$(Configuration)'=='Release'\">\n"
+        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_RELEASE};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
+        "   </PropertyGroup>\n"
+        "   <PropertyGroup Condition=\"'$(Configuration)'=='RelWithDebInfo'\">\n"
+        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_RELWITHDEBINFO};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
         "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
         "   </PropertyGroup>\n"
         "</Project>\n"

@@ -461,6 +461,11 @@ private:
     /// \param int_type  the integer type
     void create_dag_array_constructor(IType const *int_type);
 
+    /// Create the one-and-only cast operator.
+    ///
+    /// \param int_type  the integer type
+    void create_dag_cast_operator(IType const *int_type);
+
 private:
     /// The memory arena for all dependency nodes.
     Memory_arena m_arena;

@@ -22,8 +22,12 @@ Requirements
 ============
 
 In order to use the LLVM testing infrastructure, you will need all of the
-software required to build LLVM, as well as `Python <http://python.org>`_ 2.5 or
+software required to build LLVM, as well as `Python <http://python.org>`_ 2.7 or
 later.
+
+If you intend to run the :ref:`test-suite <test-suite-overview>`, you will also
+need a development version of zlib (zlib1g-dev is known to work on several Linux
+distributions).
 
 LLVM testing infrastructure organization
 ========================================
@@ -99,19 +103,11 @@ is in the ``test-suite`` module. See :ref:`test-suite Quickstart
 Regression tests
 ----------------
 
-To run all of the LLVM regression tests, use the master Makefile in the
-``llvm/test`` directory. LLVM Makefiles require GNU Make (read the :doc:`LLVM
-Makefile Guide <MakefileGuide>` for more details):
+To run all of the LLVM regression tests use the check-llvm target:
 
 .. code-block:: bash
 
-    % make -C llvm/test
-
-or:
-
-.. code-block:: bash
-
-    % make check
+    % make check-llvm
 
 If you have `Clang <http://clang.llvm.org/>`_ checked out and built, you
 can run the LLVM and Clang tests simultaneously using:
@@ -240,6 +236,62 @@ The recommended way to examine output to figure out if the test passes is using
 the :doc:`FileCheck tool <CommandGuide/FileCheck>`. *[The usage of grep in RUN
 lines is deprecated - please do not send or commit patches that use it.]*
 
+Put related tests into a single file rather than having a separate file per
+test. Check if there are files already covering your feature and consider
+adding your code there instead of creating a new file.
+
+Extra files
+-----------
+
+If your test requires extra files besides the file containing the ``RUN:``
+lines, the idiomatic place to put them is in a subdirectory ``Inputs``.
+You can then refer to the extra files as ``%S/Inputs/foo.bar``.
+
+For example, consider ``test/Linker/ident.ll``. The directory structure is
+as follows::
+
+  test/
+    Linker/
+      ident.ll
+      Inputs/
+        ident.a.ll
+        ident.b.ll
+
+For convenience, these are the contents:
+
+.. code-block:: llvm
+
+  ;;;;; ident.ll:
+
+  ; RUN: llvm-link %S/Inputs/ident.a.ll %S/Inputs/ident.b.ll -S | FileCheck %s
+
+  ; Verify that multiple input llvm.ident metadata are linked together.
+
+  ; CHECK-DAG: !llvm.ident = !{!0, !1, !2}
+  ; CHECK-DAG: "Compiler V1"
+  ; CHECK-DAG: "Compiler V2"
+  ; CHECK-DAG: "Compiler V3"
+
+  ;;;;; Inputs/ident.a.ll:
+
+  !llvm.ident = !{!0, !1}
+  !0 = metadata !{metadata !"Compiler V1"}
+  !1 = metadata !{metadata !"Compiler V2"}
+
+  ;;;;; Inputs/ident.b.ll:
+
+  !llvm.ident = !{!0}
+  !0 = metadata !{metadata !"Compiler V3"}
+
+For symmetry reasons, ``ident.ll`` is just a dummy file that doesn't
+actually participate in the test besides holding the ``RUN:`` lines.
+
+.. note::
+
+  Some existing tests use ``RUN: true`` in extra files instead of just
+  putting the extra files in an ``Inputs/`` directory. This pattern is
+  deprecated.
+
 Fragile tests
 -------------
 
@@ -261,7 +313,7 @@ default outputs a ``ModuleID``:
       ret i32 0
   }
 
-``ModuleID`` can unexpetedly match against ``CHECK`` lines.  For example:
+``ModuleID`` can unexpectedly match against ``CHECK`` lines.  For example:
 
 .. code-block:: llvm
 
@@ -304,8 +356,7 @@ For instance, on ``test/CodeGen/ARM``, the ``lit.local.cfg`` is:
 .. code-block:: python
 
   config.suffixes = ['.ll', '.c', '.cpp', '.test']
-  targets = set(config.root.targets_to_build.split())
-  if not 'ARM' in targets:
+  if not 'ARM' in config.root.targets:
     config.unsupported = True
 
 Other platform-specific tests are those that depend on a specific feature
@@ -337,106 +388,185 @@ triple, test with the specific FileCheck and put it into the specific
 directory that will filter out all other architectures.
 
 
-Variables and substitutions
+Constraining test execution
 ---------------------------
 
-With a RUN line there are a number of substitutions that are permitted.
-To make a substitution just write the variable's name preceded by a ``$``.
-Additionally, for compatibility reasons with previous versions of the
-test library, certain names can be accessed with an alternate syntax: a
-% prefix. These alternates are deprecated and may go away in a future
-version.
+Some tests can be run only in specific configurations, such as
+with debug builds or on particular platforms. Use ``REQUIRES``
+and ``UNSUPPORTED`` to control when the test is enabled.
 
-Here are the available variable names. The alternate syntax is listed in
-parentheses.
+Some tests are expected to fail. For example, there may be a known bug
+that the test detect. Use ``XFAIL`` to mark a test as an expected failure.
+An ``XFAIL`` test will be successful if its execution fails, and
+will be a failure if its execution succeeds.
 
-``$test`` (``%s``)
-   The full path to the test case's source. This is suitable for passing on
-   the command line as the input to an LLVM tool.
+.. code-block:: llvm
 
-``%(line)``, ``%(line+<number>)``, ``%(line-<number>)``
-   The number of the line where this variable is used, with an optional
-   integer offset. This can be used in tests with multiple RUN lines,
-   which reference test file's line numbers.
+    ; This test will be only enabled in the build with asserts.
+    ; REQUIRES: asserts
+    ; This test is disabled on Linux.
+    ; UNSUPPORTED: -linux-
+    ; This test is expected to fail on PowerPC.
+    ; XFAIL: powerpc
 
-``$srcdir``
-   The source directory from where the ``make check`` was run.
+``REQUIRES`` and ``UNSUPPORTED`` and ``XFAIL`` all accept a comma-separated
+list of boolean expressions. The values in each expression may be:
 
-``objdir``
-   The object directory that corresponds to the ``$srcdir``.
+- Features added to ``config.available_features`` by 
+  configuration files such as ``lit.cfg``.
+- Substrings of the target triple (``UNSUPPORTED`` and ``XFAIL`` only).
 
-``subdir``
-   A partial path from the ``test`` directory that contains the
-   sub-directory that contains the test source being executed.
+| ``REQUIRES`` enables the test if all expressions are true.
+| ``UNSUPPORTED`` disables the test if any expression is true.
+| ``XFAIL`` expects the test to fail if any expression is true.
 
-``srcroot``
-   The root directory of the LLVM src tree.
+As a special case, ``XFAIL: *`` is expected to fail everywhere.
 
-``objroot``
-   The root directory of the LLVM object tree. This could be the same as
-   the srcroot.
+.. code-block:: llvm
 
-``path``
-   The path to the directory that contains the test case source. This is
-   for locating any supporting files that are not generated by the test,
-   but used by the test.
+    ; This test is disabled on Windows,
+    ; and is disabled on Linux, except for Android Linux.
+    ; UNSUPPORTED: windows, linux && !android
+    ; This test is expected to fail on both PowerPC and ARM.
+    ; XFAIL: powerpc || arm
 
-``tmp``
-   The path to a temporary file name that could be used for this test case.
+
+Substitutions
+-------------
+
+Besides replacing LLVM tool names the following substitutions are performed in
+RUN lines:
+
+``%%``
+   Replaced by a single ``%``. This allows escaping other substitutions.
+
+``%s``
+   File path to the test case's source. This is suitable for passing on the
+   command line as the input to an LLVM tool.
+
+   Example: ``/home/user/llvm/test/MC/ELF/foo_test.s``
+
+``%S``
+   Directory path to the test case's source.
+
+   Example: ``/home/user/llvm/test/MC/ELF``
+
+``%t``
+   File path to a temporary file name that could be used for this test case.
    The file name won't conflict with other test cases. You can append to it
    if you need multiple temporaries. This is useful as the destination of
    some redirected output.
 
-``target_triplet`` (``%target_triplet``)
-   The target triplet that corresponds to the current host machine (the one
-   running the test cases). This should probably be called "host".
+   Example: ``/home/user/llvm.build/test/MC/ELF/Output/foo_test.s.tmp``
 
-``link`` (``%link``)
-   This full link command used to link LLVM executables. This has all the
-   configured ``-I``, ``-L`` and ``-l`` options.
+``%T``
+   Directory of ``%t``. Deprecated. Shouldn't be used, because it can be easily
+   misused and cause race conditions between tests.
 
-``shlibext`` (``%shlibext``)
-   The suffix for the host platforms shared library (DLL) files. This
-   includes the period as the first character.
+   Use ``rm -rf %t && mkdir %t`` instead if a temporary directory is necessary.
 
-To add more variables, look at ``test/lit.cfg``.
+   Example: ``/home/user/llvm.build/test/MC/ELF/Output``
+
+``%{pathsep}``
+
+   Expands to the path separator, i.e. ``:`` (or ``;`` on Windows).
+
+``%/s, %/S, %/t, %/T:``
+
+  Act like the corresponding substitution above but replace any ``\``
+  character with a ``/``. This is useful to normalize path separators.
+
+   Example: ``%s:  C:\Desktop Files/foo_test.s.tmp``
+   
+   Example: ``%/s: C:/Desktop Files/foo_test.s.tmp``
+
+``%:s, %:S, %:t, %:T:``
+
+  Act like the corresponding substitution above but remove colons at
+  the beginning of Windows paths. This is useful to allow concatenation
+  of absolute paths on Windows to produce a legal path.
+
+   Example: ``%s:  C:\Desktop Files\foo_test.s.tmp``
+
+   Example: ``%:s: C\Desktop Files\foo_test.s.tmp``
+
+
+**LLVM-specific substitutions:**
+
+``%shlibext``
+   The suffix for the host platforms shared library files. This includes the
+   period as the first character.
+
+   Example: ``.so`` (Linux), ``.dylib`` (OS X), ``.dll`` (Windows)
+
+``%exeext``
+   The suffix for the host platforms executable files. This includes the
+   period as the first character.
+
+   Example: ``.exe`` (Windows), empty on Linux.
+
+``%(line)``, ``%(line+<number>)``, ``%(line-<number>)``
+   The number of the line where this substitution is used, with an optional
+   integer offset. This can be used in tests with multiple RUN lines, which
+   reference test file's line numbers.
+
+
+**Clang-specific substitutions:**
+
+``%clang``
+   Invokes the Clang driver.
+
+``%clang_cpp``
+   Invokes the Clang driver for C++.
+
+``%clang_cl``
+   Invokes the CL-compatible Clang driver.
+
+``%clangxx``
+   Invokes the G++-compatible Clang driver.
+
+``%clang_cc1``
+   Invokes the Clang frontend.
+
+``%itanium_abi_triple``, ``%ms_abi_triple``
+   These substitutions can be used to get the current target triple adjusted to
+   the desired ABI. For example, if the test suite is running with the
+   ``i686-pc-win32`` target, ``%itanium_abi_triple`` will expand to
+   ``i686-pc-mingw32``. This allows a test to run with a specific ABI without
+   constraining it to a specific triple.
+
+To add more substituations, look at ``test/lit.cfg`` or ``lit.local.cfg``.
+
+
+Options
+-------
+
+The llvm lit configuration allows to customize some things with user options:
+
+``llc``, ``opt``, ...
+    Substitute the respective llvm tool name with a custom command line. This
+    allows to specify custom paths and default arguments for these tools.
+    Example:
+
+    % llvm-lit "-Dllc=llc -verify-machineinstrs"
+
+``run_long_tests``
+    Enable the execution of long running tests.
+
+``llvm_site_config``
+    Load the specified lit configuration instead of the default one.
+
 
 Other Features
 --------------
 
-To make RUN line writing easier, there are several helper scripts and programs
-in the ``llvm/test/Scripts`` directory. This directory is in the PATH
-when running tests, so you can just call these scripts using their name.
-For example:
+To make RUN line writing easier, there are several helper programs. These
+helpers are in the PATH when running tests, so you can just call them using
+their name. For example:
 
-``ignore``
-   This script runs its arguments and then always returns 0. This is useful
-   in cases where the test needs to cause a tool to generate an error (e.g.
-   to check the error output). However, any program in a pipeline that
-   returns a non-zero result will cause the test to fail.  This script
-   overcomes that issue and nicely documents that the test case is
-   purposefully ignoring the result code of the tool
 ``not``
-   This script runs its arguments and then inverts the result code from it.
+   This program runs its arguments and then inverts the result code from it.
    Zero result codes become 1. Non-zero result codes become 0.
-
-Sometimes it is necessary to mark a test case as "expected fail" or
-XFAIL. You can easily mark a test as XFAIL just by including ``XFAIL:``
-on a line near the top of the file. This signals that the test case
-should succeed if the test fails. Such test cases are counted separately
-by the testing tool. To specify an expected fail, use the XFAIL keyword
-in the comments of the test program followed by a colon and one or more
-failure patterns. Each failure pattern can be either ``*`` (to specify
-fail everywhere), or a part of a target triple (indicating the test
-should fail on that platform), or the name of a configurable feature
-(for example, ``loadable_module``). If there is a match, the test is
-expected to fail. If not, the test is expected to succeed. To XFAIL
-everywhere just specify ``XFAIL: *``. Here is an example of an ``XFAIL``
-line:
-
-.. code-block:: llvm
-
-    ; XFAIL: darwin,sun
 
 To make the output more useful, :program:`lit` will scan
 the lines of the test case for ones that contain a pattern that matches
@@ -455,6 +585,8 @@ the last RUN: line. This has two side effects:
 
 (b) it speeds things up for really big test cases by avoiding
     interpretation of the remainder of the file.
+
+.. _test-suite-overview:
 
 ``test-suite`` Overview
 =======================

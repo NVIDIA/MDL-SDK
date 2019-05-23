@@ -41,14 +41,15 @@
 //     Cases -1 and 7 are caught by a C++ test harness where the validity of
 //         of a C++ catch(...) clause catching a generated exception with a
 //         type info type of 7 is explained by: example in rules 1.6.4 in
-//         http://mentorembedded.github.com/cxx-abi/abi-eh.html (v1.22)
+//         http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html (v1.22)
 //
 // This code uses code from the llvm compiler-rt project and the llvm
 // Kaleidoscope project.
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Analysis/Verifier.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/DataLayout.h"
@@ -56,9 +57,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
-#include "llvm/PassManager.h"
-#include "llvm/Support/Dwarf.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
@@ -76,64 +77,13 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <inttypes.h>
+
+#include <unwind.h>
 
 #ifndef USE_GLOBAL_STR_CONSTS
 #define USE_GLOBAL_STR_CONSTS true
 #endif
-
-// System C++ ABI unwind types from:
-//     http://mentorembedded.github.com/cxx-abi/abi-eh.html (v1.22)
-
-extern "C" {
-
-  typedef enum {
-    _URC_NO_REASON = 0,
-    _URC_FOREIGN_EXCEPTION_CAUGHT = 1,
-    _URC_FATAL_PHASE2_ERROR = 2,
-    _URC_FATAL_PHASE1_ERROR = 3,
-    _URC_NORMAL_STOP = 4,
-    _URC_END_OF_STACK = 5,
-    _URC_HANDLER_FOUND = 6,
-    _URC_INSTALL_CONTEXT = 7,
-    _URC_CONTINUE_UNWIND = 8
-  } _Unwind_Reason_Code;
-
-  typedef enum {
-    _UA_SEARCH_PHASE = 1,
-    _UA_CLEANUP_PHASE = 2,
-    _UA_HANDLER_FRAME = 4,
-    _UA_FORCE_UNWIND = 8,
-    _UA_END_OF_STACK = 16
-  } _Unwind_Action;
-
-  struct _Unwind_Exception;
-
-  typedef void (*_Unwind_Exception_Cleanup_Fn) (_Unwind_Reason_Code,
-                                                struct _Unwind_Exception *);
-
-  struct _Unwind_Exception {
-    uint64_t exception_class;
-    _Unwind_Exception_Cleanup_Fn exception_cleanup;
-
-    uintptr_t private_1;
-    uintptr_t private_2;
-
-    // @@@ The IA-64 ABI says that this structure must be double-word aligned.
-    //  Taking that literally does not make much sense generically.  Instead
-    //  we provide the maximum alignment required by any type for the machine.
-  } __attribute__((__aligned__));
-
-  struct _Unwind_Context;
-  typedef struct _Unwind_Context *_Unwind_Context_t;
-
-  extern const uint8_t *_Unwind_GetLanguageSpecificData (_Unwind_Context_t c);
-  extern uintptr_t _Unwind_GetGR (_Unwind_Context_t c, int i);
-  extern void _Unwind_SetGR (_Unwind_Context_t c, int i, uintptr_t n);
-  extern void _Unwind_SetIP (_Unwind_Context_t, uintptr_t new_value);
-  extern uintptr_t _Unwind_GetIP (_Unwind_Context_t context);
-  extern uintptr_t _Unwind_GetRegionStart (_Unwind_Context_t context);
-
-} // extern "C"
 
 //
 // Example types
@@ -151,7 +101,7 @@ struct OurExceptionType_t {
 ///
 /// Note: The above unwind.h defines struct _Unwind_Exception to be aligned
 ///       on a double word boundary. This is necessary to match the standard:
-///       http://mentorembedded.github.com/cxx-abi/abi-eh.html
+///       http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html
 struct OurBaseException_t {
   struct OurExceptionType_t type;
 
@@ -252,7 +202,7 @@ static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function &function,
                                                 llvm::Constant *initWith = 0) {
   llvm::BasicBlock &block = function.getEntryBlock();
   llvm::IRBuilder<> tmp(&block, block.begin());
-  llvm::AllocaInst *ret = tmp.CreateAlloca(type, 0, varName.c_str());
+  llvm::AllocaInst *ret = tmp.CreateAlloca(type, 0, varName);
 
   if (initWith)
     tmp.CreateStore(initWith, ret);
@@ -268,6 +218,16 @@ static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function &function,
 //
 // Runtime C Library functions
 //
+
+namespace {
+template <typename Type_>
+uintptr_t ReadType(const uint8_t *&p) {
+  Type_ value;
+  memcpy(&value, p, sizeof(Type_));
+  p += sizeof(Type_);
+  return static_cast<uintptr_t>(value);
+}
+}
 
 // Note: using an extern "C" block so that static functions can be used
 extern "C" {
@@ -318,7 +278,7 @@ void printStr(char *toPrint) {
 }
 
 
-/// Deletes the true previosly allocated exception whose address
+/// Deletes the true previously allocated exception whose address
 /// is calculated from the supplied OurBaseException_t::unwindException
 /// member address. Handles (ignores), NULL pointers.
 /// @param expToDelete exception to delete
@@ -339,7 +299,7 @@ void deleteOurException(OurUnwindException *expToDelete) {
 /// This function is the struct _Unwind_Exception API mandated delete function
 /// used by foreign exception handlers when deleting our exception
 /// (OurException), instances.
-/// @param reason See @link http://mentorembedded.github.com/cxx-abi/abi-eh.html
+/// @param reason See @link http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html
 /// @unlink
 /// @param expToDelete exception instance to delete
 void deleteFromUnwindOurException(_Unwind_Reason_Code reason,
@@ -459,8 +419,7 @@ static uintptr_t readEncodedPointer(const uint8_t **data, uint8_t encoding) {
   // first get value
   switch (encoding & 0x0F) {
     case llvm::dwarf::DW_EH_PE_absptr:
-      result = *((uintptr_t*)p);
-      p += sizeof(uintptr_t);
+      result = ReadType<uintptr_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_uleb128:
       result = readULEB128(&p);
@@ -470,28 +429,22 @@ static uintptr_t readEncodedPointer(const uint8_t **data, uint8_t encoding) {
       result = readSLEB128(&p);
       break;
     case llvm::dwarf::DW_EH_PE_udata2:
-      result = *((uint16_t*)p);
-      p += sizeof(uint16_t);
+      result = ReadType<uint16_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_udata4:
-      result = *((uint32_t*)p);
-      p += sizeof(uint32_t);
+      result = ReadType<uint32_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_udata8:
-      result = *((uint64_t*)p);
-      p += sizeof(uint64_t);
+      result = ReadType<uint64_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_sdata2:
-      result = *((int16_t*)p);
-      p += sizeof(int16_t);
+      result = ReadType<int16_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_sdata4:
-      result = *((int32_t*)p);
-      p += sizeof(int32_t);
+      result = ReadType<int32_t>(p);
       break;
     case llvm::dwarf::DW_EH_PE_sdata8:
-      result = *((int64_t*)p);
-      p += sizeof(int64_t);
+      result = ReadType<int64_t>(p);
       break;
     default:
       // not supported
@@ -536,7 +489,7 @@ static uintptr_t readEncodedPointer(const uint8_t **data, uint8_t encoding) {
 /// are supported. Filters are not supported.
 /// See Variable Length Data in:
 /// @link http://dwarfstd.org/Dwarf3.pdf @unlink
-/// Also see @link http://mentorembedded.github.com/cxx-abi/abi-eh.html @unlink
+/// Also see @link http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html @unlink
 /// @param resultAction reference variable which will be set with result
 /// @param classInfo our array of type info pointers (to globals)
 /// @param actionEntry index into above type info array or 0 (clean up).
@@ -568,8 +521,8 @@ static bool handleActionValue(int64_t *resultAction,
   fprintf(stderr,
           "handleActionValue(...): exceptionObject = <%p>, "
           "excp = <%p>.\n",
-          exceptionObject,
-          excp);
+          (void*)exceptionObject,
+          (void*)excp);
 #endif
 
   const uint8_t *actionPos = (uint8_t*) actionEntry,
@@ -587,8 +540,8 @@ static bool handleActionValue(int64_t *resultAction,
 
 #ifdef DEBUG
     fprintf(stderr,
-            "handleActionValue(...):typeOffset: <%lld>, "
-            "actionOffset: <%lld>.\n",
+            "handleActionValue(...):typeOffset: <%" PRIi64 ">, "
+            "actionOffset: <%" PRIi64 ">.\n",
             typeOffset,
             actionOffset);
 #endif
@@ -630,7 +583,7 @@ static bool handleActionValue(int64_t *resultAction,
 
 
 /// Deals with the Language specific data portion of the emitted dwarf code.
-/// See @link http://mentorembedded.github.com/cxx-abi/abi-eh.html @unlink
+/// See @link http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html @unlink
 /// @param version unsupported (ignored), unwind version
 /// @param lsda language specific data area
 /// @param _Unwind_Action actions minimally supported unwind stage
@@ -640,12 +593,11 @@ static bool handleActionValue(int64_t *resultAction,
 /// @param exceptionObject thrown _Unwind_Exception instance.
 /// @param context unwind system context
 /// @returns minimally supported unwinding control indicator
-static _Unwind_Reason_Code handleLsda(int version,
-                                      const uint8_t *lsda,
+static _Unwind_Reason_Code handleLsda(int version, const uint8_t *lsda,
                                       _Unwind_Action actions,
-                                      uint64_t exceptionClass,
-                                    struct _Unwind_Exception *exceptionObject,
-                                      _Unwind_Context_t context) {
+                                      _Unwind_Exception_Class exceptionClass,
+                                      struct _Unwind_Exception *exceptionObject,
+                                      struct _Unwind_Context *context) {
   _Unwind_Reason_Code ret = _URC_CONTINUE_UNWIND;
 
   if (!lsda)
@@ -815,7 +767,7 @@ static _Unwind_Reason_Code handleLsda(int version,
 
 /// This is the personality function which is embedded (dwarf emitted), in the
 /// dwarf unwind info block. Again see: JITDwarfEmitter.cpp.
-/// See @link http://mentorembedded.github.com/cxx-abi/abi-eh.html @unlink
+/// See @link http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html @unlink
 /// @param version unsupported (ignored), unwind version
 /// @param _Unwind_Action actions minimally supported unwind stage
 ///        (forced specifically not supported)
@@ -824,11 +776,10 @@ static _Unwind_Reason_Code handleLsda(int version,
 /// @param exceptionObject thrown _Unwind_Exception instance.
 /// @param context unwind system context
 /// @returns minimally supported unwinding control indicator
-_Unwind_Reason_Code ourPersonality(int version,
-                                   _Unwind_Action actions,
-                                   uint64_t exceptionClass,
+_Unwind_Reason_Code ourPersonality(int version, _Unwind_Action actions,
+                                   _Unwind_Exception_Class exceptionClass,
                                    struct _Unwind_Exception *exceptionObject,
-                                   _Unwind_Context_t context) {
+                                   struct _Unwind_Context *context) {
 #ifdef DEBUG
   fprintf(stderr,
           "We are in ourPersonality(...):actions is <%d>.\n",
@@ -847,7 +798,7 @@ _Unwind_Reason_Code ourPersonality(int version,
 #ifdef DEBUG
   fprintf(stderr,
           "ourPersonality(...):lsda = <%p>.\n",
-          lsda);
+          (void*)lsda);
 #endif
 
   // The real work of the personality function is captured here
@@ -863,7 +814,7 @@ _Unwind_Reason_Code ourPersonality(int version,
 /// Generates our _Unwind_Exception class from a given character array.
 /// thereby handling arbitrary lengths (not in standard), and handling
 /// embedded \0s.
-/// See @link http://mentorembedded.github.com/cxx-abi/abi-eh.html @unlink
+/// See @link http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html @unlink
 /// @param classChars char array to encode. NULL values not checkedf
 /// @param classCharsSize number of chars in classChars. Value is not checked.
 /// @returns class value
@@ -915,7 +866,7 @@ void generateStringPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::LinkerPrivateLinkage,
+                             llvm::GlobalValue::PrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -959,7 +910,7 @@ void generateIntegerPrint(llvm::LLVMContext &context,
     new llvm::GlobalVariable(module,
                              stringConstant->getType(),
                              true,
-                             llvm::GlobalValue::LinkerPrivateLinkage,
+                             llvm::GlobalValue::PrivateLinkage,
                              stringConstant,
                              "");
   }
@@ -970,7 +921,7 @@ void generateIntegerPrint(llvm::LLVMContext &context,
 
   llvm::Value *cast = builder.CreateBitCast(stringVar,
                                             builder.getInt8PtrTy());
-  builder.CreateCall2(&printFunct, &toPrint, cast);
+  builder.CreateCall(&printFunct, {&toPrint, cast});
 }
 
 
@@ -1122,14 +1073,11 @@ static llvm::BasicBlock *createCatchBlock(llvm::LLVMContext &context,
 /// @param numExceptionsToCatch length of exceptionTypesToCatch array
 /// @param exceptionTypesToCatch array of type info types to "catch"
 /// @returns generated function
-static
-llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
-                                             llvm::IRBuilder<> &builder,
-                                             llvm::FunctionPassManager &fpm,
-                                             llvm::Function &toInvoke,
-                                             std::string ourId,
-                                             unsigned numExceptionsToCatch,
-                                             unsigned exceptionTypesToCatch[]) {
+static llvm::Function *createCatchWrappedInvokeFunction(
+    llvm::Module &module, llvm::IRBuilder<> &builder,
+    llvm::legacy::FunctionPassManager &fpm, llvm::Function &toInvoke,
+    std::string ourId, unsigned numExceptionsToCatch,
+    unsigned exceptionTypesToCatch[]) {
 
   llvm::LLVMContext &context = module.getContext();
   llvm::Function *toPrint32Int = module.getFunction("print32Int");
@@ -1266,10 +1214,10 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
   builder.SetInsertPoint(exceptionBlock);
 
   llvm::Function *personality = module.getFunction("ourPersonality");
+  ret->setPersonalityFn(personality);
 
   llvm::LandingPadInst *caughtResult =
     builder.CreateLandingPad(ourCaughtResultType,
-                             personality,
                              numExceptionsToCatch,
                              "landingPad");
 
@@ -1295,10 +1243,11 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
   // (_Unwind_Exception instance). This member tells us whether or not
   // the exception is foreign.
   llvm::Value *unwindExceptionClass =
-    builder.CreateLoad(builder.CreateStructGEP(
-             builder.CreatePointerCast(unwindException,
-                                       ourUnwindExceptionType->getPointerTo()),
-                                               0));
+      builder.CreateLoad(builder.CreateStructGEP(
+          ourUnwindExceptionType,
+          builder.CreatePointerCast(unwindException,
+                                    ourUnwindExceptionType->getPointerTo()),
+          0));
 
   // Branch to the externalExceptionBlock if the exception is foreign or
   // to a catch router if not. Either way the finally block will be run.
@@ -1338,10 +1287,10 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
   //
   // Note: Index is not relative to pointer but instead to structure
   //       unlike a true getelementptr (GEP) instruction
-  typeInfoThrown = builder.CreateStructGEP(typeInfoThrown, 0);
+  typeInfoThrown = builder.CreateStructGEP(ourExceptionType, typeInfoThrown, 0);
 
   llvm::Value *typeInfoThrownType =
-  builder.CreateStructGEP(typeInfoThrown, 0);
+      builder.CreateStructGEP(builder.getInt8PtrTy(), typeInfoThrown, 0);
 
   generateIntegerPrint(context,
                        module,
@@ -1389,13 +1338,11 @@ llvm::Function *createCatchWrappedInvokeFunction(llvm::Module &module,
 /// @param nativeThrowFunct function which will throw a foreign exception
 ///        if the above nativeThrowType matches generated function's arg.
 /// @returns generated function
-static
-llvm::Function *createThrowExceptionFunction(llvm::Module &module,
-                                             llvm::IRBuilder<> &builder,
-                                             llvm::FunctionPassManager &fpm,
-                                             std::string ourId,
-                                             int32_t nativeThrowType,
-                                             llvm::Function &nativeThrowFunct) {
+static llvm::Function *
+createThrowExceptionFunction(llvm::Module &module, llvm::IRBuilder<> &builder,
+                             llvm::legacy::FunctionPassManager &fpm,
+                             std::string ourId, int32_t nativeThrowType,
+                             llvm::Function &nativeThrowFunct) {
   llvm::LLVMContext &context = module.getContext();
   namedValues.clear();
   ArgTypes unwindArgTypes;
@@ -1508,10 +1455,10 @@ static void createStandardUtilityFunctions(unsigned numTypeInfos,
 /// @param nativeThrowFunctName name of external function which will throw
 ///        a foreign exception
 /// @returns outermost generated test function.
-llvm::Function *createUnwindExceptionTest(llvm::Module &module,
-                                          llvm::IRBuilder<> &builder,
-                                          llvm::FunctionPassManager &fpm,
-                                          std::string nativeThrowFunctName) {
+llvm::Function *
+createUnwindExceptionTest(llvm::Module &module, llvm::IRBuilder<> &builder,
+                          llvm::legacy::FunctionPassManager &fpm,
+                          std::string nativeThrowFunctName) {
   // Number of type infos to generate
   unsigned numTypeInfos = 6;
 
@@ -1577,7 +1524,7 @@ public:
                                  std::runtime_error::operator=(toCopy)));
   }
 
-  virtual ~OurCppRunException (void) throw () {}
+  ~OurCppRunException(void) throw() override {}
 };
 } // end anonymous namespace
 
@@ -1624,7 +1571,7 @@ void runExceptionThrow(llvm::ExecutionEngine *engine,
   catch (...) {
     // Catch all exceptions including our generated ones. This latter
     // functionality works according to the example in rules 1.6.4 of
-    // http://mentorembedded.github.com/cxx-abi/abi-eh.html (v1.22),
+    // http://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html (v1.22),
     // given that these will be exceptions foreign to C++
     // (the _Unwind_Exception::exception_class should be different from
     // the one used by C++).
@@ -1697,7 +1644,7 @@ static void createStandardUtilityFunctions(unsigned numTypeInfos,
 #ifdef DEBUG
   fprintf(stderr,
           "createStandardUtilityFunctions(...):ourBaseFromUnwindOffset "
-          "= %lld, sizeof(struct OurBaseException_t) - "
+          "= %" PRIi64 ", sizeof(struct OurBaseException_t) - "
           "sizeof(struct _Unwind_Exception) = %lu.\n",
           ourBaseFromUnwindOffset,
           sizeof(struct OurBaseException_t) -
@@ -1953,30 +1900,30 @@ int main(int argc, char *argv[]) {
 
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
-  llvm::LLVMContext &context = llvm::getGlobalContext();
-  llvm::IRBuilder<> theBuilder(context);
+  llvm::LLVMContext Context;
+  llvm::IRBuilder<> theBuilder(Context);
 
   // Make the module, which holds all the code.
-  llvm::Module *module = new llvm::Module("my cool jit", context);
+  std::unique_ptr<llvm::Module> Owner =
+      llvm::make_unique<llvm::Module>("my cool jit", Context);
+  llvm::Module *module = Owner.get();
 
-  llvm::RTDyldMemoryManager *MemMgr = new llvm::SectionMemoryManager();
+  std::unique_ptr<llvm::RTDyldMemoryManager> MemMgr(new llvm::SectionMemoryManager());
 
   // Build engine with JIT
-  llvm::EngineBuilder factory(module);
+  llvm::EngineBuilder factory(std::move(Owner));
   factory.setEngineKind(llvm::EngineKind::JIT);
-  factory.setAllocateGVsWithCode(false);
   factory.setTargetOptions(Opts);
-  factory.setMCJITMemoryManager(MemMgr);
-  factory.setUseMCJIT(true);
+  factory.setMCJITMemoryManager(std::move(MemMgr));
   llvm::ExecutionEngine *executionEngine = factory.create();
 
   {
-    llvm::FunctionPassManager fpm(module);
+    llvm::legacy::FunctionPassManager fpm(module);
 
     // Set up the optimizer pipeline.
     // Start with registering info about how the
     // target lays out data structures.
-    fpm.add(new llvm::DataLayout(*executionEngine->getDataLayout()));
+    module->setDataLayout(executionEngine->getDataLayout());
 
     // Optimizations turned on
 #ifdef ADD_OPT_PASSES

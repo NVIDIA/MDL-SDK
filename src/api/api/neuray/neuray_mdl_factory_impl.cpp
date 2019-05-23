@@ -34,7 +34,6 @@
 
 #include "neuray_mdl_factory_impl.h"
 
-#include <boost/scoped_array.hpp>
 #include <mi/neuraylib/iarray.h>
 #include <mi/neuraylib/iattribute_container.h>
 #include <mi/neuraylib/imaterial_definition.h>
@@ -110,7 +109,7 @@ mi::Sint32 Mdl_factory_impl::create_variants(
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
-    boost::scoped_array<MDL::Variant_data> mdl_variant_data( new MDL::Variant_data[variant_count]);
+    std::vector<MDL::Variant_data> mdl_variant_data(variant_count);
     for( mi::Size i = 0; i < variant_count; ++i) {
 
         mi::base::Handle<const mi::IStructure> variant(
@@ -137,6 +136,11 @@ mi::Sint32 Mdl_factory_impl::create_variants(
         if(    class_id != MDL::ID_MDL_MATERIAL_DEFINITION
             && class_id != MDL::ID_MDL_FUNCTION_DEFINITION)
             return -5;
+        if (class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
+            DB::Access<MDL::Mdl_function_definition> def(tag, db_transaction);
+            if (!MDL::is_supported_prototype(def.get_ptr(), true))
+                return -5;
+        }
         mdl_variant_data[i].m_prototype_tag = tag;
 
         mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
@@ -150,13 +154,43 @@ mi::Sint32 Mdl_factory_impl::create_variants(
 
     MDL::Execution_context context;
     return MDL::Mdl_module::create_module(
-        db_transaction, module_name, mdl_variant_data.get(), variant_count, &context);
+        db_transaction, module_name, mdl_variant_data.data(), mdl_variant_data.size(), &context);
 }
 
 mi::Sint32 Mdl_factory_impl::create_materials(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
     const mi::IArray* material_data)
+{
+    return 0;
+}
+
+
+namespace {
+
+MDL::Execution_context* unwrap_and_clear(
+    mi::neuraylib::IMdl_execution_context* context,
+    MDL::Execution_context& default_context) {
+
+    if (context)
+    {
+        NEURAY::Mdl_execution_context_impl* context_impl =
+            static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+        if (context_impl) {
+            MDL::Execution_context& wrapped_context = context_impl->get_context();
+            wrapped_context.clear_messages();
+            return &wrapped_context;
+        }
+    }
+    return &default_context;
+}
+
+}
+mi::Sint32 Mdl_factory_impl::create_materials(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    const mi::IArray* mdl_data,
+    mi::neuraylib::IMdl_execution_context *context)
 {
     return 0;
 }

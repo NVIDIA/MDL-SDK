@@ -44,17 +44,20 @@ namespace neuraylib {
 /// It provides the common functionality of all different discovery graph node interfaces.
 class IMdl_info : public 
     base::Interface_declare<0xd2f50312,0xe76c,0x4d64,0xa5,0x91,0xcb,0x70,0x38,0x2c,0xa9,0x9f>
-        
 {
     public:
 
         /// The kinds of the graph nodes.
-        enum Kind {
+        enum Kind {  
             DK_PACKAGE = 0,
             DK_MODULE = 1,
-            DK_RESOURCE = 2,
-            // next = 4
-            DK_FORCE_32_BIT = 0xffffffffU
+            DK_XLIFF = 2,
+            DK_TEXTURE = 4,
+            DK_LIGHTPROFILE = 8,
+            DK_MEASURED_BSDF = 16,
+            DK_DIRECTORY = 32,
+            // next = 64
+            DK_ALL = 0xffffffffU
         };
 
         /// Returns the kind of the graph node.
@@ -95,6 +98,78 @@ class IMdl_module_info : public
         virtual bool                    in_archive() const = 0;
 };
 
+/// Interface for xliff files.
+class IMdl_xliff_info : public
+    base::Interface_declare<0x3a, 0xdf, 0x8a, 0x42, 0x94, 0x09, 0x59, 0xe6, 0xf9, 0x25, 0x67, IMdl_info>
+{
+public:
+
+    /// Returns an absolute path to the xliff file in the local file system.
+    virtual const char*          get_resolved_path() const = 0;
+
+    /// Returns the index of the search path where the xliff file has been found.
+    virtual Size                 get_search_path_index() const = 0;
+
+    /// Returns the search path in the local file system that contains this xliff file.
+    virtual const char*          get_search_path() const = 0;
+
+    /// Returns true if the xliff file has been discovered inside of an archive, false if not.
+    virtual bool                 in_archive() const = 0;
+
+};
+
+/// Interface for resources.
+class IMdl_resource_info : public
+    base::Interface_declare<0x28,0x54,0x6b,0xcd,0x14,0x59,0xfd,0x42,0x9d,0xfa,0xd5, IMdl_info>
+{
+public:
+
+    /// Returns the index of the search path where this resource has been found.
+    virtual Size                    get_search_path_index() const = 0;
+
+    /// Returns the search path in the local file system that contains this resource.
+    virtual const char*             get_search_path() const = 0;
+
+    /// Returns the file extension of the resource file.
+    virtual const char*             get_extension() const = 0;
+
+    /// Returns an absolute path to the resource file in the local file system.
+    virtual const char*             get_resolved_path() const = 0;
+
+    /// Returns the number of shadows of this resource.
+    virtual Size                    get_shadows_count() const = 0;
+
+    /// Returns one of the shadows this resource has.
+    /// \param index     Index in the shadow list of this resource.
+    virtual const IMdl_resource_info* get_shadow(Size index) const = 0;
+
+    /// Returns true if the resource has been discovered inside of an archive, false if not.
+    virtual bool                    in_archive() const = 0;
+
+};
+
+
+/// Interface for texture files.
+class IMdl_texture_info : public
+    base::Interface_declare<0x62,0x71,0xac,0x50,0xde,0xa9,0x40,0x92,0x8b,0xf0,0x1d,IMdl_resource_info>
+{
+
+};
+
+/// Interface for lightprofile files.
+class IMdl_lightprofile_info : public
+    base::Interface_declare<0x17,0x23,0x61,0xf4,0xcb,0x64,0xb3,0x40,0xb4,0x45,0x07,IMdl_resource_info>
+{
+
+};
+
+/// Interface for measured bsdf files.
+class IMdl_measured_bsdf_info : public
+    base::Interface_declare<0xce,0x45,0xe6,0xef,0xdc,0x74,0x00,0x4f,0xac,0xae,0x34,IMdl_resource_info>
+{
+
+};
+
 /// Interface for a graph node representing an MDL package.
 class IMdl_package_info : public
     base::Interface_declare<0x94d,0x66,0x47a,0xb0,0xc3,0x7b,0x68,0xba,0x40,0xde,0x06,IMdl_info>
@@ -127,6 +202,7 @@ class IMdl_package_info : public
         /// \param index     Index in the interval [0, search_path_index_count).
         virtual bool                    in_archive(Size index) const = 0;
 };
+
 
 /// Interface for the discovery result.
 class IMdl_discovery_result : public
@@ -175,11 +251,15 @@ class IMdl_discovery_api : public
 public:
 
     /// Returns the file system and archive discovery result.
-    virtual const IMdl_discovery_result*  discover() const = 0;
+    /// \param filter   Bitmask, that can be used to specify which discovery kinds to include in 
+    ///                 the result (see #mi::neuraylib::IMdl_info::Kind). 
+    ///                 By default, all kinds are included.
+    virtual const IMdl_discovery_result*  discover(
+        Uint32 filter = IMdl_info::DK_ALL) const = 0;
 };
 
 } // namespace neuraylib
 
 } // namespace mi
 
-#endif // MI_NEURAYLIB_IMDL_DISCOVERY_API_H 
+#endif // MI_NEURAYLIB_IMDL_DISCOVERY_API_H

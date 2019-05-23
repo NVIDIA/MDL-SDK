@@ -1,83 +1,59 @@
-# NOTE: The tools are organized into groups of four consisting of one large and
-# three small executables. This is done to minimize memory load in parallel
-# builds.  Please retain this ordering.
+# This file will recurse into all subdirectories that contain CMakeLists.txt
+# Setting variables that match the pattern LLVM_TOOL_{NAME}_BUILD to Off will
+# prevent traversing into a directory.
+#
+# The only tools that need to be explicitly added are ones that have explicit
+# ordering requirements.
 
-add_llvm_tool_subdirectory(llvm-config)
+# Iterates all the subdirectories to create CMake options to enable/disable
+# traversing each directory.
+create_llvm_tool_options()
 
-add_llvm_tool_subdirectory(opt)
-add_llvm_tool_subdirectory(llvm-as)
-add_llvm_tool_subdirectory(llvm-dis)
-add_llvm_tool_subdirectory(llvm-mc)
-
-add_llvm_tool_subdirectory(llc)
-add_llvm_tool_subdirectory(llvm-ar)
-add_llvm_tool_subdirectory(llvm-nm)
-add_llvm_tool_subdirectory(llvm-size)
-
-add_llvm_tool_subdirectory(llvm-cov)
-add_llvm_tool_subdirectory(llvm-link)
-if( LLVM_INCLUDE_INTERPRETER )
-  add_llvm_tool_subdirectory(lli)
-else()
-  ignore_llvm_tool_subdirectory(lli)
-endif( LLVM_INCLUDE_INTERPRETER )
-
-add_llvm_tool_subdirectory(llvm-extract)
-add_llvm_tool_subdirectory(llvm-diff)
-add_llvm_tool_subdirectory(macho-dump)
-add_llvm_tool_subdirectory(llvm-objdump)
-add_llvm_tool_subdirectory(llvm-readobj)
-add_llvm_tool_subdirectory(llvm-rtdyld)
-add_llvm_tool_subdirectory(llvm-dwarfdump)
-if( LLVM_USE_INTEL_JITEVENTS )
-  add_llvm_tool_subdirectory(llvm-jitlistener)
-else()
-  ignore_llvm_tool_subdirectory(llvm-jitlistener)
-endif( LLVM_USE_INTEL_JITEVENTS )
-
-add_llvm_tool_subdirectory(bugpoint)
-add_llvm_tool_subdirectory(bugpoint-passes)
-add_llvm_tool_subdirectory(llvm-bcanalyzer)
-add_llvm_tool_subdirectory(llvm-stress)
-add_llvm_tool_subdirectory(llvm-mcmarkup)
-
-add_llvm_tool_subdirectory(llvm-symbolizer)
-
-add_llvm_tool_subdirectory(llvm-c-test)
-
-add_llvm_tool_subdirectory(obj2yaml)
-add_llvm_tool_subdirectory(yaml2obj)
-
-if( LLVM_INCLUDE_LTO AND NOT CYGWIN )
-  add_llvm_tool_subdirectory(lto)
-  add_llvm_tool_subdirectory(llvm-lto)
-else()
-  ignore_llvm_tool_subdirectory(lto)
-  ignore_llvm_tool_subdirectory(llvm-lto)
-endif()
-
-if( LLVM_ENABLE_PIC )
-  # TODO: support other systems:
-  if( (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-      OR (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD") )
-    add_llvm_tool_subdirectory(gold)
-  else()
-    ignore_llvm_tool_subdirectory(gold)
-  endif()
-else()
-  ignore_llvm_tool_subdirectory(gold)
-endif()
-
-add_llvm_external_project(clang)
-
-if( NOT LLVM_INCLUDE_TOOLS STREQUAL "bootstrap-only" )
-  add_llvm_external_project(lld)
-  add_llvm_external_project(lldb)
+# Build polly before the tools: the tools link against polly when
+# LINK_POLLY_INTO_TOOLS is set.
+if(WITH_POLLY)
   add_llvm_external_project(polly)
-
-  # Automatically add remaining sub-directories containing a 'CMakeLists.txt'
-  # file as external projects.
-  add_llvm_implicit_external_projects()
+else()
+  set(LLVM_TOOL_POLLY_BUILD Off)
 endif()
+
+if(NOT LLVM_BUILD_LLVM_DYLIB )
+  set(LLVM_TOOL_LLVM_SHLIB_BUILD Off)
+endif()
+
+if(NOT LLVM_USE_INTEL_JITEVENTS )
+  set(LLVM_TOOL_LLVM_JITLISTENER_BUILD Off)
+endif()
+
+if(CYGWIN OR NOT LLVM_ENABLE_PIC)
+  set(LLVM_TOOL_LTO_BUILD Off)
+  set(LLVM_TOOL_LLVM_LTO_BUILD Off)
+endif()
+
+# Add LTO, llvm-ar, llvm-config, and llvm-profdata before clang, ExternalProject
+# requires targets specified in DEPENDS to exist before the call to
+# ExternalProject_Add.
+add_llvm_tool_subdirectory(lto)
+add_llvm_tool_subdirectory(gold)
+add_llvm_tool_subdirectory(llvm-ar)
+add_llvm_tool_subdirectory(llvm-config)
+add_llvm_tool_subdirectory(llvm-lto)
+add_llvm_tool_subdirectory(llvm-profdata)
+
+# Projects supported via LLVM_EXTERNAL_*_SOURCE_DIR need to be explicitly
+# specified.
+add_llvm_external_project(clang)
+add_llvm_external_project(llgo)
+add_llvm_external_project(lld)
+add_llvm_external_project(lldb)
+
+# Automatically add remaining sub-directories containing a 'CMakeLists.txt'
+# file as external projects.
+add_llvm_implicit_projects()
+
+# Add subprojects specified using LLVM_EXTERNAL_PROJECTS
+foreach(p ${LLVM_EXTERNAL_PROJECTS})
+  add_llvm_external_project(${p})
+endforeach(p)
 
 set(LLVM_COMMON_DEPENDS ${LLVM_COMMON_DEPENDS} PARENT_SCOPE)

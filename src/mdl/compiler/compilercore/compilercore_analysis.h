@@ -1702,6 +1702,27 @@ private:
         IType const    *type,
         Position const &pos);
 
+    /// Check if the given source type can be casted into the destination type.
+    ///
+    /// \param pos                the source code position of the cast
+    /// \param src_type           the source type
+    /// \param dst_type           the destination type
+    /// \param dst_is_incomplete  true, if dst_type is the element type of an incomplete array
+    /// \param report_error       if true, report errors, else only return value
+    ///
+    /// \return NULL if cannot be casted, the result type otherwise
+    IType const *check_cast_conversion(
+        Position const &pos,
+        IType const    *src_type,
+        IType const    *dst_type,
+        bool           dst_is_incomplete,
+        bool           report_error);
+
+    /// Handle a cast expression.
+    ///
+    /// \param cast_expr  the cast expression
+    void handle_cast_expression(IExpression_unary *cast_expr);
+
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;

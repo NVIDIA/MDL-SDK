@@ -144,7 +144,8 @@ void DAG_ir_walker::walk_instance_slot(
         { "volume",      "scattering_coefficient", NULL },
         { "geometry",    "displacement",           NULL },
         { "geometry",    "cutout_opacity",         NULL },
-        { "geometry",    "normal",                 NULL }
+        { "geometry",    "normal",                 NULL },
+        { "hair",        NULL,                     NULL }
     };
 
     DAG_node     *node = NULL;
@@ -424,6 +425,7 @@ void Dag_hasher::hash(IType const *tp) {
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
         break;

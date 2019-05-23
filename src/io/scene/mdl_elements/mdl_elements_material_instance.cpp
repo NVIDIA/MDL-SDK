@@ -43,10 +43,12 @@
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/neuraylib/istring.h>
+#include <base/system/main/access_module.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/serial/i_serializer.h>
 #include <io/scene/scene/i_scene_journal_types.h>
+#include <mdl/integration/mdlnr/i_mdlnr.h>
 
 namespace MI {
 
@@ -177,28 +179,56 @@ mi::Sint32 Mdl_material_instance::set_arguments(
 mi::Sint32 Mdl_material_instance::set_argument(
     DB::Transaction* transaction, mi::Size index, const IExpression* argument)
 {
-    if( !argument)
+    if (!argument)
         return -1;
-    mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( index));
-    if( !expected_type)
+    mi::base::Handle<const IType> expected_type(m_parameter_types->get_type( index));
+    if (!expected_type)
         return -2;
-    mi::base::Handle<const IType> actual_type( argument->get_type());
-    if( !argument_type_matches_parameter_type( m_tf.get(), actual_type.get(), expected_type.get()))
-        return -3;
-    if( m_immutable)
+    mi::base::Handle<const IType> actual_type(argument->get_type());
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    bool allow_cast = mdlc_module->get_implicit_cast_enabled();
+    bool needs_cast = false;
+    if (!argument_type_matches_parameter_type(
+        m_tf.get(),
+        actual_type.get(),
+        expected_type.get(),
+        allow_cast,
+        needs_cast))
+            return -3;
+
+    if (m_immutable)
         return -4;
+
     bool actual_type_varying   = (actual_type->get_all_type_modifiers()   & IType::MK_VARYING) != 0;
     bool expected_type_uniform = (expected_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
-    if( actual_type_varying && expected_type_uniform)
+    if (actual_type_varying && expected_type_uniform)
         return -5;
+
     IExpression::Kind kind = argument->get_kind();
-    if( kind != IExpression::EK_CONSTANT && kind != IExpression::EK_CALL)
+    if (kind != IExpression::EK_CONSTANT && kind != IExpression::EK_CALL)
         return -6;
+
     if( expected_type_uniform && return_type_is_varying( transaction, argument))
         return -8;
-    mi::base::Handle<IExpression> argument_copy( m_ef->clone(
-        argument, /*transaction*/ nullptr, /*copy_immutable_calls*/ false));
-    m_arguments->set_expression( index, argument_copy.get());
+
+    mi::base::Handle<IExpression> argument_copy(m_ef->clone(
+        argument, transaction, /*copy_immutable_calls=*/ true));
+
+    if (needs_cast) {
+        mi::Sint32 errors = 0;
+        argument_copy = m_ef->create_cast(
+            transaction,
+            argument_copy.get(),
+            expected_type.get(),
+            /*db_element_name=*/nullptr,
+            /*force_cast=*/false,
+            /*direct_call=*/false,
+            &errors);
+        ASSERT(M_SCENE, argument_copy); // should always succeed.
+    }
+   
+    m_arguments->set_expression(index, argument_copy.get());
     return 0;
 }
 
@@ -246,10 +276,11 @@ Mdl_compiled_material* Mdl_material_instance::create_compiled_material(
         MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
     mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MIN);
     mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MAX);
+    bool load_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
 
     return new Mdl_compiled_material(
         transaction, instance.get(), module_filename, module_name,
-        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max);
+        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, load_resources);
 }
 
 namespace{
@@ -268,7 +299,7 @@ Mdl_material_instance::create_dag_material_instance(
     DB::Transaction* transaction,
     bool use_temporaries,
     bool class_compilation,
-   Execution_context* context) const
+    Execution_context* context) const
 {
     // get code DAG
     DB::Access<Mdl_module> module( m_module_tag, transaction);
@@ -310,7 +341,9 @@ Mdl_material_instance::create_dag_material_instance(
     }
 
     // initialize MDL material instance
-    Call_evaluator    call_evaluator( transaction);
+    Call_evaluator    call_evaluator(
+        transaction,
+        context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES));
     Mdl_call_resolver resolver( transaction);
 
     mi::Uint32 flags = class_compilation
@@ -320,6 +353,7 @@ Mdl_material_instance::create_dag_material_instance(
             | mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_ARGUMENT_INLINE
         :
               mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION;
+
     error_code = instance->initialize(
         &resolver,
         /*resource_modifier=*/NULL,

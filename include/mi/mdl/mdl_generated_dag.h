@@ -40,6 +40,7 @@ namespace mdl {
 class ICall_name_resolver;
 class IResource_modifier;
 class IValue;
+class IValue_float;
 class IValue_factory;
 class Messages;
 class IType_factory;
@@ -338,6 +339,13 @@ public:
 /// texture, so it could replace the runtime call by a constant.
 class ICall_evaluator {
 public:
+    /// Check whether evaluate_intrinsic_function() should be called for an unhandled
+    /// intrinsic functions with the given semantic.
+    ///
+    /// \param sema  the semantic to check for
+    virtual bool is_evaluate_intrinsic_function_enabled(
+        IDefinition::Semantics sema) const = 0;
+
     /// Evaluate an intrinsic function.
     ///
     /// \param value_factory  The value factory to create values.
@@ -491,7 +499,9 @@ public:
             MS_GEOMETRY_CUTOUT_OPACITY,         ///< .geometry.cutout_opacity
             MS_GEOMETRY_NORMAL,                 ///< .geometry.normal
 
-            MS_LAST = MS_GEOMETRY_NORMAL
+            MS_HAIR,                            ///< .hair
+
+            MS_LAST = MS_HAIR
         };
 
         /// Property flags of an instance.
@@ -503,6 +513,14 @@ public:
             IP_USES_TERNARY_OPERATOR_ON_DF    = 0x10,   ///< uses the ternary operator '?:' on *df
             IP_CLASS_COMPILED                 = 0x20,   ///< was class compiled
             IP_DISTILLED                      = 0x40,   ///< was created by the distiller
+        };
+
+        /// Opacity of an instance.
+        enum Opacity {
+            OPACITY_OPAQUE,             ///< opaque for sure
+            OPACITY_TRANSPARENT,        ///< transparent for sure
+            OPACITY_UNKNOWN             ///< opacity unknown (depends on parameter
+                                        ///  or complex user expression)
         };
 
         typedef unsigned Properties;
@@ -649,11 +667,14 @@ public:
         /// might depend on the MDL edf with global distribution.
         virtual bool depends_on_global_distribution() const = 0;
 
-        /// Returns true if this instance is opaque.
+        /// Returns the opacity of this instance.
+        virtual Opacity get_opacity() const = 0;
+
+        /// Returns the cutout opacity of this instance if it is constant.
         ///
-        /// This is a must analysis, when it returns true the instance is
-        /// surely opaque. When false is returned, the instance might be opaque.
-        virtual bool is_opaque() const = 0;
+        /// \return if the cutout opacity is a constant (and was read),
+        ///         NULL if it depends on parameters / complex user expressions
+        virtual IValue_float const *get_cutout_opacity() const = 0;
 
         /// Access messages.
         virtual Messages const &access_messages() const = 0;

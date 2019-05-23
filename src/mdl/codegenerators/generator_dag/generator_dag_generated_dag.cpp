@@ -1103,6 +1103,7 @@ void Generated_code_dag::compile_function(
     File_resolver file_resolver(
         *m_mdl.get(),
         /*module_cache=*/NULL,
+        m_mdl->get_external_resolver(),
         m_mdl->get_search_path(),
         m_mdl->get_search_path_lock(),
         dummy_msgs,
@@ -1633,6 +1634,7 @@ void Generated_code_dag::compile(IModule const *module)
     File_resolver file_resolver(
         *m_mdl.get(),
         /*module_cache=*/NULL,
+        m_mdl->get_external_resolver(),
         m_mdl->get_search_path(),
         m_mdl->get_search_path_lock(),
         dummy_msgs,
@@ -2943,6 +2945,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     File_resolver file_resolver(
         *m_mdl.get(),
         /*module_cache=*/NULL,
+        m_mdl->get_external_resolver(),
         m_mdl->get_search_path(),
         m_mdl->get_search_path_lock(),
         dummy_msgs,
@@ -2990,9 +2993,6 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
         if (!check_thin_walled_material())
             res = EC_WRONG_TRANSMISSION_ON_THIN_WALLED;
     }
-
-    // ensure that the root of our instance is always a material constructor
-    move_ternary_down();
 
     if (use_temporaries)
         build_temporaries();
@@ -3594,251 +3594,6 @@ void Generated_code_dag::Material_instance::build_temporaries()
     Temporary_inserter inserter(*this, phen_outs);
 
     walker.walk_instance(this, &inserter);
-}
-
-// Move ternary operator down from the root so the root is always a material constructor
-// with "known" slots.
-void Generated_code_dag::Material_instance::move_ternary_down()
-{
-    DAG_call *constr = const_cast<DAG_call *>(m_constructor);
-
-    if (constr->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY)) {
-        DAG_call *n_call = move_ternary_down(constr);
-
-        if (n_call != NULL) {
-            constr = n_call;
-            m_constructor = n_call;
-        } else {
-            // cannot move
-            return;
-        }
-    }
-
-    for (int i = 0, n = constr->get_argument_count(); i < n; ++i) {
-        DAG_node *arg = const_cast<DAG_node *>(constr->get_argument(i));
-
-        if (!is<DAG_call>(arg))
-            continue;
-
-        DAG_call *c_arg = cast<DAG_call>(arg);
-
-        if (c_arg->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY)) {
-            DAG_call *n_call = move_ternary_down(c_arg);
-
-            if (n_call != NULL)
-                constr->set_argument(i, n_call);
-        }
-    }
-}
-
-// Creates a ternary operator.
-DAG_node const *Generated_code_dag::Material_instance::create_ternary(
-    DAG_node const *cond,
-    DAG_node const *t_expr,
-    DAG_node const *f_expr)
-{
-    IAllocator *alloc = m_arena.get_allocator();
-
-    Name_printer printer(alloc, m_mdl.get());
-
-    IType const *type = t_expr->get_type()->skip_type_alias();
-
-    string name(DAG_builder::ternary_op_to_name(), alloc);
-    printer.print('(');
-    printer.print(cond->get_type());
-    printer.print(',');
-    printer.print(type);
-    printer.print(',');
-    printer.print(type);
-    printer.print(')');
-
-    name += printer.get_line();
-
-    DAG_call::Call_argument args[3];
-
-    args[0].arg = cond;
-    args[0].param_name = "cond";
-    args[1].arg = t_expr;
-    args[1].param_name = "true_exp";
-    args[2].arg = f_expr;
-    args[2].param_name = "false_exp";
-
-    // compute the result type
-    IType const *res_type = args[1].arg->get_type();
-
-    IType::Modifiers mod = res_type->get_type_modifiers();
-    if ((mod & IType::MK_UNIFORM) != 0) {
-        IType const *other = args[2].arg->get_type();
-
-        IType::Modifiers mod = other->get_type_modifiers();
-
-        if ((mod & IType::MK_UNIFORM) == 0)
-            res_type = other;
-    }
-
-    return create_call(
-        name.c_str(),
-        operator_to_semantic(IExpression::OK_TERNARY),
-        args,
-        3,
-        res_type
-    );
-}
-
-// Converts a constant into a elemental constructor.
-DAG_call const *Generated_code_dag::Material_instance::value_to_constructor(
-    DAG_constant const *c)
-{
-    IValue_struct const *v = cast<IValue_struct>(c->get_value());
-
-    IType_struct const *type = v->get_type();
-
-    int n_fields = type->get_field_count();
-    Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_fields);
-
-    Name_printer printer(get_allocator(), m_mdl.get());
-
-    string name(type->get_symbol()->get_name(), get_allocator());
-
-    printer.print('(');
-
-    for (int i = 0; i < n_fields; ++i) {
-        ISymbol const *f_sym;
-        IType const *f_type;
-
-        type->get_field(i, f_type, f_sym);
-
-        args[i].param_name = f_sym->get_name();
-        args[i].arg        = create_constant(v->get_value(i));
-
-        if (i != 0)
-            printer.print(',');
-
-        printer.print(f_type->skip_type_alias());
-    }
-
-    printer.print(')');
-
-    IType const *res_type = m_type_factory.import(type);
-    res_type = m_type_factory.create_alias(res_type, NULL, IType::MK_UNIFORM);
-
-    No_OPT_scope scope(m_node_factory);
-
-    return (DAG_call const *)create_call(
-        printer.get_line().c_str(),
-        IDefinition::DS_ELEM_CONSTRUCTOR,
-        args.data(),
-        args.size(),
-        type);
-}
-
-// Move ternary operator down from the root so the root is always a material constructor
-// with "known" slots.
-DAG_call *Generated_code_dag::Material_instance::move_ternary_down(DAG_call *ternary)
-{
-    MDL_ASSERT(ternary->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY));
-
-    DAG_node const *t_expr = ternary->get_argument(1);
-    DAG_node const *f_expr = ternary->get_argument(2);
-
-    if (t_expr == f_expr) {
-        // do nothing
-        return NULL;
-    }
-
-    DAG_node const *cond = ternary->get_argument(0);
-
-    DAG_call const *t_call = NULL;
-    DAG_call const *f_call = NULL;
-
-    DAG_constant const *t_const = NULL;
-    DAG_constant const *f_const = NULL;
-
-    if (is<DAG_constant>(t_expr)) {
-        if (is<DAG_constant>(f_expr)) {
-            // both are const, convert to calls is possible first
-            t_const = cast<DAG_constant>(t_expr);
-            f_const = cast<DAG_constant>(f_expr);
-
-            {
-                // switch optimization off, so we are sure no one will "rebuild" this const
-                No_OPT_scope no_opt(m_node_factory);
-
-                return (DAG_call *)create_ternary(cond, t_const, f_const);
-            }
-        } else {
-            // only t_expr must be converted
-            t_const = cast<DAG_constant>(t_expr);
-
-            if (!is<DAG_call>(f_expr))
-                return NULL;
-            f_call = cast<DAG_call>(f_expr);
-
-            if (f_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR)
-                return NULL;
-
-            t_call = value_to_constructor(t_const);
-        }
-    } else {
-        if (is<DAG_constant>(f_expr)) {
-            // only f_expr must be converted
-            f_const = cast<DAG_constant>(f_expr);
-
-            if (!is<DAG_call>(t_expr))
-                return NULL;
-            t_call = cast<DAG_call>(t_expr);
-
-            if (t_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR)
-                return NULL;
-
-            f_call = value_to_constructor(f_const);
-        } else {
-            // both are non-const, easy
-
-            if (!is<DAG_call>(t_expr) || !is<DAG_call>(f_expr))
-                return NULL;
-
-            t_call = cast<DAG_call>(t_expr);
-            f_call = cast<DAG_call>(f_expr);
-
-            if (strcmp(t_call->get_name(), f_call->get_name()) != 0) {
-                // different calls
-                return NULL;
-            }
-        }
-    }
-
-    if (t_call != NULL && f_call != NULL) {
-        MDL_ASSERT(strcmp(t_call->get_name(), f_call->get_name()) == 0);
-
-        int n_args = t_call->get_argument_count();
-        MDL_ASSERT(n_args == f_call->get_argument_count());
-
-        Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_args);
-
-        for (int i = 0; i < n_args; ++i) {
-            DAG_node const *t_arg = t_call->get_argument(i);
-            DAG_node const *f_arg = f_call->get_argument(i);
-
-            args[i].param_name = t_call->get_parameter_name(i);
-            args[i].arg        = t_arg == f_arg ?
-                t_arg : create_ternary(cond, t_arg, f_arg);
-        }
-
-        {
-            // switch optimization off, so we are sure no one will "rebuild" this call
-            No_OPT_scope no_opt(m_node_factory);
-
-            return (DAG_call *)create_call(
-                t_call->get_name(),
-                t_call->get_semantic(),
-                args.data(),
-                args.size(),
-                t_call->get_type());
-        }
-    }
-
-    return NULL;
 }
 
 // Calculate the hash values for this instance.
@@ -4749,6 +4504,7 @@ restart:
     case IType::TK_DOUBLE:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -5181,6 +4937,7 @@ void Generated_code_dag::serialize_dags(DAG_serializer &dag_serializer) const
             Parameter_info const &param = func.get_parameter(j);
 
             entity_roots.push_back(param.get_default());
+            entity_roots.push_back(param.get_enable_if_condition());
 
             for (size_t k = 0, n_annos = param.get_annotation_count(); k < n_annos; ++k) {
                 entity_roots.push_back(param.get_annotation(k));
@@ -5735,6 +5492,14 @@ IValue_invalid_ref const *Generated_code_dag::create_default_bsdf(
 {
     IType_bsdf const *type_bsdf = value_factory.get_type_factory()->create_bsdf();
     return value_factory.create_invalid_ref(type_bsdf);
+}
+
+// Create a default hair_bsdf.
+IValue_invalid_ref const *Generated_code_dag::create_default_hair_bsdf(
+    IValue_factory &value_factory)
+{
+    IType_hair_bsdf const *type_hair_bsdf = value_factory.get_type_factory()->create_hair_bsdf();
+    return value_factory.create_invalid_ref(type_hair_bsdf);
 }
 
 // Create a default edf.

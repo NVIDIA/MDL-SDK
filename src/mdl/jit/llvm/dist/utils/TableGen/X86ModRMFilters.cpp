@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-
 #include "X86ModRMFilters.h"
 
 using namespace llvm::X86Disassembler;
@@ -17,10 +16,6 @@ void ModRMFilter::anchor() { }
 void DumbFilter::anchor() { }
 
 void ModFilter::anchor() { }
-
-void EscapeFilter::anchor() { }
-
-void AddRegEscapeFilter::anchor() { }
 
 void ExtendedFilter::anchor() { }
 

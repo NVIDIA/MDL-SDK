@@ -1,13 +1,43 @@
-if (LLVM_INCLUDE_OBJC)
-  set(LLVM_LINK_COMPONENTS ${LLVM_TARGETS_TO_BUILD} bitreader asmparser bitwriter irreader instrumentation scalaropts objcarcopts ipo vectorize)
-else ()
-  set(LLVM_LINK_COMPONENTS ${LLVM_TARGETS_TO_BUILD} bitreader asmparser bitwriter irreader instrumentation scalaropts ipo vectorize)
-endif ()
+set(LLVM_LINK_COMPONENTS
+  ${LLVM_TARGETS_TO_BUILD}
+  AggressiveInstCombine
+  Analysis
+  BitWriter
+  CodeGen
+  Core
+  Coroutines
+  IPO
+  IRReader
+  InstCombine
+  Instrumentation
+  MC
+  ObjCARCOpts
+  ScalarOpts
+  Support
+  Target
+  TransformUtils
+  Vectorize
+  Passes
+  )
+
+# Support plugins.
+set(LLVM_NO_DEAD_STRIP 1)
 
 add_llvm_tool(opt
   AnalysisWrappers.cpp
+  BreakpointPrinter.cpp
+  Debugify.cpp
   GraphPrinters.cpp
+  NewPMDriver.cpp
+  PassPrinters.cpp
   PrintSCC.cpp
   opt.cpp
+
+  DEPENDS
+  intrinsics_gen
   )
-set_target_properties(opt PROPERTIES ENABLE_EXPORTS 1)
+export_executable_symbols(opt)
+
+if(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
+  target_link_libraries(opt PRIVATE Polly)
+endif(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)

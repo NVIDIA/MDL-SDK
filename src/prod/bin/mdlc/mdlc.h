@@ -53,6 +53,7 @@ class Mdlc
         TL_MDL,         ///< MDL.
         TL_DAG,         ///< DAG
         TL_GLSL,        ///< GLSL
+        TL_HLSL,        ///< HLSL
         TL_JIT,         ///< Executable machine code
         TL_PTX,         ///< PTX code
         TL_BIN          ///< binary output (serialization result)

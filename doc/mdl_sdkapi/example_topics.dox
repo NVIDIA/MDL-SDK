@@ -101,4 +101,9 @@ index.
   - \ref mi_neuray_example_mdl_browser "Caching of information on packages, modules, and materials"
   - \ref mi_neuray_example_mdl_browser "Illustration of how we believe MDL materials should be presented to the user"
 
+  - \ref mi_neuray_example_mdle "Example for Integrating the MDL encapsulated format"
+  - \ref mi_neuray_example_mdle "Export and load materials or functions using the MDL encapsulated format"
+
+  - \ref mi_neuray_example_dxr "Example for a Microsoft DXR-based MDL-enabled path tracer"
+  - \ref mi_neuray_example_dxr "Rendering glTF scenes using MDL materials"
 */

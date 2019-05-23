@@ -84,3 +84,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
+
+# add tests if available
+add_tests()

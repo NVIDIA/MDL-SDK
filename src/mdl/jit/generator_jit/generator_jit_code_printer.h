@@ -49,16 +49,11 @@ public:
     /// Constructor.
     explicit JIT_code_printer(IAllocator *alloc)
     : Base(alloc)
-    , m_printer(NULL)
     {
     }
 
     /// Print the code to the given printer.
     void print(Printer *printer, mi::base::IInterface const *code) const MDL_FINAL;
-
-private:
-    // Temporary, the used printer.
-    mutable Printer *m_printer;
 };
 
 } // mdl

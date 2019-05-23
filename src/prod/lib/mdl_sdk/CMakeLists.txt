@@ -91,6 +91,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl-codegenerators-generator_dag
         mdl::mdl-codegenerators-generator_code
         mdl::mdl-compiler-compilercore
+        mdl::mdl-compiler-compiler_hlsl
         mdl::mdl-integration-mdlnr
         mdl::mdl-integration-i18n
         mdl::mdl-jit-generator_jit

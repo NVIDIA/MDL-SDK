@@ -93,7 +93,8 @@ public:
         DS_PRE_DECREMENT,                         ///< The pre-decrement operator.
         DS_POST_INCREMENT,                        ///< The post-increment operator.
         DS_POST_DECREMENT,                        ///< The post-decrement operator.
-        DS_UNARY_LAST = DS_POST_DECREMENT,
+        DS_CAST,                                  ///< The cast operator.
+        DS_UNARY_LAST = DS_CAST,
 
         // Binary operators
         DS_BINARY_FIRST,
@@ -140,7 +141,7 @@ public:
         // ::math module intrinsics
         DS_INTRINSIC_MATH_FIRST = 0x0300,
         DS_INTRINSIC_MATH_ABS                     ///< The %math::abs() intrinsic function.
-        = DS_INTRINSIC_MATH_FIRST,
+            = DS_INTRINSIC_MATH_FIRST,
         DS_INTRINSIC_MATH_ACOS,                   ///< The %math::acos() intrinsic function.
         DS_INTRINSIC_MATH_ALL,                    ///< The %math::all() intrinsic function.
         DS_INTRINSIC_MATH_ANY,                    ///< The %math::any() intrinsic function.
@@ -297,7 +298,9 @@ public:
         /// The df::color_measured_curve_layer() function.
         DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER,
         DS_INTRINSIC_DF_FRESNEL_FACTOR,           ///< The df::fresnel_factor() function.
-        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_FRESNEL_FACTOR,
+        DS_INTRINSIC_DF_MEASURED_FACTOR,          ///< The df::measured_factor() function.
+        DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,         ///< The df::chiang_hair_bsdf() function.
+        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
 
 
         // ::debug module intrinsics

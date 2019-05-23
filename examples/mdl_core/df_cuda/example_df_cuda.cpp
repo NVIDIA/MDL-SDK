@@ -45,8 +45,11 @@
 #define OPENGL_INTEROP
 #include "example_cuda_shared.h"
 
-#include "imgui.h"
-#include "imgui_impl_glfw_gl3.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 #define terminate()          \
     do {                     \
@@ -79,7 +82,7 @@ inline float3 normalize(const float3 &d)
 /////////////////
 
 // Initialize OpenGL and create a window with an associated OpenGL context.
-static GLFWwindow *init_opengl()
+static GLFWwindow *init_opengl(std::string& version_string)
 {
     // Initialize GLFW
     check_success(glfwInit());
@@ -87,6 +90,7 @@ static GLFWwindow *init_opengl()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    version_string = "#version 330 core"; // see top comments in 'imgui_impl_opengl3.cpp'
 
     // Create an OpenGL window and a context
     GLFWwindow *window = glfwCreateWindow(
@@ -261,7 +265,7 @@ static void handle_scroll(GLFWwindow *window, double xoffset, double yoffset)
         ctx->mouse_wheel_delta = -1; ctx->mouse_event = true;
     }
 
-    ImGui_ImplGlfwGL3_ScrollCallback(window, xoffset, yoffset);
+    ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
 }
 
 // GLFW keyboard callback
@@ -303,7 +307,7 @@ static void handle_key(GLFWwindow *window, int key, int scancode, int action, in
         }
     }
 
-    ImGui_ImplGlfwGL3_KeyCallback(window, key, scancode, action, mods);
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 }
 
 // GLFW mouse button callback
@@ -313,7 +317,7 @@ static void handle_mouse_button(GLFWwindow *window, int button, int action, int 
     ctx->mouse_button = button + 1;
     ctx->mouse_button_action = action;
 
-    ImGui_ImplGlfwGL3_MouseButtonCallback(window, button, action, mods);
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
 }
 
 // GLFW mouse position callback
@@ -783,15 +787,19 @@ static void render_scene(
 
     if (options.opengl) {
         // Init OpenGL window
-        window = init_opengl();
+        std::string version_string;
+        window = init_opengl(version_string);
         glfwSetWindowUserPointer(window, &window_context);
         glfwSetKeyCallback(window, handle_key);
         glfwSetScrollCallback(window, handle_scroll);
         glfwSetCursorPosCallback(window, handle_mouse_pos);
         glfwSetMouseButtonCallback(window, handle_mouse_button);
-        glfwSetCharCallback(window, ImGui_ImplGlfwGL3_CharCallback);
+        glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
 
-        ImGui_ImplGlfwGL3_Init(window, false);
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForOpenGL(window, false);
+        ImGui_ImplOpenGL3_Init(version_string.c_str());
         ImGui::GetIO().IniFilename = nullptr;       // disable creating imgui.ini
         ImGui::GetStyle().ScaleAllSizes(options.gui_scale);
 
@@ -850,11 +858,11 @@ static void render_scene(
         "example_df_cuda_derivatives.ptx" : "example_df_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + ptx_name).c_str(),
+        (get_executable_folder() + "/" + ptx_name).c_str(),
         "render_sphere_kernel",
         &cuda_function);
 
-    // copy materials of the scene to the device 
+    // copy materials of the scene to the device
     CUdeviceptr material_buffer = 0;
     check_cuda_success(cuMemAlloc(&material_buffer,
                        material_bundle.size() * sizeof(Df_cuda_material)));
@@ -1065,7 +1073,9 @@ static void render_scene(
 
                 // Poll for events and process them
                 glfwPollEvents();
-                ImGui_ImplGlfwGL3_NewFrame();
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
 
                 // Check if buffers need to be resized
                 int nwidth, nheight;
@@ -1344,6 +1354,7 @@ static void render_scene(
 
                 // Show the GUI
                 ImGui::Render();
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
                 // Swap front and back buffers
                 glfwSwapBuffers(window);
@@ -1373,7 +1384,9 @@ static void render_scene(
         glDeleteBuffers(1, &quad_vertex_buffer);
         glDeleteProgram(program);
         check_success(glGetError() == GL_NO_ERROR);
-        ImGui_ImplGlfwGL3_Shutdown();
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
         glfwDestroyWindow(window);
         glfwTerminate();
     }
@@ -1389,7 +1402,7 @@ bool starts_with(std::string const &str, std::string const &prefix)
 Df_cuda_material create_cuda_material(
     size_t target_code_index,
     size_t compiled_material_index,
-    std::vector<mi::mdl::ILink_unit::Target_function_description> const& descs)
+    std::vector<Target_function_description> const& descs)
 {
     Df_cuda_material mat;
 
@@ -1542,15 +1555,15 @@ int main(int argc, char* argv[])
         std::vector<Df_cuda_material> material_bundle;
 
         // Select the functions to translate
-        std::vector<mi::mdl::ILink_unit::Target_function_description> descs;
+        std::vector<Target_function_description> descs;
         descs.push_back(
-            mi::mdl::ILink_unit::Target_function_description("surface.scattering"));
+            Target_function_description("surface.scattering"));
         descs.push_back(
-            mi::mdl::ILink_unit::Target_function_description("surface.emission.emission"));
+            Target_function_description("surface.emission.emission"));
         descs.push_back(
-            mi::mdl::ILink_unit::Target_function_description("surface.emission.intensity"));
+            Target_function_description("surface.emission.intensity"));
         descs.push_back(
-            mi::mdl::ILink_unit::Target_function_description("volume.absorption_coefficient"));
+            Target_function_description("volume.absorption_coefficient"));
 
         // Generate code for all materials
         bool success = true;

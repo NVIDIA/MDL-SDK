@@ -24,7 +24,7 @@ namespace llvm {
     // YOU SHOULD NEVER USE THIS DIRECTLY.
     class ThreadLocalImpl {
       typedef uint64_t ThreadLocalDataTy;
-      /// \brief Platform-specific thread local data.
+      /// Platform-specific thread local data.
       ///
       /// This is embedded in the class and we avoid malloc'ing/free'ing it,
       /// to make this class more safe for use along with CrashRecoveryContext.
@@ -36,7 +36,7 @@ namespace llvm {
       ThreadLocalImpl();
       virtual ~ThreadLocalImpl();
       void setInstance(const void* d);
-      const void* getInstance();
+      void *getInstance();
       void removeInstance();
     };
 

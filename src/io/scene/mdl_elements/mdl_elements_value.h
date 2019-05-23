@@ -173,6 +173,27 @@ private:
 };
 
 
+class Value_string_localized : public Value_base<IValue_string_localized, IType_string>
+{
+public:
+    Value_string_localized( const Type* type, const char* value, const char* original_value) : Base( type), m_value( value), m_original_value( original_value) { }
+
+    const char* get_value() const { return m_value.c_str(); }
+
+    void set_value( const char* value) { m_value = value ? value : ""; }
+
+    const char* get_original_value() const { return m_original_value.c_str(); }
+
+    void set_original_value( const char* value) { m_original_value = value ? value : ""; }
+
+    mi::Size get_memory_consumption() const;
+
+private:
+    std::string m_value;
+    std::string m_original_value;
+};
+
+
 class Value_vector : public Value_base<IValue_vector, IType_vector>
 {
 public:
@@ -301,7 +322,21 @@ private:
 class Value_texture : public Value_base<IValue_texture, IType_texture>
 {
 public:
-    Value_texture( const Type* type, DB::Tag value) : Base( type), m_value( value) { }
+
+    Value_texture(const Type* type, DB::Tag value) : Base(type), m_value(value), m_gamma(0.0f) { }
+
+    Value_texture(
+        const Type* type,
+        DB::Tag value,
+        const char* unresolved_mdl_url,
+        const char *owner_module,
+        mi::Float32 gamma)
+        : Base( type)
+        , m_value( value)
+        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
+        , m_owner_module(owner_module ? owner_module : "")
+        , m_gamma(gamma)
+    { }
 
     DB::Tag get_value() const { return m_value; }
 
@@ -309,11 +344,26 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
+    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+
+    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+
+    const char* get_owner_module() const { return m_owner_module.c_str(); }
+
+    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
+
+    void set_gamma(Float32 gamma) { m_gamma = gamma; }
+
+    mi::Float32 get_gamma() const { return m_gamma; }
+
     mi::Size get_memory_consumption() const;
 
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
+    std::string m_unresolved_mdl_url;
+    std::string m_owner_module;
+    mi::Float32 m_gamma;
 };
 
 
@@ -328,11 +378,21 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
+    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+
+    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+
+    const char* get_owner_module() const { return m_owner_module.c_str(); }
+
+    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
+
     mi::Size get_memory_consumption() const;
 
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
+    std::string m_unresolved_mdl_url;
+    std::string m_owner_module;
 };
 
 
@@ -348,11 +408,21 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
+    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+
+    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+
+    const char* get_owner_module() const { return m_owner_module.c_str(); }
+
+    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
+
     mi::Size get_memory_consumption() const;
 
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
+    std::string m_unresolved_mdl_url;
+    std::string m_owner_module;
 };
 
 
@@ -425,6 +495,8 @@ public:
 
     IValue_string* create_string( const char* value) const;
 
+    IValue_string_localized* create_string_localized( const char* value, const char* original_value) const;
+
     IValue_vector* create_vector( const IType_vector* type) const;
 
     IValue_matrix* create_matrix( const IType_matrix* type) const;
@@ -437,6 +509,13 @@ public:
     IValue_struct* create_struct( const IType_struct* type) const;
 
     IValue_texture* create_texture( const IType_texture* type, DB::Tag value) const;
+
+    IValue_texture* create_texture(
+        const IType_texture* type,
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module,
+        mi::Float32 gamma) const;
 
     IValue_light_profile* create_light_profile( DB::Tag value) const;
 

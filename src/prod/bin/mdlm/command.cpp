@@ -46,6 +46,15 @@ using mi::base::Handle;
 using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::IMdl_info;
 
+// In the GNU C Library, "minor" and "major" are defined
+#ifdef minor
+    #undef minor
+#endif
+
+#ifdef major
+    #undef major
+#endif
+
 namespace mdlm
 {
     extern mi::neuraylib::INeuray * neuray(); //Application::theApp().neuray(
@@ -929,13 +938,35 @@ int Create_mdle::add_user_file(const std::string& source_path, const std::string
 
 int Create_mdle::execute()
 {
-    // parse module and material name
-    size_t p = m_prototype.rfind("::");
-    if (p == 0 || p == std::string::npos || m_prototype[0] != ':' || m_prototype[1] != ':')
+    bool is_mdle = m_prototype.rfind(".mdle") == (m_prototype.size() - 5);
+    std::string module_name, function_name;
+    if (is_mdle)
     {
-        Util::log_error("Invalid material name '" + m_mdle + "' "
-                        "A full qualified name with leading '::' is expected.");
-        return -1;
+        if (!Util::file_is_readable(m_prototype))
+        {
+            Util::log_error("Source MDLE file '" + m_prototype + "' does not exist.");
+            return -1;
+        }
+
+        // make module_name the absolute MDLE file path and use forward slashes
+        module_name = m_prototype;
+
+        // material name is always main for MDLE
+        function_name = "main";
+    }
+    else
+    {
+        // parse module and material name
+        size_t p = m_prototype.rfind("::");
+        if (p == 0 || p == std::string::npos || m_prototype[0] != ':' || m_prototype[1] != ':')
+        {
+            Util::log_error("Invalid material name '" + m_prototype + "' "
+                            "A full qualified name with leading '::' is expected.");
+            return -1;
+        }
+
+        module_name = m_prototype.substr(0, p);
+        function_name = m_prototype.substr(p + 2);
     }
 
     // check if target file name was set
@@ -986,24 +1017,61 @@ int Create_mdle::execute()
         // force experimental to true for now
         context->set_option("experimental", true);
 
-        std::string module_name = m_prototype.substr(0, p);
-        std::string material_name = m_prototype.substr(p + 2);
-
         // load module
         mdl_compiler->load_module(transaction.get(), module_name.c_str(), context.get());
         if (context->get_error_messages_count() > 0)
             break;
 
-        // check if the material is available
-        std::string db_name = "mdl" + m_prototype;
+        // get the resulting db name
+        std::string db_name = mdl_compiler->get_module_db_name(
+            transaction.get(), module_name.c_str(), context.get());
 
+        // since "main" could be a function the signature is required
+        // therefore, get the module and iterate over the functions that are called main (only one)
+        if (is_mdle)
+        {
+            mi::base::Handle<const mi::neuraylib::IModule> mdl_module(
+                transaction->access<mi::neuraylib::IModule>(db_name.c_str()));
+
+            std::string function_db_name = db_name + "::" + "main";
+            mi::base::Handle<const mi::IArray> func_list(mdl_module->get_function_overloads(function_db_name.c_str()));
+
+            switch (func_list->get_length())
+            {
+                case 0: // mdle contains a material, that means no function called 'main'
+                {
+                    
+                    db_name = function_db_name;
+                    break;
+                }
+
+                case 1: // mdle contains a function, there can be only one called 'main'
+                {
+                    mi::base::Handle<const mi::IString> func_sign(func_list->get_element<mi::IString>(0));
+                    db_name = func_sign->get_c_str();
+                    break;
+                }
+
+                default: // not allowed
+                {
+                    Util::log_error("Multiple functions with name: 'main' found in module: '" + module_name + "'.");
+                    break;
+                }
+            }
+        }
+        else
+        {
+            db_name += "::" + function_name;
+        }
+
+        // check if the material/function is available
         mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
             transaction->access<mi::neuraylib::IMaterial_definition>(db_name.c_str()));
         mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(
             transaction->access<mi::neuraylib::IFunction_definition>(db_name.c_str()));
         if (!material_definition && !function_definition)
         {
-            Util::log_error("failed to find the selected material/function: '" + material_name + "' "
+            Util::log_error("failed to find the selected material/function: '" + function_name + "' "
                             "in module: '" + module_name + "'.");
             break;
         }
@@ -1052,6 +1120,11 @@ int Create_mdle::execute()
 
         // create the mdle
         mdle_api->export_mdle(transaction.get(), m_mdle.c_str(), data.get(), context.get());
+        if (context->get_error_messages_count() > 0)
+            break;
+
+        // check if the created mdle is valid
+        mdle_api->validate_mdle(m_mdle.c_str(), context.get());
         if (context->get_error_messages_count() > 0)
             break;
 

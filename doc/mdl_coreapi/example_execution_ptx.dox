@@ -82,7 +82,7 @@ We will iterate the \c position and \c text_coords fields over a 2x2 quad around
 
 <dt><b>Execution of generated code (PTX)</b></dt>
 <dd><br>
-For the non-native backends, the generated code has to be called directly from the corresponding framework, so we need to know the prototypes of the functions generated via \link ILink_unit::add(ILambda_function const *, ICall_name_resolver const *, Function_kind, size_t *, size_t *) ILink_unit::add() \endlink.
+For the non-native backends, the generated code has to be called directly from the corresponding framework, so we need to know the prototypes of the functions generated via \link ILink_unit::add(ILambda_function const *, ICall_name_resolver const *, IGenerated_code_executable::Function_kind, size_t *, size_t *) ILink_unit::add() \endlink.
 With \c "NAME" being the function name you provided as \c fname parameter and \c "T" being the result type, they look like this:
 
 \code

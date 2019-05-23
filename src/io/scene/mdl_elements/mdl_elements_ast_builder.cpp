@@ -66,22 +66,6 @@ using mi::mdl::cast;
 
 using mi::base::Handle;
 
-/// Unmangle a DAG mangled name.
-///
-/// \param name  a DAG mangled name
-///
-/// \note does not remove a $mdl_version suffix on deprecated symbols
-static std::string dag_unmangle(
-    char const *name)
-{
-    std::string res(name);
-
-    size_t pos = res.find('(');
-    if (pos != std::string::npos)
-        res.erase(pos);
-    return res;
-}
-
 /// Get the name of an neuray type.
 ///
 /// \param type  the type
@@ -115,6 +99,8 @@ static std::string get_type_name(
         return "light_profile";
     case IType::TK_BSDF:
         return "bsdf";
+    case IType::TK_HAIR_BSDF:
+        return "hair_bsdf";
     case IType::TK_EDF:
         return "edf";
     case IType::TK_VDF:
@@ -317,6 +303,7 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
     case IType::TK_STRING:
     case IType::TK_LIGHT_PROFILE:
     case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_VECTOR:
@@ -383,16 +370,17 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
     return NULL;
 }
 
-// Retrieve the filed symbol from a DS_INTRINSIC_DAG_FIELD_ACCESS call.
+// Retrieve the field symbol from a DS_INTRINSIC_DAG_FIELD_ACCESS call.
 mi::mdl::ISymbol const *Mdl_ast_builder::get_field_sym(
     std::string const &def)
 {
     const char* p = strstr(def.c_str(), ".mdle::");
     const char* dot = strchr(p ? (p + 7) : def.c_str(), '.');
-    if (dot != NULL) {
-        return m_st.get_symbol(dot + 1);
-    }
-    return NULL;
+    ASSERT(M_SCENE, dot);
+    ASSERT(M_SCENE, strchr(dot, '(') == NULL); // def is assumed to be "unmangled"
+
+    std::string field(dot + 1);
+    return m_st.get_symbol(field.c_str());
 }
 
 /// Removes the deprecated suffix for a DB name.
@@ -417,12 +405,16 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     Handle<IExpression_list const> const &args,
     bool                                 named_args)
 {
+    bool is_material_type = false;
     Handle<IType const> const type(ret_type->skip_all_type_aliases());
     if (type->get_kind() == IType::TK_STRUCT) {
         Handle<IType_struct const> s_tp(type->get_interface<IType_struct>());
 
-        if (s_tp->get_predefined_id() == IType_struct::SID_USER) {
+        IType_struct::Predefined_id id = s_tp->get_predefined_id();
+        if (id == IType_struct::SID_USER) {
             m_used_user_types.push_back(s_tp->get_symbol());
+        } else if (id == IType_struct::SID_MATERIAL) {
+            is_material_type = true;
         }
     } else if (type->get_kind() == IType::TK_ENUM) {
         Handle<IType_enum const> e_tp(type->get_interface<IType_enum>());
@@ -437,11 +429,22 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         mi::mdl::IExpression::Operator op = semantic_to_operator(sema);
 
         if (mi::mdl::is_unary_operator(op)) {
+
             Handle<IExpression const> un_arg(args->get_expression(mi::Size(0)));
             mi::mdl::IExpression const *arg = transform_expr(un_arg);
 
-            return m_ef.create_unary(
+            mi::mdl::IExpression_unary* res = m_ef.create_unary(
                 mi::mdl::IExpression_unary::Operator(op), arg);
+
+            if (op == mi::mdl::IExpression::OK_CAST) {
+                const mi::mdl::IType* type = int_type_to_mdl_type(
+                    ret_type.get(),
+                    m_tf);
+
+                const mi::mdl::IType_name* tn = type_to_type_name(m_owner, type);
+                res->set_type_name(tn);
+            }
+            return res;
         } else if (mi::mdl::is_binary_operator(op)) {
             mi::mdl::IExpression_binary::Operator bop = mi::mdl::IExpression_binary::Operator(op);
 
@@ -468,6 +471,43 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
     // do MDL 1.X => MDL 1.LATEST conversion here
     switch (sema) {
+    case mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR:
+        if (n_params == 6 && is_material_type) {
+            // MDL 1.4 -> 1.5: add default hair bsdf
+            mi::mdl::IQualified_name *tu_qname = create_qualified_name("hair_bsdf");
+            mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
+            mi::mdl::IExpression_call *tu_call = m_ef.create_call(tu_ref);
+
+            mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            for (mi::Size i = 0; i < n_params; ++i) {
+                mi::mdl::IArgument const *arg = NULL;
+
+                Handle<IExpression const> nr_arg(args->get_expression(i));
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+
+                if (named_args) {
+                    arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                } else {
+                    arg = m_ef.create_positional_argument(expr);
+                }
+                call->add_argument(arg);
+
+                if (i == 5) {
+                    // insert the hair parameter
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("hair"), tu_call);
+                    } else {
+                        arg = m_ef.create_positional_argument(tu_call);
+                    }
+                    call->add_argument(arg);
+                }
+            }
+            return call;
+        }
+        break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
         if (n_params == 4) {
             // MDL 1.0 -> 1.2: insert the multiplier and tangent_u parameters
@@ -759,6 +799,22 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     }
 
     switch (sema) {
+    case mi::mdl::IDefinition::DS_CONV_CONSTRUCTOR:
+    case mi::mdl::IDefinition::DS_CONV_OPERATOR:
+    {
+        // Create constructor of return type's type
+        Handle<IType const> const type(ret_type->skip_all_type_aliases());
+        mi::mdl::IType_name const *tn = create_type_name(type);
+        mi::mdl::IExpression_reference *tn_ref = m_ef.create_reference(tn);
+        mi::mdl::IExpression_call *tn_call = m_ef.create_call(tn_ref);
+
+        Handle<IExpression const> arg(args->get_expression(mi::Size(0)));
+        mi::mdl::IExpression const *arg_mdl = transform_expr(arg);
+
+        tn_call->add_argument(m_ef.create_positional_argument(arg_mdl));
+
+        return tn_call;
+    }
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
         {
             Handle<IExpression const> comp_arg(args->get_expression(mi::Size(0)));
@@ -795,6 +851,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             mi::mdl::IType_name *tn = create_type_name(e_tp);
             mi::mdl::IExpression_reference *ref = m_ef.create_reference(tn);
+            ref->set_array_constructor();
+
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
@@ -1399,6 +1457,8 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type(
         return m_tf.create_bsdf_measurement();
     case IType::TK_BSDF:
         return m_tf.create_bsdf();
+    case IType::TK_HAIR_BSDF:
+        return m_tf.create_hair_bsdf();
     case IType::TK_EDF:
         return m_tf.create_edf();
     case IType::TK_VDF:
@@ -1503,6 +1563,15 @@ mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
     return NULL;
 }
 
+ std::string Mdl_ast_builder::dag_unmangle(char const *name)
+{
+    std::string res(name);
+
+    size_t pos = res.rfind('(');
+    if (pos != std::string::npos)
+        res.erase(pos);
+    return res;
+}
 
 } // namespace MDL
 } // namespace MI

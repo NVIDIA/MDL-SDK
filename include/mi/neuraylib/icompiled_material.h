@@ -63,7 +63,16 @@ enum Material_slot {
     SLOT_GEOMETRY_DISPLACEMENT,           ///< Slot geometry.displacement
     SLOT_GEOMETRY_CUTOUT_OPACITY,         ///< Slot geometry.cutout_opacity
     SLOT_GEOMETRY_NORMAL,                 ///< Slot geometry.normal
+    SLOT_HAIR,                            ///< Slot hair
     SLOT_FORCE_32_BIT = 0xffffffffU
+};
+
+/// The compiled material's opacity.
+enum Material_opacity {
+    OPACITY_OPAQUE,                     /// material is opaque
+    OPACITY_TRANSPARENT,                /// material is transparent
+    OPACITY_UNKNOWN,                    /// material might be transparent
+    OPACITY_FORCE_32_BIT = 0xffffffffU
 };
 
 mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
@@ -302,6 +311,17 @@ public:
         const char* material_instance_name,
         Size parameter_index,
         Sint32* errors = 0) const = 0;
+    
+    /// Returns the opacity of the material.
+    virtual Material_opacity get_opacity() const = 0;
+
+    /// Returns the cutout opacity of the material if it is constant.
+    ///
+    /// \param[out] cutout_opacity  get the cutout_opacity value of the material
+    ///
+    /// \returns true of success, false if the value is not a constant, but depends on parameters
+    ///          or complex user expressions
+    virtual bool get_cutout_opacity(Float32 *cutout_opacity) const = 0;
 
     //@}
 };

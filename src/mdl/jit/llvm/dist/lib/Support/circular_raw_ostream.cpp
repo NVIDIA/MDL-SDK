@@ -13,7 +13,6 @@
 
 #include "llvm/Support/circular_raw_ostream.h"
 #include <algorithm>
-#include <cstring>
 using namespace llvm;
 
 void circular_raw_ostream::write_impl(const char *Ptr, size_t Size) {
@@ -34,13 +33,13 @@ void circular_raw_ostream::write_impl(const char *Ptr, size_t Size) {
       Cur = BufferArray;
       Filled = true;
     }
-  }    
+  }
 }
 
 void circular_raw_ostream::flushBufferWithBanner() {
   if (BufferSize != 0) {
     // Write out the buffer
-    TheStream->write(Banner, strlen(Banner));
+    TheStream->write(Banner, std::strlen(Banner));
     flushBuffer();
   }
 }

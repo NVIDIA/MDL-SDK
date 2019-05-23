@@ -50,20 +50,31 @@ set(_GENERATOR_FILES
 # collect sources
 set(PROJECT_HEADERS
     "generator_jit.h"
+    "generator_jit_ast_compute.h"
+    "generator_jit_cns_pass.h"
     "generator_jit_code_printer.h"
     "generator_jit_context.h"
     "generator_jit_generated_code.h"
+    "generator_jit_hlsl_depgraph.h"
+    "generator_jit_hlsl_function.h"
+    "generator_jit_hlsl_writer.h"
     "generator_jit_llvm.h"
     "generator_jit_llvm_passes.h"
+    "generator_jit_opt_pass_gate.h"
     "generator_jit_res_manager.h"
+    "generator_jit_streams.h"
     "generator_jit_type_map.h"
     )
 
 set(PROJECT_SOURCES 
     "generator_jit.cpp"
+    "generator_jit_ast_compute.cpp"
+    "generator_jit_cns_pass.cpp"
     "generator_jit_code_printer.cpp"
     "generator_jit_context.cpp"
     "generator_jit_generated_code.cpp"
+    "generator_jit_hlsl.cpp"
+    "generator_jit_hlsl_writer.cpp"
     "generator_jit_libbsdf.cpp"
     "generator_jit_libdevice.cpp"
     "generator_jit_mangle.cpp"
@@ -91,6 +102,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     ADDITIONAL_INCLUDE_DIRS 
         ${_GENERATED_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}/../../compiler/compiler_hlsl/generated
 )
 
 # additional definitions
@@ -131,7 +143,12 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     NO_LINKING
     NO_RUNTIME_COPY
     )
-    
+
+# dependency only for build order
+add_dependencies(${PROJECT_NAME} 
+    mdl-compiler-compiler_hlsl
+)
+
 # -------------------------------------------------------------------------------------------------
 # Code Generation Step 
 # -------------------------------------------------------------------------------------------------

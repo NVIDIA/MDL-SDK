@@ -39,6 +39,38 @@
 
 #include "example_shared.h"
 
+
+// Command line options structure.
+struct Options {
+    // Materials to use.
+    std::string material_name;
+
+    // Expression path to compile.
+    std::string expr_path;
+
+    // List of MDL module paths.
+    std::vector<std::string> mdl_paths;
+
+    // If true, changes the arguments of the instantiated material.
+    // Will be set to false if the material name or expression path is changed.
+    bool change_arguments;
+
+    // The constructor.
+    Options()
+        : material_name("::nvidia::sdk_examples::tutorials::example_compilation")
+        , expr_path("backface.scattering.tint")
+        , change_arguments(true)
+    {
+    }
+};
+
+// Helper function to extract the module name from a fully-qualified material name.
+std::string get_module_name( const std::string& material_name)
+{
+    size_t p = material_name.rfind( "::");
+    return material_name.substr( 0, p);
+}
+
 // Utility function to dump the hash, arguments, temporaries, and fields of a compiled material.
 void dump_compiled_material(
     mi::neuraylib::ITransaction* transaction,
@@ -96,18 +128,19 @@ void create_material_instance(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_compiler* mdl_compiler,
     mi::neuraylib::IMdl_execution_context* context,
+    const char* material_name,
     const char* instance_name)
 {
     // Load the "example" module.
     check_success( mdl_compiler->load_module( 
-        transaction, "::nvidia::sdk_examples::tutorials", context) >= 0);
+        transaction, get_module_name(material_name).c_str(), context) >= 0);
     print_messages( context);
 
-    // Create a material instance from the material definition 
-    // "mdl::nvidia::sdk_examples::tutorials::compilation_material" with the default arguments.
+    std::string prefix = strncmp(material_name, "::", 2) == 0 ? "mdl" : "mdl::";
+
+    // Create a material instance from the material definition with the default arguments.
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(
-            "mdl::nvidia::sdk_examples::tutorials::example_compilation"));
+        transaction->access<mi::neuraylib::IMaterial_definition>((prefix + material_name).c_str()));
     mi::Sint32 result;
     mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
         material_definition->create_material_instance( 0, &result));
@@ -222,9 +255,73 @@ void generate_cuda_ptx(
     std::cout << code_cuda_ptx->get_code() << std::endl;
 }
 
-
-int main( int /*argc*/, char* /*argv*/[])
+// Generates HLSL target code for a subexpression of a given compiled material.
+void generate_hlsl(
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_execution_context* context,
+    const char* compiled_material_name,
+    const char* path,
+    const char* fname)
 {
+    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->edit<mi::neuraylib::ICompiled_material>( compiled_material_name));
+
+    mi::base::Handle<mi::neuraylib::IMdl_backend> be_hlsl(
+        mdl_compiler->get_backend( mi::neuraylib::IMdl_compiler::MB_HLSL));
+    check_success( be_hlsl->set_option( "num_texture_spaces", "1") == 0);
+
+    mi::base::Handle<const mi::neuraylib::ITarget_code> code_hlsl(
+        be_hlsl->translate_material_expression(
+            transaction, compiled_material.get(), path, fname, context));
+    check_success( print_messages( context));
+    check_success( code_hlsl);
+
+    std::cout << "Dumping HLSL code for \"" << path << "\" of \"" << compiled_material_name
+              << "\":" << std::endl << std::endl;
+    std::cout << code_hlsl->get_code() << std::endl;
+}
+
+
+void usage( char const *prog_name)
+{
+    std::cout
+        << "Usage: " << prog_name << " [options] [<material_name>]\n"
+        << "Options:\n"
+        << "  --mdl_path <path>   mdl search path, can occur multiple times.\n"
+        << "  --expr_path         expression path to compile, defaults to "
+           "\"backface.scattering.tint\"."
+        << "  <material_name>     qualified name of materials to use, defaults to\n"
+        << "                      \"::nvidia::sdk_examples::tutorials::example_compilation\"\n"
+        << std::endl;
+    keep_console_open();
+    exit( EXIT_FAILURE);
+}
+
+int main( int argc, char* argv[])
+{
+    // Parse command line options
+    Options options;
+    options.mdl_paths.push_back(get_samples_mdl_root());
+
+    for ( int i = 1; i < argc; ++i) {
+        char const *opt = argv[i];
+        if ( opt[0] == '-') {
+            if ( strcmp( opt, "--mdl_path") == 0 && i < argc - 1) {
+                options.mdl_paths.push_back( argv[++i]);
+            } else if ( strcmp( opt, "--expr_path") == 0 && i < argc - 1) {
+                options.expr_path = argv[++i];
+                options.change_arguments = false;
+            } else {
+                std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
+                usage( argv[0]);
+            }
+        } else {
+            options.material_name = opt;
+            options.change_arguments = false;
+        }
+    }
+
     // Access the MDL SDK
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
     check_success( neuray.is_valid_interface());
@@ -232,14 +329,17 @@ int main( int /*argc*/, char* /*argv*/[])
     // Configure the MDL SDK
     configure( neuray.get());
 
+    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
+        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    for ( std::string const &mdl_path : options.mdl_paths) {
+        check_success( mdl_compiler->add_module_path( mdl_path.c_str()) == 0);
+    }
+
     // Start the MDL SDK
     mi::Sint32 result = neuray->start();
     check_start_success( result);
 
     {
-        mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-            neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
-
         mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
             neuray->get_api_component<mi::neuraylib::IMdl_factory>());
 
@@ -255,7 +355,12 @@ int main( int /*argc*/, char* /*argv*/[])
 
             // Load the "example" module and create a material instance
             std::string instance_name = "instance of compilation_material";
-            create_material_instance( transaction.get(), mdl_compiler.get(), context.get(), instance_name.c_str());
+            create_material_instance(
+                transaction.get(),
+                mdl_compiler.get(),
+                context.get(),
+                options.material_name.c_str(),
+                instance_name.c_str());
 
             // Compile the material instance in instance compilation mode
             std::string instance_compilation_name
@@ -274,28 +379,48 @@ int main( int /*argc*/, char* /*argv*/[])
             // Change some material argument and compile again in both modes. Note the differences
             // in instance compilation mode, whereas only the referenced parameter itself changes in
             // class compilation mode.
-            change_arguments( transaction.get(), mdl_factory.get(), instance_name.c_str());
-            compile_material_instance(
-                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
-                instance_compilation_name.c_str(), false);
-            compile_material_instance(
-                transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
-                class_compilation_name.c_str(), true);
+            if (options.change_arguments) {
+                change_arguments( transaction.get(), mdl_factory.get(), instance_name.c_str());
+                compile_material_instance(
+                    transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
+                    instance_compilation_name.c_str(), false);
+                compile_material_instance(
+                    transaction.get(), mdl_factory.get(), context.get(), instance_name.c_str(),
+                    class_compilation_name.c_str(), true);
+            }
 
             // Use the various backends to generate target code for some material expression.
             generate_llvm_ir(
-                transaction.get(), mdl_compiler.get(), context.get(), instance_compilation_name.c_str(),
-                "backface.scattering.tint", "tint");
+                transaction.get(), mdl_compiler.get(), context.get(),
+                instance_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
+            generate_llvm_ir(
+                transaction.get(), mdl_compiler.get(), context.get(),
+                class_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
             generate_cuda_ptx(
-                transaction.get(), mdl_compiler.get(), context.get(), instance_compilation_name.c_str(),
-                "backface.scattering.tint", "tint");
+                transaction.get(), mdl_compiler.get(), context.get(),
+                instance_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
             generate_cuda_ptx(
-                transaction.get(), mdl_compiler.get(), context.get(), class_compilation_name.c_str(),
-                "backface.scattering.tint", "tint");
+                transaction.get(), mdl_compiler.get(), context.get(),
+                class_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
+            generate_hlsl(
+                transaction.get(), mdl_compiler.get(), context.get(),
+                instance_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
+            generate_hlsl(
+                transaction.get(), mdl_compiler.get(), context.get(),
+                class_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
         }
 
         transaction->commit();
     }
+
+    // Free MDL compiler before shutting down MDL SDK
+    mdl_compiler = 0;
 
     // Shut down the MDL SDK
     check_success( neuray->shutdown() == 0);

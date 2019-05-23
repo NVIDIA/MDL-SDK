@@ -36,10 +36,8 @@
 
 #include <vector>
 
-#include <llvm/Analysis/Verifier.h>
-#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -49,8 +47,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Linker/Linker.h>
 #include <llvm/Support/CodeGen.h>
-#include <llvm/Support/Dwarf.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/PrettyStackTrace.h>
@@ -59,9 +57,6 @@
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/DIBuilder.h>
-#include <llvm/Linker.h>
-#include <llvm/PassManager.h>
 
 #include "generator_jit_llvm.h"
 #include "generator_jit_context.h"
@@ -1210,6 +1205,8 @@ const int VPRINTF_BUFFER_ROUND_UP = 8;   // In Bytes.
 typedef mi::mdl::debug::Line_buffer LB;
 typedef int    (*II_II)(int);
 typedef int    (*II_IIII)(int, int);
+typedef int    (*II_FF)(float);
+typedef int    (*II_DD)(double);
 typedef float  (*FF_FF)(float);
 typedef float  (*FF_FFFF)(float, float);
 typedef float  (*FF_FFff)(float, float *);
@@ -1219,6 +1216,7 @@ typedef double (*DD_DDDD)(double, double);
 typedef double (*DD_DDdd)(double, double *);
 typedef double (*DD_DDII)(double, int);
 typedef void   (*VV_FFffff)(float, float *, float *);
+typedef void   (*VV_DDdddd)(double, double *, double *);
 typedef void   (*FA3_FF)(float *, float);
 typedef void   (*VV_)(void);
 typedef void   (*VV_CSCSCSII)(char const *, char const *, char const *, int line);
@@ -1229,8 +1227,8 @@ typedef void   (*VV_lbII)(LB *, int);
 typedef void   (*VV_lbFF)(LB *, float);
 typedef void   (*VV_lbDD)(LB *, double);
 typedef void   (*VV_lbCS)(LB *, char const *);
-typedef void   (*VV_xsIIZZCSII)(LLVM_code_generator::Exc_state &, int, size_t, char const *, int);
-typedef void   (*VV_xsCSII)(LLVM_code_generator::Exc_state &, char const *, int);
+typedef void   (*VV_xsIIZZCSII)(Exc_state &, int, size_t, char const *, int);
+typedef void   (*VV_xsCSII)(Exc_state &, char const *, int);
 
 template <typename Signature>
 struct Signature_trait {
@@ -1238,15 +1236,19 @@ struct Signature_trait {
 };
 template <>
 struct Signature_trait<FF_FFff> {
-    enum V { NO_CAPTURE_ARG_IDX = 2 };
+    enum V { NO_CAPTURE_ARG_IDX = 1 };
 };
 template <>
 struct Signature_trait<DD_DDdd> {
-    enum V { NO_CAPTURE_ARG_IDX = 2 };
+    enum V { NO_CAPTURE_ARG_IDX = 1 };
 };
 template <>
 struct Signature_trait<VV_FFffff> {
-    enum V { NO_CAPTURE_ARG_IDX = 0x23 };  // 2 AND 3 argument
+    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // 2nd AND 3nd argument
+};
+template <>
+struct Signature_trait<VV_DDdddd> {
+    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // 2nd AND 3nd argument
 };
 
 template<typename FUNC_PTR>
@@ -1261,10 +1263,12 @@ static void add_attributes(llvm::Function *func, int nocapture_idx)
     func->setDoesNotThrow();
     if (nocapture_idx > 0) {
         if (nocapture_idx >= 0x10) {
-            func->setDoesNotCapture(unsigned(nocapture_idx) >> 4);
+            func->addParamAttr(unsigned(nocapture_idx) >> 4, llvm::Attribute::NoCapture);
             nocapture_idx = nocapture_idx & 0xF;
         }
-        func->setDoesNotCapture(unsigned(nocapture_idx));
+        func->addParamAttr(unsigned(nocapture_idx), llvm::Attribute::NoCapture);
+        func->setOnlyAccessesArgMemory();
+        func->setDoesNotReadMemory();
     }
     else
         func->setOnlyReadsMemory();
@@ -1346,9 +1350,54 @@ case en: \
     } \
     break;
 
+#define HLSL_INTRINSIC(en, name, type) \
+case en: \
+    func = decl_from_signature("hlsl." #name, signature, is_sret); \
+    add_attributes(func, Signature_trait<type>::NO_CAPTURE_ARG_IDX); \
+    func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
+    break;
+
     llvm::Function *func = NULL;
     bool is_sret = false;
-    if (m_ptx_mode) {
+    switch (m_target_lang) {
+    case LLVM_code_generator::TL_NATIVE:
+        // use default LLVM intrinsics
+        switch (code) {
+        LLVM_INTRINSIC(RT_ABS,      fabs);
+        EXTERNAL_CMATH(RT_ABSI,     abs,   II_II);
+        EXTERNAL_CMATH(RT_ACOSF,    acosf, FF_FF);
+        EXTERNAL_CMATH(RT_ACOS,     acos,  DD_DD);
+        EXTERNAL_CMATH(RT_ASINF,    asinf, FF_FF);
+        EXTERNAL_CMATH(RT_ASIN,     asin,  DD_DD);
+        EXTERNAL_CMATH(RT_ATANF,    atanf, FF_FF);
+        EXTERNAL_CMATH(RT_ATAN,     atan,  DD_DD);
+        EXTERNAL_CMATH(RT_ATAN2F,   atan2f, FF_FFFF);
+        EXTERNAL_CMATH(RT_ATAN2,    atan2,  DD_DDDD);
+        LLVM_INTRINSIC(RT_CEIL,     ceil);
+        LLVM_INTRINSIC(RT_COS,      cos);
+        LLVM_INTRINSIC(RT_EXP,      exp);
+        LLVM_INTRINSIC(RT_EXP2,     exp2);
+        LLVM_INTRINSIC(RT_FLOOR,    floor);
+        EXTERNAL_CMATH(RT_FMODF,    fmodf, FF_FFFF);
+        EXTERNAL_CMATH(RT_FMOD,     fmod,  DD_DDDD);
+        LLVM_INTRINSIC(RT_LOG,      log);
+        LLVM_INTRINSIC(RT_LOG2,     log2);
+        LLVM_INTRINSIC(RT_LOG10,    log10);
+        EXTERNAL_CMATH(RT_MODFF,    modff, FF_FFff);
+        EXTERNAL_CMATH(RT_MODF,     modf,  DD_DDdd);
+        LLVM_INTRINSIC(RT_POW,      pow);
+        _LLVM_INTRINSIC(RT_POWI,    "powi.f64");
+        LLVM_INTRINSIC(RT_SIN,      sin);
+        LLVM_INTRINSIC(RT_SQRT,     sqrt);
+        EXTERNAL_CMATH(RT_TANF,     tanf, FF_FF);
+        EXTERNAL_CMATH(RT_TAN,      tan,  DD_DD);
+        LLVM_INTRINSIC(RT_COPYSIGN, copysign);
+        default:
+            MDL_ASSERT(!"unsupported <cmath> runtime function requested");
+            break;
+        }
+        break;
+    case LLVM_code_generator::TL_PTX:
         // use libdevice calls
         switch (code) {
         EXTERNAL_LIBDEVICE(RT_ABSF,      fabsf,     FF_FF);
@@ -1406,57 +1455,59 @@ case en: \
             MDL_ASSERT(!"unsupported <cmath> runtime function requested");
             break;
         }
-    } else {
-        // use default LLVM intrinsics
+        break;
+    case LLVM_code_generator::TL_HLSL:
         switch (code) {
-            LLVM_INTRINSIC(RT_ABS,      fabs);
-            EXTERNAL_CMATH(RT_ABSI,     abs,   II_II);
-            EXTERNAL_CMATH(RT_ACOSF,    acosf, FF_FF);
-            EXTERNAL_CMATH(RT_ACOS,     acos,  DD_DD);
-            EXTERNAL_CMATH(RT_ASINF,    asinf, FF_FF);
-            EXTERNAL_CMATH(RT_ASIN,     asin,  DD_DD);
-            EXTERNAL_CMATH(RT_ATANF,    atanf, FF_FF);
-            EXTERNAL_CMATH(RT_ATAN,     atan,  DD_DD);
-            EXTERNAL_CMATH(RT_ATAN2F,   atan2f, FF_FFFF);
-            EXTERNAL_CMATH(RT_ATAN2,    atan2,  DD_DDDD);
-            LLVM_INTRINSIC(RT_CEIL,     ceil);
-            LLVM_INTRINSIC(RT_COS,      cos);
-            LLVM_INTRINSIC(RT_EXP,      exp);
-            LLVM_INTRINSIC(RT_EXP2,     exp2);
-            LLVM_INTRINSIC(RT_FLOOR,    floor);
-            EXTERNAL_CMATH(RT_FMODF,    fmodf, FF_FFFF);
-            EXTERNAL_CMATH(RT_FMOD,     fmod,  DD_DDDD);
-            LLVM_INTRINSIC(RT_LOG,      log);
-            LLVM_INTRINSIC(RT_LOG2,     log2);
-            LLVM_INTRINSIC(RT_LOG10,    log10);
-            EXTERNAL_CMATH(RT_MODFF,    modff, FF_FFff);
-            EXTERNAL_CMATH(RT_MODF,     modf,  DD_DDdd);
-            LLVM_INTRINSIC(RT_POW,      pow);
-        //#ifdef MI_ENABLE_MISTD // no powi in C++11
-            EXTERNAL_CMATH2(RT_POWI,    pow,   mi::mdl::powi, DD_DDII);
-        //#else
-            //EXTERNAL_CMATH(RT_POWI,     pow,   DD_DDII);
-        //#endif
-            LLVM_INTRINSIC(RT_SIN,      sin);
-            LLVM_INTRINSIC(RT_SQRT,     sqrt);
-            EXTERNAL_CMATH(RT_TANF,     tanf, FF_FF);
-            EXTERNAL_CMATH(RT_TAN,      tan,  DD_DD);
-#ifdef LLVM_3_4
-            LLVM_INTRINSIC(RT_COPYSIGN, copysign);
-#else
-#ifdef _MSC_VER
-            // no copysign in MS runtime
-            EXTERNAL_CMATH2(RT_COPYSIGNF, copysign,  ::_copysign,        DD_DDDD);
-            EXTERNAL_CMATH2(RT_COPYSIGN,  copysignf, mi::mdl::copysignf, FF_FFFF);
-#else
-            EXTERNAL_CMATH(RT_COPYSIGNF, copysignf, FF_FFFF);
-            EXTERNAL_CMATH(RT_COPYSIGN,  copysign,  DD_DDDD);
-#endif
-#endif
+        LLVM_INTRINSIC(RT_ABS,       fabs);
+        HLSL_INTRINSIC(RT_ABSI,      abs,       II_II);
+        HLSL_INTRINSIC(RT_ACOSF,     acos,      FF_FF);
+        HLSL_INTRINSIC(RT_ACOS,      acos,      DD_DD);
+        HLSL_INTRINSIC(RT_ASINF,     asin,      FF_FF);
+        HLSL_INTRINSIC(RT_ASIN,      asin,      DD_DD);
+        HLSL_INTRINSIC(RT_ATANF,     atan,      FF_FF);
+        HLSL_INTRINSIC(RT_ATAN,      atan,      DD_DD);
+        HLSL_INTRINSIC(RT_ATAN2F,    atan2,     FF_FFFF);
+        HLSL_INTRINSIC(RT_ATAN2,     atan2,     DD_DDDD);
+        LLVM_INTRINSIC(RT_CEIL,      ceil);
+        LLVM_INTRINSIC(RT_COS,       cos);
+        LLVM_INTRINSIC(RT_EXP,       exp);
+        LLVM_INTRINSIC(RT_EXP2,      exp2);
+        HLSL_INTRINSIC(RT_FLOORF,    floor,     FF_FF);
+        HLSL_INTRINSIC(RT_FLOOR,     floor,     DD_DD);
+        HLSL_INTRINSIC(RT_FMODF,     fmod,      FF_FFFF);
+        HLSL_INTRINSIC(RT_FMOD,      fmod,      DD_DDDD);
+        HLSL_INTRINSIC(RT_FRACF,     frac,      FF_FF);
+        HLSL_INTRINSIC(RT_FRAC,      frac,      DD_DD);
+        LLVM_INTRINSIC(RT_LOG,       log);
+        LLVM_INTRINSIC(RT_LOG2,      log2);
+        LLVM_INTRINSIC(RT_LOG10,     log10);
+        HLSL_INTRINSIC(RT_MODFF,     modf,      FF_FFff);
+        HLSL_INTRINSIC(RT_MODF,      modf,      DD_DDdd);
+        HLSL_INTRINSIC(RT_POWF,      pow,       FF_FFFF);
+        HLSL_INTRINSIC(RT_POW,       pow,       DD_DDDD);
+        HLSL_INTRINSIC(RT_POWI,      pow,       DD_DDII);
+        LLVM_INTRINSIC(RT_SIN,       sin);
+        LLVM_INTRINSIC(RT_SQRT,      sqrt);
+        HLSL_INTRINSIC(RT_TANF,      tan,       FF_FF);
+        HLSL_INTRINSIC(RT_TAN,       tan,       DD_DD);
+        HLSL_INTRINSIC(RT_COPYSIGNF, copysign,  FF_FFFF);
+        HLSL_INTRINSIC(RT_COPYSIGN,  copysign,  DD_DDDD);
+        HLSL_INTRINSIC(RT_MINI,      min,       II_IIII);
+        HLSL_INTRINSIC(RT_MAXI,      max,       II_IIII);
+        HLSL_INTRINSIC(RT_MINF,      min,       FF_FFFF);
+        HLSL_INTRINSIC(RT_MAXF,      max,       FF_FFFF);
+        HLSL_INTRINSIC(RT_MIN,       min,       DD_DDDD);
+        HLSL_INTRINSIC(RT_MAX,       max,       DD_DDDD);
+        HLSL_INTRINSIC(RT_RSQRTF,    rsqrt,     FF_FF);
+        HLSL_INTRINSIC(RT_RSQRT,     rsqrt,     DD_DD);
+        HLSL_INTRINSIC(RT_SIGNF,     sign,      II_FF);
+        HLSL_INTRINSIC(RT_SIGN,      sign,      II_DD);
+
         default:
-            MDL_ASSERT(!"unsupported <cmath> runtime function requested");
+            MDL_ASSERT(!"unsupported HLSL runtime function requested");
             break;
         }
+        break;
     }
     return func;
 
@@ -1731,11 +1782,10 @@ llvm::Value *MDL_runtime_creator::load_by_value(Function_context &ctx, llvm::Val
 // offset should point to after the last entry and will be advanced to after the new entry.
 int MDL_runtime_creator::get_next_valist_entry_offset(int &offset, llvm::Type *operand_type)
 {
-    llvm::DataLayout  data_layout(m_code_gen.get_llvm_module());
+    llvm::DataLayout data_layout(m_code_gen.get_llvm_module());
 
-    if ( offset != 0 )
-      offset = data_layout.RoundUpAlignment(offset,
-        data_layout.getPrefTypeAlignment(operand_type));
+    if (offset != 0)
+        offset = int(llvm::alignTo(offset, data_layout.getPrefTypeAlignment(operand_type)));
 
     int start_offset = offset;
 
@@ -1749,7 +1799,7 @@ int MDL_runtime_creator::get_next_valist_entry_offset(int &offset, llvm::Type *o
 llvm::Value *MDL_runtime_creator::get_next_valist_pointer(Function_context &ctx,
     llvm::Value *valist, int &offset, llvm::Type *operand_type)
 {
-    llvm::Value       *values[2] = { ctx.get_constant(0) };
+    llvm::Value *values[2] = { ctx.get_constant(0) };
 
     int start_offset = get_next_valist_entry_offset(offset, operand_type);
     values[1] = ctx.get_constant(start_offset);
@@ -1839,6 +1889,109 @@ void MDL_runtime_creator::call_rt_func_void(
     ctx->CreateCall(callee, n_args);
 }
 
+// Call texture attribute runtime function.
+llvm::Value *MDL_runtime_creator::call_tex_attr_func(
+    Function_context &ctx,
+    Runtime_function tex_func_code,
+    Type_mapper::Tex_handler_vtable_index tex_func_idx,
+    llvm::Value *res_data,
+    llvm::Value *tex_id,
+    llvm::Value *opt_uv_tile,
+    llvm::Type *res_type)
+{
+    llvm::Value *res;
+
+    if (m_has_res_handler) {
+        llvm::Function *glue_func = get_runtime_func(tex_func_code);
+        res = ctx->CreateCall(glue_func, { res_data, tex_id });
+    } else {
+        llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+            res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+        llvm::Value *self     = ctx->CreateBitCast(
+            ctx->CreateLoad(self_adr),
+            m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+        llvm::Value *tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
+        llvm::SmallVector<llvm::Value *, 4> args;
+
+        llvm::Value *tmp = nullptr;
+
+        if (tex_func_idx != Type_mapper::THV_tex_texture_isvalid) {
+            llvm::Type *tmp_type = res_type;
+            if (tex_func_idx == Type_mapper::THV_tex_resolution_2d) {
+                tmp_type = m_code_gen.m_type_mapper.get_arr_int_2_type();
+            } else if (tex_func_idx == Type_mapper::THV_tex_resolution_3d) {
+                tmp_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
+            }
+            tmp = ctx.create_local(tmp_type, "tmp");
+            args.push_back(tmp);
+        }
+        args.push_back(self);
+        args.push_back(tex_id);
+        if (tex_func_idx == Type_mapper::THV_tex_resolution_2d) {
+            if (opt_uv_tile == nullptr) {
+                opt_uv_tile = ctx.create_local(
+                    m_code_gen.m_type_mapper.get_arr_int_2_type(), "uv_tile");
+                ctx.store_int2_zero(opt_uv_tile);
+            }
+            args.push_back(opt_uv_tile);
+        }
+        llvm::CallInst *call = ctx->CreateCall(tex_func, args);
+        call->setDoesNotThrow();
+
+        if (tex_func_idx == Type_mapper::THV_tex_texture_isvalid) {
+            res = call;
+        } else {
+            res = ctx->CreateLoad(tmp);
+
+            if (tex_func_idx == Type_mapper::THV_tex_resolution_2d ||
+                    tex_func_idx == Type_mapper::THV_tex_resolution_3d) {
+                // extract requested dimension
+                unsigned dim;
+                switch (tex_func_code) {
+                default:
+                case RT_MDL_TEX_WIDTH:  dim = 0; break;
+                case RT_MDL_TEX_HEIGHT: dim = 1; break;
+                case RT_MDL_TEX_DEPTH:  dim = 2; break;
+                }
+                res = ctx.create_extract(res, dim);
+            }
+        }
+    }
+    return res;
+}
+
+// Call attribute runtime function.
+llvm::Value *MDL_runtime_creator::call_attr_func(
+    Function_context &ctx,
+    Runtime_function func_code,
+    Type_mapper::Tex_handler_vtable_index tex_func_idx,
+    llvm::Value *res_data,
+    llvm::Value *res_id)
+{
+    llvm::Value *res;
+
+    if (m_has_res_handler) {
+        llvm::Function *glue_func = get_runtime_func(func_code);
+        res = ctx->CreateCall(glue_func, { res_data, res_id });
+    } else {
+        llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+            res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+        llvm::Value *self     = ctx->CreateBitCast(
+            ctx->CreateLoad(self_adr),
+            m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+        llvm::Value *tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
+
+        llvm::Value *args[] = { self, res_id };
+        llvm::CallInst *call = ctx->CreateCall(tex_func, args);
+        call->setDoesNotThrow();
+
+        res = call;
+    }
+    return res;
+}
+
 // Check if a given MDL runtime
 llvm::Function *MDL_runtime_creator::find_in_c_runtime(
     Runtime_function code,
@@ -1857,36 +2010,44 @@ llvm::Function *MDL_runtime_creator::find_in_c_runtime(
         return get_c_runtime_func(RT_LOG2, signature);
 #endif
     case RT_MDL_MINI:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MINI, signature);
         return NULL;
     case RT_MDL_MAXI:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MAXI, signature);
         return NULL;
     case RT_MDL_MINF:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MINF, signature);
         return NULL;
     case RT_MDL_MAXF:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MAXF, signature);
         return NULL;
     case RT_MDL_MIN:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MIN, signature);
         return NULL;
     case RT_MDL_MAX:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_MAX, signature);
         return NULL;
     case RT_MDL_RSQRTF:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_RSQRTF, signature);
         return NULL;
     case RT_MDL_RSQRT:
-        if (m_ptx_mode)
+        if (m_target_lang == LLVM_code_generator::TL_PTX)
             return get_c_runtime_func(RT_RSQRT, signature);
+        return NULL;
+    case RT_MDL_FRAC:
+        if (m_target_lang == LLVM_code_generator::TL_HLSL)
+            return get_c_runtime_func(RT_FRAC, signature);
+        return NULL;
+    case RT_MDL_FRACF:
+        if (m_target_lang == LLVM_code_generator::TL_HLSL)
+            return get_c_runtime_func(RT_FRACF, signature);
         return NULL;
     default:
         return NULL;
@@ -1907,9 +2068,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     llvm::Function *func   = decl_from_signature(name, signature, is_sret);
 
     // Mark function as a native function already registered with the Jitted_code,
-    // if we are not in PTX mode
+    // if we are in NATIVE mode
     #define MARK_NATIVE(func) do {                                    \
-            if (!m_ptx_mode) {                                        \
+            if (m_target_lang == LLVM_code_generator::TL_NATIVE) {    \
                 func->setCallingConv(llvm::CallingConv::C);           \
                 func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
             }                                                         \
@@ -1919,412 +2080,418 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     switch (code) {
     case RT_MDL_TEX_RESOLUTION_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_resolution_2d
+        return func;
+    case RT_MDL_TEX_RESOLUTION_3D:
+        func->setDoesNotThrow();
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        MARK_NATIVE(func);  // tex_resolution_3d
         return func;
     case RT_MDL_TEX_WIDTH:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_width
         return func;
     case RT_MDL_TEX_HEIGHT:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_height
         return func;
     case RT_MDL_TEX_DEPTH:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_depth
         return func;
-    case RT_MDL_TEX_VALID:
+    case RT_MDL_TEX_ISVALID:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_isvalid
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_2D:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
-        func->setDoesNotCapture(6); // crop_u
-        func->setDoesNotCapture(7); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(5, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_float_2d
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
-        func->setDoesNotCapture(6); // crop_u
-        func->setDoesNotCapture(7); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(5, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_deriv_float_2d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_3D:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
-        func->setDoesNotCapture(9); // crop_w
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
+        func->addParamAttr(8, llvm::Attribute::NoCapture); // crop_w
         MARK_NATIVE(func);  // tex_lookup_float_3d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_CUBE:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_lookup_float_cube
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_PTEX:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float_ptex
         return func;
 
     case RT_MDL_TEX_LOOKUP_FLOAT2_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_float2_2d
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT2_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_deriv_float2_2d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(8); // crop_u
-        func->setDoesNotCapture(9); // crop_v
-        func->setDoesNotCapture(10); // crop_w
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(8, llvm::Attribute::NoCapture); // crop_v
+        func->addParamAttr(9, llvm::Attribute::NoCapture); // crop_w
         MARK_NATIVE(func);  // tex_lookup_float2_3d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_CUBE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_lookup_float2_cube
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_PTEX:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float2_ptex
         return func;
 
     case RT_MDL_TEX_LOOKUP_FLOAT3_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_float3_2d
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT3_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_deriv_float3_2d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(8); // crop_u
-        func->setDoesNotCapture(9); // crop_v
-        func->setDoesNotCapture(10); // crop_w
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(8, llvm::Attribute::NoCapture); // crop_v
+        func->addParamAttr(9, llvm::Attribute::NoCapture); // crop_w
         MARK_NATIVE(func);  // tex_lookup_float3_3d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_CUBE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_lookup_float3_cube
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_PTEX:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float3_ptex
         return func;
 
     case RT_MDL_TEX_LOOKUP_FLOAT4_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_float4_2d
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT4_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_deriv_float4_2d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(8); // crop_u
-        func->setDoesNotCapture(9); // crop_v
-        func->setDoesNotCapture(10); // crop_w
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(8, llvm::Attribute::NoCapture); // crop_v
+        func->addParamAttr(9, llvm::Attribute::NoCapture); // crop_w
         MARK_NATIVE(func);  // tex_lookup_float4_3d
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_CUBE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_lookup_float4_cube
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_PTEX:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float4_ptex
         return func;
 
     case RT_MDL_TEX_LOOKUP_COLOR_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_color_2d
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_COLOR_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(7); // crop_u
-        func->setDoesNotCapture(8); // crop_v
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(6, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_v
         MARK_NATIVE(func);  // tex_lookup_deriv_color_2d
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(8); // crop_u
-        func->setDoesNotCapture(9); // crop_v
-        func->setDoesNotCapture(10); // crop_w
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(7, llvm::Attribute::NoCapture); // crop_u
+        func->addParamAttr(8, llvm::Attribute::NoCapture); // crop_v
+        func->addParamAttr(9, llvm::Attribute::NoCapture); // crop_w
         MARK_NATIVE(func);  // tex_lookup_color_3d
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_CUBE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_lookup_color_cube
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_PTEX:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_color_ptex
         return func;
 
     case RT_MDL_TEX_TEXEL_FLOAT_2D:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
-        func->setDoesNotCapture(4); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_texel_float_2d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT2_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(5); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_texel_float2_2d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT3_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(5); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_texel_float3_2d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT4_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(5); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_texel_float4_2d
         return func;
     case RT_MDL_TEX_TEXEL_COLOR_2D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
-        func->setDoesNotCapture(5); // uv_tile
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // uv_tile
         MARK_NATIVE(func);  // tex_texel_color_2d
         return func;
 
     case RT_MDL_TEX_TEXEL_FLOAT_3D:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_texel_float_3d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT2_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_texel_float2_3d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT3_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_texel_float3_3d
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT4_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_texel_float4_3d
         return func;
     case RT_MDL_TEX_TEXEL_COLOR_3D:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // coord
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
         MARK_NATIVE(func);  // tex_texel_color_3d
         return func;
 
     case RT_MDL_DF_LIGHT_PROFILE_POWER:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_power
         return func;
     case RT_MDL_DF_LIGHT_PROFILE_MAXIMUM:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_maximum
         return func;
-    case RT_MDL_DF_LIGHT_PROFILE_VALID:
+    case RT_MDL_DF_LIGHT_PROFILE_ISVALID:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_isvalid
         return func;
-    case RT_MDL_DF_BSDF_MEASUREMENT_VALID:
+    case RT_MDL_DF_BSDF_MEASUREMENT_ISVALID:
         func->setDoesNotThrow();
         func->setOnlyReadsMemory();
-        func->setDoesNotCapture(1); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_bsdf_measurement_isvalid
         return func;
 
     case RT_MDL_DF_BSDF_MEASUREMENT_RESOLUTION:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_bsdf_measurement_resolution
         return func;
 
     case RT_MDL_DF_BSDF_MEASUREMENT_EVALUATE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // theta_phi_in
-        func->setDoesNotCapture(5); // theta_phi_out
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_in
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // theta_phi_out
         MARK_NATIVE(func);  // df_bsdf_measurement_evaluate
         return func;
 
     case RT_MDL_DF_BSDF_MEASUREMENT_SAMPLE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result theta phi pdf
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // theta_phi_out
-        func->setDoesNotCapture(5); // xi
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result theta phi pdf
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_out
+        func->addParamAttr(4, llvm::Attribute::NoCapture); // xi
         MARK_NATIVE(func);  // df_bsdf_measurement_sample
         return func;
 
     case RT_MDL_DF_BSDF_MEASUREMENT_PDF:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // theta_phi_in
-        func->setDoesNotCapture(4); // theta_phi_out
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi_in
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_out
         MARK_NATIVE(func);  // df_bsdf_measurement_pdf
         return func;
 
     case RT_MDL_DF_BSDF_MEASUREMENT_ALBEDOS:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // theta_phi
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_bsdf_measurement_albedos
         return func;
 
     case RT_MDL_DF_LIGHT_PROFILE_EVALUATE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // theta_phi
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_light_profile_evaluate
         return func;
 
     case RT_MDL_DF_LIGHT_PROFILE_SAMPLE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // result theta phi pdf
-        func->setDoesNotCapture(2); // resource_data
-        func->setDoesNotCapture(4); // xi
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result theta phi pdf
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // xi
         MARK_NATIVE(func);  // df_light_profile_sample
         return func;
 
     case RT_MDL_DF_LIGHT_PROFILE_PDF:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // resource_data
-        func->setDoesNotCapture(3); // theta_phi
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_light_profile_pdf
         return func;
 
     case RT_MDL_BLACKBODY:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // sRGB
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // sRGB
         MARK_NATIVE(func);  // mi::mdl::spectral::mdl_blackbody
         return func;
 
@@ -2334,16 +2501,16 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_ASSERTFAIL:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // reason
-        func->setDoesNotCapture(2); // func_name
-        func->setDoesNotCapture(3); // file_name
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // reason
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // func_name
+        func->addParamAttr(2, llvm::Attribute::NoCapture); // file_name
         MARK_NATIVE(func);  // debug::assertfail
         return func;
     case RT___ASSERTFAIL:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // message
-        func->setDoesNotCapture(2); // file
-        func->setDoesNotCapture(4); // function
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // message
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // file
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // function
 
         // CUDA/OptiX runtime function
         func->setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -2354,39 +2521,39 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_PRINT_END:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_end
         return func;
     case RT_MDL_PRINT_BOOL:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_bool
         return func;
     case RT_MDL_PRINT_INT:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_int
         return func;
     case RT_MDL_PRINT_FLOAT:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_float
         return func;
     case RT_MDL_PRINT_DOUBLE:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_double
         return func;
     case RT_MDL_PRINT_STRING:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // buffer
-        func->setDoesNotCapture(2); // value
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // value
         MARK_NATIVE(func);  // debug::print_string
         return func;
     case RT_VPRINTF:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // format
-        func->setDoesNotCapture(2); // valist
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // format
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // valist
 
         // CUDA/OptiX runtime function
         func->setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -2395,21 +2562,21 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     case RT_MDL_TO_CSTRING:
         func->setDoesNotThrow();
         if (!m_code_gen.m_type_mapper.strings_mapped_to_ids())
-            func->setDoesNotCapture(1); // string_or_id
+            func->addParamAttr(0, llvm::Attribute::NoCapture); // string_or_id
         break;
 
     case RT_MDL_OUT_OF_BOUNDS:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // exc_state
-        func->setDoesNotCapture(4); // fname
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // exc_state
+        func->addParamAttr(3, llvm::Attribute::NoCapture); // fname
         func->setDoesNotReturn();
         MARK_NATIVE(func);  // LLVM_code_generator::mdl_out_of_bounds
         return func;
 
     case RT_MDL_DIV_BY_ZERO:
         func->setDoesNotThrow();
-        func->setDoesNotCapture(1); // exc_state
-        func->setDoesNotCapture(2); // fname
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // exc_state
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // fname
         func->setDoesNotReturn();
         MARK_NATIVE(func);  // LLVM_code_generator::mdl_div_by_zero
         return func;
@@ -2447,8 +2614,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
             llvm::Function *max_func = get_runtime_func(RT_MDL_MAX);
             llvm::Function *min_func = get_runtime_func(RT_MDL_MIN);
-            llvm::Value *res = ctx->CreateCall2(max_func, x, a);
-            ctx.create_return(ctx->CreateCall2(min_func, res, b));
+            llvm::Value *res = ctx->CreateCall(max_func, { x, a });
+            ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
@@ -2461,8 +2628,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
             llvm::Function *max_func = get_runtime_func(RT_MDL_MAXF);
             llvm::Function *min_func = get_runtime_func(RT_MDL_MINF);
-            llvm::Value *res = ctx->CreateCall2(max_func, x, a);
-            ctx.create_return(ctx->CreateCall2(min_func, res, b));
+            llvm::Value *res = ctx->CreateCall(max_func, { x, a });
+            ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
@@ -2475,8 +2642,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
             llvm::Function *max_func = get_runtime_func(RT_MDL_MAXI);
             llvm::Function *min_func = get_runtime_func(RT_MDL_MINI);
-            llvm::Value *res = ctx->CreateCall2(max_func, x, a);
-            ctx.create_return(ctx->CreateCall2(min_func, res, b));
+            llvm::Value *res = ctx->CreateCall(max_func, { x, a });
+            ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
@@ -2525,7 +2692,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *c   = ctx->CreateSelect(cmp, o, z);
             llvm::Value *tmp = ctx.create_local(x->getType(), "tmp");
 
-            llvm::Value *res = ctx->CreateFAdd(ctx->CreateCall2(modf_func, x, tmp), c);
+            llvm::Value *res = ctx->CreateFAdd(ctx->CreateCall(modf_func, { x, tmp }), c);
             ctx.create_return(res);
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -2559,7 +2726,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Function *powi_func = get_runtime_func(RT_POWI);
 
             llvm::Value *x = ctx->CreateSIToFP(a, m_code_gen.m_type_mapper.get_double_type());
-            x = ctx->CreateCall2(powi_func, x, b);
+            x = ctx->CreateCall(powi_func, { x, b });
             ctx.create_return(ctx->CreateFPToSI(x, m_code_gen.m_type_mapper.get_int_type()));
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -2622,14 +2789,43 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
                 o = ctx.get_constant(1.0);
                 clamp_func = get_runtime_func(RT_MDL_CLAMP);
             }
-            ctx.create_return(ctx->CreateCall3(clamp_func, x, z, o));
+            ctx.create_return(ctx->CreateCall(clamp_func, { x, z, o }));
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
     case RT_MDL_SIGN:
     case RT_MDL_SIGNF:
         // fp sign
-        {
+        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+            // use sign
+
+            bool           is_float = code == RT_MDL_SIGNF;
+            llvm::Value    *x = arg_it;
+            llvm::Value    *izero, *zero, *ione, *one, *mone;
+            llvm::Function *sign_func;
+
+            izero = ctx.get_constant(int(0));
+            ione  = ctx.get_constant(int(1));
+            if (is_float) {
+                zero = ctx.get_constant(0.0f);
+                one  = ctx.get_constant(1.0f);
+                mone = ctx.get_constant(-1.0f);
+                sign_func = get_runtime_func(RT_SIGNF);
+            } else {
+                zero = ctx.get_constant(0.0);
+                one  = ctx.get_constant(1.0);
+                mone = ctx.get_constant(-1.0);
+                sign_func = get_runtime_func(RT_SIGN);
+            }
+            llvm::Value *args[] = { x };
+            llvm::Value *sgn  = ctx->CreateCall(sign_func, args);
+            llvm::Value *cmp0 = ctx->CreateICmpEQ(sgn, izero);
+            llvm::Value *cmp1 = ctx->CreateICmpEQ(sgn, ione);
+            llvm::Value *res  = ctx->CreateSelect(cmp0, zero, ctx->CreateSelect(cmp1, one, mone));
+            ctx.create_return(res);
+        } else {
+            // use copysign
+
             bool           is_float = code == RT_MDL_SIGNF;
             llvm::Value    *x       = arg_it;
             llvm::Value    *zero, *one;
@@ -2685,7 +2881,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
                 three = ctx.get_constant(3.0);
                 clamp_func = get_runtime_func(RT_MDL_CLAMP);
             }
-            llvm::Value *x   = ctx->CreateCall3(clamp_func, l, a, b);
+            llvm::Value *x   = ctx->CreateCall(clamp_func, { l, a, b });
             llvm::Value *b_a = ctx->CreateFSub(b, a);
             llvm::Value *x_a = ctx->CreateFSub(x, a);
             x = ctx->CreateFDiv(x_a, b_a);
@@ -2814,14 +3010,33 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH(atan,   DD_DD);
     REG_CMATH(atan2f, FF_FFFF);
     REG_CMATH(atan2,  DD_DDDD);
+    REG_CMATH(ceilf,  FF_FF);
+    REG_CMATH(ceil,   DD_DD);
+    REG_CMATH(cosf,   FF_FF);
+    REG_CMATH(cos,    DD_DD);
+    REG_CMATH(fabsf,  FF_FF);
+    REG_CMATH(fabs,   DD_DD);
+    REG_CMATH(expf,   FF_FF);
+    REG_CMATH(exp,    DD_DD);
+    REG_CMATH(floorf, FF_FF);
+    REG_CMATH(floor,  DD_DD);
     REG_CMATH(fmodf,  FF_FFFF);
     REG_CMATH(fmod,   DD_DDDD);
+    REG_CMATH(logf,   FF_FF);
+    REG_CMATH(log,    DD_DD);
+    REG_CMATH(log10f, FF_FF);
+    REG_CMATH(log10,  DD_DD);
     REG_CMATH(modff,  FF_FFff);
     REG_CMATH(modf,   DD_DDdd);
-    REG_CMATH2("pow", mi::mdl::powi, DD_DDII);
+    REG_CMATH(powf,   FF_FFFF);
+    REG_CMATH(pow,    DD_DDDD);
+    REG_CMATH2("powi", mi::mdl::powi, DD_DDII);
+    REG_CMATH(sinf,   FF_FF);
+    REG_CMATH(sin,    DD_DD);
+    REG_CMATH(sqrtf,  FF_FF);
+    REG_CMATH(sqrt,   DD_DD);
     REG_CMATH(tanf,   FF_FF);
     REG_CMATH(tan,    DD_DD);
-#ifndef LLVM_3_4
 #ifdef _MSC_VER
     // no copysign in MS runtime
     REG_CMATH2("copysign",  ::_copysign,        DD_DDDD);
@@ -2830,7 +3045,33 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH(copysignf, FF_FFFF);
     REG_CMATH(copysign,  DD_DDDD);
 #endif
+
+    // optional functions
+
+#if !defined(_MSC_VER) || _MSC_VER >= 1900
+    // on WIN we need we have at least VS 2015 for these functions
+    REG_CMATH(log2f,     FF_FF);
+    REG_CMATH(log2,      DD_DD);
+    REG_CMATH(exp2f,     FF_FF);
+    REG_CMATH(exp2,      DD_DD);
 #endif
+
+#if defined(MI_COMPILER_GCC) && ! defined (__clang__)
+    REG_CMATH(sincosf,   VV_FFffff);
+    REG_CMATH(sincos,    VV_DDdddd);
+#endif
+
+    // implemented as LLVM code
+
+    // REG_CMATH(sincosf,   VV_FFffff);
+    // REG_CMATH(min,       II_IIII);
+    // REG_CMATH(max,       II_IIII);
+    // REG_CMATH(fminf,     FF_FFFF);
+    // REG_CMATH(fmaxf,     FF_FFFF);
+    // REG_CMATH(fmin,      DD_DDDD);
+    // REG_CMATH(fmax,      DD_DDDD);
+    // REG_CMATH(rsqrtf,    FF_FF);
+    // REG_CMATH(rsqrt,     DD_DD);
 
     #undef REG_CMATH
     #undef REG_CMATH2
@@ -2842,10 +3083,12 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
         jitted_code->register_function(symname, (void *)func_impl)
 
     REG_FUNC(tex_resolution_2d);
+    // Note: no tex_resolution_3d function is used for the internal native runtime,
+    //       instead the width, height and depth functions are called directly
     REG_FUNC(tex_width);
     REG_FUNC(tex_height);
     REG_FUNC(tex_depth);
-    REG_FUNC2("mdl_tex_valid", tex_isvalid);
+    REG_FUNC(tex_isvalid);
 
     REG_FUNC(tex_lookup_float_2d);
     REG_FUNC(tex_lookup_deriv_float_2d);
@@ -2892,13 +3135,13 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
 
     REG_FUNC(df_light_profile_power);
     REG_FUNC(df_light_profile_maximum);
-    REG_FUNC2("mdl_df_light_profile_valid", df_light_profile_isvalid);
-    REG_FUNC2("mdl_df_bsdf_measurement_valid", df_bsdf_measurement_isvalid);
-    REG_FUNC2("mdl_df_bsdf_measurement_resolution", df_bsdf_measurement_resolution);
-    REG_FUNC2("mdl_df_bsdf_measurement_evaluate", df_bsdf_measurement_evaluate);
-    REG_FUNC2("mdl_df_bsdf_measurement_sample", df_bsdf_measurement_sample);
-    REG_FUNC2("mdl_df_bsdf_measurement_pdf", df_bsdf_measurement_pdf);
-    REG_FUNC2("mdl_df_bsdf_measurement_albedos", df_bsdf_measurement_albedos);
+    REG_FUNC(df_light_profile_isvalid);
+    REG_FUNC(df_bsdf_measurement_isvalid);
+    REG_FUNC(df_bsdf_measurement_resolution);
+    REG_FUNC(df_bsdf_measurement_evaluate);
+    REG_FUNC(df_bsdf_measurement_sample);
+    REG_FUNC(df_bsdf_measurement_pdf);
+    REG_FUNC(df_bsdf_measurement_albedos);
     REG_FUNC(df_light_profile_evaluate);
     REG_FUNC(df_light_profile_sample);
     REG_FUNC(df_light_profile_pdf);
@@ -3068,15 +3311,12 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_resolution(
     llvm::Type  *res_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
     llvm::Value *tmp = ctx.create_local(res_type, "tmp");
 
-    if (m_has_res_handler)
-    {
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_BSDF_MEASUREMENT_RESOLUTION);
 
         llvm::Value *args[] = {tmp, res_data, a, b};
         ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3123,15 +3363,12 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_evaluate(
     ctx.convert_and_store(b, theta_phi_in);
     ctx.convert_and_store(c, theta_phi_out);
 
-    if (m_has_res_handler)
-    {
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_BSDF_MEASUREMENT_EVALUATE);
 
         llvm::Value *args[] = {tmp, res_data, a, theta_phi_in, theta_phi_out, d};
         ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3180,15 +3417,12 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_sample(
     llvm::Value *xi = ctx.create_local(arr_float_3_type, "xi");
     ctx.convert_and_store(c, xi);
 
-    if (m_has_res_handler)
-    {
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_BSDF_MEASUREMENT_SAMPLE);
 
         llvm::Value *args[] = {tmp, res_data, a, theta_phi_out, xi, d};
         ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3230,16 +3464,13 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_pdf(
     ctx.convert_and_store(b, theta_phi_in);
     ctx.convert_and_store(c, theta_phi_out);
 
-    llvm::CallInst* call;
-    if (m_has_res_handler)
-    {
+    llvm::CallInst *call;
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_BSDF_MEASUREMENT_PDF);
 
         llvm::Value *args[] = {res_data, a, theta_phi_in, theta_phi_out, d};
         call = ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3280,16 +3511,13 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_albedos(
 
     llvm::Value *theta_phi = ctx.create_local(arr_float_2_type, "theta_phi");
     ctx.convert_and_store(b, theta_phi);
-    
-    if (m_has_res_handler)
-    {
+
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_BSDF_MEASUREMENT_ALBEDOS);
 
         llvm::Value *args[] = {tmp, res_data, a, theta_phi};
         ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3326,17 +3554,14 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_evaluate(
     llvm::Type  *arr_float_2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
     llvm::Value *theta_phi = ctx.create_local(arr_float_2_type, "theta_phi");
     ctx.convert_and_store(b, theta_phi);
-    
-    llvm::CallInst* call;
-    if (m_has_res_handler)
-    {
+
+    llvm::CallInst *call;
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_LIGHT_PROFILE_EVALUATE);
 
         llvm::Value *args[] = {res_data, a, theta_phi};
         call = ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3376,15 +3601,12 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_sample(
     llvm::Value *xi = ctx.create_local(arr_float_3_type, "xi");
     ctx.convert_and_store(b, xi);
 
-    if (m_has_res_handler)
-    {
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_LIGHT_PROFILE_SAMPLE);
 
         llvm::Value *args[] = {tmp, res_data, a, xi};
         ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3422,16 +3644,13 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_pdf(
     llvm::Value *theta_phi = ctx.create_local(arr_float_2_type, "theta_phi");
     ctx.convert_and_store(b, theta_phi);
     
-    llvm::CallInst* call;
-    if (m_has_res_handler)
-    {
+    llvm::CallInst *call;
+    if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_LIGHT_PROFILE_PDF);
 
         llvm::Value *args[] = {res_data, a, theta_phi};
         call = ctx->CreateCall(lookup_func, args);
-    }
-    else
-    {
+    } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
         llvm::Value *self = ctx->CreateBitCast(
@@ -3458,31 +3677,31 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
         if (m_use_user_state_module) {
             char const *func_name = NULL;
             switch (kind) {
-                case Internal_function::KI_STATE_SET_NORMAL:
-                    if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
-                        func_name = "_ZN5state10set_normalEP10State_coreDv3_f";
-                    else
-                        func_name = "_ZN5state10set_normalEP17State_environmentDv3_f";
-                    break;
-                case Internal_function::KI_STATE_GET_TEXTURE_RESULTS:
-                    if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
-                        func_name = "_ZN5state19get_texture_resultsEP10State_core";
-                    else
-                        func_name = "_ZN5state19get_texture_resultsEP17State_environment";
-                    break;
-                case Internal_function::KI_STATE_GET_RO_DATA_SEGMENT:
-                    if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
-                        func_name = "_ZN5state19get_ro_data_segmentEPK10State_core";
-                    else
-                        func_name = "_ZN5state19get_ro_data_segmentEPK17State_environment";
-                    break;
-                case Internal_function::KI_STATE_OBJECT_ID:
-                    if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
-                        func_name = "_ZN5state9object_idEPK10State_core";
-                    else
-                        func_name = "_ZN5state9object_idEPK17State_environment";
-                    break;
-                default: break;
+            case Internal_function::KI_STATE_SET_NORMAL:
+                if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
+                    func_name = "_ZN5state10set_normalEP10State_coreDv3_f";
+                else
+                    func_name = "_ZN5state10set_normalEP17State_environmentDv3_f";
+                break;
+            case Internal_function::KI_STATE_GET_TEXTURE_RESULTS:
+                if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
+                    func_name = "_ZN5state19get_texture_resultsEP10State_core";
+                else
+                    func_name = "_ZN5state19get_texture_resultsEP17State_environment";
+                break;
+            case Internal_function::KI_STATE_GET_RO_DATA_SEGMENT:
+                if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
+                    func_name = "_ZN5state19get_ro_data_segmentEPK10State_core";
+                else
+                    func_name = "_ZN5state19get_ro_data_segmentEPK17State_environment";
+                break;
+            case Internal_function::KI_STATE_OBJECT_ID:
+                if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE)
+                    func_name = "_ZN5state9object_idEPK10State_core";
+                else
+                    func_name = "_ZN5state9object_idEPK17State_environment";
+                break;
+            default: break;
             }
             if (func_name != NULL) {
                 if (llvm::Function *func = m_code_gen.get_llvm_module()->getFunction(func_name)) {
@@ -3494,74 +3713,74 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
         }
 
         switch (kind) {
-            case Internal_function::KI_STATE_SET_NORMAL:
-                m_internal_funcs[kind] = create_state_set_normal(int_func);
-                break;
+        case Internal_function::KI_STATE_SET_NORMAL:
+            m_internal_funcs[kind] = create_state_set_normal(int_func);
+            break;
 
-            case Internal_function::KI_STATE_GET_TEXTURE_RESULTS:
-                m_internal_funcs[kind] = create_state_get_texture_results(int_func);
-                break;
+        case Internal_function::KI_STATE_GET_TEXTURE_RESULTS:
+            m_internal_funcs[kind] = create_state_get_texture_results(int_func);
+            break;
 
-            case Internal_function::KI_STATE_GET_ARG_BLOCK:
-                m_internal_funcs[kind] = create_state_get_arg_block(int_func);
-                break;
+        case Internal_function::KI_STATE_GET_ARG_BLOCK:
+            m_internal_funcs[kind] = create_state_get_arg_block(int_func);
+            break;
 
-            case Internal_function::KI_STATE_GET_RO_DATA_SEGMENT:
-                m_internal_funcs[kind] = create_state_get_ro_data_segment(int_func);
-                break;
+        case Internal_function::KI_STATE_GET_RO_DATA_SEGMENT:
+            m_internal_funcs[kind] = create_state_get_ro_data_segment(int_func);
+            break;
 
-            case Internal_function::KI_STATE_OBJECT_ID:
-                m_internal_funcs[kind] = create_state_object_id(int_func);
-                break;
+        case Internal_function::KI_STATE_OBJECT_ID:
+            m_internal_funcs[kind] = create_state_object_id(int_func);
+            break;
 
-            case Internal_function::KI_STATE_CALL_LAMBDA_FLOAT:
-            case Internal_function::KI_STATE_CALL_LAMBDA_FLOAT3:
-            {
-                // the function body will be created later when all compiled module lambda
-                // functions are known
-                Function_instance inst(
-                    m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
-                LLVM_context_data *ctx_data =
-                    m_code_gen.get_or_create_context_data(NULL, inst, "::state");
-                m_internal_funcs[kind] = ctx_data->get_function();
-                break;
-            }
+        case Internal_function::KI_STATE_CALL_LAMBDA_FLOAT:
+        case Internal_function::KI_STATE_CALL_LAMBDA_FLOAT3:
+        {
+            // the function body will be created later when all compiled module lambda
+            // functions are known
+            Function_instance inst(
+                m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+            LLVM_context_data *ctx_data =
+                m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+            m_internal_funcs[kind] = ctx_data->get_function();
+            break;
+        }
 
-            case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
-                m_internal_funcs[kind] = create_df_bsdf_measurement_resolution(int_func);
-                break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
+            m_internal_funcs[kind] = create_df_bsdf_measurement_resolution(int_func);
+            break;
 
-            case Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE:
-                m_internal_funcs[kind] = create_df_bsdf_measurement_evaluate(int_func);
-                break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE:
+            m_internal_funcs[kind] = create_df_bsdf_measurement_evaluate(int_func);
+            break;
 
-            case Internal_function::KI_DF_BSDF_MEASUREMENT_SAMPLE:
-                m_internal_funcs[kind] = create_df_bsdf_measurement_sample(int_func);
-                break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_SAMPLE:
+            m_internal_funcs[kind] = create_df_bsdf_measurement_sample(int_func);
+            break;
 
-            case Internal_function::KI_DF_BSDF_MEASUREMENT_PDF:
-                m_internal_funcs[kind] = create_df_bsdf_measurement_pdf(int_func);
-                break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_PDF:
+            m_internal_funcs[kind] = create_df_bsdf_measurement_pdf(int_func);
+            break;
 
-            case Internal_function::KI_DF_BSDF_MEASUREMENT_ALBEDOS:
-                m_internal_funcs[kind] = create_df_bsdf_measurement_albedos(int_func);
-                break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_ALBEDOS:
+            m_internal_funcs[kind] = create_df_bsdf_measurement_albedos(int_func);
+            break;
 
-            case Internal_function::KI_DF_LIGHT_PROFILE_EVALUATE:
-                m_internal_funcs[kind] = create_df_light_profile_evaluate(int_func);
-                break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_EVALUATE:
+            m_internal_funcs[kind] = create_df_light_profile_evaluate(int_func);
+            break;
 
-            case Internal_function::KI_DF_LIGHT_PROFILE_SAMPLE:
-                m_internal_funcs[kind] = create_df_light_profile_sample(int_func);
-                break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_SAMPLE:
+            m_internal_funcs[kind] = create_df_light_profile_sample(int_func);
+            break;
 
-            case Internal_function::KI_DF_LIGHT_PROFILE_PDF:
-                m_internal_funcs[kind] = create_df_light_profile_pdf(int_func);
-                break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_PDF:
+            m_internal_funcs[kind] = create_df_light_profile_pdf(int_func);
+            break;
 
-            default:
-                MDL_ASSERT(!"Unsupported MDL internal function");
-                return NULL;
+        default:
+            MDL_ASSERT(!"Unsupported MDL internal function");
+            return NULL;
         }
     }
 
@@ -3654,7 +3873,13 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 
     bool return_derivs = call_expr->returns_derivatives(*this);
 
-    llvm::Function *callee = m_runtime->get_intrinsic_function(callee_def, return_derivs);
+    llvm::Function *callee = NULL;
+    if (m_target_lang == TL_HLSL) {
+        callee = get_hlsl_intrinsic_function(callee_def, return_derivs);
+    }
+    if (callee == NULL) {
+        callee = m_runtime->get_intrinsic_function(callee_def, return_derivs);
+    }
 
     // Intrinsic functions are NEVER instantiated!
     Function_instance inst(get_allocator(), callee_def, return_derivs);
@@ -3687,7 +3912,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
         llvm::Value *res_data = ctx.get_resource_data_parameter();
         args.push_back(res_data);
     }
-    if (p_data->has_exc_state_param()) {
+    if (target_uses_exception_state_parameter() && p_data->has_exc_state_param()) {
         // pass exc_state parameter
         llvm::Value *exc_state = ctx.get_exc_state_parameter();
         args.push_back(exc_state);
@@ -3718,7 +3943,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 
         if (m_type_mapper.is_passed_by_reference(arg_type) ||
                 m_type_mapper.is_deriv_type(expr_res.get_value_type())) {
-            // pass a reference
+            // pass by reference
             args.push_back(expr_res.as_ptr(ctx));
         } else {
             // pass by value
@@ -3823,7 +4048,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 MDL_runtime_creator *LLVM_code_generator::create_mdl_runtime(
     mi::mdl::Arena_builder &arena_builder,
     LLVM_code_generator    *code_gen,
-    bool                   ptx_mode,
+    Target_language        target_lang,
     bool                   fast_math,
     bool                   has_texture_handler,
     char const             *internal_space)
@@ -3835,9 +4060,9 @@ MDL_runtime_creator *LLVM_code_generator::create_mdl_runtime(
     return arena_builder.create<MDL_runtime_creator>(
         alloc,
         code_gen,
-        ptx_mode,
+        target_lang,
         fast_math,
-        /*has_sincos=*/ptx_mode,
+        /*has_sincos=*/target_lang == TL_PTX,
         has_texture_handler,
         encoding);
 }
@@ -3902,6 +4127,14 @@ void LLVM_code_generator::mdl_div_by_zero(
 // Get the texture results pointer from the state.
 llvm::Value *LLVM_code_generator::get_texture_results(Function_context &ctx)
 {
+    if (m_target_lang == TL_HLSL) {
+        llvm::Value *state = ctx.get_state_parameter();
+        llvm::Value *res = ctx.create_simple_gep_in_bounds(
+            state, ctx.get_constant(m_type_mapper.get_state_index(
+                Type_mapper::STATE_CORE_TEXT_RESULTS)));
+        return res;
+    }
+
     llvm::Function *func = m_runtime->get_internal_function(m_int_func_state_get_texture_results);
     llvm::Value *args[] = { ctx.get_state_parameter() };
     llvm::Value *text_results = m_runtime->call_rt_func(ctx, func, args);
@@ -3961,24 +4194,26 @@ bool LLVM_code_generator::init_user_modules()
 {
     if (m_user_state_module.data == NULL) return true;
 
-    llvm::MemoryBuffer *mem = llvm::MemoryBuffer::getMemBuffer(
+    std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
         llvm::StringRef(m_user_state_module.data, m_user_state_module.size),
         "state_module",
-        /*RequiresNullTerminator=*/false);
-    llvm::Module *state_mod = llvm::ParseBitcodeFile(mem, m_llvm_context);
-    if (state_mod == NULL) {
+        /*RequiresNullTerminator=*/false));
+    auto state_mod = llvm::parseBitcodeFile(*mem.get(), m_llvm_context);
+    if (!state_mod) {
         error(PARSING_STATE_MODULE_FAILED, Error_params(get_allocator()));
         return false;
     }
 
     // make sure all required functions are provided
-    if (!m_runtime->check_state_module(state_mod))
+    if (!m_runtime->check_state_module(state_mod->get()))
         return false;
 
     // create prototypes in the target module for all function definitions to force the linker to
     // correctly map the types
     llvm::SmallVector<llvm::Type *, 8> arg_types;
-    for (llvm::Module::iterator FI = state_mod->begin(), FE = state_mod->end(); FI != FE; ++FI) {
+    for (llvm::Module::iterator FI = state_mod->get()->begin(), FE = state_mod->get()->end();
+            FI != FE; ++FI)
+    {
         if (FI->isDeclaration())
             continue;  // not a function definition
 
@@ -4047,7 +4282,9 @@ bool LLVM_code_generator::init_user_modules()
     llvm::SmallVector<Runtime_func_info, 16> runtime_infos;
 
     // resolve and collect all external runtime function references
-    for (llvm::Module::iterator FI = state_mod->begin(), FE = state_mod->end(); FI != FE; ++FI) {
+    for (llvm::Module::iterator FI = state_mod->get()->begin(), FE = state_mod->get()->end();
+            FI != FE; ++FI)
+    {
         if (!FI->isDeclaration())
             continue;  // not an external function
 
@@ -4106,15 +4343,14 @@ bool LLVM_code_generator::init_user_modules()
             def_func->getFunctionType(),
             llvm::GlobalValue::ExternalLinkage,
             def_func->getName(),
-            state_mod);
+            state_mod->get());
 
         llvm::SmallVector<llvm::Instruction *, 16> delete_list;
 
         // replace all calls to calls to our implementation
-        for (llvm::Value::use_iterator ui = decl_func->use_begin(), ue = decl_func->use_end();
-            ui != ue; ++ui)
+        for (auto func_user : decl_func->users())
         {
-            if (llvm::CallInst *inst = llvm::dyn_cast<llvm::CallInst>(*ui)) {
+            if (llvm::CallInst *inst = llvm::dyn_cast<llvm::CallInst>(func_user)) {
                 llvm::SmallVector<llvm::Value *, 8> args;
                 for (unsigned i = 0, n = inst->getNumArgOperands(); i < n; ++i) {
                     args.push_back(inst->getArgOperand(i));
@@ -4138,13 +4374,12 @@ bool LLVM_code_generator::init_user_modules()
     // when linking the user module ("x86_x64-pc-win32") with libdevice ("nvptx-unknown-unknown").
     // Using an nvptx target for the user module  would cause struct parameters to be split, which
     // we try to avoid.
-    state_mod->setTargetTriple("");
+    state_mod->get()->setTargetTriple("");
 
-    std::string errorInfo;
-    if (llvm::Linker::LinkModules(m_module, state_mod, llvm::Linker::DestroySource, &errorInfo))
+    if (llvm::Linker::linkModules(*m_module, std::move(state_mod.get())))
     {
         // true means linking has failed
-        error(LINKING_STATE_MODULE_FAILED, errorInfo);
+        error(LINKING_STATE_MODULE_FAILED, "unknown linking error");
         return false;
     }
 
@@ -4238,6 +4473,53 @@ llvm::Function *LLVM_code_generator::get_intrinsic_function(
 // Get the LLVM function for an internal function.
 llvm::Function *LLVM_code_generator::get_internal_function(Internal_function const *int_func)
 {
+    if (m_target_lang == TL_HLSL) {
+        char const *hlsl_name = NULL;
+
+        switch (int_func->get_kind()) {
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
+            hlsl_name = "df_bsdf_measurement_resolution";
+            break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE:
+            hlsl_name = "df_bsdf_measurement_evaluate";
+            break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_SAMPLE:
+            hlsl_name = "df_bsdf_measurement_sample";
+            break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_PDF:
+            hlsl_name = "df_bsdf_measurement_pdf";
+            break;
+        case Internal_function::KI_DF_BSDF_MEASUREMENT_ALBEDOS:
+            hlsl_name = "df_bsdf_measurement_albedos";
+            break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_EVALUATE:
+            hlsl_name = "df_light_profile_evaluate";
+            break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_SAMPLE:
+            hlsl_name = "df_light_profile_sample";
+            break;
+        case Internal_function::KI_DF_LIGHT_PROFILE_PDF:
+            hlsl_name = "df_light_profile_pdf";
+            break;
+        default:
+            break;
+        }
+
+        if (hlsl_name != NULL) {
+            Function_instance inst(get_allocator(), reinterpret_cast<size_t>(int_func));
+            if (llvm::Function *func = get_function(inst)) {
+                return func;
+            }
+
+            LLVM_context_data *ctx = get_or_create_context_data(
+                NULL, inst, "::df", /*is_prototype=*/ true);
+            llvm::Function *func = ctx->get_function();
+
+            func->setName(hlsl_name);
+            return func;
+        }
+    }
+
     return m_runtime->get_internal_function(int_func);
 }
 

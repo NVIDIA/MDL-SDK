@@ -8,7 +8,8 @@ import lit.formats
 import lit.TestingConfig
 import lit.util
 
-class LitConfig:
+# LitConfig must be a new style class for properties to work
+class LitConfig(object):
     """LitConfig - Configuration data for a 'lit' test runner instance, shared
     across all tests.
 
@@ -20,8 +21,12 @@ class LitConfig:
 
     def __init__(self, progname, path, quiet,
                  useValgrind, valgrindLeakCheck, valgrindArgs,
-                 noExecute, debug, isWindows,
-                 params, config_prefix = None):
+                 noExecute, debug, isWindows, singleProcess,
+                 params, config_prefix = None,
+                 maxIndividualTestTime = 0,
+                 maxFailures = None,
+                 parallelism_groups = {},
+                 echo_all_commands = False):
         # The name of the test runner.
         self.progname = progname
         # The items to add to the PATH environment variable.
@@ -32,15 +37,17 @@ class LitConfig:
         self.valgrindUserArgs = list(valgrindArgs)
         self.noExecute = noExecute
         self.debug = debug
+        self.singleProcess = singleProcess
         self.isWindows = bool(isWindows)
         self.params = dict(params)
         self.bashPath = None
 
         # Configuration files to look for when discovering test suites.
         self.config_prefix = config_prefix or 'lit'
-        self.config_name = '%s.cfg' % (self.config_prefix,)
-        self.site_config_name = '%s.site.cfg' % (self.config_prefix,)
-        self.local_config_name = '%s.local.cfg' % (self.config_prefix,)
+        self.suffixes = ['cfg.py', 'cfg']
+        self.config_names = ['%s.%s' % (self.config_prefix,x) for x in self.suffixes]
+        self.site_config_names = ['%s.site.%s' % (self.config_prefix,x) for x in self.suffixes]
+        self.local_config_names = ['%s.local.%s' % (self.config_prefix,x) for x in self.suffixes]
 
         self.numErrors = 0
         self.numWarnings = 0
@@ -57,6 +64,41 @@ class LitConfig:
                 self.valgrindArgs.append('--leak-check=no')
             self.valgrindArgs.extend(self.valgrindUserArgs)
 
+        self.maxIndividualTestTime = maxIndividualTestTime
+        self.maxFailures = maxFailures
+        self.parallelism_groups = parallelism_groups
+        self.echo_all_commands = echo_all_commands
+
+    @property
+    def maxIndividualTestTime(self):
+        """
+            Interface for getting maximum time to spend executing
+            a single test
+        """
+        return self._maxIndividualTestTime
+
+    @maxIndividualTestTime.setter
+    def maxIndividualTestTime(self, value):
+        """
+            Interface for setting maximum time to spend executing
+            a single test
+        """
+        if not isinstance(value, int):
+            self.fatal('maxIndividualTestTime must set to a value of type int.')
+        self._maxIndividualTestTime = value
+        if self.maxIndividualTestTime > 0:
+            # The current implementation needs psutil to set
+            # a timeout per test. Check it's available.
+            # See lit.util.killProcessAndChildren()
+            try:
+                import psutil  # noqa: F401
+            except ImportError:
+                self.fatal("Setting a timeout per test requires the"
+                           " Python psutil module but it could not be"
+                           " found. Try installing it via pip or via"
+                           " your operating system's package manager.")
+        elif self.maxIndividualTestTime < 0:
+            self.fatal('The timeout per test must be >= 0 seconds')
 
     def load_config(self, config, path):
         """load_config(config, path) - Load a config object from an alternate
@@ -76,7 +118,6 @@ class LitConfig:
             self.bashPath = lit.util.which('bash')
 
         if self.bashPath is None:
-            self.warning("Unable to find 'bash'.")
             self.bashPath = ''
 
         return self.bashPath
@@ -91,7 +132,6 @@ class LitConfig:
         # bash
         self.bashPath = lit.util.which('bash', dir)
         if self.bashPath is None:
-            self.note("Unable to find 'bash.exe'.")
             self.bashPath = ''
 
         return dir
@@ -102,7 +142,7 @@ class LitConfig:
         # Step out of _write_message, and then out of wrapper.
         f = f.f_back.f_back
         file,line,_,_,_ = inspect.getframeinfo(f)
-        location = '%s:%d' % (os.path.basename(file), line)
+        location = '%s:%d' % (file, line)
 
         sys.stderr.write('%s: %s: %s: %s\n' % (self.progname, location,
                                                kind, message))

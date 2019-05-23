@@ -35,6 +35,7 @@
 #include "i_mdl_elements_function_definition.h"
 #include "i_mdl_elements_material_definition.h"
 #include "i_mdl_elements_material_instance.h"
+#include "i_mdl_elements_module_builder.h"
 #include "i_mdl_elements_utilities.h"
 #include "mdl_elements_ast_builder.h"
 #include "mdl_elements_detail.h"
@@ -45,6 +46,7 @@
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
+#include <mi/mdl/mdl_module_transformer.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_thread_context.h>
 #include <mi/neuraylib/istring.h>
@@ -190,7 +192,85 @@ bool is_mdle(const std::string& module_name)
     return false;
 }
 
+// Makes a module name standard conform.
+// For standard MDL module names, it is ensured that there is a leading "::".
+// For MDLE, the path is normalized, meaning absolute, no "/../" and using forward slashes.
+// After execution, 'out_is_mdle' is set to indicate if the module is an MDLE module or not.
+std::string normalize_module_name(const std::string& module_name, bool& out_is_mdle)
+{
+    out_is_mdle = is_mdle(module_name);
+    if (out_is_mdle)
+    {
+        std::string res = module_name;
+
+        // make path absolute
+        if (!DISK::is_path_absolute(res.c_str()))
+            res = HAL::Ospath::join(DISK::get_cwd(), res);
+
+        // normalize path to make it unique
+        res = HAL::Ospath::normpath(res);
+
+        // use forward slashes
+        res = HAL::Ospath::convert_to_forward_slashes(res);
+        return res;
+    }
+    else
+    {
+        // make sure there are leading "::"
+        if (module_name[0] == ':' && module_name[1] == ':')
+            return module_name;
+        else
+            return "::" + module_name;
+    }
+
+}
+
+std::string normalized_module_name_to_db_name(const std::string& module_name, bool is_mdle)
+{
+    if(is_mdle)
+        // add prefix and insert a leading slash if there is none
+        return (module_name[0] == '/' ? "mdle::" : "mdle::/") + module_name;
+
+    return "mdl" + module_name;
+}
+
 }  // anonymous
+
+const char* Mdl_module::get_module_db_name(
+    DB::Transaction* transaction,
+    const char* module_name,
+    Execution_context* context)
+{
+    context->clear_messages();
+
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
+
+    bool mdle = false;
+    std::string normalized_module_name = normalize_module_name(module_name, mdle);
+    std::string db_module_name = normalized_module_name_to_db_name(normalized_module_name, mdle);
+
+    // Check whether the module exists in the DB.
+    DB::Tag db_module_tag = transaction->name_to_tag(db_module_name.c_str());
+    if (!db_module_tag)
+    {
+        // don't consider this an error. This allows to check if a module is loaded.
+        return NULL;
+    }
+
+    // Check if the DB entry is a module
+    if (transaction->get_class_id(db_module_tag) != Mdl_module::id)
+    {
+        LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
+            "DB name for module \"%s\" (\"%s\") already in use.", module_name, db_module_name.c_str());
+        return NULL;
+    }
+
+    // get the name 
+    return transaction->tag_to_name(db_module_tag);
+}
+
 
 mi::Sint32 Mdl_module::create_module(
     DB::Transaction* transaction,
@@ -205,33 +285,19 @@ mi::Sint32 Mdl_module::create_module(
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
 
-    // check if the module is an mdle
-    std::string module_name_str = module_name;
-    std::string db_module_name;
-    std::string module_name_to_load;
-    if (is_mdle(module_name_str)) {
+   
+    bool mdle = false;
+    std::string normalized_module_name = normalize_module_name(module_name, mdle);
+    std::string db_module_name = normalized_module_name_to_db_name(normalized_module_name, mdle);
 
-        // make path absolute
-        if (!DISK::is_path_absolute( module_name_str.c_str())) {
-            module_name_str = HAL::Ospath::join(DISK::get_cwd(), module_name_str);
-        }
+    if (mdle) {
 
         // check if the file exists
-        if (!DISK::is_file( module_name_str.c_str())) {
+        if (!DISK::is_file( normalized_module_name.c_str())) {
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DISK,
-                "MDLe file \"%s\" does not exist.", module_name_str.c_str());
+                "MDLe file \"%s\" does not exist.", normalized_module_name.c_str());
             return -1;
         }
-
-        // use the absolute path when creating the mi::mdl::IModule
-        module_name = module_name_str.c_str();
-
-        // add prefix and insert a leading slash if there is none
-        // use forward slashes in the database name
-        db_module_name = (module_name_str[0] == '/' ? "mdle::" : "mdle::/")
-                       + HAL::Ospath::convert_to_forward_slashes(module_name_str);
-
-        module_name_to_load = HAL::Ospath::convert_to_platform_specific_path(module_name);
 
     // otherwise we check for valid mdl identifiers
     } else {
@@ -239,9 +305,6 @@ mi::Sint32 Mdl_module::create_module(
         // Reject invalid module names (in particular, names containing slashes and backslashes).
         if (!is_valid_module_name(module_name, mdl.get()))
             return -1;
-
-        db_module_name = add_mdl_db_prefix(module_name);
-        module_name_to_load = module_name;
     }
 
     // Check whether the module exists already in the DB.
@@ -257,15 +320,20 @@ mi::Sint32 Mdl_module::create_module(
 
     Module_cache module_cache( transaction);
     mi::base::Handle<mi::mdl::IThread_context> ctx( mdl->create_thread_context());
-    ctx->access_options().set_option(MDL_OPTION_EXPERIMENTAL_FEATURES,
+    mi::mdl::Options& options = ctx->access_options();
+    options.set_option(MDL_OPTION_EXPERIMENTAL_FEATURES,
         context->get_option<bool>(MDL_CTX_OPTION_EXPERIMENTAL) ? "true" : "false");
+    options.set_option(MDL_OPTION_RESOLVE_RESOURCES,
+        context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES) ? "true" : "false");
 
     mi::base::Handle<const mi::mdl::IModule> module(
-        mdl->load_module( ctx.get(), module_name_to_load.c_str(), &module_cache));
-    if( !module.is_valid_interface()) {
-        report_messages(ctx->access_messages(), context);
+        mdl->load_module( ctx.get(), normalized_module_name.c_str(), &module_cache));
+
+    // report messages even when the module is valid (warnings, notes, ...)
+    report_messages(ctx->access_messages(), context);
+
+    if( !module.is_valid_interface())
         return -2;
-    }
 
     mi::Sint32 result
         = create_module_internal(transaction, mdl.get(), module.get(), context);
@@ -319,6 +387,8 @@ mi::Sint32 Mdl_module::create_module(
                 "DB name for module \"%s\" already in use.", db_module_name.c_str());
             return -3;
         }
+
+        // module already exists
         return 1;
     }
 
@@ -537,6 +607,9 @@ mi::Sint32 Mdl_module::create_module(
             if (v > version)
                 version = v;
         } else if (class_id == ID_MDL_FUNCTION_DEFINITION) {
+            // function presets require at least mdl 1.3
+            if (version < mi::mdl::IMDL::MDL_VERSION_1_3)
+                version = mi::mdl::IMDL::MDL_VERSION_1_3;
             DB::Access<Mdl_function_definition> prototype(pd.m_prototype_tag, transaction);
             mi::mdl::IMDL::MDL_version v = get_version(transaction, prototype);
             if (v > version)
@@ -563,6 +636,8 @@ mi::Sint32 Mdl_module::create_module(
 
     Symbol_importer symbol_importer( module.get());
 
+    bool allow_cast = mdlc_module->get_implicit_cast_enabled();
+
     // Add variants to module
     for( mi::Size i = 0; i < variant_count; ++i) {
 
@@ -573,7 +648,7 @@ mi::Sint32 Mdl_module::create_module(
             DB::Access<Mdl_material_definition> prototype( pd.m_prototype_tag, transaction);
             mi::Sint32 result = add_variant( symbol_importer, transaction, module.get(),
                 prototype, pd.m_variant_name.c_str(), pd.m_defaults.get(),
-                pd.m_annotations.get(), context);
+                pd.m_annotations.get(), allow_cast, context);
             if( result != 0) {
                 LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                     "Failed to add variant \"%s\" to the module \"%s\".",
@@ -585,7 +660,7 @@ mi::Sint32 Mdl_module::create_module(
             DB::Access<Mdl_function_definition> prototype( pd.m_prototype_tag, transaction);
             mi::Sint32 result = add_variant( symbol_importer, transaction, module.get(),
                 prototype, pd.m_variant_name.c_str(), pd.m_defaults.get(),
-                pd.m_annotations.get(), context);
+                pd.m_annotations.get(), allow_cast, context);
             if( result != 0) {
                 LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                     "Failed to add variant \"%s\" to the module \"%s\".",
@@ -611,529 +686,22 @@ mi::Sint32 Mdl_module::create_module(
         return -8;
     }
 
-    return create_module_internal( transaction, mdl.get(), module.get(), context);
-}
+    mi::base::Handle <const mi::mdl::IModule> cmodule(module);
 
-
-/// Find the expression a path is pointing on.
-///
-/// \param transaction  the current transaction
-/// \param path         the path
-/// \param args         the material arguments
-static mi::base::Handle<const IExpression> find_path(
-    DB::Transaction* transaction,
-    const std::string& path,
-    const mi::base::Handle<const IExpression_list>& args)
-{
-    size_t pos = path.find('.');
-    std::string param( path.substr(0, pos));
-
-    mi::base::Handle<const IExpression> expr( args->get_expression( param.c_str()));
-    if( !expr.is_valid_interface())
-        return mi::base::Handle<const IExpression>();
-
-    for( ; pos != std::string::npos;) {
-        size_t p = path.find('.', pos + 1);
-
-        std::string arg( path.substr(pos + 1, p != std::string::npos ? p - pos - 1 : p));
-        pos = p;
-
-        IExpression::Kind kind = expr->get_kind();
-        if( kind == IExpression::EK_CALL) {
-            const mi::base::Handle<const IExpression_call> call(
-                expr->get_interface<IExpression_call>());
-
-            DB::Tag tag = call->get_call();
-            SERIAL::Class_id class_id = transaction->get_class_id( tag);
-
-            if( class_id == Mdl_function_call::id) {
-                // handle function calls
-                DB::Access<Mdl_function_call> fcall( tag, transaction);
-                mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
-
-                expr = mi::base::make_handle( args->get_expression( arg.c_str()));
-            } else if( class_id == Mdl_material_instance::id) {
-                // handle material instances
-                DB::Access<Mdl_material_instance> mat_def( tag, transaction);
-                mi::base::Handle<const IExpression_list> args( mat_def->get_arguments());
-
-                expr = mi::base::make_handle( args->get_expression( arg.c_str()));
-            } else {
-                // unsupported
-                return mi::base::Handle<const IExpression>();
-            }
-        } else if (kind == IExpression::EK_DIRECT_CALL) {
-            const mi::base::Handle<const IExpression_direct_call> call(
-                expr->get_interface<IExpression_direct_call>());
-            mi::base::Handle<const IExpression_list> args( call->get_arguments());
-
-            expr = mi::base::make_handle( args->get_expression( arg.c_str()));
-        } else {
-            return mi::base::Handle<const IExpression>();
-        }
-
-        if( !expr.is_valid_interface())
-            return mi::base::Handle<const IExpression>();
-    }
-    return expr;
-}
-
-// Helper function to work-around missing functionality in Mdl_function_definition, see
-// jira iray-897
-static bool is_uniform_function(
-    DB::Transaction* transaction,
-    const Mdl_function_definition& fdef)
-{
-    DB::Access<Mdl_module> module( fdef.get_module(transaction), transaction);
-    mi::base::Handle<const mi::mdl::IModule> imod( module->get_mdl_module());
-    mi::mdl::Module const *mod = static_cast<mi::mdl::Module const *>(imod.get());
-
-    // handle first those without a MDL definition
-    mi::mdl::IDefinition::Semantics sema = fdef.get_mdl_semantic();
-    switch (sema) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
-        // More complicated case: theoretically, the result might be uniform
-        // even if the argument is varying. But we return the property of the operator
-        // itself here, so it is always uniform
-        return true;
-
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
-        // these are always uniform
-        return true;
-
-    default:
-        ASSERT( M_SCENE, !mi::mdl::is_DAG_semantics(sema) && "DAG semantic not handled");
-        if (mi::mdl::semantic_is_operator(sema)) {
-            // operators are (except the field select operator) always uniform
-            return true;
-        }
-        break;
-    }
-
-    std::string sig(fdef.get_mdl_name());
-
-    mi::mdl::IDefinition const *def = mod->find_signature(sig.c_str(), /*only_exported=*/false);
-    ASSERT( M_SCENE, def != NULL);
-
-    // Note: don't use IS_UNIFORM here, it is not consistently set on the std library, because
-    // it was not annotated there and the analysis did not enter it because of missing bodies
-    return def != NULL && !def->get_property(mi::mdl::IDefinition::DP_IS_VARYING);
-}
-
-namespace {
-    struct Entry {
-        Entry(
-            mi::base::Handle<const IExpression> expr,
-            bool                                is_uniform)
-            : m_expr(expr)
-            , m_is_uniform(is_uniform)
-        {
-        }
-
-        mi::base::Handle<const IExpression> m_expr;
-        bool                                m_is_uniform;
-    };
-}
-
-bool Mdl_module::can_enforce_uniform(
-    DB::Transaction* transaction,
-    mi::base::Handle<const IExpression_list> const &args,
-    mi::base::Handle<const IType_list> const &param_types,
-    std::string const &path,
-    mi::base::Handle<const IExpression> const &p_expr,
-    bool &must_be_uniform)
-{
-    must_be_uniform = false;
-
-    size_t pos = path.find('.');
-    std::string param(path.substr(0, pos));
-
-    mi::base::Handle<IExpression const> expr(args->get_expression(param.c_str()));
-
-    mi::base::Handle<IType const> p_type(param_types->get_type(param.c_str()));
-
-    mi::Uint32 modifiers = p_type->get_all_type_modifiers();
-    bool is_uniform = (modifiers & IType::MK_UNIFORM) != 0;
-
-    // this parameter IS uniform, start analysis
-    typedef std::queue<Entry> Wait_queue;
-
-    Wait_queue queue;
-
-    queue.push(Entry(expr, is_uniform));
-    while (!queue.empty()) {
-        Entry const &e = queue.front();
-        expr       = e.m_expr;
-        is_uniform = e.m_is_uniform;
-
-        queue.pop();
-
-        if (is_uniform && expr == p_expr) {
-            // the parameter expression is marked uniform in the queue, hence the parameter
-            // must be created uniform
-            must_be_uniform = true;
-        }
-
-        switch (expr->get_kind()) {
-        case IExpression::EK_CONSTANT:
-            // constants are always uniform
-            break;
-        case IExpression::EK_CALL:
-            {
-                mi::base::Handle<IExpression_call const> call(
-                    expr->get_interface<IExpression_call>());
-                mi::base::Handle<IType const> ret_tp(call->get_type());
-
-                DB::Tag tag = call->get_call();
-                SERIAL::Class_id class_id = transaction->get_class_id(tag);
-
-                if (class_id == Mdl_material_instance::id) {
-                    if (is_uniform) {
-                        // materials are never uniform
-                        return false;
-                    }
-                } else if (class_id == Mdl_function_call::id) {
-                    DB::Access<Mdl_function_call> fcall(tag, transaction);
-                    DB::Access<Mdl_function_definition> def(
-                        fcall->get_function_definition(), transaction);
-
-                    bool auto_must_be_uniform = false;
-                    if (is_uniform) {
-                        if (ret_tp->get_all_type_modifiers() & IType::MK_UNIFORM) {
-                            // return type *IS* uniform, fine, no need to enforce auto parameters
-                            auto_must_be_uniform = false;
-                        } else if (!is_uniform_function(transaction, *def.get_ptr())) {
-                            // called function is not uniform, we found an error
-                            return false;
-                        } else {
-                            // function is uniform and the result must be uniform,
-                            // enforce all auto parameters
-                            auto_must_be_uniform = true;
-                        }
-                    }
-
-                    bool is_ternary = def->get_mdl_semantic() ==
-                        mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY);
-
-                    // push ALL arguments to the queue
-                    mi::base::Handle<IExpression_list const> args(fcall->get_arguments());
-                    for (mi::Size i = 0, n = args->get_size(); i < n; ++i) {
-                        mi::mdl::IType const *p_type =
-                            def->get_mdl_parameter_type(transaction, static_cast<mi::Uint32>(i));
-                        mi::mdl::IType::Modifiers mods = p_type->get_type_modifiers();
-                        bool p_is_uniform = (mods & mi::mdl::IType::MK_UNIFORM) != 0;
-                        bool p_is_varying = (mods & mi::mdl::IType::MK_VARYING) != 0;
-
-                        if (is_ternary && i == 0) {
-                            // the condition of the ternary operator inside materials must
-                            // be uniform
-                            p_is_uniform = true;
-                            p_is_varying = false;
-                        }
-
-                        expr = args->get_expression(i);
-                        queue.push(
-                            Entry(expr, !p_is_varying && (auto_must_be_uniform || p_is_uniform)));
-                    }
-                } else {
-                    ASSERT( M_SCENE, !"Unsupported entity kind in function call");
-                    return false;
-                }
-            }
-            break;
-        case IExpression::EK_PARAMETER:
-            // should not happen in this context
-            ASSERT( M_SCENE, !"parameter found inside argument expression");
-            return false;
-        case IExpression::EK_DIRECT_CALL:
-            {
-                mi::base::Handle<IExpression_direct_call const> call(
-                    expr->get_interface<IExpression_direct_call>());
-                mi::base::Handle<IType const> ret_tp(call->get_type());
-
-                DB::Tag tag = call->get_definition();
-                SERIAL::Class_id class_id = transaction->get_class_id(tag);
-
-                if (class_id == Mdl_material_definition::id) {
-                    // materials are never uniform
-                    return false;
-                } else if (class_id == Mdl_function_definition::id) {
-                    DB::Access<Mdl_function_definition> def(tag, transaction);
-
-                    bool auto_must_be_uniform = false;
-                    if (is_uniform) {
-                        if (ret_tp->get_all_type_modifiers() & IType::MK_UNIFORM) {
-                            // return type *IS* uniform, fine, no need to enforce auto parameters
-                            auto_must_be_uniform = false;
-                        } else if (!is_uniform_function(transaction, *def.get_ptr())) {
-                            // called function is not uniform
-                            return false;
-                        } else {
-                            // function is uniform and the result must be uniform,
-                            // enforce all auto parameters
-                            auto_must_be_uniform = true;
-                        }
-                    }
-
-                    // push ALL arguments to the queue
-                    mi::base::Handle<IExpression_list const> args(call->get_arguments());
-                    for (mi::Size i = 0, n = args->get_size(); i < n; ++i) {
-                        mi::mdl::IType const *p_type =
-                            def->get_mdl_parameter_type(transaction, static_cast<mi::Uint32>(i));
-                        mi::mdl::IType::Modifiers mods = p_type->get_type_modifiers();
-                        bool p_is_uniform = (mods & mi::mdl::IType::MK_UNIFORM) != 0;
-                        bool p_is_varying = (mods & mi::mdl::IType::MK_VARYING) != 0;
-                        expr = args->get_expression(i);
-                        queue.push(
-                            Entry(expr, !p_is_varying && (auto_must_be_uniform || p_is_uniform)));
-                    }
-                } else {
-                    ASSERT( M_SCENE, !"Unsupported entity kind in function call");
-                    return false;
-                }
-            }
-            break;
-        case IExpression::EK_TEMPORARY:
-            // should not happen in this context
-            ASSERT( M_SCENE, !"temporary found inside argument expression");
-            return false;
-        case IExpression::EK_FORCE_32_BIT:
-            // not a real kind;
-            ASSERT( M_SCENE, false);
-            break;
+    // inline MDLE
+    if (symbol_importer.imports_mdle()) {
+        mi::base::Handle<mi::mdl::IMDL_module_transformer> module_transformer(
+            mdl->create_module_transformer());
+        cmodule = module_transformer->inline_mdle(module.get());
+        if (!cmodule) {
+            LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
+                "Inlining MDLEs for module \"%s\" failed.", module_name);
+            report_messages(module_transformer->access_messages(), context);
+            return -8;
         }
     }
 
-    return true;
-}
-
-namespace {
-
-/// Helper class to express on (new) argument.
-class New_parameter {
-public:
-    /// Constructor.
-    New_parameter(
-        const mi::mdl::ISymbol* sym,
-        const mi::base::Handle<const IExpression>& init,
-        mi::base::Handle<const IAnnotation_block> annos,
-        bool is_uniform)
-        : m_sym(sym)
-        , m_init(init)
-        , m_annos(annos)
-        , m_is_uniform(is_uniform)
-    {
-    }
-
-    /// Get the symbol.
-    const mi::mdl::ISymbol* get_sym() const { return m_sym; }
-
-    /// Get the init expression.
-    const mi::base::Handle<const IExpression>& get_init() const { return m_init; }
-
-    /// Get the annotations.
-    const mi::base::Handle<const IAnnotation_block>& get_annos() const { return m_annos; }
-
-    /// Get the uniform flag.
-    bool is_uniform() const { return m_is_uniform; }
-
-private:
-    /// The symbol of net new parameter.
-    const mi::mdl::ISymbol* m_sym;
-
-    /// The (init) expression of the new parameter.
-    mi::base::Handle<const IExpression> m_init;
-
-    /// Annotations for this new parameter.
-    mi::base::Handle<const IAnnotation_block> m_annos;
-
-    /// True if the new parameter must be uniform.
-    bool m_is_uniform;
-};
-
-}  // anonymous
-
-
-
-mi::Sint32 Mdl_module::add_material(
-    Symbol_importer& symbol_importer,
-    DB::Transaction* transaction,
-    mi::mdl::IModule* module,
-    const ICall& callee,
-    const Material_data& md,
-    Execution_context*)
-{
-    typedef std::vector<Parameter_data>::const_iterator Iter;
-
-    mi::base::Handle<const IExpression_list> args(callee.get_arguments());
-
-    if( !args.is_valid_interface() && !md.m_parameters.empty()) {
-        // the prototype material has no parameters at all
-        return -6;
-    }
-
-    // traverse the parameter paths AND collect the types
-    std::vector< New_parameter > new_params;
-    new_params.reserve( md.m_parameters.size());
-
-    mi::base::Handle<const IType_list> param_types(callee.get_parameter_types());
-
-    mi::mdl::IName_factory &nf = *module->get_name_factory();
-
-    for( Iter it( md.m_parameters.begin()), end(md.m_parameters.end()); it != end; ++it) {
-        const Parameter_data& pd = *it;
-
-        mi::base::Handle<const IExpression> expr( find_path( transaction, pd.m_path, args));
-        if( !expr.is_valid_interface()) {
-            // path does not exists
-            return -13;
-        }
-
-        bool must_be_uniform = false;
-        if (!can_enforce_uniform(
-                transaction, args, param_types, pd.m_path, expr, must_be_uniform)) {
-            // argument cannot be enforces uniform
-            return -15;
-        }
-
-        new_params.push_back(
-            New_parameter(
-                nf.create_symbol(pd.m_name.c_str()),
-                expr,
-                pd.m_annotations,
-                must_be_uniform || pd.m_enforce_uniform));
-    }
-
-    // convert annotations to MDL AST
-    mi::mdl::IAnnotation_block* mdl_annotation_block = 0;
-    mi::Sint32 result = create_annotations(
-        transaction, module, md.m_annotations.get(), &symbol_importer, mdl_annotation_block);
-    if( result != 0)
-        return result;
-
-    mi::mdl::IDeclaration_factory &df = *module->get_declaration_factory();
-
-    // create return type
-    const mi::mdl::ISymbol* ret_tp_sym = nf.create_symbol( "material");
-    const mi::mdl::ISimple_name* ret_tp_sname = nf.create_simple_name( ret_tp_sym);
-    mi::mdl::IQualified_name* ret_tp_qname = nf.create_qualified_name();
-    ret_tp_qname->add_component( ret_tp_sname);
-
-    mi::mdl::IType_name *ret_tp_tn = nf.create_type_name( ret_tp_qname);
-
-    // create name
-    const mi::mdl::ISymbol* mat_sym = nf.create_symbol( md.m_material_name.c_str());
-    const mi::mdl::ISimple_name* mat_sname = nf.create_simple_name( mat_sym);
-
-    // setup the builder
-    Mdl_ast_builder ast_builder( module, transaction, args);
-
-    typedef std::vector<New_parameter>::const_iterator NIter;
-    for( NIter it( new_params.begin()), end( new_params.end()); it != end; ++it) {
-        const New_parameter& pd = *it;
-
-        ast_builder.declare_parameter( pd.get_sym(), pd.get_init());
-    }
-
-    // create the body
-    mi::mdl::IStatement_factory &sf  = *module->get_statement_factory();
-    mi::mdl::IExpression_factory &ef = *module->get_expression_factory();
-
-    mi::mdl::IQualified_name *qname    = ast_builder.create_qualified_name(
-        callee.get_abs_name());
-    mi::mdl::IType_name      *mat_name = nf.create_type_name(qname);
-
-    mi::mdl::IExpression_reference *ref = ef.create_reference(mat_name);
-    mi::mdl::IExpression_call      *call = ef.create_call(ref);
-
-    const mi::mdl::IExpression *res = NULL;
-    mi::Size n_params = args->get_size();
-    if( n_params > 0) {
-        mi::mdl::IExpression_let *let = ef.create_let(call);
-
-        // Note: the temporaries are create with "auto" type
-        for( mi::Size i = 0; i < n_params; ++i) {
-            mi::base::Handle<const IExpression> arg( args->get_expression( i));
-            mi::base::Handle<const IType> arg_tp( arg->get_type());
-
-            mi::mdl::IType_name *tn = ast_builder.create_type_name( arg_tp);
-            mi::mdl::IDeclaration_variable *vdecl = df.create_variable( tn, /*exported=*/false);
-
-            const mi::mdl::IExpression* init = ast_builder.transform_expr( arg);
-            const mi::mdl::ISymbol* tmp_sym = ast_builder.get_temporary_symbol();
-
-            vdecl->add_variable( ast_builder.to_simple_name( tmp_sym), init);
-
-            let->add_declaration( vdecl);
-
-            const char* pname = args->get_name( i);
-            const mi::mdl::ISymbol* psym = nf.create_symbol( pname);
-            const mi::mdl::ISimple_name *psname = ast_builder.to_simple_name( psym);
-            const mi::mdl::IExpression_reference *ref = ast_builder.to_reference( tmp_sym);
-
-            call->add_argument( ef.create_named_argument( psname, ref));
-        }
-        res = let;
-    } else {
-        res = call;
-    }
-
-    // collect all necessary imports
-    symbol_importer.collect_imports(res);
-
-    mi::mdl::IStatement *stmt = sf.create_expression(res);
-
-    mi::mdl::IDeclaration_function *fdecl = df.create_function(
-        ret_tp_tn, /*ret_annos=*/NULL, mat_sname, /*is_clone*/false,
-        stmt, mdl_annotation_block, /*is_exported=*/true);
-
-    // add parameter
-    ast_builder.remove_parameters();
-    for( NIter it( new_params.begin()), end( new_params.end()); it != end; ++it) {
-        const New_parameter& pd = *it;
-
-        mi::base::Handle<const IType> ptype( pd.get_init()->get_type());
-        mi::mdl::IType_name* tn = ast_builder.create_type_name( ptype);
-
-        if( pd.is_uniform()) {
-            tn->set_qualifier( mi::mdl::FQ_UNIFORM);
-        }
-
-        // work-around until the expression are correctly typed: resource parameters
-        // must be uniform
-        IType::Kind kind = ptype->get_kind();
-        if (kind == IType::TK_TEXTURE || kind == IType::TK_BSDF_MEASUREMENT ||
-            kind == IType::TK_LIGHT_PROFILE)
-        {
-            tn->set_qualifier(mi::mdl::FQ_UNIFORM);
-        }
-
-        const mi::mdl::ISimple_name* sname = nf.create_simple_name( pd.get_sym());
-        const mi::mdl::IExpression* init = ast_builder.transform_expr( pd.get_init());
-
-        mi::mdl::IAnnotation_block* p_annos = 0;
-        mi::Sint32 result = create_annotations(
-            transaction, module, pd.get_annos().get(), &symbol_importer, p_annos);
-        if( result != 0)
-            return result;
-
-        const mi::mdl::IParameter* param = df.create_parameter( tn, sname, init, p_annos);
-
-        fdecl->add_parameter( param);
-        if( init)
-            symbol_importer.collect_imports( init);
-    }
-
-    // and add the used types from the builder, because these might not directly be visible
-    symbol_importer.add_names(ast_builder.get_used_user_types());
-
-    // and finally add it to the module
-    module->add_declaration( fdecl);
-    return 0;
+    return create_module_internal( transaction, mdl.get(), cmodule.get(), context);
 }
 
 
@@ -1179,6 +747,7 @@ mi::Sint32 Mdl_module::add_variant(
     const char* variant_name,
     const IExpression_list* defaults,
     const IAnnotation_block* annotation_block,
+    bool allow_cast,
     Execution_context*)
 {
     mi::base::Handle<IType_factory> tf( get_type_factory());
@@ -1196,16 +765,23 @@ mi::Sint32 Mdl_module::add_variant(
 
     // check that the provided arguments are parameters of the material definition
     // and that their types match the expected types
+    std::vector<bool> needs_cast(prototype->get_parameter_count(), false);
+
     mi::base::Handle<const IType_list> expected_types( prototype->get_parameter_types());
     for( mi::Size i = 0; defaults && i < defaults->get_size(); ++i) {
         const char* name = defaults->get_name( i);
-        mi::base::Handle<const IType> expected_type( expected_types->get_type( name));
+        mi::Size index = expected_types->get_index(name);
+        mi::base::Handle<const IType> expected_type( expected_types->get_type(index));
         if( !expected_type)
             return -6;
         mi::base::Handle<const IExpression> default_( defaults->get_expression( i));
         mi::base::Handle<const IType> actual_type( default_->get_type());
-        if( !argument_type_matches_parameter_type( tf.get(), actual_type.get(),expected_type.get()))
+
+        bool needs_cast_tmp = false;
+        if( !argument_type_matches_parameter_type(
+            tf.get(), actual_type.get(),expected_type.get(), allow_cast, needs_cast_tmp))
             return -7;
+        needs_cast[index] = needs_cast_tmp;
     }
 
     // create call expression for variant
@@ -1224,6 +800,21 @@ mi::Sint32 Mdl_module::add_variant(
             mi::base::Handle<const IExpression> default_(defaults->get_expression(arg_name));
             if (!default_)
                 continue;
+            if (needs_cast[i]) {
+
+                mi::base::Handle<const IType> expected_type(expected_types->get_type(i));
+                mi::Sint32 errors;
+                mi::base::Handle<IExpression> expr(
+                    ef->clone(default_.get(), transaction, /*copy_immutable_calls=*/false));
+                default_ = ef->create_cast(
+                    transaction,
+                    expr.get(),
+                    expected_type.get(),
+                    /*cast_db_name=*/nullptr,
+                    /*force_cast=*/false,
+                    /*direct_call=*/false,
+                    &errors);
+            }
             const mi::mdl::ISymbol* arg_symbol = nf.create_symbol(arg_name);
             const mi::mdl::ISimple_name* arg_simple_name = nf.create_simple_name(arg_symbol);
             const mi::mdl::IType* arg_type
@@ -1253,6 +844,7 @@ mi::Sint32 Mdl_module::add_variant(
     // create return type for variant
     const mi::mdl::IType_name* return_type_type_name
         = create_return_type_name( transaction, module, prototype);
+    symbol_importer.collect_imports(return_type_type_name);
 
     // create body for variant
     mi::mdl::IStatement_factory* stat_factory = module->get_statement_factory();
@@ -1471,6 +1063,7 @@ mi::Sint32 Mdl_module::create_module_internal(
         context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE);
     options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, internal_space.c_str());
 
+   
     Module_cache module_cache( transaction);
     if( !module->restore_import_entries( &module_cache)) {
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -1494,7 +1087,15 @@ mi::Sint32 Mdl_module::create_module_internal(
     mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
         code->get_interface<mi::mdl::IGenerated_code_dag>());
 
-    update_resource_literals( transaction, code_dag.get(), module_filename, module_name);
+    bool load_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    if (load_resources) {
+        update_resource_literals(transaction, code_dag.get(), module_filename, module_name);
+    }
+    else {
+        LOG::mod_log->info(M_SCENE, LOG::Mod_log::C_DATABASE,
+            "Resource loading has been disabled for module '%s'. "
+            "Resource data will be unavailable.", module->get_name());
+    }
 
     // Collect tags of imported modules, create DB elements on the fly if necessary.
     mi::Uint32 import_count = module->get_import_count();
@@ -1574,14 +1175,15 @@ mi::Sint32 Mdl_module::create_module_internal(
 
     db_module_tag = transaction->reserve_tag();
     Mdl_module* db_module = new Mdl_module(transaction,
-        mdl, module, code_dag.get(), imports, function_tags, material_tags);
+        mdl, module, code_dag.get(), imports, function_tags, material_tags, load_resources);
 
     DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
 
     // Create DB elements for the function definitions in this module.
     for( mi::Uint32 i = 0; i < function_count; ++i) {
         Mdl_function_definition* db_function = new Mdl_function_definition(transaction,
-            db_module_tag, function_tags[i], code_dag.get(), i, module_filename, module_name);
+            db_module_tag, function_tags[i], code_dag.get(), i, module_filename, module_name,
+            load_resources);
         transaction->store_for_reference_counting(
             function_tags[i], db_function, function_names[i].c_str(), privacy_level);
     }
@@ -1589,7 +1191,8 @@ mi::Sint32 Mdl_module::create_module_internal(
     // Create DB elements for the material definitions in this module.
     for( mi::Uint32 i = 0; i < material_count; ++i) {
         Mdl_material_definition* db_material = new Mdl_material_definition(transaction,
-            db_module_tag, material_tags[i], code_dag.get(), i, module_filename, module_name);
+            db_module_tag, material_tags[i], code_dag.get(), i, module_filename, module_name,
+            load_resources);
         transaction->store_for_reference_counting(
             material_tags[i], db_material, material_names[i].c_str(), privacy_level);
     }
@@ -1733,7 +1336,8 @@ Mdl_module::Mdl_module(
     mi::mdl::IGenerated_code_dag* code_dag,
     const std::vector<DB::Tag>& imports,
     const std::vector<DB::Tag>& functions,
-    const std::vector<DB::Tag>& materials)
+    const std::vector<DB::Tag>& materials,
+    bool load_resources)
 {
     ASSERT( M_SCENE, mdl);
     ASSERT( M_SCENE, module);
@@ -1791,30 +1395,30 @@ Mdl_module::Mdl_module(
         const mi::mdl::DAG_constant* constant = code_dag->get_constant_value( i);
         const mi::mdl::IValue* value = constant->get_value();
         mi::base::Handle<IValue> value_int( mdl_value_to_int_value(
-            m_vf.get(), transaction, /*type_int*/ 0, value, m_file_name.c_str(), m_name.c_str()));
+            m_vf.get(), transaction, /*type_int*/ 0, value, m_file_name.c_str(), m_name.c_str(), load_resources));
         std::string full_name = m_name + "::" + name;
         m_constants->add_value( full_name.c_str(), value_int.get());
     }
 
     // convert module annotations
-    Mdl_dag_converter converter(
+    Mdl_dag_converter anno_converter(
         m_ef.get(),
         transaction,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
         m_file_name.c_str(),
         m_name.c_str(),
-        /*prototype_tag*/ DB::Tag());
+        /*prototype_tag*/ DB::Tag(),
+        load_resources);
 
     mi::Uint32 annotation_count = code_dag->get_module_annotation_count();
     Mdl_annotation_block annotations( annotation_count);
     for( mi::Uint32 i = 0; i < annotation_count; ++i)
         annotations[i] = code_dag->get_module_annotation( i);
-    m_annotations = converter.mdl_dag_node_vector_to_int_annotation_block(
+    m_annotations = anno_converter.mdl_dag_node_vector_to_int_annotation_block(
         annotations, m_name.c_str());
 
-    if (module->get_referenced_resources_count() > 0)
-    {
+    if (module->get_referenced_resources_count() > 0) {
         std::map <std::string, mi::Size> resource_url_2_index;
         for (mi::Size i = 0; i < module->get_referenced_resources_count(); ++i)
             resource_url_2_index.insert(std::make_pair(module->get_referenced_resource_url(i), i));
@@ -1822,10 +1426,9 @@ Mdl_module::Mdl_module(
         // update resource references
         std::set<const mi::mdl::IValue_resource*> resources;
         collect_resource_references(code_dag, resources);
-    
+
         m_resource_reference_tags.resize(module->get_referenced_resources_count());
         for (const auto r : resources) {
-        
             const char *key = r->get_string_value();
             const auto& it = resource_url_2_index.find(key);
             if (it != resource_url_2_index.end())

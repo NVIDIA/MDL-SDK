@@ -51,7 +51,7 @@ These essential documents must be read before reading this document:
   Formation, SSA-based Optimization, Register Allocation, Prolog/Epilog Code
   Insertion, Late Machine Code Optimizations, and Code Emission.
 
-* :doc:`TableGenFundamentals` --- a document that describes the TableGen
+* :doc:`TableGen/index` --- a document that describes the TableGen
   (``tblgen``) application that manages domain-specific information to support
   LLVM code generation.  TableGen processes input from a target description
   file (``.td`` suffix) and generates C++ code that can be used for code
@@ -135,14 +135,13 @@ First, you should create a subdirectory under ``lib/Target`` to hold all the
 files related to your target.  If your target is called "Dummy", create the
 directory ``lib/Target/Dummy``.
 
-In this new directory, create a ``Makefile``.  It is easiest to copy a
-``Makefile`` of another target and modify it.  It should at least contain the
-``LEVEL``, ``LIBRARYNAME`` and ``TARGET`` variables, and then include
-``$(LEVEL)/Makefile.common``.  The library can be named ``LLVMDummy`` (for
-example, see the MIPS target).  Alternatively, you can split the library into
-``LLVMDummyCodeGen`` and ``LLVMDummyAsmPrinter``, the latter of which should be
-implemented in a subdirectory below ``lib/Target/Dummy`` (for example, see the
-PowerPC target).
+In this new directory, create a ``CMakeLists.txt``.  It is easiest to copy a
+``CMakeLists.txt`` of another target and modify it.  It should at least contain
+the ``LLVM_TARGET_DEFINITIONS`` variable. The library can be named ``LLVMDummy``
+(for example, see the MIPS target).  Alternatively, you can split the library
+into ``LLVMDummyCodeGen`` and ``LLVMDummyAsmPrinter``, the latter of which
+should be implemented in a subdirectory below ``lib/Target/Dummy`` (for example,
+see the PowerPC target).
 
 Note that these two naming schemes are hardcoded into ``llvm-config``.  Using
 any other naming scheme will confuse ``llvm-config`` and produce a lot of
@@ -156,13 +155,12 @@ generator, you should do what all current machine backends do: create a
 subclass of ``LLVMTargetMachine``.  (To create a target from scratch, create a
 subclass of ``TargetMachine``.)
 
-To get LLVM to actually build and link your target, you need to add it to the
-``TARGETS_TO_BUILD`` variable.  To do this, you modify the configure script to
-know about your target when parsing the ``--enable-targets`` option.  Search
-the configure script for ``TARGETS_TO_BUILD``, add your target to the lists
-there (some creativity required), and then reconfigure.  Alternatively, you can
-change ``autotools/configure.ac`` and regenerate configure by running
-``./autoconf/AutoRegen.sh``.
+To get LLVM to actually build and link your target, you need to run ``cmake``
+with ``-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=Dummy``. This will build your
+target without needing to add it to the list of all the targets.
+
+Once your target is stable, you can add it to the ``LLVM_ALL_TARGETS`` variable
+located in the main ``CMakeLists.txt``.
 
 Target Machine
 ==============
@@ -238,6 +236,12 @@ For some targets, you also need to support the following methods:
 * ``getTargetLowering()``
 * ``getJITInfo()``
 
+Some architectures, such as GPUs, do not support jumping to an arbitrary
+program location and implement branching using masked execution and loop using
+special instructions around the loop body. In order to avoid CFG modifications
+that introduce irreducible control flow not handled by such hardware, a target
+must call `setRequiresStructuredCFG(true)` when being initialized.
+
 In addition, the ``XXXTargetMachine`` constructor should specify a
 ``TargetDescription`` string that determines the data layout for the target
 machine, including characteristics such as pointer size, alignment, and
@@ -284,11 +288,11 @@ looks like this:
 
 .. code-block:: c++
 
-  Target llvm::TheSparcTarget;
+  Target llvm::getTheSparcTarget();
 
   extern "C" void LLVMInitializeSparcTargetInfo() {
     RegisterTarget<Triple::sparc, /*HasJIT=*/false>
-      X(TheSparcTarget, "sparc", "Sparc");
+      X(getTheSparcTarget(), "sparc", "Sparc");
   }
 
 This allows the ``TargetRegistry`` to look up the target by name or by target
@@ -301,7 +305,7 @@ example.  Here is an example of registering the Sparc assembly printer:
 .. code-block:: c++
 
   extern "C" void LLVMInitializeSparcAsmPrinter() {
-    RegisterAsmPrinter<SparcAsmPrinter> X(TheSparcTarget);
+    RegisterAsmPrinter<SparcAsmPrinter> X(getTheSparcTarget());
   }
 
 For more information, see "`llvm/Target/TargetRegistry.h
@@ -341,7 +345,7 @@ to define an object for each register.  The specified string ``n`` becomes the
 ``Name`` of the register.  The basic ``Register`` object does not have any
 subregisters and does not specify any aliases.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class Register<string n> {
     string Namespace = "";
@@ -357,7 +361,7 @@ subregisters and does not specify any aliases.
 For example, in the ``X86RegisterInfo.td`` file, there are register definitions
 that utilize the ``Register`` class, such as:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def AL : Register<"AL">, DwarfRegNum<[0, 0, 0]>;
 
@@ -410,7 +414,7 @@ classes.  In ``Target.td``, the ``Register`` class is the base for the
 ``RegisterWithSubRegs`` class that is used to define registers that need to
 specify subregisters in the ``SubRegs`` list, as shown here:
 
-.. code-block:: llvm
+.. code-block:: text
 
   class RegisterWithSubRegs<string n, list<Register> subregs> : Register<n> {
     let SubRegs = subregs;
@@ -423,7 +427,7 @@ feature common to these subclasses.  Note the use of "``let``" expressions to
 override values that are initially defined in a superclass (such as ``SubRegs``
 field in the ``Rd`` class).
 
-.. code-block:: llvm
+.. code-block:: text
 
   class SparcReg<string n> : Register<n> {
     field bits<5> Num;
@@ -448,7 +452,7 @@ field in the ``Rd`` class).
 In the ``SparcRegisterInfo.td`` file, there are register definitions that
 utilize these subclasses of ``Register``, such as:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def G0 : Ri< 0, "G0">, DwarfRegNum<[0]>;
   def G1 : Ri< 1, "G1">, DwarfRegNum<[1]>;
@@ -474,7 +478,7 @@ default allocation order of the registers.  A target description file
 ``XXXRegisterInfo.td`` that uses ``Target.td`` can construct register classes
 using the following class:
 
-.. code-block:: llvm
+.. code-block:: text
 
   class RegisterClass<string namespace,
   list<ValueType> regTypes, int alignment, dag regList> {
@@ -528,7 +532,7 @@ defines a group of 32 single-precision floating-point registers (``F0`` to
 ``F31``); ``DFPRegs`` defines a group of 16 double-precision registers
 (``D0-D15``).
 
-.. code-block:: llvm
+.. code-block:: text
 
   // F0, F1, F2, ..., F31
   def FPRegs : RegisterClass<"SP", [f32], 32, (sequence "F%u", 0, 31)>;
@@ -589,12 +593,12 @@ the order in the definition of ``IntRegs`` in the target description file.
     FPRegsClass     FPRegsRegClass;
     IntRegsClass    IntRegsRegClass;
   ...
-    // IntRegs Sub-register Classess...
+    // IntRegs Sub-register Classes...
     static const TargetRegisterClass* const IntRegsSubRegClasses [] = {
       NULL
     };
   ...
-    // IntRegs Super-register Classess...
+    // IntRegs Super-register Classes..
     static const TargetRegisterClass* const IntRegsSuperRegClasses [] = {
       NULL
     };
@@ -699,7 +703,7 @@ which describes one instruction.  An instruction descriptor defines:
 The Instruction class (defined in ``Target.td``) is mostly used as a base for
 more complex instruction classes.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class Instruction {
     string Namespace = "";
@@ -756,7 +760,7 @@ specific operation value for ``LD``/Load Word.  The third parameter is the
 output destination, which is a register operand and defined in the ``Register``
 target description file (``IntRegs``).
 
-.. code-block:: llvm
+.. code-block:: text
 
   def LDrr : F3_1 <3, 0b000000, (outs IntRegs:$dst), (ins MEMrr:$addr),
                    "ld [$addr], $dst",
@@ -765,7 +769,7 @@ target description file (``IntRegs``).
 The fourth parameter is the input source, which uses the address operand
 ``MEMrr`` that is defined earlier in ``SparcInstrInfo.td``:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def MEMrr : Operand<i32> {
     let PrintMethod = "printMemOperand";
@@ -784,7 +788,7 @@ immediate value operands.  For example, to perform a Load Integer instruction
 for a Word from an immediate operand to a register, the following instruction
 class is defined:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def LDri : F3_2 <3, 0b000000, (outs IntRegs:$dst), (ins MEMri:$addr),
                    "ld [$addr], $dst",
@@ -797,7 +801,7 @@ creation of templates to define several instruction classes at once (using the
 pattern ``F3_12`` is defined to create 2 instruction classes each time
 ``F3_12`` is invoked:
 
-.. code-block:: llvm
+.. code-block:: text
 
   multiclass F3_12 <string OpcStr, bits<6> Op3Val, SDNode OpNode> {
     def rr  : F3_1 <2, Op3Val,
@@ -814,7 +818,7 @@ So when the ``defm`` directive is used for the ``XOR`` and ``ADD``
 instructions, as seen below, it creates four instruction objects: ``XORrr``,
 ``XORri``, ``ADDrr``, and ``ADDri``.
 
-.. code-block:: llvm
+.. code-block:: text
 
   defm XOR   : F3_12<"xor", 0b000011, xor>;
   defm ADD   : F3_12<"add", 0b000000, add>;
@@ -826,7 +830,7 @@ For example, the 10\ :sup:`th` bit represents the "greater than" condition for
 integers, and the 22\ :sup:`nd` bit represents the "greater than" condition for
 floats.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def ICC_NE  : ICC_VAL< 9>;  // Not Equal
   def ICC_E   : ICC_VAL< 1>;  // Equal
@@ -851,7 +855,7 @@ order they are defined.  Fields are bound when they are assigned a value.  For
 example, the Sparc target defines the ``XNORrr`` instruction as a ``F3_1``
 format instruction having three operands.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def XNORrr  : F3_1<2, 0b000111,
                      (outs IntRegs:$dst), (ins IntRegs:$b, IntRegs:$c),
@@ -861,7 +865,7 @@ format instruction having three operands.
 The instruction templates in ``SparcInstrFormats.td`` show the base class for
 ``F3_1`` is ``InstSP``.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class InstSP<dag outs, dag ins, string asmstr, list<dag> pattern> : Instruction {
     field bits<32> Inst;
@@ -876,7 +880,7 @@ The instruction templates in ``SparcInstrFormats.td`` show the base class for
 
 ``InstSP`` leaves the ``op`` field unbound.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class F3<dag outs, dag ins, string asmstr, list<dag> pattern>
       : InstSP<outs, ins, asmstr, pattern> {
@@ -893,7 +897,7 @@ The instruction templates in ``SparcInstrFormats.td`` show the base class for
 fields.  ``F3`` format instructions will bind the operands ``rd``, ``op3``, and
 ``rs1`` fields.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class F3_1<bits<2> opVal, bits<6> op3val, dag outs, dag ins,
              string asmstr, list<dag> pattern> : F3<outs, ins, asmstr, pattern> {
@@ -921,7 +925,7 @@ TableGen definition will add all of its operands to an enumeration in the
 llvm::XXX:OpName namespace and also add an entry for it into the OperandMap
 table, which can be queried using getNamedOperandIdx()
 
-.. code-block:: llvm
+.. code-block:: text
 
   int DstIndex = SP::getNamedOperandIdx(SP::XNORrr, SP::OpName::dst); // => 0
   int BIndex = SP::getNamedOperandIdx(SP::XNORrr, SP::OpName::b);     // => 1
@@ -968,7 +972,7 @@ For example, the X86 backend defines ``brtarget`` and ``brtarget8``, both
 instances of the TableGen ``Operand`` class, which represent branch target
 operands:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def brtarget : Operand<OtherVT>;
   def brtarget8 : Operand<OtherVT>;
@@ -1004,9 +1008,49 @@ Instruction Scheduling
 ----------------------
 
 Instruction itineraries can be queried using MCDesc::getSchedClass(). The
-value can be named by an enumemation in llvm::XXX::Sched namespace generated
+value can be named by an enumeration in llvm::XXX::Sched namespace generated
 by TableGen in XXXGenInstrInfo.inc. The name of the schedule classes are
 the same as provided in XXXSchedule.td plus a default NoItinerary class.
+
+The schedule models are generated by TableGen by the SubtargetEmitter,
+using the ``CodeGenSchedModels`` class. This is distinct from the itinerary
+method of specifying machine resource use.  The tool ``utils/schedcover.py``
+can be used to determine which instructions have been covered by the
+schedule model description and which haven't. The first step is to use the
+instructions below to create an output file. Then run ``schedcover.py`` on the
+output file:
+
+.. code-block:: shell
+
+  $ <src>/utils/schedcover.py <build>/lib/Target/AArch64/tblGenSubtarget.with
+  instruction, default, CortexA53Model, CortexA57Model, CycloneModel, ExynosM1Model, FalkorModel, KryoModel, ThunderX2T99Model, ThunderXT8XModel
+  ABSv16i8, WriteV, , , CyWriteV3, M1WriteNMISC1, FalkorWr_2VXVY_2cyc, KryoWrite_2cyc_XY_XY_150ln, , 
+  ABSv1i64, WriteV, , , CyWriteV3, M1WriteNMISC1, FalkorWr_1VXVY_2cyc, KryoWrite_2cyc_XY_noRSV_67ln, , 
+  ...
+
+To capture the debug output from generating a schedule model, change to the
+appropriate target directory and use the following command:
+command with the ``subtarget-emitter`` debug option:
+
+.. code-block:: shell
+
+  $ <build>/bin/llvm-tblgen -debug-only=subtarget-emitter -gen-subtarget \
+    -I <src>/lib/Target/<target> -I <src>/include \
+    -I <src>/lib/Target <src>/lib/Target/<target>/<target>.td \
+    -o <build>/lib/Target/<target>/<target>GenSubtargetInfo.inc.tmp \
+    > tblGenSubtarget.dbg 2>&1
+
+Where ``<build>`` is the build directory, ``src`` is the source directory,
+and ``<target>`` is the name of the target.
+To double check that the above command is what is needed, one can capture the
+exact TableGen command from a build by using:
+
+.. code-block:: shell
+
+  $ VERBOSE=1 make ... 
+
+and search for ``llvm-tblgen`` commands in the output.
+
 
 Instruction Relation Mapping
 ----------------------------
@@ -1218,14 +1262,14 @@ definitions in ``XXXInstrInfo.td``.  For example, in ``SparcInstrInfo.td``,
 this entry defines a register store operation, and the last parameter describes
 a pattern with the store DAG operator.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def STrr  : F3_1< 3, 0b000100, (outs), (ins MEMrr:$addr, IntRegs:$src),
                    "st $src, [$addr]", [(store i32:$src, ADDRrr:$addr)]>;
 
 ``ADDRrr`` is a memory mode that is also defined in ``SparcInstrInfo.td``:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def ADDRrr : ComplexPattern<i32, 2, "SelectADDRrr", [], []>;
 
@@ -1236,7 +1280,7 @@ defined in an implementation of the Instructor Selector (such as
 In ``lib/Target/TargetSelectionDAG.td``, the DAG operator for store is defined
 below:
 
-.. code-block:: llvm
+.. code-block:: text
 
   def store : PatFrag<(ops node:$val, node:$ptr),
                       (st node:$val, node:$ptr), [{
@@ -1454,7 +1498,7 @@ if the current argument is of type ``f32`` or ``f64``), then the action is
 performed.  In this case, the ``CCAssignToReg`` action assigns the argument
 value to the first available register: either ``R0`` or ``R1``.
 
-.. code-block:: llvm
+.. code-block:: text
 
   CCIfType<[f32,f64], CCAssignToReg<[R0, R1]>>
 
@@ -1465,7 +1509,7 @@ which registers are used for specified scalar return types.  A single-precision
 float is returned to register ``F0``, and a double-precision float goes to
 register ``D0``.  A 32-bit integer is returned in register ``I0`` or ``I1``.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def RetCC_Sparc32 : CallingConv<[
     CCIfType<[i32], CCAssignToReg<[I0, I1]>>,
@@ -1480,7 +1524,7 @@ the size of the slot, and the second parameter, also 4, indicates the stack
 alignment along 4-byte units.  (Special cases: if size is zero, then the ABI
 size is used; if alignment is zero, then the ABI alignment is used.)
 
-.. code-block:: llvm
+.. code-block:: text
 
   def CC_Sparc32 : CallingConv<[
     // All arguments get passed in integer registers if there is space.
@@ -1495,7 +1539,7 @@ the following example (in ``X86CallingConv.td``), the definition of
 assigned to the register ``ST0`` or ``ST1``, the ``RetCC_X86Common`` is
 invoked.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def RetCC_X86_32_C : CallingConv<[
     CCIfType<[f32], CCAssignToReg<[ST0, ST1]>>,
@@ -1510,7 +1554,7 @@ then a specified action is invoked.  In the following example (in
 ``RetCC_X86_32_Fast`` is invoked.  If the ``SSECall`` calling convention is in
 use, then ``RetCC_X86_32_SSE`` is invoked.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def RetCC_X86_32 : CallingConv<[
     CCIfCC<"CallingConv::Fast", CCDelegateTo<RetCC_X86_32_Fast>>,
@@ -1678,7 +1722,7 @@ feature, the value of the attribute, and a description of the feature.  (The
 fifth parameter is a list of features whose presence is implied, and its
 default value is an empty array.)
 
-.. code-block:: llvm
+.. code-block:: text
 
   class SubtargetFeature<string n, string a, string v, string d,
                          list<SubtargetFeature> i = []> {
@@ -1692,7 +1736,7 @@ default value is an empty array.)
 In the ``Sparc.td`` file, the ``SubtargetFeature`` is used to define the
 following features.
 
-.. code-block:: llvm
+.. code-block:: text
 
   def FeatureV9 : SubtargetFeature<"v9", "IsV9", "true",
                        "Enable SPARC-V9 instructions">;
@@ -1706,7 +1750,7 @@ Elsewhere in ``Sparc.td``, the ``Proc`` class is defined and then is used to
 define particular SPARC processor subtypes that may have the previously
 described features.
 
-.. code-block:: llvm
+.. code-block:: text
 
   class Proc<string Name, list<SubtargetFeature> Features>
     : Processor<Name, NoItineraries, Features>;

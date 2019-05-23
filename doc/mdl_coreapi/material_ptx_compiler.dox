@@ -87,7 +87,7 @@ For loading texture resources, the examples use the \c Texture_data helper class
 <dt><b>Adding material subexpressions to the link unit</b></dt>
 <dd>
 The \c Material_ptx_compiler::add_material_subexpr() function allows to add subexpressions of a material for code generation to the link unit.
-The \link ILink_unit::add(ILambda_function const *, ICall_name_resolver const *, Function_kind, size_t *, size_t *) ILink_unit::add() \endlink expects an ILambda_function as a parameter which represents such MDL expressions.
+The \link ILink_unit::add(ILambda_function const *, ICall_name_resolver const *, IGenerated_code_executable::Function_kind, size_t *, size_t *) ILink_unit::add() \endlink expects an ILambda_function as a parameter which represents such MDL expressions.
 To create a lambda function, we need a material instance of the requested material and the DAG node for the requested path starting at the constructor node of the material.
 
 When creating the ILambda_function object, an ILambda_function::Lambda_execution_context must be provided.

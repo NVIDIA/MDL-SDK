@@ -12,9 +12,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/StringRef.h"
+#ifndef LLVM_SUPPORT_UNICODE_H
+#define LLVM_SUPPORT_UNICODE_H
 
 namespace llvm {
+class StringRef;
+
 namespace sys {
 namespace unicode {
 
@@ -57,6 +60,12 @@ bool isPrintable(int UCS);
 ///   * 1 for each of the remaining characters.
 int columnWidthUTF8(StringRef Text);
 
+/// Fold input unicode character according the Simple unicode case folding
+/// rules.
+int foldCharSimple(int C);
+
 } // namespace unicode
 } // namespace sys
 } // namespace llvm
+
+#endif

@@ -23,11 +23,9 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "objc-arc-expand"
-
 #include "ObjCARC.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Value.h"
@@ -37,8 +35,9 @@
 #include "llvm/PassSupport.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
+
+#define DEBUG_TYPE "objc-arc-expand"
 
 namespace llvm {
   class Module;
@@ -48,11 +47,11 @@ using namespace llvm;
 using namespace llvm::objcarc;
 
 namespace {
-  /// \brief Early ARC transformations.
+  /// Early ARC transformations.
   class ObjCARCExpand : public FunctionPass {
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-    virtual bool doInitialization(Module &M);
-    virtual bool runOnFunction(Function &F);
+    void getAnalysisUsage(AnalysisUsage &AU) const override;
+    bool doInitialization(Module &M) override;
+    bool runOnFunction(Function &F) override;
 
     /// A flag indicating whether this optimization pass should run.
     bool Run;
@@ -92,28 +91,31 @@ bool ObjCARCExpand::runOnFunction(Function &F) {
 
   bool Changed = false;
 
-  DEBUG(dbgs() << "ObjCARCExpand: Visiting Function: " << F.getName() << "\n");
+  LLVM_DEBUG(dbgs() << "ObjCARCExpand: Visiting Function: " << F.getName()
+                    << "\n");
 
   for (inst_iterator I = inst_begin(&F), E = inst_end(&F); I != E; ++I) {
     Instruction *Inst = &*I;
 
-    DEBUG(dbgs() << "ObjCARCExpand: Visiting: " << *Inst << "\n");
+    LLVM_DEBUG(dbgs() << "ObjCARCExpand: Visiting: " << *Inst << "\n");
 
-    switch (GetBasicInstructionClass(Inst)) {
-    case IC_Retain:
-    case IC_RetainRV:
-    case IC_Autorelease:
-    case IC_AutoreleaseRV:
-    case IC_FusedRetainAutorelease:
-    case IC_FusedRetainAutoreleaseRV: {
+    switch (GetBasicARCInstKind(Inst)) {
+    case ARCInstKind::Retain:
+    case ARCInstKind::RetainRV:
+    case ARCInstKind::Autorelease:
+    case ARCInstKind::AutoreleaseRV:
+    case ARCInstKind::FusedRetainAutorelease:
+    case ARCInstKind::FusedRetainAutoreleaseRV: {
       // These calls return their argument verbatim, as a low-level
       // optimization. However, this makes high-level optimizations
       // harder. Undo any uses of this optimization that the front-end
       // emitted here. We'll redo them in the contract pass.
       Changed = true;
       Value *Value = cast<CallInst>(Inst)->getArgOperand(0);
-      DEBUG(dbgs() << "ObjCARCExpand: Old = " << *Inst << "\n"
-                      "               New = " << *Value << "\n");
+      LLVM_DEBUG(dbgs() << "ObjCARCExpand: Old = " << *Inst
+                        << "\n"
+                           "               New = "
+                        << *Value << "\n");
       Inst->replaceAllUsesWith(Value);
       break;
     }
@@ -122,7 +124,7 @@ bool ObjCARCExpand::runOnFunction(Function &F) {
     }
   }
 
-  DEBUG(dbgs() << "ObjCARCExpand: Finished List.\n\n");
+  LLVM_DEBUG(dbgs() << "ObjCARCExpand: Finished List.\n\n");
 
   return Changed;
 }

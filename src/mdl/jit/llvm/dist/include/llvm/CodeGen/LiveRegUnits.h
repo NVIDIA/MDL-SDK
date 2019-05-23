@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/LiveRegUnits.h - Live register unit set ----*- C++ -*-===//
+//===- llvm/CodeGen/LiveRegUnits.h - Register Unit Set ----------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,82 +7,160 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements a Set of live register units. This can be used for ad
-// hoc liveness tracking after register allocation. You can start with the
-// live-ins/live-outs at the beginning/end of a block and update the information
-// while walking the instructions inside the block.
+/// \file
+/// A set of register units. It is intended for register liveness tracking.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CODEGEN_LIVEREGUNITS_H
 #define LLVM_CODEGEN_LIVEREGUNITS_H
 
-#include "llvm/ADT/SparseSet.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include <cassert>
+#include "llvm/ADT/BitVector.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/MC/LaneBitmask.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include <cstdint>
 
 namespace llvm {
 
 class MachineInstr;
+class MachineBasicBlock;
 
-/// A set of live register units with functions to track liveness when walking
-/// backward/forward through a basic block.
+/// A set of register units used to track register liveness.
 class LiveRegUnits {
-  SparseSet<unsigned> LiveUnits;
+  const TargetRegisterInfo *TRI = nullptr;
+  BitVector Units;
 
-  LiveRegUnits(const LiveRegUnits&) LLVM_DELETED_FUNCTION;
-  LiveRegUnits &operator=(const LiveRegUnits&) LLVM_DELETED_FUNCTION;
 public:
-  /// \brief Constructs a new empty LiveRegUnits set.
-  LiveRegUnits() {}
+  /// Constructs a new empty LiveRegUnits set.
+  LiveRegUnits() = default;
 
-  void init(const TargetRegisterInfo *TRI) {
-    LiveUnits.clear();
-    LiveUnits.setUniverse(TRI->getNumRegs());
+  /// Constructs and initialize an empty LiveRegUnits set.
+  LiveRegUnits(const TargetRegisterInfo &TRI) {
+    init(TRI);
   }
 
-  void clear() { LiveUnits.clear(); }
-
-  bool empty() const { return LiveUnits.empty(); }
-
-  /// \brief Adds a register to the set.
-  void addReg(unsigned Reg, const MCRegisterInfo &MCRI) {
-    for (MCRegUnitIterator RUnits(Reg, &MCRI); RUnits.isValid(); ++RUnits)
-      LiveUnits.insert(*RUnits);
-  }
-
-  /// \brief Removes a register from the set.
-  void removeReg(unsigned Reg, const MCRegisterInfo &MCRI) {
-    for (MCRegUnitIterator RUnits(Reg, &MCRI); RUnits.isValid(); ++RUnits)
-      LiveUnits.erase(*RUnits);
-  }
-
-  /// \brief Removes registers clobbered by the regmask operand @p Op.
-  void removeRegsInMask(const MachineOperand &Op, const MCRegisterInfo &MCRI);
-
-  /// \brief Returns true if register @p Reg (or one of its super register) is
-  /// contained in the set.
-  bool contains(unsigned Reg, const MCRegisterInfo &MCRI) const {
-    for (MCRegUnitIterator RUnits(Reg, &MCRI); RUnits.isValid(); ++RUnits) {
-      if (LiveUnits.count(*RUnits))
-        return true;
+  /// For a machine instruction \p MI, adds all register units used in
+  /// \p UsedRegUnits and defined or clobbered in \p ModifiedRegUnits. This is
+  /// useful when walking over a range of instructions to track registers
+  /// used or defined seperately.
+  static void accumulateUsedDefed(const MachineInstr &MI,
+                                  LiveRegUnits &ModifiedRegUnits,
+                                  LiveRegUnits &UsedRegUnits,
+                                  const TargetRegisterInfo *TRI) {
+    for (ConstMIBundleOperands O(MI); O.isValid(); ++O) {
+      if (O->isRegMask())
+        ModifiedRegUnits.addRegsInMask(O->getRegMask());
+      if (!O->isReg())
+        continue;
+      unsigned Reg = O->getReg();
+      if (!TargetRegisterInfo::isPhysicalRegister(Reg))
+        continue;
+      if (O->isDef()) {
+        // Some architectures (e.g. AArch64 XZR/WZR) have registers that are
+        // constant and may be used as destinations to indicate the generated
+        // value is discarded. No need to track such case as a def.
+        if (!TRI->isConstantPhysReg(Reg))
+          ModifiedRegUnits.addReg(Reg);
+      } else {
+        assert(O->isUse() && "Reg operand not a def and not a use");
+        UsedRegUnits.addReg(Reg);
+      }
     }
-    return false;
+    return;
   }
 
-  /// \brief Simulates liveness when stepping backwards over an
-  /// instruction(bundle): Remove Defs, add uses.
-  void stepBackward(const MachineInstr &MI, const MCRegisterInfo &MCRI);
+  /// Initialize and clear the set.
+  void init(const TargetRegisterInfo &TRI) {
+    this->TRI = &TRI;
+    Units.reset();
+    Units.resize(TRI.getNumRegUnits());
+  }
 
-  /// \brief Simulates liveness when stepping forward over an
-  /// instruction(bundle): Remove killed-uses, add defs.
-  void stepForward(const MachineInstr &MI, const MCRegisterInfo &MCRI);
+  /// Clears the set.
+  void clear() { Units.reset(); }
 
-  /// \brief Adds all registers in the live-in list of block @p BB.
-  void addLiveIns(const MachineBasicBlock *MBB, const MCRegisterInfo &MCRI);
+  /// Returns true if the set is empty.
+  bool empty() const { return Units.none(); }
+
+  /// Adds register units covered by physical register \p Reg.
+  void addReg(unsigned Reg) {
+    for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit)
+      Units.set(*Unit);
+  }
+
+  /// Adds register units covered by physical register \p Reg that are
+  /// part of the lanemask \p Mask.
+  void addRegMasked(unsigned Reg, LaneBitmask Mask) {
+    for (MCRegUnitMaskIterator Unit(Reg, TRI); Unit.isValid(); ++Unit) {
+      LaneBitmask UnitMask = (*Unit).second;
+      if (UnitMask.none() || (UnitMask & Mask).any())
+        Units.set((*Unit).first);
+    }
+  }
+
+  /// Removes all register units covered by physical register \p Reg.
+  void removeReg(unsigned Reg) {
+    for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit)
+      Units.reset(*Unit);
+  }
+
+  /// Removes register units not preserved by the regmask \p RegMask.
+  /// The regmask has the same format as the one in the RegMask machine operand.
+  void removeRegsNotPreserved(const uint32_t *RegMask);
+
+  /// Adds register units not preserved by the regmask \p RegMask.
+  /// The regmask has the same format as the one in the RegMask machine operand.
+  void addRegsInMask(const uint32_t *RegMask);
+
+  /// Returns true if no part of physical register \p Reg is live.
+  bool available(unsigned Reg) const {
+    for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit) {
+      if (Units.test(*Unit))
+        return false;
+    }
+    return true;
+  }
+
+  /// Updates liveness when stepping backwards over the instruction \p MI.
+  /// This removes all register units defined or clobbered in \p MI and then
+  /// adds the units used (as in use operands) in \p MI.
+  void stepBackward(const MachineInstr &MI);
+
+  /// Adds all register units used, defined or clobbered in \p MI.
+  /// This is useful when walking over a range of instruction to find registers
+  /// unused over the whole range.
+  void accumulate(const MachineInstr &MI);
+
+  /// Adds registers living out of block \p MBB.
+  /// Live out registers are the union of the live-in registers of the successor
+  /// blocks and pristine registers. Live out registers of the end block are the
+  /// callee saved registers.
+  void addLiveOuts(const MachineBasicBlock &MBB);
+
+  /// Adds registers living into block \p MBB.
+  void addLiveIns(const MachineBasicBlock &MBB);
+
+  /// Adds all register units marked in the bitvector \p RegUnits.
+  void addUnits(const BitVector &RegUnits) {
+    Units |= RegUnits;
+  }
+  /// Removes all register units marked in the bitvector \p RegUnits.
+  void removeUnits(const BitVector &RegUnits) {
+    Units.reset(RegUnits);
+  }
+  /// Return the internal bitvector representation of the set.
+  const BitVector &getBitVector() const {
+    return Units;
+  }
+
+private:
+  /// Adds pristine registers. Pristine registers are callee saved registers
+  /// that are unused in the function.
+  void addPristines(const MachineFunction &MF);
 };
 
-} // namespace llvm
+} // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_LIVEREGUNITS_H

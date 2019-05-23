@@ -88,6 +88,17 @@ public:
     /// Flush stream.
     virtual void flush() {}
 
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    virtual bool unput(char c) {
+        // unsupported
+        return false;
+    }
+
     // from IInterface: This object is not reference counted.
     virtual Uint32 retain() const { return 1; }
     virtual Uint32 release() const { return 1; }
@@ -204,8 +215,10 @@ class Code_cache : public mi::base::Interface_implement<mi::mdl::ICode_cache>
             char *blob      = new char[size];
             char **mapped   = (char **)blob;
             char *data_area = blob + entry.mapped_string_size * sizeof(char *);
+            Func_info *func_info_area = (Func_info *) (data_area + entry.mapped_string_data_size);
+            char *func_info_data_area = (char *) (func_info_area + entry.func_info_size);
 
-            blob = data_area + entry.mapped_string_data_size;
+            blob = func_info_data_area + entry.func_info_string_data_size;
 
             char *seg    = blob + entry.code_size;
             char *layout = seg + entry.const_seg_size;
@@ -230,10 +243,36 @@ class Code_cache : public mi::base::Interface_implement<mi::mdl::ICode_cache>
                 }
             }
 
+            if (entry.func_info_size > 0) {
+                Func_info *cur_info = func_info_area;
+                char *p = func_info_data_area;
+                for (size_t i = 0; i < entry.func_info_size; ++i, ++cur_info) {
+                    size_t len = strlen(entry.func_infos[i].name);
+                    memcpy(p, entry.func_infos[i].name, len + 1);
+                    cur_info->name = p;
+                    p += len + 1;
+
+                    cur_info->dist_kind = entry.func_infos[i].dist_kind;
+                    cur_info->func_kind = entry.func_infos[i].func_kind;
+
+                    for (int j = 0 ; j < int(mi::mdl::IGenerated_code_executable::PL_NUM_LANGUAGES);
+                            ++j)
+                    {
+                        len = strlen(entry.func_infos[i].prototypes[j]);
+                        memcpy(p, entry.func_infos[i].prototypes[j], len + 1);
+                        cur_info->prototypes[j] = p;
+                        p += len + 1;
+                    }
+
+                    cur_info->arg_block_index = entry.func_infos[i].arg_block_index;
+                }
+            }
+
             code           = blob;
             const_seg      = seg;
             arg_layout     = layout;
             mapped_strings = mapped;
+            func_infos     = func_info_area;
         }
 
         /// Destructor.
@@ -413,6 +452,7 @@ Mdlc_module_impl::Mdlc_module_impl()
   , m_used_with_mdl_sdk(false) /*arbitrary*/
   , m_used_with_mdl_sdk_set(false)
   , m_code_cache(0)
+  , m_implicit_cast_enabled(true)
 {
 }
 
@@ -568,6 +608,16 @@ mi::mdl::ICode_cache *Mdlc_module_impl::get_code_cache() const
 bool Mdlc_module_impl::utf8_match(char const *file_mask, char const *file_name) const
 {
     return mi::mdl::utf8_match(file_mask, file_name);
+}
+
+bool Mdlc_module_impl::get_implicit_cast_enabled() const
+{
+    return m_implicit_cast_enabled;
+}
+
+void Mdlc_module_impl::set_implicit_cast_enabled(bool v)
+{
+    m_implicit_cast_enabled = v;
 }
 
 } // namespace MDLC

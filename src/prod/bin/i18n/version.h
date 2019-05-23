@@ -30,6 +30,15 @@
 #include <mi/mdl_sdk.h>
 #include <string>
 
+// In the GNU C Library, "minor" and "major" are defined
+#ifdef minor
+    #undef minor
+#endif
+
+#ifdef major
+    #undef major
+#endif
+
 namespace i18n
 {
 /// Helper for version strings.

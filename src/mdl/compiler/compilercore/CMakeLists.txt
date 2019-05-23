@@ -62,6 +62,7 @@ set(PROJECT_HEADERS
     "compilercore_archiver.h"
     "compilercore_array_ref.h"
     "compilercore_assert.h"
+    "compilercore_ast_list.h"
     "compilercore_bitset.h"
     "compilercore_builder.h"
     "compilercore_builtin_types.h"

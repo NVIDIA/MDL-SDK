@@ -29,7 +29,11 @@
 #ifndef MDL_GENERATOR_JIT_GENERATED_CODE
 #define MDL_GENERATOR_JIT_GENERATED_CODE 1
 
+#include <csetjmp>
+
+#include <mi/base/atom.h>
 #include <mi/base/handle.h>
+
 #include <mi/mdl/mdl_generated_executable.h>
 
 #include <mdl/compiler/compilercore/compilercore_cc_conf.h>
@@ -37,11 +41,8 @@
 #include <mdl/compiler/compilercore/compilercore_messages.h>
 
 #include <mdl/codegenerators/generator_dag/generator_dag_lambda_function.h>
+#include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
 
-#include <llvm/ADT/OwningPtr.h>
-#include <llvm/IR/LLVMContext.h>
-
-#include "generator_jit_llvm.h"
 #include "generator_jit_res_manager.h"
 
 namespace llvm {
@@ -50,6 +51,25 @@ namespace llvm {
 
 namespace mi {
 namespace mdl {
+
+class LLVM_code_generator;
+
+using MDL_JIT_module_key = uint64_t;
+
+
+/// The exception state.
+struct Exc_state {
+    IMDL_exception_handler *handler;  ///< The exception handler if any.
+    mi::base::Atom32       *abort;    ///< Points to the abort flag.
+                                      ///  The long_jump buffer for abort on exception.
+    jmp_buf                env;       // PVS: -V730_NOINIT
+
+    /// Constructor.
+    Exc_state(IMDL_exception_handler *handler, mi::base::Atom32 &abort)
+    : handler(handler), abort(&abort)
+    {
+    }
+};
 
 /// Layout structure.
 typedef struct {
@@ -155,7 +175,7 @@ public:
     // Non-API methods
 
     /// Get the layout data buffer and its size.
-    char const *get_layout_data(size_t &size);
+    char const *get_layout_data(size_t &size) const;
 
 private:
     /// The layout data buffer.
@@ -165,13 +185,143 @@ private:
     bool m_strings_mapped_to_ids;
 };
 
+// Allow impl_cast on Generated_code_value_layout
+template<>
+inline Generated_code_value_layout const *impl_cast(IGenerated_code_value_layout const *t) {
+    return static_cast<Generated_code_value_layout const *>(t);
+}
+
+
+/// Structure containing information about a function in a generated executable code object.
+struct Generated_code_function_info
+{
+    Generated_code_function_info(
+        string const &name,
+        IGenerated_code_executable::Distribution_kind dist_kind,
+        IGenerated_code_executable::Function_kind kind,
+        size_t arg_block_index)
+    : m_name(name)
+    , m_dist_kind(dist_kind)
+    , m_kind(kind)
+    , m_prototypes(name.get_allocator())
+    , m_arg_block_index(arg_block_index)
+    {}
+
+    /// The name of the function.
+    string m_name;
+
+    /// The kind of the function.
+    IGenerated_code_executable::Distribution_kind m_dist_kind;
+
+    /// The kind of the function.
+    IGenerated_code_executable::Function_kind m_kind;
+
+    /// The prototypes for the different languages according to
+    /// #mi::mdl::ILink_unit::Prototype_language.
+    vector<string>::Type m_prototypes;
+
+    /// The index of the target argument block associated with this function, or ~0 if not used.
+    size_t m_arg_block_index;
+};
+
+
+///
+/// Base class for classes implementing IGenerated_code_executable.
+///
+template <class Interface>
+class Generated_code_executable_base : public Allocator_interface_implement<Interface>
+{
+    typedef Allocator_interface_implement<Interface> Base;
+public:
+    Generated_code_executable_base(IAllocator *alloc)
+    : Base(alloc)
+    , m_func_infos(alloc)
+    {}
+
+    // ------------------- from IGenerated_code_executable -------------------
+
+    /// Get the number of functions in this link unit.
+    size_t get_function_count() const MDL_FINAL;
+
+    /// Get the name of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return the name of the i'th function or NULL if the index is out of bounds
+    char const *get_function_name(size_t i) const MDL_FINAL;
+
+    /// Returns the distribution kind of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    IGenerated_code_executable::Distribution_kind get_distribution_kind(size_t i) const MDL_FINAL;
+
+    /// Returns the function kind of the i'th function inside this link unit.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    IGenerated_code_executable::Function_kind get_function_kind(size_t i) const MDL_FINAL;
+
+    /// Get the index of the target argument block layout for the i'th function inside this link
+    /// unit if used.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The index of the target argument block layout or ~0 if not used or \p i is invalid.
+    size_t get_function_arg_block_layout_index(size_t i) const MDL_FINAL;
+
+    /// Returns the prototype of the i'th function inside this link unit.
+    ///
+    /// \param index   the index of the function.
+    /// \param lang    the language to use for the prototype.
+    ///
+    /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
+    ///         for this target code.
+    char const *get_function_prototype(
+        size_t index,
+        IGenerated_code_executable::Prototype_language lang) const MDL_FINAL;
+
+    /// Set a function prototype for a function.
+    ///
+    /// \param index  the index of the function
+    /// \param lang   the language of the prototype being set
+    /// \param proto  the function prototype
+    void set_function_prototype(
+        size_t index,
+        IGenerated_code_executable::Prototype_language lang,
+        char const *prototype) MDL_FINAL;
+
+    /// Add a function to the given target code, also registering the function prototypes
+    /// applicable for the used backend.
+    ///
+    /// \param name             the name of the function to add
+    /// \param dist_kind        the kind of distribution to add
+    /// \param func_kind        the kind of the function to add
+    /// \param arg_block_index  the argument block index for this function or ~0 if not used
+    ///
+    /// \returns the function index of the added function
+    size_t add_function_info(
+        char const *name,
+        IGenerated_code_executable::Distribution_kind dist_kind,
+        IGenerated_code_executable::Function_kind func_kind,
+        size_t arg_block_index) MDL_FINAL;
+
+private:
+    typedef vector<Generated_code_function_info>::Type Func_info_vec;
+
+    /// Function infos of all externally visible functions inside this generated code object.
+    Func_info_vec m_func_infos;
+};
+
 
 ///
 /// Implementation of generated executable code.
 ///
-class Generated_code_jit : public Allocator_interface_implement<IGenerated_code_executable>
+class Generated_code_jit : public Generated_code_executable_base<IGenerated_code_executable>
 {
-    typedef Allocator_interface_implement<IGenerated_code_executable> Base;
+    typedef Generated_code_executable_base<IGenerated_code_executable> Base;
 
     friend class JIT_code_printer;
 public:
@@ -274,6 +424,14 @@ public:
         mi::mdl::IModule const *module,
         Options_impl const     &options);
 
+    /// Compile a whole MDL module into HLSL.
+    ///
+    /// \param module             The MDL module to generate code from.
+    /// \param options            The backend options.
+    void compile_module_to_hlsl(
+        mi::mdl::IModule const *module,
+        Options_impl const     &options);
+
     /// Retrieve the LLVM context of this jitted code.
     llvm::LLVMContext &get_llvm_context() { return m_llvm_context; }
 
@@ -294,11 +452,8 @@ private:
     // no assignment operator
     Generated_code_jit const &operator=(Generated_code_jit const &) MDL_DELETED_FUNCTION;
 
-    /// Retrieve the LLVM module.
-    llvm::Module const *get_llvm_module() const { return m_llvm_module.get(); }
-
-    /// Retrieve the PTX code.
-    char const *get_ptx_code() const { return m_ptx_code.c_str(); }
+    /// Retrieve the source code.
+    char const *get_source_code() const { return m_source_code.c_str(); }
 
 private:
     /// The allocator builder.
@@ -307,32 +462,29 @@ private:
     /// The context of the module, its life time must include the module ...
     llvm::LLVMContext m_llvm_context;
 
-    /// The llvm module.
-    llvm::OwningPtr<llvm::Module> m_llvm_module;
-
     /// A Reference to the jitted code singleton.
     mi::base::Handle<Jitted_code> m_jitted_code;
 
     /// The messages if any.
     Messages_impl m_messages;
 
-    /// Generated PTX code if any.
-    string m_ptx_code;
+    /// Generated source code if any.
+    string m_source_code;
 
     /// The render state usage.
     State_usage m_render_state_usage;
 
-    typedef vector<string>::Type Mappend_string_vector;
+    typedef vector<string>::Type Mapped_string_vector;
 
     /// The mapped strings
-    Mappend_string_vector m_mappend_strings;
+    Mapped_string_vector m_mapped_strings;
 };
 
-/// The implementation of a source code, used for PTX or LLVM-IR.
+/// The implementation of a source code, used for PTX, LLVM-IR and HLSL.
 class Generated_code_source :
-    public Allocator_interface_implement<IGenerated_code_executable>
+    public Generated_code_executable_base<IGenerated_code_executable>
 {
-    typedef Allocator_interface_implement<IGenerated_code_executable> Base;
+    typedef Generated_code_executable_base<IGenerated_code_executable> Base;
     friend class Allocator_builder;
 public:
     typedef vector<size_t>::Type Offset_vec;
@@ -390,7 +542,7 @@ public:
     };
 
 public:
-    // -------------------from IGenerated_code -------------------
+    // ------------------- from IGenerated_code -------------------
 
     /// Get the kind of code generated.
     IGenerated_code::Kind get_kind() const MDL_FINAL;
@@ -525,9 +677,9 @@ private:
 
 /// The implementation of a compiled lambda function.
 class Generated_code_lambda_function :
-    public Allocator_interface_implement<IGenerated_code_lambda_function>
+    public Generated_code_executable_base<IGenerated_code_lambda_function>
 {
-    typedef Allocator_interface_implement<IGenerated_code_lambda_function> Base;
+    typedef Generated_code_executable_base<IGenerated_code_lambda_function> Base;
     friend class Allocator_builder;
 
     /// Helper value class to handle resource entries.
@@ -948,8 +1100,12 @@ public:
 
     /// Set the LLVM module.
     ///
-    /// \param module  the LLVM module
-    void set_llvm_module(llvm::Module *module) { m_module = module; }
+    /// \param module_key  the JIT module key
+    /// \param module      the LLVM module
+    void set_llvm_module(MDL_JIT_module_key module_key, llvm::Module *module) {
+        m_module_key = module_key;
+        m_module = module;
+    }
 
     /// Add an entry point of a JIT compiled function.
     ///
@@ -1029,6 +1185,9 @@ private:
     /// The LLVM module of the environment function.
     llvm::Module      *m_module;
 
+    /// The JIT module key of the LLVM module.
+    MDL_JIT_module_key m_module_key;
+
     typedef void (Jitted_func)();
 
     /// The signature of the JIT compiled environment function.
@@ -1043,7 +1202,7 @@ private:
         RGB_color                       *result,
         Shading_state_environment const *state,
         Res_data_pair const             &res_data_pair,
-        LLVM_code_generator::Exc_state  &exc_state,
+        Exc_state                       &exc_state,
         void const                      *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a boolean.
@@ -1055,7 +1214,7 @@ private:
     typedef void (Lambda_func_bool)(
         bool                           &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning an int.
@@ -1067,7 +1226,7 @@ private:
     typedef void (Lambda_func_int)(
         int                            &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning an unsigned.
@@ -1079,7 +1238,7 @@ private:
     typedef void (Lambda_func_unsigned)(
         unsigned                       &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float.
@@ -1091,7 +1250,7 @@ private:
     typedef void (Lambda_func_float)(
         float                          &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float2 vector.
@@ -1103,7 +1262,7 @@ private:
     typedef void (Lambda_func_float2)(
         Float2_struct                  &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float3 vector.
@@ -1115,7 +1274,7 @@ private:
     typedef void (Lambda_func_float3)(
         Float3_struct                  &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float4 vector.
@@ -1127,7 +1286,7 @@ private:
     typedef void (Lambda_func_float4)(
         Float4_struct                  &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float3x3 matrix.
@@ -1139,7 +1298,7 @@ private:
     typedef void (Lambda_func_float3x3)(
         Matrix3x3_struct               &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a float4x4 matrix.
@@ -1151,7 +1310,7 @@ private:
     typedef void (Lambda_func_float4x4)(
         Matrix4x4_struct               &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function returning a string.
@@ -1163,7 +1322,7 @@ private:
     typedef char const *(Lambda_func_string)(
         char const *                   &result,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of the JIT compiled lambda function.
@@ -1177,7 +1336,7 @@ private:
     typedef bool (Core_func)(
         Shading_state_material const   *state,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args,
         Float3_struct                  &result,
         unsigned                       proj);
@@ -1193,7 +1352,7 @@ private:
         void                           *result,
         Shading_state_material const   *state,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The signature of a JIT compiled BSDF init function.
@@ -1205,7 +1364,7 @@ private:
     typedef void (Init_func)(
         Shading_state_material         *state,
         Res_data_pair const            &res_data_pair,
-        LLVM_code_generator::Exc_state &exc_state,
+        Exc_state                      &exc_state,
         void const                     *cap_args);
 
     /// The list of JIT compiled functions.
@@ -1248,7 +1407,6 @@ private:
     /// The mapped strings
     Mappend_string_vector m_mappend_strings;
 };
-
 
 }  // mdl
 }  // mi

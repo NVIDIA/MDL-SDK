@@ -178,6 +178,14 @@ public:
     /// Flush stream.
     void flush() MDL_FINAL;
 
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    bool unput(char c) MDL_FINAL;
+
     /// Returns true if this stream supports color.
     bool has_color() const MDL_FINAL;
 
@@ -235,6 +243,14 @@ public:
     /// Flush stream.
     void flush() MDL_FINAL;
 
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    bool unput(char c) MDL_FINAL;
+
     /// Constructor.
     ///
     /// \param alloc  the allocator to be used
@@ -267,6 +283,14 @@ public:
 
     /// Flush stream.
     void flush() MDL_FINAL;
+
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully removed,
+    /// false otherwise
+    bool unput(char c) MDL_FINAL;
 
     /// Retrieve the written data len.
     size_t get_data_size() const { return m_data_length; }

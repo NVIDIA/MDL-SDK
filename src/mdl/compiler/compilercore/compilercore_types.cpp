@@ -424,6 +424,18 @@ public:
     }
 };
 
+/// Implementation of the hair_bsdf type.
+class Type_hair_bsdf : public Type_base<IType_hair_bsdf>
+{
+    typedef Type_base<IType_hair_bsdf> Base;
+public:
+    /// Constructor.
+    explicit Type_hair_bsdf()
+    : Base()
+    {
+    }
+};
+
 /// Implementation of the edf type.
 class Type_edf : public Type_base<IType_edf>
 {
@@ -1190,6 +1202,14 @@ IType_bsdf const *Type_factory::create_bsdf()
     return &the_bsdf_type;
 }
 
+// Create a new type hair_bsdf instance.
+IType_hair_bsdf const *Type_factory::create_hair_bsdf()
+{
+    if (m_compiler_factory)
+        return m_compiler_factory->create_hair_bsdf();
+    return &the_hair_bsdf_type;
+}
+
 // Create a new type edf instance.
 IType_edf const *Type_factory::create_edf()
 {
@@ -1570,6 +1590,8 @@ IType const *Type_factory::import(IType const *type)
         return create_light_profile();
     case IType::TK_BSDF:
         return create_bsdf();
+    case IType::TK_HAIR_BSDF:
+        return create_hair_bsdf();
     case IType::TK_EDF:
         return create_edf();
     case IType::TK_VDF:
@@ -1799,6 +1821,8 @@ IType const *Type_factory::get_equal(IType const *type) const
         return safe->create_light_profile();
     case IType::TK_BSDF:
         return safe->create_bsdf();
+    case IType::TK_HAIR_BSDF:
+        return safe->create_hair_bsdf();
     case IType::TK_EDF:
         return safe->create_edf();
     case IType::TK_VDF:

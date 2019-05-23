@@ -14,6 +14,7 @@
 #ifndef LLVM_SUPPORT_MUTEX_H
 #define LLVM_SUPPORT_MUTEX_H
 
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Threading.h"
 #include <cassert>
@@ -22,7 +23,7 @@ namespace llvm
 {
   namespace sys
   {
-    /// @brief Platform agnostic Mutex class.
+    /// Platform agnostic Mutex class.
     class MutexImpl
     {
     /// @name Constructors
@@ -33,11 +34,11 @@ namespace llvm
       /// to false, the lock will not be recursive which makes it cheaper but
       /// also more likely to deadlock (same thread can't acquire more than
       /// once).
-      /// @brief Default Constructor.
+      /// Default Constructor.
       explicit MutexImpl(bool recursive = true);
 
       /// Releases and removes the lock
-      /// @brief Destructor
+      /// Destructor
       ~MutexImpl();
 
     /// @}
@@ -48,14 +49,14 @@ namespace llvm
       /// Attempts to unconditionally acquire the lock. If the lock is held by
       /// another thread, this method will wait until it can acquire the lock.
       /// @returns false if any kind of error occurs, true otherwise.
-      /// @brief Unconditionally acquire the lock.
+      /// Unconditionally acquire the lock.
       bool acquire();
 
       /// Attempts to release the lock. If the lock is held by the current
       /// thread, the lock is released allowing other threads to acquire the
       /// lock.
       /// @returns false if any kind of error occurs, true otherwise.
-      /// @brief Unconditionally release the lock.
+      /// Unconditionally release the lock.
       bool release();
 
       /// Attempts to acquire the lock without blocking. If the lock is not
@@ -63,21 +64,23 @@ namespace llvm
       /// the lock is available, it is acquired.
       /// @returns false if any kind of error occurs or the lock is not
       /// available, true otherwise.
-      /// @brief Try to acquire the lock.
+      /// Try to acquire the lock.
       bool tryacquire();
 
     //@}
     /// @name Platform Dependent Data
     /// @{
     private:
+#if defined(LLVM_ENABLE_THREADS) && LLVM_ENABLE_THREADS != 0
       void* data_; ///< We don't know what the data will be
+#endif
 
     /// @}
     /// @name Do Not Implement
     /// @{
     private:
-      MutexImpl(const MutexImpl &) LLVM_DELETED_FUNCTION;
-      void operator=(const MutexImpl &) LLVM_DELETED_FUNCTION;
+      MutexImpl(const MutexImpl &) = delete;
+      void operator=(const MutexImpl &) = delete;
     /// @}
     };
 
@@ -86,16 +89,17 @@ namespace llvm
     /// indicates whether this mutex should become a no-op when we're not
     /// running in multithreaded mode.
     template<bool mt_only>
-    class SmartMutex : public MutexImpl {
+    class SmartMutex {
+      MutexImpl impl;
       unsigned acquired;
       bool recursive;
     public:
       explicit SmartMutex(bool rec = true) :
-        MutexImpl(rec), acquired(0), recursive(rec) { }
+        impl(rec), acquired(0), recursive(rec) { }
 
-      bool acquire() {
+      bool lock() {
         if (!mt_only || llvm_is_multithreaded()) {
-          return MutexImpl::acquire();
+          return impl.acquire();
         } else {
           // Single-threaded debugging code.  This would be racy in
           // multithreaded mode, but provides not sanity checks in single
@@ -106,9 +110,9 @@ namespace llvm
         }
       }
 
-      bool release() {
+      bool unlock() {
         if (!mt_only || llvm_is_multithreaded()) {
-          return MutexImpl::release();
+          return impl.release();
         } else {
           // Single-threaded debugging code.  This would be racy in
           // multithreaded mode, but provides not sanity checks in single
@@ -120,9 +124,9 @@ namespace llvm
         }
       }
 
-      bool tryacquire() {
+      bool try_lock() {
         if (!mt_only || llvm_is_multithreaded())
-          return MutexImpl::tryacquire();
+          return impl.tryacquire();
         else return true;
       }
 
@@ -140,11 +144,11 @@ namespace llvm
 
     public:
       SmartScopedLock(SmartMutex<mt_only>& m) : mtx(m) {
-        mtx.acquire();
+        mtx.lock();
       }
 
       ~SmartScopedLock() {
-        mtx.release();
+        mtx.unlock();
       }
     };
 

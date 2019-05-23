@@ -167,29 +167,14 @@ public:
     /// If true, compile pure constants into functions.
     bool get_compile_consts() const { return m_compile_consts; }
 
-    /// If true, PTX backend outputs PTX, else LLVM-IR.
-    bool get_output_ptx() const { return m_output_ptx; }
+    /// If true, source code backend emits target language, else LLVM-IR.
+    bool get_output_target_lang() const { return m_output_target_lang; }
 
     /// If true, string arguments are mapped to string identifiers.
     bool get_strings_mapped_to_ids() const { return m_strings_mapped_to_ids; }
 
     /// If true, derivatives should be calculated.
     bool get_calc_derivatives() const { return m_calc_derivatives; }
-
-    /// Add a function to the given target code, also registering the function prototypes
-    /// applicable for the used backend.
-    ///
-    /// \param tc               The target code
-    /// \param name             The name of the function to add
-    /// \param dist_kind        The kind of distribution to add
-    /// \param func_kind        The kind of the function to add
-    /// \param arg_block_index  The argument block index for this function or ~0 if not used
-    void add_target_code_function(
-        Target_code *tc,
-        std::string const &name,
-        mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
-        mi::neuraylib::ITarget_code::Function_kind func_kind,
-        mi::Size arg_block_index);
 
 private:
     /// The backend kind.
@@ -219,8 +204,8 @@ private:
     /// If true, SIMD instruction are generated.
     bool m_enable_simd;
 
-    /// If true, PTX backend outputs PTX, else LLVM-IR.
-    bool m_output_ptx;
+    /// If true, source code backends backend emit the target language, else LLVM-IR.
+    bool m_output_target_lang;
 
     /// If true, strings arguments are compiled into string identifiers.
     bool m_strings_mapped_to_ids;

@@ -1,0 +1,13 @@
+/* libre-baskerville-regular - latin */
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: normal;
+  font-weight: 400;
+  src: url('libre-baskerville/libre-baskerville-v5-latin-regular.eot'); /* IE9 Compat Modes */
+  src: local('Libre Baskerville'), local('LibreBaskerville-Regular'),
+       url('libre-baskerville/libre-baskerville-v5-latin-regular.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+       url('libre-baskerville/libre-baskerville-v5-latin-regular.woff2') format('woff2'), /* Super Modern Browsers */
+       url('libre-baskerville/libre-baskerville-v5-latin-regular.woff') format('woff'), /* Modern Browsers */
+       url('libre-baskerville/libre-baskerville-v5-latin-regular.ttf') format('truetype'), /* Safari, Android, iOS */
+       url('libre-baskerville/libre-baskerville-v5-latin-regular.svg#LibreBaskerville') format('svg'); /* Legacy iOS */
+}

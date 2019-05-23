@@ -118,6 +118,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/api/api/mdl)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_code)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_dag)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compilercore)
+add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_hlsl)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libbsdf)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/devlib)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/generator_jit)
@@ -130,11 +131,11 @@ add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)
 
 # libs/products
+add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 
 # PLUGINS
 #--------------------------------------------------------------------------------------------------
@@ -145,7 +146,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
 #--------------------------------------------------------------------------------------------------
 
 # third party
-if(MDL_ENABLE_OPENGL_EXAMPLES)
+if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_D3D11_EXAMPLES OR MDL_ENABLE_D3D12_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
 endif()
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
@@ -165,13 +166,19 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/start_shutdown)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/traversal)
 
-    if(MDL_ENABLE_OPENGL_EXAMPLES AND MDL_ENABLE_CUDA_EXAMPLES)
-        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_cuda)
+    if(MDL_ENABLE_CUDA_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_cuda)
+        if(MDL_ENABLE_OPENGL_EXAMPLES)
+            add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_cuda)
+        endif()
     endif()
 
     if(MDL_ENABLE_QT_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/mdl_browser)
+    endif()
+
+    if(WINDOWS AND MDL_ENABLE_D3D12_EXAMPLES)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/dxr)
     endif()
 endif()
 
@@ -179,9 +186,11 @@ endif()
 if(MDL_BUILD_CORE_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/shared)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/calls)
-    if(MDL_ENABLE_OPENGL_EXAMPLES AND MDL_ENABLE_CUDA_EXAMPLES)
-        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/df_cuda)
+    if(MDL_ENABLE_CUDA_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/execution_cuda)
+        if(MDL_ENABLE_OPENGL_EXAMPLES)
+            add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/df_cuda)
+        endif()
     endif()
 endif()
 

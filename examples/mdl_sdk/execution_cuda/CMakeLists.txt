@@ -52,8 +52,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
         mdl_sdk::shared
-        opengl
-        imgui
         cuda
         )
         

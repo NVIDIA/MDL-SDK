@@ -3,16 +3,24 @@
 add_llvm_library(LLVMExecutionEngine
   ExecutionEngine.cpp
   ExecutionEngineBindings.cpp
-  RTDyldMemoryManager.cpp
+  GDBRegistrationListener.cpp
+  SectionMemoryManager.cpp
   TargetSelect.cpp
+
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/ExecutionEngine
+
+  DEPENDS
+  intrinsics_gen
   )
 
-if( LLVM_INCLUDE_INTERPRETER )
-  add_subdirectory(Interpreter)
-endif( LLVM_INCLUDE_INTERPRETER )
+if(BUILD_SHARED_LIBS)
+  target_link_libraries(LLVMExecutionEngine PUBLIC LLVMRuntimeDyld)
+endif()
 
-add_subdirectory(JIT)
+add_subdirectory(Interpreter)
 add_subdirectory(MCJIT)
+add_subdirectory(Orc)
 add_subdirectory(RuntimeDyld)
 
 if( LLVM_USE_OPROFILE )
@@ -22,3 +30,7 @@ endif( LLVM_USE_OPROFILE )
 if( LLVM_USE_INTEL_JITEVENTS )
   add_subdirectory(IntelJITEvents)
 endif( LLVM_USE_INTEL_JITEVENTS )
+
+if( LLVM_USE_PERF )
+  add_subdirectory(PerfJITEvents)
+endif( LLVM_USE_PERF )

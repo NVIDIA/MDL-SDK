@@ -16,18 +16,35 @@
 // wakes them up. This complicated work is performed so that all three threads
 // call into the JIT at the same time (or the best possible approximation of the
 // same time). This test had assertion errors until I got the locking right.
+//
+//===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
-#include "llvm/ExecutionEngine/Interpreter.h"
-#include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/IR/Argument.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/TargetSelect.h"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <memory>
+#include <vector>
 #include <pthread.h>
+
 using namespace llvm;
 
 static Function* createAdd1(Module *M) {
@@ -37,8 +54,7 @@ static Function* createAdd1(Module *M) {
   Function *Add1F =
     cast<Function>(M->getOrInsertFunction("add1",
                                           Type::getInt32Ty(M->getContext()),
-                                          Type::getInt32Ty(M->getContext()),
-                                          (Type *)0));
+                                          Type::getInt32Ty(M->getContext())));
 
   // Add a basic block to the function. As before, it automatically inserts
   // because of the last argument.
@@ -49,7 +65,7 @@ static Function* createAdd1(Module *M) {
 
   // Get pointers to the integer argument of the add1 function...
   assert(Add1F->arg_begin() != Add1F->arg_end()); // Make sure there's an arg
-  Argument *ArgX = Add1F->arg_begin();  // Get the arg
+  Argument *ArgX = &*Add1F->arg_begin();          // Get the arg
   ArgX->setName("AnArg");            // Give it a nice symbolic name for fun.
 
   // Create the add instruction, inserting it into the end of BB.
@@ -68,8 +84,7 @@ static Function *CreateFibFunction(Module *M) {
   Function *FibF = 
     cast<Function>(M->getOrInsertFunction("fib",
                                           Type::getInt32Ty(M->getContext()),
-                                          Type::getInt32Ty(M->getContext()),
-                                          (Type *)0));
+                                          Type::getInt32Ty(M->getContext())));
 
   // Add a basic block to the function.
   BasicBlock *BB = BasicBlock::Create(M->getContext(), "EntryBlock", FibF);
@@ -79,7 +94,7 @@ static Function *CreateFibFunction(Module *M) {
   Value *Two = ConstantInt::get(Type::getInt32Ty(M->getContext()), 2);
 
   // Get pointer to the integer argument of the add1 function...
-  Argument *ArgX = FibF->arg_begin();   // Get the arg.
+  Argument *ArgX = &*FibF->arg_begin(); // Get the arg.
   ArgX->setName("AnArg");            // Give it a nice symbolic name for fun.
 
   // Create the true_block.
@@ -129,16 +144,18 @@ public:
     n = 0;
     waitFor = 0;
 
-    int result = pthread_cond_init( &condition, NULL );
+    int result = pthread_cond_init( &condition, nullptr );
+    (void)result;
     assert( result == 0 );
 
-    result = pthread_mutex_init( &mutex, NULL );
+    result = pthread_mutex_init( &mutex, nullptr );
     assert( result == 0 );
   }
 
   ~WaitForThreads()
   {
     int result = pthread_cond_destroy( &condition );
+    (void)result;
     assert( result == 0 );
 
     result = pthread_mutex_destroy( &mutex );
@@ -149,6 +166,7 @@ public:
   void block()
   {
     int result = pthread_mutex_lock( &mutex );
+    (void)result;
     assert( result == 0 );
     n ++;
     //~ std::cout << "block() n " << n << " waitFor " << waitFor << std::endl;
@@ -178,6 +196,7 @@ public:
   void releaseThreads( size_t num )
   {
     int result = pthread_mutex_lock( &mutex );
+    (void)result;
     assert( result == 0 );
 
     if ( n >= num ) {
@@ -240,13 +259,14 @@ int main() {
   LLVMContext Context;
 
   // Create some module to put our function into it.
-  Module *M = new Module("test", Context);
+  std::unique_ptr<Module> Owner = make_unique<Module>("test", Context);
+  Module *M = Owner.get();
 
   Function* add1F = createAdd1( M );
   Function* fibF = CreateFibFunction( M );
 
   // Now we create the JIT.
-  ExecutionEngine* EE = EngineBuilder(M).create();
+  ExecutionEngine* EE = EngineBuilder(std::move(Owner)).create();
 
   //~ std::cout << "We just constructed this LLVM module:\n\n" << *M;
   //~ std::cout << "\n\nRunning foo: " << std::flush;
@@ -257,21 +277,21 @@ int main() {
   struct threadParams fib2 = { EE, fibF, 42 };
 
   pthread_t add1Thread;
-  int result = pthread_create( &add1Thread, NULL, callFunc, &add1 );
+  int result = pthread_create( &add1Thread, nullptr, callFunc, &add1 );
   if ( result != 0 ) {
           std::cerr << "Could not create thread" << std::endl;
           return 1;
   }
 
   pthread_t fibThread1;
-  result = pthread_create( &fibThread1, NULL, callFunc, &fib1 );
+  result = pthread_create( &fibThread1, nullptr, callFunc, &fib1 );
   if ( result != 0 ) {
           std::cerr << "Could not create thread" << std::endl;
           return 1;
   }
 
   pthread_t fibThread2;
-  result = pthread_create( &fibThread2, NULL, callFunc, &fib2 );
+  result = pthread_create( &fibThread2, nullptr, callFunc, &fib2 );
   if ( result != 0 ) {
           std::cerr << "Could not create thread" << std::endl;
           return 1;

@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TARGET_NVPTX_H
-#define LLVM_TARGET_NVPTX_H
+#ifndef LLVM_LIB_TARGET_NVPTX_NVPTX_H
+#define LLVM_LIB_TARGET_NVPTX_NVPTX_H
 
 #include "MCTargetDesc/NVPTXBaseInfo.h"
 #include "llvm/ADT/StringMap.h"
@@ -26,7 +26,6 @@
 
 namespace llvm {
 class NVPTXTargetMachine;
-class NVVMAnnotations;
 class FunctionPass;
 class MachineFunctionPass;
 class formatted_raw_ostream;
@@ -42,38 +41,21 @@ enum CondCodes {
 };
 }
 
-inline static const char *NVPTXCondCodeToString(NVPTXCC::CondCodes CC) {
-  switch (CC) {
-  case NVPTXCC::NE:
-    return "ne";
-  case NVPTXCC::EQ:
-    return "eq";
-  case NVPTXCC::LT:
-    return "lt";
-  case NVPTXCC::LE:
-    return "le";
-  case NVPTXCC::GT:
-    return "gt";
-  case NVPTXCC::GE:
-    return "ge";
-  }
-  llvm_unreachable("Unknown condition code");
-}
-
-FunctionPass *
-createNVPTXISelDag(NVPTXTargetMachine &TM, llvm::CodeGenOpt::Level OptLevel);
+FunctionPass *createNVPTXISelDag(NVPTXTargetMachine &TM,
+                                 llvm::CodeGenOpt::Level OptLevel);
 ModulePass *createNVPTXAssignValidGlobalNamesPass();
 ModulePass *createGenericToNVVMPass();
-ModulePass *createNVVMReflectPass();
-ModulePass *createNVVMReflectPass(const StringMap<int>& Mapping);
+FunctionPass *createNVVMIntrRangePass(unsigned int SmVersion);
+FunctionPass *createNVVMReflectPass();
 MachineFunctionPass *createNVPTXPrologEpilogPass();
 MachineFunctionPass *createNVPTXReplaceImageHandlesPass();
-FunctionPass *createNVPTXImageOptimizerPass(NVVMAnnotations &NVVM);
+FunctionPass *createNVPTXImageOptimizerPass();
+FunctionPass *createNVPTXLowerArgsPass(const NVPTXTargetMachine *TM);
+BasicBlockPass *createNVPTXLowerAllocaPass();
+MachineFunctionPass *createNVPTXPeephole();
 
-bool isImageOrSamplerVal(const Value *, const Module *);
-
-extern Target TheNVPTXTarget32;
-extern Target TheNVPTXTarget64;
+Target &getTheNVPTXTarget32();
+Target &getTheNVPTXTarget64();
 
 namespace NVPTX {
 enum DrvInterface {
@@ -124,7 +106,8 @@ enum AddressSpace {
 enum FromType {
   Unsigned = 0,
   Signed,
-  Float
+  Float,
+  Untyped
 };
 enum VecType {
   Scalar = 1,

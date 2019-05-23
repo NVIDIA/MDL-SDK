@@ -91,19 +91,19 @@ public:
 
 /// Represents data needed to create a new material based on an existing material. Used by one of
 /// the #create_module() overloads below.
-class Material_data
+class Mdl_data
 {
 public:
-    /// The name of the new material (non-qualified, without module prefix). The DB name of the new
+    /// The name of the new definition (non-qualified, without module prefix). The DB name of the new
     /// material is created by prefixing this name with the DB name of the new module plus "::".
-    std::string m_material_name;
-    /// The tag of the prototype (material instance or function call to the material constructor)
-    /// for the new material.
+    std::string m_definition_name;
+    /// The tag of the prototype (material instance or function call)
+    /// for the new definition.
     DB::Tag m_prototype_tag;
-    /// The parameters of the new material.
+    /// The parameters of the new definition.
     std::vector<Parameter_data> m_parameters;
     /// The material does not inherit any annotations from the prototype. This member allows to
-    /// specify annotations for the material, i.e., for the material declaration itself (but not for
+    /// specify annotations for the definition, i.e., for the definition declaration itself (but not for
     /// its arguments). So far, only annotations with a single string argument are supported.
     /// The name of the annotation needs to be the fully-qualified MDL name (starting with a double
     /// colon, with signature). \n
@@ -111,6 +111,12 @@ public:
     /// from another MDL interface does not create a link between both instances. \n
     /// \c NULL is a valid value which is handled like an empty annotation block.
     mi::base::Handle<const IAnnotation_block> m_annotations;
+
+    /// Return annotations in case of functions.
+    mi::base::Handle<const IAnnotation_block> m_return_annotations;
+
+    /// True, if a material should be created.
+    bool m_is_material;
 };
 
 /// Represents data needed to create a variant. Used by one of the #create_module() overloads below.
@@ -205,8 +211,11 @@ public:
     /// needed).
     ///
     /// \param transaction     The DB transaction to use.
-    /// \param module_name     The fully-qualified MDL module name (including package names, starts
-    ///                        with "::").
+    /// \param module_name     The fully-qualified MDL name of the MDL module (including package
+    ///                        names, starting with "::") or an MDLE filename (absolute or relative 
+    ///                        to the current working directory). For MDLE, the subpaths '/../' is 
+    ///                        allowed explicitly as long the resulting path is not exceeding the 
+    ///                        root.
     /// \param variant_data    An array with the data for each variant to be created. For details
     ///                        #see Variant_data.
     /// \param variant_count   The length of \p variant_data.
@@ -236,6 +245,34 @@ public:
         const char* module_name,
         const Variant_data* variant_data,
         mi::Size variant_count,
+        Execution_context* context);
+
+    /// Gets the database name of a loaded module.
+    ///
+    /// After successfully loading a module using #load_module() or #load_module_from_string() it is
+    /// often required to query the module or containing elements from the database. Therefore, the
+    /// database name of the module is required, which is returned by this method.
+    /// While MDL modules follow the simple rule 'mdl::<simple_name>{::<simple_name>}', this is more
+    /// evolved for MDLE, where the DB name contains the absolute, normalized file path of the MDLE.
+    /// Normalized means that there are no occurrences of '/../' and '/' is used as path separator,
+    /// independent of the platform. Furthermore must the normalized path start with a leading
+    /// forward slash, which has to be added in case there is none already.
+    ///
+    /// \param transaction   The DB transaction to be used for checking if the module is loaded.
+    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::") or an MDLE filename (absolute or relative
+    ///                      to the current working directory). For MDLE, the sub-path '/../' is
+    ///                      allowed explicitly as long the resulting path is not exceeding
+    ///                      the root.
+    /// \param context       The execution context can be used to pass options to control the
+    ///                      behavior of the MDL compiler. Messages like errors or warnings are also
+    ///                      stored in the context. Can be \c NULL.
+    /// \return              The database name of the module that was loaded using the provided
+    ///                      \p module_name. NULL in case of the module was not found are the
+    ///                      provided module name was not a valid module name.
+    static const char* get_module_db_name(
+        DB::Transaction* transaction,
+        const char* module_name,
         Execution_context* context);
 
 
@@ -461,6 +498,7 @@ private:
     ///                        passing an attribute set obtained from another MDL interface does not
     ///                        create a link between both instances. \n \c NULL is a valid value
     ///                        which is handled like an empty attribute set.
+    /// \param allow_cast      True, if compatible types are allowed.
     /// \param[inout] context  Execution context used to pass options to and store messages from
     ///                        the compiler.
     /// \return
@@ -490,26 +528,8 @@ private:
         const char* variant_name,
         const IExpression_list* defaults,
         const IAnnotation_block* annotations,
+        bool allow_cast,
         Execution_context* context);
-
-    /// Check if it is possible to enforce the uniform property if the new parameter is uniform
-    ///
-    /// \param[in]  transaction      current transaction
-    /// \param[in]  args             argument list
-    /// \param[in]  param_types      parameter type list
-    /// \param[in]  path             path to the newly parameter
-    /// \param[in]  expr             the expression that will be turned into parameter
-    /// \param[out] must_be_uniform  \c true iff the newly created parameter must be uniform to
-    ///                              enforce the uniform property
-    ///
-    /// \return true if possible, false if not possible
-    static bool can_enforce_uniform(
-        DB::Transaction* transaction,
-        mi::base::Handle<const IExpression_list> const &args,
-        mi::base::Handle<const IType_list> const &param_types,
-        std::string const &path,
-        mi::base::Handle<const IExpression> const &expr,
-        bool &must_be_uniform);
 
     /// \return
     ///           -   1: Success (module exists already, creating from \p variant_data was
@@ -528,7 +548,7 @@ private:
         DB::Transaction* transaction,
         mi::mdl::IModule* module,
         const ICall& callee,
-        const Material_data& md,
+        const Mdl_data& md,
         Execution_context* context);
 
     /// Creates an mi::mdl annotation block from an MI::MDL annotation block.
@@ -617,7 +637,8 @@ private:
         mi::mdl::IGenerated_code_dag* code_dag,
         const std::vector<DB::Tag>& imports,
         const std::vector<DB::Tag>& functions,
-        const std::vector<DB::Tag>& materials);
+        const std::vector<DB::Tag>& materials,
+        bool load_resources);
 
     /// The main MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;

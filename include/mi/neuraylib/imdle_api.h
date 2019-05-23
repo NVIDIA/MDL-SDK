@@ -120,11 +120,11 @@ public:
     ///                            the context for details.
     virtual Sint32 validate_mdle(
         const char* file_name,
-        mi::neuraylib::IMdl_execution_context* context) const = 0;
+        IMdl_execution_context* context) const = 0;
 
     /// Get a user file that has been added to an MDLE during its creation.
     ///
-    /// \param mlde_file_name   The file name of the MDLE that contains the user file.
+    /// \param mdle_file_name   The file name of the MDLE that contains the user file.
     /// \param user_file_name   The path and name of the file to read inside the MDLE.
     ///                         This equals the \b target_path during the creation.
     /// \param context          An execution context which can be queried for detailed error 
@@ -133,10 +133,43 @@ public:
     /// \return
     ///                         A reader with access to the user file content or NULL in case of
     ///                         errors. Check the context for details in that case.
-    virtual mi::neuraylib::IReader* get_user_file(
-        const char* mlde_file_name,
+    virtual IReader* get_user_file(
+        const char* mdle_file_name,
         const char* user_file_name,
-        mi::neuraylib::IMdl_execution_context* context) const = 0;
+        IMdl_execution_context* context) const = 0;
+
+    /// Check if two MDLE are identical, meaning that they contain the same content
+    /// independent of their file path.
+    ///
+    /// \param mdle_file_name_a   The file name of the first MDLE to compare.
+    /// \param mdle_file_name_b   The file name of the second MDLE to compare.
+    /// \param context            An execution context which can be queried for detailed error
+    ///                           messages after the operation has finished.
+    ///                           Can be \c NULL.
+    /// \return
+    ///                           -   0: Success
+    ///                           -  -1: The files are different or at least one is not existing.
+    ///                                  If provided, please check the context for details.
+    virtual Sint32 compare_mdle(
+        const char* mdle_file_name_a,
+        const char* mdle_file_name_b,
+        IMdl_execution_context* context) const = 0;
+
+    /// Extracts the hash of the MDLE archive.
+    ///
+    /// \param mdle_file_name   The file name of the MDLE.
+    /// \param[out] hash        The returned hash value.
+    /// \param context          An execution context which can be queried for detailed error
+    ///                         messages after the operation has finished.
+    ///                         Can be \c NULL.
+    /// \return
+    ///                          -   0: Success
+    ///                          -  -1: An error occurred. If provided,
+    ///                                 please check the context for details.
+    virtual Sint32 get_hash(
+        const char* mdle_file_name,
+        base::Uuid& hash,
+        IMdl_execution_context* context) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_types

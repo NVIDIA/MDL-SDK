@@ -31,7 +31,11 @@
 <div align="right">
     [\link mi_neuray_example_derivatives Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling Next\endlink]
+\else
     [\link mi_neuray_example_traversal Next\endlink]
+\endif
 </div>
 
 This example shows how to use a custom implementation of the state module.
@@ -175,7 +179,11 @@ You can create an LLVM IR assembly text file \c "state.ll" with this command lin
 <div align="right">
     [\link mi_neuray_example_derivatives Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling Next\endlink]
+\else
     [\link mi_neuray_example_traversal Next\endlink]
+\endif
 </div>
 
 */

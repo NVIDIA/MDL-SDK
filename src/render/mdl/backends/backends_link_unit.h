@@ -159,7 +159,7 @@ public:
     /// \param material              The compiled MDL material.
     /// \param function_descriptions The list of descriptions of function to translate.
     /// \param lfunction_count       The size of the list of descriptions.
-    /// \param context               Pointer to an #mi::nueraylib::IMdl_execution_context which can
+    /// \param context               Pointer to an #mi::neuraylib::IMdl_execution_context which can
     ///                              be used to pass compilation options to the MDL compiler.
     ///                              The following options are supported by this operation:
     ///                              - bool "include_geometry_normal" If true, the
@@ -173,10 +173,10 @@ public:
     ///                      - -1: An error occurred while processing the entries in the list.
     ///                            Please check the execution context for details.
     virtual mi::Sint32 add_material(
-        MDL::Mdl_compiled_material const                   *i_material,
-        mi::mdl::ILink_unit::Target_function_description   *function_descriptions,
-        mi::Size                                            function_count,
-        MDL::Execution_context                             *context);
+        MDL::Mdl_compiled_material const             *i_material,
+        mi::neuraylib::Target_function_description   *function_descriptions,
+        mi::Size                                      function_count,
+        MDL::Execution_context                       *context);
 
     /// Get the number of functions inside this link unit.
     mi::Size get_num_functions() const;
@@ -247,6 +247,9 @@ public:
 private:
     /// The MDL compiler.
     mi::base::Handle<mi::mdl::IMDL> m_compiler;
+
+    /// The kind of the backend.
+    mi::neuraylib::IMdl_compiler::Mdl_backend_kind m_be_kind;
 
     /// The MDL link unit.
     mi::base::Handle<mi::mdl::ILink_unit> m_unit;

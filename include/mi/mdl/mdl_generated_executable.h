@@ -168,6 +168,36 @@ public:
     /// The state usage bitmap type.
     typedef unsigned State_usage;
 
+    /// Possible kinds of distribution functions.
+    enum Distribution_kind {
+        DK_NONE,
+        DK_BSDF,
+        DK_EDF,
+        DK_INVALID
+    };
+
+    /// Possible kinds of functions.
+    enum Function_kind {
+        FK_INVALID,
+        FK_LAMBDA,
+        FK_SWITCH_LAMBDA,
+        FK_ENVIRONMENT,
+        FK_CONST,
+        FK_DF_INIT,
+        FK_DF_SAMPLE,
+        FK_DF_EVALUATE,
+        FK_DF_PDF
+    };
+
+    /// Language to use for the function prototype.
+    enum Prototype_language {
+        PL_CUDA,
+        PL_PTX,
+        PL_HLSL,
+        PL_GLSL,             // \if MDL_SOURCE_RELEASE Reserved\else GLSL\endif.
+        PL_NUM_LANGUAGES
+    };
+
     /// Returns the source code of the module if available.
     ///
     /// \param size  will be assigned to the length of the source code
@@ -207,6 +237,72 @@ public:
     ///
     /// \note that the id 0 is ALWAYS mapped to the empty string ""
     virtual char const *get_string_constant(size_t id) const = 0;
+
+    /// Get the number of functions in this executable code.
+    virtual size_t get_function_count() const = 0;
+
+    /// Get the name of the i'th function inside this executable code.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return the name of the i'th function or \c NULL if the index is out of bounds
+    virtual char const *get_function_name(size_t i) const = 0;
+
+    /// Returns the distribution kind of the i'th function inside this executable code.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The distribution kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    virtual Distribution_kind get_distribution_kind(size_t i) const = 0;
+
+    /// Returns the function kind of the i'th function inside this executable code.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The function kind of the i'th function or \c FK_INVALID if \p i was invalid.
+    virtual Function_kind get_function_kind(size_t i) const = 0;
+
+    /// Get the index of the target argument block layout for the i'th function inside this
+    /// executable code if used.
+    ///
+    /// \param i  the index of the function
+    ///
+    /// \return The index of the target argument block layout or ~0 if not used or \p i is invalid.
+    virtual size_t get_function_arg_block_layout_index(size_t i) const = 0;
+
+    /// Returns the prototype of the i'th function inside this executable code.
+    ///
+    /// \param index   the index of the function.
+    /// \param lang    the language to use for the prototype.
+    ///
+    /// \return The prototype or NULL or an empty string if \p index is out of bounds or \p lang
+    ///         cannot be used for this target code.
+    virtual char const *get_function_prototype(size_t index, Prototype_language lang) const = 0;
+
+    /// Set a function prototype for a function.
+    ///
+    /// \param index      the index of the function
+    /// \param lang       the language of the prototype being set
+    /// \param prototype  the function prototype
+    virtual void set_function_prototype(
+        size_t index,
+        Prototype_language lang,
+        char const *prototype) = 0;
+
+    /// Add a function to the given target code, also registering the function prototypes
+    /// applicable for the used backend.
+    ///
+    /// \param name             the name of the function to add
+    /// \param dist_kind        the kind of distribution to add
+    /// \param func_kind        the kind of the function to add
+    /// \param arg_block_index  the argument block index for this function or ~0 if not used
+    ///
+    /// \returns the function index of the added function
+    virtual size_t add_function_info(
+        char const *name,
+        Distribution_kind dist_kind,
+        Function_kind func_kind,
+        size_t arg_block_index) = 0;
 };
 
 /// A handler for MDL runtime exceptions.
@@ -1297,3 +1393,4 @@ public:
 } // mi
 
 #endif
+

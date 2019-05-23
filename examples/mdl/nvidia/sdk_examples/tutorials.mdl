@@ -194,6 +194,22 @@ in material(
     )
 );
 
+const float[4] global_arr(0.25, 0.7, 0.4, 1);
+
+// Example material using the rodata-segment in HLSL.
+export material example_execution4()
+= let {
+    float time = state::animation_time();
+    float3 pos = state::texture_coordinate(0);
+}
+in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: color(0.5 + math::cos(time * 2 * math::PI / 4) / 2) * global_arr[int(pos.x * 8) & 3]
+        )
+    )
+);
+
 // simple material with textures and light profile
 export material example_modulemdl_material_examples(
     color tint = color(1.0),
@@ -396,6 +412,23 @@ export material example_mod_rough(color tint = color(1.0), float roughness = 0)
 } in material(
     surface: material_surface(scattering: tmp),
     backface: material_surface(scattering: tmp)
+);
+
+export material dxr_sphere_mat(
+    color tint = color(0.3), 
+    float roughness_scale = 1.0,
+    float roughness_offset = 0.25
+) = let {
+    uniform texture_2d tex = texture_2d("resources/example_roughness.png", ::tex::gamma_linear);
+    float3 tex_coord = state::texture_coordinate(0);
+    float mod_roughness = roughness_offset + roughness_scale * tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y)).x;
+} in material(
+    surface: material_surface(
+        scattering: df::simple_glossy_bsdf(
+            roughness_u: mod_roughness,
+            tint: tint
+        )
+    )
 );
 
 // simple measured material

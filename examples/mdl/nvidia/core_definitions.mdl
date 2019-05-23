@@ -1794,7 +1794,7 @@ export material flex_material(
     [[
         anno::in_group("Global"),
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have abbe numbers between 25 and 85"),
+        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85"),
         anno::soft_range(0.0,100.0),
         ui_position(15)
     ]]
@@ -2049,7 +2049,7 @@ export material thick_glass(
     [[
         ui_position(6),
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0.0 switches dispersion off, dispersive materials have abbe numbers between 25.0 and 85.0"),
+        anno::description("Controls dispersion. 0.0 switches dispersion off, dispersive materials have Abbe numbers between 25.0 and 85.0"),
         anno::soft_range(0.0,100.0)
     ]]
 )
@@ -2152,7 +2152,7 @@ export material thick_translucent(
     uniform float abbe_number = 0.0
     [[
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have abbe numbers between 25 and 85"),
+        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85"),
         anno::soft_range(0.0,100.0),
         ui_position(8)
     ]]

@@ -3,11 +3,15 @@ add_llvm_library(LLVMObjCARCOpts
   ObjCARCOpts.cpp
   ObjCARCExpand.cpp
   ObjCARCAPElim.cpp
-  ObjCARCAliasAnalysis.cpp
-  ObjCARCUtil.cpp
   ObjCARCContract.cpp
   DependencyAnalysis.cpp
   ProvenanceAnalysis.cpp
-  )
+  ProvenanceAnalysisEvaluator.cpp
+  PtrState.cpp
 
-add_dependencies(LLVMObjCARCOpts intrinsics_gen)
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/Transforms
+
+  DEPENDS
+  intrinsics_gen
+  )

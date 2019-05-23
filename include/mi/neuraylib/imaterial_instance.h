@@ -246,12 +246,12 @@ public:
     ///                                    #mi::neuraylib::IMdl_execution_context which can be used
     ///                                    to pass compilation options to the MDL compiler. The
     ///                                    following options are supported for this operation:
-    ///                                    - Float32 "mdl_meters_per_scene_unit": The conversion
+    ///                                    - Float32 "meters_per_scene_unit": The conversion
     ///                                      ratio between meters and scene units for this
     ///                                      material. Default: 1.0f.
-    ///                                    - Float32 "mdl_wavelength_min": The smallest
+    ///                                    - Float32 "wavelength_min": The smallest
     ///                                      supported wavelength. Default: 380.0f.
-    ///                                    - Float32 "mdl_wavelength_max": The largest supported
+    ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
     ///                                    During material compilation, messages like errors and
     ///                                    warnings will be passed to the context for

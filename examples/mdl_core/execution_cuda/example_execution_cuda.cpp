@@ -93,7 +93,7 @@ void bake_expression_cuda_ptx(
         "example_execution_cuda_derivatives.ptx" : "example_execution_cuda.ptx";
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
-        (get_executable_folder() + ptx_name).c_str(),
+        (get_executable_folder() + "/" + ptx_name).c_str(),
         "evaluate_mat_expr",
         &cuda_function);
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
                 if (!mc.add_material_subexpr(
                         options.material_names[i].c_str(),
                         "surface.scattering.tint",
-                        "tint",
+                        ("tint_" + to_string(i)).c_str(),
                         options.use_class_compilation)) {
                     success = false;
                     if (!mc.has_errors()) {

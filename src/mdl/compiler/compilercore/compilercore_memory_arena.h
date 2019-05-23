@@ -29,16 +29,25 @@
 #ifndef MDL_COMPILERCORE_MEMORY_ARENA_H
 #define MDL_COMPILERCORE_MEMORY_ARENA_H 1
 
+#include "compilercore_cc_conf.h"
+
 #include <mi/base/handle.h>
 
 #include <string>
 #include <vector>
+
+#if MDL_STD_HAS_UNORDERED
+#include <unordered_map>
+#include <unordered_set>
+#else
+ // pre C++11 need boost headers
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
+#endif
+
 #include <list>
 #include <functional>
 
-#include "compilercore_cc_conf.h"
 #include "compilercore_allocator.h"
 #include "compilercore_assert.h"
 
@@ -451,6 +460,85 @@ inline size_t dynamic_memory_consumption(std::vector<T, Memory_arena_allocator<T
     return 0;
 }
 
+#if MDL_STD_HAS_UNORDERED
+template <
+    typename Key,
+    typename Tp,
+    typename HashFcn = std::hash<Key>,
+    typename EqualKey = std::equal_to<Key>
+>
+struct Arena_hash_map {
+    typedef std::unordered_map<
+        Key, Tp, HashFcn, EqualKey,
+        Memory_arena_allocator<
+        typename std::unordered_map<Key, Tp, HashFcn, EqualKey>::value_type>
+    > Type;
+};
+
+template <
+    typename Key,
+    typename Tp,
+    typename HashFcn = Hash_ptr<Key>,
+    typename EqualKey = Equal_ptr<Key>
+>
+struct Arena_ptr_hash_map {
+    typedef std::unordered_map<
+        Key *, Tp, HashFcn, EqualKey,
+        Memory_arena_allocator<
+        typename std::unordered_map<Key *, Tp, HashFcn, EqualKey>::value_type>
+    > Type;
+};
+
+// Helper for dynamic memory consumption: Arena hash maps have no EXTRA memory allocated.
+template<typename T1, typename T2, typename T3, typename T4>
+inline bool has_dynamic_memory_consumption(
+    std::unordered_map<T1, T2, T3, T4, Memory_arena_allocator<std::pair<T1, T2> > > const &)
+{
+    return false;
+}
+template<typename T1, typename T2, typename T3, typename T4>
+inline size_t dynamic_memory_consumption(
+    std::unordered_map<T1, T2, T3, T4, Memory_arena_allocator<std::pair<T1, T2> > >  const &)
+{
+    return 0;
+}
+
+template <
+    typename Key,
+    typename HashFcn = std::hash<Key>,
+    typename EqualKey = std::equal_to<Key>
+>
+struct Arena_hash_set {
+    typedef std::unordered_set<
+        Key, HashFcn, EqualKey, Memory_arena_allocator<Key> > Type;
+};
+
+template <
+    typename Key,
+    typename HashFcn = Hash_ptr<Key>,
+    typename EqualKey = Equal_ptr<Key>
+>
+struct Arena_ptr_hash_set {
+    typedef std::unordered_set<
+        Key *, HashFcn, EqualKey, Memory_arena_allocator<Key *> > Type;
+};
+
+// Helper for dynamic memory consumption: Arena hash sets have no EXTRA memory allocated.
+template<typename T1, typename T2, typename T3>
+inline bool has_dynamic_memory_consumption(
+    std::unordered_set<T1, T2, T3, Memory_arena_allocator<T1> > const &)
+{
+    return false;
+}
+template<typename T1, typename T2, typename T3>
+inline size_t dynamic_memory_consumption(
+    std::unordered_set<T1, T2, T3, Memory_arena_allocator<T1> > const &)
+{
+    return 0;
+}
+
+#else
+
 template <
     typename Key,
     typename Tp,
@@ -526,6 +614,7 @@ inline size_t dynamic_memory_consumption(
 {
     return 0;
 }
+#endif
 
 /// A list using a memory arena.
 template <typename Tp>

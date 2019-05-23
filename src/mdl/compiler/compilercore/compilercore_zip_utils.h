@@ -43,11 +43,12 @@ class MDL_zip_container_file;
 
 struct MDL_zip_container_header
 {
-    char const prefix[4];             ///< leader marker, i.e., MDR, MDLE, or ...
-    uint16_t const major_version_min; ///< minimum supported major version number.
-    uint16_t const minor_version_min; ///< minimum supported minor version number.
-    uint16_t const major_version_max; ///< maximum supported major version number.
-    uint16_t const minor_version_max; ///< maximum supported minor version number.
+    char prefix[4];             ///< leader marker, i.e., MDR, MDLE, or ...
+    uint16_t major_version_min; ///< minimum supported major version number.
+    uint16_t minor_version_min; ///< minimum supported minor version number.
+    uint16_t major_version_max; ///< maximum supported major version number.
+    uint16_t minor_version_max; ///< maximum supported minor version number.
+    unsigned char hash[16];     ///< maximum supported minor version number.
 
     /// Constructor.
     ///
@@ -79,6 +80,7 @@ struct MDL_zip_container_header
 
     /// Copy constructor.
     MDL_zip_container_header(MDL_zip_container_header const &to_copy);
+    MDL_zip_container_header &operator=(MDL_zip_container_header const &);
 };
 
 
@@ -231,6 +233,7 @@ enum MDL_zip_container_error_code
     EC_RENAME_ERROR,            ///< Rename operation failed.
     EC_INVALID_HEADER,          ///< The zip header does not start MDR, MDLE, or ...
     EC_INVALID_HEADER_VERSION,  ///< The zip header prefix is correct but the version is not.
+    EC_PRE_RELEASE_VERSION,     ///< Container has a pre-release version number.
     EC_INTERNAL_ERROR,          ///< Internal archiver error.
 };
 
@@ -266,6 +269,16 @@ public:
     /// \return true on success, false if the file was not found inside the container
     bool get_file_hash(char const *name, unsigned char md5[16]) const;
 
+    /// Get the version number of an opened container.
+    ///
+    /// \param[out] major_version   Major version number found in the container header
+    /// \param[out] minor_version   Minor version number found in the container header
+    void get_version(uint16_t &major_version, uint16_t &minor_version) const
+    {
+        major_version = m_header.major_version_min; // min and max are equal for loaded files
+        minor_version = m_header.minor_version_min; // min and max are equal for loaded files
+    }
+
     /// Get the allocator.
     IAllocator *get_allocator() const { return m_alloc; }
 
@@ -288,12 +301,13 @@ protected:
     /// \param[in]  alloc                   the allocator
     /// \param[in]  path                    the UTF8 encoded archive path
     /// \param[out] err                     error code
-    /// \param[in]  expected_header_info    file header to check
+    /// \param[in]  header_info             file header to check, will contain the file hash
+    ///                                     in case it was set while writing
     static zip_t *open(
         IAllocator                      *alloc,
         char const                      *path,
         MDL_zip_container_error_code    &err,
-        const MDL_zip_container_header  &expected_header_info);
+        MDL_zip_container_header        &header_info);
 
 private:
     // Get the length of a file from the file pointer.
@@ -312,6 +326,9 @@ protected:
 
     /// The zip archive handle.
     zip_t *m_za;
+
+    /// header of the zip file
+    MDL_zip_container_header m_header;
 };
 
 /// Helper class for file from an archive.

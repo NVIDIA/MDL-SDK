@@ -324,7 +324,41 @@ private:
         DAG_call::Call_argument const call_args[],
         IType const                   *ret_type);
 
+    /// Converts a constant into a elemental constructor.
+    ///
+    /// \param c  The constant to convert.
+    /// \returns  A DAG_call representing the constant.
+    DAG_call const *value_to_constructor(
+        DAG_constant const *c);
+
+    /// Try to move a ternary operator down.
+    ///
+    /// \param cond            The condition expression.
+    /// \param t_expr          The true expression.
+    /// \param f_cond          The false expression.
+    /// \param ret_type        The return type of the function.
+    /// \returns               The result of moving the operator down or NULL if that failed.
+    DAG_node const *move_ternary_down(
+        DAG_node const *cond,
+        DAG_node const *true_expr,
+        DAG_node const *false_expr,
+        IType const    *ret_type);
+
+    /// Create a ternary operator call.
+    ///
+    /// \param cond            The condition expression.
+    /// \param t_expr          The true expression.
+    /// \param f_cond          The false expression.
+    /// \param ret_type        The return type of the function.
+    /// \returns               The created call or an equivalent IR node.
+    DAG_node const *create_ternary_call(
+        DAG_node const *cond,
+        DAG_node const *t_expr,
+        DAG_node const *f_expr,
+        IType const    *ret_type);
+
     /// Create a constructor call.
+    ///
     /// \param name            The name of the called constructor.
     /// \param sema            The semantics of the called constructor.
     /// \param call_args       The arguments of the called constructor.
@@ -383,8 +417,13 @@ private:
     /// Get the allocator of this factory.
     IAllocator *get_allocator() const { return m_builder.get_arena()->get_allocator(); }
 
-    /// Get the field name from a getter function call name.
-    string get_field_name(char const *call_name) const;
+    /// Get the field index from a getter function call name.
+    ///
+    /// \param type       a compound type
+    /// \param call_name  the name of an DAG_INTRINSIC_FIELD_SELECT call
+    int get_field_index(
+        IType_compound const *type,
+        char const           *call_name);
 
     /// Allocate a Call node.
     Call_impl *alloc_call(
