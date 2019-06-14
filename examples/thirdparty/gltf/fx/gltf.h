@@ -635,6 +635,27 @@ namespace gltf
             }
         };
 
+        struct KHR_PBRSpecularGlossiness
+        {
+            std::array<float, 4> diffuseFactor = {defaults::IdentityVec4};
+            Texture diffuseTexture;
+
+            std::array<float, 3> specularFactor = {defaults::IdentityVec3};
+            float glossinessFactor{defaults::IdentityScalar};
+            Texture specularGlossinessTexture;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return diffuseTexture.empty() && 
+                       specularGlossinessTexture.empty() &&
+                       specularFactor == defaults::IdentityVec3 && 
+                       glossinessFactor == 1.0f && 
+                       diffuseFactor == defaults::IdentityVec4;
+            }
+        };
+
         float alphaCutoff{ defaults::MaterialAlphaCutoff };
         AlphaMode alphaMode{ AlphaMode::Opaque };
 
@@ -643,11 +664,13 @@ namespace gltf
         NormalTexture normalTexture;
         OcclusionTexture occlusionTexture;
         PBRMetallicRoughness pbrMetallicRoughness;
+        KHR_PBRSpecularGlossiness pbrSpecularGlossiness;
 
         Texture emissiveTexture;
         std::array<float, 3> emissiveFactor = { defaults::NullVec3 };
 
         std::string name;
+
         nlohmann::json extensionsAndExtras{};
     };
 
@@ -1104,6 +1127,17 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, pbrMetallicRoughness.extensionsAndExtras);
     }
 
+    inline void from_json(nlohmann::json const & json, Material::KHR_PBRSpecularGlossiness& pbrSpecularGlossiness)
+    {
+        detail::ReadOptionalField("diffuseFactor", json, pbrSpecularGlossiness.diffuseFactor);
+        detail::ReadOptionalField("diffuseTexture", json, pbrSpecularGlossiness.diffuseTexture);
+        detail::ReadOptionalField("specularFactor", json, pbrSpecularGlossiness.specularFactor);
+        detail::ReadOptionalField("glossinessFactor", json, pbrSpecularGlossiness.glossinessFactor);
+        detail::ReadOptionalField("specularGlossinessTexture", json, pbrSpecularGlossiness.specularGlossinessTexture);
+
+        detail::ReadExtensionsAndExtras(json, pbrSpecularGlossiness.extensionsAndExtras);
+    }
+
     inline void from_json(nlohmann::json const & json, Material & material)
     {
         detail::ReadOptionalField("alphaMode", json, material.alphaMode);
@@ -1115,6 +1149,10 @@ namespace gltf
         detail::ReadOptionalField("normalTexture", json, material.normalTexture);
         detail::ReadOptionalField("occlusionTexture", json, material.occlusionTexture);
         detail::ReadOptionalField("pbrMetallicRoughness", json, material.pbrMetallicRoughness);
+
+        const nlohmann::json::const_iterator iterExtensions = json.find("extensions");
+        if (iterExtensions != json.end())
+            detail::ReadOptionalField("KHR_materials_pbrSpecularGlossiness", *iterExtensions, material.pbrSpecularGlossiness);
 
         detail::ReadExtensionsAndExtras(json, material.extensionsAndExtras);
     }

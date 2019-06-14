@@ -195,11 +195,6 @@ public:
     }
 
 private:
-
-    /// Converts a hash from the MDL API representation to the base API representation.
-    static mi::base::Uuid convert_hash(
-        const mi::mdl::DAG_hash& hash);
-
     mi::base::Handle<IType_factory> m_tf;             ///< The type factory.
     mi::base::Handle<IValue_factory> m_vf;            ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;       ///< The expression factory.
@@ -226,7 +221,6 @@ private:
 
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
-
 };
 
 } // namespace MDL

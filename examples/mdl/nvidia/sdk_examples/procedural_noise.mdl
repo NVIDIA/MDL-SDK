@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+ * Copyright 2019 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -74,7 +74,7 @@ export material noise_worley_glossy (
     ]]
 ) [[ 
     anno::copyright_notice (
-    "Copyright (c) 2019 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2019 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Dielectric, worley noise textures"),
     anno::description("A simple dielectric material showcasing procedural texturing")
@@ -159,7 +159,7 @@ export material noise_perlin_glossy (
     ]]
 ) [[ 
     anno::copyright_notice (
-    "Copyright (c) 2019 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2019 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Dielectric, perlin noise textures"),
     anno::description("A simple dielectric material showcasing procedural texturing")

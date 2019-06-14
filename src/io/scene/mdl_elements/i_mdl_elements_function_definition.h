@@ -31,6 +31,7 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_definitions.h>
+#include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <io/scene/scene/i_scene_scene_element.h>
 
@@ -76,7 +77,8 @@ public:
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
     /// \param name                   The fully-qualified MDL module name.
-    /// \param load_resources         True, if resources are supposed to be loaded into the DB.
+    /// \param load_resources         True, if resources are supposed to be loaded into the DB
+    ///                               (if referenced in the parameter defaults).
     Mdl_function_definition(
         DB::Transaction* transaction,
         DB::Tag module_tag,
@@ -200,6 +202,9 @@ public:
     /// Returns the database name of the module this definition belongs to.
     const char* get_module_db_name() const;
 
+    /// Return a function hash if available.
+    mi::base::Uuid get_function_hash() const { return m_function_hash; }
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -257,6 +262,8 @@ private:
     mi::base::Handle<IAnnotation_block> m_return_annotations;
     mi::base::Handle<IExpression_list> m_enable_if_conditions;
     std::vector< std::vector<mi::Sint32> > m_enable_if_users;
+
+    mi::base::Uuid m_function_hash;             ///< The function hash if any.
 };
 
 } // namespace MDL

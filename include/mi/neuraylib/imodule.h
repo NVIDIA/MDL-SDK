@@ -41,6 +41,7 @@ class IArray;
 namespace neuraylib {
 
 class IAnnotation_block;
+class IAnnotation_definition;
 class IExpression_list;
 class IType_list;
 class IType_resource;
@@ -245,7 +246,7 @@ public:
     ///                 removed from the DB.
     virtual const char* get_material( Size index) const = 0;
     
-    /// Returns the number of resources defined in the module. 
+    /// Returns the number of resources defined in the module.
     /// Resources defined in a module that is imported by this module are not included.
     virtual Size get_resources_count() const = 0;
 
@@ -265,8 +266,24 @@ public:
     ///
     /// \param index    The index of the resource.
     /// \return         The database name of the resource or \c NULL if
-    ///                 this resource could not be resolved. 
+    ///                 this resource could not be resolved.
     virtual const char* get_resource_name( Size index) const = 0;
+
+    /// Returns the number of annotations defined in the module.
+    virtual Size get_annotation_definition_count() const = 0;
+
+    /// Returns the annotation definition at \p index.
+    ///
+    /// \param index    The index of the annotation definition.
+    /// \return         The annotation definition or \c NULL if
+    ///                 \p index is out of range.
+    virtual const IAnnotation_definition* get_annotation_definition(Size index) const = 0;
+
+    /// Returns the annotation definition of the given \p name.
+    ///
+    /// \param name     The name of the annotation definition.
+    /// \return         The annotation definition or \c NULL if there is no such definition.
+    virtual const IAnnotation_definition* get_annotation_definition(const char *name) const = 0;
 
     /// Returns the annotations of the module, or \c NULL if there are no such annotations.
     virtual const IAnnotation_block* get_annotations() const = 0;

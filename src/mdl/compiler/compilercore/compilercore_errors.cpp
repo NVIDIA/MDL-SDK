@@ -742,6 +742,8 @@ char const *get_error_template(
             return "function '$0' in user-specified state module has wrong return type";
         case API_STRUCT_TYPE_MUST_BE_OPAQUE:
             return "opaque API struct '$0' in user-specified state module may not be redefined";
+        case GET_SYMBOL_FAILED:
+            return "getting a symbol in the jit compiled code failed: $0";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:

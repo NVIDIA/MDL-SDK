@@ -44,7 +44,10 @@
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_value.h"
 
-namespace mi { namespace neuraylib { class IReader; } }
+namespace mi {
+    namespace neuraylib { class IReader; }
+    namespace base      { struct Uuid; }
+}
 
 namespace MI {
 
@@ -66,6 +69,11 @@ mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
 mi::mdl::IDefinition::Semantics ext_semantics_to_mdl_semantics(
     mi::neuraylib::IFunction_definition::Semantics);
 
+/// Converts mi::mdl::IDefinition::Semantics to mi::neuraylib::IAnnotation_definition::Semantics.
+///
+/// Some values cannot appear here. Such values are mapped to DS_UNKNOWN after an assertion.
+mi::neuraylib::IAnnotation_definition::Semantics mdl_semantics_to_ext_annotation_semantics(
+    mi::mdl::IDefinition::Semantics semantic);
 
 // ********** Conversion from mi::mdl to MI::MDL ***************************************************
 
@@ -688,6 +696,21 @@ mi::base::Handle<const IExpression> find_path(
     DB::Transaction* transaction,
     const std::string& path,
     const mi::base::Handle<const IExpression_list>& args);
+
+/// Write an UUID to the given serializer.
+///
+/// \param serializer  the serializer to be used
+/// \param uuid        the UUID to be written
+void write(SERIAL::Serializer* serializer, const mi::base::Uuid& uuid);
+
+/// Read an UUID from the given deserializer.
+///
+/// \param deserializer  the deserializer to be used
+/// \param uuid          the UUID to be read
+void read(SERIAL::Deserializer* deserializer, mi::base::Uuid& uuid);
+
+/// Converts a hash from the MDL API representation to the base API representation.
+mi::base::Uuid convert_hash( mi::mdl::DAG_hash const &hash);
 
 } // namespace MDL
 

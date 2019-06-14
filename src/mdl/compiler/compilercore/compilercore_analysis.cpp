@@ -3934,6 +3934,26 @@ bool NT_analysis::import_entity(
     return true;
 }
 
+/// Computes the package length, handling '.' and '..' prefixes of an entity qualified name.
+///
+/// \param entity_name  a qualified name of an entity
+static int package_len(IQualified_name const *entity_name)
+{
+    int n = entity_name->get_component_count() - 1;
+    for (int i = 0; i < n; ++i) {
+        ISimple_name const *sname = entity_name->get_component(i);
+        ISymbol const      *sym   = sname->get_symbol();
+
+        size_t id = sym->get_id();
+        if (id == ISymbol::SYM_DOT || id == ISymbol::SYM_DOTDOT) {
+            // skip '.' or '..::*' prefixed
+            continue;
+        }
+        return n - i;
+    }
+    return n;
+}
+
 // Import a qualified entity from a module.
 bool NT_analysis::import_qualified_entity(
     IQualified_name const *entity_name,
@@ -4023,7 +4043,7 @@ bool NT_analysis::import_qualified_entity(
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
         IQualified_name const *imp_name = imp_mod->get_qualified_name();
-        int prefix_len = imp_name->get_component_count() - (n - 1);
+        int prefix_len = imp_name->get_component_count() - package_len(entity_name);
 
         MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
 
@@ -14165,7 +14185,7 @@ void NT_analysis::check_called_functions()
     Usage_checker     uc(*this);
 
     // check if the call graph has loops and report them
-    m_cg.finalize(*this);
+    m_cg.finalize(this);
 
     // mark all exported roots as used
     Call_node_vec const &root_set = m_cg.get_root_set();
@@ -14178,35 +14198,44 @@ void NT_analysis::check_called_functions()
     }
 
     // check that every called function exists and mark used ones
-    m_cg.walk(&ec);
+    Call_graph_walker::walk(m_cg, &ec);
 
     if (m_opt_dump_cg) {
-        // dump the call graph
-        string fname("cg_", get_allocator());
-        char const *abs_name = m_module.get_name();
-        if (abs_name[0] == ':' && abs_name[1] == ':')
-            abs_name += 2;
-        fname += abs_name;
-        for (size_t i = 0, n = fname.size(); i < n; ++i) {
-            if (fname[i] == ':')
-                fname[i] = '_';
-        }
-        fname += ".gv";
-
-        if (FILE *f = fopen(fname.c_str(), "w")) {
-            Allocator_builder builder(get_allocator());
-
-            mi::base::Handle<File_Output_stream> out(
-                builder.create<File_Output_stream>(get_allocator(), f, /*close_at_destroy=*/true));
-
-            m_cg.dump(out.get());
-        }
+        dump_call_graph(get_allocator(), m_module.get_name(), m_cg);
     }
 
     Scope *file_scope = m_def_tab->get_global_scope();
 
     // report unused functions
     file_scope->walk(&uc);
+}
+
+// Dump a call graph to a file.
+void NT_analysis::dump_call_graph(
+    IAllocator       *alloc,
+    char const       *module_name,
+    Call_graph const &cg)
+{
+    // dump the call graph
+    string fname("cg_", alloc);
+    char const *abs_name = module_name;
+    if (abs_name[0] == ':' && abs_name[1] == ':')
+        abs_name += 2;
+    fname += abs_name;
+    for (size_t i = 0, n = fname.size(); i < n; ++i) {
+        if (fname[i] == ':')
+            fname[i] = '_';
+    }
+    fname += ".gv";
+
+    if (FILE *f = fopen(fname.c_str(), "w")) {
+        Allocator_builder builder(alloc);
+
+        mi::base::Handle<File_Output_stream> out(
+            builder.create<File_Output_stream>(alloc, f, /*close_at_destroy=*/true));
+
+        cg.dump(out.get());
+    }
 }
 
 // Check that all exported entities exist.
@@ -14802,11 +14831,6 @@ void NT_analysis::calc_state_usage()
 {
     class State_spreader : public ICallgraph_visitor {
     public:
-        /// Process a strongly coupled component inside of a call graph.
-        void process_scc(Call_node_vec const &scc) MDL_FINAL {
-            // ignore this: if we have SCC, the module is broken either
-        }
-
         /// Visit a node of the call graph.
         void visit_cg_node(Call_node *node, ICallgraph_visitor::Order order) MDL_FINAL {
             if (order == POST_ORDER) {
@@ -14949,7 +14973,7 @@ void NT_analysis::calc_state_usage()
     };
 
     State_spreader spreader;
-    m_cg.walk(&spreader);
+    Call_graph_walker::walk(m_cg, &spreader);
 }
 
 

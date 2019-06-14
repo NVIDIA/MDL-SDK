@@ -46,21 +46,61 @@ class Optimizer {
 public:
     /// Run the optimizer on this compilation unit.
     ///
+    /// \param alloc           the allocator to be used
     /// \param compiler        the current compiler
     /// \param unit            the compilation unit to optimize
     /// \param opt_level       optimization level
     static void run(
+        IAllocator        *alloc,
         Compiler          &compiler,
         Compilation_unit  &unit,
         int              opt_level);
 
 private:
+    /// Checks if two given expressions are semantically the same.
+    bool same_expr(Expr *a, Expr *b) const;
+
+    /// Creates an unary expression.
+    Expr *create_unary(
+        Expr_unary::Operator op,
+        Expr                *arg,
+        Location const      &pos);
+
+    /// Optimize vector constructors.
+    Expr *optimize_vector_constructor(Expr_call *constr);
+
+    /// Optimize calls.
+    Expr *optimize_call(Expr_call *call);
+
+    /// Execute a function on the bodies of all HLSL functions.
+    ///
+    /// \param body_func  execute on all statements of a function body
+    /// \param expr_func  execute on all expressions of a function body
+    void run_on_function(
+        Stmt *(Optimizer::* body_func)(Stmt *),
+        Expr *(Optimizer::* expr_func)(Expr *));
+
+    /// Run local optimizations.
+    Declaration *local_opt(Declaration *decl);
+
+    /// Run local optimizations.
+    Stmt *local_opt(Stmt *stmt);
+
+    /// Run local optimizations.
+    Expr *local_opt(Expr *expr);
+
+    /// Run local optimizations.
+    void local_opt();
+
+private:
     /// Constructor.
     ///
+    /// \param alloc           the allocator to be used
     /// \param compiler        the current compiler
     /// \param unit            the compilation unit to optimize
     /// \param opt_level       optimization level
     Optimizer(
+        IAllocator       *alloc,
         Compiler         &compiler,
         Compilation_unit &unit,
         int              opt_level);
@@ -72,6 +112,9 @@ private:
     Optimizer &operator=(Optimizer const &) HLSL_DELETED_FUNCTION;
 
 private:
+    /// The allocator.
+    IAllocator *m_alloc;
+
     /// The HLSL compiler.
     Compiler &m_compiler;
 
@@ -79,10 +122,13 @@ private:
     Compilation_unit &m_unit;
 
     /// The statement factory of the current unit.
-    Stmt_factory &m_stmt_factory;
+    Stmt_factory &m_sf;
 
     /// The Expression factory of the current unit.
-    Expr_factory &m_expr_factory;
+    Expr_factory &m_ef;
+
+    /// The Declaration factory of the current unit.
+    Decl_factory &m_df;
 
     /// The value factory of the current unit.
     Value_factory &m_value_factory;

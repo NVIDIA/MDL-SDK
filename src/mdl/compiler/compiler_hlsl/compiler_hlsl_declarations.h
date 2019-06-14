@@ -980,6 +980,12 @@ T const *as(Declaration const *decl) {
     return (decl->get_kind() == T::s_kind) ? static_cast<T const *>(decl) : NULL;
 }
 
+/// Cast to declaration or return NULL if types do not match.
+template<typename T>
+T *as(Declaration *decl) {
+    return (decl->get_kind() == T::s_kind) ? static_cast<T *>(decl) : NULL;
+}
+
 /// Check if a declaration is of a certain type.
 template<typename T>
 bool is(Declaration const *decl) {

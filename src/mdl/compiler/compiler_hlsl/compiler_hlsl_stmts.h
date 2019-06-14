@@ -185,6 +185,9 @@ public:
     /// Get the declaration of this statement.
     Declaration const *get_declaration() const { return m_decl; }
 
+    /// Set the declaration of this statement.
+    void set_declaration(Declaration *decl) { m_decl = decl; }
+
 private:
     /// Constructor.
     ///

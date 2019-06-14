@@ -138,6 +138,7 @@ void DAG_code_printer::print(Printer *printer, mi::base::IInterface const *code)
 
     print_types(code_dag.get());
     print_constants(code_dag.get());
+    print_annotations(code_dag.get());
     print_functions(code_dag.get());
     print_materials(code_dag.get());
 }
@@ -893,7 +894,7 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
     }
 }
 
-// Print all material of the code dag.
+// Print all materials of the code dag.
 void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) const
 {
     int material_count = code_dag->get_material_count();
@@ -1020,6 +1021,92 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
                 indent(depth);
                 print_exp(depth, code_dag, mat_idx, code_dag->get_material_annotation(mat_idx,k));
                 if (k < n_annos - 1)
+                    print(", ");
+                print("\n");
+            }
+            print("]]");
+        }
+        print(";\n");
+    }
+}
+
+// Print all annotations of the code dag.
+void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) const
+{
+    int annotation_count = code_dag->get_annotation_count();
+    for (int i = 0; i < annotation_count; ++i) {
+        print("\n");
+        IDefinition::Semantics sema = code_dag->get_annotation_semantics(i);
+        print_sema(sema);
+
+        char const *orig_name = code_dag->get_original_annotation_name(i);
+        if (orig_name != NULL) {
+            push_color(ISyntax_coloring::C_COMMENT);
+            print("// Alias of \"");
+            print(orig_name);
+            print("\"\n");
+            pop_color();
+        }
+
+        bool is_exported = code_dag->get_annotation_property(
+            i, IGenerated_code_dag::AP_IS_EXPORTED);
+        if (is_exported) {
+            keyword("export");
+        } else {
+            push_color(ISyntax_coloring::C_COMMENT);
+            print("/* local */");
+            pop_color();
+        }
+        print(" ");
+
+        keyword("annotation");
+        print(" '");
+
+        char const *annotation_name = code_dag->get_annotation_name(i);
+        print(annotation_name);
+        print("'(");
+        int parameter_count = code_dag->get_annotation_parameter_count(i);
+        bool vertical = need_vertical_params(code_dag, -(i + 1), parameter_count);
+
+        int depth = 0;
+        if (vertical) {
+            ++depth;
+            print("\n");
+            indent(depth);
+        }
+
+        for (int k = 0; k < parameter_count; ++k) {
+            if (k > 0) {
+                if (vertical) {
+                    print(",\n");
+                    indent(depth);
+                } else {
+                    print(", ");
+                }
+            }
+
+            IType const *parameter_type = code_dag->get_annotation_parameter_type(i, k);
+            print(parameter_type);
+            print(" ");
+
+            char const *parameter_name = code_dag->get_annotation_parameter_name(i, k);
+            print(parameter_name);
+
+            if (DAG_node const *init = code_dag->get_annotation_parameter_default(i, k)) {
+                print(" = ");
+                print_exp(depth, code_dag, -(i + 1), init);
+            }
+        }
+        print(")");
+        if (vertical)
+            --depth;
+
+        if (int annotation_count = code_dag->get_annotation_annotation_count(i)) {
+            print("\n[[\n");
+            for (int k = 0; k < annotation_count; ++k) {
+                indent(1);
+                print_exp(1, code_dag, -(i + 1), code_dag->get_annotation_annotation(i, k));
+                if (k < annotation_count - 1)
                     print(", ");
                 print("\n");
             }

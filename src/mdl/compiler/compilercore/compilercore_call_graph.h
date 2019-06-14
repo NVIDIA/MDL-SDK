@@ -57,11 +57,17 @@ public:
         POST_ORDER
     };
 
-    /// Process a strongly coupled component inside of a call graph.
-    virtual void process_scc(Call_node_vec const &scc) {}
-
     /// Visit a node of the call graph.
-    virtual void visit_cg_node(Call_node *node, ICallgraph_visitor::Order order) {}
+    virtual void visit_cg_node(Call_node *node, ICallgraph_visitor::Order order) = 0;
+};
+
+///
+/// An interface for the call graph finisher.
+///
+class ICallgraph_scc_visitor {
+public:
+    /// Process a strongly coupled component inside of a call graph.
+    virtual void process_scc(Call_node_vec const &scc) = 0;
 };
 
 ///
@@ -69,6 +75,7 @@ public:
 ///
 class Call_node : public Interface_owned {
     friend class Call_graph;
+    friend class Call_graph_walker;
     friend class Arena_builder;
 public:
     enum Flag {
@@ -128,6 +135,8 @@ private:
 /// Represents the call graph.
 ///
 class Call_graph {
+    friend class Call_graph_walker;
+
 public:
     struct Def_line_less {
         // compare Definitions by its unique id
@@ -140,13 +149,11 @@ private:
     /// Depth first search.
     void do_dfs(Call_node *node);
 
-    /// Walker.
-    void do_walk(Call_node *node);
-
     /// Called to process a non-trivial scc.
     void process_scc(Call_node_vec const &scc) const
     {
-        m_visitor->process_scc(scc);
+        if (m_scc_visitor != NULL)
+            m_scc_visitor->process_scc(scc);
     }
 
     /// replace declarations by definitions in the call graph.
@@ -159,7 +166,10 @@ private:
     void distribute_reachability();
 
     /// Calculate the strongly coupled components.
-    void calc_scc(Call_node *node, ICallgraph_visitor &visitor);
+    ///
+    /// \param node     the current call graph node
+    /// \param visitor  if non-NULL, visit SCCs
+    void calc_scc(Call_node *node, ICallgraph_scc_visitor *visitor);
 
 public:
 
@@ -207,21 +217,10 @@ public:
     /// \param mat  the material
     Call_node *get_call_graph_for_material(Definition *mat);
 
-    /// Walk the graph starting at a given root.
-    ///
-    /// \param root     the root
-    /// \param visitor  the visitor to execute
-    void walk(Call_node *root, ICallgraph_visitor *visitor);
-
-    /// Walk the graph starting at the root set.
-    ///
-    /// \param visitor  the visitor to execute
-    void walk(ICallgraph_visitor *visitor);
-
     /// Finalize the call graph and check for recursions.
     ///
-    /// \param visitor  the visitor
-    void finalize(ICallgraph_visitor &visitor);
+    /// \param visitor  if non-NULL, the visitor for the strongly coupled components found
+    void finalize(ICallgraph_scc_visitor *visitor = NULL);
 
     /// Return a set reference containing all function/method definitions.
     Definition_set const &get_definite_defs() const { return m_definition_set; }
@@ -232,7 +231,10 @@ public:
     /// Dump the call graph as a dot file.
     ///
     /// \param out  an output stream
-    void dump(IOutput_stream *out);
+    void dump(IOutput_stream *out) const;
+
+    /// Get the allocator.
+    IAllocator *get_allocator() const { return m_arena.get_allocator(); }
 
 private:
     /// The memory arena for all allocated nodes.
@@ -250,13 +252,16 @@ private:
     Definition_call_map m_call_nodes;
 
     /// current visit count
-    size_t m_visit_count;
+    mutable size_t m_visit_count;
 
     /// used for scc
     size_t m_next_dfs_num;
 
     /// Callgraph visitor interface used inside process_scc() and walk()
     ICallgraph_visitor *m_visitor;
+
+    /// Callgraph visitor interface used inside process_scc() and walk()
+    ICallgraph_scc_visitor *m_scc_visitor;
 
     /// Stack for scc.
     typedef stack<Call_node *>::Type Call_node_stack;
@@ -270,6 +275,54 @@ private:
 
     /// If true, this is a call graph of a standard library module.
     bool m_is_stdlib;
+};
+
+/// A Call graph walker.
+class Call_graph_walker
+{
+public:
+    /// SWalk over the graph using the root set
+    ///
+    /// \param cg       the call graph
+    /// \param visitor  the visitor, may be NULL
+    static void walk(
+        Call_graph const   &cg,
+        ICallgraph_visitor *visitor)
+    {
+        Call_graph_walker(cg, visitor).walk();
+    }
+
+    /// Walk the graph starting at a given root.
+    ///
+    /// \param root     the root
+    void walk(Call_node *root);
+
+    /// Walk the graph starting at the root set.
+    void walk();
+
+private:
+    /// Walker.
+    void do_walk(Call_node *node);
+
+public:
+    /// Constructor.
+    ///
+    /// \param cg       the call graph
+    /// \param visitor  the visitor, may be NULL
+    Call_graph_walker(
+        Call_graph const   &cg,
+        ICallgraph_visitor *visitor)
+    : m_cg(cg)
+    , m_visitor(visitor)
+    {
+    }
+
+private:
+    /// The call graph that is visited.
+    Call_graph const &m_cg;
+
+    /// The visitor used.
+    ICallgraph_visitor *m_visitor;
 };
 
 }  // mdl

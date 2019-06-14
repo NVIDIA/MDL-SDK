@@ -253,6 +253,9 @@ public:
     ///                                      supported wavelength. Default: 380.0f.
     ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
+    ///                                    - bool "fold_ternary_on_df": Fold all ternary operators
+    ///                                      of *df types, even in class compilation mode.
+    ///                                      Default: false.
     ///                                    During material compilation, messages like errors and
     ///                                    warnings will be passed to the context for
     ///                                    later evaluation by the caller.

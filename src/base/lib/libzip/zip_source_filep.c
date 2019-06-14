@@ -253,14 +253,24 @@ create_temp_output(struct read_file *ctx) {
     }
     sprintf(temp, "%s.XXXXXX", ctx->fname);
 
+#ifndef __linux__
+    // Temporary umask changes are not thread-safe. Since glibc > 2.06 mkstemp() uses filemode 600
+    // instead of 666, and the temporary umask changes with _SAFE_MASK = 0177 should no longer be
+    // necessary. We assume here that Linux at build time implies glibc > 2.06 at run time. See
+    // bug 19138 for more information.
     mask = umask(_SAFE_MASK);
+#endif
     if ((tfd = mkstemp(temp)) == -1) {
 	zip_error_set(&ctx->error, ZIP_ER_TMPOPEN, errno);
+#ifndef __linux__
 	umask(mask);
+#endif
 	free(temp);
 	return -1;
     }
+#ifndef __linux__
     umask(mask);
+#endif
 
     if ((tfp = fdopen(tfd, "r+b")) == NULL) {
 	zip_error_set(&ctx->error, ZIP_ER_TMPOPEN, errno);

@@ -246,8 +246,17 @@ public:
     }
 
     /// Get the address for a symbol name in the given module.
-    llvm::JITTargetAddress get_symbol_address_in(MDL_JIT_module_key K, const llvm::Twine &name) {
-        return cantFail(find_symbol_in(K, name).getAddress());
+    llvm::JITTargetAddress get_symbol_address_in(
+        MDL_JIT_module_key K,
+        const llvm::Twine &name,
+        LLVM_code_generator &code_gen)
+    {
+        llvm::Expected<uint64_t> addr = find_symbol_in(K, name).getAddress();
+        if (auto error = addr.takeError()) {
+            code_gen.error(GET_SYMBOL_FAILED, llvm::toString(std::move(error)));
+            return llvm::JITTargetAddress(0);
+        }
+        return addr.get();
     }
 
     /// Remove the given module.
@@ -391,9 +400,12 @@ void Jitted_code::delete_llvm_module(MDL_JIT_module_key module_key)
 }
 
 // JIT compile the given LLVM function.
-void *Jitted_code::jit_compile(MDL_JIT_module_key module_key, llvm::Function *func)
+void *Jitted_code::jit_compile(
+    MDL_JIT_module_key module_key,
+    llvm::Function *func,
+    LLVM_code_generator &code_gen)
 {
-    return (void *)(m_mdl_jit->get_symbol_address_in(module_key, func->getName()));
+    return (void *)(m_mdl_jit->get_symbol_address_in(module_key, func->getName(), code_gen));
 }
 
 // ----------------------------- Internal_function class -----------------------------
@@ -2333,12 +2345,18 @@ LLVM_context_data::Flags LLVM_code_generator::get_function_flags(IDefinition con
         flags |= LLVM_context_data::FL_HAS_EXC;
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_OBJECT_ID)) {
-        if (!need_render_state_param || !state_include_uniform_state())
+        if ((!need_render_state_param || !state_include_uniform_state()) &&
+            m_state_mode != State_subset_mode::SSM_ENVIRONMENT)
+        {
             flags |= LLVM_context_data::FL_HAS_OBJ_ID;
+        }
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_TRANSFORM)) {
-        if (!need_render_state_param || !state_include_uniform_state())
+        if ((!need_render_state_param || !state_include_uniform_state()) &&
+            strcmp(m_internal_space, "*") != 0)
+        {
             flags |= LLVM_context_data::FL_HAS_TRANSFORMS;
+        }
     }
 
     return flags;
@@ -2441,7 +2459,9 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         flags |= LLVM_context_data::FL_HAS_EXC;
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_OBJECT_ID)) {
-        if (!need_render_state_param || !state_include_uniform_state()) {
+        if ((!need_render_state_param || !state_include_uniform_state()) &&
+            m_state_mode != State_subset_mode::SSM_ENVIRONMENT)
+        {
             // add a hidden object_id parameter
             arg_types.push_back(m_type_mapper.get_int_type());
 
@@ -2449,7 +2469,9 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         }
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_TRANSFORM)) {
-        if (!need_render_state_param || !state_include_uniform_state()) {
+        if ((!need_render_state_param || !state_include_uniform_state()) &&
+            strcmp(m_internal_space, "*") != 0)
+        {
             // add two hidden transform (matrix) parameters
             arg_types.push_back(m_type_mapper.get_arr_float_4_ptr_type());
             arg_types.push_back(m_type_mapper.get_arr_float_4_ptr_type());
@@ -8485,7 +8507,7 @@ MDL_JIT_module_key LLVM_code_generator::jit_compile(llvm::Module *module)
     for (auto &func : module->functions()) {
         if (!func.isDeclaration()) {
             // jit it
-            m_jitted_code->jit_compile(module_key, &func);
+            m_jitted_code->jit_compile(module_key, &func, *this);
         }
     }
 
@@ -8780,7 +8802,7 @@ void LLVM_code_generator::disable_function_instancing()
 // Get the address of a JIT compiled LLVM function.
 void *LLVM_code_generator::get_entry_point(MDL_JIT_module_key module_key, llvm::Function *func)
 {
-    return m_jitted_code->jit_compile(module_key, func);
+    return m_jitted_code->jit_compile(module_key, func, *this);
 }
 
 // Get the number of error messages.

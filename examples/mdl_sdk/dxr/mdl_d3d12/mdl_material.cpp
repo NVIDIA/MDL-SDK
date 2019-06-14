@@ -187,6 +187,175 @@ namespace mdl_d3d12
     }
 
     // --------------------------------------------------------------------------------------------
+    // helper functions to pass glTF PBR model parameters to the MDL support materials
+    
+    // pass parameter defined in the scene file to the support material  
+    // and return the material name to use
+    std::string parameterize_support_material(
+       Mdl_sdk& m_sdk, 
+       mi::neuraylib::ITransaction& transaction,
+       const std::string& scene_directory,
+       const IScene_loader::Material& material_desc,
+       mi::neuraylib::IExpression_list& parameter_list)
+    {
+        // create material parameters
+        mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+            m_sdk.get_neuray().get_api_component<mi::neuraylib::IMdl_factory>());
+        mi::base::Handle<mi::neuraylib::IValue_factory> vf(
+            mdl_factory->create_value_factory(&transaction));
+        mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
+            mdl_factory->create_expression_factory(&transaction));
+        mi::base::Handle<mi::neuraylib::IType_factory> tf(
+            mdl_factory->create_type_factory(&transaction));
+
+        // helper to add a texture if it is available
+        auto add_texture = [&](
+            const std::string& expression_name,
+            const std::string& releative_texture_path, float gamma)
+        {
+            if (releative_texture_path.empty()) return;
+
+            mi::base::Handle<mi::neuraylib::IImage> image(
+                transaction.create<mi::neuraylib::IImage>("Image"));
+            std::string image_name = "mdl::" + releative_texture_path + "_image";
+
+            std::string file_path = scene_directory + "/" + releative_texture_path;
+
+            image->reset_file(file_path.c_str());
+            transaction.store(image.get(), image_name.c_str());
+
+            mi::base::Handle<mi::neuraylib::ITexture> texture(
+                transaction.create<mi::neuraylib::ITexture>("Texture"));
+            texture->set_image(image_name.c_str());
+            texture->set_gamma(gamma);
+            std::string texture_name = "mdl::" + releative_texture_path + "_texture2d";
+            transaction.store(texture.get(), texture_name.c_str());
+
+            mi::base::Handle<const mi::neuraylib::IType_texture> type(
+                tf->create_texture(mi::neuraylib::IType_texture::TS_2D));
+            mi::base::Handle<mi::neuraylib::IValue_texture> value(
+                vf->create_texture(type.get(), texture_name.c_str()));
+            mi::base::Handle<mi::neuraylib::IExpression> expr(
+                ef->create_constant(value.get()));
+
+            parameter_list.add_expression(expression_name.c_str(), expr.get());
+
+        };
+
+        // helper to add a color parameter
+        auto add_color = [&](
+            const std::string& expression_name,
+            float r, float g, float b)
+        {
+            mi::base::Handle<mi::neuraylib::IValue> value(vf->create_color(r, g, b));
+            mi::base::Handle<mi::neuraylib::IExpression> expr(
+                ef->create_constant(value.get()));
+
+            parameter_list.add_expression(expression_name.c_str(), expr.get());
+        };
+
+        // helper to add a float
+        auto add_float = [&](
+            const std::string& expression_name,
+            float x)
+        {
+            mi::base::Handle<mi::neuraylib::IValue> value(vf->create_float(x));
+            mi::base::Handle<mi::neuraylib::IExpression> expr(
+                ef->create_constant(value.get()));
+
+            parameter_list.add_expression(expression_name.c_str(), expr.get());
+        };
+
+        // helper to add a enum
+        auto add_enum = [&](
+            const std::string& expression_name,
+            mi::Sint32 enum_value)
+        {
+            mi::base::Handle<const mi::neuraylib::IType_enum> type(
+                tf->create_enum("::nvidia::sdk_examples::gltf_support::gltf_alpha_mode"));
+
+            mi::base::Handle<mi::neuraylib::IValue_enum> value(vf->create_enum(type.get()));
+            value->set_value(enum_value);
+            mi::base::Handle<mi::neuraylib::IExpression> expr(
+                ef->create_constant(value.get()));
+
+            parameter_list.add_expression(expression_name.c_str(), expr.get());
+        };
+
+        // add the actual parameters to the parameter list
+        add_texture("normal_texture", material_desc.normal_texture, 1.0f);
+        add_float("normal_scale_factor", material_desc.normal_scale_factor);
+
+        add_texture("occlusion_texture", material_desc.occlusion_texture, 1.0f);
+        add_float("occlusion_strength", material_desc.occlusion_strength);
+
+        add_texture("emissive_texture", material_desc.emissive_texture, 2.2f);
+        add_color("emissive_factor", material_desc.emissive_factor.x,
+            material_desc.emissive_factor.y, material_desc.emissive_factor.z);
+
+        add_enum("alpha_mode", static_cast<mi::Sint32>(material_desc.alpha_mode));
+        add_float("alpha_cutoff", material_desc.alpha_cutoff);
+
+        // model dependent parameters
+        switch (material_desc.pbr_model)
+        {
+            case IScene_loader::Material::Pbr_model::Khr_specular_glossiness:
+            {
+                add_texture("diffuse_texture",
+                    material_desc.khr_specular_glossiness.diffuse_texture, 2.2f);
+
+                add_color("diffuse_factor",
+                    material_desc.khr_specular_glossiness.diffuse_factor.x,
+                    material_desc.khr_specular_glossiness.diffuse_factor.y,
+                    material_desc.khr_specular_glossiness.diffuse_factor.z);
+
+                add_float("base_alpha",
+                    material_desc.khr_specular_glossiness.diffuse_factor.w);
+
+                add_texture("specular_glossiness_texture",
+                    material_desc.khr_specular_glossiness.specular_glossiness_texture, 2.2f);
+
+                add_color("specular_factor",
+                    material_desc.khr_specular_glossiness.specular_factor.x,
+                    material_desc.khr_specular_glossiness.specular_factor.y,
+                    material_desc.khr_specular_glossiness.specular_factor.z);
+                add_float("glossiness_factor",
+
+                    material_desc.khr_specular_glossiness.glossiness_factor);
+
+                return "gltf_material_khr_specular_glossiness";
+            }
+
+            case IScene_loader::Material::Pbr_model::Metallic_roughness:
+            default:
+            {
+                add_texture("base_color_texture", 
+                    material_desc.metallic_roughness.base_color_texture, 2.2f);
+
+                add_color("base_color_factor", 
+                    material_desc.metallic_roughness.base_color_factor.x,
+                    material_desc.metallic_roughness.base_color_factor.y, 
+                    material_desc.metallic_roughness.base_color_factor.z);
+
+                add_float("base_alpha", 
+                    material_desc.metallic_roughness.base_color_factor.w);
+
+                add_texture("metallic_roughness_texture",
+                    material_desc.metallic_roughness.metallic_roughness_texture, 1.0f);
+
+                add_float("metallic_factor", 
+                    material_desc.metallic_roughness.metallic_factor);
+
+                add_float("roughness_factor", 
+                    material_desc.metallic_roughness.roughness_factor);
+
+                return "gltf_material";
+            }
+        }
+    }
+
+
+    // --------------------------------------------------------------------------------------------
 
     Mdl_material_library::Mdl_material_library(Base_application* app, Mdl_sdk* sdk)
         : m_app(app)
@@ -248,7 +417,6 @@ namespace mdl_d3d12
                 // the scene file, e.g. GLTF material parameters
 
                 module_name = "nvidia::sdk_examples::gltf_support";
-                material_name = "gltf_material";
                 use_gltf_support_material = true; 
 
                 // .. but it will be disabled for opaque material instances
@@ -287,6 +455,25 @@ namespace mdl_d3d12
             }
         }
 
+        // pass parameter defined in the scene file to the support material
+        if (use_gltf_support_material)
+        {
+            mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+                m_sdk->get_neuray().get_api_component<mi::neuraylib::IMdl_factory>());
+            mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
+                mdl_factory->create_expression_factory(&transaction));
+
+            // create a new parameter list
+            gltf_parameters = ef->create_expression_list();
+
+            // set the parameters
+            material_name = parameterize_support_material(*m_sdk, transaction,
+                m_app->get_options()->scene_directory, material_desc, *gltf_parameters.get());
+
+            // use these parameters as parameters for the created instance
+            parameters = gltf_parameters.get();
+        }
+
         // get the loaded material from the database
         std::string material_db_name = std::string(module_db_name) + "::" + material_name;
 
@@ -297,124 +484,6 @@ namespace mdl_d3d12
             log_error("Material '" + material_name + "' not found", SRC);
             delete mat;
             return nullptr;
-        }
-
-        // pass parameter defined in the scene file to the support material
-        if (use_gltf_support_material)
-        {
-            // create material parameters
-            mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
-                m_sdk->get_neuray().get_api_component<mi::neuraylib::IMdl_factory>());
-            mi::base::Handle<mi::neuraylib::IValue_factory> vf(
-                mdl_factory->create_value_factory(&transaction));
-            mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
-                mdl_factory->create_expression_factory(&transaction));
-            mi::base::Handle<mi::neuraylib::IType_factory> tf(
-                mdl_factory->create_type_factory(&transaction));
-
-            gltf_parameters = ef->create_expression_list();
-
-            // helper to add a texture if it is available
-            auto add_texture = [&](
-                const std::string& expression_name,
-                const std::string& releative_texture_path, float gamma)
-            {
-                if (releative_texture_path.empty()) return;
-
-                mi::base::Handle<mi::neuraylib::IImage> image(
-                    transaction.create<mi::neuraylib::IImage>("Image"));
-                std::string image_name = "mdl::" + releative_texture_path + "_image";
-
-                std::string file_path = m_app->get_options()->scene_directory + "/" +
-                    releative_texture_path;
-
-                image->reset_file(file_path.c_str());
-                transaction.store(image.get(), image_name.c_str());
-
-                mi::base::Handle<mi::neuraylib::ITexture> texture(
-                    transaction.create<mi::neuraylib::ITexture>("Texture"));
-                texture->set_image(image_name.c_str());
-                texture->set_gamma(gamma);
-                std::string texture_name = "mdl::" + releative_texture_path + "_texture2d";
-                transaction.store(texture.get(), texture_name.c_str());
-
-                mi::base::Handle<const mi::neuraylib::IType_texture> type(
-                    tf->create_texture(mi::neuraylib::IType_texture::TS_2D));
-                mi::base::Handle<mi::neuraylib::IValue_texture> value(
-                    vf->create_texture(type.get(), texture_name.c_str()));
-                mi::base::Handle<mi::neuraylib::IExpression> expr(
-                    ef->create_constant(value.get()));
-
-                gltf_parameters->add_expression(expression_name.c_str(), expr.get());
-
-            };
-
-            // helper to add a color parameter
-            auto add_color = [&](
-                const std::string& expression_name,
-                float r, float g, float b)
-            {
-                mi::base::Handle<mi::neuraylib::IValue> value(vf->create_color(r, g, b));
-                mi::base::Handle<mi::neuraylib::IExpression> expr(
-                    ef->create_constant(value.get()));
-
-                gltf_parameters->add_expression(expression_name.c_str(), expr.get());
-            };
-
-            // helper to add a float
-            auto add_float = [&](
-                const std::string& expression_name,
-                float x)
-            {
-                mi::base::Handle<mi::neuraylib::IValue> value(vf->create_float(x));
-                mi::base::Handle<mi::neuraylib::IExpression> expr(
-                    ef->create_constant(value.get()));
-
-                gltf_parameters->add_expression(expression_name.c_str(), expr.get());
-            };
-
-            // helper to add a enum
-            auto add_enum = [&](
-                const std::string& expression_name,
-                mi::Sint32 enum_value)
-            {
-                mi::base::Handle<const mi::neuraylib::IType_enum> type(
-                    tf->create_enum("::nvidia::sdk_examples::gltf_support::gltf_alpha_mode"));
-
-                mi::base::Handle<mi::neuraylib::IValue_enum> value(vf->create_enum(type.get()));
-                value->set_value(enum_value);
-                mi::base::Handle<mi::neuraylib::IExpression> expr(
-                    ef->create_constant(value.get()));
-
-                gltf_parameters->add_expression(expression_name.c_str(), expr.get());
-            };
-
-            // add the actual parameters to the parameter list
-            add_texture("base_color_texture", material_desc.base_color_texture, 2.2f);
-            add_color("base_color_factor", material_desc.base_color_factor.x,
-                      material_desc.base_color_factor.y, material_desc.base_color_factor.z);
-            add_float("base_alpha", material_desc.base_color_factor.w);
-
-            add_texture("metallic_roughness_texture",
-                        material_desc.metallic_roughness_texture, 1.0f);
-            add_float("metallic_factor", material_desc.metallic_factor);
-            add_float("roughness_factor", material_desc.roughness_factor);
-
-            add_texture("normal_texture", material_desc.normal_texture, 1.0f);
-            add_float("normal_scale_factor", material_desc.normal_scale_factor);
-
-            add_texture("occlusion_texture", material_desc.occlusion_texture, 1.0f);
-            add_float("occlusion_strength", material_desc.occlusion_strength);
-
-            add_texture("emissive_texture", material_desc.emissive_texture, 2.2f);
-            add_color("emissive_factor", material_desc.emissive_factor.x,
-                      material_desc.emissive_factor.y, material_desc.emissive_factor.z);
-
-            add_enum("alpha_mode", static_cast<mi::Sint32>(material_desc.alpha_mode));
-            add_float("alpha_cutoff", material_desc.alpha_cutoff);
-
-            // use these parameters as parameters for the created instance
-            parameters = gltf_parameters.get();
         }
 
         // create an material instance (with default parameters, if non are specified)

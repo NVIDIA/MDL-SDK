@@ -1266,6 +1266,9 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
         if (init)
             m_symbol_importer->collect_imports(init);
     }
+    // add types seen by the ast builder
+    m_symbol_importer->add_names(ast_builder.get_used_user_types());
+
     // defer the actual adding to the module until the module is built
     m_added_functions.push_back(fdecl);
     m_added_function_annotations.push_back(m_annotation_factory->create_annotation_block());

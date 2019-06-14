@@ -102,6 +102,14 @@ public:
     const char* get_resource_mdl_file_path(mi::Size index) const;
 
     const char* get_resource_name(mi::Size index) const;
+
+    mi::Size get_annotation_definition_count() const;
+
+    const mi::neuraylib::IAnnotation_definition* get_annotation_definition(
+        mi::Size index) const;
+
+    const mi::neuraylib::IAnnotation_definition* get_annotation_definition(
+        const char *name) const;
 };
 
 } // namespace NEURAY

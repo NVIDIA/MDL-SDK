@@ -54,6 +54,7 @@
 #include "compilercore_tools.h"
 #include "compilercore_fatal.h"
 #include "compilercore_file_resolution.h"
+#include "compilercore_func_hash.h"
 
 #ifndef M_PIf
 #   define M_PIf        3.14159265358979323846f
@@ -491,6 +492,7 @@ Module::Module(
 , m_is_native((flags & MF_IS_NATIVE) != 0)
 , m_is_compiler_owned((flags & (MF_IS_STDLIB|MF_IS_OWNED)) != 0)
 , m_is_debug((flags & MF_IS_DEBUG) != 0)
+, m_is_hashed((flags & MF_IS_HASHED) != 0)
 , m_sema_version(NULL)
 , m_mdl_version(version)
 , m_msg_list(alloc, file_name)
@@ -511,6 +513,7 @@ Module::Module(
 , m_arc_mdl_version(IMDL::MDL_LATEST_VERSION)
 , m_archive_versions(&m_arena)
 , m_res_table(&m_arena)
+, m_func_hashes(Func_hash_map::key_compare(), alloc)
 {
     MDL_ASSERT(file_name != NULL);
     if (!m_is_compiler_owned) {
@@ -627,6 +630,11 @@ bool Module::analyze(
     // we have analyzed it
     set_analyze_result(access_messages().get_error_message_count() == 0);
 
+    if (has_function_hashes()) {
+        // compute function hashes if necessary
+        Sema_hasher::run(get_allocator(), this, m_compiler);
+    }
+
     // drop the reference count of all imports, it was increased
     // during load_module_to_import() inside NT_analysis::run().
     // Note that this does NOT drop all imports, it just sets the count
@@ -643,6 +651,23 @@ bool Module::analyze(
 {
     return analyze(cache, context, /*resolve_resources=*/true);
 }
+
+// Get all known function hashes.
+void Module::get_all_function_hashes(
+    Function_hash_set &hashes) const
+{
+    hashes.clear();
+
+    for (Func_hash_map::const_iterator it(m_func_hashes.begin()), end(m_func_hashes.end());
+        it != end;
+        ++it)
+    {
+        IModule::Function_hash const &fh = it->second;
+
+        hashes.insert(fh);
+    }
+}
+
 
 // Check if the module has been analyzed.
 bool Module::is_analyzed() const
@@ -1715,6 +1740,21 @@ char const *Module::get_referenced_resource_file_name(size_t i) const
     if (i < m_res_table.size()) {
         return m_res_table[i].m_filename;
     }
+    return NULL;
+}
+
+// Returns true if this module supports function hashes.
+bool Module::has_function_hashes() const
+{
+    return m_is_hashed;
+}
+
+// Get the function hash for a given function definition if any.
+Module::Function_hash const *Module::get_function_hash(IDefinition const *def) const
+{
+    Func_hash_map::const_iterator it = m_func_hashes.find(def);
+    if (it != m_func_hashes.end())
+        return &it->second;
     return NULL;
 }
 
@@ -2993,6 +3033,12 @@ void Module::serialize(Module_serializer &serializer) const
     DOUT(("builtin: %s\n", m_is_builtins ? "true" : "false"));
     serializer.write_bool(m_is_native);
     DOUT(("native: %s\n", m_is_native ? "true" : "false"));
+    serializer.write_bool(m_is_compiler_owned);
+    DOUT(("compiler owned: %s\n", m_is_compiler_owned ? "true" : "false"));
+    serializer.write_bool(m_is_debug);
+    DOUT(("debug: %s\n", m_is_debug ? "true" : "false"));
+    serializer.write_bool(m_is_hashed);
+    DOUT(("func hashes: %s\n", m_is_hashed ? "true" : "false"));
 
     serializer.write_encoded_tag(size_t(m_mdl_version));
     DOUT(("version: %u\n", m_mdl_version));
@@ -3124,6 +3170,31 @@ void Module::serialize(Module_serializer &serializer) const
         DOUT(("url '%s', type %u, esists %u\n", url, t, unsigned(exists)));
     }
     DEC_SCOPE();
+
+    // serialize the function hashes
+    if (m_is_hashed) {
+        size_t n_func_hashes = m_func_hashes.size();
+        serializer.write_encoded_tag(n_func_hashes);
+        DOUT(("#rfunc_hashes: %u\n", unsigned(n_func_hashes)));
+        INC_SCOPE();
+
+        for (Func_hash_map::const_iterator it(m_func_hashes.begin()), end(m_func_hashes.end());
+            it != end;
+            ++it)
+        {
+            IDefinition const   *def  = it->first;
+            Function_hash const &hash = it->second;
+
+            t = serializer.get_definition_tag(def);
+            serializer.write_encoded_tag(t);
+            DOUT(("hashed def %u\n", unsigned(t)));
+
+            for (size_t i = 0, n = dimension_of(hash.hash); i < n; ++i) {
+                serializer.write_byte(hash.hash[i]);
+            }
+        }
+        DEC_SCOPE();
+    }
 
     // last the AST
     serialize_ast(serializer);
@@ -3575,6 +3646,12 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
     DOUT(("builtin: %s\n", is_builtins ? "true" : "false"));
     bool is_native = deserializer.read_bool();
     DOUT(("native: %s\n", is_native ? "true" : "false"));
+    bool is_compiler_owned = deserializer.read_bool();
+    DOUT(("compiler owned: %s\n", is_compiler_owned ? "true" : "false"));
+    bool is_debug = deserializer.read_bool();
+    DOUT(("debug: %s\n", is_debug ? "true" : "false"));
+    bool is_hashed = deserializer.read_bool();
+    DOUT(("func hashes: %s\n", is_hashed ? "true" : "false"));
 
     IMDL::MDL_version mdl_version = IMDL::MDL_version(deserializer.read_encoded_tag());
     DOUT(("version: %u\n", mdl_version));
@@ -3584,11 +3661,14 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
 
     mod->set_filename(filename.c_str());
 
-    mod->m_is_analyzed = is_analyzed;
-    mod->m_is_valid    = is_valid;
-    mod->m_is_stdlib   = is_stdlib;
-    mod->m_is_builtins = is_builtins;
-    mod->m_is_native   = is_native;
+    mod->m_is_analyzed       = is_analyzed;
+    mod->m_is_valid          = is_valid;
+    mod->m_is_stdlib         = is_stdlib;
+    mod->m_is_builtins       = is_builtins;
+    mod->m_is_native         = is_native;
+    mod->m_is_compiler_owned = is_compiler_owned;
+    mod->m_is_debug          = is_debug;
+    mod->m_is_hashed         = is_hashed;
 
     // deserialize the message list
     mod->m_msg_list.deserialize(deserializer);
@@ -3712,6 +3792,26 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
         mod->m_res_table.push_back(Module::Resource_entry(url, /*filename=*/NULL, type, exists));
     }
     DEC_SCOPE();
+
+    // deserialize the function hashes
+    if (is_hashed) {
+        size_t n_func_hashes = deserializer.read_encoded_tag();
+        DOUT(("#rfunc_hashes: %u\n", unsigned(n_func_hashes)));
+        INC_SCOPE();
+
+        for (size_t i = 0; i < n_func_hashes; ++i) {
+            t = deserializer.read_encoded_tag();
+            DOUT(("hashed def %u\n", unsigned(t)));
+            IDefinition const *def = deserializer.get_definition(t);
+
+            Function_hash hash;
+            for (size_t i = 0, n = dimension_of(hash.hash); i < n; ++i) {
+                hash.hash[i] = deserializer.read_byte();
+            }
+            mod->m_func_hashes[def] = hash;
+        }
+        DEC_SCOPE();
+    }
 
     // last the AST
     mod->deserialize_ast(deserializer);
@@ -4654,6 +4754,12 @@ IExpression const *promote_expressions_to_mdl_version(
     Module *mod = impl_cast<Module>(owner);
 
     return promote_expr(*mod, expr);
+}
+
+// Compare two function hashes.
+bool operator<(IModule::Function_hash const &a, IModule::Function_hash const &b)
+{
+    return memcmp(a.hash, b.hash, dimension_of(a.hash)) < 0;
 }
 
 }  // mdl

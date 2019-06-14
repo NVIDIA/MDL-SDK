@@ -1395,6 +1395,28 @@ inline Vector<U,3> transform_vector(
 }
 
 /// Returns an inverse transformed 3D normal vector by applying the 3x3 transposed linear
+/// transformation in the matrix \c inv_mat on the 3D normal vector \c normal.
+///
+/// Note that in %general, a normal vector is transformed by the transposed inverse matrix (compared
+/// to a point transformation). The inverse is often costly to compute, why one typically keeps the
+/// inverse stored and this function operates then on the inverse matrix to properly transform
+/// normal vectors. If you need to transform only one normal, you can also consider the
+/// #mi::math::transform_normal() function, which includes the inverse computation.
+///
+/// The normal vector \c normal is considered to be a row vector, which is multiplied from the left
+/// with the transposed upper-left 3x3 sub-matrix of \c inv_mat.
+template <typename T, typename U>
+inline Vector<U,3> transform_normal_inv(
+    const Matrix<T,3,3>& inv_mat, ///< inverse 4x4 transformation matrix
+    const Vector<U,3>&   normal)  ///< normal vector to transform
+{
+    return Vector<U,3>(
+        U(inv_mat.xx * normal.x + inv_mat.xy * normal.y + inv_mat.xz * normal.z),
+        U(inv_mat.yx * normal.x + inv_mat.yy * normal.y + inv_mat.yz * normal.z),
+        U(inv_mat.zx * normal.x + inv_mat.zy * normal.y + inv_mat.zz * normal.z));
+}
+
+/// Returns an inverse transformed 3D normal vector by applying the 3x3 transposed linear
 /// sub-transformation in the 4x4 matrix \c inv_mat on the 3D normal vector \c normal.
 ///
 /// Note that in %general, a normal vector is transformed by the transposed inverse matrix (compared

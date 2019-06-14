@@ -84,7 +84,7 @@ public:
 
     /// The name of the option that controls, if resources are resolved by the compiler.
     static char const *option_resolve_resources;
-    
+
     /// The value of limits::FLOAT_MIN.
     static char const *option_limits_float_min;
 

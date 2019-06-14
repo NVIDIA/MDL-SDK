@@ -860,7 +860,7 @@ IValue* Value_factory::clone( const IValue* value) const
                 value_texture->get_value(),
                 value_texture->get_unresolved_mdl_url(),
                 value_texture->get_owner_module(),
-                /*value_texture->get_gamma()*/ 0.0f);
+                value_texture->get_gamma());
         }
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(

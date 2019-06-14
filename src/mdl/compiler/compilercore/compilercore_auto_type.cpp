@@ -789,23 +789,23 @@ void AT_analysis::AT_visitor::visit_cg_node(Call_node *node, ICallgraph_visitor:
 
 // Run the auto typing analysis on this module.
 void AT_analysis::run(
-    MDL            *compiler,
-    Module         &module,
-    Thread_context &ctx,
-    Call_graph     &cg)
+    MDL              *compiler,
+    Module           &module,
+    Thread_context   &ctx,
+    Call_graph const &cg)
 {
     AT_analysis ana(compiler, module, ctx, cg);
 
     AT_analysis::AT_visitor visitor(ana);
 
-    cg.walk(&visitor);
+    Call_graph_walker::walk(cg, &visitor);
 }
 
 AT_analysis::AT_analysis(
-    MDL            *compiler,
-    Module         &module,
-    Thread_context &ctx,
-    Call_graph     &cg)
+    MDL              *compiler,
+    Module           &module,
+    Thread_context   &ctx,
+    Call_graph const &cg)
 : Base(compiler, module, ctx)
 , m_arena(module.get_allocator())
 , m_builder(m_arena)

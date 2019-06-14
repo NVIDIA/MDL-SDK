@@ -36,7 +36,8 @@
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 #include <mdl/compiler/compilercore/compilercore_file_resolution.h>
-#include <mdl/codegenerators/generator_code/generator_code_hash.h>
+#include <mdl/compiler/compilercore/compilercore_hash.h>
+#include <mdl/compiler/compilercore/compilercore_tools.h>
 
 #include <cstring>
 
@@ -52,6 +53,8 @@
 
 namespace mi {
 namespace mdl {
+
+typedef Store<bool> Flag_store;
 
 namespace {
 
@@ -824,6 +827,7 @@ Generated_code_dag::Generated_code_dag(
 , m_module_annotations(alloc)
 , m_functions(alloc)
 , m_materials(alloc)
+, m_annotations(alloc)
 , m_user_types(alloc)
 , m_user_constants(alloc)
 , m_internal_space(internal_space, alloc)
@@ -895,6 +899,31 @@ Generated_code_dag::Parameter_info const *Generated_code_dag::get_func_param_inf
     return NULL;
 }
 
+// Get the annotation info for a given annotation index or NULL if the index is out of range.
+Generated_code_dag::Annotation_info const *Generated_code_dag::get_annotation_info(
+    int annotation_index) const
+{
+    if (annotation_index < 0 || m_annotations.size() <= size_t(annotation_index)) {
+        return NULL;
+    }
+    return &m_annotations[annotation_index];
+}
+
+// Get the parameter info for a given annotation and parameter index pair or NULL if
+// one index is out of range.
+Generated_code_dag::Parameter_info const *Generated_code_dag::get_anno_param_info(
+    int annotation_index,
+    int parameter_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        if (parameter_index < 0 || anno->get_parameter_count() <= size_t(parameter_index)) {
+            return NULL;
+        }
+        return &anno->get_parameter(parameter_index);
+    }
+    return NULL;
+}
+
 // Get the user type info for a given type index or NULL if the index is out of range.
 Generated_code_dag::User_type_info const *Generated_code_dag::get_type_info(
     int type_index) const
@@ -957,6 +986,21 @@ void Generated_code_dag::gen_function_annotations(
         int annotation_count = annotations->get_annotation_count();
         for (int k = 0; k < annotation_count; ++k)
             func.add_annotation(
+                dag_builder.annotation_to_dag(annotations->get_annotation(k)));
+    }
+}
+
+// Generate annotations for annotation declarations (only for the decl itself).
+void Generated_code_dag::gen_anno_decl_annotations(
+    DAG_builder                   &dag_builder,
+    Annotation_info               &anno,
+    IDeclaration_annotation const *decl)
+{
+    IAnnotation_block const *annotations = decl->get_annotations();
+    if (annotations != NULL) {
+        int annotation_count = annotations->get_annotation_count();
+        for (int k = 0; k < annotation_count; ++k)
+            anno.add_annotation(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
     }
 }
@@ -1047,6 +1091,26 @@ void Generated_code_dag::gen_function_parameter_annotations(
     }
 }
 
+// Generate annotations for annotation (declaration) parameters.
+void Generated_code_dag::gen_annotation_parameter_annotations(
+    DAG_builder                   &dag_builder,
+    Parameter_info                &param,
+    IDefinition const             *f_def,
+    IModule const                 *owner_module,
+    IDeclaration_annotation const *decl,
+    int                           k)
+{
+    IParameter const *parameter = decl->get_parameter(k);
+    if (IAnnotation_block const *annotations = parameter->get_annotations()) {
+        int annotation_count = annotations->get_annotation_count();
+        for (int l = 0; l < annotation_count; ++l) {
+            IAnnotation const *anno = annotations->get_annotation(l);
+
+            param.add_annotation(dag_builder.annotation_to_dag(anno));
+        }
+    }
+}
+
 // Generate annotations for the module.
 void Generated_code_dag::gen_module_annotations(
     DAG_builder               &dag_builder,
@@ -1072,13 +1136,26 @@ void Generated_code_dag::compile_function(
     // import the return type into our type factory
     ret_type = m_type_factory.import(ret_type);
 
+    DAG_hash func_hash, *fh = NULL;
+
+    IDefinition const *f_def = f_node->get_definition();
+
+    if (f_def != NULL) {
+        if (IModule::Function_hash const *h = module->get_function_hash(f_def)) {
+            // we have a function hash value
+            func_hash = DAG_hash(h->hash);
+            fh        = &func_hash;
+        }
+    }
+
     Function_info func(
         get_allocator(),
         f_node->get_semantics(),
         ret_type,
         f_node->get_dag_name(),
         f_node->get_dag_alias_name(),
-        f_node->get_dag_preset_name());
+        f_node->get_dag_preset_name(),
+        fh);
 
     size_t parameter_count = f_node->get_parameter_count();
     for (size_t k = 0; k < parameter_count; ++k) {
@@ -1111,7 +1188,6 @@ void Generated_code_dag::compile_function(
 
     DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
 
-    IDefinition const *f_def = f_node->get_definition();
     if (f_def == NULL) {
         // DAG generated functions are not native but always uniform
         func_properties |= 1 << FP_IS_UNIFORM;
@@ -1239,8 +1315,147 @@ void Generated_code_dag::compile_function(
     m_functions.push_back(func);
 }
 
+// Compile an annotation (declaration).
+void Generated_code_dag::compile_annotation(
+    IModule const         *module,
+    Dependence_node const *f_node)
+{
+    Annotation_info anno(
+        get_allocator(),
+        f_node->get_semantics(),
+        f_node->get_dag_name(),
+        f_node->get_dag_alias_name());
+
+    size_t parameter_count = f_node->get_parameter_count();
+    for (size_t k = 0; k < parameter_count; ++k) {
+        IType const *parameter_type;
+        char const  *parameter_name;
+
+        f_node->get_parameter(k, parameter_type, parameter_name);
+
+        // import the parameter type into our type factory
+        parameter_type = m_type_factory.import(parameter_type);
+
+        Parameter_info param(get_allocator(), parameter_type, parameter_name);
+
+        anno.add_parameter(param);
+    }
+
+    unsigned char anno_properties = 1 << AP_IS_EXPORTED;
+    anno.set_properties(anno_properties);
+
+    // Note: The file resolver might produce error messages when non-existing resources are
+    // processed. Catch them but throw them away
+    Messages_impl dummy_msgs(get_allocator(), module->get_filename());
+    File_resolver file_resolver(
+        *m_mdl.get(),
+        /*module_cache=*/NULL,
+        m_mdl->get_external_resolver(),
+        m_mdl->get_search_path(),
+        m_mdl->get_search_path_lock(),
+        dummy_msgs,
+        /*front_path=*/NULL);
+
+    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+
+    IDefinition const  *f_def = f_node->get_definition();
+    IDefinition const  *orig_f_def = module->get_original_definition(f_def);
+
+    IDeclaration_annotation const *decl =
+        cast<IDeclaration_annotation>(orig_f_def->get_declaration());
+
+    mi::base::Handle<IModule const> orig_module(module->get_owner_module(f_def));
+
+    // the rest of the processing is done inside the owner module
+    Module_scope scope(dag_builder, orig_module.get());
+
+    gen_anno_decl_annotations(dag_builder, anno, decl);
+
+    // clear the temporary map, we will process default parameter initializers
+    dag_builder.reset();
+
+    for (size_t k = 0; k < parameter_count; ++k) {
+        Parameter_info &param = anno.get_parameter(k);
+
+        // Do not CSE default parameters and annotations, don't build DAGs for them
+        No_CSE_scope cse_off(m_node_factory);
+
+        gen_annotation_parameter_annotations(
+            dag_builder, param, f_def, orig_module.get(), decl, k);
+
+        // create the default parameter initializers, but disable inlining
+        // for them, so inspection shows the same structure as MDL declaration
+        {
+            No_INLINE_scope no_inline(m_node_factory);
+
+            IParameter const *parameter = decl->get_parameter(k);
+            dag_builder.make_accessible(parameter);
+
+            param.set_default(
+                dag_builder.exp_to_dag(orig_f_def->get_default_param_initializer(k)));
+        }
+    }
+
+    MDL_ASSERT(dag_builder.get_errors().size() == 0 && "Unexpected errors compiling annotation");
+    m_annotations.push_back(anno);
+}
+
+// Compile a local annotation (declaration).
+void Generated_code_dag::compile_local_annotation(
+    IModule const         *module,
+    DAG_builder           &dag_builder,
+    Dependence_node const *a_node)
+{
+    Annotation_info anno(
+        get_allocator(),
+        a_node->get_semantics(),
+        a_node->get_dag_name(),
+        a_node->get_dag_alias_name());
+
+    size_t parameter_count = a_node->get_parameter_count();
+    for (size_t k = 0; k < parameter_count; ++k) {
+        IType const *parameter_type;
+        char const  *parameter_name;
+
+        a_node->get_parameter(k, parameter_type, parameter_name);
+
+        // import the parameter type into our type factory
+        parameter_type = m_type_factory.import(parameter_type);
+
+        Parameter_info param(get_allocator(), parameter_type, parameter_name);
+
+        anno.add_parameter(param);
+    }
+
+    unsigned char anno_properties = 0;
+
+    IDefinition const *a_def = a_node->get_definition();
+
+    // annotations are attached to the prototype if one exists
+    IDefinition const  *orig_a_def = module->get_original_definition(a_def);
+    IDeclaration_annotation const *a_decl =
+        cast<IDeclaration_annotation>(orig_a_def->get_declaration());
+
+    if (a_decl != NULL) {
+        mi::base::Handle<IModule const> orig_module(module->get_owner_module(a_def));
+
+        // annotations must be retrieve from the prototype declaration
+        gen_anno_decl_annotations(dag_builder, anno, a_decl);
+    }
+
+    // clear the temporary map, we will process default parameter initializers
+    dag_builder.reset();
+
+    anno.set_properties(anno_properties);
+
+    // Note: we do NOT create defaults for local annotations, even if they have ones
+
+    m_annotations.push_back(anno);
+}
+
 // Compile a local function.
 void Generated_code_dag::compile_local_function(
+    IModule const         *module,
     DAG_builder           &dag_builder,
     Dependence_node const *f_node)
 {
@@ -1249,13 +1464,26 @@ void Generated_code_dag::compile_local_function(
     // import the return type into our type factory
     ret_type = m_type_factory.import(ret_type);
 
+    DAG_hash func_hash, *fh = NULL;
+
+    IDefinition const *f_def = f_node->get_definition();
+
+    if (f_def != NULL) {
+        if (IModule::Function_hash const *h = module->get_function_hash(f_def)) {
+            // we have a function hash value
+            func_hash = DAG_hash(h->hash);
+            fh = &func_hash;
+        }
+    }
+
     Function_info func(
         get_allocator(),
         f_node->get_semantics(),
         ret_type,
         f_node->get_dag_name(),
         f_node->get_dag_alias_name(),
-        f_node->get_dag_preset_name());
+        f_node->get_dag_preset_name(),
+        fh);
 
     size_t parameter_count = f_node->get_parameter_count();
     for (size_t k = 0; k < parameter_count; ++k) {
@@ -1274,10 +1502,27 @@ void Generated_code_dag::compile_local_function(
 
     unsigned char func_properties = 0;
 
-    IDefinition const *f_def = f_node->get_definition();
     if (f_def != NULL) {
         // get properties
         func_properties |= get_function_properties(f_def);
+
+        // annotations are attached to the prototype if one exists
+        IDefinition const  *orig_f_def = module->get_original_definition(f_def);
+        IDeclaration const *proto_decl = orig_f_def->get_prototype_declaration();
+
+        mi::base::Handle<IModule const> orig_module(module->get_owner_module(f_def));
+
+        if (proto_decl == NULL)
+            proto_decl = orig_f_def->get_declaration();
+
+        // annotations must be retrieve from the prototype declaration
+        if (proto_decl != NULL) {
+            gen_function_annotations(dag_builder, func, proto_decl);
+            gen_function_return_annotations(dag_builder, func, proto_decl);
+
+            // clear the temporary map, we will process default parameter initializers
+            dag_builder.reset();
+        }
     } else {
         // DAG generated functions are always uniform
         func_properties |= 1 << FP_IS_UNIFORM;
@@ -1614,12 +1859,74 @@ void Generated_code_dag::compile_material(
 
 // Compile a local material.
 void Generated_code_dag::compile_local_material(
-   DAG_builder        &dag_builder,
+    DAG_builder       &dag_builder,
     IDefinition const *material_def)
 {
     // ignore local materials for now. Currently they are always inlined, so there is no trouble
     // with them
 }
+
+/// Helper class to enumerate all local types of a module.
+class Local_type_enumerator : public IDefinition_visitor {
+public:
+    /// Enumerate all local types.
+    ///
+    /// \param code_dag     the current code_dag
+    /// \param mod          the current module
+    /// \param dag_builder  the DAG builder to be used
+    static void enumerate_local_types(
+        Generated_code_dag &code_dag,
+        Module const       *mod,
+        DAG_builder        dag_builder)
+    {
+        Local_type_enumerator enumerator(code_dag, dag_builder);
+
+        Definition_table const &dt = mod->get_definition_table();
+        dt.walk(&enumerator);
+    }
+
+private:
+    /// Called for every visited definition.
+    ///
+    /// \param def  the definition
+    void visit(Definition const *def) const MDL_FINAL
+    {
+        if (def->get_kind()!= Definition::DK_TYPE)
+            return;
+
+        if (def->has_flag(Definition::DEF_IS_EXPORTED))
+            return;
+        if (def->has_flag(Definition::DEF_IS_IMPORTED))
+            return;
+
+        IType const *type = def->get_type();
+
+        if (!DAG_builder::is_user_type(type))
+            return;
+
+        m_code_dag.compile_type(m_dag_builder, def, /*is_exported=*/false);
+    }
+
+private:
+    /// Constructor.
+    ///
+    /// \param code_dag     the current code_dag
+    /// \param dag_builder  the DAG builder to be used
+    Local_type_enumerator(
+        Generated_code_dag &code_dag,
+        DAG_builder        dag_builder)
+    : m_code_dag(code_dag)
+    , m_dag_builder(dag_builder)
+    {
+    }
+
+private:
+    /// The current code dag.
+    Generated_code_dag &m_code_dag;
+
+    /// The DAG builder to be used.
+    mutable DAG_builder m_dag_builder;
+};
 
 // Compile the module.
 void Generated_code_dag::compile(IModule const *module)
@@ -1676,7 +1983,7 @@ void Generated_code_dag::compile(IModule const *module)
             compile_constant(dag_builder, def);
             break;
         case IDefinition::DK_TYPE:
-            compile_type(dag_builder, def);
+            compile_type(dag_builder, def, /*is_exported*/true);
             break;
         default:
             break;
@@ -1685,6 +1992,12 @@ void Generated_code_dag::compile(IModule const *module)
 
     // finally compile the module starting with the exported entities.
     bool include_locals = (m_options & INCLUDE_LOCAL_ENTITIES) != 0;
+
+    if (include_locals) {
+        // collect local types
+        Local_type_enumerator::enumerate_local_types(
+            *this, impl_cast<Module>(module), dag_builder);
+    }
 
     // ... build the dependence graph first
     DAG_dependence_graph dep_graph(
@@ -1788,7 +2101,8 @@ DAG_node const *Generated_code_dag::build_material_dag(
 // Compile a user defined type.
 void Generated_code_dag::compile_type(
     DAG_builder       &dag_builder,
-    IDefinition const *def)
+    IDefinition const *def,
+    bool              is_exported)
 {
     bool is_reexported = def->get_property(IDefinition::DP_IS_IMPORTED);
 
@@ -1834,7 +2148,7 @@ void Generated_code_dag::compile_type(
     }
 
     IAllocator *alloc = get_allocator();
-    User_type_info user_type(alloc, type, sym->get_name(), orig_name);
+    User_type_info user_type(alloc, is_exported, type, sym->get_name(), orig_name);
 
     if (decl == NULL) {
         // imported type, no annotations
@@ -2041,13 +2355,15 @@ void Generated_code_dag::collect_types(
                 return;
             }
 
-            IType const *ret_type = fun_type->get_return_type();
-            if (def->get_kind() == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
-                // functions returning materials ARE materials, ignore the return type
-            } else {
-                // import the return type into our type factory
-                ret_type = m_type_factory.import(ret_type);
-                collector.collect_indexable_types(ret_type, /*is_exported=*/true);
+            if (def->get_kind() != IDefinition::DK_ANNOTATION) {
+                IType const *ret_type = fun_type->get_return_type();
+                if (def->get_kind() == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
+                    // functions returning materials ARE materials, ignore the return type
+                } else {
+                    // import the return type into our type factory
+                    ret_type = m_type_factory.import(ret_type);
+                    collector.collect_indexable_types(ret_type, /*is_exported=*/true);
+                }
             }
 
             int parameter_count = fun_type->get_parameter_count();
@@ -2116,7 +2432,12 @@ void Generated_code_dag::compile_entity(
 
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
-    if (def != NULL && def->get_kind() == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
+
+    IDefinition::Kind kind = def != NULL ? def->get_kind() : IDefinition::DK_ERROR;
+
+    if (kind == IDefinition::DK_ANNOTATION) {
+        compile_annotation(module, node);
+    } else if (kind == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
         // functions returning materials ARE materials
         compile_material(dag_builder, node);
     } else {
@@ -2137,11 +2458,20 @@ void Generated_code_dag::compile_local_entity(
 
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
-    if (def != NULL && def->get_kind() == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
+
+    IDefinition::Kind kind = def != NULL ? def->get_kind() : IDefinition::DK_ERROR;
+
+    if (kind == IDefinition::DK_ANNOTATION) {
+        IModule const *module = dag_builder.tos_module();
+
+        compile_local_annotation(module, dag_builder, node);
+    } else if (kind == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
         // functions returning materials ARE materials
         compile_local_material(dag_builder, def);
     } else {
-        compile_local_function(dag_builder, node);
+        IModule const *module = dag_builder.tos_module();
+
+        compile_local_function(module, dag_builder, node);
     }
 }
 
@@ -2356,6 +2686,16 @@ int Generated_code_dag::get_function_parameter_enable_if_condition_user(
             return users[user_index];
     }
     return -1;
+}
+
+// Get the function hash value for the given function index if available.
+DAG_hash const *Generated_code_dag::get_function_hash(
+    int function_index) const
+{
+    if (Function_info const *func = get_function_info(function_index)) {
+        return func->get_hash();
+    }
+    return NULL;
 }
 
 // Check if the code contents are valid.
@@ -3352,6 +3692,16 @@ IType const *Generated_code_dag::get_type(
     return NULL;
 }
 
+// Returns true if the type at index is exported.
+bool Generated_code_dag::is_type_exported(
+    int index) const
+{
+    if (User_type_info const *type = get_type_info(index)) {
+        return type->is_exported();
+    }
+    return false;
+}
+
 // Get the number of annotations of the type at index.
 int Generated_code_dag::get_type_annotation_count(
     int index) const
@@ -3882,6 +4232,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
 , m_cache(
     0, Dep_analysis_cache::hasher(), Dep_analysis_cache::key_equal(), get_allocator())
 , m_properties(0)
+, m_instanciate_args(flags & CLASS_COMPILATION)
 {
     // reset the CSE table, we will build new expressions
     m_node_factory.identify_clear();
@@ -4384,52 +4735,95 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
             int n_args = call->get_argument_count();
             VLA<DAG_call::Call_argument> args(get_allocator(), n_args);
-            for (int i = 0; i < n_args; ++i) {
-                args[i].arg        = instantiate_dag(call->get_argument(i));
-                args[i].param_name = call->get_parameter_name(i);
+
+            res = NULL;
+
+            bool args_processed = false;
+            if (m_flags & NO_TERNARY_ON_DF) {
+                if (call->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY)) {
+                    if (is<IType_df>(call->get_type()->skip_type_alias())) {
+                        DAG_node const *cond = call->get_argument(0);
+
+                        {
+                            Flag_store store(m_instanciate_args, false);
+                            cond = instantiate_dag(cond);
+                        }
+
+                        DAG_node const *t    = call->get_argument(1);
+                        DAG_node const *f    = call->get_argument(2);
+
+                        if (DAG_constant const *c = as<DAG_constant>(cond)) {
+                            IValue_bool const *b_cond = cast<IValue_bool>(c->get_value());
+
+                            if (b_cond->get_value()) {
+                                res =  instantiate_dag(t);
+                            } else {
+                                res =  instantiate_dag(f);
+                            }
+                        } else {
+                            args[0].arg        = cond;
+                            args[0].param_name = call->get_parameter_name(0);
+                            args[1].arg        = instantiate_dag(t);
+                            args[1].param_name = call->get_parameter_name(1);
+                            args[2].arg        = instantiate_dag(f);
+                            args[2].param_name = call->get_parameter_name(2);
+                        }
+
+                        args_processed = true;
+                    }
+                }
             }
 
             string signature(call->get_name(), get_allocator());
-            res = NULL;
 
-            if (m_node_factory.is_inline_allowed()) {
-                // basically this means we are inside an argument, see the parameter case
-                mi::base::Handle<IModule const> mod(m_resolver.get_owner_module(signature.c_str()));
-
-                Module const *module = impl_cast<Module>(mod.get());
-                IDefinition const *def =
-                    module->find_signature(signature.c_str(), /*only_exported=*/true);
-                if (def != NULL) {
-                    if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
-                        // If this is an alias (imported/exported), then replace it by its
-                        // original name. This does not help much, BUT the neuray material
-                        // converter supports only the "original" names
-                        // modify the signature to point to the original one
-                        char const *old_mod_name = module->get_name();
-                        size_t l = strlen(old_mod_name);
-                        MDL_ASSERT(strncmp(signature.c_str(), old_mod_name, l) == 0);
-
-                        char const *orig_module = module->get_owner_module_name(def);
-                        signature = orig_module + signature.substr(l);
+            if (res == NULL) {
+                if (!args_processed) {
+                    for (int i = 0; i < n_args; ++i) {
+                        args[i].arg = instantiate_dag(call->get_argument(i));
+                        args[i].param_name = call->get_parameter_name(i);
                     }
                 }
 
-                if (call->get_semantic() == IDefinition::DS_UNKNOWN) {
-                    IDefinition const *def = NULL;
-                    if (mod.is_valid_interface()) {
-                        // beware, use old signature here, we retrieve the def again
-                        def = module->find_signature(call->get_name(), /*only_exported=*/false);
+                if (m_node_factory.is_inline_allowed()) {
+                    // basically this means we are inside an argument, see the parameter case
+                    mi::base::Handle<IModule const> mod(
+                        m_resolver.get_owner_module(signature.c_str()));
 
-                        if (def != NULL) {
-                            // try to inline it
-                            Module_scope module_scope(m_dag_builder, mod.get());
+                    Module const *module = impl_cast<Module>(mod.get());
+                    IDefinition const *def =
+                        module->find_signature(signature.c_str(), /*only_exported=*/true);
+                    if (def != NULL) {
+                        if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
+                            // If this is an alias (imported/exported), then replace it by its
+                            // original name. This does not help much, BUT the neuray material
+                            // converter supports only the "original" names
+                            // modify the signature to point to the original one
+                            char const *old_mod_name = module->get_name();
+                            size_t l = strlen(old_mod_name);
+                            MDL_ASSERT(strncmp(signature.c_str(), old_mod_name, l) == 0);
 
-                            res = m_dag_builder.try_inline(def, args.data(), n_args);
+                            char const *orig_module = module->get_owner_module_name(def);
+                            signature = orig_module + signature.substr(l);
+                        }
+                    }
 
-                            // must be analyzed when was inlined; do this here by analyzing the
-                            // inlined function
-                            if (res != NULL) {
-                                analyze_function_ast(module, def);
+                    if (call->get_semantic() == IDefinition::DS_UNKNOWN) {
+                        IDefinition const *def = NULL;
+                        if (mod.is_valid_interface()) {
+                            // beware, use old signature here, we retrieve the def again
+                            def = module->find_signature(call->get_name(), /*only_exported=*/false);
+
+                            if (def != NULL) {
+                                // try to inline it
+                                Module_scope module_scope(m_dag_builder, mod.get());
+
+                                res = m_dag_builder.try_inline(def, args.data(), n_args);
+
+                                // must be analyzed when was inlined; do this here by analyzing the
+                                // inlined function
+                                if (res != NULL) {
+                                    analyze_function_ast(module, def);
+                                }
                             }
                         }
                     }
@@ -4449,6 +4843,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                 }
             }
 
+            // check if its still a ternary operator and set flags accordingly
             if (DAG_call const *n_call = as<DAG_call>(res)) {
                 if (n_call->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY)) {
                     set_property(IP_USES_TERNARY_OPERATOR, true);
@@ -4466,7 +4861,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
             DAG_parameter const *para = cast<DAG_parameter>(node);
             int parameter_index = para->get_index();
-            if (m_flags & CLASS_COMPILATION) {
+            if (m_instanciate_args) {
                 // inside class compilation: switch to argument compilation mode
                 char const *p_name =
                     m_code_dag.get_material_parameter_name(m_material_index, parameter_index);
@@ -4863,6 +5258,133 @@ char const *Generated_code_dag::get_internal_space() const
     return m_internal_space.c_str();
 }
 
+// Get the number of annotations in the generated code.
+int Generated_code_dag::get_annotation_count() const
+{
+    return m_annotations.size();
+}
+
+// Get the semantics of the annotation at annotation_index.
+IDefinition::Semantics Generated_code_dag::get_annotation_semantics(int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_semantics();
+    }
+    return IDefinition::DS_UNKNOWN;
+}
+
+// Get the name of the annotation at annotation_index.
+char const *Generated_code_dag::get_annotation_name(int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_name();
+    }
+    return NULL;
+}
+
+// Get the original name of the annotation at annotation_index if the annotation name is
+// an alias, i.e. re-exported from a module.
+char const *Generated_code_dag::get_original_annotation_name(int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_original_name();
+    }
+    return NULL;
+}
+
+// Get the parameter count of the annotation at annotation_index.
+int Generated_code_dag::get_annotation_parameter_count(int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_parameter_count();
+    }
+    return 0;
+}
+
+// Get the parameter type of the parameter at parameter_index
+// of the annotation at annotation_index.
+IType const *Generated_code_dag::get_annotation_parameter_type(
+    int annotation_index,
+    int parameter_index) const
+{
+    if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
+        return param->get_type();
+    }
+    return NULL;
+}
+
+// Get the parameter name of the parameter at parameter_index
+// of the annotation at annotation_index.
+char const *Generated_code_dag::get_annotation_parameter_name(
+    int annotation_index,
+    int parameter_index) const
+{
+    if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
+        return param->get_name();
+    }
+    return NULL;
+}
+
+// Get the index of the parameter parameter_name.
+int Generated_code_dag::get_annotation_parameter_index(
+    int        annotation_index,
+    char const *parameter_name) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        for (size_t i = 0, n = anno->get_parameter_count(); i < n; ++i) {
+            if (strcmp(parameter_name, anno->get_parameter(i).get_name()) == 0)
+                return i;
+        }
+    }
+    return -1;
+}
+
+// Get the default initializer of the parameter at parameter_index
+// of the annotation at annotation_index.
+DAG_node const *Generated_code_dag::get_annotation_parameter_default(
+    int annotation_index,
+    int parameter_index) const
+{
+    if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
+        return param->get_default();
+    }
+    return NULL;
+}
+
+// Get the property flag of the annotation at annotation_index.
+bool Generated_code_dag::get_annotation_property(
+    int                 annotation_index,
+    Annotation_property ap) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return (anno->get_properties() & (1 << ap)) != 0;
+    }
+    return false;
+
+}
+
+// Get the number of annotations of the annotation at annotation_index.
+int Generated_code_dag::get_annotation_annotation_count(
+    int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_annotation_count();
+    }
+    return 0;
+}
+
+// Get the annotation at annotation_index of the annotation (declaration) at anno_decl_index.
+DAG_node const *Generated_code_dag::get_annotation_annotation(
+    int anno_decl_index,
+    int annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(anno_decl_index)) {
+        if (size_t(annotation_index) < anno->get_annotation_count())
+            return anno->get_annotation(annotation_index);
+    }
+    return NULL;
+}
+
 // Serialize this code DAG.
 void Generated_code_dag::serialize(
     ISerializer           *serializer,
@@ -5041,6 +5563,16 @@ void Generated_code_dag::serialize_functions(DAG_serializer &dag_serializer) con
         dag_serializer.write_encoded(func.m_original_name);
         dag_serializer.write_encoded(func.m_cloned);
 
+        if (func.m_has_hash) {
+            dag_serializer.write_bool(true);
+
+            for (size_t i = 0, n = func.m_hash.size(); i < n; ++i) {
+                dag_serializer.write_byte(func.m_hash[i]);
+            }
+        } else {
+            dag_serializer.write_bool(false);
+        }
+
         serialize_parameters(func, dag_serializer);
 
         dag_serializer.serialize(func.m_annotations);
@@ -5063,9 +5595,19 @@ void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserialize
         string                name      = dag_deserializer.read_encoded<string>();
         string                orig_name = dag_deserializer.read_encoded<string>();
         string                cloned    = dag_deserializer.read_encoded<string>();
+        bool                  has_hash  = dag_deserializer.read_bool();
+
+        DAG_hash hash, *hp = NULL;
+
+        if (has_hash) {
+            for (size_t i = 0, n = hash.size(); i < n; ++i) {
+                hash.data()[i] = dag_deserializer.read_byte();
+            }
+            hp = &hash;
+        }
 
         Function_info func(
-            get_allocator(), sema, ret_type, name.c_str(), orig_name.c_str(), cloned.c_str());
+            get_allocator(), sema, ret_type, name.c_str(), orig_name.c_str(), cloned.c_str(), hp);
 
         deserialize_parameters(func, dag_deserializer);
 
@@ -5122,6 +5664,50 @@ void Generated_code_dag::deserialize_materials(DAG_deserializer &dag_deserialize
         mat.m_body = dag_deserializer.read_encoded<DAG_node const *>();
 
         m_materials.push_back(mat);
+    }
+}
+
+// Serialize all Annotation_infos of this code DAG.
+void Generated_code_dag::serialize_annotations(DAG_serializer &dag_serializer) const
+{
+    size_t l = m_annotations.size();
+
+    dag_serializer.write_encoded_tag(l);
+    for (size_t i = 0; i < l; ++i) {
+        Annotation_info const &anno = m_annotations[i];
+
+        dag_serializer.write_encoded(anno.m_semantics);
+        dag_serializer.write_encoded(anno.m_name);
+        dag_serializer.write_encoded(anno.m_original_name);
+
+        serialize_parameters(anno, dag_serializer);
+
+        dag_serializer.serialize(anno.m_annotations);
+
+        dag_serializer.write_unsigned(anno.m_properties);
+    }
+}
+
+// Deserialize all Annotation_infos of this code DAG.
+void Generated_code_dag::deserialize_annotations(DAG_deserializer &dag_deserializer)
+{
+    size_t l = dag_deserializer.read_encoded_tag();
+    m_annotations.reserve(l);
+
+    for (size_t i = 0; i < l; ++i) {
+        Definition::Semantics sema = dag_deserializer.read_encoded<Definition::Semantics>();
+        string                name = dag_deserializer.read_encoded<string>();
+        string                orig_name = dag_deserializer.read_encoded<string>();
+
+        Annotation_info anno(get_allocator(), sema, name.c_str(), orig_name.c_str());
+
+        deserialize_parameters(anno, dag_deserializer);
+
+        dag_deserializer.deserialize(anno.m_annotations);
+
+        anno.m_properties = dag_deserializer.read_unsigned();
+
+        m_annotations.push_back(anno);
     }
 }
 
@@ -5238,6 +5824,33 @@ void Generated_code_dag::deserialize_parameters(
     }
 }
 
+/// Serialize all parameters of an annotation.
+void Generated_code_dag::serialize_parameters(
+    Annotation_info const &anno,
+    DAG_serializer        &dag_serializer) const
+{
+    size_t l = anno.get_parameter_count();
+
+    dag_serializer.write_encoded_tag(l);
+
+    for (size_t i = 0; i < l; ++i) {
+        serialize_parameter(anno.get_parameter(i), dag_serializer);
+    }
+}
+
+// Deserialize all parameters of a annotation.
+void Generated_code_dag::deserialize_parameters(
+    Annotation_info  &anno,
+    DAG_deserializer &dag_deserializer)
+{
+    size_t l = dag_deserializer.read_encoded_tag();
+    anno.m_parameters.reserve(l);
+
+    for (size_t i = 0; i < l; ++i) {
+        anno.add_parameter(deserialize_parameter(dag_deserializer));
+    }
+}
+
 // Serialize all User_type_infos of this code DAG.
 void Generated_code_dag::serialize_user_types(DAG_serializer &dag_serializer) const
 {
@@ -5251,10 +5864,12 @@ void Generated_code_dag::serialize_user_types(DAG_serializer &dag_serializer) co
 
         dag_serializer.write_encoded(type.m_name);
         dag_serializer.write_encoded(type.m_original_name);
+        dag_serializer.write_bool(type.m_is_exported);
 
         dag_serializer.serialize(type.m_annotations);
 
         serialize_entities(type, dag_serializer);
+
     }
 }
 
@@ -5265,12 +5880,13 @@ void Generated_code_dag::deserialize_user_types(DAG_deserializer &dag_deserializ
     m_user_types.reserve(l);
 
     for (size_t i = 0; i < l; ++i) {
-        IType const *type = dag_deserializer.read_encoded<IType const *>();
-        string      name = dag_deserializer.read_encoded<string>();
-        string      orig_name = dag_deserializer.read_encoded<string>();
+        IType const *type       = dag_deserializer.read_encoded<IType const *>();
+        string      name        = dag_deserializer.read_encoded<string>();
+        string      orig_name   = dag_deserializer.read_encoded<string>();
+        bool        is_exported = dag_deserializer.read_bool();
 
         User_type_info func(
-            get_allocator(), type, name.c_str(), orig_name.c_str());
+            get_allocator(), is_exported, type, name.c_str(), orig_name.c_str());
 
         dag_deserializer.deserialize(func.m_annotations);
 

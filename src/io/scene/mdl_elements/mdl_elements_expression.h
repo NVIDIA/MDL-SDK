@@ -196,6 +196,55 @@ private:
 };
 
 
+class Annotation_definition : public mi::base::Interface_implement<IAnnotation_definition>
+{
+public:
+    Annotation_definition(
+        const char* name,
+        mi::neuraylib::IAnnotation_definition::Semantics semantic,
+        bool is_exported,
+        const IType_list* parameter_types,
+        const IExpression_list* parameter_defaults,
+        const IAnnotation_block* annotations)
+        : m_name(name)
+        , m_semantic(semantic)
+        , m_is_exported(is_exported)
+        , m_parameter_types(parameter_types, mi::base::DUP_INTERFACE)
+        , m_parameter_defaults(parameter_defaults, mi::base::DUP_INTERFACE)
+        , m_annotations(annotations, mi::base::DUP_INTERFACE) { }
+
+    const char* get_name() const { return m_name.c_str(); }
+
+    mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
+
+    mi::Size get_parameter_count() const;
+
+    const char* get_parameter_name(mi::Size index) const;
+
+    mi::Size get_parameter_index(const char* name) const;
+
+    const IType_list* get_parameter_types() const;
+
+    const IExpression_list* get_defaults() const;
+
+    bool is_exported() const;
+
+    const IAnnotation_block* get_annotations() const;
+
+    const IAnnotation* create_annotation(const IExpression_list* arguments) const;
+
+    mi::Size get_memory_consumption() const;
+
+private:
+    std::string m_name;
+    mi::neuraylib::IAnnotation_definition::Semantics m_semantic;
+    bool m_is_exported;
+    mi::base::Handle<const IType_list> m_parameter_types;
+    mi::base::Handle<const IExpression_list> m_parameter_defaults;
+    mi::base::Handle<const IAnnotation_block> m_annotations;
+};
+
+
 class Annotation : public mi::base::Interface_implement<IAnnotation>
 {
 public:
@@ -207,6 +256,8 @@ public:
     void set_name( const char* name) { m_name = name ? name : ""; }
 
     const IExpression_list* get_arguments() const;
+
+    const IAnnotation_definition* get_definition(DB::Transaction* transaction) const;
 
     mi::Size get_memory_consumption() const;
 
@@ -300,9 +351,19 @@ public:
 
     IAnnotation* create_annotation( const char* name, const IExpression_list* arguments) const;
 
+    IAnnotation_definition* create_annotation_definition(
+        const char* name,
+        mi::neuraylib::IAnnotation_definition::Semantics sema,
+        bool is_exported,
+        const IType_list* parameter_types,
+        const IExpression_list* parameter_defaults,
+        const IAnnotation_block* annotations) const;
+
     IAnnotation_block* create_annotation_block() const;
 
     IAnnotation_list* create_annotation_list() const;
+
+    IAnnotation_definition_list* create_annotation_definition_list() const;
 
     IExpression* clone(
         const IExpression* expr,
@@ -375,6 +436,11 @@ public:
 
     IAnnotation* deserialize_annotation( SERIAL::Deserializer* deserializer) const;
 
+    void serialize_annotation_definition(
+        SERIAL::Serializer* serializer, const IAnnotation_definition* anno_def) const;
+
+    IAnnotation_definition* deserialize_annotation_definition(SERIAL::Deserializer* deserializer) const;
+
     void serialize_annotation_block(
         SERIAL::Serializer* serializer, const IAnnotation_block* block) const;
 
@@ -384,6 +450,12 @@ public:
         SERIAL::Serializer* serializer, const IAnnotation_list* list) const;
 
     IAnnotation_list* deserialize_annotation_list( SERIAL::Deserializer* deserializer) const;
+
+    void serialize_annotation_definition_list(
+        SERIAL::Serializer* serializer, const IAnnotation_definition_list* anno_def_list) const;
+
+    IAnnotation_definition_list* deserialize_annotation_definition_list(
+        SERIAL::Deserializer* deserializer) const;
 
     // internal methods
 
@@ -433,6 +505,27 @@ private:
         std::ostringstream& s);
 
     mi::base::Handle<IValue_factory> m_value_factory;
+};
+
+/// Helper class to store annotation definitions.
+class Annotation_definition_list : public mi::base::Interface_implement<IAnnotation_definition_list>
+{
+public:
+    mi::Sint32 add_definition(const IAnnotation_definition* anno_def);
+
+    const IAnnotation_definition* get_definition(mi::Size index) const;
+
+    const IAnnotation_definition* get_definition(const char* name) const;
+
+    mi::Size get_size() const { return m_anno_definitions.size(); }
+
+    mi::Size get_memory_consumption() const;
+
+    friend class Expression_factory; // for serialization/deserialization
+
+private:
+    std::vector<mi::base::Handle<const IAnnotation_definition>> m_anno_definitions;
+    std::map<std::string, int> m_name_to_index;
 };
 
 } // namespace MDL

@@ -121,24 +121,44 @@ namespace mdl_d3d12
             float far_plane_distance;
         };
 
+
         class Material
         {
         public:
+
             enum class Alpha_mode
             {
-                Opaque,   // alpha is ignored, 1.0 is used instead
-                Mask,     // opaque if alpha (base_color.w) is >= alpha_cutoff, 0.0 otherwise 
-                Blend     // blending based on alpha (base_color.w)
+                Opaque = 0, // alpha is ignored, 1.0 is used instead
+                Mask,       // opaque if alpha (base_color.w) is >= alpha_cutoff, 0.0 otherwise 
+                Blend       // blending based on alpha (base_color.w)
+            };
+
+            enum class Pbr_model
+            {
+                Metallic_roughness = 0,
+                Khr_specular_glossiness
+            };
+
+            struct Pbr_model_data_metallic_roughness
+            {
+                std::string base_color_texture;
+                DirectX::XMFLOAT4 base_color_factor;
+                std::string metallic_roughness_texture;
+                float metallic_factor;
+                float roughness_factor;
+            };
+
+            struct Pbr_model_data_khr_specular_glossiness
+            {
+                std::string diffuse_texture;
+                DirectX::XMFLOAT4 diffuse_factor;
+
+                std::string specular_glossiness_texture;
+                DirectX::XMFLOAT3 specular_factor;
+                float glossiness_factor;
             };
 
             std::string name;
-
-            std::string base_color_texture;
-            DirectX::XMFLOAT4 base_color_factor;
-
-            std::string metallic_roughness_texture;
-            float metallic_factor;
-            float roughness_factor;
 
             std::string normal_texture;
             float normal_scale_factor;
@@ -152,7 +172,14 @@ namespace mdl_d3d12
             Alpha_mode alpha_mode;
             float alpha_cutoff;
             bool single_sided;
+
+            // depending on the material model different sub classes 
+            Pbr_model pbr_model;
+            Pbr_model_data_metallic_roughness metallic_roughness;
+            Pbr_model_data_khr_specular_glossiness khr_specular_glossiness;
+
         };
+
 
         class Scene
         {

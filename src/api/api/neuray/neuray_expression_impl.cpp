@@ -280,10 +280,78 @@ const MDL::IExpression_list* Expression_list::get_internal_expression_list() con
     return m_expression_list.get();
 }
 
+const char* Annotation_definition::get_name() const
+{   
+    return m_anno_def->get_name();
+}
+
+mi::neuraylib::IAnnotation_definition::Semantics Annotation_definition::get_semantic() const
+{
+    return m_anno_def->get_semantic();
+}
+
+mi::Size Annotation_definition::get_parameter_count() const
+{
+    return m_anno_def->get_parameter_count();
+}
+
+const char* Annotation_definition::get_parameter_name(mi::Size index) const
+{
+    return m_anno_def->get_parameter_name(index);
+}
+
+mi::Size Annotation_definition::get_parameter_index(const char* name) const
+{
+    if (!name)
+        return mi::Size(-1);
+    return m_anno_def->get_parameter_index(name);
+}
+
+const mi::neuraylib::IType_list* Annotation_definition::get_parameter_types() const
+{
+    mi::base::Handle<const MDL::IType_list> result_int(m_anno_def->get_parameter_types());
+    return m_tf->create_type_list(result_int.get(), m_owner.get());
+}
+
+const mi::neuraylib::IExpression_list* Annotation_definition::get_defaults() const
+{
+    mi::base::Handle<const MDL::IExpression_list> result_int(m_anno_def->get_defaults());
+    return m_ef->create_expression_list(result_int.get(), m_owner.get());
+}
+
+bool Annotation_definition::is_exported() const
+{
+    return m_anno_def->is_exported();
+}
+
+const mi::neuraylib::IAnnotation_block* Annotation_definition::get_annotations() const
+{
+    mi::base::Handle<const MDL::IAnnotation_block> result_int(m_anno_def->get_annotations());
+    return m_ef->create_annotation_block(result_int.get(), m_owner.get());
+}
+
+const mi::neuraylib::IAnnotation* Annotation_definition::create_annotation(
+    const mi::neuraylib::IExpression_list* arguments) const
+{
+    mi::base::Handle<const MDL::IExpression_list> arguments_int(
+        get_internal_expression_list(arguments));
+    mi::base::Handle<const MDL::IAnnotation> result_int(
+        m_anno_def->create_annotation(arguments_int.get()));
+    return m_ef->create_annotation(result_int.get(), m_owner.get());
+}
+
 const mi::neuraylib::IExpression_list* Annotation::get_arguments() const
 {
     mi::base::Handle<const MDL::IExpression_list> result_int( m_annotation->get_arguments());
     return m_ef->create_expression_list( result_int.get(), m_owner.get());
+}
+
+const mi::neuraylib::IAnnotation_definition* Annotation::get_definition() const
+{
+    mi::base::Handle<const MDL::IAnnotation_definition> result_int(
+        m_annotation->get_definition(m_ef->get_db_transaction()));
+
+    return m_ef->create_annotation_definition(result_int.get(), m_owner.get());
 }
 
 MDL::IAnnotation* Annotation::get_internal_annotation()
@@ -704,6 +772,15 @@ const mi::neuraylib::IAnnotation_list* Expression_factory::create_annotation_lis
     const MDL::IAnnotation_list* list, const mi::base::IInterface* owner) const
 {
     return create_annotation_list( const_cast<MDL::IAnnotation_list*>( list), owner);
+}
+
+const mi::neuraylib::IAnnotation_definition* Expression_factory::create_annotation_definition(
+    const MDL::IAnnotation_definition* anno_def, const mi::base::IInterface* owner) const
+{
+    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(m_transaction.get());
+    mi::base::Handle<Type_factory> tf(transaction_impl->get_type_factory());
+
+    return anno_def ? new Annotation_definition(this, tf.get(), anno_def, owner) : 0;
 }
 
 mi::neuraylib::IExpression* Expression_factory::create_cast(

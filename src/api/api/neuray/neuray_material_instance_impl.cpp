@@ -199,6 +199,9 @@ mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_mater
     mi::Uint32 flags,
     mi::neuraylib::IMdl_execution_context* context) const
 {
+    if (get_db_element()->is_immutable())
+        return nullptr;
+
     MDL::Execution_context default_context;
     NEURAY::Mdl_execution_context_impl* context_impl =
         static_cast<NEURAY::Mdl_execution_context_impl*>(context);

@@ -267,10 +267,18 @@ namespace
 
 
         fx::gltf::Document doc;
-        if(str_ends_with(file_name, ".glb"))
-            doc = fx::gltf::LoadFromBinary(file_name, quotas);
-        else
-            doc = fx::gltf::LoadFromText(file_name, quotas);
+        try
+        {
+            if (str_ends_with(file_name, ".glb"))
+                doc = fx::gltf::LoadFromBinary(file_name, quotas);
+            else
+                doc = fx::gltf::LoadFromText(file_name, quotas);
+        }
+        catch (std::exception &ex)
+        {
+            log_error(ex, SRC);
+            return false;
+        }
 
         // process all meshes
         for (const auto& m : doc.meshes)
@@ -394,7 +402,8 @@ namespace
 
                 mesh.primitives.push_back(std::move(part));
             }
-            m_scene.meshes.push_back(std::move(mesh));
+
+             m_scene.meshes.push_back(std::move(mesh));
         }
 
         // process all cameras
@@ -418,19 +427,48 @@ namespace
         for (const auto& m : doc.materials)
         {
             Material mat;
-            mat.name = m.name;
+            mat.name = std::string(m.name);
 
-            mat.base_color_texture = get_texture_uri(doc, m.pbrMetallicRoughness.baseColorTexture);
-            mat.base_color_factor = {
-                m.pbrMetallicRoughness.baseColorFactor[0],
-                m.pbrMetallicRoughness.baseColorFactor[1],
-                m.pbrMetallicRoughness.baseColorFactor[2],
-                m.pbrMetallicRoughness.baseColorFactor[3]};
+            // KHR specular glossiness ?
+            if (!m.pbrSpecularGlossiness.empty())
+            {
+                mat.pbr_model = Material::Pbr_model::Khr_specular_glossiness;
 
-            mat.metallic_roughness_texture = get_texture_uri(
-                doc, m.pbrMetallicRoughness.metallicRoughnessTexture);
-            mat.metallic_factor = m.pbrMetallicRoughness.metallicFactor;
-            mat.roughness_factor = m.pbrMetallicRoughness.roughnessFactor;
+                mat.khr_specular_glossiness.diffuse_texture =
+                    get_texture_uri(doc, m.pbrSpecularGlossiness.diffuseTexture);
+                mat.khr_specular_glossiness.diffuse_factor = {
+                    m.pbrSpecularGlossiness.diffuseFactor[0],
+                    m.pbrSpecularGlossiness.diffuseFactor[1],
+                    m.pbrSpecularGlossiness.diffuseFactor[2],
+                    m.pbrSpecularGlossiness.diffuseFactor[3] };
+
+                mat.khr_specular_glossiness.specular_glossiness_texture =
+                    get_texture_uri(doc, m.pbrSpecularGlossiness.specularGlossinessTexture);
+                mat.khr_specular_glossiness.specular_factor = {
+                    m.pbrSpecularGlossiness.specularFactor[0],
+                    m.pbrSpecularGlossiness.specularFactor[1],
+                    m.pbrSpecularGlossiness.specularFactor[2]};
+                mat.khr_specular_glossiness.glossiness_factor = 
+                    m.pbrSpecularGlossiness.glossinessFactor;
+            }
+            // metallic roughness (Default)
+            else
+            {
+                mat.pbr_model = Material::Pbr_model::Metallic_roughness;
+
+                mat.metallic_roughness.base_color_texture = 
+                    get_texture_uri(doc, m.pbrMetallicRoughness.baseColorTexture);
+                mat.metallic_roughness.base_color_factor = {
+                    m.pbrMetallicRoughness.baseColorFactor[0],
+                    m.pbrMetallicRoughness.baseColorFactor[1],
+                    m.pbrMetallicRoughness.baseColorFactor[2],
+                    m.pbrMetallicRoughness.baseColorFactor[3] };
+
+                mat.metallic_roughness.metallic_roughness_texture =
+                    get_texture_uri(doc, m.pbrMetallicRoughness.metallicRoughnessTexture);
+                mat.metallic_roughness.metallic_factor = m.pbrMetallicRoughness.metallicFactor;
+                mat.metallic_roughness.roughness_factor = m.pbrMetallicRoughness.roughnessFactor;
+            }
 
             mat.normal_texture = get_texture_uri(doc, m.normalTexture);
             mat.normal_scale_factor = m.normalTexture.scale;
@@ -477,10 +515,13 @@ namespace
 
                 if (src_child.mesh >= 0 || src_child.mesh < doc.meshes.size())
                 {
-                    node.kind = Node::Kind::Mesh;
                     node.index = src_child.mesh;
+                    bool empty = m_scene.meshes[node.index].primitives.size() == 0;
+
+                    node.kind = empty ? Node::Kind::Empty : Node::Kind::Mesh;
                     if (m_scene.meshes[node.index].name.empty())
-                        m_scene.meshes[node.index].name = node.name + "_Mesh";
+                        m_scene.meshes[node.index].name = node.name + 
+                            (empty ? "_Node" : "_Mesh");
                 }
 
                 if (src_child.camera >= 0 || src_child.camera < doc.cameras.size())

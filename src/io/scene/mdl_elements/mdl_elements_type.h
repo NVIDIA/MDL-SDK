@@ -193,6 +193,10 @@ public:
 
     static std::string get_type_name( const IType* type, bool include_aliased_type = true);
 
+    mi::Uint32 destroy_enum_type( const IType_enum* e_type);
+
+    mi::Uint32 destroy_struct_type( const IType_struct* s_type);
+
 private:
 
     static mi::Sint32 compare_static( const IType_alias* lhs, const IType_alias* rhs);
@@ -208,30 +212,28 @@ private:
     static void dump_static( const IType_list* list, mi::Size depth, std::ostringstream& s);
 
 
-    typedef std::map<std::string, mi::base::Handle<const IType_enum> > Enum_symbol_map;
+    typedef std::map<std::string, const IType_enum *> Weak_enum_symbol_map;
 
-    typedef std::map<IType_enum::Predefined_id, mi::base::Handle<const IType_enum> > Enum_id_map;
+    typedef std::map<IType_enum::Predefined_id, const IType_enum *> Weak_enum_id_map;
 
-    typedef std::map<std::string,mi::base::Handle<const IType_struct> > Struct_symbol_map;
+    typedef std::map<std::string, const IType_struct *> Weak_struct_symbol_map;
 
-    typedef std::map<IType_struct::Predefined_id, mi::base::Handle<const IType_struct> >
-        Struct_id_map;
+    typedef std::map<IType_struct::Predefined_id, const IType_struct *> Weak_struct_id_map;
 
-
-    /// Lock for the four members below.
-    mutable mi::base::Lock m_lock;
+    /// Lock for the four weak map members below.
+    mutable mi::base::Lock m_weak_map_lock;
 
     /// All registered enum types by symbol. Needs #m_lock.
-    Enum_symbol_map m_enum_symbols;
+    Weak_enum_symbol_map m_enum_symbols;
 
     /// All registered enum types by ID. Needs #m_lock.
-    Enum_id_map m_enum_ids;
+    Weak_enum_id_map m_enum_ids;
 
     /// All registered struct types by symbol. Needs #m_lock.
-    Struct_symbol_map m_struct_symbols;
+    Weak_struct_symbol_map m_struct_symbols;
 
     /// All registered struct types by ID. Needs #m_lock.
-    Struct_id_map m_struct_ids;
+    Weak_struct_id_map m_struct_ids;
 };
 
 } // namespace MDL

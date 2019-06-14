@@ -59,6 +59,8 @@ namespace DB { class Transaction; }
 
 namespace MDL {
 
+class IAnnotation_definition;
+class IAnnotation_definition_list;
 class IAnnotation_block;
 class IExpression_factory;
 class IExpression_list;
@@ -401,6 +403,12 @@ public:
 
     const IAnnotation_block* get_annotations() const;
 
+    mi::Size get_annotation_definition_count() const;
+
+    const IAnnotation_definition* get_annotation_definition(mi::Size index) const;
+
+    const IAnnotation_definition* get_annotation_definition(const char *name) const;
+
     bool is_standard_module() const;
 
     const std::vector<std::string> get_function_overloads(
@@ -662,9 +670,13 @@ private:
     std::string m_api_file_name;
 
     std::vector<DB::Tag> m_imports;              ///< The imported modules.
-    mi::base::Handle<IType_list> m_types;        ///< The types.
-    mi::base::Handle<IValue_list> m_constants;   ///< The constants.
+    mi::base::Handle<IType_list> m_exported_types;   ///< The exported user defined types.
+    mi::base::Handle<IType_list> m_local_types;      ///< The local user defined types.
+    mi::base::Handle<IValue_list> m_constants;       ///< The constants.
     mi::base::Handle<IAnnotation_block> m_annotations; ///< Module annotations.
+
+    /// This module's annotation definitions.
+    mi::base::Handle<IAnnotation_definition_list> m_annotation_definitions;
 
     std::vector<DB::Tag> m_functions;        ///< tags of the contained function definitions.
     std::vector<DB::Tag> m_materials;        ///< tags of the contained material definitions.

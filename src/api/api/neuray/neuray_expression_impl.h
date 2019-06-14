@@ -298,6 +298,48 @@ private:
     const mi::base::Handle<const mi::base::IInterface> m_owner;
 };
 
+class Annotation_definition : public mi::base::Interface_implement<mi::neuraylib::IAnnotation_definition>
+{
+public:
+    Annotation_definition(
+        const Expression_factory* ef,
+        const Type_factory* tf,
+        const MDL::IAnnotation_definition* anno_def,
+        const mi::base::IInterface* owner)
+        : m_ef(ef, mi::base::DUP_INTERFACE)
+        , m_tf(tf, mi::base::DUP_INTERFACE)
+        , m_anno_def(anno_def, mi::base::DUP_INTERFACE)
+        , m_owner(owner, mi::base::DUP_INTERFACE) { }
+
+    // public API methods
+
+    const char* get_name() const;
+
+    mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
+
+    mi::Size get_parameter_count() const;
+
+    const char* get_parameter_name(mi::Size index) const;
+
+    mi::Size get_parameter_index(const char* name) const;
+
+    const mi::neuraylib::IType_list* get_parameter_types() const;
+
+    const mi::neuraylib::IExpression_list* get_defaults() const;
+
+    bool is_exported() const;
+
+    const mi::neuraylib::IAnnotation_block* get_annotations() const;
+
+    const mi::neuraylib::IAnnotation* create_annotation(const mi::neuraylib::IExpression_list* arguments) const;
+
+private:
+    const mi::base::Handle<const Expression_factory> m_ef;
+    const mi::base::Handle<const Type_factory> m_tf;
+    const mi::base::Handle<const MDL::IAnnotation_definition> m_anno_def;
+    const mi::base::Handle<const mi::base::IInterface> m_owner;
+};
+
 class Annotation : public mi::base::Interface_implement<mi::neuraylib::IAnnotation>
 {
 public:
@@ -316,6 +358,8 @@ public:
     void set_name( const char* name) { m_annotation->set_name( name); }
 
     const mi::neuraylib::IExpression_list* get_arguments() const;
+
+    const mi::neuraylib::IAnnotation_definition* get_definition() const;
 
     // internal methods
 
@@ -558,6 +602,10 @@ public:
     /// Creates a wrapper for the internal annotation list.
     const mi::neuraylib::IAnnotation_list* create_annotation_list(
         const MDL::IAnnotation_list* list, const mi::base::IInterface* owner) const;
+
+    /// Creates a wrapper for the internal annotation definition.
+    const mi::neuraylib::IAnnotation_definition* create_annotation_definition(
+        const MDL::IAnnotation_definition* anno_def, const mi::base::IInterface* owner) const;
 
     /// Returns the DB transaction corresponding to m_transaction.
     DB::Transaction* get_db_transaction() const;

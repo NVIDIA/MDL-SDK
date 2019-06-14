@@ -508,6 +508,7 @@ struct Options {
     bool use_class_compilation;
     bool no_aa;
     bool enable_derivatives;
+    bool fold_ternary_on_df;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
@@ -532,6 +533,7 @@ struct Options {
     , use_class_compilation(true)
     , no_aa(false)
     , enable_derivatives(false)
+    , fold_ternary_on_df(false)
     , res_x(1024)
     , res_y(1024)
     , iterations(4096)
@@ -1802,6 +1804,7 @@ static void usage(const char *name)
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
         << "-d                          enable use of derivatives\n"
+        << " --fold_ternary_on_df       fold all ternary operators on *df types (default: false)\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n"
         << "      and alternatively, full MDLE file paths can be passed as material name\n";
@@ -1866,6 +1869,8 @@ int main(int argc, char* argv[])
                 options.no_aa = true;
             } else if (strcmp(opt, "-d") == 0) {
                 options.enable_derivatives = true;
+            } else if (strcmp(opt, "--fold_ternary_on_df") == 0) {
+                options.fold_ternary_on_df = true;
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
@@ -1924,7 +1929,8 @@ int main(int argc, char* argv[])
                 mdl_factory.get(),
                 transaction.get(),
                 16,
-                options.enable_derivatives);
+                options.enable_derivatives,
+                options.fold_ternary_on_df);
 
             // List of materials in the scene
             std::vector<Df_cuda_material> material_bundle;

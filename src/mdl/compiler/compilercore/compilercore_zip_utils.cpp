@@ -27,11 +27,13 @@
  *****************************************************************************/
 
 #include "pch.h"
+
+#include <mi/mdl/mdl_entity_resolver.h>
+
 #include "compilercore_file_utils.h"
 #include "compilercore_file_resolution.h"
+#include "compilercore_hash.h"
 #include "compilercore_zip_utils.h"
-#include <mi/mdl/mdl_entity_resolver.h>
-#include <mdl/codegenerators/generator_code/generator_code_hash.h>
 
 // defined in zipint.h
 extern "C" int zip_source_remove(zip_source_t *);
@@ -40,7 +42,9 @@ extern "C" zip_int64_t zip_source_supports(zip_source_t *src);
 namespace mi {
 namespace mdl {
 
-Layered_zip_source::Layered_zip_source(zip_source_t *base, const MDL_zip_container_header &header)
+Layered_zip_source::Layered_zip_source(
+    zip_source_t                   *base,
+    MDL_zip_container_header const &header)
 : m_base(base)
 , m_header(header)
 {
@@ -52,7 +56,8 @@ Layered_zip_source::~Layered_zip_source()
 }
 
 /// Open the layered stream
-zip_source_t *Layered_zip_source::open(zip_error_t &ze) {
+zip_source_t *Layered_zip_source::open(zip_error_t &ze)
+{
     return zip_source_function_create(callback, this, &ze);
 }
 

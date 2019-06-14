@@ -35,8 +35,8 @@
 #include "mdl/compiler/compilercore/compilercore_errors.h"
 #include "mdl/compiler/compilercore/compilercore_mdl.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
+#include "mdl/compiler/compilercore/compilercore_hash.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_tools.h"
-#include "mdl/codegenerators/generator_code/generator_code_hash.h"
 
 #include "generator_jit.h"
 #include "generator_jit_code_printer.h"

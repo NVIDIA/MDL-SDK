@@ -34,6 +34,7 @@
 #ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_EXPRESSION_H
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_EXPRESSION_H
 
+#include <mi/neuraylib/iexpression.h>
 #include "i_mdl_elements_value.h"
 
 namespace mi { class IString; }
@@ -45,6 +46,8 @@ namespace DB { class Transaction; }
 namespace MDL {
 
 class IExpression_list;
+class IAnnotation;
+class IAnnotation_block;
 
 class IExpression : public
     mi::base::Interface_declare<0xdb6bbe22,0xc36b,0x4786,0x9f,0x6e,0xda,0x45,0x12,0x0f,0x0c,0x31>
@@ -200,6 +203,33 @@ public:
     virtual mi::Size get_memory_consumption() const = 0;
 };
 
+class IAnnotation_definition : public
+    mi::base::Interface_declare<0x6ca3757d,0x995f,0x49e5,0xbc,0x10,0x70,0xec,0xdd,0x82,0x5e,0x1b>
+{
+public:
+    virtual const char* get_name() const = 0;
+
+    virtual mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const = 0;
+
+    virtual mi::Size get_parameter_count() const = 0;
+
+    virtual const char* get_parameter_name(mi::Size index) const = 0;
+
+    virtual mi::Size get_parameter_index(const char* name) const = 0;
+
+    virtual const IType_list* get_parameter_types() const = 0;
+
+    virtual const IExpression_list* get_defaults() const = 0;
+
+    virtual bool is_exported() const = 0;
+
+    virtual const IAnnotation_block* get_annotations() const = 0;
+
+    virtual const IAnnotation* create_annotation(const IExpression_list* arguments) const = 0;
+
+    virtual mi::Size get_memory_consumption() const = 0;
+};
+
 class IAnnotation : public
     mi::base::Interface_declare<0xa9c652e7,0x952e,0x4887,0x93,0xb4,0x55,0xc8,0x66,0xd0,0x1a,0x1f>
 {
@@ -209,6 +239,8 @@ public:
     virtual void set_name( const char* name) = 0;
 
     virtual const IExpression_list* get_arguments() const = 0;
+
+    virtual const IAnnotation_definition* get_definition(DB::Transaction* transaction) const = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -254,6 +286,23 @@ public:
     virtual mi::Size get_memory_consumption() const = 0;
 };
 
+/// Internal helper class to store annotation definitions.
+class IAnnotation_definition_list : public
+    mi::base::Interface_declare<0xa43330cc,0xb1c4,0x41dd,0x9f,0x1b,0xed,0xcc,0x9,0x5b,0x51,0x1>
+{
+public:
+    virtual mi::Sint32 add_definition(const IAnnotation_definition* anno_def) = 0;
+
+    virtual const IAnnotation_definition* get_definition(mi::Size index) const = 0;
+
+    virtual const IAnnotation_definition* get_definition(const char* name) const = 0;
+
+    virtual mi::Size get_size() const = 0;
+
+    virtual mi::Size get_memory_consumption() const = 0;
+};
+
+
 class IExpression_factory : public
     mi::base::Interface_declare<0xf2422380,0xae9c,0x44e0,0x8d,0xc7,0x15,0xf0,0x30,0xda,0x9e,0x1e>
 {
@@ -276,9 +325,19 @@ public:
     virtual IAnnotation* create_annotation(
         const char* name, const IExpression_list* arguments) const = 0;
 
+    virtual IAnnotation_definition* create_annotation_definition(
+        const char* name,
+        mi::neuraylib::IAnnotation_definition::Semantics sema,
+        bool is_exported,
+        const IType_list* parameter_types,
+        const IExpression_list* parameter_defaults,
+        const IAnnotation_block* annotations) const = 0;
+
     virtual IAnnotation_block* create_annotation_block() const = 0;
 
     virtual IAnnotation_list* create_annotation_list() const = 0;
+
+    virtual IAnnotation_definition_list* create_annotation_definition_list() const = 0;
 
     virtual IExpression* clone(
         const IExpression* expr, 
@@ -392,6 +451,14 @@ public:
     /// Deserializes an annotation list from \p deserializer.
     virtual IAnnotation_list* deserialize_annotation_list(
         SERIAL::Deserializer* deserializer) const = 0;
+
+    /// Serializes an annotation definition list to \p serializer.
+    virtual void serialize_annotation_definition_list(
+        SERIAL::Serializer* serializer, const IAnnotation_definition_list* anno_def_list) const = 0;
+
+    /// Deserializes an annotation definition list from \p deserializer.
+    virtual IAnnotation_definition_list* deserialize_annotation_definition_list(
+        SERIAL::Deserializer* deserializer) const = 0;
 };
 
 /// Returns the global expression factory.
@@ -410,6 +477,12 @@ inline bool has_dynamic_memory_consumption( const IAnnotation*) { return true; }
 inline size_t dynamic_memory_consumption( const IAnnotation* a)
 { return a->get_memory_consumption(); }
 
+inline bool has_dynamic_memory_consumption(const IAnnotation_definition*) { return true; }
+inline size_t dynamic_memory_consumption(const IAnnotation_definition* a)
+{
+    return a->get_memory_consumption();
+}
+
 inline bool has_dynamic_memory_consumption( const IAnnotation_block*) { return true; }
 inline size_t dynamic_memory_consumption( const IAnnotation_block* b)
 { return b->get_memory_consumption(); }
@@ -417,6 +490,12 @@ inline size_t dynamic_memory_consumption( const IAnnotation_block* b)
 inline bool has_dynamic_memory_consumption( const IAnnotation_list*) { return true; }
 inline size_t dynamic_memory_consumption( const IAnnotation_list* l)
 { return l->get_memory_consumption(); }
+
+inline bool has_dynamic_memory_consumption(const IAnnotation_definition_list*) { return true; }
+inline size_t dynamic_memory_consumption(const IAnnotation_definition_list* l)
+{
+    return l->get_memory_consumption();
+}
 
 }  // namespace MDL
 

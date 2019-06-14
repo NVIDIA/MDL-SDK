@@ -248,7 +248,8 @@ mi::neuraylib::IType_enum::Predefined_id Type_enum::get_predefined_id() const
 const mi::neuraylib::IAnnotation_block* Type_enum::get_annotations() const
 {
     mi::base::Handle<const MDL::IAnnotation_block> result_int( m_type->get_annotations());
-    mi::base::Handle<Expression_factory> ef( s_class_factory->create_expression_factory( 0));
+    mi::base::Handle<Expression_factory> ef(
+        s_class_factory->create_expression_factory( m_transaction.get()));
     return ef->create_annotation_block( result_int.get(), m_owner.get());
 }
 
@@ -256,7 +257,8 @@ const mi::neuraylib::IAnnotation_block* Type_enum::get_value_annotations( mi::Si
 {
     mi::base::Handle<const MDL::IAnnotation_block> result_int(
         m_type->get_value_annotations( index));
-    mi::base::Handle<Expression_factory> ef( s_class_factory->create_expression_factory( 0));
+    mi::base::Handle<Expression_factory> ef(
+        s_class_factory->create_expression_factory( m_transaction.get()));
     return ef->create_annotation_block( result_int.get(), m_owner.get());
 }
 
@@ -322,7 +324,8 @@ mi::neuraylib::IType_struct::Predefined_id Type_struct::get_predefined_id() cons
 const mi::neuraylib::IAnnotation_block* Type_struct::get_annotations() const
 {
     mi::base::Handle<const MDL::IAnnotation_block> result_int( m_type->get_annotations());
-    mi::base::Handle<Expression_factory> ef( s_class_factory->create_expression_factory( 0));
+    mi::base::Handle<Expression_factory> ef(
+        s_class_factory->create_expression_factory( m_transaction.get()));
     return ef->create_annotation_block( result_int.get(), m_owner.get());
 }
 
@@ -330,7 +333,8 @@ const mi::neuraylib::IAnnotation_block* Type_struct::get_field_annotations( mi::
 {
     mi::base::Handle<const MDL::IAnnotation_block> result_int(
         m_type->get_field_annotations( index));
-    mi::base::Handle<Expression_factory> ef( s_class_factory->create_expression_factory( 0));
+    mi::base::Handle<Expression_factory> ef(
+        s_class_factory->create_expression_factory( m_transaction.get()));
     return ef->create_annotation_block( result_int.get(), m_owner.get());
 }
 
@@ -597,7 +601,7 @@ const mi::neuraylib::IType* Type_factory::create(
         }
         case MDL::IType::TK_ENUM: {
             mi::base::Handle<const MDL::IType_enum> t( type->get_interface<MDL::IType_enum>());
-            return new Type_enum( this, t.get(), owner);
+            return new Type_enum( this, m_transaction.get(), t.get(), owner);
         }
         case MDL::IType::TK_FLOAT: {
             mi::base::Handle<const MDL::IType_float> t( type->get_interface<MDL::IType_float>());
@@ -629,7 +633,7 @@ const mi::neuraylib::IType* Type_factory::create(
         }
         case MDL::IType::TK_STRUCT: {
             mi::base::Handle<const MDL::IType_struct> t( type->get_interface<MDL::IType_struct>());
-            return new Type_struct( this, t.get(), owner);
+            return new Type_struct( this, m_transaction.get(), t.get(), owner);
         }
         case MDL::IType::TK_TEXTURE: {
             mi::base::Handle<const MDL::IType_texture> t(

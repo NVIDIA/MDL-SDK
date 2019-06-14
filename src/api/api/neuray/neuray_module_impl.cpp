@@ -226,6 +226,30 @@ const char* Module_impl::get_resource_name(mi::Size index) const
     return get_db_transaction()->tag_to_name(tag);
 }
 
+mi::Size Module_impl::get_annotation_definition_count() const
+{
+    return get_db_element()->get_annotation_definition_count();
+}
+
+const mi::neuraylib::IAnnotation_definition* Module_impl::get_annotation_definition(
+    mi::Size index) const
+{
+    mi::base::Handle<const MDL::IAnnotation_definition> result_int(
+        get_db_element()->get_annotation_definition(index));
+    mi::base::Handle<Expression_factory> ef(get_transaction()->get_expression_factory());
+    return ef->create_annotation_definition(result_int.get(), this->cast_to_major());
+
+}
+
+const mi::neuraylib::IAnnotation_definition* Module_impl::get_annotation_definition(
+    const char *name) const
+{
+    mi::base::Handle<const MDL::IAnnotation_definition> result_int(
+        get_db_element()->get_annotation_definition(name));
+    mi::base::Handle<Expression_factory> ef(get_transaction()->get_expression_factory());
+    return ef->create_annotation_definition(result_int.get(), this->cast_to_major());
+}
+
 } // namespace NEURAY
 
 } // namespace MI

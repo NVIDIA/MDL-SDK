@@ -38,8 +38,7 @@
 #include "mdl/compiler/compilercore/compilercore_streams.h"
 #include "mdl/compiler/compilercore/compilercore_array_ref.h"
 #include "mdl/compiler/compilercore/compilercore_file_resolution.h"
-
-#include <mdl/codegenerators/generator_code/generator_code_hash.h>
+#include "mdl/compiler/compilercore/compilercore_hash.h"
 
 #include "generator_dag_tools.h"
 #include "generator_dag_serializer.h"

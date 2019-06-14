@@ -37,7 +37,7 @@
 #include "compilercore_options.h"
 #include "compilercore_streams.h"
 #include "compilercore_zip_utils.h"
-#include <mdl/codegenerators/generator_code/generator_code_hash.h>
+#include "compilercore_hash.h"
 
 #include <mi/mdl/mdl_entity_resolver.h>
 

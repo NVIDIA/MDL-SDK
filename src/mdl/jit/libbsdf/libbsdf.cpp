@@ -2228,7 +2228,7 @@ BSDF_API void color_weighted_layer_sample(
         if (data->event_type == BSDF_EVENT_ABSORB)
             return;
 
-        data->bsdf_over_pdf *= weight * p_inv;
+        data->bsdf_over_pdf *= (make_float3(1.0f, 1.0f, 1.0f) - weight) * p_inv;
 
         if (p > 0.0f) {
             BSDF_pdf_data pdf_data = to_pdf_data(data);
@@ -2260,7 +2260,7 @@ BSDF_API void color_weighted_layer_evaluate(
     if (p < 1.0f) {
         base.evaluate(data, state, inherited_normal);
         bsdf += (make_float3(1.0f, 1.0f, 1.0f) - weight) * data->bsdf;
-        pdf  += (1.0f - p)                               * pdf;
+        pdf  += (1.0f - p)                               * data->pdf;
     }
     data->bsdf = bsdf;
     data->pdf  = pdf;

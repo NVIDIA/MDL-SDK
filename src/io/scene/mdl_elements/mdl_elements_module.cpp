@@ -39,6 +39,7 @@
 #include "i_mdl_elements_utilities.h"
 #include "mdl_elements_ast_builder.h"
 #include "mdl_elements_detail.h"
+#include "mdl_elements_expression.h"
 #include "mdl_elements_utilities.h"
 
 #include <sstream>
@@ -1320,9 +1321,11 @@ Mdl_module::Mdl_module( const Mdl_module& other)
     m_file_name( other.m_file_name),
     m_api_file_name( other.m_api_file_name),
     m_imports( other.m_imports),
-    m_types( other.m_types),
+    m_exported_types( other.m_exported_types),
+    m_local_types(other.m_local_types),
     m_constants( other.m_constants),
     m_annotations( other.m_annotations),
+    m_annotation_definitions( other.m_annotation_definitions),
     m_functions( other.m_functions),
     m_materials( other.m_materials),
     m_resource_reference_tags(other.m_resource_reference_tags)
@@ -1337,31 +1340,32 @@ Mdl_module::Mdl_module(
     const std::vector<DB::Tag>& imports,
     const std::vector<DB::Tag>& functions,
     const std::vector<DB::Tag>& materials,
-    bool load_resources)
+    bool load_resources) 
+    : m_mdl(make_handle_dup(mdl)),
+    m_module(make_handle_dup(module)),
+    m_code_dag(make_handle_dup(code_dag)),
+    m_tf(get_type_factory()),
+    m_vf(get_value_factory()),
+    m_ef(get_expression_factory()),
+    m_imports(imports),
+    m_exported_types(m_tf->create_type_list()),
+    m_local_types(m_tf->create_type_list()),
+    m_constants(m_vf->create_value_list()),
+    m_annotation_definitions(m_ef->create_annotation_definition_list()),
+    m_functions(functions),
+    m_materials(materials)
 {
     ASSERT( M_SCENE, mdl);
     ASSERT( M_SCENE, module);
     ASSERT( M_SCENE, module->get_name());
     ASSERT( M_SCENE, module->get_filename());
 
-    m_tf = get_type_factory();
-    m_vf = get_value_factory();
-    m_ef = get_expression_factory();
-
-    m_mdl = make_handle_dup( mdl);
-    m_module = make_handle_dup( module);
-    m_code_dag = make_handle_dup( code_dag);
     m_name = module->get_name();
     m_file_name = module->get_filename();
     m_api_file_name = DETAIL::is_container_member( m_file_name.c_str())
         ? DETAIL::get_container_filename( m_file_name.c_str()) : m_file_name;
 
-    m_imports = imports;
-    m_functions = functions;
-    m_materials = materials;
-
     // convert types
-    m_types = m_tf->create_type_list();
     mi::Uint32 type_count = code_dag->get_type_count();
     for( mi::Uint32 i = 0; i < type_count; ++i) {
         const char* name = code_dag->get_type_name( i);
@@ -1384,11 +1388,14 @@ Mdl_module::Mdl_module(
         mi::base::Handle<const IType> type_int(
             mdl_type_to_int_type( m_tf.get(), type, &annotations, &sub_annotations));
         std::string full_name = m_name + "::" + name;
-        m_types->add_type( full_name.c_str(), type_int.get());
+
+        if( code_dag->is_type_exported( i))
+            m_exported_types->add_type( full_name.c_str(), type_int.get());
+        else
+            m_local_types->add_type( full_name.c_str(), type_int.get());
     }
 
     // convert constants
-    m_constants = m_vf->create_value_list();
     mi::Uint32 constant_count = code_dag->get_constant_count();
     for( mi::Uint32 i = 0; i < constant_count; ++i) {
         const char* name = code_dag->get_constant_name( i);
@@ -1400,7 +1407,6 @@ Mdl_module::Mdl_module(
         m_constants->add_value( full_name.c_str(), value_int.get());
     }
 
-    // convert module annotations
     Mdl_dag_converter anno_converter(
         m_ef.get(),
         transaction,
@@ -1411,6 +1417,65 @@ Mdl_module::Mdl_module(
         /*prototype_tag*/ DB::Tag(),
         load_resources);
 
+    // convert annotation definitions
+    mi::Uint32 annotation_definition_count = code_dag->get_annotation_count();
+    for (mi::Uint32 i = 0; i < annotation_definition_count; ++i) {
+
+        const char* name = code_dag->get_annotation_name(i);
+
+        // convert parameters
+        mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
+        mi::base::Handle<IExpression_list> parameter_defaults(m_ef->create_expression_list());
+
+        for (int p = 0, n = code_dag->get_annotation_parameter_count(i); p < n; ++p) {
+
+            const char* parameter_name = code_dag->get_annotation_parameter_name(i, p);
+
+            // convert types
+            const mi::mdl::IType* parameter_type
+                = code_dag->get_annotation_parameter_type(i, p);
+
+            mi::base::Handle<const IType> type_int(
+                mdl_type_to_int_type(m_tf.get(), parameter_type));
+            parameter_types->add_type(parameter_name, type_int.get());
+
+            // convert defaults
+            const mi::mdl::DAG_node* default_
+                = code_dag->get_annotation_parameter_default(i, p);
+            if (default_) {
+                mi::base::Handle<IExpression> default_int(anno_converter.mdl_dag_node_to_int_expr(
+                    default_, type_int.get()));
+                ASSERT(M_SCENE, default_int);
+                parameter_defaults->add_expression(parameter_name, default_int.get());
+            }
+        }
+        // convert annotations
+        int annotation_annotation_count = code_dag->get_annotation_annotation_count(i);
+        Mdl_annotation_block annotations(annotation_annotation_count);
+        for (int a = 0; a < annotation_annotation_count; ++a) {
+            annotations[a] = code_dag->get_annotation_annotation(i, a);
+        }
+        mi::base::Handle<IAnnotation_block> annotations_int(anno_converter.mdl_dag_node_vector_to_int_annotation_block(
+            annotations, m_name.c_str()));
+
+        bool is_exported = code_dag->get_annotation_property(i, mi::mdl::IGenerated_code_dag::AP_IS_EXPORTED);
+
+        mi::neuraylib::IAnnotation_definition::Semantics sema = mdl_semantics_to_ext_annotation_semantics(
+            code_dag->get_annotation_semantics(i));
+
+        mi::base::Handle<IAnnotation_definition> anno_def(
+            m_ef->create_annotation_definition(
+                name,
+                sema,
+                is_exported,
+                parameter_types.get(),
+                parameter_defaults.get(),
+                annotations_int.get()));
+
+        m_annotation_definitions->add_definition(anno_def.get());
+    }
+
+    // convert module annotations
     mi::Uint32 annotation_count = code_dag->get_module_annotation_count();
     Mdl_annotation_block annotations( annotation_count);
     for( mi::Uint32 i = 0; i < annotation_count; ++i)
@@ -1466,8 +1531,8 @@ DB::Tag Mdl_module::get_import( mi::Size index) const
 
 const IType_list* Mdl_module::get_types() const
 {
-    m_types->retain();
-    return m_types.get();
+    m_exported_types->retain();
+    return m_exported_types.get();
 }
 
 const IValue_list* Mdl_module::get_constants() const
@@ -1511,6 +1576,24 @@ const IAnnotation_block* Mdl_module::get_annotations() const
         return 0;
     m_annotations->retain();
     return m_annotations.get();
+}
+
+mi::Size Mdl_module::get_annotation_definition_count() const
+{
+    ASSERT(M_SCENE, m_annotation_definitions);
+    return m_annotation_definitions->get_size();
+}
+
+const IAnnotation_definition* Mdl_module::get_annotation_definition(mi::Size index) const
+{
+    ASSERT(M_SCENE, m_annotation_definitions);
+    return m_annotation_definitions->get_definition(index);
+}
+
+const IAnnotation_definition* Mdl_module::get_annotation_definition(const char* name) const
+{
+    ASSERT(M_SCENE, m_annotation_definitions);
+    return m_annotation_definitions->get_definition(name);
 }
 
 const char* Mdl_module::get_material_name(DB::Transaction* transaction, mi::Size index) const
@@ -1689,9 +1772,11 @@ const SERIAL::Serializable* Mdl_module::serialize( SERIAL::Serializer* serialize
     serializer->write( m_file_name);
     serializer->write( m_api_file_name);
     SERIAL::write( serializer, m_imports);
-    m_tf->serialize_list( serializer, m_types.get());
+    m_tf->serialize_list( serializer, m_exported_types.get());
+    m_tf->serialize_list( serializer, m_local_types.get());
     m_vf->serialize_list( serializer, m_constants.get());
     m_ef->serialize_annotation_block( serializer, m_annotations.get());
+    m_ef->serialize_annotation_definition_list(serializer, m_annotation_definitions.get());
     SERIAL::write( serializer, m_functions);
     SERIAL::write( serializer, m_materials);
     SERIAL::write(serializer, m_resource_reference_tags);
@@ -1717,9 +1802,11 @@ SERIAL::Serializable* Mdl_module::deserialize( SERIAL::Deserializer* deserialize
     deserializer->read( &m_file_name);
     deserializer->read( &m_api_file_name);
     SERIAL::read( deserializer, &m_imports);
-    m_types = m_tf->deserialize_list( deserializer);
+    m_exported_types = m_tf->deserialize_list( deserializer);
+    m_local_types = m_tf->deserialize_list( deserializer);
     m_constants = m_vf->deserialize_list( deserializer);
     m_annotations = m_ef->deserialize_annotation_block( deserializer);
+    m_annotation_definitions = m_ef->deserialize_annotation_definition_list(deserializer);
     SERIAL::read( deserializer, &m_functions);
     SERIAL::read( deserializer, &m_materials);
     SERIAL::read( deserializer, &m_resource_reference_tags);
@@ -1747,13 +1834,16 @@ void Mdl_module::dump( DB::Transaction* transaction) const
         s << "tag " << m_imports[imports_count-1].get_uint();
     s << std::endl;
 
-    tmp = m_tf->dump( m_types.get());
-    s << "Types: " << tmp->get_c_str() << std::endl;
+    tmp = m_tf->dump( m_exported_types.get());
+    s << "Exported types: " << tmp->get_c_str() << std::endl;
+
+    tmp = m_tf->dump( m_local_types.get());
+    s << "Local types: " << tmp->get_c_str() << std::endl;
 
     tmp = m_vf->dump( transaction, m_constants.get(), /*name*/ 0);
     s << "Constants: " << tmp->get_c_str() << std::endl;
 
-    // m_annotations, m_resource_references missing
+    // m_annotations, m_annotation_definitions, m_resource_references missing
 
     mi::Size function_count = m_functions.size();
     for( mi::Size i = 0; i < function_count; ++i)
@@ -1775,9 +1865,11 @@ size_t Mdl_module::get_size() const
         + dynamic_memory_consumption( m_file_name)
         + dynamic_memory_consumption( m_api_file_name)
         + dynamic_memory_consumption( m_imports)
-        + dynamic_memory_consumption( m_types)
+        + dynamic_memory_consumption( m_exported_types)
+        + dynamic_memory_consumption( m_local_types)
         + dynamic_memory_consumption( m_constants)
         + dynamic_memory_consumption( m_annotations)
+        + dynamic_memory_consumption( m_annotation_definitions)
         + dynamic_memory_consumption( m_functions)
         + dynamic_memory_consumption( m_materials)
         + m_module->get_memory_size()

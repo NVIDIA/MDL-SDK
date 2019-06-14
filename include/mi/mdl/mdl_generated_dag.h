@@ -383,6 +383,11 @@ public:
         FP_IS_NATIVE         = 6, ///< True, if this function was declared native.
     };
 
+    /// Properties of DAG annotations.
+    enum Annotation_property {
+        AP_IS_EXPORTED       = 1, ///< True, if this annotation is exported.
+    };
+
     /// The node factory for DAG IR nodes.
     class DAG_node_factory
     {
@@ -465,11 +470,12 @@ public:
     public:
         /// Instantiation flags.
         enum Flags {
-            INSTANCE_COMPILATION = 0,  ///< Do an instance compilation, default.
-            CLASS_COMPILATION    = 1,  ///< Do a class compilation.
-            NO_ARGUMENT_INLINE   = 2,  ///< CLASS_COMPILATION: Do not inline any arguments.
-            NO_RESOURCE_SHARING  = 4,  ///< CLASS_COMPILATION: Do not share resource arguments.
-            NO_STRING_PARAMS     = 8,  ///< CLASS_COMPILATION: Do not create string parameters.
+            INSTANCE_COMPILATION = 0 << 0,  ///< Do an instance compilation, default.
+            CLASS_COMPILATION    = 1 << 0,  ///< Do a class compilation.
+            NO_ARGUMENT_INLINE   = 1 << 1,  ///< CLASS_COMPILATION: Do not inline any arguments.
+            NO_RESOURCE_SHARING  = 1 << 2,  ///< CLASS_COMPILATION: Do not share resource arguments.
+            NO_STRING_PARAMS     = 1 << 3,  ///< CLASS_COMPILATION: Do not create string parameters.
+            NO_TERNARY_ON_DF     = 1 << 4,  ///< CLASS_COMPILATION: Do not allow ?: on df.
 
             DEFAULT_CLASS_COMPILATION =  ///< Do class compilation with default flags.
                 CLASS_COMPILATION |
@@ -799,6 +805,14 @@ public:
         int parameter_index,
         int user_index) const = 0;
 
+    /// Get the function hash value for the given function index if available.
+    ///
+    /// \param function_index  The index of the function.
+    /// \returns               The function hash of the function or NULL if no hash
+    ///                        value is available or the index is out of bounds.
+    virtual DAG_hash const *get_function_hash(
+        int function_index) const = 0;
+
     /// Get the number of materials in the generated code.
     ///
     /// \returns    The number of materials in this generated code.
@@ -1098,6 +1112,13 @@ public:
     virtual IType const *get_type(
         int index) const = 0;
 
+    /// Returns true if the type at index is exported.
+    ///
+    /// \param index  The index of the type.
+    /// \returns      true for exported types.
+    virtual bool is_type_exported(
+        int index) const = 0;
+
     /// Get the number of annotations of the type at index.
     ///
     /// \param index  The index of the type.
@@ -1224,6 +1245,100 @@ public:
 
     /// Get the internal space.
     virtual char const *get_internal_space() const = 0;
+
+    /// Get the number of annotations in the generated code.
+    ///
+    /// \returns    The number of annotations in this generated code.
+    virtual int get_annotation_count() const = 0;
+
+    /// Get the semantics of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The semantics of the annotation.
+    virtual IDefinition::Semantics get_annotation_semantics(int annotation_index) const = 0;
+
+    /// Get the name of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The name of the annotation.
+    virtual char const *get_annotation_name(int annotation_index) const = 0;
+
+    /// Get the original name of the annotation at annotation_index if the annotation name is
+    /// an alias, i.e. re-exported from a module.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The original name of the annotation or NULL.
+    virtual char const *get_original_annotation_name(int annotation_index) const = 0;
+
+    /// Get the parameter count of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The number of parameters of the annotation.
+    virtual int get_annotation_parameter_count(int annotation_index) const = 0;
+
+    /// Get the parameter type of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_index   The index of the parameter.
+    /// \returns                 The type of the parameter.
+    virtual IType const *get_annotation_parameter_type(
+        int annotation_index,
+        int parameter_index) const = 0;
+
+    /// Get the parameter name of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_index   The index of the parameter.
+    /// \returns                 The name of the parameter.
+    virtual char const *get_annotation_parameter_name(
+        int annotation_index,
+        int parameter_index) const = 0;
+
+    /// Get the index of the parameter parameter_name.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_name    The name of the parameter.
+    /// \returns                 The index of the parameter, or -1 if it does not exist.
+    virtual int get_annotation_parameter_index(
+        int        annotation_index,
+        char const *parameter_name) const = 0;
+
+    /// Get the default initializer of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index   The index of the annotation.
+    /// \param parameter_index    The index of the parameter.
+    /// \returns                  The default initializer or NULL if not available.
+    virtual DAG_node const *get_annotation_parameter_default(
+        int annotation_index,
+        int parameter_index) const = 0;
+
+    /// Get the property flag of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param ap                The requested annotation property.
+    /// \returns                 True if this annotation has the property, false if not.
+    virtual bool get_annotation_property(
+        int                 annotation_index,
+        Annotation_property ap) const = 0;
+
+    /// Get the number of annotations of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns               The number of annotations.
+    virtual int get_annotation_annotation_count(
+        int annotation_index) const = 0;
+
+    /// Get the annotation at annotation_index of the annotation (declaration) at anno_decl_index.
+    ///
+    /// \param anno_decl_index    The index of the annotation (declaration).
+    /// \param annotation_index   The index of the annotation.
+    /// \returns                  The annotation.
+    virtual DAG_node const *get_annotation_annotation(
+        int anno_decl_index,
+        int annotation_index) const = 0;
 };
 
 /// Check if a DAG node is of a certain type.

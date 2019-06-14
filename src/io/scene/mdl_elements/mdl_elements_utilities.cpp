@@ -60,6 +60,7 @@
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/data/serial/i_serializer.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_generated_dag.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
@@ -355,6 +356,61 @@ mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
 
     ASSERT( M_SCENE, false);
     return mi::neuraylib::IFunction_definition::DS_UNKNOWN;
+}
+
+mi::neuraylib::IAnnotation_definition::Semantics mdl_semantics_to_ext_annotation_semantics(
+    mi::mdl::IDefinition::Semantics semantic)
+{
+    if ((semantic < mi::mdl::IDefinition::DS_ANNOTATION_FIRST ||
+         semantic > mi::mdl::IDefinition::DS_ANNOTATION_LAST) && 
+        semantic != mi::mdl::IDefinition::DS_UNKNOWN) {
+
+        ASSERT(M_SCENE, false);
+        return mi::neuraylib::IAnnotation_definition::AS_UNKNOWN;
+    }
+
+    switch (semantic) {
+
+#define CASE_AS(e) \
+        case mi::mdl::IDefinition::DS_##e: \
+            return mi::neuraylib::IAnnotation_definition::AS_##e;
+
+        CASE_AS(INTRINSIC_ANNOTATION);
+        CASE_AS(THROWS_ANNOTATION);
+        CASE_AS(SINCE_ANNOTATION);
+        CASE_AS(REMOVED_ANNOTATION);
+        CASE_AS(CONST_EXPR_ANNOTATION);
+        CASE_AS(DERIVABLE_ANNOTATION);
+        CASE_AS(NATIVE_ANNOTATION);
+        CASE_AS(UNUSED_ANNOTATION);
+        CASE_AS(NOINLINE_ANNOTATION);
+        CASE_AS(SOFT_RANGE_ANNOTATION);
+        CASE_AS(HARD_RANGE_ANNOTATION);
+        CASE_AS(HIDDEN_ANNOTATION);
+        CASE_AS(DEPRECATED_ANNOTATION);
+        CASE_AS(VERSION_NUMBER_ANNOTATION);
+        CASE_AS(VERSION_ANNOTATION);
+        CASE_AS(DEPENDENCY_ANNOTATION);
+        CASE_AS(UI_ORDER_ANNOTATION);
+        CASE_AS(USAGE_ANNOTATION);
+        CASE_AS(ENABLE_IF_ANNOTATION);
+        CASE_AS(THUMBNAIL_ANNOTATION);
+        CASE_AS(DISPLAY_NAME_ANNOTATION);
+        CASE_AS(IN_GROUP_ANNOTATION);
+        CASE_AS(DESCRIPTION_ANNOTATION);
+        CASE_AS(AUTHOR_ANNOTATION);
+        CASE_AS(CONTRIBUTOR_ANNOTATION);
+        CASE_AS(COPYRIGHT_NOTICE_ANNOTATION);
+        CASE_AS(CREATED_ANNOTATION);
+        CASE_AS(MODIFIED_ANNOTATION);
+        CASE_AS(KEYWORDS_ANNOTATION);
+        CASE_AS(ORIGIN_ANNOTATION);
+
+#undef CASE_AS
+    default:
+        break;
+    }
+    return mi::neuraylib::IAnnotation_definition::AS_UNKNOWN;
 }
 
 mi::mdl::IDefinition::Semantics ext_semantics_to_mdl_semantics(
@@ -2208,6 +2264,9 @@ IValue* mdl_value_to_int_value(
                 mdl_type_to_int_type<IType_texture>( tf.get(), type_texture));
             DB::Tag tag;
             Float32 gamma = 0.0f;
+            std::string string_value_buf;
+            const char* string_value = value_texture->get_string_value();
+            bool needs_owner = false;
             if (load_resources) {
                 tag = DETAIL::mdl_texture_to_tag(
                     transaction, value_texture, module_filename, module_name);
@@ -2220,8 +2279,14 @@ IValue* mdl_value_to_int_value(
                 tag = DB::Tag(value_texture->get_tag_value());
                 gamma = value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_default ? 0.0f :
                     (value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
+                string_value_buf = string_value;
+                auto p = string_value_buf.find("|");
+                if (p != std::string::npos) {
+                    needs_owner = true;
+                    string_value = &string_value_buf[p + 1];
+                }
             }
-            return vf->create_texture( type_texture_int.get(), tag, value_texture->get_string_value(), module_name, gamma);
+            return vf->create_texture( type_texture_int.get(), tag, string_value, needs_owner ? module_name : nullptr, gamma);
         }
         case mi::mdl::IValue::VK_LIGHT_PROFILE: {
             const mi::mdl::IValue_light_profile* value_light_profile
@@ -2709,6 +2774,7 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
 {
     DB::Tag tag = tex->get_value();
     const char *resource_name;
+    std::string resource_name_buf;
     DB::Tag_version tag_version, image_tag_version;
     mi::Float32 gamma_override = 0.0f;
     mi::mdl::IValue_texture::gamma_mode gamma = mi::mdl::IValue_texture::gamma_default;
@@ -2757,6 +2823,15 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
         if (resource_name == NULL || resource_name[0] == '\0') {
             // invalid resource
             return vf->create_invalid_ref(mdl_type);
+        }
+
+        // for weak-relative resource path, we pre-pend the resource url with its owner module
+        const char *owner_name = tex->get_owner_module();
+        if (owner_name != NULL && owner_name[0] != '\0') {
+            resource_name_buf = owner_name;
+            resource_name_buf += "|";
+            resource_name_buf += resource_name;
+            resource_name = resource_name_buf.c_str();
         }
     }
     if (gamma_override == 1.0f)
@@ -3183,6 +3258,19 @@ const mi::mdl::IType* int_type_to_mdl_type(
     case IType::TK_ENUM: {
         mi::base::Handle<const IType_enum> int_enum_type(
             type->get_interface<IType_enum>());
+
+        switch (int_enum_type->get_predefined_id()) {
+        case IType_enum::EID_INTENSITY_MODE:
+            return tf.get_predefined_enum(mi::mdl::IType_enum::EID_INTENSITY_MODE);
+        case IType_enum::EID_TEX_GAMMA_MODE:
+            return tf.get_predefined_enum(mi::mdl::IType_enum::EID_TEX_GAMMA_MODE);
+        case IType_enum::EID_USER:
+            break;
+        default:
+            ASSERT(M_SCENE, !"unhandled predefinied enum type.");
+            return nullptr;
+        }
+
         const mi::mdl::ISymbol *s = symtab->create_symbol(int_enum_type->get_symbol());
         mi::mdl::IType_enum* te = tf.create_enum(s);
         for (mi::Size i = 0, n = int_enum_type->get_size(); i < n; ++i) {
@@ -3213,6 +3301,23 @@ const mi::mdl::IType* int_type_to_mdl_type(
     {
         mi::base::Handle<const IType_struct> int_struct_type(
             type->get_interface<IType_struct>());
+        switch (int_struct_type->get_predefined_id()) {
+        case IType_struct::SID_MATERIAL:
+            return tf.get_predefined_struct(mi::mdl::IType_struct::SID_MATERIAL);
+        case IType_struct::SID_MATERIAL_EMISSION:
+            return tf.get_predefined_struct(mi::mdl::IType_struct::SID_MATERIAL_EMISSION);
+        case IType_struct::SID_MATERIAL_GEOMETRY:
+            return tf.get_predefined_struct(mi::mdl::IType_struct::SID_MATERIAL_GEOMETRY);
+        case IType_struct::SID_MATERIAL_SURFACE:
+            return tf.get_predefined_struct(mi::mdl::IType_struct::SID_MATERIAL_SURFACE);
+        case IType_struct::SID_MATERIAL_VOLUME:
+            return tf.get_predefined_struct(mi::mdl::IType_struct::SID_MATERIAL_VOLUME);
+        case IType_struct::SID_USER:
+            break;
+        default:
+            ASSERT(M_SCENE, !"unhandled predefinied struct type.");
+            return nullptr;
+        }
 
         const mi::mdl::ISymbol *s = symtab->create_symbol(int_struct_type->get_symbol());
         mi::mdl::IType_struct* st = tf.create_struct(s);
@@ -4576,7 +4681,7 @@ public:
     {
         const mi::mdl::IType* type = name->get_type();
         if( type && type->get_kind() == mi::mdl::IType::TK_ENUM) {
-            // for enum values, the type must be imported
+            // for enum values, the type must be imported.
             handle_type( type);
             return;
         }
@@ -4756,7 +4861,7 @@ void Symbol_importer::add_imports()
     for( String_set::const_iterator it = imports.begin(); it != imports.end(); ++it) {
         const std::string& import = *it;
         // do not import intensity_mode, this is a keyword in MDL 1.1
-        if( import == "intensity_mode")
+        if (import == "intensity_mode" || import == "::intensity_mode")
             continue;
         module->add_import( import.c_str());
     }
@@ -5087,6 +5192,7 @@ Execution_context::Execution_context() : m_result(0)
     add_option(Option(MDL_CTX_OPTION_BUNDLE_RESOURCES, false));
     add_option(Option(MDL_CTX_OPTION_EXPERIMENTAL, false));
     add_option(Option(MDL_CTX_OPTION_RESOLVE_RESOURCES, true));
+    add_option(Option(MDL_CTX_OPTION_FOLD_TERNARY_ON_DF, false));
 }
 
 mi::Size Execution_context::get_messages_count() const
@@ -5569,6 +5675,33 @@ bool can_enforce_uniform(
     }
 
     return true;
+}
+
+void write(SERIAL::Serializer* serializer, const mi::base::Uuid& uuid)
+{
+    serializer->write(uuid.m_id1);
+    serializer->write(uuid.m_id2);
+    serializer->write(uuid.m_id3);
+    serializer->write(uuid.m_id4);
+}
+
+void read(SERIAL::Deserializer* deserializer, mi::base::Uuid& uuid)
+{
+    deserializer->read(&uuid.m_id1);
+    deserializer->read(&uuid.m_id2);
+    deserializer->read(&uuid.m_id3);
+    deserializer->read(&uuid.m_id4);
+}
+
+mi::base::Uuid convert_hash(
+    mi::mdl::DAG_hash const &h)
+{
+    mi::base::Uuid result;
+    result.m_id1 = (h[ 0] << 24) | (h[ 1] << 16) | (h[ 2] << 8) | h[ 3];
+    result.m_id2 = (h[ 4] << 24) | (h[ 5] << 16) | (h[ 6] << 8) | h[ 7];
+    result.m_id3 = (h[ 8] << 24) | (h[ 9] << 16) | (h[10] << 8) | h[11];
+    result.m_id4 = (h[12] << 24) | (h[13] << 16) | (h[14] << 8) | h[15];
+    return result;
 }
 
 } // namespace MDL

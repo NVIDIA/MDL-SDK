@@ -300,6 +300,7 @@ public:
     #define MDL_CTX_OPTION_BUNDLE_RESOURCES         "bundle_resources"
     #define MDL_CTX_OPTION_EXPERIMENTAL             "experimental"
     #define MDL_CTX_OPTION_RESOLVE_RESOURCES        "resolve_resources"
+    #define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF       "fold_ternary_on_df"
 
     Execution_context();
 

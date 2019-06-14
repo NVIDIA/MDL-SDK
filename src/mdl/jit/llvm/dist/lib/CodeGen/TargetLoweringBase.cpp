@@ -89,6 +89,8 @@ static cl::opt<unsigned> OptsizeJumpTableDensity(
     cl::desc("Minimum density for building a jump table in "
              "an optsize function"));
 
+// Currently not used
+#if 0
 static bool darwinHasSinCos(const Triple &TT) {
   assert(TT.isOSDarwin() && "should be called with darwin triple");
   // Don't bother with 32 bit x86.
@@ -103,6 +105,7 @@ static bool darwinHasSinCos(const Triple &TT) {
   // Any other darwin such as WatchOS/TvOS is new enough.
   return true;
 }
+#endif
 
 // Although this default value is arbitrary, it is not random. It is assumed
 // that a condition that evaluates the same way by a higher percentage than this
@@ -126,6 +129,8 @@ void TargetLoweringBase::InitLibcalls(const Triple &TT) {
 
   // A few names are different on particular architectures or environments.
   if (TT.isOSDarwin()) {
+    // The MDL SDK JIT does not support OS version specific functions
+#if 0
     // For f16/f32 conversions, Darwin uses the standard naming scheme, instead
     // of the gnueabi-style __gnu_*_ieee.
     // FIXME: What about other targets?
@@ -156,6 +161,7 @@ void TargetLoweringBase::InitLibcalls(const Triple &TT) {
                               CallingConv::ARM_AAPCS_VFP);
       }
     }
+#endif
   } else {
     setLibcallName(RTLIB::FPEXT_F16_F32, "__gnu_h2f_ieee");
     setLibcallName(RTLIB::FPROUND_F32_F16, "__gnu_f2h_ieee");

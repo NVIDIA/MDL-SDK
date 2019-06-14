@@ -43,11 +43,11 @@ namespace
         m.append(message);
         if (!file.empty())
         {
-            m.append("\n     (file: ");
+            m.append("\n                file: ");
             m.append(file);
             m.append(", line: ");
             m.append(std::to_string(line));
-            m.append(")\n");
+            m.append("\n");
         }
         else
         {
@@ -90,6 +90,18 @@ namespace
         }
     }
 
+    std::string print_nested_exceotion(const std::exception& e) 
+    {
+        std::string message = e.what();
+        try {
+            std::rethrow_if_nested(e);
+        }
+        catch (const std::exception& nested) {
+            message += "\n               nested: " + print_nested_exceotion(nested);
+        }
+        return message;
+    }
+
 } // anonymous
 
 namespace mdl_d3d12
@@ -108,6 +120,12 @@ namespace mdl_d3d12
     {
         print("[MDL_D3D12] [ERROR]   ", message, file, line);
     }
+
+    void log_error(const std::exception& exception, const std::string& file, int line)
+    {
+        print("[MDL_D3D12] [ERROR]   ", print_nested_exceotion(exception), file, line);
+    }
+
 
     bool log_on_failure(
         HRESULT error_code, const std::string& message, const std::string& file, int line)

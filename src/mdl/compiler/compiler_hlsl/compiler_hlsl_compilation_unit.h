@@ -201,6 +201,9 @@ public:
     /// Register a new file name.
     unsigned register_filename(char const *fname);
 
+    /// Get the allocator.
+    IAllocator *get_allocator() const { return m_arena.get_allocator(); }
+
 private:
     /// Constructor.
     ///

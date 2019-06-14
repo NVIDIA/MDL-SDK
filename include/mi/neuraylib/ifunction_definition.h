@@ -64,9 +64,7 @@ public:
     /// All known semantics of functions definitions.
     ///
     /// \note Do not rely on the numeric values of the enumerators since they may change without
-    ///       further notice. In case of additions or removals other the numerical value of other
-    ///       needs to be adjusted in order to maintain the semantics of the \c FOO_FIRST and
-    ///       \c FOO_LAST enumerators.
+    ///       further notice.
     enum Semantics
     {
         DS_UNKNOWN = 0,                            ///< Unknown semantics.
@@ -494,6 +492,8 @@ public:
     virtual IFunction_call* create_function_call(
         const IExpression_list* arguments, Sint32* errors = 0) const = 0;
 };
+
+mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));
 
 /*@}*/ // end group mi_neuray_mdl_elements
 

@@ -483,7 +483,6 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
             }
 
             if (def_lookup->get_semantics() != IDefinition::DS_UNKNOWN) {
-              
                 // construct qualified name for reference
                 mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
                 MDL_ASSERT(!needs_inline(mod_ori.get()));
@@ -636,7 +635,6 @@ IExpression_call *Module_inliner::make_constructor(
     IType_name      *tname = m_nf.create_type_name(qname);
 
     if (is<IType_array>(vs_ori->get_type())) {
-
         IExpression_literal *array_size = m_ef.create_literal(
             m_vf.create_int(vs_ori->get_component_count()));
         tname->set_array_size(array_size);
@@ -660,7 +658,6 @@ IExpression_call *Module_inliner::make_constructor(
             type = ta->get_element_type();
         }
         if (is_user_type(type)) {
-
             Definition const *type_def = get_type_definition(m_module.get(), type);
             if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
                 type_def = m_module->get_original_definition(type_def);
@@ -669,23 +666,21 @@ IExpression_call *Module_inliner::make_constructor(
                 Reference_map::iterator const &it = m_references.find(type_def);
                 MDL_ASSERT(it != m_references.end());
                 arg_expr = make_constructor(cast<IValue_compound>(old_value), it->second);
-            }
-            else if (is<IValue_enum>(old_value)) {
+            } else if (is<IValue_enum>(old_value)) {
                 ISimple_name const *sn = cast<IDeclaration_type_enum>(
                     type_def->get_declaration())->get_value_name(cast<IValue_enum>(old_value)->get_index());
 
                 IDefinition const *vndef = sn->get_definition();
                 Reference_map::iterator const &it = m_references.find(vndef);
-                if (it == m_references.end())
+                if (it == m_references.end()) {
                     arg_expr = simple_name_to_reference(m_target_module->clone_name(sn));
-                else {
+                } else {
                     ISymbol const *sym = it->second;
-                    ISimple_name *sn = m_nf.create_simple_name(sym);
+                    ISimple_name  *sn  = m_nf.create_simple_name(sym);
                     arg_expr =  simple_name_to_reference(sn);
                 }
             }
-        }
-        else {
+        } else {
             IValue const *new_value = m_target_module->import_value(old_value);
             arg_expr = m_ef.create_literal(new_value);
         }
@@ -699,7 +694,6 @@ ISimple_name const *Module_inliner::generate_name(
     ISimple_name const *simple_name,
     char const *prefix)
 {
-  
     string name(prefix ? prefix : "", m_alloc);
     name.append(simple_name->get_symbol()->get_name());
 
@@ -726,7 +720,7 @@ ISimple_name const *Module_inliner::generate_name(
 // Clones a statement.
 IStatement *Module_inliner::clone_statement(IStatement const *stmt)
 {
-    if (!stmt)
+    if (stmt == NULL)
         return NULL;
 
     switch (stmt->get_kind()) {
@@ -861,8 +855,7 @@ IAnnotation *Module_inliner::create_string_anno(
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol("anno")));
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol(anno_name)));
 
-    IValue_string const *s = m_target_module->get_value_factory()->create_string(
-        value);
+    IValue_string const *s   = m_target_module->get_value_factory()->create_string(value);
     IExpression_literal *lit = m_ef.create_literal(s);
     IArgument_positional const *arg = m_ef.create_positional_argument(lit);
 
@@ -877,7 +870,7 @@ IAnnotation_block *Module_inliner::create_annotation_block(
     IDefinition const       *def,
     IAnnotation_block const *anno_block)
 {
-    if (m_is_root && anno_block) {
+    if (m_is_root && anno_block != NULL) {
         return m_target_module->clone_annotation_block(anno_block, this);
     }
     bool is_anno = def->get_declaration()->get_kind() == IDeclaration::DK_ANNOTATION;
@@ -885,7 +878,6 @@ IAnnotation_block *Module_inliner::create_annotation_block(
     IAnnotation_block *new_block = m_af.create_annotation_block();
     // create a "hidden" annotation for exported non-root entities
     if (!is_anno && m_exports.find(def) != m_exports.end()) {
-
         IQualified_name *qn = m_nf.create_qualified_name();
         qn->add_component(m_nf.create_simple_name(m_nf.create_symbol("anno")));
         qn->add_component(m_nf.create_simple_name(m_nf.create_symbol("hidden")));
@@ -894,45 +886,60 @@ IAnnotation_block *Module_inliner::create_annotation_block(
     }
 
     IAnnotation *anno_display_name = NULL;
-    IAnnotation *anno_origin = NULL;
+    IAnnotation *anno_origin       = NULL;
 
-    if (anno_block) {
+    if (anno_block != NULL) {
         for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
-            IAnnotation const *anno = anno_block->get_annotation(i);
-            IQualified_name const *qn = anno->get_name();
+            IAnnotation const     *anno = anno_block->get_annotation(i);
+            IQualified_name const *qn   = anno->get_name();
+            IDefinition const     *def  = qn->get_definition();
 
-            IDefinition const     *def = qn->get_definition();
             if (!is_anno) {
-                if (def->get_semantics() == IDefinition::DS_DISPLAY_NAME_ANNOTATION) {
-                    anno_display_name = m_target_module->clone_annotation(anno, /*modifier=*/ NULL);
+                // only for non-annotations
+                switch (def->get_semantics()) {
+                case IDefinition::DS_DISPLAY_NAME_ANNOTATION:
+                    // copy and remember the display_name annotation
+                    anno_display_name = m_target_module->clone_annotation(anno, /*modifier=*/NULL);
                     continue;
-                }
-                else if (def->get_semantics() == IDefinition::DS_DESCRIPTION_ANNOTATION) {
+                case IDefinition::DS_DESCRIPTION_ANNOTATION:
+                    // copy the description annotation
                     register_import("::anno", "description");
-                    IAnnotation *anno_desc_name = m_target_module->clone_annotation(anno, /*modifier=*/ NULL);
-                    new_block->add_annotation(anno_desc_name);
+                    new_block->add_annotation(
+                        m_target_module->clone_annotation(anno, /*modifier=*/NULL));
                     continue;
+                case IDefinition::DS_NOINLINE_ANNOTATION:
+                    // copy the noinline annotation, this is necessary for the function hash
+                    // based replacement
+                    register_import("::anno", "noinline");
+                    new_block->add_annotation(
+                        m_target_module->clone_annotation(anno, /*modifier=*/NULL));
+                    continue;
+                default:
+                    // ignore
+                    break;
                 }
             }
+
+            // for all entities
             if (def->get_semantics() == IDefinition::DS_ORIGIN_ANNOTATION) {
+                // copy and remember the origin annotation
                 anno_origin = m_target_module->clone_annotation(anno, /*modifier=*/ NULL);
             }
         }
     }
 
-    if (!anno_origin) {
-       
+    if (anno_origin == NULL) {
         string name_ori(m_alloc);
         name_ori += m_module->get_name();
         name_ori += "::";
-        name_ori += def->get_symbol()->get_name(); 
+        name_ori += def->get_symbol()->get_name();
 
         anno_origin = create_string_anno("origin", name_ori.c_str());
     }
     new_block->add_annotation(anno_origin);
 
     if (!is_anno) {
-        if (!anno_display_name) {
+        if (anno_display_name == NULL) {
             anno_display_name = create_string_anno("display_name", def->get_symbol()->get_name());
         }
         new_block->add_annotation(anno_display_name);
@@ -946,12 +953,14 @@ IAnnotation_block const *Module_inliner::clone_parameter_annotations(
     IAnnotation_block const *anno_block,
     char const              *display_name)
 {
-    if (m_is_root) // simply clone the block
+    if (m_is_root) {
+        // simply clone the block
         return m_target_module->clone_annotation_block(anno_block, this);
+    }
 
     IAnnotation_block *new_block = m_af.create_annotation_block();
     bool has_display_name = false;
-    if (anno_block)
+    if (anno_block != NULL) {
         for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
             IAnnotation const     *anno = anno_block->get_annotation(i);
             IQualified_name const *qn   = anno->get_name();
@@ -965,16 +974,18 @@ IAnnotation_block const *Module_inliner::clone_parameter_annotations(
                 new_block->add_annotation(
                     m_target_module->clone_annotation(anno, /*modifier=*/ NULL));
                 has_display_name = true;
-            }
-            else if (def->get_semantics() == IDefinition::DS_DESCRIPTION_ANNOTATION) {
+            } else if (def->get_semantics() == IDefinition::DS_DESCRIPTION_ANNOTATION) {
                 register_import("::anno", "description");
                 new_block->add_annotation(
                     m_target_module->clone_annotation(anno, /*modifier=*/ NULL));
             }
         }
-    if (!has_display_name && display_name) {
+    }
+
+    if (!has_display_name && display_name != NULL) {
         new_block->add_annotation(create_string_anno("display_name", display_name));
     }
+
     return new_block->get_annotation_count() > 0 ? new_block : NULL;
 }
 

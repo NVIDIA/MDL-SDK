@@ -1265,7 +1265,8 @@ public:
         mi::neuraylib::IMdl_factory* mdl_factory,
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
-        bool enable_derivatives);
+        bool enable_derivatives,
+        bool fold_ternary_on_df);
 
     // Helper function that checks if the provided name describes an MDLe element.
     static bool is_mdle_name(const std::string& name);
@@ -1371,7 +1372,8 @@ Material_compiler::Material_compiler(
         mi::neuraylib::IMdl_factory* mdl_factory,
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
-        bool enable_derivatives)
+        bool enable_derivatives,
+        bool fold_ternary_on_df)
     : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
     , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
     , m_transaction(mi::base::make_handle_dup(transaction))
@@ -1403,7 +1405,9 @@ Material_compiler::Material_compiler(
 
 
     // force experimental to true for now
-    m_context->set_option("experimental", true); 
+    m_context->set_option("experimental", true);
+
+    m_context->set_option("fold_ternary_on_df", fold_ternary_on_df);
 
     // After we set the options, we can create the link unit
     m_link_unit = mi::base::make_handle(m_be_cuda_ptx->create_link_unit(transaction, m_context.get()));

@@ -310,6 +310,7 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 , m_show_extra_modifiers(false)
 , m_show_mdl_versions(false)
 , m_show_res_table(false)
+, m_show_func_hashes(false)
 , m_ostr(ostr, mi::base::DUP_INTERFACE)
 , m_c_ostr()
 , m_color_stack(Syntax_elements_stack::container_type(alloc))
@@ -950,7 +951,7 @@ void Printer::print(IValue const *value)
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.7g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.9g", f);
                 buf[sizeof(buf) - 2] = '\0';
                 print(to_float_constant(buf, 'f'));
             } else if (f == +HUGE_VAL) {
@@ -969,7 +970,7 @@ void Printer::print(IValue const *value)
 
             double d = v->get_value();
             if (isfinite(d)) {
-                snprintf(buf, sizeof(buf) - 2, "%.16g", d);
+                snprintf(buf, sizeof(buf) - 2, "%.17g", d);
                 buf[sizeof(buf) - 2] = '\0';
                 print(to_float_constant(buf, 'd'));
             } else if (d == +HUGE_VAL) {
@@ -2259,7 +2260,7 @@ void Printer::print(IArgument const *arg)
 // Print module.
 void Printer::print(IModule const *module)
 {
-    m_version = impl_cast<Module>(module)->get_version();
+    Store<unsigned> store(m_version, impl_cast<Module>(module)->get_version());
 
     int major, minor;
     module->get_version(major, minor);
@@ -2360,7 +2361,55 @@ void Printer::print(IModule const *module)
         pop_color();
     }
 
-    m_version = IMDL::MDL_DEFAULT_VERSION;
+    if (m_show_func_hashes && module->has_function_hashes()) {
+        Module const           *m  = impl_cast<Module>(module);
+        Definition_table const &dt = m->get_definition_table();
+
+        class Definition_visitor : public IDefinition_visitor {
+        public:
+            /// Constructor.
+            Definition_visitor(
+                Printer       &printer,
+                IModule const *mod)
+            : m_printer(printer)
+            , m_mod(*mod)
+            {
+            }
+
+            /// Called for every visited definition.
+            void visit(Definition const *def) const MDL_FINAL
+            {
+                if (def->get_kind()!= IDefinition::DK_FUNCTION)
+                    return;
+
+                if (IModule::Function_hash const *hash = m_mod.get_function_hash(def)) {
+                    m_printer.print("// ");
+
+                    for (size_t i = 0, n = dimension_of(hash->hash); i < n; ++i) {
+                        m_printer.printf("%02x", hash->hash[i]);
+                    }
+                    m_printer.print(" ");
+                    m_printer.print_type(def->get_type(), def->get_symbol());
+                    m_printer.nl();
+                }
+            }
+
+        private:
+            Printer &m_printer;
+            IModule const &m_mod;
+        };
+
+        Definition_visitor visitor(*this, module);
+
+        nl();
+        push_color(C_COMMENT);
+        print("// Function hash table:");
+        nl();
+
+        dt.walk(&visitor);
+
+        pop_color();
+    }
 }
 
 // Internal print a message
@@ -2607,6 +2656,12 @@ void Printer::show_mdl_versions(bool enable)
 void Printer::show_resource_table(bool enable)
 {
     m_show_res_table = enable;
+}
+
+// Enable/disable MDL function hash table comments.
+void Printer::show_function_hash_table(bool enable)
+{
+    m_show_func_hashes = enable;
 }
 
 // Prints an annotation block.

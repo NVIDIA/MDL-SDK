@@ -1119,6 +1119,19 @@ struct map {
         Key, Tp, Compare, Mi_allocator<std::pair<const Key, Tp> > > Type;
 };
 
+/// A map from Key * to Tp, using a IAllocator.
+template <
+    typename Key,
+    typename Tp,
+    typename LessFcn = std::less<Key *>
+>
+struct ptr_map {
+    typedef std::map<
+        Key *, Tp, LessFcn,
+        Mi_allocator<typename std::map<Key *, Tp, LessFcn>::value_type>
+    > Type;
+};
+
 }  // mdl
 }  // mi
 

@@ -113,8 +113,11 @@ private:
     /// Print all functions of the code dag.
     void print_functions(IGenerated_code_dag const *code_dag) const;
 
-    /// Print all material of the code dag.
+    /// Print all materials of the code dag.
     void print_materials(IGenerated_code_dag const *code_dag) const;
+
+    /// Print all annotations of the code dag.
+    void print_annotations(IGenerated_code_dag const *code_dag) const;
 
 private:
     // Temporary, the used printer.

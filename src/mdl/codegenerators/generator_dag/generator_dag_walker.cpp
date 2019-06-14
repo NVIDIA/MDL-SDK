@@ -33,8 +33,7 @@
 #include "mdl/compiler/compilercore/compilercore_allocator.h"
 #include "mdl/compiler/compilercore/compilercore_assert.h"
 #include "mdl/compiler/compilercore/compilercore_bitset.h"
-
-#include "mdl/codegenerators/generator_code/generator_code_hash.h"
+#include "mdl/compiler/compilercore/compilercore_hash.h"
 
 #include "generator_dag_walker.h"
 #include "generator_dag_generated_dag.h"

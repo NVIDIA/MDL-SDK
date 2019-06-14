@@ -636,7 +636,7 @@ private:
 ///
 /// The combined name and type analysis.
 ///
-class NT_analysis : public Analysis, ICallgraph_visitor {
+class NT_analysis : public Analysis, ICallgraph_scc_visitor {
     typedef Analysis Base;
     friend class Optimizer;
     friend class Default_initializer_modifier;
@@ -1549,6 +1549,16 @@ private:
     /// Check that all called functions do exists.
     void check_called_functions();
 
+    /// Dump a call graph to a file.
+    ///
+    /// \param alloc        the allocator
+    /// \param module_name  the absolute name of the owner module
+    /// \param cg           the call graph
+    static void dump_call_graph(
+        IAllocator       *alloc,
+        char const       *module_name,
+        Call_graph const &cg);
+
     /// Check that all exported entities exist.
     void check_exported_for_existance();
 
@@ -2346,10 +2356,10 @@ public:
     /// \param ctx       the thread context
     /// \param cg        the call graph
     static void run(
-        MDL            *compiler,
-        Module         &module,
-        Thread_context &ctx,
-        Call_graph     &cg);
+        MDL              *compiler,
+        Module           &module,
+        Thread_context   &ctx,
+        Call_graph const &cg);
 
 private:
     /// Predefined node Id's..
@@ -2366,10 +2376,10 @@ private:
     /// \param ctx       the thread context
     /// \param cg        the call graph
     explicit AT_analysis(
-        MDL            *compiler,
-        Module         &module,
-        Thread_context &ctx,
-        Call_graph     &cg);
+        MDL              *compiler,
+        Module           &module,
+        Thread_context   &ctx,
+        Call_graph const &cg);
 
     /// Add control dependence to the given node if one exists.
     ///

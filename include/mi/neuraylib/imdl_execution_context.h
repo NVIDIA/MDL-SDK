@@ -112,6 +112,8 @@ public:
 ///   material. Default: 1.0f.
 /// - "wavelength_min": The smallest supported wavelength. Default: 380.0f.
 /// - "wavelength_max": The largest supported wavelength. Default: 780.0f.
+/// - "fold_ternary_on_df": Fold all ternary operators of *df types, even in class compilation
+///   mode. Default: false.
 ///
 /// Options for code generation
 /// - "meters_per_scene_unit": The conversion ratio between meters and scene units for this

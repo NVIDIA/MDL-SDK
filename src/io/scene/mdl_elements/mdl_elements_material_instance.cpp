@@ -318,6 +318,8 @@ Mdl_material_instance::create_dag_material_instance(
         MDL_CTX_OPTION_WAVELENGTH_MIN);
     mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(
         MDL_CTX_OPTION_WAVELENGTH_MAX);
+    bool fold_tn = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_TERNARY_ON_DF);
 
     // convert m_arguments to DAG nodes
     mi::Uint32 n = code_dag->get_material_parameter_count( m_material_index);
@@ -351,6 +353,7 @@ Mdl_material_instance::create_dag_material_instance(
               mi::mdl::IGenerated_code_dag::IMaterial_instance::CLASS_COMPILATION
             | mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_RESOURCE_SHARING
             | mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_ARGUMENT_INLINE
+            | (fold_tn ? mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_TERNARY_ON_DF : 0)
         :
               mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION;
 

@@ -1,6 +1,67 @@
 Change Log
 ==========
 
+MDL SDK 2019.1.1 (317500.2554): 08 Jun 2019
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2019.1.1 (317500.2554) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+
+    - A new API class `mi::neuraylib::IAnnotation_definition` has been added.
+    - The following new functions have been added:
+        - `mi::neuraylib::IAnnotation::get_definition()`
+        - `mi::neuraylib::IModule::get_annotation_definition_count()`
+        - `mi::neuraylib::IModule::get_annotation_definition(Size)`
+        - `mi::neuraylib::IModule::get_annotation_definition(const char*)`
+    - Added the Boolean option `fold_ternary_on_df` to fold ternary operators on
+      distribution function types in material bodies even in class compilation mode:
+      Some uber-materials extensively use the ternary operator to switch BSDFs. This
+      causes a lot of generated code and may not be supported by some renderers.
+      Enabling this option will compile all arguments that control the condition of
+      such a ternary operator in. Changing any of these arguments will then require
+      a recompilation.
+
+- MDL SDK examples
+
+    - Support for the glTF extension `KHR_materials_pbrSpecularGlossiness` has been
+      added to `example_dxr`.
+
+**Fixed Bugs**
+
+- General
+
+    - Wrong copying of gamma values during cloning of texture values has been fixed.
+      This especially happened for default parameters during material instantiation.
+    - Fixed problem with dangling user defined types when a module is removed;
+      previously removing a module left all its user defined types alive, preventing
+      creating new (different) ones when the deleted module was reloaded.
+    - Fixed failure when generating MDLE files that reference `intensity_mode` values.
+
+- MDL Compiler and Backends
+
+    - Fixed wrong optimization of empty do-while loops in the core compiler.
+    - Fixed imports starting with `.` or `..`, which caused wrong package names before.
+    - Fixed printing of float and double constants when MDL code was generated;  not
+      enough digits were used previously, causing lost precision when this code was
+      compiled again.
+    - Fixed a problem where sometimes several uninitialized variables were generated and
+      copied around in generated HLSL code.
+    - Fixed generation of useless copies, like `t = t;` in generated HLSL code.
+    - Generated better HLSL code for vector constructor calls, like
+     `floatX(a.x, x.y, ...) => a.xy...`
+    - JIT compilation of functions involving `sin` and `cos` with the same argument on
+      Mac OS has been fixed.
+    - The implementation of `df::color_weighted_layer` has been fixed.
+
+- MDL SDK examples
+
+    - `findGLEW` has been fixed in the build script to work with CMake 3.15.
+
+
 MDL SDK 2019.1 (317500.1752): 16 May 2019
 -----------------------------------------------
 

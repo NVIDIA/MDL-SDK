@@ -48,6 +48,7 @@ namespace mi {
 namespace mdl {
 
 typedef DAG_dependence_graph::Def_node_map Def_node_map;
+typedef Store<bool>                        Flag_store;
 
 /// A walker over the dependency graph.
 class DG_walker {
@@ -318,10 +319,9 @@ public:
 
     /// Create the dependency tree.
     ///
-    /// \param list  the list of all nodes created so far 
+    /// \param list  the list of all nodes created so far
     void create(Dependence_node *list)
     {
-        /// A Wait queue of definitions.
         for (Dependence_node *n = list; n != NULL; n = n->get_next()) {
             IDefinition const *def = n->get_definition();
 
@@ -348,49 +348,69 @@ public:
             IDefinition const *def = m_curr->get_definition();
             IDefinition::Kind kind = def->get_kind();
 
-            if (kind == IDefinition::DK_FUNCTION) {
-                IDeclaration const *proto_decl = def->get_prototype_declaration();
+            switch (kind) {
+            case IDefinition::DK_ANNOTATION:
+                {
+                    IDeclaration_annotation const *decl =
+                        cast<IDeclaration_annotation>(def->get_declaration());
 
-                if (proto_decl != NULL) {
-                    // default parameters are visible on the prototype
-                    visit(proto_decl);
+                    // first collect all deferred sized parameters, so we can handle array
+                    // length operators
+                    collect_deferred_sized_parameters(decl);
+
+                    // now visit the declaration
+                    visit(decl);
                 }
+                break;
+            case IDefinition::DK_FUNCTION:
+                {
+                    IDeclaration const *proto_decl = def->get_prototype_declaration();
 
-                IDeclaration_function const *decl =
-                    cast<IDeclaration_function>(def->get_declaration());
+                    if (proto_decl != NULL) {
+                        // default parameters are visible on the prototype
+                        visit(proto_decl);
+                    }
 
-                m_inside_preset = decl->is_preset();
+                    IDeclaration_function const *decl =
+                        cast<IDeclaration_function>(def->get_declaration());
 
-                // first collect all deferred sized parameters, so we can handle array
-                // length operators
-                collect_deferred_sized_parameters(decl);
+                    Flag_store inside_preset(m_inside_preset, decl->is_preset());
 
-                // now visit the declaration
-                visit(decl);
-                m_inside_preset = false;
-            } else if (kind == IDefinition::DK_CONSTRUCTOR) {
-                IDeclaration_type_struct const *s_decl =
-                    as<IDeclaration_type_struct>(def->get_declaration());
+                    // first collect all deferred sized parameters, so we can handle array
+                    // length operators
+                    collect_deferred_sized_parameters(decl);
 
-                if (s_decl != NULL) {
-                    // a struct declaration, add dependency to default initializers
+                    // now visit the declaration
+                    visit(decl);
+                }
+                break;
+            case IDefinition::DK_CONSTRUCTOR:
+                {
+                    IDeclaration_type_struct const *s_decl =
+                        as<IDeclaration_type_struct>(def->get_declaration());
 
-                    IDefinition::Semantics sema = def->get_semantics();
-                    if (sema == IDefinition::DS_ELEM_CONSTRUCTOR ||
-                        sema == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR)
-                    {
-                        m_inside_parameter = true;
+                    if (s_decl != NULL) {
+                        // a struct declaration, add dependency to default initializers
 
-                        for (int i = 0, n = s_decl->get_field_count(); i < n; ++i) {
-                            IExpression const *init = s_decl->get_field_init(i);
+                        IDefinition::Semantics sema = def->get_semantics();
+                        if (sema == IDefinition::DS_ELEM_CONSTRUCTOR ||
+                            sema == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR)
+                        {
+                            Flag_store inside_preset(m_inside_parameter, true);
 
-                            if (init != NULL)
-                                visit(init);
+                            for (int i = 0, n = s_decl->get_field_count(); i < n; ++i) {
+                                IExpression const *init = s_decl->get_field_init(i);
+
+                                if (init != NULL)
+                                    visit(init);
+                            }
                         }
                     }
                 }
-            } else {
+                break;
+            default:
                 MDL_ASSERT(!"unexpected definition kind");
+                break;
             }
 
             m_wait_q.pop();
@@ -411,6 +431,30 @@ private:
     void post_visit(IParameter *param) MDL_FINAL
     {
         m_inside_parameter = false;
+    }
+
+    /// Post visit an annotation.
+    void post_visit(IAnnotation *anno) MDL_FINAL
+    {
+        IQualified_name const *name = anno->get_name();
+        IDefinition const *callee = name->get_definition();
+
+        bool is_imported = callee->get_property(IDefinition::DP_IS_IMPORTED);
+
+        Dependence_node *node = m_dg.get_node(callee);
+
+        if (m_marker.insert(callee).second) {
+            // new node discovered
+            IDeclaration const *decl = callee->get_declaration();
+
+            // the dependency graph is restricted to one module, so stop at imports;
+            // for compiler generated entities decl can be NULL
+            if (!is_imported && decl != NULL) {
+                m_wait_q.push(node);
+            }
+        }
+
+        m_curr->add_edge(m_arena, node, m_inside_parameter);
     }
 
     /// Post visit a call.
@@ -772,6 +816,20 @@ private:
         for (int i = 0, n = fkt_decl->get_parameter_count(); i < n; ++i) {
             IParameter const  *param = fkt_decl->get_parameter(i);
             IDefinition const *def   = param->get_name()->get_definition();
+
+            enter_param(def);
+        }
+    }
+
+    /// Collect all deferred sized parameters from an annotation declaration.
+    ///
+    /// \param anno_decl  the annotation decl
+    void collect_deferred_sized_parameters(IDeclaration_annotation const *anno_decl)
+    {
+        // enter all parameters
+        for (int i = 0, n = anno_decl->get_parameter_count(); i < n; ++i) {
+            IParameter const  *param = anno_decl->get_parameter(i);
+            IDefinition const *def = param->get_name()->get_definition();
 
             enter_param(def);
         }
@@ -1226,7 +1284,7 @@ DAG_dependence_graph::DAG_dependence_graph(
             create_exported_nodes(module, def);
         }
     }
-    
+
     // add normal exports
     for (int i = 0; i < def_count; ++i) {
         IDefinition const *def = module->get_exported_definition(i);
@@ -1500,6 +1558,7 @@ bool DAG_dependence_graph::skip_definition(IDefinition const *def)
     switch (def->get_kind()) {
     case IDefinition::DK_TYPE:          // handle types,
     case IDefinition::DK_FUNCTION:      // functions,
+    case IDefinition::DK_ANNOTATION:    // annotations,
     case IDefinition::DK_CONSTRUCTOR:   // and constructors
         return false;
     case IDefinition::DK_OPERATOR:      // handle operators.
@@ -1581,7 +1640,7 @@ void DAG_dependence_graph::create_exported_nodes(
             IDefinition::Semantics sema = def->get_semantics();
             if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
                 // copy constructors are of no semantic value in MDL, do not export them
-                return;;
+                return;
             }
 
             Dependence_node *n = get_node(def);

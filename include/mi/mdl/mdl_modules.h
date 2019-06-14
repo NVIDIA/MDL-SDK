@@ -111,6 +111,12 @@ class IModule : public
     mi::base::IInterface>
 {
 public:
+    /// A function hash for hashed modules.
+    struct Function_hash {
+        unsigned char hash[16];
+    };
+
+public:
     /// Get the absolute name of the module.
     ///
     /// \return The absolute name of this MDL module.
@@ -412,6 +418,14 @@ public:
     ///
     /// \return The OS-specific file name of NULL f the name is not known.
     virtual char const *get_referenced_resource_file_name(size_t i) const = 0;
+
+    /// Returns true if this module supports function hashes.
+    virtual bool has_function_hashes() const = 0;
+
+    /// Get the function hash for a given function definition if any.
+    ///
+    /// \param def  the function definition (must be owned by this module)
+    virtual Function_hash const *get_function_hash(IDefinition const *def) const = 0;
 };
 
 }  // mdl

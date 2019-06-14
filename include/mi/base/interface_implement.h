@@ -154,6 +154,10 @@ public:
     }
 
 protected:
+    /// Get the current refcount.
+    Atom32& refcount() const { return m_refcnt; }
+
+protected:
     virtual ~Interface_implement() {}
 
 private:

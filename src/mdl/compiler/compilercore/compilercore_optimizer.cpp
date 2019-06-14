@@ -608,15 +608,14 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
                     return local_opt(loop_stmt->get_body());
                 }
             }
-            IStatement const *body = local_opt(loop_stmt->get_body());
-            if (body == NULL) {
-                // body is empty, preserve just the condition
-                Position const &pos = loop_stmt->access_position();
-                IStatement *n_stmt = m_stmt_factory.create_expression(cond, POS(pos));
-
-                return local_opt(n_stmt);
+            IStatement const *body   = loop_stmt->get_body();
+            IStatement const *n_body = local_opt(body);
+            if (n_body == NULL) {
+                // do-while body cannot be empty
+                Position const &pos = body->access_position();
+                n_body = m_stmt_factory.create_expression(NULL, POS(pos));
             }
-            loop_stmt->set_body(body);
+            loop_stmt->set_body(n_body);
             return loop_stmt;
         }
 
@@ -626,7 +625,7 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
             IExpression const *cond     = for_stmt->get_condition();
 
             if (cond != NULL) {
-                cond = local_opt(for_stmt->get_condition());
+                cond = local_opt(cond);
                 for_stmt->set_condition(cond);
                 if (IExpression_literal const *lit = as<IExpression_literal>(cond)) {
                     IValue_bool const *v = cast<IValue_bool>(lit->get_value());
@@ -663,7 +662,7 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
 
             IExpression const *next = for_stmt->get_update();
             if (next != NULL) {
-                IExpression const *next = local_opt(for_stmt->get_update());
+                next = local_opt(next);
                 for_stmt->set_update(next);
             }
             return for_stmt;

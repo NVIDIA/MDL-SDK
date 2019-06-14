@@ -194,8 +194,12 @@ class Type_enum : public Type_base<mi::neuraylib::IType_enum, MDL::IType_enum>
 {
 public:
     Type_enum(
-        const Type_factory* tf, const Internal_type* type, const mi::base::IInterface* owner)
-      : Base( tf, type, owner) { }
+        const Type_factory* tf,
+        mi::neuraylib::ITransaction* transaction,
+        const Internal_type* type,
+        const mi::base::IInterface* owner)
+      : Base( tf, type, owner)
+      , m_transaction(transaction, mi::base::DUP_INTERFACE) { }
 
     const char* get_symbol() const { return m_type->get_symbol(); }
 
@@ -214,6 +218,9 @@ public:
     const mi::neuraylib::IAnnotation_block* get_annotations() const;
 
     const mi::neuraylib::IAnnotation_block* get_value_annotations( mi::Size index) const;
+
+private:
+    const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
 };
 
 
@@ -310,8 +317,12 @@ class Type_struct : public Type_base<mi::neuraylib::IType_struct, MDL::IType_str
 {
 public:
     Type_struct(
-        const Type_factory* tf, const Internal_type* type, const mi::base::IInterface* owner)
-      : Base( tf, type, owner) { }
+        const Type_factory* tf,
+        mi::neuraylib::ITransaction* transaction,
+        const Internal_type* type,
+        const mi::base::IInterface* owner)
+      : Base( tf, type, owner)
+      , m_transaction(transaction, mi::base::DUP_INTERFACE) { }
 
     const mi::neuraylib::IType* get_component_type( mi::Size index) const;
 
@@ -330,6 +341,9 @@ public:
     const mi::neuraylib::IAnnotation_block* get_annotations() const;
 
     const mi::neuraylib::IAnnotation_block* get_field_annotations( mi::Size index) const;
+
+private:
+    const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
 };
 
 

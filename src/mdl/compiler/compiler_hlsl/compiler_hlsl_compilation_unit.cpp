@@ -85,13 +85,20 @@ unsigned Compilation_unit::get_filename_id_count() const
 bool Compilation_unit::analyze(
     ICompiler &compiler)
 {
-    Optimizer::run(impl_cast<Compiler>(compiler), *this, 3);
+    // FIXME: no semantic analysis yet, assume it IS valid
+    m_is_valid = true;
+
+    if (is_valid()) {
+        Optimizer::run(get_allocator(), impl_cast<Compiler>(compiler), *this, 3);
+    }
 
     return false;
 }
 
 // Check if the module has been analyzed.
-bool Compilation_unit::is_analyzed() const { return false; }
+bool Compilation_unit::is_analyzed() const {
+    return false;
+}
 
 // Check if the module contents are valid.
 bool Compilation_unit::is_valid() const

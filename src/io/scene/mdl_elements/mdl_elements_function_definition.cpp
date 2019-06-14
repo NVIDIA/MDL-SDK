@@ -115,6 +115,7 @@ Mdl_function_definition::Mdl_function_definition(
 , m_return_annotations()
 , m_enable_if_conditions()
 , m_enable_if_users()
+, m_function_hash()
 {
     const char* s = code_dag->get_cloned_function_name( function_index);
     std::string prototype_name = s == NULL ? "" : s;
@@ -228,6 +229,10 @@ Mdl_function_definition::Mdl_function_definition(
         mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
         m_thumbnail = DETAIL::lookup_thumbnail(
             module_filename, m_name, m_annotations.get(), archive_tool.get());
+    }
+
+    if (mi::mdl::DAG_hash const *hash = code_dag->get_function_hash(function_index)) {
+        m_function_hash = convert_hash(*hash);
     }
 }
 
@@ -769,6 +774,7 @@ const SERIAL::Serializable* Mdl_function_definition::serialize(
     m_ef->serialize_list(serializer, m_enable_if_conditions.get());
 
     serializer->write( m_enable_if_users);
+    write( serializer, m_function_hash);
 
     return this + 1;
 }
@@ -801,9 +807,9 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     m_enable_if_conditions = m_ef->deserialize_list( deserializer);
 
     deserializer->read( &m_enable_if_users);
+    read( deserializer, m_function_hash);
 
-    if( !m_thumbnail.empty())
-    {
+    if( !m_thumbnail.empty()) {
         m_thumbnail = HAL::Ospath::convert_to_platform_specific_path( m_thumbnail);
         if( !DISK::access( m_thumbnail.c_str()))
             m_thumbnail.clear();

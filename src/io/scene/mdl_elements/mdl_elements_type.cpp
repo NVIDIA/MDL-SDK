@@ -128,11 +128,11 @@ template <class T>
 class Type_base : public mi::base::Interface_implement<T>
 {
 public:
-    virtual IType::Kind get_kind() const final { return T::s_kind; };
+    IType::Kind get_kind() const final { return T::s_kind; };
 
-    virtual mi::Uint32 get_all_type_modifiers() const override { return 0; }
+    mi::Uint32 get_all_type_modifiers() const override { return 0; }
 
-    virtual const IType* skip_all_type_aliases() const override {
+    const IType* skip_all_type_aliases() const override {
         this->retain();
         return this;
     }
@@ -142,16 +142,16 @@ template <class T>
 class Type_base_immutable : public Interface_implement_singleton<T>
 {
 public:
-    virtual IType::Kind get_kind() const final { return T::s_kind; };
+    IType::Kind get_kind() const final { return T::s_kind; };
 
-    virtual mi::Uint32 get_all_type_modifiers() const override { return 0; }
+    mi::Uint32 get_all_type_modifiers() const override { return 0; }
 
-    virtual const IType* skip_all_type_aliases() const override {
+    const IType* skip_all_type_aliases() const override {
         this->retain();
         return this;
     }
 
-    virtual mi::Size get_memory_consumption() const final { return 0; }
+    mi::Size get_memory_consumption() const final { return 0; }
 };
 
 
@@ -167,30 +167,30 @@ public:
     }
 
 public:
-    virtual mi::Uint32 get_all_type_modifiers() const final {
+    mi::Uint32 get_all_type_modifiers() const final {
         mi::base::Handle<const IType> aliased_type(this->get_aliased_type());
         return this->get_type_modifiers() | aliased_type->get_all_type_modifiers();
     }
 
-    virtual const IType* skip_all_type_aliases() const final {
+    const IType* skip_all_type_aliases() const final {
         mi::base::Handle<const IType> aliased_type(this->get_aliased_type());
         return aliased_type->skip_all_type_aliases();
     }
 
-    virtual const IType* get_aliased_type() const final {
+    const IType* get_aliased_type() const final {
         if (!m_aliased_type)
             return nullptr;
         m_aliased_type->retain();
         return m_aliased_type.get();
     }
 
-    virtual mi::Uint32 get_type_modifiers() const final { return m_modifiers; }
+    mi::Uint32 get_type_modifiers() const final { return m_modifiers; }
 
-    virtual const char* get_symbol() const final {
+    const char* get_symbol() const final {
         return m_symbol.empty() ? nullptr : m_symbol.c_str();
     }
 
-    virtual mi::Size get_memory_consumption() const final {
+    mi::Size get_memory_consumption() const final {
         return sizeof(*this)
             + dynamic_memory_consumption(m_aliased_type)
             + dynamic_memory_consumption(m_symbol);
@@ -221,14 +221,17 @@ public:
 
 class Type_enum final : public Type_base<IType_enum>
 {
+    friend class MI::MDL::Type_factory;
 public:
     Type_enum(
+        Type_factory* owner,
         const char* symbol,
         IType_enum::Predefined_id id,
         const IType_enum::Values& values,
         const mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_enum::Value_annotations& value_annotations)
-    : m_symbol(symbol)
+    : m_owner(mi::base::make_handle_dup(owner))
+    , m_symbol(symbol)
     , m_predefined_id(id)
     , m_values(values)
     , m_annotations(annotations)
@@ -239,17 +242,17 @@ public:
     }
 
 public:
-    virtual const char* get_symbol() const final { return m_symbol.c_str(); }
+    const char* get_symbol() const final { return m_symbol.c_str(); }
 
-    virtual mi::Size get_size() const final { return m_values.size(); }
+    mi::Size get_size() const final { return m_values.size(); }
 
-    virtual const char* get_value_name(mi::Size index) const {
+    const char* get_value_name(mi::Size index) const {
         if (index >= m_values.size())
             return nullptr;
         return m_values[index].first.c_str();
     }
 
-    virtual mi::Sint32 get_value_code(mi::Size index, mi::Sint32* errors) const final {
+    mi::Sint32 get_value_code(mi::Size index, mi::Sint32* errors) const final {
         if (index >= m_values.size()) {
             if (errors) *errors = -1;
             return 0;
@@ -259,7 +262,7 @@ public:
         return m_values[index].second;
     }
 
-    virtual mi::Size find_value(char const* name) const final {
+    mi::Size find_value(char const* name) const final {
         if (!name)
             return static_cast<mi::Size>(-1);
 
@@ -270,7 +273,7 @@ public:
         return static_cast<mi::Size>(-1);
     }
 
-    virtual mi::Size find_value(mi::Sint32 code) const final {
+    mi::Size find_value(mi::Sint32 code) const final {
         for (mi::Size i = 0, n = m_values.size(); i < n; ++i)
             if (m_values[i].second == code)
                 return i;
@@ -278,9 +281,9 @@ public:
         return static_cast<mi::Size>(-1);
     }
 
-    virtual IType_enum::Predefined_id get_predefined_id() const final { return m_predefined_id; }
+    IType_enum::Predefined_id get_predefined_id() const final { return m_predefined_id; }
 
-    virtual const IAnnotation_block* get_annotations() const final {
+    const IAnnotation_block* get_annotations() const final {
         if (!m_annotations)
             return nullptr;
 
@@ -288,7 +291,7 @@ public:
         return m_annotations.get();
     }
 
-    virtual const IAnnotation_block* get_value_annotations(mi::Size index) const final {
+    const IAnnotation_block* get_value_annotations(mi::Size index) const final {
         if (index >= m_value_annotations.size() || !m_value_annotations[index])
             return nullptr;
 
@@ -296,13 +299,29 @@ public:
         return m_value_annotations[index].get();
     }
 
-    virtual mi::Size get_memory_consumption() const final {
+    mi::Size get_memory_consumption() const final {
         return sizeof(*this)
             + dynamic_memory_consumption(m_symbol)
             + dynamic_memory_consumption(m_values);
     }
 
+    Uint32 release() const final
+    {
+        Uint32 cnt = --refcount();
+        if (cnt == 0) {
+            // try deletion
+            cnt = m_owner->destroy_enum_type(this);
+
+            if (cnt == 0) {
+                // destruction successful
+                delete this;
+            }
+        }
+        return cnt;
+    }
+
 private:
+    mutable mi::base::Handle<Type_factory> m_owner;
     const std::string m_symbol;
     const IType_enum::Predefined_id m_predefined_id;
     const IType_enum::Values m_values;
@@ -351,9 +370,9 @@ public:
         return nullptr;
     }
 
-    virtual mi::Size get_size() const final { return m_size; }
+    mi::Size get_size() const final { return m_size; }
 
-    virtual const IType_atomic* get_element_type() const final {
+    const IType_atomic* get_element_type() const final {
         m_element_type->retain();
         return m_element_type.get();
     }
@@ -374,15 +393,15 @@ public:
     }
 
 public:
-    virtual const IType* get_component_type(mi::Size index) const final {
+    const IType* get_component_type(mi::Size index) const final {
         if (index < m_columns)
             return get_element_type();
         return nullptr;
     }
 
-    virtual mi::Size get_size() const final { return m_columns; }
+    mi::Size get_size() const final { return m_columns; }
 
-    virtual const IType_vector* get_element_type() const final {
+    const IType_vector* get_element_type() const final {
         m_element_type->retain();
         return m_element_type.get();
     }
@@ -402,7 +421,7 @@ public:
     }
 
 public:
-    virtual const IType* get_component_type(mi::Size index) const final {
+    const IType* get_component_type(mi::Size index) const final {
         if (index >= s_compound_size)
             return nullptr;
         m_component_type->retain();
@@ -439,26 +458,26 @@ public:
     }
 
 public:
-    virtual const IType* get_component_type(mi::Size index) const final {
+    const IType* get_component_type(mi::Size index) const final {
         if (m_immediate_sized && index >= m_immediate_size)
             return nullptr;
         return get_element_type();
     }
 
-    virtual mi::Size get_size() const final { return m_immediate_sized ? m_immediate_size : -1; }
+    mi::Size get_size() const final { return m_immediate_sized ? m_immediate_size : -1; }
 
-    virtual const IType* get_element_type() const final {
+    const IType* get_element_type() const final {
         m_element_type->retain();
         return m_element_type.get();
     }
 
-    virtual bool is_immediate_sized() const final { return m_immediate_sized; }
+    bool is_immediate_sized() const final { return m_immediate_sized; }
 
-    virtual const char* get_deferred_size() const final {
+    const char* get_deferred_size() const final {
         return m_immediate_sized ? nullptr : m_deferred_size.c_str();
     }
 
-    virtual mi::Size get_memory_consumption() const final {
+    mi::Size get_memory_consumption() const final {
         return sizeof(*this)
             + dynamic_memory_consumption(m_element_type)
             + dynamic_memory_consumption(m_deferred_size);
@@ -474,14 +493,20 @@ private:
 
 class Type_struct final : public Type_base<IType_struct>
 {
+    friend class MI::MDL::Type_factory;
+    typedef Type_base<IType_struct> Base;
 public:
+    // Constructor.
     Type_struct(
+        Type_factory *owner,
         const char* symbol,
         IType_struct::Predefined_id id,
         const IType_struct::Fields& fields,
         const mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_struct::Field_annotations& field_annotations)
-    : m_symbol(symbol)
+    : Base()
+    , m_owner(mi::base::make_handle_dup(owner))
+    , m_symbol(symbol)
     , m_predefined_id(id)
     , m_fields(fields)
     , m_annotations(annotations)
@@ -492,28 +517,28 @@ public:
     }
 
 public:
-    virtual const IType* get_component_type(mi::Size index) const final {
+    const IType* get_component_type(mi::Size index) const final {
         return get_field_type(index);
     }
 
-    virtual mi::Size get_size() const final { return m_fields.size(); }
+    mi::Size get_size() const final { return m_fields.size(); }
 
-    virtual const char* get_symbol() const final { return m_symbol.c_str(); }
+    const char* get_symbol() const final { return m_symbol.c_str(); }
 
-    virtual const IType* get_field_type(mi::Size index) const final {
+    const IType* get_field_type(mi::Size index) const final {
         if (index >= m_fields.size())
             return nullptr;
         m_fields[index].first->retain();
         return m_fields[index].first.get();
     }
 
-    virtual const char* get_field_name(mi::Size index) const final {
+    const char* get_field_name(mi::Size index) const final {
         if (index >= m_fields.size())
             return nullptr;
         return m_fields[index].second.c_str();
     }
 
-    virtual mi::Size find_field(const char* name) const final {
+    mi::Size find_field(const char* name) const final {
         if (!name)
             return -1;
 
@@ -524,9 +549,9 @@ public:
         return -1;
     }
 
-    virtual IType_struct::Predefined_id get_predefined_id() const final { return m_predefined_id; }
+    IType_struct::Predefined_id get_predefined_id() const final { return m_predefined_id; }
 
-    virtual const IAnnotation_block* get_annotations() const final {
+    const IAnnotation_block* get_annotations() const final {
         if (!m_annotations)
             return nullptr;
 
@@ -534,7 +559,7 @@ public:
         return m_annotations.get();
     }
 
-    virtual const IAnnotation_block* get_field_annotations(mi::Size index) const final {
+    const IAnnotation_block* get_field_annotations(mi::Size index) const final {
         if (index >= m_field_annotations.size() || !m_field_annotations[index])
             return nullptr;
 
@@ -542,13 +567,28 @@ public:
         return m_field_annotations[index].get();
     }
 
-    virtual mi::Size get_memory_consumption() const final {
+    mi::Size get_memory_consumption() const final {
         return sizeof(*this)
             + dynamic_memory_consumption(m_symbol)
             + dynamic_memory_consumption(m_fields);
     }
 
+    Uint32 release() const final
+    {
+        Uint32 cnt = --refcount();
+        if (cnt == 0) {
+            // try deletion
+            cnt = m_owner->destroy_struct_type(this);
+            if (cnt == 0) {
+                // destruction successful
+                delete this;
+            }
+        }
+        return cnt;
+    }
+
 private:
+    mutable mi::base::Handle<Type_factory> m_owner;
     const std::string m_symbol;
     const IType_struct::Predefined_id m_predefined_id;
     const IType_struct::Fields m_fields;
@@ -781,13 +821,15 @@ const IType_enum* Type_factory::create_enum(const char* symbol) const
     if (!symbol)
         return nullptr;
 
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    Enum_symbol_map::const_iterator it = m_enum_symbols.find(symbol);
-    if (it == m_enum_symbols.end())
-        return nullptr;
-    it->second->retain();
-    return it->second.get();
+        Weak_enum_symbol_map::const_iterator it = m_enum_symbols.find(symbol);
+        if (it == m_enum_symbols.end())
+            return nullptr;
+        it->second->retain();
+        return it->second;
+    }
 }
 
 const IType_float* Type_factory::create_float() const {
@@ -932,13 +974,15 @@ const IType_struct* Type_factory::create_struct(const char* symbol) const
     if (!symbol)
         return nullptr;
 
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    Struct_symbol_map::const_iterator it = m_struct_symbols.find(symbol);
-    if (it == m_struct_symbols.end())
-        return nullptr;
-    it->second->retain();
-    return it->second.get();
+        Weak_struct_symbol_map::const_iterator it = m_struct_symbols.find(symbol);
+        if (it == m_struct_symbols.end())
+            return nullptr;
+        it->second->retain();
+        return it->second;
+    }
 }
 
 const IType_texture* Type_factory::create_texture(
@@ -989,25 +1033,29 @@ const IType_vdf* Type_factory::create_vdf() const {
 const IType_enum* Type_factory::get_predefined_enum(
     IType_enum::Predefined_id id) const
 {
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    Enum_id_map::const_iterator it = m_enum_ids.find(id);
-    if (it == m_enum_ids.end())
-        return nullptr;
-    it->second->retain();
-    return it->second.get();
+        Weak_enum_id_map::const_iterator it = m_enum_ids.find(id);
+        if (it == m_enum_ids.end())
+            return nullptr;
+        it->second->retain();
+        return it->second;
+    }
 }
 
 const IType_struct* Type_factory::get_predefined_struct(
     IType_struct::Predefined_id id) const
 {
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    Struct_id_map::const_iterator it = m_struct_ids.find(id);
-    if (it == m_struct_ids.end())
-        return nullptr;
-    it->second->retain();
-    return it->second.get();
+        Weak_struct_id_map::const_iterator it = m_struct_ids.find(id);
+        if (it == m_struct_ids.end())
+            return nullptr;
+        it->second->retain();
+        return it->second;
+    }
 }
 
 mi::Sint32 Type_factory::compare(const IType* lhs, const IType* rhs) const
@@ -1119,37 +1167,39 @@ const IType_enum* Type_factory::create_enum(
         return nullptr;
     }
 
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    if (m_struct_symbols.find(symbol) != m_struct_symbols.end()) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    Enum_symbol_map::const_iterator it = m_enum_symbols.find(symbol);
-    if (m_enum_symbols.find(symbol) != m_enum_symbols.end()) {
-
-        const IType_enum* type_enum = it->second.get();
-        if (!equivalent_enum_types(type_enum, id, values)) {
-            *errors = -4;
+        if (m_struct_symbols.find(symbol) != m_struct_symbols.end()) {
+            *errors = -3;
             return nullptr;
         }
 
+        Weak_enum_symbol_map::const_iterator it = m_enum_symbols.find(symbol);
+        if (m_enum_symbols.find(symbol) != m_enum_symbols.end()) {
+
+            const IType_enum* type_enum = it->second;
+            if (!equivalent_enum_types(type_enum, id, values)) {
+                *errors = -4;
+                return nullptr;
+            }
+
+            *errors = 0;
+            type_enum->retain();
+            return type_enum;
+        }
+
+        const IType_enum* type = new TYPES::Type_enum(
+            this, symbol, id, values, annotations, value_annotations);
+        m_enum_symbols[symbol] = type;
+        if (id != IType_enum::EID_USER) {
+            ASSERT(M_SCENE, !m_enum_ids[id]);
+            m_enum_ids[id] = type;
+        }
+
         *errors = 0;
-        type_enum->retain();
-        return type_enum;
+        return type;
     }
-
-    const IType_enum* type = new TYPES::Type_enum(
-        symbol, id, values, annotations, value_annotations);
-    m_enum_symbols[symbol] = make_handle_dup(type);
-    if (id != IType_enum::EID_USER) {
-        ASSERT(M_SCENE, !m_enum_ids[id]);
-        m_enum_ids[id] = make_handle_dup(type);
-    }
-
-    *errors = 0;
-    return type;
 }
 
 const IType_struct* Type_factory::create_struct(
@@ -1169,37 +1219,39 @@ const IType_struct* Type_factory::create_struct(
         return nullptr;
     }
 
-    mi::base::Lock::Block block(&m_lock);
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
 
-    if (m_enum_symbols.find(symbol) != m_enum_symbols.end()) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    Struct_symbol_map::const_iterator it = m_struct_symbols.find(symbol);
-    if (it != m_struct_symbols.end()) {
-
-        const IType_struct* type_struct = it->second.get();
-        if (!equivalent_struct_types(type_struct, id, fields)) {
-            *errors = -4;
+        if (m_enum_symbols.find(symbol) != m_enum_symbols.end()) {
+            *errors = -3;
             return nullptr;
         }
 
+        Weak_struct_symbol_map::const_iterator it = m_struct_symbols.find(symbol);
+        if (it != m_struct_symbols.end()) {
+
+            const IType_struct* type_struct = it->second;
+            if (!equivalent_struct_types(type_struct, id, fields)) {
+                *errors = -4;
+                return nullptr;
+            }
+
+            *errors = 0;
+            type_struct->retain();
+            return type_struct;
+        }
+
+        const IType_struct* type = new TYPES::Type_struct(
+            this, symbol, id, fields, annotations, field_annotations);
+        m_struct_symbols[symbol] = type;
+        if (id != IType_struct::SID_USER) {
+            ASSERT(M_SCENE, !m_struct_ids[id]);
+            m_struct_ids[id] = type;
+        }
+
         *errors = 0;
-        type_struct->retain();
-        return type_struct;
+        return type;
     }
-
-    const IType_struct* type = new TYPES::Type_struct(
-        symbol, id, fields, annotations, field_annotations);
-    m_struct_symbols[symbol] = make_handle_dup(type);
-    if (id != IType_struct::SID_USER) {
-        ASSERT(M_SCENE, !m_struct_ids[id]);
-        m_struct_ids[id] = make_handle_dup(type);
-    }
-
-    *errors = 0;
-    return type;
 }
 
 void Type_factory::serialize(SERIAL::Serializer* serializer, const IType* type) const
@@ -1733,6 +1785,48 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
 
     ASSERT(M_SCENE, false);
     return "";
+}
+
+Uint32 Type_factory::destroy_enum_type( const IType_enum* e_type)
+{
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
+
+        const TYPES::Type_enum* t = static_cast<const TYPES::Type_enum*>(e_type);
+
+        Uint32 cnt = t->refcount();
+        if (cnt > 0) {
+            // resurrected, do nothing
+            return cnt;
+        }
+
+        // really dead, remove from the weak sets
+        m_enum_symbols.erase(t->get_symbol());
+        m_enum_ids.erase(t->get_predefined_id());
+
+        return cnt;
+    }
+}
+
+Uint32 Type_factory::destroy_struct_type( const IType_struct* s_type)
+{
+    {
+        mi::base::Lock::Block block(&m_weak_map_lock);
+
+        const TYPES::Type_struct* t = static_cast<const TYPES::Type_struct*>(s_type);
+
+        Uint32 cnt = t->refcount();
+        if (cnt > 0) {
+            // resurrected, do nothing
+            return cnt;
+        }
+
+        // really dead, remove from the weak sets
+        m_struct_symbols.erase(t->get_symbol());
+        m_struct_ids.erase(t->get_predefined_id());
+
+        return cnt;
+    }
 }
 
 mi::Sint32 Type_factory::compare_static(

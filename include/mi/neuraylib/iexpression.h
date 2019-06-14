@@ -39,6 +39,8 @@ class IString;
 
 namespace neuraylib {
 
+class IAnnotation;
+class IAnnotation_block;
 class IExpression_list;
 
 /** \addtogroup mi_neuray_mdl_types
@@ -302,10 +304,111 @@ public:
     virtual Sint32 add_expression( const char* name, const IExpression* expression) = 0;
 };
 
-/// An annotation is similar to a direct call expression, but without corresponding definition
-/// and return type.
+/// An annotation definition.
 ///
-/// Annotations can be created with #mi::neuraylib::IExpression_factory::create_annotation().
+class IAnnotation_definition : public
+    mi::base::Interface_declare<0xa453318b,0xe056,0x4521,0x9f,0x3c,0x9d,0x5c,0x3,0x23,0x5f,0xb7>
+{
+public:
+
+    /// All known semantics of annotation definitions.
+    ///
+    /// \note Do not rely on the numeric values of the enumerators since they may change without
+    ///       further notice.
+    enum Semantics
+    {
+        AS_UNKNOWN = 0,                          ///< Unknown semantics.
+        AS_ANNOTATION_FIRST = 0x0100,
+
+        AS_INTRINSIC_ANNOTATION                  ///< This is the internal intrinsic() annotation.
+        = AS_ANNOTATION_FIRST,
+        AS_THROWS_ANNOTATION,                    ///< This is the internal throws() annotation.
+        AS_SINCE_ANNOTATION,                     ///< This is the internal since() annotation.
+        AS_REMOVED_ANNOTATION,                   ///< This is the internal removed() annotation.
+        AS_CONST_EXPR_ANNOTATION,                ///< This is the internal const_expr() annotation.
+        AS_DERIVABLE_ANNOTATION,                 ///< This is the internal derivable() annotation.
+        AS_NATIVE_ANNOTATION,                    ///< This is the internal native() annotation.
+
+        AS_UNUSED_ANNOTATION,                    ///< This is the unused() annotation.
+        AS_NOINLINE_ANNOTATION,                  ///< This is the noinline() annotation.
+        AS_SOFT_RANGE_ANNOTATION,                ///< This is the soft_range() annotation.
+        AS_HARD_RANGE_ANNOTATION,                ///< This is the hard_range() annotation.
+        AS_HIDDEN_ANNOTATION,                    ///< This is the hidden() annotation.
+        AS_DEPRECATED_ANNOTATION,                ///< This is the deprecated() annotation.
+        AS_VERSION_NUMBER_ANNOTATION,            ///< This is the (old) version_number() annotation.
+        AS_VERSION_ANNOTATION,                   ///< This is the version() annotation.
+        AS_DEPENDENCY_ANNOTATION,                ///< This is the dependency() annotation.
+        AS_UI_ORDER_ANNOTATION,                  ///< This is the ui_order() annotation.
+        AS_USAGE_ANNOTATION,                     ///< This is the usage() annotation.
+        AS_ENABLE_IF_ANNOTATION,                 ///< This is the enable_if() annotation.
+        AS_THUMBNAIL_ANNOTATION,                 ///< This is the thumbnail() annotation.
+        AS_DISPLAY_NAME_ANNOTATION,              ///< This is the display_name() annotation.
+        AS_IN_GROUP_ANNOTATION,                  ///< This is the in_group() annotation.
+        AS_DESCRIPTION_ANNOTATION,               ///< This is the description() annotation.
+        AS_AUTHOR_ANNOTATION,                    ///< This is the author() annotation.
+        AS_CONTRIBUTOR_ANNOTATION,               ///< This is the contributor() annotation.
+        AS_COPYRIGHT_NOTICE_ANNOTATION,          ///< This is the copyright_notice() annotation.
+        AS_CREATED_ANNOTATION,                   ///< This is the created() annotation.
+        AS_MODIFIED_ANNOTATION,                  ///< This is the modified() annotation.
+        AS_KEYWORDS_ANNOTATION,                  ///< This is the key_words() annotation.
+        AS_ORIGIN_ANNOTATION,                    ///< This is the origin() annotation.
+
+        AS_ANNOTATION_LAST = AS_ORIGIN_ANNOTATION,
+        AS_FORCE_32_BIT = 0xffffffffU            //   Undocumented, for alignment only.
+    };
+
+    /// Returns the name of the annotation definition.
+    virtual const char* get_name() const = 0;
+
+    /// Returns the semantic of this annotation definition.
+    virtual Semantics get_semantic() const = 0;
+
+    /// Returns the parameter count of the annotation definition.
+    virtual Size get_parameter_count() const = 0;
+
+    /// Returns the parameter name of the given index.
+    ///
+    /// \param index    The parameter index.
+    /// \return         The name of the parameter or \c NULL if index
+    ///                 is out of range.
+    virtual const char* get_parameter_name(Size index) const = 0;
+
+    /// Returns the parameter index of the given name.
+    ///
+    /// \param name     The parameter name.
+    /// \return         The index of the parameter or \c -1 if there is no
+    ///                 parameter of that \p name.
+    virtual Size get_parameter_index(const char* name) const = 0;
+
+    /// Returns the parameter types of the annotation definition.
+    virtual const IType_list* get_parameter_types() const = 0;
+
+    /// Returns the parameter defaults of the annotation definition.
+    virtual const IExpression_list* get_defaults() const = 0;
+
+    /// Indicates whether the annotation definition is exported by its module.
+    virtual bool is_exported() const = 0;
+    
+    /// Returns the annotations of this definition or \c NULL if no
+    /// annotations exist.
+    virtual const IAnnotation_block* get_annotations() const = 0;
+
+    /// Creates an annotation.
+    ///
+    /// \param arguments    The arguments for new annotation.
+    /// \return             The created annotation or \c NULL if one of the arguments
+    ///                     does not correspond to an actual parameter of the annotation or
+    ///                     is not a constant expression.
+    virtual const IAnnotation* create_annotation(const IExpression_list* arguments) const = 0;
+};
+
+mi_static_assert(sizeof(IAnnotation_definition::Semantics) == sizeof(Uint32));
+
+/// An annotation is similar to a direct call expression, but without return type. Its definition
+/// can be obtained by calling #mi::neuraylib::IAnnotation::get_definition().
+///
+/// Annotations can be created with #mi::neuraylib::IExpression_factory::create_annotation() or
+/// #mi::neuraylib::IAnnotation_definition::create_annotation().
 class IAnnotation : public
     mi::base::Interface_declare<0xa9c652e7,0x952e,0x4887,0x93,0xb4,0x55,0xc8,0x66,0xd0,0x1a,0x1f>
 {
@@ -320,6 +423,9 @@ public:
     ///
     /// The arguments of annotations are always constant expressions.
     virtual const IExpression_list* get_arguments() const = 0;
+    
+    /// Returns the definition of this annotation.
+    virtual const IAnnotation_definition* get_definition() const = 0;
 };
 
 /// An annotation block is an array of annotations.

@@ -63,6 +63,9 @@ struct Options {
     // Whether derivative support should be enabled.
     bool enable_derivatives;
 
+    // Whether terninary operators on *df types are executed at runtime or folded at compile time.
+    bool fold_ternary_on_df;
+
     // List of materials to use.
     std::vector<std::string> material_names;
 
@@ -79,6 +82,7 @@ struct Options {
         , use_class_compilation(false)
         , no_aa(false)
         , enable_derivatives(false)
+        , fold_ternary_on_df(false)
     {
     }
 };
@@ -157,18 +161,19 @@ void usage(char const *prog_name)
     std::cout
         << "Usage: " << prog_name << " [options] [(<material_pattern | (<material_name1> ...)]\n"
         << "Options:\n"
-        << "  --device <id>       run on CUDA device <id> (default: 0)\n"
-        << "  --res <x> <y>       resolution (default: 700x520)\n"
-        << "  --cc                use class compilation\n"
-        << "  --noaa              disable pixel oversampling\n"
-        << "  -d                  enable use of derivatives\n"
-        << "  -o <outputfile>     image file to write result to\n"
-        << "                      (default: example_cuda_<material_pattern>.png)\n"
-        << "  --mdl_path <path>   mdl search path, can occur multiple times.\n"
-        << "  <material_pattern>  a number from 1 to 2 ^ num_materials - 1 choosing which\n"
-        << "                      material combination to use (default: 2 ^ num_materials - 1)\n"
-        << "  <material_name*>    qualified name of materials to use. The example will try to\n"
-        << "                      access the path \"surface.scattering.tint\"."
+        << "  --device <id>        run on CUDA device <id> (default: 0)\n"
+        << "  --res <x> <y>        resolution (default: 700x520)\n"
+        << "  --cc                 use class compilation\n"
+        << "  --noaa               disable pixel oversampling\n"
+        << "  -d                   enable use of derivatives\n"
+        << "  -o <outputfile>      image file to write result to\n"
+        << "                       (default: example_cuda_<material_pattern>.png)\n"
+        << "  --mdl_path <path>    mdl search path, can occur multiple times.\n"
+        << " --fold_ternary_on_df  fold all ternary operators on *df types\n"
+        << "  <material_pattern>   a number from 1 to 2 ^ num_materials - 1 choosing which\n"
+        << "                       material combination to use (default: 2 ^ num_materials - 1)\n"
+        << "  <material_name*>     qualified name of materials to use. The example will try to\n"
+        << "                       access the path \"surface.scattering.tint\"."
         << std::endl;
     keep_console_open();
     exit(EXIT_FAILURE);
@@ -205,6 +210,8 @@ int main(int argc, char* argv[])
                 options.enable_derivatives = true;
             } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
                 options.mdl_paths.push_back(argv[++i]);
+            } else if (strcmp(opt, "--fold_ternary_on_df") == 0) {
+                options.fold_ternary_on_df = true;
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
@@ -272,7 +279,8 @@ int main(int argc, char* argv[])
                 mdl_factory.get(),
                 transaction.get(),
                 /*num_texture_results=*/ 0,
-                options.enable_derivatives);
+                options.enable_derivatives,
+                options.fold_ternary_on_df);
 
             for (unsigned i = 0, n = unsigned(options.material_names.size()); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {

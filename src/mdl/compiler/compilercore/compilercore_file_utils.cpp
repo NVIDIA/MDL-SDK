@@ -349,10 +349,13 @@ string simplify_path(
     } while (slash != length);
 
     string result(alloc);
-    if (file_path[0] == sep)
+    if (file_path[0] == sep) {
         result += sep;
-    if (length > 1 && file_path[1] == sep)
-        result += sep;
+        if (length > 1 && file_path[1] == sep) {
+            // handle '//' at start
+            result += sep;
+        }
+    }
     if (!directory_names.empty())
         result += directory_names[0];
     for (size_t i = 1, n = directory_names.size(); i < n; ++i) {

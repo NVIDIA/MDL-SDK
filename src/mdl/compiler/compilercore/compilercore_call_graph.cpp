@@ -47,7 +47,7 @@ namespace mdl {
 namespace {
 
 template<typename T>
-T min(T a, T b) { return a <= b ? a : b; }
+MDL_CONSTEXPR T min(T a, T b) { return a <= b ? a : b; }
 }
 
 bool Call_graph::Def_line_less::operator() (Definition const *d1, Definition const *d2) const {
@@ -91,6 +91,7 @@ Call_graph::Call_graph(
 , m_visit_count(0)
 , m_next_dfs_num(0)
 , m_visitor(NULL)
+, m_scc_visitor(NULL)
 , m_stack(Call_node_stack::container_type(alloc))
 , m_definition_set(Definition_set::key_compare(), alloc)
 , m_name(Arena_strdup(m_arena, name != NULL ? name : "call_graph"))
@@ -222,59 +223,17 @@ void Call_graph::do_dfs(Call_node *node)
 }
 
 // Calculate the strongly coupled components.
-void Call_graph::calc_scc(Call_node *node, ICallgraph_visitor &visitor)
+void Call_graph::calc_scc(Call_node *node, ICallgraph_scc_visitor *visitor)
 {
-    m_visitor = &visitor;
+    Store<ICallgraph_scc_visitor *> store(m_scc_visitor, visitor);
 
     ++m_visit_count;
     m_next_dfs_num = 0;
     do_dfs(node);
 }
 
-// Calculate the strongly coupled components.
-void Call_graph::do_walk(Call_node *node)
-{
-    node->m_visit_count = m_visit_count;
-
-    if (m_visitor)
-        m_visitor->visit_cg_node(node, ICallgraph_visitor::PRE_ORDER);
-    for (Callee_iterator it = node->callee_begin(); it != node->callee_end(); ++it) {
-        Call_node *callee = *it;
-        if (callee->m_visit_count < m_visit_count) {
-            do_walk(callee);
-        }
-    }
-    if (m_visitor)
-        m_visitor->visit_cg_node(node, ICallgraph_visitor::POST_ORDER);
-}
-
-// Walk the graph, starting at a given root.
-void Call_graph::walk(Call_node *root, ICallgraph_visitor *visitor)
-{
-    m_visitor = visitor;
-
-    ++m_visit_count;
-    do_walk(root);
-}
-
-// Walk the graph starting at the root set.
-void Call_graph::walk(ICallgraph_visitor *visitor)
-{
-    m_visitor = visitor;
-    ++m_visit_count;
-    for (Call_node_vec::iterator it(m_root_set.begin()), end(m_root_set.end());
-         it != end;
-         ++it)
-    {
-        Call_node *root = *it;
-        if (root->m_visit_count < m_visit_count) {
-            do_walk(root);
-        }
-    }
-}
-
 // Finalize the call graph and check for recursions.
-void Call_graph::finalize(ICallgraph_visitor &visitor)
+void Call_graph::finalize(ICallgraph_scc_visitor *visitor)
 {
     skip_declarations();
     create_root_set();
@@ -300,6 +259,8 @@ void Call_graph::finalize(ICallgraph_visitor &visitor)
 void Call_graph::create_root_set()
 {
     size_t curr_visited_count = ++m_visit_count;
+
+    Call_graph_walker walker(*this, NULL);
 
     // create the initial root set: shader main, constructor, destructor
     for (Definition_call_map::iterator it = m_call_nodes.begin(), end = m_call_nodes.end();
@@ -327,7 +288,7 @@ void Call_graph::create_root_set()
 
         // set reachability
         root->set_reachability_flag(Call_node::FL_REACHABLE);
-        walk(root, NULL);
+        walker.walk(root);
     }
 
     Call_node_vec all_nodes(m_arena.get_allocator());
@@ -353,7 +314,7 @@ void Call_graph::create_root_set()
             if (!def->has_flag(Definition::DEF_IS_DECL_ONLY)) {
                 // add a new (unreachable) root
                 m_root_set.push_back(node);
-                walk(node, NULL);
+                walker.walk(node);
             }
         }
     }
@@ -436,12 +397,17 @@ void Call_graph::distribute_reachability()
 }
 
 namespace {
+
+/// Helper class to dump a call graph into a VCG file.
 class Dumper : public ICallgraph_visitor {
 public:
+    /// Constructor.
     explicit Dumper(
-        IAllocator     *alloc,
-        IOutput_stream *out,
-        Call_graph     &cg);
+        IAllocator       *alloc,
+        IOutput_stream   *out,
+        Call_graph const &cg);
+
+    /// Dump the graph.
     void dump();
 
 private:
@@ -452,15 +418,15 @@ private:
     void visit_cg_node(Call_node *node, ICallgraph_visitor::Order order) MDL_FINAL;
 
 private:
-    Call_graph                &m_cg;
+    Call_graph const          &m_cg;
     mi::base::Handle<Printer> m_printer;
     size_t                    m_depth;
 };
 
 Dumper::Dumper(
-    IAllocator     *alloc,
-    IOutput_stream *out,
-    Call_graph     &cg)
+    IAllocator       *alloc,
+    IOutput_stream   *out,
+    Call_graph const &cg)
 : m_cg(cg)
 , m_printer()
 , m_depth(0)
@@ -480,7 +446,7 @@ void Dumper::dump()
     m_printer->print("\" {\n");
     m_printer->print("root [label=\"RootSet\"];\n");
 
-    m_cg.walk(this);
+    Call_graph_walker::walk(m_cg, this);
 
     // create the "virtual" root
     Call_node_vec const &root_set = m_cg.get_root_set();
@@ -598,12 +564,54 @@ void Dumper::visit_cg_node(Call_node *n, ICallgraph_visitor::Order order)
 }  // anonymous
 
 // Dump the call graph as a dot file.
-void Call_graph::dump(IOutput_stream *out)
+void Call_graph::dump(IOutput_stream *out) const
 {
     Dumper dumper(m_builder.get_arena()->get_allocator(), out, *this);
 
     dumper.dump();
 }
+
+// ------------------------------- visitor -------------------------------
+
+// Calculate the strongly coupled components.
+void Call_graph_walker::do_walk(Call_node *node)
+{
+    node->m_visit_count = m_cg.m_visit_count;
+
+    if (m_visitor != NULL)
+        m_visitor->visit_cg_node(node, ICallgraph_visitor::PRE_ORDER);
+    for (Callee_iterator it = node->callee_begin(); it != node->callee_end(); ++it) {
+        Call_node *callee = *it;
+        if (callee->m_visit_count < m_cg.m_visit_count) {
+            do_walk(callee);
+        }
+    }
+    if (m_visitor != NULL)
+        m_visitor->visit_cg_node(node, ICallgraph_visitor::POST_ORDER);
+}
+
+// Walk the graph, starting at a given root.
+void Call_graph_walker::walk(Call_node *root)
+{
+    ++m_cg.m_visit_count;
+    do_walk(root);
+}
+
+// Walk the graph starting at the root set.
+void Call_graph_walker::walk()
+{
+    ++m_cg.m_visit_count;
+    for (Call_node_vec::const_iterator it(m_cg.m_root_set.begin()), end(m_cg.m_root_set.end());
+        it != end;
+        ++it)
+    {
+        Call_node *root = *it;
+        if (root->m_visit_count < m_cg.m_visit_count) {
+            do_walk(root);
+        }
+    }
+}
+
 
 }  // mdl
 }  // mi

@@ -133,6 +133,7 @@ class Module : public Allocator_interface_implement<IModule>
     friend class Analysis;
     friend class NT_analysis;
     friend class Expression_call;
+    friend class MDL;
 
 public:
     /// Special module property flags.
@@ -143,7 +144,10 @@ public:
         MF_IS_OWNED   = 1 << 2, ///< This module is owned by the compiler.
         MF_IS_DEBUG   = 1 << 3, ///< This is the debug module.
         MF_IS_NATIVE  = 1 << 4, ///< This module is native.
+        MF_IS_HASHED  = 1 << 5, ///< This module has function hashes.
     };  // can be or'ed
+
+    typedef set<Function_hash>::Type Function_hash_set;
 
     /// An archive version.
     class Archive_version {
@@ -473,6 +477,14 @@ public:
     ///
     /// \return The OS-specific file name of NULL f the name is not known.
     char const *get_referenced_resource_file_name(size_t i) const MDL_FINAL;
+
+    /// Returns true if this module supports function hashes.
+    bool has_function_hashes() const MDL_FINAL;
+
+    /// Get the function hash for a given function definition if any.
+    ///
+    /// \param def  the function definition (must be owned by this module)
+    Function_hash const *get_function_hash(IDefinition const *def) const MDL_FINAL;
 
     // --------------------------- non interface methods ---------------------------
 
@@ -943,6 +955,19 @@ public:
         IThread_context *ctx,
         bool            resolve_resources);
 
+    /// Clear all function hashes.
+    void clear_function_hashes() { m_func_hashes.clear(); }
+
+    /// Add a function hash.
+    void add_function_hash(IDefinition const *def, IModule::Function_hash const &hash) {
+        m_func_hashes[def] = hash;
+    }
+
+    /// Get all known function hashes.
+    ///
+    /// \param[out]  a set that will be filled with all hashes
+    void get_all_function_hashes(Function_hash_set &hashes) const;
+
 private:
     class Import_entry {
     public:
@@ -1210,6 +1235,9 @@ private:
     /// Set if this module is only visible in debug configuration.
     bool m_is_debug;
 
+    /// Set if this module has function hashes.
+    bool m_is_hashed;
+
     /// The semantic version if any.
     Semantic_version const *m_sema_version;
 
@@ -1283,6 +1311,12 @@ private:
 
     /// The resource table.
     Res_table m_res_table;
+
+    // ----- function hashes -----
+    typedef ptr_map<IDefinition const, Function_hash>::Type Func_hash_map;
+
+    /// The function hash map.
+    Func_hash_map m_func_hashes;
 };
 
 /// Construct a Type_name AST element for an MDL type.
@@ -1310,6 +1344,9 @@ IExpression const *promote_expressions_to_mdl_version(
 // Helper shims for calculation the dynamic memory consumption
 inline size_t dynamic_memory_consumption(Module::Import_entry const &s) { return 0; }
 inline bool has_dynamic_memory_consumption(Module::Import_entry const &s) { return false; }
+
+/// Compare two function hashes.
+bool operator<(IModule::Function_hash const &a, IModule::Function_hash const &b);
 
 }  // mdl
 }  // mi

@@ -587,13 +587,13 @@ void MDL::create_builtin_modules()
             register_builtin_module(builtins_mod);
         }
 
-        // currently load base.mdl
+        // currently load base.mdl, this must be hashed
         {
             mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
                 m_builder.get_allocator(),
                 mdl_module_base, sizeof(mdl_module_base), ""));
             Module *base_mod = load_module(
-                NULL, ctx.get(), "::base", s.get(), Module::MF_IS_OWNED);
+                NULL, ctx.get(), "::base", s.get(), Module::MF_IS_OWNED | Module::MF_IS_HASHED);
 
             // takes ownership
             register_builtin_module(base_mod);
@@ -1015,20 +1015,19 @@ Module *MDL::load_module(
     parser.set_module(module, get_compiler_bool_option(ctx, option_experimental_features, false));
     parser.Parse();
 
-    // module in archive
     mi::base::Handle<IArchive_input_stream> iarchvice_s(s->get_interface<IArchive_input_stream>());
     if (iarchvice_s.is_valid_interface()) {
+        // this module was loaded from an archive, mark it
         mi::base::Handle<IArchive_manifest const> manifest(iarchvice_s->get_manifest());
 
         if (manifest.is_valid_interface()) {
             module->set_archive_info(manifest.get());
         }
-
-    // module in mdle
     } else {
         mi::base::Handle<IMdle_input_stream> imdle_s(s->get_interface<IMdle_input_stream>());
         if (imdle_s.is_valid_interface()) {
-            // module->set_mdle_info();
+            // this module was loaded from an mdle, compute function hashes
+            module->m_is_hashed = true;
         }
     }
 

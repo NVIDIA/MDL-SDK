@@ -41,8 +41,7 @@ export enum gltf_alpha_mode {
     blend
 };
 
-float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff)
-{
+float compute_opacity(gltf_alpha_mode mode,  float alpha,  float cutoff) {
     switch (mode) {
         case mask:
             return alpha < cutoff ? 0.0 : 1.0;
@@ -51,6 +50,41 @@ float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff)
         case opaque:
             return 1.0;
     }
+}
+
+float4 gltf_prepare_tex_float4(uniform texture_2d texture, int tex_coord_index) {
+    float3 tex_coord = state::texture_coordinate(tex_coord_index);
+    return tex::texture_isvalid(texture)
+        ? tex::lookup_float4(texture, float2(tex_coord.x, tex_coord.y))
+        : float4(1.0);
+}
+
+float3 gltf_prepare_tex_float3(uniform texture_2d texture, int tex_coord_index) {
+    float3 tex_coord = state::texture_coordinate(tex_coord_index);
+    return tex::texture_isvalid(texture)
+        ? tex::lookup_float3(texture, float2(tex_coord.x, tex_coord.y))
+        : float3(1.0);
+}
+
+float3 gltf_prepare_normal(uniform texture_2d texture, int tex_coord_index, int tex_tangent_index, uniform float scale_factor) {
+    base::texture_coordinate_info coordinate_info = base::texture_coordinate_info(
+        position: state::texture_coordinate(tex_coord_index),
+        tangent_u: state::texture_tangent_u(tex_tangent_index),
+        tangent_v: state::texture_tangent_v(tex_tangent_index));
+    return tex::texture_isvalid(texture)
+            ? base::tangent_space_normal_texture(
+                texture: texture,
+                uvw: coordinate_info,
+                factor: scale_factor)
+            : state::normal();
+}
+
+float gltf_prepare_occlusion(uniform texture_2d texture, int coord_index, float occlusion_strength) {
+    return math::lerp(1.0, gltf_prepare_tex_float3(texture, coord_index).x, occlusion_strength);
+}
+
+color gltf_perpare_emission(uniform texture_2d texture, int coord_index, color emissive_factor) {
+    return emissive_factor * color(gltf_prepare_tex_float3(texture, coord_index));
 }
 
 export material gltf_material(
@@ -64,12 +98,12 @@ export material gltf_material(
     uniform int metallic_roughness_texture_coord_index = 0,
     uniform float metallic_factor = 1.0
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
 
     uniform float roughness_factor = 1.0
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
 
     // normal map
@@ -78,7 +112,7 @@ export material gltf_material(
     uniform int normal_texture_tangent_index = 0,
     uniform float normal_scale_factor = 1.0
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
 
     // emission
@@ -91,19 +125,19 @@ export material gltf_material(
     uniform int occlusion_texture_coord_index = 0,
     uniform float occlusion_strength = 1.0
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
 
     // alpha
     uniform float base_alpha = 1.0
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
 
     // alpha for gltf_alpha_mode::mask
     uniform float alpha_cutoff  = 0.5
     [[
-        anno::hard_range(0.0f, 1.0f)
+        anno::hard_range(0.0, 1.0)
     ]],
     uniform gltf_alpha_mode alpha_mode = opaque
 ) [[
@@ -115,47 +149,17 @@ export material gltf_material(
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
-    float3 base_color_texture_coord = state::texture_coordinate(base_color_texture_coord_index);
-    float4 base_float4 = (tex::texture_isvalid(base_color_texture)
-        ? tex::lookup_float4(base_color_texture, float2(base_color_texture_coord.x, base_color_texture_coord.y))
-        : float4(1.0));
+    float4 base_float4 = gltf_prepare_tex_float4(base_color_texture, base_color_texture_coord_index);
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
     float alpha = base_alpha * base_float4.w;
 
-    float3 metallic_roughness_texture_coord = state::texture_coordinate(metallic_roughness_texture_coord_index);
-    float3 metallic_roughness = float3(metallic_factor, roughness_factor, 0.0) *
-        (tex::texture_isvalid(metallic_roughness_texture) 
-            ? tex::lookup_float3(metallic_roughness_texture, float2(metallic_roughness_texture_coord.x, metallic_roughness_texture_coord.y))
-            : float3(1.0));
+    float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture, metallic_roughness_texture_coord_index);
+    float metallic = metallic_factor * metallic_roughness.x;
+    float roughness = roughness_factor * metallic_roughness.y;
 
-    float metallic = metallic_roughness.x;
-    float roughness = metallic_roughness.y;
-
-    base::texture_coordinate_info normal_coordinate_info = base::texture_coordinate_info(
-        position: state::texture_coordinate(normal_texture_coord_index),
-        tangent_u: state::texture_tangent_u(normal_texture_tangent_index),
-        tangent_v: state::texture_tangent_v(normal_texture_tangent_index));
-        
-    float3 normal = tex::texture_isvalid(normal_texture)
-            ? base::tangent_space_normal_texture(
-                texture: normal_texture,
-                uvw: normal_coordinate_info,
-                factor: normal_scale_factor)
-            : state::normal();
-
-    float3 occlusion_texture_coord = state::texture_coordinate(occlusion_texture_coord_index);
-    float occlusion = math::lerp(
-        1.0,
-        (tex::texture_isvalid(occlusion_texture)
-            ? tex::lookup_float3(occlusion_texture, float2(occlusion_texture_coord.x, occlusion_texture_coord.y)).x
-            : 1.0),
-        occlusion_strength);         
-
-    float3 emissive_texture_coord = state::texture_coordinate(emissive_texture_coord_index);
-    color emissive_color = emissive_factor * 
-        (tex::texture_isvalid(emissive_texture)
-            ? color(tex::lookup_float3(emissive_texture, float2(emissive_texture_coord.x, emissive_texture_coord.y)))
-            : color(1.0));
+    float3 normal = gltf_prepare_normal(normal_texture, normal_texture_coord_index, normal_texture_tangent_index, normal_scale_factor);
+    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_texture_coord_index, occlusion_strength);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_texture_coord_index, emissive_factor);
 
     // metallic roughness model
     // ------------------------------------------------------------------------
@@ -199,6 +203,126 @@ export material gltf_material(
 } in material(
     surface: material_surface(
         scattering: dielectric_metal_mix,
+        emission:  material_emission (
+            emission: df::diffuse_edf(),
+            intensity: emissive_color
+        )
+    ),
+    geometry: material_geometry(
+        normal: normal,
+        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
+    )
+);
+
+
+export material gltf_material_khr_specular_glossiness(
+    // diffuse color
+    uniform texture_2d diffuse_texture = texture_2d(),
+    uniform int diffuse_texture_coord_index = 0,
+    uniform color diffuse_factor = color(1.0), 
+
+    // specular glossiness
+    uniform texture_2d specular_glossiness_texture = texture_2d(),
+    uniform int specular_glossiness_texture_coord_index = 0,
+    uniform color specular_factor = color(1.0)
+    [[
+        anno::hard_range(color(0.0), color(1.0))
+    ]],
+
+    uniform float glossiness_factor = 1.0
+    [[
+        anno::hard_range(0.0, 1.0)
+    ]],
+
+    // normal map
+    uniform texture_2d normal_texture = texture_2d(),
+    uniform int normal_texture_coord_index = 0,
+    uniform int normal_texture_tangent_index = 0,
+    uniform float normal_scale_factor = 1.0
+    [[
+        anno::hard_range(0.0, 1.0)
+    ]],
+
+    // emission
+    uniform texture_2d emissive_texture = texture_2d(),
+    uniform int emissive_texture_coord_index = 0,
+    uniform color emissive_factor = color(1.0),
+
+    // ambient occlusion
+    uniform texture_2d occlusion_texture = texture_2d(),
+    uniform int occlusion_texture_coord_index = 0,
+    uniform float occlusion_strength = 1.0
+    [[
+        anno::hard_range(0.0, 1.0)
+    ]],
+
+    // alpha
+    uniform float base_alpha = 1.0
+    [[
+        anno::hard_range(0.0, 1.0)
+    ]],
+
+    // alpha for gltf_alpha_mode::mask
+    uniform float alpha_cutoff  = 0.5
+    [[
+        anno::hard_range(0.0, 1.0)
+    ]],
+    uniform gltf_alpha_mode alpha_mode = opaque
+) [[
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("GLTF Material"),
+    anno::hidden(),
+    anno::description("Specular-Glossiness Material that takes the GLTF KHR extension parameters as input.")
+]] = let {
+
+    // handling GLTF parameters
+    // ------------------------------------------------------------------------
+    float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture, diffuse_texture_coord_index);
+    color diffuse = diffuse_factor * color(diffuse_float4.x, diffuse_float4.y, diffuse_float4.z);
+    float alpha = base_alpha * diffuse_float4.w;
+
+    float4 specular_glossiness = gltf_prepare_tex_float4(specular_glossiness_texture, specular_glossiness_texture_coord_index);
+    color specular = specular_factor * color(specular_glossiness.x, specular_glossiness.y, specular_glossiness.z);
+    float glossiness = glossiness_factor * specular_glossiness.w;
+
+    float3 normal = gltf_prepare_normal(normal_texture, normal_texture_coord_index, normal_texture_tangent_index, normal_scale_factor);
+    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_texture_coord_index, occlusion_strength);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_texture_coord_index, emissive_factor);
+
+    // specular glossiness model
+    // ------------------------------------------------------------------------
+
+    //color c_diff = diffuse * (1.0 - math::maxvalue(specular));
+    float F_0 = math::max_value(specular);
+    color F_0_tint = F_0==0.0? color(0.0) : (specular/F_0); 
+
+    float a = (1.0 - glossiness) * (1.0 - glossiness);
+
+	// diffuse BRDF
+	bsdf diffuse_brdf = df::diffuse_reflection_bsdf(
+        tint: diffuse * occlusion, 
+        roughness: 0.0);
+
+	// specular BRDF
+	bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
+        tint: color(1.0) * occlusion,
+	    roughness_u: a, 
+        roughness_v: a, 
+        tangent_u: state::texture_tangent_u(0));
+	bsdf tinted_specular =  df::directional_factor(normal_tint: F_0_tint, grazing_tint: color(1.0), exponent: 5.0, base: specular_brdf);
+	//- Custom curve for specular/diffuse angular mix
+	bsdf diffuse_specular_mix = df::custom_curve_layer(
+        normal_reflectivity: F_0, 
+        grazing_reflectivity: 1.0, 
+        exponent: 5.0, 
+		weight: 1.0, 
+        layer: tinted_specular, 
+        base: diffuse_brdf, 
+        normal: normal);
+
+} in material(
+    surface: material_surface(
+        scattering: diffuse_specular_mix,
         emission:  material_emission (
             emission: df::diffuse_edf(),
             intensity: emissive_color

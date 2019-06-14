@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef MDL_GENERATOR_CODE_HASH_H
-#define MDL_GENERATOR_CODE_HASH_H
+#ifndef MDL_COMPILERCORE_HASH_H
+#define MDL_COMPILERCORE_HASH_H
 
 #include <cstring>
 #include <mi/base/types.h>

@@ -164,6 +164,9 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
     Enter_func_decl visitor(m_unit.get());
     m_dg.walk(visitor);
 
+    // analyze and optimize it
+    m_unit->analyze(*m_hlsl_compiler.get());
+
     mi::base::Handle<IPrinter> printer(m_hlsl_compiler->create_printer(&m_out));
 
     printer->enable_locations(m_use_dbg);
@@ -190,20 +193,39 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
 // Generate HLSL predefined entities into the definition table.
 void HLSLWriterPass::fillPredefinedEntities()
 {
+    // This is a work-around function, so far it adds only the float3 and float4 constructors.
+
     MDL_ASSERT(m_def_tab.get_curr_scope() == m_def_tab.get_predef_scope());
 
-    hlsl::Type_scalar *float_type = m_type_factory.get_float();
+    hlsl::Type_scalar *float_type  = m_type_factory.get_float();
+
     hlsl::Type_vector *float3_type = m_type_factory.get_vector(float_type, 3);
 
-    hlsl::Type_function::Parameter p(float_type, hlsl::Type_function::Parameter::PM_IN);
-    hlsl::Type_function::Parameter params[] = { p, p, p };
-    hlsl::Type_function *func_type = m_type_factory.get_function(float3_type, params );
+    {
+        hlsl::Type_function::Parameter p(float_type, hlsl::Type_function::Parameter::PM_IN);
+        hlsl::Type_function::Parameter params[] = { p, p, p };
+        hlsl::Type_function *func_type = m_type_factory.get_function(float3_type, params);
 
-    m_def_tab.enter_function_definition(
-        m_symbol_table.get_symbol("float3"),
-        func_type,
-        hlsl::Def_function::DS_ELEM_CONSTRUCTOR,
-        NULL);
+        m_def_tab.enter_function_definition(
+            m_symbol_table.get_symbol("float3"),
+            func_type,
+            hlsl::Def_function::DS_ELEM_CONSTRUCTOR,
+            NULL);
+    }
+
+    {
+        hlsl::Type_vector *float4_type = m_type_factory.get_vector(float_type, 4);
+
+        hlsl::Type_function::Parameter p(float_type, hlsl::Type_function::Parameter::PM_IN);
+        hlsl::Type_function::Parameter params[] = { p, p, p, p };
+        hlsl::Type_function *func_type = m_type_factory.get_function(float4_type, params);
+
+        m_def_tab.enter_function_definition(
+            m_symbol_table.get_symbol("float4"),
+            func_type,
+            hlsl::Def_function::DS_ELEM_CONSTRUCTOR,
+            NULL);
+    }
 }
 
 // Create the HLSL definition for a user defined LLVM function.
@@ -708,7 +730,10 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
             }
         }
         if (single_stmt) {
-            stmts.push_back(m_stmt_factory.create_expression(res->get_location(), res));
+            // ignore reference expressions
+            if (!hlsl::is<hlsl::Expr_ref>(res)) {
+                stmts.push_back(m_stmt_factory.create_expression(res->get_location(), res));
+            }
         }
     }
 
@@ -1894,7 +1919,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
     if (it != m_local_var_map.end()) {
         auto result = create_reference(it->second);
 
-        if (dst_var != nullptr)
+        if (dst_var != nullptr && it->second != dst_var)
             return create_assign_expr(dst_var, result);
         return result;
     }
@@ -4304,8 +4329,9 @@ void HLSLWriterPass::add_array_specifiers(Decl_type *decl, hlsl::Type *type)
 // Get the constructor for the given HLSL type.
 hlsl::Def_function *HLSLWriterPass::lookup_constructor(hlsl::Type *type)
 {
+    // FIXME: this implementation is wrong, it works only for the fake fillPredefEntities()
     if (hlsl::Def_function *def = hlsl::as_or_null<hlsl::Def_function>(
-        m_def_tab.get_global_scope()->find_definition_in_scope(type->get_sym())))
+        m_def_tab.get_predef_scope()->find_definition_in_scope(type->get_sym())))
     {
         if (def->get_semantics() == hlsl::Def_function::DS_ELEM_CONSTRUCTOR)
             return def;
@@ -4421,6 +4447,12 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
 
     if (type->isVoidTy())
         return nullptr;
+
+    auto it = m_local_var_map.find(value);
+    if (it != m_local_var_map.end()) {
+        // this should be a variable, otherwise something did go really wrong
+        return hlsl::cast<hlsl::Def_variable>(it->second);
+    }
 
     hlsl::Symbol *var_sym = get_unique_hlsl_sym(value->getName(), "tmp");
 

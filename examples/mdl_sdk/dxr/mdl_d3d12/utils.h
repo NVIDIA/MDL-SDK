@@ -61,6 +61,11 @@ namespace mdl_d3d12
         const std::string& file = "", 
         int line = 0);
 
+    void log_error(
+        const std::exception& exception,
+        const std::string& file,
+        int line = 0);
+
     bool log_on_failure(
         HRESULT error_code, 
         const std::string& message, 

@@ -400,26 +400,6 @@ bool Mdl_compiled_material::get_cutout_opacity(mi::Float32* cutout_opacity) cons
     return false;
 }
 
-namespace {
-
-void write( SERIAL::Serializer* serializer, const mi::base::Uuid& uuid)
-{
-    serializer->write( uuid.m_id1);
-    serializer->write( uuid.m_id2);
-    serializer->write( uuid.m_id3);
-    serializer->write( uuid.m_id4);
-}
-
-void read( SERIAL::Deserializer* deserializer, mi::base::Uuid& uuid)
-{
-    deserializer->read( &uuid.m_id1);
-    deserializer->read( &uuid.m_id2);
-    deserializer->read( &uuid.m_id3);
-    deserializer->read( &uuid.m_id4);
-}
-
-}
-
 const SERIAL::Serializable* Mdl_compiled_material::serialize(
     SERIAL::Serializer* serializer) const
 {
@@ -544,17 +524,6 @@ void Mdl_compiled_material::get_scene_element_references( DB::Tag_set* result) c
     collect_references( m_body.get(), result);
     collect_references( m_temporaries.get(), result);
     collect_references( m_arguments.get(), result);
-}
-
-mi::base::Uuid Mdl_compiled_material::convert_hash(
-    const mi::mdl::DAG_hash& h)
-{
-    mi::base::Uuid result;
-    result.m_id1 = (h[ 0] << 24) | (h[ 1] << 16) | (h[ 2] << 8) | h[ 3];
-    result.m_id2 = (h[ 4] << 24) | (h[ 5] << 16) | (h[ 6] << 8) | h[ 7];
-    result.m_id3 = (h[ 8] << 24) | (h[ 9] << 16) | (h[10] << 8) | h[11];
-    result.m_id4 = (h[12] << 24) | (h[13] << 16) | (h[14] << 8) | h[15];
-    return result;
 }
 
 } // namespace MDL

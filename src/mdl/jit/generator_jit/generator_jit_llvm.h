@@ -76,6 +76,7 @@ class IResource_manager;
 class IStatement;
 class IStatement_compound;
 class Lambda_function;
+class LLVM_code_generator;
 class Distribution_function;
 class MDL;
 class MDL_runtime_creator;
@@ -115,11 +116,15 @@ public:
     /// \param module_key  the module key returned by add_llvm_module() for the module containing
     ///                    the function
     /// \param func        the LLVM function to compile
+    /// \param code_gen    the code generator used for reporting errors
     ///
-    /// \return The address of the jitted code of the function.
+    /// \return The address of the jitted code of the function or NULL on error.
     ///
     /// \note: the module of this function must be added in advance
-    void *jit_compile(MDL_JIT_module_key module_key, llvm::Function *func);
+    void *jit_compile(
+        MDL_JIT_module_key module_key,
+        llvm::Function *func,
+        LLVM_code_generator &code_gen);
 
     /// Get the only instance.
     ///
@@ -1669,6 +1674,49 @@ public:
     /// \param jitted_code  the Jitted_code object containing the JIT
     static void register_native_runtime_functions(Jitted_code *jitted_code);
 
+    /// Get the number of error messages.
+    int get_error_message_count();
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param params  the message parameters
+    void error(int code, Error_params const &params);
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param param   a string parameter for the error message
+    void error(int code, char const *str_param);
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param param   a string parameter for the error message
+    void error(int code, llvm::StringRef const &str_param)
+    {
+        string str(str_param.data(), str_param.size(), get_allocator());
+        error(code, str.c_str());
+    }
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param param   a string parameter for the error message
+    void error(int code, std::string const &str_param)
+    {
+        error(code, str_param.c_str());
+    }
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param param   a string parameter for the error message
+    void error(int code, string const &str_param)
+    {
+        error(code, str_param.c_str());
+    }
+
 private:
     /// Helper to retrieve the allocator.
     mi::mdl::IAllocator *get_allocator() { return m_arena.get_allocator(); }
@@ -2686,49 +2734,6 @@ private:
 
     /// Get the address of a JIT compiled LLVM function.
     void *get_entry_point(MDL_JIT_module_key module_key, llvm::Function *func);
-
-    /// Get the number of error messages.
-    int get_error_message_count();
-
-    /// Add a JIT backend error message to the messages.
-    ///
-    /// \param code    the code of the error message
-    /// \param params  the message parameters
-    void error(int code, Error_params const &params);
-
-    /// Add a JIT backend error message to the messages.
-    ///
-    /// \param code    the code of the error message
-    /// \param param   a string parameter for the error message
-    void error(int code, char const *str_param);
-
-    /// Add a JIT backend error message to the messages.
-    ///
-    /// \param code    the code of the error message
-    /// \param param   a string parameter for the error message
-    void error(int code, llvm::StringRef const &str_param)
-    {
-        string str(str_param.data(), str_param.size(), get_allocator());
-        error(code, str.c_str());
-    }
-
-    /// Add a JIT backend error message to the messages.
-    ///
-    /// \param code    the code of the error message
-    /// \param param   a string parameter for the error message
-    void error(int code, std::string const &str_param)
-    {
-        error(code, str_param.c_str());
-    }
-
-    /// Add a JIT backend error message to the messages.
-    ///
-    /// \param code    the code of the error message
-    /// \param param   a string parameter for the error message
-    void error(int code, string const &str_param)
-    {
-        error(code, str_param.c_str());
-    }
 
     /// Create a runtime.
     ///

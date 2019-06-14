@@ -74,6 +74,7 @@ class Generated_code_dag: public Allocator_interface_implement<IGenerated_code_d
     friend class Allocator_builder;
     friend class Code_generator_dag;
     friend class DAG_dependence_graph;
+    friend class Local_type_enumerator;
 
     /// The type of vector of types.
     typedef vector<IType const *>::Type Type_list;
@@ -303,13 +304,15 @@ public:
         /// \param name       The name of the function.
         /// \param orig_name  The original name of the function if this is an alias, "" else.
         /// \param cloned     The name of the cloned function or "".
+        /// \param hash       The function hash if available.
         Function_info(
             IAllocator            *alloc,
             Definition::Semantics sema,
             IType const           *ret_tp,
             char const            *name,
             char const            *orig_name,
-            char const            *cloned)
+            char const            *cloned,
+            DAG_hash const        *hash)
         : m_semantics(sema)
         , m_return_type(ret_tp)
         , m_name(name, alloc)
@@ -319,8 +322,13 @@ public:
         , m_annotations(alloc)
         , m_return_annos(alloc)
         , m_refs(alloc)
+        , m_hash()
         , m_properties(0u)
+        , m_has_hash(hash != NULL)
         {
+            if (m_has_hash) {
+                m_hash = *hash;
+            }
         }
 
         /// Add a parameter.
@@ -384,6 +392,9 @@ public:
         /// Get the function properties.
         unsigned get_properties() const { return m_properties; }
 
+        /// Get the function hash if available.
+        DAG_hash const *get_hash() const { return m_has_hash ? &m_hash : NULL; }
+
     private:
         Definition::Semantics m_semantics;     ///< The function semantics.
         IType const           *m_return_type;  ///< The function return type.
@@ -394,10 +405,89 @@ public:
         Dag_vector            m_annotations;   ///< The annotations of the function.
         Dag_vector            m_return_annos;  ///< The return annotations of the function.
         String_vector         m_refs;          ///< The references of a function.
+        DAG_hash              m_hash;          ///< The function hash value.
         unsigned              m_properties;    ///< The property flags of this function.
+        bool                  m_has_hash;      ///< True, if a hash value is available.
     };
 
     typedef vector<Function_info>::Type Function_vector;
+
+    /// Helper class describing one annotation.
+    class Annotation_info {
+        // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
+        friend bool has_dynamic_memory_consumption(Annotation_info const &);
+        friend size_t dynamic_memory_consumption(Annotation_info const &);
+        friend class Generated_code_dag;
+
+    public:
+        /// Constructor.
+        ///
+        /// \param alloc      The allocator.
+        /// \param sema       The semantics of the annotation.
+        /// \param name       The name of the function.
+        /// \param orig_name  The original name of the annotation if this is an alias, "" else.
+        Annotation_info(
+            IAllocator            *alloc,
+            Definition::Semantics sema,
+            char const            *name,
+            char const            *orig_name)
+        : m_semantics(sema)
+        , m_name(name, alloc)
+        , m_original_name(orig_name == NULL ? "" : orig_name, alloc)
+        , m_parameters(alloc)
+        , m_annotations(alloc)
+        , m_properties(0u)
+        {
+        }
+
+        /// Add a parameter.
+        void add_parameter(Parameter_info const &param) { m_parameters.push_back(param); }
+
+        /// Add an annotation.
+        void add_annotation(DAG_node const *anno) { m_annotations.push_back(anno); }
+
+        /// Set the function properties.
+        void set_properties(unsigned props) { m_properties = props; }
+
+        /// Get the semantics.
+        Definition::Semantics get_semantics() const { return m_semantics; }
+
+        /// Get the name.
+        char const *get_name() const { return m_name.c_str(); }
+
+        /// Get the original name if any.
+        char const *get_original_name() const {
+            return m_original_name.empty() ? NULL : m_original_name.c_str();
+        }
+
+        /// Get the parameter count.
+        size_t get_parameter_count() const { return m_parameters.size(); }
+
+        /// Get the parameter at index.
+        Parameter_info const &get_parameter(size_t idx) const { return m_parameters[idx]; }
+
+        /// Get the parameter at index.
+        Parameter_info &get_parameter(size_t idx) { return m_parameters[idx]; }
+
+        /// Get the annotation count.
+        size_t get_annotation_count() const { return m_annotations.size(); }
+
+        /// Get the annotation at index.
+        DAG_node const *get_annotation(size_t idx) const { return m_annotations[idx]; }
+
+        /// Get the function properties.
+        unsigned get_properties() const { return m_properties; }
+
+    private:
+        Definition::Semantics m_semantics;     ///< The function semantics.
+        string                m_name;          ///< The name of the function.
+        string                m_original_name; ///< If this is an alias, the original name, else "".
+        Param_vector          m_parameters;    ///< The material parameters.
+        Dag_vector            m_annotations;   ///< The annotations of the annotation.
+        unsigned              m_properties;    ///< The property flags of this function.
+    };
+
+    typedef vector<Annotation_info>::Type Annotation_vector;
 
     //// Helper class describing a user defined type.
     class User_type_info {
@@ -439,11 +529,13 @@ public:
         /// Constructor.
         ///
         /// \param alloc          The allocator.
+        /// \param is_exported    True, if this user type is exported.
         /// \param type           The user defined type.
         /// \param name           The fully qualified name of the type.
         /// \param original_name  If the type was re-exported, the original name of the type.
         User_type_info(
             IAllocator  *alloc,
+            bool        is_exported,
             IType const *type,
             char const  *name,
             char const  *original_name)
@@ -452,6 +544,7 @@ public:
             , m_original_name(original_name != NULL ? original_name : "", alloc)
             , m_annotations(alloc)
             , m_entities(alloc)
+            , m_is_exported(is_exported)
         {
         }
 
@@ -484,6 +577,9 @@ public:
         /// Get a (sub-)entity of the type.
         Entity_info const &get_entity(size_t idx) const { return m_entities[idx]; }
 
+        /// Returns true if this is an exported type.
+        bool is_exported() const { return m_is_exported; }
+
     private:
         /// The user defined type.
         IType const * const m_type;
@@ -499,6 +595,9 @@ public:
 
         /// The sub-entities of the type.
         Entity_vector m_entities;
+
+        /// True, if this user type is exported.
+        bool m_is_exported;
     };
 
     typedef vector<User_type_info>::Type User_type_vector;
@@ -1086,6 +1185,9 @@ public:
 
             /// Properties of the generated instance.
             Properties m_properties;
+
+            /// If true, instanciate arguments.
+            bool m_instanciate_args;
         };
 
         /// A builder, used for generating printer.
@@ -1260,6 +1362,14 @@ public:
         int function_index,
         int parameter_index,
         int user_index) const MDL_FINAL;
+
+    /// Get the function hash value for the given function index if available.
+    ///
+    /// \param function_index  The index of the function.
+    /// \returns               The function hash of the function or NULL if no hash
+    ///                        value is available or the index is out of bounds.
+    DAG_hash const *get_function_hash(
+        int function_index) const MDL_FINAL;
 
     /// Check if the code contents are valid.
     bool is_valid() const MDL_FINAL;
@@ -1532,6 +1642,13 @@ public:
     IType const *get_type(
         int index) const MDL_FINAL;
 
+    /// Returns true if the type at index is exported.
+    ///
+    /// \param index  The index of the type.
+    /// \returns      true for exported types.
+    bool is_type_exported(
+        int index) const MDL_FINAL;
+
     /// Get the number of annotations of the type at index.
     ///
     /// \param      index  The index of the type.
@@ -1680,6 +1797,100 @@ public:
     /// Get the internal space
     char const *get_internal_space() const MDL_FINAL;
 
+    /// Get the number of annotations in the generated code.
+    ///
+    /// \returns    The number of annotations in this generated code.
+    int get_annotation_count() const MDL_FINAL;
+
+    /// Get the semantics of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The semantics of the annotation.
+    IDefinition::Semantics get_annotation_semantics(int annotation_index) const MDL_FINAL;
+
+    /// Get the name of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The name of the annotation.
+    char const *get_annotation_name(int annotation_index) const MDL_FINAL;
+
+    /// Get the original name of the annotation at annotation_index if the annotation name is
+    /// an alias, i.e. re-exported from a module.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The original name of the annotation or NULL.
+    char const *get_original_annotation_name(int annotation_index) const MDL_FINAL;
+
+    /// Get the parameter count of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The number of parameters of the annotation.
+    int get_annotation_parameter_count(int annotation_index) const MDL_FINAL;
+
+    /// Get the parameter type of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_index   The index of the parameter.
+    /// \returns                 The type of the parameter.
+    IType const *get_annotation_parameter_type(
+        int annotation_index,
+        int parameter_index) const MDL_FINAL;
+
+    /// Get the parameter name of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_index   The index of the parameter.
+    /// \returns                 The name of the parameter.
+    char const *get_annotation_parameter_name(
+        int annotation_index,
+        int parameter_index) const MDL_FINAL;
+
+    /// Get the index of the parameter parameter_name.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_name    The name of the parameter.
+    /// \returns                 The index of the parameter, or -1 if it does not exist.
+    int get_annotation_parameter_index(
+        int        annotation_index,
+        char const *parameter_name) const MDL_FINAL;
+
+    /// Get the default initializer of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    ///
+    /// \param annotation_index   The index of the annotation.
+    /// \param parameter_index    The index of the parameter.
+    /// \returns                  The default initializer or NULL if not available.
+    DAG_node const *get_annotation_parameter_default(
+        int annotation_index,
+        int parameter_index) const MDL_FINAL;
+
+    /// Get the property flag of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \param ap                The requested annotation property.
+    /// \returns                 True if this annotation has the property, false if not.
+    bool get_annotation_property(
+        int                 annotation_index,
+        Annotation_property ap) const MDL_FINAL;
+
+    /// Get the number of annotations of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns               The number of annotations.
+    int get_annotation_annotation_count(
+        int annotation_index) const MDL_FINAL;
+
+    /// Get the annotation at annotation_index of the annotation (declaration) at anno_decl_index.
+    ///
+    /// \param anno_decl_index    The index of the annotation (declaration).
+    /// \param annotation_index   The index of the annotation.
+    /// \returns                  The annotation.
+    DAG_node const *get_annotation_annotation(
+        int anno_decl_index,
+        int annotation_index) const MDL_FINAL;
+
     // --------------------------- non interface methods ---------------------------
 
     /// Get the value factory of this code.
@@ -1755,6 +1966,21 @@ private:
     /// \param parameter_index  the parameter index
     Parameter_info const *get_func_param_info(
         int function_index,
+        int parameter_index) const;
+
+    /// Get the annotation info for a given annotation index or NULL if the index is out of range.
+    ///
+    /// \param annotation_index  the annotation index
+    Annotation_info const *get_annotation_info(
+        int annotation_index) const;
+
+    /// Get the parameter info for a given annotation and parameter index pair or NULL if
+    /// one index is out of range.
+    ///
+    /// \param annotation_index   the annotation index
+    /// \param parameter_index  the parameter index
+    Parameter_info const *get_anno_param_info(
+        int annotation_index,
         int parameter_index) const;
 
     /// Get the user type info for a given type index or NULL if the index is out of range.
@@ -1836,9 +2062,11 @@ private:
     ///
     /// \param dag_builder  the DAG builder to be used
     /// \param def          the definition of the type.
+    /// \param is_exported  true, if this type is exported
     void compile_type(
         DAG_builder       &dag_builder,
-        IDefinition const *def);
+        IDefinition const *def,
+        bool              is_exported);
 
     /// Compile a constant.
     ///
@@ -1864,6 +2092,16 @@ private:
         DAG_builder        &dag_builder,
         Function_info      &func,
         IDeclaration const *decl);
+
+    /// Generate annotations for annotation declarations (only for the decl itself).
+    ///
+    /// \param dag_builder  the DAG builder to be used
+    /// \param anno         the annotation info to be filled
+    /// \param decl         the declaration of the annotation
+    void gen_anno_decl_annotations(
+        DAG_builder                   &dag_builder,
+        Annotation_info               &anno,
+        IDeclaration_annotation const *decl);
 
     /// Generate annotations for function return types.
     ///
@@ -1891,6 +2129,22 @@ private:
         IDeclaration const *decl,
         int                k);
 
+    /// Generate annotations for annotation (declaration) parameters.
+    ///
+    /// \param dag_builder   the DAG builder to be used
+    /// \param param         the parameter
+    /// \param f_def         the definition of the annotation
+    /// \param owner_module  the owner module of the annotation definition
+    /// \param decl          its declaration
+    /// \param k             the parameter index
+    void gen_annotation_parameter_annotations(
+        DAG_builder                   &dag_builder,
+        Parameter_info                &param,
+        IDefinition const             *f_def,
+        IModule const                 *owner_module,
+        IDeclaration_annotation const *decl,
+        int                           k);
+
     /// Generate annotations for the module.
     ///
     /// \param dag_builder  the DAG builder to be used
@@ -1898,6 +2152,24 @@ private:
     void gen_module_annotations(
         DAG_builder               &dag_builder,
         IDeclaration_module const *decl);
+
+    /// Compile an annotation (declaration).
+    ///
+    /// \param module   The owner module of the annotation to compile.
+    /// \param a_node   The dependence graph node of the annotation.
+    void compile_annotation(
+        IModule const         *module,
+        Dependence_node const *a_node);
+
+    /// Compile a local annotation (declaration).
+    ///
+    /// \param module       the owner module of the annotation to compile
+    /// \param dag_builder  the DAG builder to be used
+    /// \param a_node       the dependence graph node of the annotation
+    void compile_local_annotation(
+        IModule const         *module,
+        DAG_builder           &dag_builder,
+        Dependence_node const *a_node);
 
     /// Compile a function.
     ///
@@ -1909,9 +2181,11 @@ private:
 
     /// Compile a local function.
     ///
+    /// \param module       the owner module of the function to compile
     /// \param dag_builder  the DAG builder to be used
-    /// \param f_node   the dependence graph node of the function
+    /// \param f_node       the dependence graph node of the function
     void compile_local_function(
+        IModule const         *module,
         DAG_builder           &dag_builder,
         Dependence_node const *f_node);
 
@@ -2063,6 +2337,16 @@ private:
     /// \param dag_serializer  the DAG IR serializer
     void deserialize_materials(DAG_deserializer &dag_deserializer);
 
+    /// Serialize all Annotation_infos of this code DAG.
+    ///
+    /// \param dag_serializer  the DAG IR serializer
+    void serialize_annotations(DAG_serializer &dag_serializer) const;
+
+    /// Deserialize all Annotation_infos of this code DAG.
+    ///
+    /// \param dag_serializer  the DAG IR serializer
+    void deserialize_annotations(DAG_deserializer &dag_deserializer);
+
     /// Serialize one parameter.
     ///
     /// \param param           the parameter
@@ -2098,6 +2382,18 @@ private:
     /// \param mat               the material
     /// \param dag_deserializer  the DAG IR serializer
     void deserialize_parameters(Material_info &mat, DAG_deserializer &dag_deserializer);
+
+    /// Serialize all parameters of an annotation.
+    ///
+    /// \param anno            the annotation
+    /// \param dag_serializer  the DAG IR serializer
+    void serialize_parameters(Annotation_info const &anno, DAG_serializer &dag_serializer) const;
+
+    /// Deserialize all parameters of a annotation.
+    ///
+    /// \param anno              the annotation
+    /// \param dag_deserializer  the DAG IR serializer
+    void deserialize_parameters(Annotation_info &anno, DAG_deserializer &dag_deserializer);
 
     /// Serialize all User_type_infos of this code DAG.
     ///
@@ -2187,7 +2483,10 @@ private:
     /// The materials of this compiled module.
     Material_vector m_materials;
 
-    /// The (exported) user defined types of this compiled module.
+    /// The (declared) annotations of this compiled module.
+    Annotation_vector m_annotations;
+
+    /// The (exported and non-exported) user defined types of this compiled module.
     User_type_vector m_user_types;
 
     /// The (exported) user defined constants of this compiled module.

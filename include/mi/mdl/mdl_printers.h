@@ -271,6 +271,14 @@ public:
     ///
     /// \param  enable   true if the resource table should be printed
     virtual void show_resource_table(bool enable = true) = 0;
+
+    /// Enable/disable MDL function hash table comments.
+    ///
+    /// The MDL compiler computes for some modules a function hash table.
+    /// if enabled print this table as comments.
+    ///
+    /// \param  enable   true if the function hash table should be printed
+    virtual void show_function_hash_table(bool enable = true) = 0;
 };
 
 /// Resource callback for the MDL exporter.
