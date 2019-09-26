@@ -33,6 +33,7 @@ set(PROJECT_NAME mdl-jit-generator_jit)
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(_GENERATED_SOURCES 
     ${_GENERATED_DIR}/libbsdf_bitcode.h
+    ${_GENERATED_DIR}/libmdlrt_bitcode.h
     ${_GENERATED_DIR}/glue_libdevice.h
     ${_GENERATED_DIR}/generator_jit_intrinsic_func.i
     )
@@ -41,6 +42,7 @@ set(_GENERATED_SOURCES
 set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_intrinsic_func.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_libdevice.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gen_libmdlrt.py
     )
 
 # -------------------------------------------------------------------------------------------------
@@ -77,6 +79,7 @@ set(PROJECT_SOURCES
     "generator_jit_hlsl_writer.cpp"
     "generator_jit_libbsdf.cpp"
     "generator_jit_libdevice.cpp"
+    "generator_jit_libmdlrt.cpp"
     "generator_jit_mangle.cpp"
     "generator_jit_llvm.cpp"
     "generator_jit_llvm_df.cpp"
@@ -134,6 +137,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS 
         boost
         mdl-jit-libbsdf
+        mdl-jit-libmdlrt
     )
 
 # add cuda headers, only required for CUDA_VERSION define
@@ -191,6 +195,17 @@ add_custom_command(
     DEPENDS 
         ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
         ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf.bc
+    VERBATIM
+    )
+
+add_custom_command(
+    OUTPUT ${_GENERATED_DIR}/libmdlrt_bitcode.h
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating libmdlrt_bitcode.h ..."
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libmdlrt.py ${CMAKE_CURRENT_BINARY_DIR}/../libmdlrt/generated/libmdlrt.bc ${_GENERATED_DIR}
+    DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/gen_libmdlrt.py
+        ${CMAKE_CURRENT_BINARY_DIR}/../libmdlrt/generated/libmdlrt.bc
     VERBATIM
     )
 

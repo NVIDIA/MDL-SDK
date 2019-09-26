@@ -687,6 +687,17 @@ struct Bsdf_pdf_data {
     tct_float        pdf;            ///< pdf (non-projected hemisphere)
 };
 
+/// Input and output structure for BSDF auxiliary calculation data.
+struct Bsdf_auxiliary_data {
+    // Input fields
+    tct_float3       ior1;           ///< IOR current medium
+    tct_float3       ior2;           ///< IOR other side
+    tct_float3       k1;             ///< outgoing direction
+
+    // Output fields
+    tct_float3       albedo;         ///< albedo
+    tct_float3       normal;         ///< normal
+};
 
 // Signatures for generated target code functions.
 
@@ -975,6 +986,15 @@ struct Edf_pdf_data
     tct_float       pdf;            ///< pdf (non-projected hemisphere)
 };
 
+/// Input and output structure for EDF auxiliary calculation data.
+struct Edf_auxiliary_data
+{
+    // Input fields
+    tct_float3      k1;             ///< outgoing direction
+    
+    // Output fields
+    // reserved for future use
+};
 
 /// Signature of the initialization function for material distribution functions created via
 /// #mi::mdl::ICode_generator_jit::compile_distribution_function_cpu(),

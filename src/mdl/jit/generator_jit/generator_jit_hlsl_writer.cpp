@@ -929,7 +929,7 @@ llvm::Value *HLSLWriterPass::process_pointer_address_recurse(
         if (base_pointer == nullptr)
             return nullptr;
 
-        llvm::Type *cur_llvm_type = stack.back().llvm_type;
+        llvm::Type *cur_llvm_type = stack.back().field_type;
         uint64_t cur_type_size = 0;
 
         for (unsigned i = 1, num_indices = gep->getNumIndices(); i < num_indices; ++i) {
@@ -1066,8 +1066,11 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
         }
 
         if (hlsl::Type_struct *struct_type = hlsl::as<hlsl::Type_struct>(cur_type)) {
-            llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
-            unsigned idx_imm = unsigned(idx->getZExtValue()) + stack[i].field_index_offs;
+            unsigned idx_imm = stack[i].field_index_offs;
+            if (stack[i].field_index_val) {
+                llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
+                idx_imm += unsigned(idx->getZExtValue());
+            }
             hlsl::Type_struct::Field *field = struct_type->get_field(idx_imm);
             hlsl::Expr *field_ref = create_reference(
                 field->get_symbol(), field->get_type());
@@ -2168,7 +2171,12 @@ hlsl::Expr *HLSLWriterPass::translate_expr_bin(llvm::Instruction *inst)
         hlsl_op = hlsl::Expr_binary::OK_BITWISE_OR;
         break;
     case llvm::Instruction::Xor:
-        hlsl_op = hlsl::Expr_binary::OK_BITWISE_XOR;
+        if (hlsl::is<hlsl::Type_bool>(left->get_type()->skip_type_alias()) &&
+                hlsl::is<hlsl::Type_bool>(right->get_type()->skip_type_alias())) {
+            // map XOR on boolean values to NOT-EQUAL to be compatible to SLANG
+            hlsl_op = hlsl::Expr_binary::OK_NOT_EQUAL;
+        } else
+            hlsl_op = hlsl::Expr_binary::OK_BITWISE_XOR;
         break;
 
     // "Other operators"
@@ -2577,6 +2585,29 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
                 }
             }
 
+            if (src_type->isPointerTy() && dest_type->isPointerTy()) {
+                llvm::StructType *src_elem_st =
+                    llvm::dyn_cast<llvm::StructType>(src_type->getPointerElementType());
+                llvm::StructType *dest_elem_st =
+                    llvm::dyn_cast<llvm::StructType>(dest_type->getPointerElementType());
+
+                // skip "bitcast %State_core* %1 to %class.State*" and
+                // "bitcast %class.State* %1 to %State_core*"
+                // (can appear when optimization is disabled)
+                if (src_elem_st && dest_elem_st &&
+                        src_elem_st->hasName() && dest_elem_st->hasName() && (
+                            (
+                                src_elem_st->getName() == "State_core" &&
+                                dest_elem_st->getName() == "class.State"
+                            ) || (
+                                src_elem_st->getName() == "class.State" &&
+                                dest_elem_st->getName() == "State_core"
+                            )
+                        ) ) {
+                    return expr;
+                }
+            }
+
             MDL_ASSERT(!"unexpected LLVM BitCast instruction");
             return m_expr_factory.create_invalid(convert_location(inst));
         }
@@ -2711,14 +2742,8 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
         }
         pointer = bitcast->getOperand(0);
     }
-    if (llvm::AllocaInst *alloca_inst = llvm::dyn_cast<llvm::AllocaInst>(pointer)) {
-        auto it = m_local_var_map.find(pointer);
-        if (it != m_local_var_map.end()) {
-            return create_reference(it->second);
-        }
-        MDL_ASSERT(!"unexpected unmapped alloca");
-        return m_expr_factory.create_invalid(convert_location(alloca_inst));
-    } else if (llvm::GetElementPtrInst *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(pointer)) {
+
+    if (llvm::GetElementPtrInst *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(pointer)) {
         llvm::ConstantInt *zero_idx = llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(1));
         if (zero_idx == nullptr || !zero_idx->isZero()) {
             MDL_ASSERT(!"invalid gep, first index not zero");
@@ -2727,7 +2752,7 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
 
         // walk the base expression using select operations according to the indices of the gep
         llvm::Type *cur_llvm_type = gep->getPointerOperandType()->getPointerElementType();
-        hlsl::Expr *cur_expr = translate_expr(gep->getPointerOperand(), nullptr);
+        hlsl::Expr *cur_expr = translate_lval_expression(gep->getPointerOperand());
         hlsl::Type *cur_type = cur_expr->get_type()->skip_type_alias();
 
         for (unsigned i = 1, num_indices = gep->getNumIndices(); i < num_indices; ++i) {
@@ -2785,7 +2810,13 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
         }
         return cur_expr;
     }
-    MDL_ASSERT(!"unsupported lvalue expression");
+
+    // should be alloca or pointer parameter
+    auto it = m_local_var_map.find(pointer);
+    if (it != m_local_var_map.end()) {
+        return create_reference(it->second);
+    }
+    MDL_ASSERT(!"unexpected unmapped alloca or pointer parameter");
     return m_expr_factory.create_invalid(zero_loc);
 }
 
@@ -3140,7 +3171,6 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractelement(llvm::ExtractElementIn
     llvm::Value *index = extract->getIndexOperand();
 
     hlsl::Type *res_type = convert_type(extract->getType());
-
     hlsl::Expr *res;
 
     if (hlsl::Symbol *index_sym = get_vector_index_sym(index)) {
@@ -3152,6 +3182,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractelement(llvm::ExtractElementIn
         res = m_expr_factory.create_binary(
             Expr_binary::OK_ARRAY_SUBSCRIPT, expr, index_expr);
     }
+
     res->set_type(res_type);
     res->set_location(convert_location(extract));
 
@@ -3173,6 +3204,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractvalue(llvm::ExtractValueInst *
                 m_value_factory.get_uint32(i));
             res = m_expr_factory.create_binary(
                 Expr_binary::OK_ARRAY_SUBSCRIPT, res, index_expr);
+        } else if (hlsl::is<hlsl::Type_vector>(cur_type)) {
+            // due to type mapping, this could also be a vector
+            res = create_vector_access(res, i);
         } else {
             hlsl::Type_struct *s_type = hlsl::cast<hlsl::Type_struct>(cur_type);
 
@@ -3188,10 +3222,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractvalue(llvm::ExtractValueInst *
 
         cur_type = get_compound_sub_type(hlsl::cast<hlsl::Type_compound>(cur_type), i);
         cur_type = cur_type->skip_type_alias();
+        res->set_type(cur_type);
     }
 
-    hlsl::Type *res_type = convert_type(extract->getType());
-    res->set_type(res_type);
     res->set_location(convert_location(extract));
 
     return res;
@@ -3451,6 +3484,8 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
                 return create_bsdf_evaluate_data_struct_types(s_type);
             if (name == "struct.BSDF_pdf_data")
                 return create_bsdf_pdf_data_struct_types(s_type);
+            if (name == "struct.BSDF_auxiliary_data")
+                return create_bsdf_auxiliary_data_struct_types(s_type);
         }
         if (name.startswith("struct.EDF_")) {
             if (name == "struct.EDF_sample_data")
@@ -3459,6 +3494,8 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
                 return create_edf_evaluate_data_struct_types(s_type);
             if (name == "struct.EDF_pdf_data")
                 return create_edf_pdf_data_struct_types(s_type);
+            if (name == "struct.EDF_auxiliary_data")
+                return create_edf_auxiliary_data_struct_types(s_type);
         }
         if (name == "struct.float3") {
             hlsl::Type_scalar *float_type = m_type_factory.get_float();
@@ -3742,6 +3779,32 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_pdf_data_struct_types(llvm::Struc
     return res;
 }
 
+// Create the Bsdf_auxiliary_data struct type used by libbsdf.
+hlsl::Type_struct *HLSLWriterPass::create_bsdf_auxiliary_data_struct_types(llvm::StructType *type)
+{
+    hlsl::Type_scalar *float_type = m_type_factory.get_float();
+    hlsl::Type_vector *float3_type = m_type_factory.get_vector(float_type, 3);
+
+    hlsl::Declaration_struct *decl_struct = m_decl_factory.create_struct(zero_loc);
+    hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Bsdf_auxiliary_data");
+    decl_struct->set_name(get_name(zero_loc, struct_sym));
+
+    hlsl::Type_struct::Field fields[5];
+
+    fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
+    fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
+    fields[2] = add_struct_field(decl_struct, float3_type, "k1");
+    fields[3] = add_struct_field(decl_struct, float3_type, "albedo");
+    fields[4] = add_struct_field(decl_struct, float3_type, "normal");
+
+    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+    m_type_cache[type] = res;
+
+    // do not add to the unit to avoid printing it
+
+    return res;
+}
+
 // Create the Edf_sample_data struct type used by libbsdf.
 hlsl::Type_struct *HLSLWriterPass::create_edf_sample_data_struct_types(llvm::StructType *type)
 {
@@ -3808,6 +3871,28 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_pdf_data_struct_types(llvm::Struct
 
     fields[0] = add_struct_field(decl_struct, float3_type, "k1");
     fields[1] = add_struct_field(decl_struct, float_type,  "pdf");
+
+    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+    m_type_cache[type] = res;
+
+    // do not add to the unit to avoid printing it
+
+    return res;
+}
+
+// Create the Edf_auxiliary_data struct type used by libbsdf.
+hlsl::Type_struct *HLSLWriterPass::create_edf_auxiliary_data_struct_types(llvm::StructType *type)
+{
+    hlsl::Type_scalar *float_type = m_type_factory.get_float();
+    hlsl::Type_vector *float3_type = m_type_factory.get_vector(float_type, 3);
+
+    hlsl::Declaration_struct *decl_struct = m_decl_factory.create_struct(zero_loc);
+    hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Edf_auxiliary_data");
+    decl_struct->set_name(get_name(zero_loc, struct_sym));
+
+    hlsl::Type_struct::Field fields[1];
+
+    fields[0] = add_struct_field(decl_struct, float3_type, "k1");
 
     hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
     m_type_cache[type] = res;
@@ -4507,6 +4592,8 @@ hlsl::Def_variable *HLSLWriterPass::create_global_const(llvm::Constant *cv)
     auto it = m_global_var_map.find(cv);
     if (it != m_global_var_map.end())
         return hlsl::as<hlsl::Def_variable>(it->second);
+
+    hlsl::Definition_table::Scope_transition scope(m_def_tab, m_def_tab.get_global_scope());
 
     llvm::Type   *type = cv->getType();
     hlsl::Symbol *cnst_sym = get_unique_hlsl_sym(cv->getName(), "glob_cnst");

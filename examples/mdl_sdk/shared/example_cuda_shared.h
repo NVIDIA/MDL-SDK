@@ -1266,7 +1266,8 @@ public:
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
         bool enable_derivatives,
-        bool fold_ternary_on_df);
+        bool fold_ternary_on_df,
+        bool enable_auxiliary);
 
     // Helper function that checks if the provided name describes an MDLe element.
     static bool is_mdle_name(const std::string& name);
@@ -1373,7 +1374,8 @@ Material_compiler::Material_compiler(
         mi::neuraylib::ITransaction* transaction,
         unsigned num_texture_results,
         bool enable_derivatives,
-        bool fold_ternary_on_df)
+        bool fold_ternary_on_df,
+        bool enable_auxiliary)
     : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
     , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
     , m_transaction(mi::base::make_handle_dup(transaction))
@@ -1402,6 +1404,13 @@ Material_compiler::Material_compiler(
     check_success(m_be_cuda_ptx->set_option(
         "num_texture_results",
         to_string(num_texture_results).c_str()) == 0);
+
+    if (enable_auxiliary) {
+        // Option "enable_auxiliary": Default is disabled.
+        // We enable it to create an additional 'auxiliary' function that can be called on each
+        // distribution function to fill an albedo and normal buffer e.g. for denoising.
+        check_success(m_be_cuda_ptx->set_option("enable_auxiliary", "on") == 0);
+    }
 
 
     // force experimental to true for now

@@ -81,15 +81,16 @@ Base_application::Base_application()
     m_render_args.back_buffer_rtv = {0};
 }
 
-Base_application::~Base_application() {}
-
-
-int Base_application::run(const Base_options* options, HINSTANCE hInstance, int nCmdShow)
+Base_application::~Base_application() 
 {
-    m_options = options;
+    log_set_file_path(nullptr); // close the file if there is one
+}
 
+
+int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdShow)
+{
     // create graphics context, load MDL SDK, ...
-    if (!initialize()) return -1;
+    if (!initialize_internal(options)) return -1;
 
     // create the window
     Base_application_message_interface message_interface(this, hInstance);
@@ -124,8 +125,8 @@ int Base_application::run(const Base_options* options, HINSTANCE hInstance, int 
     delete m_resource_descriptor_heap;
     delete m_render_target_descriptor_heap;
     delete m_window;
-    m_device->Release();
-    m_factory->Release();
+    m_device = nullptr;
+    m_factory = nullptr;
 
     #if defined(_DEBUG)
     {
@@ -167,8 +168,13 @@ Descriptor_heap* Base_application::get_render_target_descriptor_heap()
     { return m_render_target_descriptor_heap; }
 }
 
-bool Base_application::initialize()
+bool Base_application::initialize_internal(Base_options* options)
 {
+    if (!initialize(options))
+        return false;
+
+    m_options = options;
+
     UINT dxgi_factory_flags = 0;
     D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
 
@@ -202,21 +208,69 @@ bool Base_application::initialize()
         "Failed to create DXGI Factory.", SRC)) 
         return false;
 
-    // check if a device fits the requirements 
-    ComPtr<IDXGIAdapter1> adapter;
+
+    // collect non-software adapters
     bool found_adapter = false;
+    struct adapter_pair
+    {
+        ComPtr<IDXGIAdapter1> adapter;
+        DXGI_ADAPTER_DESC1 desc;
+    };
+
+    std::deque<adapter_pair> available_adapters;
+
+    ComPtr<IDXGIAdapter1> adapter;
     for (UINT a = 0; DXGI_ERROR_NOT_FOUND != m_factory->EnumAdapters1(a, &adapter); ++a)
     {
         DXGI_ADAPTER_DESC1 desc;
         adapter->GetDesc1(&desc);
-        std::string name = wstr_to_str(desc.Description);
 
+        // check if a device fits the requirements 
         if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             continue;
 
+        available_adapters.push_back({adapter, desc});
+    }
+
+    // sort by dedicated memory, assuming that is a good heuristic
+    std::sort(available_adapters.begin(), available_adapters.end(), 
+        [](const adapter_pair& a, const adapter_pair& b)
+        {
+            return a.desc.DedicatedVideoMemory > b.desc.DedicatedVideoMemory;
+        });
+
+    // allow the user to select a certain GPU
+    if (available_adapters.size() > 1)
+    {
+        std::string msg = 
+            "Multiple GPUs detected, run with option '--gpu <num>' to select a specific one."
+            "\n                      Default is the first one (from the top) that supports RTX:";
+
+        for (size_t i = 0; i < available_adapters.size(); ++i)
+        {
+            std::string name = wstr_to_str(available_adapters[i].desc.Description);
+            msg += "\n                      - [" + std::to_string(i) + "] " + name;
+        }
+
+        log_info(msg);
+    }
+
+    // if the user picked one, move that to the top
+    if (options->gpu >= 0 && options->gpu < available_adapters.size())
+    {
+        adapter_pair selected = available_adapters[options->gpu];
+        available_adapters.erase(available_adapters.begin() + options->gpu);
+        available_adapters.push_front(selected);
+    }
+
+    // iterate over available devices and use the first that fits the requirements
+    for (adapter_pair& pair : available_adapters)
+    {
+        std::string name = wstr_to_str(pair.desc.Description);
+
         // create the device context
         if (SUCCEEDED(D3D12CreateDevice(
-            adapter.Get(), feature_level, _uuidof(D3DDevice), &m_device)))
+            pair.adapter.Get(), feature_level, _uuidof(D3DDevice), &m_device)))
         {
             // check ray tracing support
             D3D12_FEATURE_DATA_D3D12_OPTIONS5 data;
@@ -278,7 +332,7 @@ bool Base_application::initialize()
 
     // create a heap for all resources
     m_resource_descriptor_heap = new Descriptor_heap(
-        this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024 /* hard coded */, "ResourceHeap");
+        this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096 /* hard coded */, "ResourceHeap");
 
     m_render_target_descriptor_heap = new Descriptor_heap(
         this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 8 /* hard coded */, "RenderTargetHeap");

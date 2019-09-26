@@ -380,6 +380,9 @@ private:
     /// Create the Bsdf_pdf_data struct type used by libbsdf.
     hlsl::Type_struct *create_bsdf_pdf_data_struct_types(llvm::StructType *type);
 
+    /// Create the Bsdf_auxiliary_data struct type used by libbsdf.
+    hlsl::Type_struct *create_bsdf_auxiliary_data_struct_types(llvm::StructType *type);
+
     /// Create the Edf_sample_data struct type used by libbsdf.
     hlsl::Type_struct *create_edf_sample_data_struct_types(llvm::StructType *type);
 
@@ -388,6 +391,9 @@ private:
 
     /// Create the Edf_pdf_data struct type used by libbsdf.
     hlsl::Type_struct *create_edf_pdf_data_struct_types(llvm::StructType *type);
+
+    /// Create the Edf_auxiliary_data struct type used by libbsdf.
+    hlsl::Type_struct *create_edf_auxiliary_data_struct_types(llvm::StructType *type);
 
     /// Get an HLSL symbol for an LLVM string.
     hlsl::Symbol *get_sym(llvm::StringRef const &str);

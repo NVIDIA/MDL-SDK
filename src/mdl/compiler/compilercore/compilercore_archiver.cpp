@@ -2129,8 +2129,7 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
         }
     }
 
-    if(archiv)
-        archiv->m_header = header_info;
+    archiv->m_header = header_info;
     return archiv;
 }
 

@@ -42,11 +42,13 @@ namespace mdl_d3d12
     {
     public:
         IDxcBlob* compile_shader_library(
-            const std::string& file_name);
+            const std::string& file_name,
+            const std::map<std::string, std::string>* defines = nullptr);
 
         IDxcBlob* compile_shader_library_from_string(
             const std::string& shader_source, 
-            const std::string& debug_name);
+            const std::string& debug_name,
+            const std::map<std::string, std::string>* defines = nullptr);
     };
 
     class Shader
@@ -65,6 +67,10 @@ namespace mdl_d3d12
     {
         friend class Root_signature;
     public:
+        Descriptor_table() = default;
+        Descriptor_table(const Descriptor_table& to_copy);
+        Descriptor_table(Descriptor_table&& to_move);
+
         void register_cbv(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
         void register_srv(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
         void register_uav(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
@@ -197,6 +203,7 @@ namespace mdl_d3d12
 
             uint8_t* m_mapped_table_pointer;                // used directly after finalize()
         };
+
     public:
         struct Shader_handle
         {
@@ -209,17 +216,20 @@ namespace mdl_d3d12
             };
             friend class Shader_binding_tables;
             static const Shader_handle invalid;
-            bool is_valid() const { return kind != Kind::invalid; }
+            bool is_valid() const { return m_kind != Kind::invalid; }
+            Kind get_kind() const { return m_kind; }
 
-            const Kind kind;
+            explicit Shader_handle()
+                : m_shader_binding_table(nullptr), m_kind(Kind::invalid), m_shader_id(nullptr) {}
+
+            virtual ~Shader_handle() = default;
         private:
             explicit Shader_handle(
-                Shader_binding_tables* binding_table, 
-                Kind kind, 
-                void* shader_id);
+                Shader_binding_tables* binding_table, Kind kind, void* shader_id);
 
             Shader_binding_tables* m_shader_binding_table;
             void* m_shader_id;
+            Kind m_kind;
         };
 
         explicit Shader_binding_tables(

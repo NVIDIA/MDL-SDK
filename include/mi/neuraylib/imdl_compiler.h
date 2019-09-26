@@ -824,12 +824,17 @@ public:
     ///   * \c "2": full optimizations, including inlining (default)
     /// - \c "num_texture_spaces": Set the number of supported texture spaces.
     ///   Default: \c "32".
+    /// - \c "enable_auxiliary": Enable code generation for auxiliary methods on distribution
+    ///                          functions. For BSDFs, these compute albedo approximations and
+    ///                          normals. For EDFs, the functions exist only as placeholder for   
+    ///                          future use. Possible values: \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the NATIVE backend only:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
     ///   Possible values: \c "on", \c "off". Default: \c "on".
     ///
     /// The following options are supported by the PTX, LLVM-IR and native backend:
+    ///
     /// - \c "enable_exceptions": Enables/disables support for exceptions through runtime function
     ///   calls. For PTX, this options is always treated as disabled. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
@@ -845,6 +850,8 @@ public:
     /// - \c "texture_runtime_with_derivs": Enables/disables derivative support for texture lookup
     ///   functions. If enabled, the user-provided texture runtime has to provide functions with
     ///   derivative parameters for the texture coordinates.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the LLVM-IR backend only:
     /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
@@ -879,7 +886,7 @@ public:
     ///   passed to all resource callbacks.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
-    ///
+    /// .
     ///
     /// \param name       The name of the option.
     /// \param value      The value of the option.
@@ -1902,7 +1909,8 @@ public:
         FK_DF_INIT,
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
-        FK_DF_PDF
+        FK_DF_PDF,
+        FK_DF_AUXILIARY
     };
 
     /// Possible texture gamma modes.
@@ -2279,6 +2287,33 @@ public:
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
     
+
+    /// Run the BSDF auxiliary calculation function for this code on the native CPU.
+    ///
+    /// \param[in]    index     The index of the callable function.
+    /// \param[inout] data      The input and output fields for the BSDF auxiliary calculation.
+    /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]    cap_args  The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a BSDF PDF calculation
+    ///         function
+    virtual Sint32 execute_bsdf_auxiliary(
+        Size index,
+        Bsdf_auxiliary_data *data,
+        const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+
     /// Run the EDF init function for this code on the native CPU.
     ///
     /// This function updates the normal field of the shading state with the result of
@@ -2375,6 +2410,32 @@ public:
     virtual Sint32 execute_edf_pdf(
         Size index,
         Edf_pdf_data *data,
+        const Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+
+    /// Run the EDF auxiliary calculation function for this code on the native CPU.
+    ///
+    /// \param[in]    index     The index of the callable function.
+    /// \param[inout] data      The input and output fields for the EDF auxiliary calculation.
+    /// \param[in]    state     The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]    cap_args  The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \returns
+    ///    - 0  on success
+    ///    - -1 if execution was aborted by runtime error
+    ///    - -2 cannot execute: not native code or the given function is not a EDF PDF calculation
+    ///         function
+    virtual Sint32 execute_edf_auxiliary(
+        Size index,
+        Edf_auxiliary_data *data,
         const Shading_state_material& state,
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;

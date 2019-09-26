@@ -104,7 +104,10 @@ namespace
         return nullptr;
     }
 
-    void apply_transform(Transform& target, const fx::gltf::Node& source)
+    void apply_transform(
+        Transform& target, 
+        const fx::gltf::Node& source, 
+        const IScene_loader::Scene_options& options)
     {
         // check the quaternion to see if translation, rotation, scale are used
         if (source.rotation[0] != 0 || 
@@ -112,6 +115,7 @@ namespace
             source.rotation[2] != 0 || 
             source.rotation[3] != 0)
         {
+
             target.translation = 
                 {source.translation[0], source.translation[1], source.translation[2]};
             target.rotation = 
@@ -124,10 +128,38 @@ namespace
         if (target.is_identity())
         {
             DirectX::XMMATRIX m(source.matrix.data());
+
+            if (options.handle_z_axis_up)
+            {
+                DirectX::XMMATRIX flip = DirectX::XMMatrixIdentity();
+                flip.r[1].m128_f32[1] = 0.0f;
+                flip.r[1].m128_f32[2] = -1.0f;
+                flip.r[2].m128_f32[1] = 1.0f;
+                flip.r[2].m128_f32[2] = 0.0f;
+                m = DirectX::XMMatrixMultiply(flip, m);
+            }
             Transform from_matrix;
             if (Transform::try_from_matrix(m, from_matrix) || !from_matrix.is_identity())
                 target = from_matrix; // use identity
         }
+
+        //if (options.handle_z_axis_up)
+        //{
+        //    target.translation = 
+        //        { target.translation.x, -target.translation.z, target.translation.y} ;
+        //    target.rotation = 
+        //        { target.rotation.m128_f32[0], -target.rotation.m128_f32[2], 
+        //          target.rotation.m128_f32[1], target.rotation.m128_f32[3]};
+        //    target.scale = 
+        //        { target.scale.x, -target.scale.z, target.scale.y };
+        //}
+
+        float scale = 1.0f / options.units_per_meter;
+        target.translation = { 
+            target.translation.x * scale, 
+            target.translation.y * scale, 
+            target.translation.z * scale
+        };
     }
 
 
@@ -252,9 +284,26 @@ namespace
         return doc.images[src_index].uri;
     }
 
+    void process_vertex(Vertex& v, const IScene_loader::Scene_options& options)
+    {
+        if (options.handle_z_axis_up)
+        {
+            v.position = {v.position.x, -v.position.z, v.position.y};
+            v.normal = {v.normal.x, -v.normal.z, v.normal.y};
+            v.tangent0 = {v.tangent0.x, -v.tangent0.z, v.tangent0.y, v.tangent0.w};
+        }
+
+        float scale = 1.0f / options.units_per_meter;
+        v.position = {
+            v.position.x * scale,
+            v.position.y * scale,
+            v.position.z * scale
+        };
+    }
+
 } // anonymous
 
-    bool Loader_gltf::load(const std::string& file_name)
+    bool Loader_gltf::load(const std::string& file_name, const Scene_options& options)
     {
         m_scene = {};
         m_scene.root.kind = Node::Kind::Empty;
@@ -352,6 +401,8 @@ namespace
                             v.tangent0.z = tangent.z;
                         }
                     }
+
+                    process_vertex(v, options);
 
                     mesh.vertices.push_back(std::move(v));
                 }
@@ -504,14 +555,14 @@ namespace
         }
 
         // process the scene graph
-        std::function<void(Node&, const fx::gltf::Node&)> traverse = 
+        std::function<void(Node&, const fx::gltf::Node&)> visit = 
             [&](Node& parent, const fx::gltf::Node& src_child)
             {
                 Node node;
                 node.name = src_child.name;
                 node.kind = Node::Kind::Empty;
                 node.index = static_cast<size_t>(-1);
-                apply_transform(node.local, src_child);
+                apply_transform(node.local, src_child, options);
 
                 if (src_child.mesh >= 0 || src_child.mesh < doc.meshes.size())
                 {
@@ -534,14 +585,14 @@ namespace
 
                 // go down recursively
                 for (const auto& c : src_child.children)
-                    traverse(node, doc.nodes[c]);
+                    visit(node, doc.nodes[c]);
 
                 parent.children.push_back(std::move(node));
             };
 
         auto s = doc.scenes[doc.scene]; // default scene
         for (const auto& n : s.nodes)
-            traverse(m_scene.root, doc.nodes[n]);
+            visit(m_scene.root, doc.nodes[n]);
 
         return true;
     }

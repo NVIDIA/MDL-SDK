@@ -41,7 +41,7 @@ namespace mdl_d3d12
     public:
         virtual ~Loader_gltf() = default;
 
-        bool load(const std::string& file_name) override;
+        bool load(const std::string& file_name, const Scene_options& options) override;
         const Scene& get_scene() const override { return m_scene; }
 
         void replace_all_materials(const std::string& mdl_name);

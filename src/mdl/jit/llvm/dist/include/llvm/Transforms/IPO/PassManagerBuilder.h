@@ -157,6 +157,7 @@ public:
   bool PrepareForThinLTO;
   bool PerformThinLTO;
   bool DivergentTarget;
+  bool AvoidPointerPHIs;  // this will disable sinking loads and stores in SimplifyCFG
 
   /// Enable profile instrumentation pass.
   bool EnablePGOInstrGen;

@@ -957,7 +957,9 @@ int Create_mdle::execute()
     else
     {
         // parse module and material name
-        size_t p = m_prototype.rfind("::");
+        size_t p = m_prototype.find("(");
+        std::string tmp = m_prototype.substr(0, p);
+        p = tmp.rfind("::");
         if (p == 0 || p == std::string::npos || m_prototype[0] != ':' || m_prototype[1] != ':')
         {
             Util::log_error("Invalid material name '" + m_prototype + "' "
@@ -1028,40 +1030,54 @@ int Create_mdle::execute()
 
         // since "main" could be a function the signature is required
         // therefore, get the module and iterate over the functions that are called main (only one)
-        if (is_mdle)
+        mi::base::Handle<const mi::neuraylib::IModule> mdl_module(
+            transaction->access<mi::neuraylib::IModule>(db_name.c_str()));
+
+        // db_name is now the name of the function/material
+        db_name += "::" + function_name;
+        mi::base::Handle<const mi::IArray> func_list(mdl_module->get_function_overloads(db_name.c_str()));
+
+        bool unknown_signature = false;
+        std::string potential_msg = "";
+        switch (func_list->get_length())
         {
-            mi::base::Handle<const mi::neuraylib::IModule> mdl_module(
-                transaction->access<mi::neuraylib::IModule>(db_name.c_str()));
-
-            std::string function_db_name = db_name + "::" + "main";
-            mi::base::Handle<const mi::IArray> func_list(mdl_module->get_function_overloads(function_db_name.c_str()));
-
-            switch (func_list->get_length())
+            case 0: // material names are unique
             {
-                case 0: // mdle contains a material, that means no function called 'main'
-                {
-                    
-                    db_name = function_db_name;
-                    break;
-                }
+                break;
+            }
 
-                case 1: // mdle contains a function, there can be only one called 'main'
-                {
-                    mi::base::Handle<const mi::IString> func_sign(func_list->get_element<mi::IString>(0));
-                    db_name = func_sign->get_c_str();
-                    break;
-                }
+            case 1: // if there is only one function with the selected name it is okay too
+            {
+                mi::base::Handle<const mi::IString> func_sign(func_list->get_element<mi::IString>(0));
+                db_name = func_sign->get_c_str();
+                break;
+            }
 
-                default: // not allowed
+            default: // if there are overloads, check if the selected one exists
+            {
+                unknown_signature = true;
+                potential_msg = 
+                    "multiple functions with name: '" + function_name + "' found in module: '" + module_name + "'.\n"
+                    "Valid function names are:\n";
+
+                for (mi::Size i = 0, n = func_list->get_length(); i < n; ++i)
                 {
-                    Util::log_error("Multiple functions with name: 'main' found in module: '" + module_name + "'.");
-                    break;
+                    mi::base::Handle<const mi::IString> func_sign(func_list->get_element<mi::IString>(i));
+                    potential_msg += "-   " + std::string(func_sign->get_c_str() + 3 /* skip 'mdl'*/) + "\n";
+
+                    if (strcmp(db_name.c_str(), func_sign->get_c_str()) == 0)
+                    {
+                        unknown_signature = false;
+                        break;
+                    }
                 }
+                break;
             }
         }
-        else
+        if (unknown_signature)
         {
-            db_name += "::" + function_name;
+            Util::log_error(potential_msg);
+            break;
         }
 
         // check if the material/function is available
@@ -1084,15 +1100,36 @@ int Create_mdle::execute()
 
         // keep the thumbnail (since defaults can't be change here)
         std::string thumbnail_path("");
+        mi::Size parameter_count = 0;
+        mi::Size defaults_count = 0;
+
         if(material_definition) 
         {
             const char* p = material_definition->get_thumbnail();
+            parameter_count = material_definition->get_parameter_count();
+            mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
+                material_definition->get_defaults());
+            defaults_count = defaults->get_size();
             thumbnail_path = p ? p : "";
         } 
         else if (function_definition) 
         {
             const char* p = function_definition->get_thumbnail();
+            parameter_count = function_definition->get_parameter_count();
+            mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
+                function_definition->get_defaults());
+            defaults_count = defaults->get_size();
             thumbnail_path = p ? p : "";
+        }
+
+        // check if all parameters have defaults
+        if (parameter_count != defaults_count)
+        {
+            Util::log_error("failed to create MDLE for '" + module_name + "::" + function_name +
+                            "' because at least one parameter is unspecified. "
+                            "For MDLEs all function/material parameters have to be defined. "
+                            "MDLM does not support the export of such functions/materials.");
+            break;
         }
 
         if (!thumbnail_path.empty()) {

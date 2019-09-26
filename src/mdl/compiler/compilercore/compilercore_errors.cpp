@@ -744,6 +744,8 @@ char const *get_error_template(
             return "opaque API struct '$0' in user-specified state module may not be redefined";
         case GET_SYMBOL_FAILED:
             return "getting a symbol in the jit compiled code failed: $0";
+        case LINKING_LIBMDLRT_FAILED:
+            return "linking libmdlrt failed: $0";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:

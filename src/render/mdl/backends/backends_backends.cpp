@@ -2327,6 +2327,9 @@ Mdl_llvm_backend::Mdl_llvm_backend(
 
     // by default we expect a texture runtime without derivative support
     options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, "false");
+
+    // by default we generate no auxiliary methods on distribution functions
+    options.set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, "false");
 }
 
 /// Currently supported SM versions.
@@ -2395,6 +2398,20 @@ mi::Sint32 Mdl_llvm_backend::set_option(
 
     // llvm specific options
 
+    if (strcmp(name, "enable_auxiliary") == 0)
+    {
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        }
+        else if (strcmp(value, "on") == 0) {
+            value = "true";
+        }
+        else {
+            return -2;
+        }
+        m_jit->access_options().set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, value);
+        return 0;
+    }
     if (strcmp(name, "enable_exceptions") == 0) {
         // beware, the JIT backend has the inverse option
         if (strcmp(value, "off") == 0) {
@@ -2540,24 +2557,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         break;
 
     case mi::neuraylib::IMdl_compiler::MB_HLSL:
-        if (strcmp(name, "output_format") == 0) {
-            bool enable_bc = false;
-            if (strcmp(value, "HLSL") == 0) {
-                m_output_target_lang = true;
-                enable_bc = false;
-            } else if (strcmp(value, "LLVM-IR") == 0) {
-                m_output_target_lang = false;
-                enable_bc = false;
-            } else if (strcmp(value, "LLVM-BC") == 0) {
-                m_output_target_lang = false;
-                enable_bc = true;
-            } else {
-                return -2;
-            }
-            jit_options.set_option(
-                MDL_JIT_OPTION_WRITE_BITCODE, enable_bc ? "true" : "false");
-            return 0;
-        }
         if (strcmp(name, "hlsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
                 m_use_builtin_resource_handler = true;
@@ -2929,6 +2928,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 m_enable_simd));
         break;
     case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_compiler::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_into_source(
                 m_code_cache.get(),

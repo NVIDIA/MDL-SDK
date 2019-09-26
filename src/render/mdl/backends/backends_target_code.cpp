@@ -557,6 +557,17 @@ mi::Sint32 Target_code::execute_bsdf_pdf(
         mi::neuraylib::ITarget_code::FK_DF_PDF, index, data, state, tex_handler, cap_args);
 }
 
+mi::Sint32 Target_code::execute_bsdf_auxiliary(
+    mi::Size index,
+    mi::neuraylib::Bsdf_auxiliary_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_BSDF,
+        mi::neuraylib::ITarget_code::FK_DF_AUXILIARY, index, data, state, tex_handler, cap_args);
+}
+
 mi::Sint32 Target_code::execute_edf_init(
     mi::Size index,
     mi::neuraylib::Shading_state_material& state,
@@ -598,6 +609,17 @@ mi::Sint32 Target_code::execute_edf_pdf(
 {
     return execute_generic_function(mi::neuraylib::ITarget_code::DK_EDF,
         mi::neuraylib::ITarget_code::FK_DF_PDF, index, data, state, tex_handler, cap_args);
+}
+
+mi::Sint32 Target_code::execute_edf_auxiliary(
+    mi::Size index,
+    mi::neuraylib::Edf_auxiliary_data *data,
+    const mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_generic_function(mi::neuraylib::ITarget_code::DK_EDF,
+        mi::neuraylib::ITarget_code::FK_DF_AUXILIARY, index, data, state, tex_handler, cap_args);
 }
 
 Target_code::State_usage Target_code::get_render_state_usage() const
@@ -882,32 +904,48 @@ mi::Uint32 Target_code::get_known_resource_index(
         return m_native_code->get_known_resource_index(tag.get_uint());
     }
 
+    bool is_resolved = true;
     char const *db_name = transaction->tag_to_name(tag);
-    if (db_name == NULL) db_name = "";
+    char const *mdl_url = NULL, *owner_module = NULL;
+    if (db_name == NULL) {
+        mdl_url = resource->get_unresolved_mdl_url();
+        if (!mdl_url || mdl_url[0] == '\0') // none given
+            return 0;
+        is_resolved = false;
+        owner_module = resource->get_owner_module();
+        if (owner_module == NULL)
+            owner_module = "";
+    }
 
     switch (resource->get_kind()) {
     case MDL::IValue::VK_TEXTURE:
     {
-        char const *mdl_url = resource->get_unresolved_mdl_url();
-        if (mdl_url == NULL) mdl_url = "";
-
         // skip first texture, which is always the invalid resource
         for (mi::Size i = 1, n = get_texture_count(); i < n; ++i) {
-            const char *texture_db_name = get_texture(i);
-            if (texture_db_name) {
-                if (strcmp(texture_db_name, db_name) == 0)
-                    return mi::Uint32(i);
-            } else {
-                const char *texture_mdl_url = get_texture_url(i);
-                const char *owner_module = get_texture_owner_module(i);
-                if (owner_module) {
-                    std::string url(owner_module);
-                    url += "|";
-                    url += texture_mdl_url;
-                    if (strcmp(url.c_str(), mdl_url) == 0)
+
+            if (is_resolved) {
+                const char *texture_db_name = get_texture(i);
+                if (texture_db_name && texture_db_name[0] != '\0') {
+                    if (strcmp(texture_db_name, db_name) == 0)
                         return mi::Uint32(i);
-                } else if (texture_mdl_url && strcmp(texture_mdl_url, mdl_url) == 0)
-                    return mi::Uint32(i);
+                }
+            } else {
+                    // handle unresolved resources
+
+                const char *texture_mdl_url = get_texture_url(i);
+                if (!texture_mdl_url || texture_mdl_url[0] == '\0')
+                    continue;
+
+                if (strcmp(mdl_url, texture_mdl_url) == 0) {
+
+                    // also compare owner modules
+                    const char *texture_owner_module = get_texture_owner_module(i);
+                    if (!texture_owner_module)
+                        texture_owner_module = "";
+
+                    if (strcmp(owner_module, texture_owner_module) == 0)
+                        return mi::Uint32(i);
+                }
             }
         }
         return 0;

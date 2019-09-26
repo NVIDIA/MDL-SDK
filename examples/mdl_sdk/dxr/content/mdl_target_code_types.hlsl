@@ -5,8 +5,9 @@
 #ifndef MDL_TARGET_CODE_TYPES_HLSLI
 #define MDL_TARGET_CODE_TYPES_HLSLI
 
- // compiler constants defined from outside:
- // - MDL_NUM_TEXTURE_RESULTS
+// compiler constants defined from outside:
+// - MDL_NUM_TEXTURE_RESULTS
+// - USE_DERIVS
 
 #ifdef USE_DERIVS
  // Used by the texture runtime.
@@ -249,6 +250,17 @@ struct Bsdf_pdf_data {
     float        pdf;            ///< pdf (non-projected hemisphere)
 };
 
+/// Input and output structure for BSDF auxiliary calculation data.
+struct Bsdf_auxiliary_data {
+    // Input fields
+    float3       ior1;           ///< IOR current medium
+    float3       ior2;           ///< IOR other side
+    float3       k1;             ///< outgoing direction
+ 
+    // Output fields
+    float3       albedo;         ///< albedo
+    float3       normal;         ///< normal
+};
 
 
 /// Input and output structure for EDF sampling data.
@@ -285,6 +297,17 @@ struct Edf_pdf_data
     // Output fields
     float           pdf;            ///< pdf (non-projected hemisphere)
 };
+
+/// Input and output structure for EDF PDF calculation data.
+struct Edf_auxiliary_data
+{
+    // Input fields
+    float3          k1;             ///< outgoing direction
+
+    // Output fields
+    // reserved for future use
+};
+
 
 
 // Modifies state.normal with the result of "geometry.normal" of the material.

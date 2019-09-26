@@ -482,8 +482,6 @@ private:
 
         IDefinition const *callee = ref->get_definition();
 
-        bool is_imported = callee->get_property(IDefinition::DP_IS_IMPORTED);
-
         IDefinition::Semantics sema = callee->get_semantics();
         if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
             // no copy constructors in the DAG representation
@@ -511,7 +509,7 @@ private:
 
                 // the dependency graph is restricted to one module, so stop at imports;
                 // for compiler generated entities decl can be NULL
-                if (!is_imported && decl != NULL) {
+                if (decl != NULL && !callee->get_property(IDefinition::DP_IS_IMPORTED)) {
                     m_wait_q.push(node);
                 }
             }

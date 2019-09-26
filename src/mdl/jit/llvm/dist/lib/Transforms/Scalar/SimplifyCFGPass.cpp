@@ -213,6 +213,7 @@ SimplifyCFGPass::SimplifyCFGPass(const SimplifyCFGOptions &Opts) {
   Options.SinkCommonInsts = UserSinkCommonInsts.getNumOccurrences()
                                 ? UserSinkCommonInsts
                                 : Opts.SinkCommonInsts;
+  Options.AvoidPointerPHIs = Opts.AvoidPointerPHIs;
 }
 
 PreservedAnalyses SimplifyCFGPass::run(Function &F,
@@ -234,7 +235,7 @@ struct CFGSimplifyPass : public FunctionPass {
 
   CFGSimplifyPass(unsigned Threshold = 1, bool ForwardSwitchCond = false,
                   bool ConvertSwitch = false, bool KeepLoops = true,
-                  bool SinkCommon = false,
+                  bool SinkCommon = false, bool AvoidPointerPHIs = false,
                   std::function<bool(const Function &)> Ftor = nullptr)
       : FunctionPass(ID), PredicateFtor(std::move(Ftor)) {
 
@@ -259,6 +260,8 @@ struct CFGSimplifyPass : public FunctionPass {
     Options.SinkCommonInsts = UserSinkCommonInsts.getNumOccurrences()
                                   ? UserSinkCommonInsts
                                   : SinkCommon;
+
+    Options.AvoidPointerPHIs = AvoidPointerPHIs;
   }
 
   bool runOnFunction(Function &F) override {
@@ -289,8 +292,8 @@ INITIALIZE_PASS_END(CFGSimplifyPass, "simplifycfg", "Simplify the CFG", false,
 FunctionPass *
 llvm::createCFGSimplificationPass(unsigned Threshold, bool ForwardSwitchCond,
                                   bool ConvertSwitch, bool KeepLoops,
-                                  bool SinkCommon,
+                                  bool SinkCommon, bool AvoidPointerPHIs,
                                   std::function<bool(const Function &)> Ftor) {
   return new CFGSimplifyPass(Threshold, ForwardSwitchCond, ConvertSwitch,
-                             KeepLoops, SinkCommon, std::move(Ftor));
+                             KeepLoops, SinkCommon, AvoidPointerPHIs, std::move(Ftor));
 }

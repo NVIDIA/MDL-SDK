@@ -445,7 +445,7 @@ public:
     /// Get the module declaration of this module if any.
     ///
     /// \return the module declaration or NULL if there was none.
-    IDeclaration_module const *get_module_declararation() const MDL_FINAL;
+    IDeclaration_module const *get_module_declaration() const MDL_FINAL;
 
     /// Get the semantic version of this module if one was set.
     ISemantic_version const *get_semantic_version() const MDL_FINAL;
@@ -731,8 +731,11 @@ public:
 
     /// Return the value create by a const default constructor of a type.
     ///
-    /// \param type  the type
-    IValue const *create_default_value(IType const *type) const;
+    /// \param factory  the factory to create the value
+    /// \param type     the type
+    IValue const *create_default_value(
+        IValue_factory *factory,
+        IType const    *type) const;
 
     /// Replace the global declarations by new collection.
     ///

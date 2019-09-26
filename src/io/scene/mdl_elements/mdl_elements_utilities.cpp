@@ -1976,8 +1976,10 @@ const IType* mdl_type_to_int_type(
     const Mdl_annotation_block_vector* member_annotations)
 {
     mi::mdl::IType::Kind kind = type->get_kind();
+    mi::mdl::IType::Kind skipped_kind = type->skip_type_alias()->get_kind();
 
-    bool enum_or_struct = kind == mi::mdl::IType::TK_ENUM || kind == mi::mdl::IType::TK_STRUCT;
+    bool enum_or_struct = skipped_kind == mi::mdl::IType::TK_ENUM ||
+        skipped_kind == mi::mdl::IType::TK_STRUCT;
     ASSERT( M_SCENE, enum_or_struct || !annotations);
     ASSERT( M_SCENE, enum_or_struct || !member_annotations);
     boost::ignore_unused( enum_or_struct);
@@ -3271,6 +3273,11 @@ const mi::mdl::IType* int_type_to_mdl_type(
             return nullptr;
         }
 
+        if (mi::mdl::IType_enum const *te = tf.lookup_enum(int_enum_type->get_symbol())) {
+            // an enum with this name already exists, assume it's the right one
+            return te;
+        }
+
         const mi::mdl::ISymbol *s = symtab->create_symbol(int_enum_type->get_symbol());
         mi::mdl::IType_enum* te = tf.create_enum(s);
         for (mi::Size i = 0, n = int_enum_type->get_size(); i < n; ++i) {
@@ -3319,7 +3326,13 @@ const mi::mdl::IType* int_type_to_mdl_type(
             return nullptr;
         }
 
+        if (mi::mdl::IType_struct const *st = tf.lookup_struct(int_struct_type->get_symbol())) {
+            // an struct with this name already exists, assume it's the right one
+            return st;
+        }
+
         const mi::mdl::ISymbol *s = symtab->create_symbol(int_struct_type->get_symbol());
+
         mi::mdl::IType_struct* st = tf.create_struct(s);
         for (mi::Size i = 0, n = int_struct_type->get_size(); i < n; ++i) {
 
@@ -3469,7 +3482,8 @@ const mi::mdl::IExpression* int_expr_to_mdl_ast_expr(
                         const mi::mdl::IType* type = call->get_mdl_parameter_type( transaction, 0);
                         const mi::mdl::IExpression* expr = int_expr_to_mdl_ast_expr(
                             transaction, module, type, arg.get(), call_trace);
-                        
+                        if (!expr)
+                            return 0;
                         mi::mdl::IExpression_unary* res = expr_factory->create_unary(
                             mi::mdl::IExpression_unary::Operator( op), expr);
                         return res;
@@ -3478,16 +3492,22 @@ const mi::mdl::IExpression* int_expr_to_mdl_ast_expr(
 
                         const mi::mdl::IType* left_type
                             = call->get_mdl_parameter_type( transaction, 0);
+                        left_type = type_factory->import( left_type);
                         const mi::mdl::IType* right_type
                             = call->get_mdl_parameter_type( transaction, 1);
+                        right_type = type_factory->import( right_type);
                         mi::base::Handle<const IExpression> left_arg(
                              args->get_expression( static_cast<mi::Size>( 0)));
                         mi::base::Handle<const IExpression> right_arg(
                             args->get_expression( 1));
                         const mi::mdl::IExpression* left_expr  = int_expr_to_mdl_ast_expr(
                             transaction, module, left_type,  left_arg.get(), call_trace);
+                        if (!left_expr)
+                            return 0;
                         const mi::mdl::IExpression* right_expr = int_expr_to_mdl_ast_expr(
                             transaction, module, right_type, right_arg.get(), call_trace);
+                        if (!right_expr)
+                            return 0;
                         return expr_factory->create_binary(
                             mi::mdl::IExpression_binary::Operator( op), left_expr, right_expr);
 
@@ -4115,7 +4135,7 @@ const mi::mdl::IExpression_reference* signature_to_reference(
             symbol = nf.create_symbol( component.c_str());
             signature = pos + 2;
             ++pos;
-        } else if( pos[0] == '(') {
+        } else if( pos[0] == '(' ) {
             std::string component( signature, pos - signature);
             symbol = nf.create_symbol( component.c_str());
             signature = 0;

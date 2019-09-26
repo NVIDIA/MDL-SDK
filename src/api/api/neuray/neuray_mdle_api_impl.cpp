@@ -64,6 +64,7 @@
 #include <io/scene/mdl_elements/mdl_elements_expression.h>
 #include <io/scene/mdl_elements/mdl_elements_type.h>
 #include <io/scene/mdl_elements/mdl_elements_value.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <io/scene/texture/i_texture.h>
 
 #include <mdl/integration/mdlnr/i_mdlnr.h>
@@ -557,6 +558,25 @@ Mdle_api_impl::~Mdle_api_impl()
     m_neuray = NULL;
 }
 
+namespace {
+
+/// Helper class for dropping module imports at destruction.
+class Drop_import_scope
+{
+public:
+    Drop_import_scope(const mi::mdl::IModule* module)
+    : m_module(module, mi::base::DUP_INTERFACE)
+    {
+    }
+
+    ~Drop_import_scope() { m_module->drop_import_entries(); }
+
+private:
+    mi::base::Handle<const mi::mdl::IModule> m_module;
+};
+
+}  // anonymous
+
 mi::Sint32 Mdle_api_impl::export_mdle(
     mi::neuraylib::ITransaction* transaction,
     const char* file_name,
@@ -803,14 +823,24 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     //---------------------------------------------------------------------------------------------
     mi::base::Handle<mi::mdl::IMDL_module_transformer> module_transformer(
         imdl->create_module_transformer());
+    mi::base::Handle<mi::mdl::IModule const> inlined_module;
 
-    mi::base::Handle<mi::mdl::IModule const> inlined_module(
-        module_transformer->inline_imports(tmp_module.get()));
+    {
+        MI::MDL::Module_cache module_cache(db_transaction);
+        if (!tmp_module->restore_import_entries(&module_cache)) {
+            add_error_message(mdl_context, "Restore import entries failed.", -1);
+            return -1;
+        }
+        Drop_import_scope scope(tmp_module.get());
 
-    if (!inlined_module.is_valid_interface()) {
+        inlined_module = mi::base::make_handle(
+            module_transformer->inline_imports(tmp_module.get()));
 
-        MI::MDL::report_messages(module_transformer->access_messages(), mdl_context);
-        return -1;
+        if (!inlined_module.is_valid_interface()) {
+
+            MI::MDL::report_messages(module_transformer->access_messages(), mdl_context);
+            return -1;
+        }
     }
 
     // add user files

@@ -161,10 +161,14 @@ public:
 
     /// Open a directory for reading names in it.
     ///
-    /// \param utf8_path  UFT8 encoded path to open
+    /// \param utf8_path    UFT8 encoded path to open
+    /// \param utf8_filter  an optional filter for the entries to be read, will be ignored
+    ///                    if not supported
     ///
     /// \return true on success
-    bool open(char const *utf8_path);
+    bool open(
+        char const *utf8_path,
+        char const *utf8_filter = NULL);
 
     /// Close directory.
     /// \return success

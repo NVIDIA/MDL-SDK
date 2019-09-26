@@ -41,7 +41,7 @@ namespace mdl_d3d12
     // --------------------------------------------------------------------------------------------
 
     Raytracing_pipeline::Library::Library(
-        IDxcBlob* dxil_library,
+        const IDxcBlob* dxil_library,
         bool owns_dxil_library, 
         const std::vector<std::string>& exported_symbols)
         
@@ -61,8 +61,12 @@ namespace mdl_d3d12
         }
 
         // Create a library descriptor combining the DXIL code and the export names
-        m_desc.DXILLibrary.BytecodeLength = m_dxil_library->GetBufferSize();
-        m_desc.DXILLibrary.pShaderBytecode = m_dxil_library->GetBufferPointer();
+        m_desc.DXILLibrary.BytecodeLength = 
+            const_cast<IDxcBlob*>(m_dxil_library)->GetBufferSize();
+
+        m_desc.DXILLibrary.pShaderBytecode = 
+            const_cast<IDxcBlob*>(m_dxil_library)->GetBufferPointer();
+
         m_desc.NumExports = static_cast<UINT>(m_exported_symbols.size());
         m_desc.pExports = m_exports.data();
     }
@@ -135,7 +139,7 @@ namespace mdl_d3d12
     }
 
     bool Raytracing_pipeline::add_library(
-        IDxcBlob * dxil_library, 
+        const IDxcBlob * dxil_library,
         bool owns_dxil_library,
         const std::vector<std::string>& exported_symbols)
     {

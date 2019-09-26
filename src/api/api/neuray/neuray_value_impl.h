@@ -384,6 +384,8 @@ public:
 
     const char* get_file_path() const;
 
+    mi::Float32 get_gamma() const;
+
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
 };

@@ -867,6 +867,8 @@ class ICode_generator_jit : public
     /// The name of the option to use bitangent instead of tangent_u, tangent_v in the MDL state.
     #define MDL_JIT_OPTION_USE_BITANGENT "jit_use_bitangent"
 
+    /// The name of the option to generate auxiliary methods on distribution functions.
+    #define MDL_JIT_OPTION_ENABLE_AUXILIARY "jit_enable_auxiliary"
 
     /// The name of the option to let the the JIT code generator create a LLVM bitcode
     /// instead of LLVM IR (ascii) code
@@ -958,6 +960,7 @@ public:
     ///
     /// The generated function will have the signature #mi::mdl::Lambda_switch_function.
     ///
+    /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
@@ -966,6 +969,7 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_into_switch_function_for_gpu(
+        ICode_cache               *code_cache,
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,

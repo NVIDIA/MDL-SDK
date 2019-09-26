@@ -210,6 +210,10 @@ public:
         KI_STATE_OBJECT_ID,                     ///< Kind of state::object_id()
         KI_STATE_CALL_LAMBDA_FLOAT,             ///< Kind of state::call_lambda_float(int)
         KI_STATE_CALL_LAMBDA_FLOAT3,            ///< Kind of state::call_lambda_float3(int)
+        KI_STATE_CALL_LAMBDA_UINT,              ///< Kind of state::call_lambda_uint(int)
+        KI_STATE_GET_MATERIAL_IOR,              ///< Kind of state::get_material_ior()
+        KI_STATE_GET_MEASURED_CURVE_VALUE,      ///< Kind of state::get_measured_curve_value()
+        KI_STATE_GET_THIN_WALLED,               ///< Kind of state::get_thin_walled()
 
         /// Kind of df::bsdf_measurement_resolution(int,int)
         KI_DF_BSDF_MEASUREMENT_RESOLUTION,
@@ -938,6 +942,7 @@ public:
         DFSTATE_SAMPLE,     ///< Generating BSDF sample functions
         DFSTATE_EVALUATE,   ///< Generating BSDF evaluate functions
         DFSTATE_PDF,        ///< Generating BSDF PDF functions
+        DFSTATE_AUXILIARY,  ///< Generating BSDF auxiliary functions
         DFSTATE_END_STATE
     };
 
@@ -2261,6 +2266,20 @@ private:
     /// Generate a call to an expression lambda function.
     ///
     /// \param ctx                 the function context
+    /// \param expr_lambda         the precalculated lambda function
+    /// \param opt_results_buffer  an optional results buffer. The result will be converted
+    ///                            before writing it there, if necessary
+    /// \param opt_result_index    the index of the result in the results buffer
+    /// \returns the result pointer
+    Expression_result generate_expr_lambda_call(
+        Function_context       &ctx,
+        ILambda_function const *expr_lambda,
+        llvm::Value            *opt_results_ptr = NULL,
+        size_t                 opt_result_index = ~0);
+
+    /// Generate a call to an expression lambda function.
+    ///
+    /// \param ctx                 the function context
     /// \param lambda_index        the index of the precalculated lambda function
     /// \param opt_results_buffer  an optional results buffer. The result will be converted
     ///                            before writing it there, if necessary
@@ -2410,9 +2429,12 @@ private:
     ///
     /// \param ctx                  the function context
     /// \param lambda_result_exprs  the list of expression lambda indices for the lambda results
+    /// \param mat_data_global      if non-null, the global variable containing the material data
+    ///                             for the interpreter for the current distribution function
     Expression_result translate_distribution_function(
         Function_context                     &ctx,
-        llvm::SmallVector<unsigned, 8> const &lambda_result_exprs);
+        llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
+        llvm::GlobalVariable                 *mat_data_global);
 
     /// Translate the init function of the current distribution function to LLVM IR.
     ///
@@ -2616,14 +2638,6 @@ private:
     /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_matrix_diagonal_constructor(
-        Function_context          &ctx,
-        mi::mdl::ICall_expr const *call_expr);
-
-    /// Translate a color from spectrum constructor call to LLVM IR.
-    ///
-    /// \param ctx        the function context
-    /// \param call_expr  the call expression to translate
-    Expression_result translate_color_from_spectrum(
         Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
@@ -2899,6 +2913,11 @@ private:
     /// \param llvm_context  the context for the loader
     std::unique_ptr<llvm::Module> load_libbsdf(llvm::LLVMContext &llvm_context);
 
+    /// Load the libmdlrt LLVM module.
+    ///
+    /// \param llvm_context  the context for the loader
+    std::unique_ptr<llvm::Module> load_libmdlrt(llvm::LLVMContext &llvm_context);
+
     /// Determines the semantics for a libbsdf df function name.
     ///
     /// \param name      the name of the function
@@ -2948,7 +2967,27 @@ private:
     bool load_and_link_libbsdf();
 
     /// Returns the set of context data flags to use for functions used with distribution functions.
-    LLVM_context_data::Flags get_df_function_flags();
+    LLVM_context_data::Flags get_df_function_flags(const llvm::Function *func);
+
+    /// Translate a potential runtime call in a libmdlrt function to a call to the according
+    /// intrinsic, converting the arguments as necessary.
+    ///
+    /// \param call      the call instruction to translate
+    /// \param ii        the instruction iterator, which will be updated if the call is translated
+    /// \param ctx       the context for the translation
+    ///
+    /// \returns false if there was any error
+    bool translate_libmdlrt_runtime_call(
+        llvm::CallInst             *call,
+        llvm::BasicBlock::iterator &ii,
+        Function_context           &ctx);
+
+    /// Load and link libmdlrt into the current LLVM module.
+    /// It maps the types from libmdlrt to our types and resolves referenced API functions
+    /// to our intrinsics.
+    ///
+    /// \returns false if there was any error.
+    bool load_and_link_libmdlrt(llvm::Module *llvm_module);
 
     /// Clear the DAG-to-LLVM-IR node map.
     void clear_dag_node_map() { m_node_value_map.clear(); }
@@ -3053,6 +3092,9 @@ private:
 
     /// If true, pass a user defined resource data struct to all resource callbacks.
     bool m_hlsl_use_resource_data;
+
+    /// If true, we generating code for an intrinsic function.
+    bool m_in_intrinsic_generator;
 
 
     /// The runtime creator.
@@ -3312,6 +3354,9 @@ private:
     /// If true, the libdevice is linked into PTX output.
     bool m_link_libdevice;
 
+    /// If true, link libmdlrt.
+    bool m_link_libmdlrt;
+
     /// If true, this code generator will allow incremental compilation.
     bool m_incremental;
 
@@ -3334,11 +3379,21 @@ private:
     /// Current state of generating a distribution function.
     Distribution_function_state m_dist_func_state;
 
-    typedef mi::mdl::ptr_hash_map<ILambda_function const, llvm::Function *>::Type
-        Dist_func_lambda_map;
+    /// List of all libbsdf template functions which should be removed before optimizing.
+    mi::mdl::vector<llvm::Function *>::Type m_libbsdf_template_funcs;
 
-    /// Map from ILambda_function objects to LLVM functions used for distribution functions.
-    Dist_func_lambda_map m_dist_func_lambda_map;
+
+    /// If true, auxiliary functions are generated for DFs.
+    bool m_enable_auxiliary;
+
+    /// List of all compiled lambda functions in the module.
+    mi::mdl::vector<llvm::Function *>::Type m_module_lambda_funcs;
+
+    typedef mi::mdl::ptr_hash_map<ILambda_function const, unsigned int>::Type
+        Module_lambda_index_map;
+
+    /// Map from ILambda_function objects to the index in m_module_lambda_funcs.
+    Module_lambda_index_map m_module_lambda_index_map;
 
     /// A structure type for storing the results of all lambda functions.
     llvm::StructType *m_lambda_results_struct_type;
@@ -3379,6 +3434,12 @@ private:
     /// Return type of the BSDF PDF function.
     llvm::Type *m_type_bsdf_pdf_data;
 
+    /// Function type of the BSDF auxiliary function.
+    llvm::FunctionType *m_type_bsdf_auxiliary_func;
+
+    /// Return type of the BSDF auxiliary function.
+    llvm::Type *m_type_bsdf_auxiliary_data;
+
     /// Function type of the EDF sample function.
     llvm::FunctionType *m_type_edf_sample_func;
 
@@ -3396,6 +3457,12 @@ private:
 
     /// Return type of the EDF PDF function.
     llvm::Type *m_type_edf_pdf_data;
+    
+    /// Function type of the EDF auxiliary function.
+    llvm::FunctionType *m_type_edf_auxiliary_func;
+
+    /// Return type of the EDF PDF function.
+    llvm::Type *m_type_edf_auxiliary_data;
 
 
     /// The LLVM metadata kind ID for the BSDF parameter information attached to allocas.
@@ -3424,6 +3491,18 @@ private:
 
     /// The internal state::call_lambda_float3(int) function, only available for libbsdf.
     Internal_function *m_int_func_state_call_lambda_float3;
+
+    /// The internal state::call_lambda_uint(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_call_lambda_uint;
+
+    /// The internal state::get_material_ior() function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_material_ior;
+
+    /// The internal state::get_measured_curve_value() function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_measured_curve_value;
+
+    /// The internal state::get_thin_walled() function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_thin_walled;
 
     /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
     Internal_function *m_int_func_df_bsdf_measurement_resolution;

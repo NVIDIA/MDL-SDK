@@ -378,7 +378,7 @@ llvm::Value *Function_context::get_exec_ctx_parameter()
 // Get the state parameter of the current function.
 llvm::Value *Function_context::get_state_parameter(llvm::Value *exec_ctx)
 {
-    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_STATE);
+    MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_STATE | LLVM_context_data::FL_HAS_EXEC_CTX));
 
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
@@ -395,7 +395,7 @@ llvm::Value *Function_context::get_state_parameter(llvm::Value *exec_ctx)
 // Get the resource_data parameter of the current function.
 llvm::Value *Function_context::get_resource_data_parameter(llvm::Value *exec_ctx)
 {
-    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_RES);
+    MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_RES | LLVM_context_data::FL_HAS_EXEC_CTX));
 
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
@@ -415,7 +415,7 @@ llvm::Value *Function_context::get_resource_data_parameter(llvm::Value *exec_ctx
 // Get the exc_state parameter of the current function.
 llvm::Value *Function_context::get_exc_state_parameter(llvm::Value *exec_ctx)
 {
-    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_EXC);
+    MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_EXC | LLVM_context_data::FL_HAS_EXEC_CTX));
 
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
@@ -438,7 +438,7 @@ llvm::Value *Function_context::get_exc_state_parameter(llvm::Value *exec_ctx)
 // Get the cap_args parameter of the current function.
 llvm::Value *Function_context::get_cap_args_parameter(llvm::Value *exec_ctx)
 {
-    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_CAP_ARGS);
+    MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_CAP_ARGS | LLVM_context_data::FL_HAS_EXEC_CTX));
 
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
@@ -469,7 +469,7 @@ llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ct
     if (m_lambda_results_override)
         return m_lambda_results_override;
 
-    MDL_ASSERT(m_flags & LLVM_context_data::FL_HAS_LMBD_RES);
+    MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_LMBD_RES | LLVM_context_data::FL_HAS_EXEC_CTX));
 
     llvm::Function::arg_iterator arg_it = m_function->arg_begin();
     if (m_flags & LLVM_context_data::FL_SRET) {
@@ -496,6 +496,7 @@ llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ct
     }
     return arg_it;
 }
+
 
 // Get the wavelength_min() value of the current function.
 llvm::Value *Function_context::get_wavelength_min_value()
@@ -3286,3 +3287,4 @@ bool Function_context::is_constant_value(llvm::Value *val, int int_val)
 
 }  // mdl
 }  // mi
+

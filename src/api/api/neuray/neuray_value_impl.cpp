@@ -32,6 +32,7 @@
 
 #include "pch.h"
 
+#include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
@@ -236,6 +237,18 @@ const char* Value_texture::get_file_path() const
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     return m_value->get_file_path( db_transaction);
+}
+
+mi::Float32 Value_texture::get_gamma() const
+{
+    DB::Tag texture_tag = m_value->get_value();
+    if (texture_tag.is_valid()) {
+        Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(m_transaction.get());
+        DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+        DB::Access<TEXTURE::Texture> tex(texture_tag, db_transaction);
+        return tex->get_gamma();
+    }
+    return m_value->get_gamma();
 }
 
 const char* Value_light_profile::get_value() const

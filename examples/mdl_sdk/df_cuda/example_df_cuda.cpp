@@ -257,6 +257,17 @@ struct Window_context
     float exposure;
 };
 
+static std::string to_string(Display_buffer_options option)
+{
+    switch (option)
+    {
+        case Display_buffer_options::Beauty: return "Beauty";
+        case Display_buffer_options::Albedo: return "Albedo";
+        case Display_buffer_options::Normal: return "Normal";
+        default: return "";
+    }
+}
+
 // GLFW scroll callback
 static void handle_scroll(GLFWwindow *window, double xoffset, double yoffset)
 {
@@ -336,9 +347,18 @@ static void handle_mouse_pos(GLFWwindow *window, double xpos, double ypos)
     }
 }
 
+// Resize CUDA buffers for a given resolution
+static void resize_buffers(CUdeviceptr *buffer_cuda,int width, int height)
+{
+    // Allocate CUDA buffer
+    if (*buffer_cuda)
+        check_cuda_success(cuMemFree(*buffer_cuda));
+    check_cuda_success(cuMemAlloc(buffer_cuda, width * height * sizeof(float3)));
+}
+
 // Resize OpenGL and CUDA buffers for a given resolution
 static void resize_buffers(
-    CUdeviceptr *accum_buffer_cuda,
+    CUdeviceptr *buffer_cuda,
     CUgraphicsResource *display_buffer_cuda, int width, int height, GLuint display_buffer)
 {
     // Allocate GL display buffer
@@ -355,10 +375,8 @@ static void resize_buffers(
         cuGraphicsGLRegisterBuffer(
             display_buffer_cuda, display_buffer, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD));
 
-    // Allocate CUDA accumulation buffer
-    if (*accum_buffer_cuda)
-        check_cuda_success(cuMemFree(*accum_buffer_cuda));
-    check_cuda_success(cuMemAlloc(accum_buffer_cuda, width * height * sizeof(float3)));
+    // Allocate CUDA buffer
+    resize_buffers(buffer_cuda, width, height);
 }
 
 // Helper for create_environment()
@@ -484,7 +502,7 @@ static void create_environment(
 
 // Save current result image to disk
 static void save_result(
-    const CUdeviceptr accum_buffer,
+    const CUdeviceptr cuda_buffer,
     const unsigned int width,
     const unsigned int height,
     const std::string &filename,
@@ -495,7 +513,7 @@ static void save_result(
         image_api->create_canvas("Rgb_fp", width, height));
     mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
     float3 *data = static_cast<float3 *>(tile->get_data());
-    check_cuda_success(cuMemcpyDtoH(data, accum_buffer, width * height * sizeof(float3)));
+    check_cuda_success(cuMemcpyDtoH(data, cuda_buffer, width * height * sizeof(float3)));
 
     mdl_compiler->export_canvas(filename.c_str(), canvas.get());
 }
@@ -509,6 +527,7 @@ struct Options {
     bool no_aa;
     bool enable_derivatives;
     bool fold_ternary_on_df;
+    bool enable_auxiliary_output;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
@@ -534,6 +553,7 @@ struct Options {
     , no_aa(false)
     , enable_derivatives(false)
     , fold_ternary_on_df(false)
+    , enable_auxiliary_output(true)
     , res_x(1024)
     , res_y(1024)
     , iterations(4096)
@@ -988,11 +1008,16 @@ static void render_scene(
     CUcontext cuda_context = init_cuda(options.cuda_device, options.opengl);
 
     CUdeviceptr accum_buffer = 0;
+    CUdeviceptr aux_albedo_buffer = 0; // buffer for auxiliary output
+    CUdeviceptr aux_normal_buffer = 0; //
     CUgraphicsResource display_buffer_cuda = nullptr;
+
     if (!options.opengl) {
         width = options.res_x;
         height = options.res_y;
         check_cuda_success(cuMemAlloc(&accum_buffer, width * height * sizeof(float3)));
+        check_cuda_success(cuMemAlloc(&aux_albedo_buffer, width * height * sizeof(float3)));
+        check_cuda_success(cuMemAlloc(&aux_normal_buffer, width * height * sizeof(float3)));
     }
 
     // Setup initial CUDA kernel parameters
@@ -1008,6 +1033,8 @@ static void render_scene(
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
     kernel_params.disable_aa = options.no_aa;
     kernel_params.use_derivatives = options.enable_derivatives;
+    kernel_params.enable_auxiliary_output = options.enable_auxiliary_output;
+    kernel_params.display_buffer_index = 0;
 
     // Setup camera
     float base_dist = length(options.cam_pos);
@@ -1050,19 +1077,19 @@ static void render_scene(
     kernel_params.env_accel = reinterpret_cast<Env_accel *>(env_accel);
 
     // Setup file name for nogl mode
-    std::string next_filename;
+    std::string next_filename_base;
     std::string filename_base, filename_ext;
-    if (options.material_names.size() > 1) {
-        size_t dot_pos = options.outputfile.rfind(".");
-        if (dot_pos == std::string::npos)
-            filename_base = options.outputfile;
-        else {
-            filename_base = options.outputfile.substr(0, dot_pos);
-            filename_ext = options.outputfile.substr(dot_pos);
-        }
-        next_filename = filename_base + "-0" + filename_ext;
-    } else
-        next_filename = options.outputfile;
+    size_t dot_pos = options.outputfile.rfind(".");
+    if (dot_pos == std::string::npos) {
+        filename_base = options.outputfile;
+    } else {
+        filename_base = options.outputfile.substr(0, dot_pos);
+        filename_ext = options.outputfile.substr(dot_pos);
+    }
+    if (options.material_names.size() > 1)
+        next_filename_base = filename_base + "-0";
+    else
+        next_filename_base = filename_base;
 
     // Scope for material context resources
     {
@@ -1308,13 +1335,28 @@ static void render_scene(
                 kernel_params.resolution.x = width;
                 kernel_params.resolution.y = height;
                 kernel_params.accum_buffer = reinterpret_cast<float3 *>(accum_buffer);
+                kernel_params.albedo_buffer = reinterpret_cast<float3 *>(aux_albedo_buffer);
+                kernel_params.normal_buffer = reinterpret_cast<float3 *>(aux_normal_buffer);
+
 
                 // Check if desired number of samples is reached
                 if (kernel_params.iteration_start >= options.iterations) {
                     std::cout << "rendering done" << std::endl;
 
                     save_result(
-                        accum_buffer, width, height, next_filename, image_api, mdl_compiler);
+                        accum_buffer, width, height, 
+                        next_filename_base + filename_ext, 
+                        image_api, mdl_compiler);
+
+                    save_result(
+                        aux_albedo_buffer, width, height,
+                        next_filename_base +  "_albedo" + filename_ext,
+                        image_api, mdl_compiler);
+
+                    save_result(
+                        aux_normal_buffer, width, height,
+                        next_filename_base + "_normal" + filename_ext,
+                        image_api, mdl_compiler);
 
                     std::cout << std::endl;
 
@@ -1325,8 +1367,8 @@ static void render_scene(
                     // Start new image with next material
                     kernel_params.iteration_start = 0;
                     ++kernel_params.current_material;
-                    next_filename = filename_base + "-" + to_string(kernel_params.current_material)
-                        + filename_ext;
+                    next_filename_base = 
+                        filename_base + "-" + to_string(kernel_params.current_material);
                 }
 
                 std::cout
@@ -1357,6 +1399,13 @@ static void render_scene(
                         &accum_buffer, &display_buffer_cuda, width, height, display_buffer);
                     kernel_params.accum_buffer = reinterpret_cast<float3 *>(accum_buffer);
 
+                    resize_buffers(&aux_albedo_buffer, width, height);
+                    kernel_params.albedo_buffer = reinterpret_cast<float3 *>(aux_albedo_buffer);
+
+
+                    resize_buffers(&aux_normal_buffer, width, height);
+                    kernel_params.normal_buffer = reinterpret_cast<float3 *>(aux_normal_buffer);
+
                     glViewport(0, 0, width, height);
 
                     kernel_params.resolution.x = width;
@@ -1365,17 +1414,47 @@ static void render_scene(
                 }
 
                 // Create material parameter editor window
-                ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
                 ImGui::SetNextWindowSize(
-                    ImVec2(360 * options.gui_scale, 350 * options.gui_scale),
+                    ImVec2(360 * options.gui_scale, 475 * options.gui_scale),
                     ImGuiCond_FirstUseEver);
-                ImGui::Begin("Material parameters");
+                ImGui::Begin("Settings");
                 ImGui::SetWindowFontScale(options.gui_scale);
                 ImGui::PushItemWidth(-200 * options.gui_scale);
                 if (options.use_class_compilation)
                     ImGui::Text("CTRL + Click to manually enter numbers");
                 else
                     ImGui::Text("Parameter editing requires class compilation.");
+
+                if (kernel_params.enable_auxiliary_output)
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Display options");
+                    ImGui::Separator();
+
+                    std::string current_display_buffer =
+                        to_string((Display_buffer_options) kernel_params.display_buffer_index);
+                    if (ImGui::BeginCombo("buffer", current_display_buffer.c_str()))
+                    {
+                        for (unsigned i = 0; i < (unsigned) Display_buffer_options::COUNT; ++i)
+                        {
+                            const std::string &name = to_string((Display_buffer_options) i);
+                            bool is_selected = (current_display_buffer == name);
+                            if (ImGui::Selectable(name.c_str(), is_selected))
+                            {
+                                kernel_params.display_buffer_index = i;
+                                kernel_params.iteration_start = 0;
+                            }
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+
+                ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                ImGui::Text("Material parameters");
+                ImGui::Separator();
 
                 Material_info &mat_info = mat_infos[
                     material_bundle[kernel_params.current_material].compiled_material_index];
@@ -1596,7 +1675,22 @@ static void render_scene(
                     static_cast<Window_context*>(glfwGetWindowUserPointer(window));
                 if (ctx->save_result && !ImGui::GetIO().WantCaptureKeyboard) {
                     save_result(
-                        accum_buffer, width, height, options.outputfile, image_api, mdl_compiler);
+                        accum_buffer, 
+                        width, height, 
+                        options.outputfile, 
+                        image_api, mdl_compiler);
+
+                    save_result(
+                        aux_albedo_buffer, 
+                        width, height, 
+                        filename_base + "_albedo" + filename_ext,
+                        image_api, mdl_compiler);
+
+                    save_result(
+                        aux_normal_buffer,
+                        width, height,
+                        filename_base + "_normal" + filename_ext,
+                        image_api, mdl_compiler);
                 }
                 if (ctx->exposure_event && !ImGui::GetIO().WantCaptureKeyboard) {
                     kernel_params.exposure_scale = powf(2.0f, ctx->exposure);
@@ -1713,6 +1807,8 @@ static void render_scene(
     check_cuda_success(cudaFreeArray(env_tex_data));
     check_cuda_success(cuMemFree(env_accel));
     check_cuda_success(cuMemFree(accum_buffer));
+    check_cuda_success(cuMemFree(aux_albedo_buffer));
+    check_cuda_success(cuMemFree(aux_normal_buffer));
     check_cuda_success(cuMemFree(material_buffer));
     check_cuda_success(cuModuleUnload(cuda_module));
     uninit_cuda(cuda_context);
@@ -1782,6 +1878,7 @@ static void usage(const char *name)
         << "--device <id>               run on CUDA device <id> (default: 0)\n"
         << "--nogl                      don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
+        << "--noaux                     don't generate code for albedo and normal buffers\n"
         << "--gui_scale <factor>        GUI scaling factor (default: 1.0)\n"
         << "--res <res_x> <res_y>       resolution (default: 1024x1024)\n"
         << "--hdr <filename>            HDR environment map "
@@ -1804,7 +1901,7 @@ static void usage(const char *name)
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
         << "-d                          enable use of derivatives\n"
-        << " --fold_ternary_on_df       fold all ternary operators on *df types (default: false)\n"
+        << "--fold_ternary_on_df        fold all ternary operators on *df types (default: false)\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n"
         << "      and alternatively, full MDLE file paths can be passed as material name\n";
@@ -1826,6 +1923,8 @@ int main(int argc, char* argv[])
                 options.opengl = false;
             } else if (strcmp(opt, "--nocc") == 0) {
                 options.use_class_compilation = false;
+            } else if (strcmp(opt, "--noaux") == 0) {
+                options.enable_auxiliary_output = false;
             } else if (strcmp(opt, "--gui_scale") == 0 && i < argc - 1) {
                 options.gui_scale = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
@@ -1930,7 +2029,8 @@ int main(int argc, char* argv[])
                 transaction.get(),
                 16,
                 options.enable_derivatives,
-                options.fold_ternary_on_df);
+                options.fold_ternary_on_df,
+                options.enable_auxiliary_output);
 
             // List of materials in the scene
             std::vector<Df_cuda_material> material_bundle;

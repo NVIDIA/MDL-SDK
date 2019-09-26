@@ -67,15 +67,17 @@ enum Material_slot {
     SLOT_FORCE_32_BIT = 0xffffffffU
 };
 
+mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
+
 /// The compiled material's opacity.
 enum Material_opacity {
-    OPACITY_OPAQUE,                     /// material is opaque
-    OPACITY_TRANSPARENT,                /// material is transparent
-    OPACITY_UNKNOWN,                    /// material might be transparent
+    OPACITY_OPAQUE,                     ///< material is opaque
+    OPACITY_TRANSPARENT,                ///< material is transparent
+    OPACITY_UNKNOWN,                    ///< material might be transparent
     OPACITY_FORCE_32_BIT = 0xffffffffU
 };
 
-mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( Material_opacity) == sizeof( mi::Uint32));
 
 /// This interface represents a compiled material.
 ///
@@ -313,7 +315,16 @@ public:
         Sint32* errors = 0) const = 0;
     
     /// Returns the opacity of the material.
+    ///
+    /// First, the cutout_opacity is checked. In case of opaque
+    /// materials it is checked if a transmissive BSDF is present in the \c surface.scattering
+    /// slot of the material.
     virtual Material_opacity get_opacity() const = 0;
+
+    /// Returns the surface opacity of the material by checking, if a
+    /// transmissive BSDF is present in the \c surface.scattering slot of
+    /// the material.
+    virtual Material_opacity get_surface_opacity() const = 0;
 
     /// Returns the cutout opacity of the material if it is constant.
     ///

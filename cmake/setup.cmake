@@ -151,6 +151,9 @@ else()
     set(MDL_ENABLE_TESTS OFF CACHE INTERNAL "Generates unit and example tests." FORCE)
 endif()
 
+# list of tests that can be defined only after all other targets are setup (clear that list here)
+set(MDL_TEST_LIST_POST "" CACHE INTERNAL "list of test directories to add after regular targets are defined")
+
 include(${MDL_BASE_FOLDER}/cmake/find/find_cuda_ext.cmake)
 find_cuda_ext()
 
@@ -185,4 +188,5 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_ENABLE_CUDA_EXAMPLES:           " ${MDL_ENABLE_CUDA_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_D3D12_EXAMPLES:          " ${MDL_ENABLE_D3D12_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_QT_EXAMPLES:             " ${MDL_ENABLE_QT_EXAMPLES})
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                   " ${MDL_ENABLE_TESTS})
 endif()

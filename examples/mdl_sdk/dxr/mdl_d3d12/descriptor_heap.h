@@ -46,6 +46,25 @@ namespace mdl_d3d12
         // TODO supposed to be used to track states and improve error handling
         struct Entry
         {
+            enum class Kind
+            {
+                Unknown = 0,
+                SRV,    // shader resource view
+                CBV,    // constant buffer view
+                RTV,    // render target view
+                UAV,    // unordered access view
+            };
+
+            explicit Entry();
+            virtual ~Entry() = default;
+
+            friend class Descriptor_heap;
+        private:
+            std::string resource_name;
+            Kind resource_type;
+            size_t alloc_block_id;
+            size_t alloc_block_size;
+            size_t alloc_block_index;
         };
 
     public:
@@ -55,90 +74,65 @@ namespace mdl_d3d12
                                  std::string debug_name);
         virtual ~Descriptor_heap();
 
-        D3D12_CPU_DESCRIPTOR_HANDLE get_cpu_handle(size_t index)
-        {
-            D3D12_CPU_DESCRIPTOR_HANDLE handle(m_cpu_heap_start);
-            handle.ptr += index * m_element_size;
-            return handle;
-        }
-        D3D12_GPU_DESCRIPTOR_HANDLE get_gpu_handle(size_t index)
-        {
-            D3D12_GPU_DESCRIPTOR_HANDLE handle(m_gpu_heap_start);
-            handle.ptr += index * m_element_size;
-            return handle;
-        }
+        /// Reserves a number of resource views on the heap and returns a handle to the first one.
+        /// Used to create handles that then be used with the `create_*_view(...)` methods.
+        Descriptor_heap_handle reserve_views(size_t count);
 
-        Descriptor_heap_handle add_empty_view();
+        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        bool create_shader_resource_view(
+            Buffer* buffer, bool raw, const Descriptor_heap_handle& handle);
 
-        Descriptor_heap_handle add_shader_resource_view(Index_buffer* buffer)
+        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        bool create_shader_resource_view(
+            Texture* texture, const Descriptor_heap_handle& handle);
+
+        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        bool create_shader_resource_view(
+            Raytracing_acceleration_structure* tlas, const Descriptor_heap_handle& handle);
+
+        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        template<typename T> bool create_shader_resource_view(
+            Structured_buffer<T>* buffer, 
+            const Descriptor_heap_handle& handle)
         {
+            if (!handle.is_valid()) {
+                log_error("Heap Handle invalid while creating view to: " +
+                    buffer->get_debug_name(), SRC);
+                return false;
+            }
+
             D3D12_SHADER_RESOURCE_VIEW_DESC desc;
             if (!buffer->get_shader_resource_view_description(desc))
-                return Descriptor_heap_handle();
+                return false;
 
-            return add_shader_resource_view(desc, buffer->get_resource());
+            m_entries[handle].resource_name = buffer->get_debug_name();
+            m_entries[handle].resource_type = Entry::Kind::SRV;
+            m_app->get_device()->CreateShaderResourceView(
+                buffer->get_resource(), &desc, handle.get_cpu_handle());
+            return true;
         }
 
-        template<typename T>
-        Descriptor_heap_handle add_shader_resource_view(Structured_buffer<T>* buffer)
-        {
-            D3D12_SHADER_RESOURCE_VIEW_DESC desc;
-            if (!buffer->get_shader_resource_view_description(desc))
-                return Descriptor_heap_handle();
+        /// Create a Render Target View (RTV) at a given position on the heap.
+        bool create_render_target_view(
+            Texture* texture, const Descriptor_heap_handle& handle);
 
-            return add_shader_resource_view(desc, buffer->get_resource());
-        }
+        /// Create an Unordered Access View (UAV) at a given position on the heap.
+        bool create_unordered_access_view(
+            Texture* texture, const Descriptor_heap_handle& handle);
 
-        Descriptor_heap_handle add_render_target_view(Texture* texture);
-        bool replace_by_render_target_view(
-            Texture* texture, const Descriptor_heap_handle& index);
+        /// Create an Constant Buffer View (CBV) at a given position on the heap.
+        bool create_constant_buffer_view(
+            const Constant_buffer_base* constants, const Descriptor_heap_handle& handle);
 
-        Descriptor_heap_handle add_shader_resource_view(Buffer* buffer, bool raw);
-        bool replace_by_shader_resource_view(
-            Buffer* buffer, bool raw, const Descriptor_heap_handle& index);
-
-        Descriptor_heap_handle add_shader_resource_view(Raytracing_acceleration_structure* tlas);
-        Descriptor_heap_handle add_shader_resource_view(Texture* texture);
-
-        Descriptor_heap_handle add_unordered_access_view(Texture* texture);
-        bool replace_by_unordered_access_view(
-            Texture* texture, const Descriptor_heap_handle& index);
-
-        Descriptor_heap_handle add_constant_buffer_view(const Constant_buffer_base* constants);
-
-        bool replace_by_constant_buffer_view(
-            const Constant_buffer_base* constants, const Descriptor_heap_handle& index);
-
+        /// Get the internal D3D heap
         ID3D12DescriptorHeap* get_heap() { return m_heap.Get(); }
 
+        /// Print the heap structure to the log
+        void print_debug_infos();
+
     private:
-
-        Descriptor_heap_handle add_shader_resource_view(
-            const D3D12_SHADER_RESOURCE_VIEW_DESC& desc, 
-            ID3D12Resource* resource);
-
-        void replace_by_shader_resource_view(
-            const D3D12_SHADER_RESOURCE_VIEW_DESC& desc,
-            ID3D12Resource* resource,
-            const Descriptor_heap_handle& index);
-
-        Descriptor_heap_handle add_constant_buffer_view(
-            const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc);
-
-        void replace_by_constant_buffer_view(
-            const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc, 
-            const Descriptor_heap_handle& index);
-
-        Descriptor_heap_handle add_unordered_access_view(
-            const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc,
-            ID3D12Resource* resource,
-            ID3D12Resource* counter_resource);
-
-        void replace_by_unordered_access_view(
-            const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc,
-            ID3D12Resource* resource,
-            ID3D12Resource* counter_resource, 
-            const Descriptor_heap_handle& index);
+        friend D3D12_CPU_DESCRIPTOR_HANDLE Descriptor_heap_handle::get_cpu_handle() const;
+        friend D3D12_GPU_DESCRIPTOR_HANDLE Descriptor_heap_handle::get_gpu_handle() const;
 
         Base_application* m_app;
         const std::string m_debug_name;
@@ -146,9 +140,13 @@ namespace mdl_d3d12
         size_t m_size;
         size_t m_element_size;
 
+        std::mutex m_entries_mutex;
         std::vector<Entry> m_entries;
+        std::atomic<size_t> m_entry_alloc_block_counter;
+
         ComPtr<ID3D12DescriptorHeap> m_heap;
         D3D12_CPU_DESCRIPTOR_HANDLE m_cpu_heap_start;
+
         D3D12_GPU_DESCRIPTOR_HANDLE m_gpu_heap_start;
     };
 }

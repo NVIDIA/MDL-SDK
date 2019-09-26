@@ -48,7 +48,7 @@ class IQualified_name;
 class ISimple_name;
 class IExpression;
 class IConst_fold_handler;
-
+class IValue_factory;
 
 /// The generic interface to expressions inside the MDL AST.
 class IExpression : public Interface_owned
@@ -160,12 +160,14 @@ public:
 
     /// Fold this expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The const fold handler, may be NULL.
     ///
     /// \return IValue_bad if this expression could not be folded.
     virtual IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const = 0;
 
     /// Return the number of sub expressions of this expression.

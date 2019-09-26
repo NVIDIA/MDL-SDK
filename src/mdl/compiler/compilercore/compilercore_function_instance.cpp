@@ -60,7 +60,10 @@ Function_instance::Function_instance(
 , m_kind(KI_DEFINITION)
 {
     // def might be NULL for intrinsic functions
-    MDL_ASSERT(def == NULL || def->get_kind() == IDefinition::DK_FUNCTION);
+    MDL_ASSERT(
+        def == NULL ||
+        def->get_kind() == IDefinition::DK_FUNCTION ||
+        def->get_kind() == IDefinition::DK_CONSTRUCTOR);
 }
 
 // Constructor from a lambda function.

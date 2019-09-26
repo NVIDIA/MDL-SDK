@@ -1,6 +1,78 @@
 Change Log
 ==========
 
+MDL SDK 2019.1.4 (317500.5028): 27 Aug 2019
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2019.1.4 (317500.5028) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+
+    - A new function `mi::neuraylib::IValue_texture::get_gamma()` has been added.
+    - The following new functions have been added to the target code generation:
+        - `mi::neuraylib::ITarget_code::execute_bsdf_auxiliary()`
+        - `mi::neuraylib::ITarget_code::execute_edf_auxiliary()`
+    - A new function `mi::neuraylib::ICompiled_material::get_surface_opacity()`
+      has been added.
+
+- MDL Compiler and Backends
+
+    - Code generation for auxiliary methods has been added on distribution
+      functions for potential use in AI-denoising.
+    - The spectral color constructor `color(float[<N>],float[N])`,
+      `math::emission_color()`, and `math::blackboby()` are now supported in the
+      JIT backend.
+    - More optimizations regarding elemental constructors in the DAG
+      representation have been implemented.
+    - Map XOR operators on Boolean values to NOT-EQUAL in the HLSL backend to be
+      compatible to the SLANG compiler.
+
+- MDL SDK examples
+
+    - The example programs `example_dxr` and `example_df_cuda` have been extended
+      to illustrate the use of auxiliary functions.
+    - A modified version of `example_dxr` has been added to illustrate the usage
+      of MDL in a multi-threaded context.
+    - Camera controls have been improved and new options have been added to
+      the example program `example_dxr`.
+
+**Fixed Bugs**
+
+- General
+
+    - The export of MDLE files from in-memory MDL modules has been fixed.
+
+- MDL Compiler and Backends
+
+    - Temporary exponential creation of DAG nodes when using derivatives has
+      been fixed.
+    - Code generation of parameters reused multiple times in a derivative context
+      has been fixed.
+    - Relative imports including "." and ".." have been fixed.
+    - Duplicate global variables in generated HLSL code have been fixed.
+    - Invalid code generation for HLSL for special materials has been fixed.
+    - Indeterministic rare compilation errors regarding unknown functions have
+      been fixed.
+    - Indeterministic rare hangs during compilation with multiple threads have
+      been fixed.
+    - Under rare condition the code cache could return HLSL code instead of PTX
+      and vice versa. This has been fixed.
+    - The code cache that was not working under several conditions has been fixed.
+    - The handling of the `?:` operator on arrays inside the DAG representation
+      has been fixed such that it computes the right name now.
+    - The handling of unresolved resource paths in the target code has been fixed.
+      Previously all resources were mapped to index 1.
+    - A crash in the code generator when handling uniform matrix expressions with
+      automatic derivatives enabled has been fixed.
+    - A crash in the HLSL code generator for non-default optimization levels has
+      been fixed.
+    - A crash when adding distribution functions to a link unit after adding non-
+      distribution functions has been fixed.
+
+
 MDL SDK 2019.1.1 (317500.2554): 08 Jun 2019
 -----------------------------------------------
 

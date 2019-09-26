@@ -616,6 +616,19 @@ struct Bsdf_pdf_data {
     tct_float        pdf;            ///< pdf (non-projected hemisphere)
 };
 
+/// Input and output structure for BSDF auxiliary calculation data.
+struct Bsdf_auxiliary_data
+{
+    // Input fields
+    tct_float3       ior1;           ///< IOR current medium
+    tct_float3       ior2;           ///< IOR other side
+    tct_float3       k1;             ///< outgoing direction
+
+    // Output fields
+    tct_float3       albedo;         ///< albedo
+    tct_float3       normal;         ///< normal
+};
+
 
 // Signatures for generated target code functions.
 
@@ -809,7 +822,38 @@ typedef void (Bsdf_pdf_function_with_derivs)(
     void const                                *exception_state,
     char const                                *arg_block_data);
 
+/// Signature of the auxiliary function for material distribution functions created via
+/// #mi::neuraylib::IMdl_backend::translate_material_df() and
+/// #mi::neuraylib::ILink_unit::add_material_df().
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Bsdf_auxiliary_function)(
+    Bsdf_auxiliary_data           *data,
+    Shading_state_material const  *state,
+    Resource_data const           *res_data,
+    void const                    *exception_state,
+    char const                    *arg_block_data);
 
+
+/// Signature of the auxiliary function for material distribution functions created via
+/// #mi::neuraylib::IMdl_backend::translate_material_df() and
+/// #mi::neuraylib::ILink_unit::add_material_df().
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Bsdf_auxiliary_function_with_derivs)(
+    Bsdf_auxiliary_data                       *data,
+    Shading_state_material_with_derivs const  *state,
+    Resource_data const                       *res_data,
+    void const                                *exception_state,
+    char const                                *arg_block_data);
 
 /// The type of events created by EDF importance sampling.
 enum Edf_event_type
@@ -854,6 +898,16 @@ struct Edf_pdf_data
 
     // Output fields
     tct_float       pdf;            ///< pdf (non-projected hemisphere)
+};
+
+/// Input and output structure for EDF auxiliary calculation data.
+struct Edf_auxiliary_data
+{
+    // Input fields
+    tct_float3      k1;             ///< outgoing direction
+
+    // Output fields
+    // reserved for future use
 };
 
 
@@ -991,6 +1045,39 @@ typedef void (Edf_pdf_function)(
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_pdf_function_with_derivs)(
     Edf_pdf_data                              *data,
+    Shading_state_material_with_derivs const  *state,
+    Resource_data const                       *res_data,
+    void const                                *exception_state,
+    char const                                *arg_block_data);
+
+/// Signature of the auxiliary function for material distribution functions created via
+/// #mi::neuraylib::IMdl_backend::translate_material_df() and
+/// #mi::neuraylib::ILink_unit::add_material_df().
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_auxiliary_function)(
+    Edf_auxiliary_data               *data,
+    Shading_state_material const  *state,
+    Resource_data const           *res_data,
+    void const                    *exception_state,
+    char const                    *arg_block_data);
+
+
+/// Signature of the auxiliary function for material distribution functions created via
+/// #mi::neuraylib::IMdl_backend::translate_material_df() and
+/// #mi::neuraylib::ILink_unit::add_material_df().
+///
+/// \param data             the input and output structure
+/// \param state            the shading state
+/// \param res_data         the resources
+/// \param exception_state  unused, should be NULL
+/// \param arg_block_data   the target argument block data, if class compilation was used
+typedef void (Edf_auxiliary_function_with_derivs)(
+    Edf_auxiliary_data                           *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     void const                                *exception_state,

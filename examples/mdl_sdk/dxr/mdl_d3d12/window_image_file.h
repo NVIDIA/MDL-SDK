@@ -54,6 +54,7 @@ namespace mdl_d3d12
 
         int show(int nCmdShow) override;
         void close() override { m_close = true; }
+        bool has_focus() const override { return false; }
 
         Texture* get_back_buffer() const override { return m_back_buffer; }
         D3D12_CPU_DESCRIPTOR_HANDLE get_back_buffer_rtv() const override;

@@ -76,15 +76,17 @@ public:
 
     /// Fold this expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The constant folding handler, may be NULL.
     ///
     /// \return IValue_bad if this expression could not be folded.
     IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const MDL_OVERRIDE
     {
-        return module->get_value_factory()->create_bad();
+        return factory->create_bad();
     }
 
 protected:
@@ -182,8 +184,12 @@ public:
     }
 
     /// Fold this literal expression into a constant value.
-    IValue const *fold(IModule const *, IConst_fold_handler *) const MDL_FINAL {
-        return m_value;
+    IValue const *fold(
+        IModule const       *,
+        IValue_factory      *factory,
+        IConst_fold_handler *) const MDL_FINAL
+    {
+        return factory->import(m_value);
     }
 
     /// Return the number of sub expressions of this expression.
@@ -251,23 +257,25 @@ public:
 
     /// Fold this reference expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The const fold handler, may be NULL.
     IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const MDL_FINAL
     {
         if (m_def != NULL) {
             IDefinition::Kind kind = m_def->get_kind();
             if (kind == IDefinition::DK_CONSTANT || kind == IDefinition::DK_ENUM_VALUE)
-                return m_def->get_constant_value();
+                return factory->import(m_def->get_constant_value());
             if (handler != NULL) {
                 IValue const *v = handler->lookup(m_def);
                 if (!is<IValue_bad>(v))
-                    return v;
+                    return factory->import(v);
             }
         }
-        return Base::fold(module, handler);
+        return Base::fold(module, factory, handler);
     }
 
     /// Returns true if this references an array constructor.
@@ -332,15 +340,15 @@ public:
 
     /// Fold this unary expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The const fold handler, may be NULL.
     IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const MDL_FINAL
     {
-        IValue_factory *factory = module->get_value_factory();
-
-        IValue const *val = m_expr->fold(module, handler);
+        IValue const *val = m_expr->fold(module, factory, handler);
         switch (m_op) {
         case OK_BITWISE_COMPLEMENT:
             return val->bitwise_not(factory);
@@ -431,15 +439,15 @@ public:
 
     /// Fold this binary expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The const fold handler, may be NULL.
     IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const MDL_FINAL
     {
-        IValue_factory *factory = module->get_value_factory();
-
-        IValue const *lhs = m_lhs->fold(module, handler);
+        IValue const *lhs = m_lhs->fold(module, factory, handler);
         if (is<IValue_bad>(lhs))
             return lhs;
 
@@ -460,7 +468,7 @@ public:
         if (m_op == OK_LOGICAL_OR && lhs->is_one())
             return lhs;
 
-        IValue const *rhs = m_rhs->fold(module, handler);
+        IValue const *rhs = m_rhs->fold(module, factory, handler);
         if (is<IValue_bad>(rhs))
             return rhs;
 
@@ -783,14 +791,14 @@ public:
 
     /// Fold this call expression into a constant value if possible.
     ///
-    /// \param module   The module of this expression.
+    /// \param module   The owner module of this expression.
+    /// \param factory  The factory to be used to create new values if any.
     /// \param handler  The const fold handler, may be NULL.
     IValue const *fold(
         IModule const       *module,
+        IValue_factory      *factory,
         IConst_fold_handler *handler) const MDL_FINAL
     {
-        IValue_factory *factory = module->get_value_factory();
-
         if (IExpression_reference const *ref = as<IExpression_reference>(m_callee)) {
             if (ref->is_array_constructor()) {
                 // array constructor: fold all of its arguments
@@ -809,14 +817,15 @@ public:
                     for (int i = 0; i < n; ++i) {
                         IArgument const   *arg  = get_argument(i);
                         IExpression const *expr = arg->get_argument_expr();
-                        IValue const      *val  = expr->fold(module, handler);
+                        IValue const      *val  = expr->fold(module, factory, handler);
                         if (is<IValue_bad>(val))
                             return val;
                         values[i] = val;
                     }
                 } else {
                     // array default constructor
-                    IValue const *def_val = mod->create_default_value(a_type->get_element_type());
+                    IValue const *def_val =
+                        mod->create_default_value(factory, a_type->get_element_type());
                     for (int i = 0; i < n; ++i) {
                         values[i] = def_val;
                     }
@@ -843,7 +852,7 @@ public:
                             for (int i = 0; i < n; ++i) {
                                 IArgument const   *arg  = get_argument(i);
                                 IExpression const *expr = arg->get_argument_expr();
-                                IValue const      *val  = expr->fold(module, handler);
+                                IValue const      *val  = expr->fold(module, factory, handler);
 
                                 if (is<IValue_bad>(val))
                                     return val;
@@ -854,7 +863,7 @@ public:
                         } else {
                             MDL_ASSERT(get_argument_count() == 1);
                             IExpression const *expr = get_argument(0)->get_argument_expr();
-                            return expr->fold(module, handler);
+                            return expr->fold(module, factory, handler);
                         }
                     }
                 case IDefinition::DS_CONV_CONSTRUCTOR:
@@ -865,7 +874,7 @@ public:
                         IType const          *dst_type  = func_type->get_return_type();
 
                         IExpression const *expr = get_argument(0)->get_argument_expr();
-                        IValue const      *val  = expr->fold(module, handler);
+                        IValue const      *val  = expr->fold(module, factory, handler);
                         return val->convert(factory, dst_type);
                     }
                 case IDefinition::DS_ELEM_CONSTRUCTOR:
@@ -888,7 +897,7 @@ public:
                             for (int i = 0; i < n_args; ++i) {
                                 IArgument const   *arg  = get_argument(i);
                                 IExpression const *expr = arg->get_argument_expr();
-                                IValue const      *val  = expr->fold(module, handler);
+                                IValue const      *val  = expr->fold(module, factory, handler);
                                 if (is<IValue_bad>(val))
                                     return val;
                                 values[i] = val;
@@ -923,13 +932,13 @@ public:
 
                         IArgument const   *arg0  = get_argument(0);
                         IExpression const *expr0 = arg0->get_argument_expr();
-                        wavelengths = expr0->fold(module, handler);
+                        wavelengths = expr0->fold(module, factory, handler);
                         if (is<IValue_bad>(wavelengths))
                             return wavelengths;
 
                         IArgument const   *arg1  = get_argument(1);
                         IExpression const *expr1 = arg1->get_argument_expr();
-                        aplitudes = expr1->fold(module, handler);
+                        aplitudes = expr1->fold(module, factory, handler);
                         if (is<IValue_bad>(aplitudes))
                             return aplitudes;
 
@@ -959,7 +968,7 @@ public:
                             for (size_t row = 0; row < n_rows; ++row, ++idx) {
                                 IArgument const   *arg  = get_argument(idx);
                                 IExpression const *expr = arg->get_argument_expr();
-                                IValue const      *val  = expr->fold(module, handler);
+                                IValue const      *val  = expr->fold(module, factory, handler);
                                 if (is<IValue_bad>(val))
                                     return val;
                                 row_vals[row] = val;
@@ -980,7 +989,7 @@ public:
                         IType_atomic const   *a_type    = v_type->get_element_type();
 
                         IExpression const *expr = get_argument(0)->get_argument_expr();
-                        IValue const *val  = expr->fold(module, handler);
+                        IValue const *val  = expr->fold(module, factory, handler);
                         IValue const *zero = factory->create_zero(a_type);
 
                         IValue const *column_vals[4];
@@ -1016,7 +1025,7 @@ public:
                             IType const          *dst_type  = func_type->get_return_type();
                             Module const         *mod       = impl_cast<Module>(module);
 
-                            return mod->create_default_value(dst_type);
+                            return mod->create_default_value(factory, dst_type);
                         }
                         break;
                     }
@@ -1028,10 +1037,10 @@ public:
                             cast<IType_texture>(ftype->get_return_type());
 
                         IExpression const *expr0 = get_argument(0)->get_argument_expr();
-                        IValue const      *val0  = expr0->fold(module, handler);
+                        IValue const      *val0  = expr0->fold(module, factory, handler);
 
                         IExpression const *expr1 = get_argument(1)->get_argument_expr();
-                        IValue const      *val1  = expr1->fold(module, handler);
+                        IValue const      *val1  = expr1->fold(module, factory, handler);
 
                         if (is<IValue_string>(val0) && is<IValue_enum>(val1)) {
                             IValue_string const *sval  = cast<IValue_string>(val0);
@@ -1062,7 +1071,7 @@ public:
                             for (int i = 0; i < n; ++i) {
                                 IArgument const   *arg  = get_argument(i);
                                 IExpression const *expr = arg->get_argument_expr();
-                                IValue const      *val  = expr->fold(module, handler);
+                                IValue const      *val  = expr->fold(module, factory, handler);
 
                                 if (is<IValue_bad>(val))
                                     return val;

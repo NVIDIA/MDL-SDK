@@ -193,6 +193,11 @@ namespace mdl_d3d12
 
         // create back buffers
         m_swap_buffer_index = m_swap_chain->GetCurrentBackBufferIndex();
+
+        // create views on the heap
+        Descriptor_heap* target_heap = m_app->get_render_target_descriptor_heap();
+        Descriptor_heap_handle first_handle = target_heap->reserve_views(desc.BufferCount);
+
         for (size_t i = 0; i < desc.BufferCount; ++i)
         {
             Texture* target = new Texture(
@@ -201,8 +206,13 @@ namespace mdl_d3d12
             m_swap_fence_handles.push_back(
                 m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT)->get_fence()->signal());
 
-            Descriptor_heap_handle handle = 
-                m_app->get_render_target_descriptor_heap()->add_render_target_view(target);
+            Descriptor_heap_handle handle = first_handle.create_offset(i);
+            if (!target_heap->create_render_target_view(target, handle)) {
+                std::string msg = "Failed to create resource view for back buffer.";
+                log_error(msg, SRC);
+                throw(msg);
+            }
+
             m_render_target_views_heap_indices.push_back(handle);
         }
     }
@@ -239,6 +249,11 @@ namespace mdl_d3d12
         m_close = true;
     }
 
+    bool Window_win32::has_focus() const
+    {
+        return GetForegroundWindow() == m_window_handle;
+    }
+
     Texture* Window_win32::get_back_buffer() const
     {
         return m_swap_buffers[m_swap_buffer_index];
@@ -246,8 +261,7 @@ namespace mdl_d3d12
 
     D3D12_CPU_DESCRIPTOR_HANDLE Window_win32::get_back_buffer_rtv() const
     {
-        return m_app->get_render_target_descriptor_heap()->get_cpu_handle(
-            m_render_target_views_heap_indices[m_swap_buffer_index]);
+        return m_render_target_views_heap_indices[m_swap_buffer_index].get_cpu_handle();
     }
 
     bool Window_win32::present_back_buffer()
@@ -316,7 +330,7 @@ namespace mdl_d3d12
             m_swap_fence_handles[i] = 
                 m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT)->get_fence()->signal();
 
-            if (!m_app->get_render_target_descriptor_heap()->replace_by_render_target_view(
+            if (!m_app->get_render_target_descriptor_heap()->create_render_target_view(
                 m_swap_buffers[i], m_render_target_views_heap_indices[i]))
                 return false;
         }

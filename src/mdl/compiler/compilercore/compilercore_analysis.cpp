@@ -4135,7 +4135,20 @@ void NT_analysis::import_all_entities(
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
         IQualified_name const *imp_name = imp_mod->get_qualified_name();
-        int prefix_len = imp_name->get_component_count() - rel_name->get_component_count();
+
+        // skip "." and ".."
+        int rel_name_len = rel_name->get_component_count();
+        int first = 0;
+        for (; first < rel_name_len; ++first) {
+            ISymbol const *sym = rel_name->get_component(first)->get_symbol();
+            size_t        id   = sym->get_id();
+
+            if (id != ISymbol::SYM_DOT && id != ISymbol::SYM_DOTDOT)
+                break;
+        }
+        rel_name_len -= first;
+
+        int prefix_len = imp_name->get_component_count() - rel_name_len;
 
         MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
 
@@ -5010,7 +5023,7 @@ void NT_analysis::check_expression_range(
     if (is_invalid)
         return;
 
-    IValue const *v = expr->fold(&m_module, NULL);
+    IValue const *v = expr->fold(&m_module, m_module.get_value_factory(), NULL);
     if (is<IValue_bad>(v))
         return;
 
@@ -7250,7 +7263,7 @@ IExpression *NT_analysis::convert_to_type_and_fold(
     IType const       *dst_type)
 {
     if (IExpression const *call = convert_to_type_implicit(expr, dst_type)) {
-        IValue const *v = call->fold(&m_module, NULL);
+        IValue const *v = call->fold(&m_module, m_module.get_value_factory(), NULL);
         if (!is<IValue_bad>(v)) {
             Position const *pos = &expr->access_position();
             return m_module.create_literal(v, pos);
@@ -9033,7 +9046,8 @@ bool NT_analysis::handle_array_copy_constructor(
         } else {
             // fold it
             m_exc_handler.clear_error_state();
-            IValue const *val = arr_size->fold(&m_module, &m_exc_handler);
+            IValue const *val = arr_size->fold(
+                &m_module, m_module.get_value_factory(), &m_exc_handler);
 
             // convert to int
             val = val->convert(m_module.get_value_factory(), m_tc.int_type);
@@ -10187,7 +10201,8 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                     if (!is<IType_error>(init->get_type())) {
                         // we have a valid init constructor
                         m_exc_handler.clear_error_state();
-                        IValue const *val = init->fold(&m_module, &m_exc_handler);
+                        IValue const *val = init->fold(
+                            &m_module, m_module.get_value_factory(), &m_exc_handler);
                         if (! m_exc_handler.has_error()) {
                             MDL_ASSERT(
                                 !is<IValue_bad>(val) &&
@@ -10583,7 +10598,8 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
                     }
                 } else {
                     m_exc_handler.clear_error_state();
-                    IValue const *val = init->fold(&m_module, &m_exc_handler);
+                    IValue const *val = init->fold(
+                        &m_module, m_module.get_value_factory(), &m_exc_handler);
                     if (IValue_int const *iv = as<IValue_int>(val))
                         code = iv->get_value();
                     else if (IValue_enum const *ev = as<IValue_enum>(val))
@@ -11237,7 +11253,8 @@ bool NT_analysis::pre_visit(IStatement_switch *switch_stmt)
                         has_error = true;
                     } else {
                         // fold it
-                        IValue const *val  = label_expr->fold(&m_module, NULL);
+                        IValue const *val  = label_expr->fold(
+                            &m_module, m_module.get_value_factory(), NULL);
                         IValue const *ival =
                             val->convert(m_module.get_value_factory(), m_tc.int_type);
 
@@ -11656,7 +11673,7 @@ void NT_analysis::post_visit(IExpression_binary *bin_expr)
                 // we can also catch an out of range reference if the index can be folded
                 bool is_invalid = false;
                 if (!m_in_expected_const_expr && is_const_expression(rhs, is_invalid)) {
-                    IValue const *val = rhs->fold(&m_module, NULL);
+                    IValue const *val = rhs->fold(&m_module, m_module.get_value_factory(), NULL);
                     val = val->convert(m_module.get_value_factory(), m_tc.int_type);
 
                     if (is<IValue_int>(val)) {
@@ -11761,7 +11778,7 @@ void NT_analysis::post_visit(IExpression_binary *bin_expr)
                 if (is_integer_or_integer_vector_type(r_type)) {
                     // check if the right parameter is NOT a non-zero literal
                     bool can_trow = true;
-                    IValue const *v = rhs->fold(&m_module, NULL);
+                    IValue const *v = rhs->fold(&m_module, m_module.get_value_factory(), NULL);
                     if (!is<IValue_bad>(v)) {
                         if (IValue_vector const *vv = as<IValue_vector>(v)) {
                             // check every component
@@ -12004,7 +12021,8 @@ void NT_analysis::post_visit(IExpression_call *call_expr)
                     } else {
                         // fold it
                         m_exc_handler.clear_error_state();
-                        IValue const *val = arr_size->fold(&m_module, &m_exc_handler);
+                        IValue const *val = arr_size->fold(
+                            &m_module, m_module.get_value_factory(), &m_exc_handler);
 
                         // convert to int
                         val = val->convert(m_module.get_value_factory(), m_tc.int_type);
@@ -12213,7 +12231,8 @@ bool NT_analysis::pre_visit(IType_name *type_name)
                         type = m_tc.create_array(type, size);
                     } else {
                         m_exc_handler.clear_error_state();
-                        IValue const *val = arr_size->fold(&m_module, &m_exc_handler);
+                        IValue const *val = arr_size->fold(
+                            &m_module, m_module.get_value_factory(), &m_exc_handler);
 
                         // convert to int
                         val = val->convert(m_module.get_value_factory(), m_tc.int_type);
@@ -12500,7 +12519,8 @@ bool NT_analysis::check_module_dependency(
     IAnnotation const *anno)
 {
     IExpression const *module_name_expr = anno->get_argument(0)->get_argument_expr();
-    IValue const      *module_name_val  = module_name_expr->fold(&m_module, NULL);
+    IValue const      *module_name_val  =
+        module_name_expr->fold(&m_module, m_module.get_value_factory(), NULL);
     char const        *module_name = cast<IValue_string>(module_name_val)->get_value();
 
     if (!valid_module_path(module_name)) {
@@ -12559,16 +12579,20 @@ bool NT_analysis::check_module_dependency(
     }
 
     IExpression const *major_expr       = anno->get_argument(1)->get_argument_expr();
-    IValue const      *major_val        = major_expr->fold(&m_module, NULL);
+    IValue const      *major_val        =
+        major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
     int               major             = cast<IValue_int>(major_val)->get_value();
     IExpression const *minor_expr       = anno->get_argument(2)->get_argument_expr();
-    IValue const      *minor_val        = minor_expr->fold(&m_module, NULL);
+    IValue const      *minor_val        =
+        minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
     int               minor             = cast<IValue_int>(minor_val)->get_value();
     IExpression const *patch_expr       = anno->get_argument(3)->get_argument_expr();
-    IValue const      *patch_val        = patch_expr->fold(&m_module, NULL);
+    IValue const      *patch_val        =
+        patch_expr->fold(&m_module, m_module.get_value_factory(), NULL);
     int               patch             = cast<IValue_int>(patch_val)->get_value();
     IExpression const *prerl_expr       = anno->get_argument(4)->get_argument_expr();
-    IValue const      *prerl_val        = prerl_expr->fold(&m_module, NULL);
+    IValue const      *prerl_val        =
+        prerl_expr->fold(&m_module, m_module.get_value_factory(), NULL);
     char const        *prerl            = cast<IValue_string>(prerl_val)->get_value();
 
 
@@ -12675,13 +12699,17 @@ Definition const *NT_analysis::handle_known_annotation(
             case IDefinition::DS_VERSION_ANNOTATION:
                 {
                     IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-                    IValue const      *major      = major_expr->fold(&m_module, NULL);
+                    IValue const      *major      =
+                        major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
                     IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-                    IValue const      *minor      = minor_expr->fold(&m_module, NULL);
+                    IValue const      *minor      =
+                        minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
                     IExpression const *patch_expr = anno->get_argument(2)->get_argument_expr();
-                    IValue const      *patch      = patch_expr->fold(&m_module, NULL);
+                    IValue const      *patch      =
+                        patch_expr->fold(&m_module, m_module.get_value_factory(), NULL);
                     IExpression const *prerl_expr = anno->get_argument(3)->get_argument_expr();
-                    IValue const      *prerl      = prerl_expr->fold(&m_module, NULL);
+                    IValue const      *prerl      =
+                        prerl_expr->fold(&m_module, m_module.get_value_factory(), NULL);
 
                     Position const *prev_pos = set_module_sem_version(
                         m_module,
@@ -12902,9 +12930,11 @@ Definition const *NT_analysis::handle_known_annotation(
     case Definition::DS_SINCE_ANNOTATION:
         {
             IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-            IValue const      *major      = major_expr->fold(&m_module, NULL);
+            IValue const      *major      =
+                major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
             IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-            IValue const      *minor      = minor_expr->fold(&m_module, NULL);
+            IValue const      *minor      =
+                minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
 
             if (!is<IValue_int>(major) || !is<IValue_int>(minor)) {
                 error(
@@ -12926,9 +12956,11 @@ Definition const *NT_analysis::handle_known_annotation(
     case Definition::DS_REMOVED_ANNOTATION:
         {
             IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-            IValue const      *major      = major_expr->fold(&m_module, NULL);
+            IValue const      *major      =
+                major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
             IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-            IValue const      *minor      = minor_expr->fold(&m_module, NULL);
+            IValue const      *minor      =
+                minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
 
             if (!is<IValue_int>(major) || !is<IValue_int>(minor)) {
                 error(
@@ -13003,8 +13035,8 @@ Definition const *NT_analysis::handle_known_annotation(
 
             if (!is_error(def)) {
                 // check if the range is valid
-                IValue const *min_v = min_expr->fold(&m_module, NULL);
-                IValue const *max_v = max_expr->fold(&m_module, NULL);
+                IValue const *min_v = min_expr->fold(&m_module, m_module.get_value_factory(), NULL);
+                IValue const *max_v = max_expr->fold(&m_module, m_module.get_value_factory(), NULL);
                 if (element_wise_compare(min_v, max_v) & ~IValue::CR_LE) {
                     warning(
                         WRONG_ANNOTATION_RANGE_INTERVAL,
@@ -13042,7 +13074,8 @@ Definition const *NT_analysis::handle_known_annotation(
 
             if (anno->get_argument_count() == 1) {
                 IExpression const   *msg_expr = anno->get_argument(0)->get_argument_expr();
-                IValue_string const *msg = as<IValue_string>(msg_expr->fold(&m_module, NULL));
+                IValue_string const *msg = as<IValue_string>(
+                    msg_expr->fold(&m_module, m_module.get_value_factory(), NULL));
 
                 if (msg != NULL) {
                     m_module.set_deprecated_message(m_annotated_def, msg);
@@ -13729,16 +13762,14 @@ IType const *NT_analysis::check_cast_conversion(
 
     if (report_error) {
         // completely unrelated
-        if (report_error) {
-            error(
-                CAST_TYPES_UNRELATED,
-                pos,
-                Error_params(*this)
-                .add(src_tp)
-                .add(dst_tp, dst_is_incomplete)
-                .add(dst_is_incomplete ? "[]" : "")
-            );
-        }
+        error(
+            CAST_TYPES_UNRELATED,
+            pos,
+            Error_params(*this)
+            .add(src_tp)
+            .add(dst_tp, dst_is_incomplete)
+            .add(dst_is_incomplete ? "[]" : "")
+        );
     }
 
     return  m_tc.error_type;
@@ -15100,6 +15131,8 @@ void NT_analysis::handle_resource_url(
 {
     IValue_string const *sval   = as<IValue_string>(val);
     IValue_resource const *rval = as<IValue_resource>(val);
+    MDL_ASSERT(sval != NULL || rval != NULL);
+
     char const *url = sval != NULL ? sval->get_value() : rval->get_string_value();
 
     check_file_path(url, lit->access_position());

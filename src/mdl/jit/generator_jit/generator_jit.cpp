@@ -129,6 +129,10 @@ Code_generator_jit::Code_generator_jit(
         MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA,
         "false",
         "HLSL: Pass an extra user defined resource data struct to resource callbacks");
+    m_options.add_option(
+        MDL_JIT_OPTION_ENABLE_AUXILIARY,
+        "false",
+        "Enable code generation for auxiliary functions on DFs");
 }
 
 // Get the name of the target language.
@@ -494,6 +498,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
 // Compile a lambda switch function having several roots using the JIT into a
 // function computing one of the root expressions for execution on the GPU.
 IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for_gpu(
+    ICode_cache               *code_cache,
     ILambda_function const    *ilambda,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
@@ -519,6 +524,48 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
 
     Generated_code_source *code = builder.create<Generated_code_source>(
         alloc, IGenerated_code_executable::CK_PTX);
+
+    unsigned char cache_key[16];
+
+    if (code_cache != NULL) {
+        MD5_hasher hasher;
+
+        DAG_hash const *hash = lambda->get_hash();
+
+        // set the generators name
+        hasher.update("JIT");
+        hasher.update(code->get_kind());
+
+        hasher.update(lambda->get_name());
+        hasher.update(hash->data(), hash->size());
+
+        hasher.update(num_texture_spaces);
+        hasher.update(num_texture_results);
+        hasher.update(sm_version);
+
+        // Beware: the selected options change the generated code, hence we must include them into
+        // the key
+        hasher.update(lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
+            Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
+        hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
+        hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
+        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+
+        hasher.final(cache_key);
+
+        ICode_cache::Entry const *entry = code_cache->lookup(cache_key);
+
+        if (entry != NULL) {
+            // found a hit
+            fill_code_from_cache(code, entry);
+            return code;
+        }
+    }
 
     Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
@@ -572,6 +619,10 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         // copy the string constant table.
         for (size_t i = 0, n = code_gen.get_string_constant_count(); i < n; ++i) {
             code->add_mapped_string(code_gen.get_string_constant(i), i);
+        }
+
+        if (code_cache != NULL) {
+            enter_code_into_cache(code, code_cache, cache_key);
         }
     } else if (code->access_messages().get_error_message_count() == 0) {
         // on failure, ensure that the code contains an error message
@@ -1105,6 +1156,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
         // set the generators name
         hasher.update("JIT");
+        hasher.update(code->get_kind());
 
         hasher.update(lambda->get_name());
         hasher.update(hash->data(), hash->size());
@@ -1126,7 +1178,10 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
+
+        if (code_kind == IGenerated_code_executable::CK_HLSL) {
+            hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
+        }
 
         hasher.final(cache_key);
 
@@ -1311,8 +1366,10 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
 IGenerated_code_executable *Code_generator_jit::compile_unit(
     ILink_unit const *iunit)
 {
+    if (iunit == NULL)
+        return NULL;
     size_t num_funcs = iunit->get_function_count();
-    if (iunit == NULL || num_funcs == 0)
+    if (num_funcs == 0)
         return NULL;
 
     Link_unit_jit const &unit = *impl_cast<Link_unit_jit>(iunit);

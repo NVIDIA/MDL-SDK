@@ -360,6 +360,7 @@ public:
     /// Compile a lambda switch function having several roots using the JIT into a
     /// function computing one of the root expressions for execution on the GPU.
     ///
+    /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
@@ -368,6 +369,7 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     IGenerated_code_executable *compile_into_switch_function_for_gpu(
+        ICode_cache               *code_cache,
         ILambda_function const    *lambda,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,

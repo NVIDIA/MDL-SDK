@@ -195,9 +195,9 @@ const mi::IString* Compiled_material_impl::get_connected_function_db_name(
     return result;
 }
 
-mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
+static mi::neuraylib::Material_opacity int_opacity_to_opacity(
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity opacity)
 {
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity opacity = get_db_element()->get_opacity();
     switch (opacity) {
     case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE:
         return mi::neuraylib::OPACITY_OPAQUE;
@@ -209,6 +209,16 @@ mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
         break;
     }
     return mi::neuraylib::OPACITY_UNKNOWN;
+}
+
+mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
+{
+    return int_opacity_to_opacity(get_db_element()->get_opacity());
+}
+
+mi::neuraylib::Material_opacity Compiled_material_impl::get_surface_opacity() const
+{
+    return int_opacity_to_opacity(get_db_element()->get_surface_opacity());
 }
 
 bool Compiled_material_impl::get_cutout_opacity(mi::Float32 *cutout_opacity) const

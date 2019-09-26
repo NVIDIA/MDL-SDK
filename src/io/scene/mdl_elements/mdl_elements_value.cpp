@@ -442,6 +442,9 @@ mi::Size Value_struct::get_memory_consumption() const
 
 const char* Value_texture::get_file_path( DB::Transaction* transaction) const
 {
+    if (!m_value && !m_unresolved_mdl_url.empty())
+        return m_unresolved_mdl_url.c_str();
+
     if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
         return 0;
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
@@ -461,6 +464,9 @@ mi::Size Value_texture::get_memory_consumption() const
 
 const char* Value_light_profile::get_file_path( DB::Transaction* transaction) const
 {
+    if( !m_value && !m_unresolved_mdl_url.empty())
+        return m_unresolved_mdl_url.c_str();
+
     if( !m_value || transaction->get_class_id( m_value) != LIGHTPROFILE::ID_LIGHTPROFILE)
         return 0;
     DB::Access<LIGHTPROFILE::Lightprofile> light_profile( m_value, transaction);
@@ -476,6 +482,9 @@ mi::Size Value_light_profile::get_memory_consumption() const
 
 const char* Value_bsdf_measurement::get_file_path( DB::Transaction* transaction) const
 {
+    if (!m_value && !m_unresolved_mdl_url.empty())
+        return m_unresolved_mdl_url.c_str();
+
     if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
         return 0;
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( m_value, transaction);

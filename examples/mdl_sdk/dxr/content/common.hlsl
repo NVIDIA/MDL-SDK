@@ -2,6 +2,16 @@
  * Copyright 2019 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
+#ifndef MDL_DXR_EXAMPLE_COMMON_HLSL
+#define MDL_DXR_EXAMPLE_COMMON_HLSL
+
+ // macros the append the target code ID to the function name.
+ // this is required because the resulting DXIL libraries will be linked to same pipeline object
+ // and for that, the entry point names have to be unique.
+#define export_name_impl(name, id) name ## _ ## id
+#define export_name_impl_2(name, id) export_name_impl(name, id)
+#define export_name(name) export_name_impl_2(name, TARGET_CODE_ID)
+
 static const float M_PI =          3.14159265358979323846;
 static const float M_ONE_OVER_PI = 0.318309886183790671538;
 static const float DIRAC = -1.0f;
@@ -33,6 +43,9 @@ cbuffer SceneConstants : register(b1)
 
     // gamma correction while rendering to the frame buffer
     float output_gamma_correction;
+
+    // when auxiliary buffers are enabled, this index is used to select to one to display
+    uint display_buffer_index;
 }
 
 // Ray typed, has to match with CPU version
@@ -50,6 +63,7 @@ enum RadianceHitInfoFlags
     FLAG_NONE = 0,
     FLAG_INSIDE = 1,
     FLAG_DONE = 2,
+    FLAG_FIRST_PATH_SEGMENT = 4
 };
 
 void add_flag(inout uint flags, uint to_add) { flags |= to_add; }
@@ -250,3 +264,5 @@ float3 offset_ray(float3 p, float3 n)
                   abs(p.y) < origin ? p.y + float_scale * n.y : p_i.y,
                   abs(p.z) < origin ? p.z + float_scale * n.z : p_i.z);
 }
+
+#endif

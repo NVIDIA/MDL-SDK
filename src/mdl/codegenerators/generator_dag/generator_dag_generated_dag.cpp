@@ -1971,7 +1971,7 @@ void Generated_code_dag::compile(IModule const *module)
         collect_types(module, def, collector);
     }
 
-    if (IDeclaration_module const *mod_decl = module->get_module_declararation()) {
+    if (IDeclaration_module const *mod_decl = module->get_module_declaration()) {
         gen_module_annotations(dag_builder, mod_decl);
     }
 
@@ -3034,9 +3034,9 @@ Generated_code_dag::Material_instance::Material_instance(
 , m_temporaries(alloc)
 , m_default_param_values(alloc)
 , m_param_names(alloc)
+, m_hash()
 , m_properties(0)
 {
-    memset(&m_hash,       0, sizeof(m_hash));
     memset(m_slot_hashes, 0, sizeof(m_slot_hashes));
 }
 
@@ -6141,12 +6141,12 @@ IValue_vector const *Generated_code_dag::create_default_vector(
 {
     IType const *et = type->get_element_type();
     int count = type->get_size();
-    VLA<IValue const *> values(get_allocator(), count);
+    Small_VLA<IValue const *, 4> values(get_allocator(), count);
 
     switch (et->get_kind()) {
     case IType::TK_BOOL:
         {
-            const IValue_bool *false_value = value_factory.create_bool(false);
+            IValue_bool const *false_value = value_factory.create_bool(false);
             for (int i = 0; i < count; ++i)
                 values[i] = false_value;
             return value_factory.create_vector(type, values.data(), values.size());
@@ -6185,7 +6185,7 @@ IValue_matrix const *Generated_code_dag::create_default_matrix(
 {
     IType_vector const *rt = type->get_element_type();
     int count = type->get_columns();
-    VLA<IValue const *> values(get_allocator(), count);
+    Small_VLA<IValue const *, 4> values(get_allocator(), count);
     for (int i = 0; i < count; ++i)
         values[i] = create_default_vector(value_factory, rt);
     return value_factory.create_matrix(type, values.data(), values.size());

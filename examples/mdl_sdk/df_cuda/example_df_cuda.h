@@ -108,6 +108,10 @@ struct Kernel_params {
     float         exposure_scale;
     unsigned int *display_buffer;
     float3       *accum_buffer;
+    float3       *albedo_buffer;
+    float3       *normal_buffer;
+    bool          enable_auxiliary_output;
+    unsigned      display_buffer_index;
 
     // parameters
     unsigned int iteration_start;
@@ -138,6 +142,14 @@ struct Kernel_params {
     char const        **arg_block_list;
     unsigned int        current_material;
     Df_cuda_material   *material_buffer;
+};
+
+enum class Display_buffer_options
+{
+    Beauty = 0,
+    Albedo,
+    Normal,
+    COUNT
 };
 
 #endif // EXAMPLE_DF_CUDA_H

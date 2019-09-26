@@ -1683,7 +1683,7 @@ IOverload_result_set const *Module::find_annotation_by_signature(
 }
 
 // Get the module declaration of this module if any.
-IDeclaration_module const *Module::get_module_declararation() const
+IDeclaration_module const *Module::get_module_declaration() const
 {
     for (size_t i = 0, n = m_declarations.size(); i < n; ++i) {
         IDeclaration const *decl = m_declarations[i];
@@ -2086,7 +2086,7 @@ IExpression *Module::clone_expr(
         res->set_type(new_type);
 
         // after cloning try to fold it: the modifier might change the expression
-        IValue const *val = res->fold(this, NULL);
+        IValue const *val = res->fold(this, get_value_factory(), NULL);
         if (!is<IValue_bad>(val)) {
             Position const *pos = &res->access_position();
             return create_literal(val, pos);
@@ -2299,10 +2299,10 @@ char const *Module::get_import_fname(size_t mod_id) const
 }
 
 // Return the value create by a const default constructor of a type.
-IValue const *Module::create_default_value(IType const *type) const
+IValue const *Module::create_default_value(
+    IValue_factory *factory,
+    IType const    *type) const
 {
-    Value_factory *factory = get_value_factory();
-
     IDefinition::Semantics constr_sema = IDefinition::DS_ELEM_CONSTRUCTOR;
 
 restart:
@@ -2324,7 +2324,8 @@ restart:
                 MDL_ASSERT(!"cannot create default value for abstract array");
                 return factory->create_bad();
             }
-            IValue const *e_val = create_default_value(a_type->get_element_type());
+            IValue const *e_val = create_default_value(
+                get_value_factory(), a_type->get_element_type());
 
             size_t a_size = a_type->get_size();
             VLA<IValue const *> values(get_allocator(), a_size);
@@ -2420,12 +2421,15 @@ restart:
     case IType::TK_STRING:
         // atomic types: constructor has one argument
         MDL_ASSERT(func_type->get_parameter_count() == 1 && "wrong atomic type constructor");
-        return import_value(c_def->get_default_param_initializer(0)->fold(c_mod.get(), NULL));
+        return import_value(
+            c_def->get_default_param_initializer(0)->
+            fold(c_mod.get(), c_mod->get_value_factory(), NULL));
 
     case IType::TK_COLOR:
         {
             IExpression const *expr = c_def->get_default_param_initializer(0);
-            IValue const      *pval = import_value(expr->fold(c_mod.get(), NULL));
+            IValue const      *pval = import_value(
+                expr->fold(c_mod.get(), c_mod->get_value_factory(), NULL));
             if (is<IValue_bad>(pval))
                 return pval;
 
@@ -2445,7 +2449,7 @@ restart:
                 IValue const *pval;
                 if (IExpression const *expr = c_def->get_default_param_initializer(i)) {
                     // this compound element has an initializer, fold it
-                    pval = import_value(expr->fold(c_mod.get(), NULL));
+                    pval = import_value(expr->fold(c_mod.get(), factory, /*handler=*/NULL));
                 } else {
                     // this compound element is default initialized
                     IType const   *ptype;
@@ -2453,7 +2457,7 @@ restart:
 
                     func_type->get_parameter(i, ptype, psym);
 
-                    pval = create_default_value(ptype);
+                    pval = create_default_value(factory, ptype);
                 }
 
                 if (is<IValue_bad>(pval))
@@ -4491,133 +4495,148 @@ static IType_name const *promote_name(
     if (tn->is_array())
         return tn;
 
-    IQualified_name const *qn = tn->get_qualified_name();
-
-    int n_components = qn->get_component_count();
-    if (n_components < 2)
-        return tn;
-
-    ISimple_name const *sn   = qn->get_component(n_components -1);
-    ISymbol const      *sym  = sn->get_symbol();
-    char const         *name = sym->get_name();
-
-    char const *suffix = strrchr(name, '$');
-    if (suffix == NULL)
-        return tn;
-    int major = 0, minor = 0;
-
-    char const *p = suffix;
-    for (++p; *p != '.' && *p != '\0'; ++p) {
-        major *= 10;
-        switch (*p) {
-        case '0': major += 0; break;
-        case '1': major += 1; break;
-        case '2': major += 2; break;
-        case '3': major += 3; break;
-        case '4': major += 4; break;
-        case '5': major += 5; break;
-        case '6': major += 6; break;
-        case '7': major += 7; break;
-        case '8': major += 8; break;
-        case '9': major += 9; break;
-        default:
-            return tn;
-        }
-    }
-    if (*p != '.')
-        return tn;
-
-    for (++p; *p != '\0'; ++p) {
-        minor *= 10;
-        switch (*p) {
-        case '0': minor += 0; break;
-        case '1': minor += 1; break;
-        case '2': minor += 2; break;
-        case '3': minor += 3; break;
-        case '4': minor += 4; break;
-        case '5': minor += 5; break;
-        case '6': minor += 6; break;
-        case '7': minor += 7; break;
-        case '8': minor += 8; break;
-        case '9': minor += 9; break;
-        default:
-            return tn;
-        }
-    }
-    if (*p != '\0')
-        return tn;
-
     int mod_major = 0, mod_minor = 0;
     mod.get_version(mod_major, mod_minor);
 
-    string n(name, suffix, mod.get_allocator());
+    IQualified_name const *qn = tn->get_qualified_name();
 
-    if (major < mod_major || (major == mod_major && minor < mod_minor)) {
-        // the symbol was removed BEFORE the module version, we need promotion
-        // which might change the name
-        if (n_components == 2) {
-            ISimple_name const *sn = qn->get_component(0);
-            ISymbol const *package = sn->get_symbol();
+    int n_components = qn->get_component_count();
+    ISymbol const *sym;
+    ISimple_name const *sn;
+    string n(mod.get_allocator());
+    if (n_components == 1) {
+        sn = qn->get_component(0);
+        sym = sn->get_symbol();
+        if (strcmp(sym->get_name(), "material$1.4") == 0) {
+            if (mod_major > 1 || (mod_major == 1 && mod_minor > 4)) {
+                rules = Module::PR_MATERIAL_ADD_HAIR;
+                n = "material";
+            } else {
+                n = "material";
+            }
+        } else {
+            return tn;
+        }
+    }
+    else {
+        sn               = qn->get_component(n_components -1);
+        sym              = sn->get_symbol();
+        char const *name = sym->get_name();
 
-            if (strcmp(package->get_name(), "df") == 0) {
-                if (major == 1) {
-                    if (minor == 0) {
-                        // all functions deprecated after MDL 1.0
-                        if (n == "spot_edf") {
-                            rules = Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
-                        } else if (n == "measured_edf") {
-                            if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1))
-                                rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
-                            if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2))
-                                rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
-                        }
-                    } else if (minor == 1) {
-                        // all functions deprecated after MDL 1.1
-                        if (n == "measured_edf") {
-                            rules = Module::PR_MEASURED_EDF_ADD_TANGENT_U;
-                        }
-                    } else if (minor == 3) {
-                        // all functions deprecated after MDL 1.3
-                        if (n == "fresnel_layer") {
-                            rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
-                            n = "color_fresnel_layer";
+        char const *suffix = strrchr(name, '$');
+        if (suffix == NULL)
+            return tn;
+        int major = 0, minor = 0;
+
+        char const *p = suffix;
+        for (++p; *p != '.' && *p != '\0'; ++p) {
+            major *= 10;
+            switch (*p) {
+            case '0': major += 0; break;
+            case '1': major += 1; break;
+            case '2': major += 2; break;
+            case '3': major += 3; break;
+            case '4': major += 4; break;
+            case '5': major += 5; break;
+            case '6': major += 6; break;
+            case '7': major += 7; break;
+            case '8': major += 8; break;
+            case '9': major += 9; break;
+            default:
+                return tn;
+            }
+        }
+        if (*p != '.')
+            return tn;
+
+        for (++p; *p != '\0'; ++p) {
+            minor *= 10;
+            switch (*p) {
+            case '0': minor += 0; break;
+            case '1': minor += 1; break;
+            case '2': minor += 2; break;
+            case '3': minor += 3; break;
+            case '4': minor += 4; break;
+            case '5': minor += 5; break;
+            case '6': minor += 6; break;
+            case '7': minor += 7; break;
+            case '8': minor += 8; break;
+            case '9': minor += 9; break;
+            default:
+                return tn;
+            }
+        }
+        if (*p != '\0')
+            return tn;
+
+        n = string(name, suffix, mod.get_allocator());
+
+        if (major < mod_major || (major == mod_major && minor < mod_minor)) {
+            // the symbol was removed BEFORE the module version, we need promotion
+            // which might change the name
+            if (n_components == 2) {
+                ISimple_name const *sn = qn->get_component(0);
+                ISymbol const *package = sn->get_symbol();
+
+                if (strcmp(package->get_name(), "df") == 0) {
+                    if (major == 1) {
+                        if (minor == 0) {
+                            // all functions deprecated after MDL 1.0
+                            if (n == "spot_edf") {
+                                rules = Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
+                            } else if (n == "measured_edf") {
+                                if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1))
+                                    rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
+                                if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2))
+                                    rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                            }
+                        } else if (minor == 1) {
+                            // all functions deprecated after MDL 1.1
+                            if (n == "measured_edf") {
+                                rules = Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                            }
+                        } else if (minor == 3) {
+                            // all functions deprecated after MDL 1.3
+                            if (n == "fresnel_layer") {
+                                rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
+                                n = "color_fresnel_layer";
+                            }
                         }
                     }
-                }
-            } else if (strcmp(package->get_name(), "state") == 0) {
-                if (major == 1) {
-                    if (minor == 2) {
-                        // all functions deprecated after MDL 1.2
-                        if (n == "rounded_corner_normal") {
-                            rules = Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+                } else if (strcmp(package->get_name(), "state") == 0) {
+                    if (major == 1) {
+                        if (minor == 2) {
+                            // all functions deprecated after MDL 1.2
+                            if (n == "rounded_corner_normal") {
+                                rules = Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+                            }
                         }
                     }
-                }
-            } else if (strcmp(package->get_name(), "tex") == 0) {
-                if (major == 1) {
-                    if (minor == 3) {
-                        // all functions deprecated after MDL 1.3
-                        if (n == "width") {
-                            rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
-                        } else if (n == "height") {
-                            rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
-                        } else if (n == "texel_float") {
-                            rules = Module::PR_TEXEL_ADD_UV_TILE;
-                        } else if (n == "texel_float2") {
-                            rules = Module::PR_TEXEL_ADD_UV_TILE;
-                        } else if (n == "texel_float3") {
-                            rules = Module::PR_TEXEL_ADD_UV_TILE;
-                        } else if (n == "texel_float4") {
-                            rules = Module::PR_TEXEL_ADD_UV_TILE;
-                        } else if (n == "texel_color") {
-                            rules = Module::PR_TEXEL_ADD_UV_TILE;
+                } else if (strcmp(package->get_name(), "tex") == 0) {
+                    if (major == 1) {
+                        if (minor == 3) {
+                            // all functions deprecated after MDL 1.3
+                            if (n == "width") {
+                                rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
+                            } else if (n == "height") {
+                                rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
+                            } else if (n == "texel_float") {
+                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            } else if (n == "texel_float2") {
+                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            } else if (n == "texel_float3") {
+                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            } else if (n == "texel_float4") {
+                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            } else if (n == "texel_color") {
+                                rules = Module::PR_TEXEL_ADD_UV_TILE;
+                            }
                         }
                     }
                 }
             }
         }
     }
-
     sym = mod.get_symbol_table().get_symbol(n.c_str());
 
     IQualified_name *n_qn = mod.get_name_factory()->create_qualified_name();

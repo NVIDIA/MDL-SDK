@@ -924,6 +924,7 @@ bool File_resolver::check_no_dots_strict_relative(
 string File_resolver::normalize_file_path(
     string const &file_path,
     string const &file_mask,
+    bool         file_mask_is_regex,
     string const &directory_path,
     string const &file_name,
     size_t       nesting_level,
@@ -955,7 +956,7 @@ string File_resolver::normalize_file_path(
         string file = cwd_is_archive ?
             current_working_directory + ':' + simplify_path(file_mask_os, os_separator()) :
             simplify_path(join_path(current_working_directory, file_mask_os), os_separator());
-        if (!file_exists(file.c_str())) {
+        if (!file_exists(file.c_str(), file_mask_is_regex)) {
             // FIXME: do we need an error here
             return string(m_alloc);
         }
@@ -986,7 +987,7 @@ string File_resolver::normalize_file_path(
     string file = join_path(current_working_directory, file_mask_os);
 
     // if the searched file does not exists locally, assume the weak relative path is absolute
-    if (!file_exists(file.c_str()))
+    if (!file_exists(file.c_str(), file_mask_is_regex))
         return "/" + file_path;
 
     // otherwise canonical path is the file path resolved w.r.t. the current module path
@@ -1084,6 +1085,7 @@ string File_resolver::consider_search_paths(
 bool File_resolver::check_consistency(
     string const &resolved_file_system_location,
     string const &canonical_file_path,
+    bool         is_regex,
     string const &file_path,
     string const &current_working_directory,
     string const &current_search_path,
@@ -1136,11 +1138,11 @@ bool File_resolver::check_consistency(
         // construct an "archive path"
         MDL_ASSERT(canonical_file_path_os[0] == os_separator());
         file = current_search_path + ':' + canonical_file_path_os.substr(1);
-        if (!file_exists(file.c_str()))
+        if (!file_exists(file.c_str(), is_regex))
             return true;
     } else {
         file = current_search_path + canonical_file_path_os;
-        if (!file_exists(file.c_str()))
+        if (!file_exists(file.c_str(), is_regex))
             return true;
     }
 
@@ -1376,7 +1378,7 @@ string File_resolver::search_mdl_path(
 
         if (!in_resource_path) {
             Directory dir(m_alloc);
-            if (!dir.open(path)) {
+            if (!dir.open(path, "*.mdr")) {
                 // directory does not exist
                 continue;
             }
@@ -1504,22 +1506,26 @@ string File_resolver::search_mdl_path(
 // Check if the given file name (UTF8 encoded) names a file on the file system or inside
 // an archive.
 bool File_resolver::file_exists(
-    char const *fname) const
+    char const *fname,
+    bool       is_regex) const
 {
     char const *p_archive = strstr(fname, ".mdr:");
     char const *p_mdle = (p_archive == NULL) ? strstr(fname, ".mdle:") : NULL;
 
     if (p_archive == NULL && p_mdle == NULL) {
         // not inside an archive
-        string dname(m_alloc);
+        if (is_regex) {
+            string dname(m_alloc);
 
-        char const *p = strrchr(fname, os_separator());
-        if (p != NULL) {
-            dname = string(fname, p - fname, m_alloc);
-            fname = p + 1;
+            char const *p = strrchr(fname, os_separator());
+            if (p != NULL) {
+                dname = string(fname, p - fname, m_alloc);
+                fname = p + 1;
+            }
+
+            return has_file_utf8(m_alloc, dname.c_str(), fname);
         }
-
-        return has_file_utf8(m_alloc, dname.c_str(), fname);
+        return is_file_utf8(m_alloc, fname);
     }
 
     // open container, mdr or mdle
@@ -1533,15 +1539,17 @@ bool File_resolver::file_exists(
         container = MDL_zip_container_archive::open(m_alloc, container_name.c_str(), err, false);
     }
 
-    if(p_mdle != NULL) {
+    if (p_mdle != NULL) {
         string container_name = string(fname, p_mdle + 5, m_alloc);
         container_file_name = p_mdle + 6;
         container = MDL_zip_container_mdle::open(m_alloc, container_name.c_str(), err);
     }
 
     // check if there is a corresponding file
-    if (container) {
-        bool res = container->contains_mask(container_file_name);
+    if (container != NULL) {
+        bool res = is_regex ?
+            container->contains_mask(container_file_name) :
+            container->contains(container_file_name);
         container->close();
         return res;
     }
@@ -1680,6 +1688,7 @@ string File_resolver::resolve_filename(
     string canonical_file_path = normalize_file_path(
         url,
         url_mask,
+        udim_mode != NO_UDIM,
         directory_path,
         file_name,
         nesting_level,
@@ -1784,7 +1793,7 @@ string File_resolver::resolve_filename(
             file = convert_slashes_to_os_separators(url_mask);
         }
 
-        if (!file_exists(file.c_str())) {
+        if (!file_exists(file.c_str(), udim_mode != NO_UDIM)) {
             string module_for_error_msg(m_alloc);
 
             if (m_pos->get_start_line() == 0) {
@@ -1812,7 +1821,7 @@ string File_resolver::resolve_filename(
         // the referenced resource is part of an MDLE
         // Note, this is invalid for mdl modules in the search paths!
         if (resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
-            if (file_exists(file_path))
+            if (file_exists(file_path, udim_mode != NO_UDIM))
                 resolved_file_system_location = file_path;
         }
 
@@ -1841,6 +1850,7 @@ string File_resolver::resolve_filename(
     if (!check_consistency(
         resolved_file_system_location,
         canonical_file_path,
+        udim_mode != NO_UDIM,
         url,
         current_working_directory,
         current_search_path,

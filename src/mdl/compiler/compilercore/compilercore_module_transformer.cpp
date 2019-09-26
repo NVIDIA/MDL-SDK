@@ -570,6 +570,21 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
         lit_type = ta->get_element_type();
     }
     if (is_user_type(lit_type)) {
+        // we must handle two cases here:
+        // 1) a literal of the original module is cloned
+        // 2) an expression of the original module was cloned, resulting in a literal
+        //    after a fold operation
+        // in case 1), type is owned by m_module, in case 2) by m_target_module
+        // Fortunately the owner test for types is O(1)
+        Type_factory const *tf = m_target_module->get_type_factory();
+
+        if (tf->is_owner(lit_type)) {
+            // the type was already imported into the target module, but the definition
+            // of the type exists only in the original module. Hence convert it back to the
+            // original module's type
+            lit_type = m_module->get_type_factory()->get_equal(lit_type);
+        }
+
         Definition const *type_def = get_type_definition(m_module.get(), lit_type);
         if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
             mi::base::Handle<const IModule> mod_ori(m_module->get_owner_module(type_def));

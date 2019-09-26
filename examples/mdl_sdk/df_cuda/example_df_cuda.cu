@@ -48,31 +48,35 @@
 #endif
 
 #ifdef ENABLE_DERIVATIVES
-typedef Material_expr_function_with_derivs  Mat_expr_func;
-typedef Bsdf_init_function_with_derivs      Bsdf_init_func;
-typedef Bsdf_sample_function_with_derivs    Bsdf_sample_func;
-typedef Bsdf_evaluate_function_with_derivs  Bsdf_evaluate_func;
-typedef Bsdf_pdf_function_with_derivs       Bsdf_pdf_func;
-typedef Edf_init_function_with_derivs       Edf_init_func;
-typedef Edf_sample_function_with_derivs     Edf_sample_func;
-typedef Edf_evaluate_function_with_derivs   Edf_evaluate_func;
-typedef Edf_pdf_function_with_derivs        Edf_pdf_func;
-typedef Shading_state_material_with_derivs  Mdl_state;
-typedef Texture_handler_deriv               Tex_handler;
-#define TEX_VTABLE                          tex_deriv_vtable
+typedef Material_expr_function_with_derivs      Mat_expr_func;
+typedef Bsdf_init_function_with_derivs          Bsdf_init_func;
+typedef Bsdf_sample_function_with_derivs        Bsdf_sample_func;
+typedef Bsdf_evaluate_function_with_derivs      Bsdf_evaluate_func;
+typedef Bsdf_pdf_function_with_derivs           Bsdf_pdf_func;
+typedef Bsdf_auxiliary_function_with_derivs     Bsdf_auxiliary_func;
+typedef Edf_init_function_with_derivs           Edf_init_func;
+typedef Edf_sample_function_with_derivs         Edf_sample_func;
+typedef Edf_evaluate_function_with_derivs       Edf_evaluate_func;
+typedef Edf_pdf_function_with_derivs            Edf_pdf_func;
+typedef Edf_auxiliary_function_with_derivs      Edf_auxiliary_func;
+typedef Shading_state_material_with_derivs      Mdl_state;
+typedef Texture_handler_deriv                   Tex_handler;
+#define TEX_VTABLE                              tex_deriv_vtable
 #else
-typedef Material_expr_function              Mat_expr_func;
-typedef Bsdf_init_function                  Bsdf_init_func;
-typedef Bsdf_sample_function                Bsdf_sample_func;
-typedef Bsdf_evaluate_function              Bsdf_evaluate_func;
-typedef Bsdf_pdf_function                   Bsdf_pdf_func;
-typedef Edf_init_function                   Edf_init_func;
-typedef Edf_sample_function                 Edf_sample_func;
-typedef Edf_evaluate_function               Edf_evaluate_func;
-typedef Edf_pdf_function                    Edf_pdf_func;
-typedef Shading_state_material              Mdl_state;
-typedef Texture_handler                     Tex_handler;
-#define TEX_VTABLE                          tex_vtable
+typedef Material_expr_function                  Mat_expr_func;
+typedef Bsdf_init_function                      Bsdf_init_func;
+typedef Bsdf_sample_function                    Bsdf_sample_func;
+typedef Bsdf_evaluate_function                  Bsdf_evaluate_func;
+typedef Bsdf_pdf_function                       Bsdf_pdf_func;
+typedef Bsdf_auxiliary_function                 Bsdf_auxiliary_func;
+typedef Edf_init_function                       Edf_init_func;
+typedef Edf_sample_function                     Edf_sample_func;
+typedef Edf_evaluate_function                   Edf_evaluate_func;
+typedef Edf_pdf_function                        Edf_pdf_func;
+typedef Edf_auxiliary_function                  Edf_auxiliary_func;
+typedef Shading_state_material                  Mdl_state;
+typedef Texture_handler                         Tex_handler;
+#define TEX_VTABLE                              tex_vtable
 #endif
 
 // Custom structure representing the resources used by the generated code of a target code object.
@@ -99,10 +103,12 @@ union Mdl_function_ptr
     Bsdf_sample_func        *bsdf_sample;
     Bsdf_evaluate_func      *bsdf_evaluate;
     Bsdf_pdf_func           *bsdf_pdf;
+    Bsdf_auxiliary_func     *bsdf_auxiliary;
     Edf_init_func           *edf_init;
     Edf_sample_func         *edf_sample;
     Edf_evaluate_func       *edf_evaluate;
     Edf_pdf_func            *edf_pdf;
+    Edf_auxiliary_func      *edf_auxiliary;
 };
 
 // function index offset depending on the target code
@@ -220,6 +226,11 @@ __device__ inline Bsdf_pdf_func* as_bsdf_pdf(const Mdl_function_index& index)
     return mdl_functions[index.z + 3].bsdf_pdf;
 }
 
+__device__ inline Bsdf_auxiliary_func* as_bsdf_auxiliary(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 4].bsdf_auxiliary;
+}
+
 // EDF functions
 __device__ inline Edf_init_func* as_edf_init(const Mdl_function_index& index)
 {
@@ -239,6 +250,11 @@ __device__ inline Edf_evaluate_func* as_edf_evaluate(const Mdl_function_index& i
 __device__ inline Edf_pdf_func* as_edf_pdf(const Mdl_function_index& index)
 {
     return mdl_functions[index.z + 3].edf_pdf;
+}
+
+__device__ inline Edf_auxiliary_func* as_edf_auxiliary(const Mdl_function_index& index)
+{
+    return mdl_functions[index.z + 4].edf_auxiliary;
 }
 
 
@@ -346,7 +362,7 @@ __device__ inline float3 environment_sample(
     const float sin_theta = sinf(theta);
     dir = make_float3(cos_phi * sin_theta, -cos_theta, sin_phi * sin_theta);
 
-    // lookup filtered value
+    // lookup filtered beauty
     const float v = theta * (float)(1.0 / M_PI);
     const float4 t = tex2D<float4>(params.env_tex, u, v);
     return make_float3(t.x, t.y, t.z) / pdf;
@@ -391,6 +407,39 @@ __device__ inline float intersect_sphere(
     return m > 0.0f ? m : fmaxf(t0, t1);
 }
 
+struct auxiliary_data
+{
+    float3 albedo;
+    float3 normal;
+    int num; // multiple elements can contribute to the aux buffer with equal weight 
+
+    __device__ inline auxiliary_data& operator+=(const auxiliary_data& b)
+    {
+        albedo += b.albedo;
+        normal += b.normal;
+        num += b.num;
+        return *this;
+    }
+};
+
+__device__ inline static void clear(auxiliary_data& data)
+{
+    data.albedo = make_float3(0.0f, 0.0f, 0.0f);
+    data.normal = make_float3(0.0f, 0.0f, 0.0f);
+    data.num = 0;
+}
+
+__device__ inline void normalize(auxiliary_data& data)
+{
+    data.albedo = data.albedo / fmaxf(1.0f, float(data.num));
+
+    if (dot(data.normal, data.normal) > 0.0f)
+        data.normal = normalize(data.normal);
+
+    data.num = min(1, data.num);
+}
+
+
 struct Ray_state {
     float3 contribution;
     float3 weight;
@@ -398,6 +447,7 @@ struct Ray_state {
     float3 dir, dir_rx, dir_ry;
     bool inside;
     int intersection;
+    auxiliary_data* aux;
 };
 
 __device__ inline bool trace_sphere(
@@ -594,9 +644,10 @@ __device__ inline bool trace_sphere(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data   sample_data;
-            Bsdf_evaluate_data eval_data;
-            Bsdf_pdf_data      pdf_data;
+            Bsdf_sample_data    sample_data;
+            Bsdf_evaluate_data  eval_data;
+            Bsdf_pdf_data       pdf_data;
+            Bsdf_auxiliary_data aux_data;
         };
 
         // for thin_walled materials there is no 'inside'
@@ -616,6 +667,15 @@ __device__ inline bool trace_sphere(
             sample_data.ior2.x = BSDF_USE_MATERIAL_IOR;
         }
         sample_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
+
+        // if requested, fill auxiliary buffers
+        if (params.enable_auxiliary_output && ray_state.intersection == 0)
+        {
+            as_bsdf_auxiliary(func_idx)(&aux_data, &state, &mdl_resources.data, NULL, arg_block);
+            ray_state.aux->albedo += aux_data.albedo;
+            ray_state.aux->normal += aux_data.normal;
+            ray_state.aux->num++;
+        }
 
         // compute direct lighting for point light
         if (params.light_intensity.x > 0.0f ||
@@ -733,7 +793,13 @@ __device__ inline bool trace_sphere(
     return false;
 }
 
-__device__ inline float3 render_sphere(
+struct render_result
+{
+    float3 beauty;
+    auxiliary_data aux;
+};
+
+__device__ inline render_result render_sphere(
     Rand_state &rand_state,
     const Kernel_params &params,
     const unsigned x,
@@ -755,6 +821,9 @@ __device__ inline float3 render_sphere(
     const float u_ry = (2.0f * (screen_pos.y + inv_res_y) - 1.0f);
     const float aspect = (float)params.resolution.y / (float)params.resolution.x;
 
+    render_result res;
+   clear(res.aux);
+
     Ray_state ray_state;
     ray_state.contribution = make_float3(0.0f, 0.0f, 0.0f);
     ray_state.weight = make_float3(1.0f, 1.0f, 1.0f);
@@ -766,18 +835,42 @@ __device__ inline float3 render_sphere(
     ray_state.dir_ry = normalize(
         params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u_ry);
     ray_state.inside = false;
-
-    const unsigned int max_num_intersections = params.max_path_length - 1;
-    for (ray_state.intersection = 0; ray_state.intersection < max_num_intersections;
-            ++ray_state.intersection)
+    ray_state.aux = &res.aux;
+    const unsigned int max_inters = params.max_path_length - 1;
+    for (ray_state.intersection = 0; ray_state.intersection < max_inters; ++ray_state.intersection)
+    {
         if (!trace_sphere(rand_state, ray_state, params))
             break;
-
-    return
+    }
+    
+    res.beauty =
         isfinite(ray_state.contribution.x) &&
         isfinite(ray_state.contribution.y) &&
         isfinite(ray_state.contribution.z) ? ray_state.contribution : make_float3(0.0f, 0.0f, 0.0f);
+    normalize(res.aux);
+    return res;
 }
+
+
+// quantize + gamma
+__device__ inline unsigned int float3_to_rgba8(float3 val)
+{
+    const unsigned int r = (unsigned int) (255.0 * powf(saturate(val.x), 1.0f / 2.2f));
+    const unsigned int g = (unsigned int) (255.0 * powf(saturate(val.y), 1.0f / 2.2f));
+    const unsigned int b = (unsigned int) (255.0 * powf(saturate(val.z), 1.0f / 2.2f));
+    return 0xff000000 | (r << 16) | (g << 8) | b;
+}
+
+//__device__ inline unsigned int float3_to_rgba8(float3 val)
+//{
+//    const unsigned int r =
+//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.x, 0.0f), (float) (1.0 / 2.2)), 1.0f));
+//    const unsigned int g =
+//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.y, 0.0f), (float) (1.0 / 2.2)), 1.0f));
+//    const unsigned int b =
+//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.z, 0.0f), (float) (1.0 / 2.2)), 1.0f));
+//    return 0xff000000 | (r << 16) | (g << 8) | b;
+//}
 
 
 // exposure + simple Reinhard tonemapper + gamma
@@ -788,14 +881,9 @@ __device__ inline unsigned int display(float3 val, const float tonemap_scale)
     val.x *= (1.0f + val.x * burn_out) / (1.0f + val.x);
     val.y *= (1.0f + val.y * burn_out) / (1.0f + val.y);
     val.z *= (1.0f + val.z * burn_out) / (1.0f + val.z);
-    const unsigned int r =
-        (unsigned int)(255.0 * fminf(powf(fmaxf(val.x, 0.0f), (float)(1.0 / 2.2)), 1.0f));
-    const unsigned int g =
-        (unsigned int)(255.0 * fminf(powf(fmaxf(val.y, 0.0f), (float)(1.0 / 2.2)), 1.0f));
-    const unsigned int b =
-        (unsigned int)(255.0 * fminf(powf(fmaxf(val.z, 0.0f), (float)(1.0 / 2.2)), 1.0f));
-    return 0xff000000 | (r << 16) | (g << 8) | b;
+    return float3_to_rgba8(val);
 }
+
 
 // CUDA kernel rendering simple geometry with IBL
 extern "C" __global__ void render_sphere_kernel(
@@ -811,29 +899,80 @@ extern "C" __global__ void render_sphere_kernel(
     const unsigned int num_dim = kernel_params.disable_aa ? 6 : 8; // 2 camera, 3 BSDF, 3 environment
     curand_init(idx, /*subsequence=*/0, kernel_params.iteration_start * num_dim, &rand_state);
 
-    float3 value = make_float3(0.0f, 0.0f, 0.0f);
+    render_result res;
+    float3 beauty = make_float3(0.0f, 0.0f, 0.0f);
+    auxiliary_data aux;
+    clear(aux);
     for (unsigned int s = 0; s < kernel_params.iteration_num; ++s)
     {
-        value += render_sphere(
+        res = render_sphere(
             rand_state,
             kernel_params,
             x, y);
-    }
-    value *= 1.0f / (float)kernel_params.iteration_num;
 
+        beauty += res.beauty;
+        aux += res.aux;
+
+    }
+    beauty *= 1.0f / (float)kernel_params.iteration_num;
+    normalize(aux);
 
     // accumulate
-    if (kernel_params.iteration_start == 0)
-        kernel_params.accum_buffer[idx] = value;
-    else {
+    if (kernel_params.iteration_start == 0) {
+        kernel_params.accum_buffer[idx] = beauty;
+
+        if (kernel_params.enable_auxiliary_output) {
+            kernel_params.albedo_buffer[idx] = aux.albedo;
+            kernel_params.normal_buffer[idx] = aux.normal;
+        }
+    } else {
+        float iteration_weight = (float) kernel_params.iteration_num /
+            (float) (kernel_params.iteration_start + kernel_params.iteration_num);
+
         kernel_params.accum_buffer[idx] = kernel_params.accum_buffer[idx] +
-            (value - kernel_params.accum_buffer[idx]) *
-                ((float)kernel_params.iteration_num /
-                    (float)(kernel_params.iteration_start + kernel_params.iteration_num));
+            (beauty - kernel_params.accum_buffer[idx]) * iteration_weight;
+
+        if (kernel_params.enable_auxiliary_output) {
+
+            // albedo
+            kernel_params.albedo_buffer[idx] = kernel_params.albedo_buffer[idx] +
+                (aux.albedo - kernel_params.albedo_buffer[idx]) * iteration_weight;
+
+            // normal, check for zero length first
+            float3 weighted_normal = kernel_params.normal_buffer[idx] +
+                (aux.normal - kernel_params.normal_buffer[idx]) * iteration_weight;
+            if (dot(weighted_normal, weighted_normal) > 0.0f)
+                weighted_normal = normalize(weighted_normal);
+            kernel_params.normal_buffer[idx] = weighted_normal;
+        }
     }
 
     // update display buffer
     if (kernel_params.display_buffer)
-        kernel_params.display_buffer[idx] =
-            display(kernel_params.accum_buffer[idx], kernel_params.exposure_scale);
+    {
+        switch (kernel_params.enable_auxiliary_output ? kernel_params.display_buffer_index : 0)
+        {
+        case 1: /* albedo */
+            kernel_params.display_buffer[idx] = float3_to_rgba8(kernel_params.albedo_buffer[idx]);
+            break;
+
+        case 2: /* normal */
+        {
+            float3 display_normal = kernel_params.normal_buffer[idx];
+            if (dot(display_normal, display_normal) > 0) {
+                display_normal.x = display_normal.x * 0.5f + 0.5f;
+                display_normal.y = display_normal.y * 0.5f + 0.5f;
+                display_normal.z = display_normal.z * 0.5f + 0.5f;
+            }
+            kernel_params.display_buffer[idx] = float3_to_rgba8(display_normal);
+            break;
+        }
+        default: /* beauty */
+            kernel_params.display_buffer[idx] =
+                display(kernel_params.accum_buffer[idx], kernel_params.exposure_scale);
+            break;
+        }
+    }
+
+
 }

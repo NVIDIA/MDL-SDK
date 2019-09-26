@@ -71,7 +71,7 @@ namespace mdl_d3d12
                 *ppvObj = NULL;
                 if (riid == IID_IUnknown || riid == __uuidof(IDxcIncludeHandler))
                 {
-                    *ppvObj = (LPVOID) this;
+                    *ppvObj = (LPVOID)this;
                     AddRef();
                     return NOERROR;
                 }
@@ -98,7 +98,9 @@ namespace mdl_d3d12
         };
     } // anonymous
 
-    IDxcBlob* Shader_compiler::compile_shader_library(const std::string& file_name)
+    IDxcBlob* Shader_compiler::compile_shader_library(
+        const std::string& file_name,
+        const std::map<std::string, std::string>* defines)
     {
         std::string shader_source = "";
         {
@@ -115,57 +117,76 @@ namespace mdl_d3d12
             log_error("Failed to load shader source from file: " + file_name, SRC);
             return nullptr;
         }
-        return compile_shader_library_from_string(shader_source, file_name);
+        return compile_shader_library_from_string(shader_source, file_name, defines);
     }
 
     IDxcBlob* Shader_compiler::compile_shader_library_from_string(
-        const std::string& shader_source, 
-        const std::string& debug_name)
+        const std::string& shader_source,
+        const std::string& debug_name,
+        const std::map<std::string, std::string>* defines)
     {
-        static IDxcCompiler* s_compiler = nullptr;
-        static IDxcLibrary* s_library = nullptr;
-        static ComPtr<IncludeHandler> s_include_handler;
+        IDxcCompiler* compiler = nullptr;
+        IDxcLibrary* library = nullptr;
+        ComPtr<IncludeHandler> include_handler;
 
-        if (!s_compiler)
-        {
-            if (log_on_failure(DxcCreateInstance(
-                CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**) &s_compiler),
-                "Failed to create IDxcCompiler", SRC))
-                return nullptr;
+        if (log_on_failure(DxcCreateInstance(
+            CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**)&compiler),
+            "Failed to create IDxcCompiler", SRC))
+            return nullptr;
 
-            if (log_on_failure(DxcCreateInstance(
-                CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void**) &s_library),
-                "Failed to create IDxcLibrary", SRC))
-                return nullptr;
+        if (log_on_failure(DxcCreateInstance(
+            CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void**)&library),
+            "Failed to create IDxcLibrary", SRC))
+            return nullptr;
 
-            IDxcIncludeHandler* base_handler;
-            if (log_on_failure(s_library->CreateIncludeHandler(&base_handler),
-                "Failed to create Include Handler.", SRC))
-                return nullptr;
+        IDxcIncludeHandler* base_handler;
+        if (log_on_failure(library->CreateIncludeHandler(&base_handler),
+            "Failed to create Include Handler.", SRC))
+            return nullptr;
 
-            s_include_handler = new IncludeHandler(base_handler);
-        }
+        include_handler = new IncludeHandler(base_handler);
 
         IDxcBlobEncoding* shader_source_blob;
-        if (log_on_failure(s_library->CreateBlobWithEncodingFromPinned(
-            (LPBYTE) shader_source.c_str(), (uint32_t) shader_source.size(), 0, 
+        if (log_on_failure(library->CreateBlobWithEncodingFromPinned(
+            (LPBYTE)shader_source.c_str(), (uint32_t)shader_source.size(), 0,
             &shader_source_blob),
             "Failed to create shader source blob: " + debug_name, SRC))
             return nullptr;
 
         // compilation arguments
-        // LPCWSTR pp_args[] = 
-        // {
-        //     L"/Zi", // debug info
-        // };
+#if DEBUG
+        LPCWSTR pp_args[] = {
+            L"/Zi", // debug info
+        };
+        UINT32 args_count = _countof(pp_args);
+
+#else
+        LPCWSTR* pp_args = nullptr;
+        UINT32 args_count = 0;
+#endif
+
+        // since there are only a few defines, copying them seems okay
+        std::vector<DxcDefine> wdefines;
+        std::vector<std::wstring> wstrings;
+        if (defines) {
+            for (const auto d : *defines) {
+                wstrings.push_back(str_to_wstr(d.first));
+                wstrings.push_back(str_to_wstr(d.second));
+                wdefines.push_back(DxcDefine{
+                    wstrings[wstrings.size() - 2].c_str(),
+                    wstrings[wstrings.size() - 1].c_str(),
+                    });
+            }
+        }
 
         IDxcOperationResult* result;
         std::wstring file_name_w = str_to_wstr(debug_name);
-        if (log_on_failure(s_compiler->Compile(
+        if (log_on_failure(compiler->Compile(
             shader_source_blob, file_name_w.c_str(), L"", L"lib_6_3",
-            //pp_args, _countof(pp_args),
-            nullptr, 0,
-            nullptr, 0, s_include_handler.Get(), &result),
+            pp_args, args_count,
+            wdefines.data(), wdefines.size(),
+            include_handler.Get(), &result),
+
             "Failed to compile shader source: " + debug_name, SRC))
             return nullptr;
 
@@ -195,6 +216,24 @@ namespace mdl_d3d12
             "Failed to get shader blob for source: " + debug_name, SRC))
             return nullptr;
 
+        static std::atomic<size_t> sl_counter = 0;
+
+        // setup debug name
+        std::string file_name = debug_name;
+        std::replace(file_name.begin(), file_name.end(), '\\', '/');
+        size_t p = file_name.find_last_of('/');
+        if (p != std::string::npos)
+            file_name = file_name.substr(p + 1);
+        file_name = file_name.substr(0, file_name.find_last_of('.'));
+        file_name += ".dxil";
+
+        FILE* file = fopen(file_name.c_str(), "wb");
+        if (file)
+        {
+            fwrite(shader_blob->GetBufferPointer(), shader_blob->GetBufferSize(), 1, file);
+            fclose(file);
+        }
+
         return shader_blob;
     }
 
@@ -208,6 +247,20 @@ namespace mdl_d3d12
     }
 
     // --------------------------------------------------------------------------------------------
+
+    Descriptor_table::Descriptor_table(const Descriptor_table& to_copy)
+        : m_descriptor_ranges()
+    {
+        size_t n = to_copy.m_descriptor_ranges.size();
+        m_descriptor_ranges.resize(n);
+        for (size_t i = 0; i < n; ++i)
+            m_descriptor_ranges[i] = to_copy.m_descriptor_ranges[i];
+    }
+
+    Descriptor_table::Descriptor_table(Descriptor_table&& to_move)
+        : m_descriptor_ranges(std::move(to_move.m_descriptor_ranges))
+    {
+    }
 
     void Descriptor_table::register_cbv(
         size_t slot, size_t space, size_t heap_offset, size_t count)
@@ -499,7 +552,7 @@ namespace mdl_d3d12
         Kind kind, 
         void* shader_id)
 
-        : kind(kind)
+        : m_kind(kind)
         , m_shader_binding_table(binding_table)
         , m_shader_id(shader_id)
     {
@@ -621,15 +674,15 @@ namespace mdl_d3d12
         size_t size_in_byte)
     {
         if (shader_handle.m_shader_binding_table != this || 
-            shader_handle.kind == Shader_handle::Kind::invalid) 
+            shader_handle.get_kind() == Shader_handle::Kind::invalid)
         {
             log_error("Tried to set a binding table entry of a different table "
                       "or an invalid handle to: " + m_debug_name, SRC);
             return false;
         }
 
-        assert(m_shader_records[static_cast<size_t>(shader_handle.kind)].size() > index);
-        auto& record = m_shader_records[static_cast<size_t>(shader_handle.kind)][index];
+        assert(m_shader_records[static_cast<size_t>(shader_handle.get_kind())].size() > index);
+        auto& record = m_shader_records[static_cast<size_t>(shader_handle.get_kind())][index];
 
         if (m_is_finalized)
         {

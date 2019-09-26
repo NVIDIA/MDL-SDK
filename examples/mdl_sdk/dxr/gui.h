@@ -38,6 +38,7 @@ namespace mdl_d3d12
     class Base_application;
     struct Update_args;
     struct Render_args;
+    class Mdl_material;
     class Scene;
     class Scene_node;
 }
@@ -46,21 +47,25 @@ namespace mdl_d3d12
 class Camera_controls
 {
 public:
-    explicit Camera_controls(mdl_d3d12::Scene_node* node = nullptr);
+    explicit Camera_controls(mdl_d3d12::Base_application* app, mdl_d3d12::Scene_node* node = nullptr);
     virtual ~Camera_controls() = default;
 
     bool update(const mdl_d3d12::Update_args& args);
+    mdl_d3d12::Scene_node* get_target() { return m_target; }
     void set_target(mdl_d3d12::Scene_node* node);
 
     float movement_speed;
     float rotation_speed;
     
 private:
+    mdl_d3d12::Base_application* m_app;
     bool m_left_mouse_button_held;
     bool m_middle_mouse_button_held;
+    bool m_right_mouse_button_held;
     int32_t m_mouse_move_start_x;
     int32_t m_mouse_move_start_y;
     mdl_d3d12::Scene_node* m_target;
+    bool m_has_focus;
 };
 
 class Gui
@@ -79,7 +84,7 @@ private:
     mdl_d3d12::Base_application* m_app;
     mdl_d3d12::ComPtr<ID3D12DescriptorHeap> m_ui_heap;
 
-    std::string m_selected_material;
+    mdl_d3d12::Mdl_material* m_selected_material;
 
     std::unordered_map<std::string, mdl_d3d12::Scene_node*> m_camera_map;
     std::string m_selected_camera;

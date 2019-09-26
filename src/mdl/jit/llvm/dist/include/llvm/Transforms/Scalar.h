@@ -254,6 +254,7 @@ FunctionPass *createJumpThreadingPass(int Threshold = -1);
 FunctionPass *createCFGSimplificationPass(
     unsigned Threshold = 1, bool ForwardSwitchCond = false,
     bool ConvertSwitch = false, bool KeepLoops = true, bool SinkCommon = false,
+    bool AvoidPointerPHIs = false,
     std::function<bool(const Function &)> Ftor = nullptr);
 
 //===----------------------------------------------------------------------===//

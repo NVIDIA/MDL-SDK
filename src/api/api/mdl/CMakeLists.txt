@@ -31,11 +31,11 @@ set(PROJECT_NAME api-api-mdl)
 
 # collect sources
 set(PROJECT_HEADERS
-    "mdl_logger.h"
-    "mdl_mdl_backend_impl.h"
-    "mdl_mdl_compiler_impl.h"
-    "mdl_mdl_entity_resolver_impl.h"
-    "mdl_neuray_impl.h"
+    "../mdl/mdl_logger.h"
+    "../mdl/mdl_mdl_backend_impl.h"
+    "../mdl/mdl_mdl_compiler_impl.h"
+    "../mdl/mdl_mdl_entity_resolver_impl.h"
+    "../mdl/mdl_neuray_impl.h"
     "../neuray/i_neuray_attribute_context.h"
     "../neuray/i_neuray_transaction.h"
     "../neuray/i_neuray_db_element.h"
@@ -99,11 +99,11 @@ set(PROJECT_HEADERS
 )
 
 set(PROJECT_SOURCES 
-    "mdl_logger.cpp"
-    "mdl_mdl_backend_impl.cpp"
-    "mdl_mdl_compiler_impl.cpp"
-    "mdl_mdl_entity_resolver_impl.cpp"
-    "mdl_neuray_impl.cpp"
+    "../mdl/mdl_logger.cpp"
+    "../mdl/mdl_mdl_backend_impl.cpp"
+    "../mdl/mdl_mdl_compiler_impl.cpp"
+    "../mdl/mdl_mdl_entity_resolver_impl.cpp"
+    "../mdl/mdl_neuray_impl.cpp"
     "../neuray/neuray_array_impl.cpp"
     "../neuray/neuray_array_impl_proxy.cpp"
     "../neuray/neuray_attribute_container_impl.cpp"

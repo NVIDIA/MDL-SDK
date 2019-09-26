@@ -480,6 +480,15 @@ public:
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
+    /// Run the BSDF auxiliary calculation function for this code on the native CPU.
+    mi::Sint32 execute_bsdf_auxiliary (
+        mi::Size index,
+        mi::neuraylib::Bsdf_auxiliary_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+
+
     /// Run the EDF init function for this code on the native CPU.
     mi::Sint32 execute_edf_init(
         mi::Size index,
@@ -511,6 +520,13 @@ public:
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
+    /// Run the EDF auxiliary calculation function for this code on the native CPU.
+    mi::Sint32 execute_edf_auxiliary(
+        mi::Size index,
+        mi::neuraylib::Edf_auxiliary_data *data,
+        const mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
 
     // non-API methods.
 

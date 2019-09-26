@@ -1922,6 +1922,11 @@ void Module_serializer::write_decl(
             IAnnotation_block const *annos = s_decl->get_annotations();
             write_annos(annos);
 
+            IDefinition const *def = s_decl->get_definition();
+            Tag_t def_tag = get_definition_tag(def);
+            write_encoded_tag(def_tag);
+            DOUT(("def %u\n", unsigned(def_tag)));
+
             int f_count = s_decl->get_field_count();
             write_unsigned(f_count);
             DOUT(("#fields %d\n", f_count));
@@ -1960,6 +1965,11 @@ void Module_serializer::write_decl(
 
             IAnnotation_block const *annos = e_decl->get_annotations();
             write_annos(annos);
+
+            IDefinition const *def = e_decl->get_definition();
+            Tag_t def_tag = get_definition_tag(def);
+            write_encoded_tag(def_tag);
+            DOUT(("def %u\n", unsigned(def_tag)));
 
             int v_count = e_decl->get_value_count();
             write_unsigned(v_count);
@@ -3541,6 +3551,11 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
 
             IDeclaration_type_struct *s_decl = df->create_struct(sname, annos, exported);
 
+            Tag_t def_tag = read_encoded_tag();
+            IDefinition const *def = get_definition(def_tag);
+            s_decl->set_definition(def);
+            DOUT(("def %u\n", unsigned(def_tag)));
+
             int f_count = read_unsigned();
             DOUT(("#fields %d\n", f_count));
             INC_SCOPE();
@@ -3571,6 +3586,11 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
             ISimple_name const      *sname  = read_sname(mod);
             IAnnotation_block const *annos  = read_annos(mod);
             IDeclaration_type_enum  *e_decl = df->create_enum(sname, annos, exported);
+
+            Tag_t def_tag = read_encoded_tag();
+            IDefinition const *def = get_definition(def_tag);
+            e_decl->set_definition(def);
+            DOUT(("def %u\n", unsigned(def_tag)));
 
             int v_count = read_unsigned();
             DOUT(("#values %d\n", v_count));

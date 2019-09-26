@@ -78,6 +78,8 @@ namespace mdl_d3d12
         const std::string& file = "",
         int line = 0);
 
+    void log_set_file_path(const char* log_file_path);
+
     template<typename T>
     using is_scoped_enum = 
         std::integral_constant<bool, std::is_enum<T>::value && !std::is_convertible<T, int>::value>;
@@ -122,17 +124,16 @@ namespace mdl_d3d12
 
         size_t offset(0);
         size_t pos(0);
+        std::string chunk;
         while (pos != std::string::npos)
         {
             pos = input.find(sep, offset);
 
             if (pos == std::string::npos)
-            {
-                chunks.push_back(input.substr(offset));
-                break;
-            }
+                chunk = input.substr(offset);
+            else
+                chunk = input.substr(offset, pos - offset);
 
-            std::string chunk = input.substr(offset, pos - offset);
             if(!chunk.empty())
                 chunks.push_back(chunk);
             offset = pos + 1;
@@ -167,6 +168,23 @@ namespace mdl_d3d12
             if (s[sn - i - 1] != potential_end[n - i - 1])
                 return false;
 
+        return true;
+    }
+
+    inline bool str_remove_quotes(std::string& s)
+    {
+        size_t l = s.length();
+        if (l < 2) 
+            return false;
+
+        bool leading = s[0] == '\"';
+        bool trailing = s[l-1] == '\"';
+
+        if (leading != trailing)
+            return false;
+
+        if(leading)
+            s = s.substr(1, l - 2);
         return true;
     }
 

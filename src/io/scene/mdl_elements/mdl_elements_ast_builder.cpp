@@ -216,6 +216,7 @@ Mdl_ast_builder::Mdl_ast_builder(
 , m_param_map()
 , m_args(args)
 , m_used_user_types()
+, m_owner_version(m_owner->get_mdl_version())
 {
 }
 
@@ -224,7 +225,13 @@ mi::mdl::ISimple_name const *Mdl_ast_builder::create_simple_name(
     char const *name)
 {
     ASSERT( M_SCENE, strstr(name, "::") == NULL);
-    mi::mdl::ISymbol const *sym = m_st.get_symbol(name);
+    char const* v = strchr(name, '$');
+    mi::mdl::ISymbol const *sym;
+    if (v) {
+        std::string n(name, v);
+        sym = m_st.get_symbol(n.c_str());
+    } else
+        sym = m_st.get_symbol(name);
     return m_nf.create_simple_name(sym);
 }
 
@@ -469,10 +476,10 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         }
     }
 
-    // do MDL 1.X => MDL 1.LATEST conversion here
+    // do MDL 1.X => MDL 1.Y conversion here
     switch (sema) {
     case mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR:
-        if (n_params == 6 && is_material_type) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_4 && n_params == 6 && is_material_type) {
             // MDL 1.4 -> 1.5: add default hair bsdf
             mi::mdl::IQualified_name *tu_qname = create_qualified_name("hair_bsdf");
             mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
@@ -509,7 +516,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
-        if (n_params == 4) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_1 && n_params == 4) {
             // MDL 1.0 -> 1.2: insert the multiplier and tangent_u parameters
             mi::mdl::IQualified_name *tu_qname = create_qualified_name("state::texture_tangent_u");
             mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
@@ -561,7 +568,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 call->add_argument(arg);
             }
             return call;
-        } else if (n_params == 5) {
+        } else if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_1 && n_params == 5) {
             // MDL 1.1 -> 1.2: insert tangent_u parameter
             mi::mdl::IQualified_name *tu_qname = create_qualified_name("state::texture_tangent_u");
             mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
@@ -605,44 +612,46 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
         {
-            size_t pos = callee_name.rfind('$');
-            if (pos != std::string::npos) {
-                // MDL 1.3 -> 1.4: convert "half-colored" to full colored
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3) {
+                size_t pos = callee_name.rfind('$');
+                if (pos != std::string::npos) {
+                    // MDL 1.3 -> 1.4: convert "half-colored" to full colored
 
-                mi::mdl::IQualified_name *qname = create_qualified_name(
-                    "::df::color_fresnel_layer");
-                mi::mdl::IExpression_reference *ref = to_reference(qname);
-                mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+                    mi::mdl::IQualified_name *qname = create_qualified_name(
+                        "::df::color_fresnel_layer");
+                    mi::mdl::IExpression_reference *ref = to_reference(qname);
+                    mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
-                for (mi::Size i = 0; i < n_params; ++i) {
-                    mi::mdl::IArgument const *arg = NULL;
+                    for (mi::Size i = 0; i < n_params; ++i) {
+                        mi::mdl::IArgument const *arg = NULL;
 
-                    Handle<IExpression const> nr_arg(args->get_expression(i));
-                    mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                        Handle<IExpression const> nr_arg(args->get_expression(i));
+                        mi::mdl::IExpression const *expr = transform_expr(nr_arg);
 
-                    if (i == 1) {
-                        // wrap by color constructor
-                        mi::mdl::IQualified_name *qname = create_qualified_name("color");
-                        mi::mdl::IExpression_reference *ref = to_reference(qname);
-                        mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+                        if (i == 1) {
+                            // wrap by color constructor
+                            mi::mdl::IQualified_name *qname = create_qualified_name("color");
+                            mi::mdl::IExpression_reference *ref = to_reference(qname);
+                            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
-                        call->add_argument(m_ef.create_positional_argument(expr));
-                        expr = call;
+                            call->add_argument(m_ef.create_positional_argument(expr));
+                            expr = call;
+                        }
+
+                        if (named_args) {
+                            arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
+                        } else {
+                            arg = m_ef.create_positional_argument(expr);
+                        }
+                        call->add_argument(arg);
                     }
-
-                    if (named_args) {
-                        arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
-                    } else {
-                        arg = m_ef.create_positional_argument(expr);
-                    }
-                    call->add_argument(arg);
+                    return call;
                 }
-                return call;
             }
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DF_SPOT_EDF:
-        if (n_params == 4) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_0 && n_params == 4) {
             // MDL 1.0 -> 1.1: insert spread parameter
             mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
@@ -677,7 +686,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
-        if (n_params == 2) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_2 && n_params == 2) {
             // MDL 1.2 -> 1.3: insert the roundness parameter
             mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
@@ -709,7 +718,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT:
-        if (n_params == 1) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 1) {
             mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
@@ -744,7 +753,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
-        if (n_params == 2) {
+        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 2) {
             mi::mdl::IQualified_name *qname = create_qualified_name(remove_deprecated(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);

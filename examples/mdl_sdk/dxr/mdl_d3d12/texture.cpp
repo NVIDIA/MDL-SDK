@@ -36,37 +36,6 @@
 
 namespace mdl_d3d12
 {
-    namespace
-    {
-        D3D12_RESOURCE_STATES translate(const Texture* tex, GPU_access access_mode)
-        {
-            switch(access_mode)
-            {
-                case GPU_access::none:
-                    return D3D12_RESOURCE_STATE_COMMON;
-
-                case GPU_access::depth_stencil_target:
-                    return D3D12_RESOURCE_STATE_DEPTH_WRITE;
-
-                case GPU_access::render_target:
-                    return D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-                case GPU_access::unorder_access:
-                    return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
-                case GPU_access::shader_resource:
-                    log_error("NOT IMPLEMENTED", SRC);
-                    throw("NOT IMPLEMENTED");
-
-                default:
-                    throw(false);
-                    
-            }
-
-            return D3D12_RESOURCE_STATE_COMMON;
-        }
-    }
-
     Texture::Texture(
         Base_application* app, 
         GPU_access gpu_access, 
@@ -285,7 +254,7 @@ namespace mdl_d3d12
         transition_to(command_list, saved);
 
         if (buffer != data)
-            delete buffer;
+            delete[] buffer;
 
         if (res != buffer_size) {
             log_error("Failed to upload texture data to GPU: " + m_debug_name, SRC);
@@ -479,14 +448,11 @@ namespace mdl_d3d12
 
     bool Environment::create(const std::string& file_path)
     {
-        mi::base::Handle<mi::neuraylib::IDatabase> database(
-            m_app->get_mdl_sdk().get_neuray().get_api_component<mi::neuraylib::IDatabase>());
-        mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
-        mi::base::Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
         {
             // Load environment texture
             mi::base::Handle<mi::neuraylib::IImage>image(
-                transaction->create<mi::neuraylib::IImage>("Image"));
+                m_app->get_mdl_sdk().get_transaction().create<mi::neuraylib::IImage>("Image"));
+
             if (image->reset_file(file_path.c_str()) != 0)
             {
                 log_error("Failed to load image for: " + m_debug_name, SRC);
@@ -559,25 +525,31 @@ namespace mdl_d3d12
             if (!m_sampling_buffer->upload(command_list)) return false;
 
             command_queue->execute_command_list(command_list);
-            command_queue->flush();
         }
-        transaction->commit();
+
+        // reserve continuous part of the descriptor
+        auto resource_heap = m_app->get_resource_descriptor_heap();
+        Descriptor_heap_handle first = resource_heap->reserve_views(2);
+        if (!first.is_valid()) return false;
 
         // create a resource views on the heap
-        Descriptor_heap_handle texture_handle = 
-            m_app->get_resource_descriptor_heap()->add_shader_resource_view(m_texture);
-        if (!texture_handle.is_valid()) return false;
+        if (!resource_heap->create_shader_resource_view(m_texture, first))
+            return false;
+
+        Descriptor_heap_handle second = first.create_offset(1);
+        if (!second.is_valid()) return false;
+
+
+        if (!resource_heap->create_shader_resource_view(m_sampling_buffer, second))
+            return false;
 
         // bind read-only data segment to shader register(t0, space1)
-        m_resource_descriptor_table.register_srv(0, 1, texture_handle); 
-
-
-        Descriptor_heap_handle sample_buffer_handle = 
-            m_app->get_resource_descriptor_heap()->add_shader_resource_view(m_sampling_buffer);
-        if (!sample_buffer_handle.is_valid()) return false;
+        m_resource_descriptor_table.register_srv(0, 1, first); 
+        // note, passing the handle directly assumed a global root signature starting at the
+        // beginning of the heap! TODO, make this more flexible
 
         // bind read-only data segment to shader register(t1, space1)
-        m_resource_descriptor_table.register_srv(1, 1, sample_buffer_handle); 
+        m_resource_descriptor_table.register_srv(1, 1, second); 
 
         return true;
     }

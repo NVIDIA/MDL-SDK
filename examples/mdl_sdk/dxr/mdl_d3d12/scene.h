@@ -40,6 +40,7 @@ namespace mdl_d3d12
     class Buffer;
     class Constant_buffer_base;
     class IMaterial;
+    class Scene;
     struct Update_args;
 
     template<typename T> class Constant_buffer;
@@ -52,21 +53,84 @@ namespace mdl_d3d12
         DirectX::XMFLOAT4 tangent0;
     };
 
+    // --------------------------------------------------------------------------------------------
+
+    inline static DirectX::XMVECTOR vector(const DirectX::XMFLOAT3& vec3, float w)
+    {
+
+        DirectX::XMVECTOR res = DirectX::XMLoadFloat3(&vec3);
+        res.m128_f32[3] = w;
+        return std::move(res);
+    }
+
+    // --------------------------------------------------------------------------------------------
+
     struct Transform
     {
         explicit Transform();
 
         bool is_identity() const;
         static bool try_from_matrix(const DirectX::XMMATRIX& matrix, Transform& out_transform);
+        static Transform look_at(
+            const DirectX::XMFLOAT3& camera_pos, 
+            const DirectX::XMFLOAT3& focus, 
+            const DirectX::XMFLOAT3& up);
 
         DirectX::XMFLOAT3 translation;
         DirectX::XMVECTOR rotation;
         DirectX::XMFLOAT3 scale;
 
-        DirectX::XMMATRIX get_matrix();
+        DirectX::XMMATRIX get_matrix() const;
 
         static const Transform identity;
     };
+
+    // --------------------------------------------------------------------------------------------
+
+    struct Bounding_box
+    {
+        static const Bounding_box Invalid;
+        static const Bounding_box Zero;
+
+        explicit Bounding_box(const DirectX::XMFLOAT3& min, const DirectX::XMFLOAT3& max);
+        explicit Bounding_box();
+
+        void merge(const Bounding_box& second);
+        static Bounding_box merge(const Bounding_box& value1, const Bounding_box& value2);
+
+        void extend(const DirectX::XMFLOAT3& point);
+        static Bounding_box extend(const Bounding_box& box, const DirectX::XMFLOAT3& point);
+
+        static Bounding_box transform(const Bounding_box& box, const Transform& transformation);
+        static Bounding_box transform(const Bounding_box& box, const DirectX::XMMATRIX& matrix);
+
+        void get_corners(std::vector<DirectX::XMVECTOR>& outCorners) const;
+
+        DirectX::XMFLOAT3 center() const;
+        DirectX::XMFLOAT3 size() const;
+
+        bool is_zero() const;
+        bool is_valid() const;
+
+        DirectX::XMFLOAT3 min;
+        DirectX::XMFLOAT3 max;
+    };
+
+    inline bool operator==(const Bounding_box& lhs, const Bounding_box& rhs) 
+    { 
+        if (lhs.min.x != rhs.min.x) return false;
+        if (lhs.min.y != rhs.min.y) return false;
+        if (lhs.min.z != rhs.min.z) return false;
+        if (lhs.max.x != rhs.max.x) return false;
+        if (lhs.max.y != rhs.max.y) return false;
+        if (lhs.max.z != rhs.max.z) return false;
+        return true;
+    }
+
+    inline bool operator!=(const Bounding_box& lhs, const Bounding_box& rhs) 
+    { 
+        return !(lhs == rhs); 
+    }
 
     // --------------------------------------------------------------------------------------------
 
@@ -190,7 +254,19 @@ namespace mdl_d3d12
             Node root;
         };
 
-        virtual bool load(const std::string& file_name) = 0;
+
+        class Scene_options
+        {
+        public:
+            explicit Scene_options();
+            virtual ~Scene_options() = default;
+
+            float units_per_meter; // todo
+            bool handle_z_axis_up;
+        };
+
+
+        virtual bool load(const std::string& file_name, const Scene_options& options) = 0;
         virtual const Scene& get_scene() const = 0;
     };
 
@@ -205,19 +281,44 @@ namespace mdl_d3d12
         {
             friend class Mesh;
             friend class Scene;
+
             explicit Geometry();
 
-            const Raytracing_acceleration_structure::Geometry_handle& get_geometry() const { 
-                return m_geometry; 
+            const Raytracing_acceleration_structure::Geometry_handle& get_geometry_handle() const { 
+                return m_geometry_handle;
             }
 
-            const IMaterial* get_material() const { return m_material; }
             uint32_t get_index_offset() const { return m_index_offset; }
 
         private:
-            IMaterial* m_material;
-            Raytracing_acceleration_structure::Geometry_handle m_geometry;
+            size_t m_index_in_mesh;
+            Raytracing_acceleration_structure::Geometry_handle m_geometry_handle;
             uint32_t m_index_offset;
+        };
+
+        struct Instance
+        {
+            friend class Mesh;
+            explicit Instance();
+
+            const Mesh* get_mesh() const { return m_mesh; }
+
+            const IMaterial* get_material(const Mesh::Geometry* geometry) const { 
+                return m_materials[geometry->m_index_in_mesh]; 
+            }
+
+            void set_material(const Mesh::Geometry* geometry, IMaterial* material) { 
+                m_materials[geometry->m_index_in_mesh] = material; 
+            }
+
+            const Raytracing_acceleration_structure::Instance_handle& get_instance_handle() const {
+                return m_instance_handle;
+            }
+
+        private: 
+            Mesh* m_mesh;
+            Raytracing_acceleration_structure::Instance_handle m_instance_handle;
+            std::vector<IMaterial*> m_materials; // materials for each geometry
         };
 
         explicit Mesh(
@@ -226,12 +327,18 @@ namespace mdl_d3d12
             const IScene_loader::Mesh& mesh_desc);
         virtual ~Mesh();
 
-        const Raytracing_acceleration_structure::Instance_handle create_instance();
+        Instance* create_instance();
         bool upload_buffers(D3DCommandList* command_list);
 
         const std::vector<Geometry>& get_geometries() const { return m_geometries; }
+
+        bool visit_geometries(std::function<bool(const Geometry*)> action) const;
+        bool visit_geometries(std::function<bool(Geometry*)> action);
+
         const Vertex_buffer<Vertex>* get_vertex_buffer() const { return m_vertex_buffer; }
         const Index_buffer* get_index_buffer() const { return m_index_buffer; }
+
+        const Bounding_box& get_local_bounding_box() const { return m_local_aabb; };
         
     private:
         Base_application* m_app;
@@ -244,6 +351,7 @@ namespace mdl_d3d12
         Raytracing_acceleration_structure::BLAS_handle m_blas;
 
         std::vector<Geometry> m_geometries;
+        Bounding_box m_local_aabb;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -315,9 +423,12 @@ namespace mdl_d3d12
         Kind get_kind() const { return m_kind; }
         const std::string& get_name() const { return m_name; }
 
-        const Mesh* get_mesh() const { return m_kind == Kind::Mesh ? m_mesh : nullptr; }
-        const Raytracing_acceleration_structure::Instance_handle& get_mesh_instance() const { 
-            return m_mesh_instance; 
+        const Mesh::Instance* get_mesh_instance() const { 
+            return m_kind == Kind::Mesh ? m_mesh_instance : nullptr; 
+        }
+        
+        Mesh::Instance* get_mesh_instance() {
+            return m_kind == Kind::Mesh ? m_mesh_instance : nullptr; 
         }
 
         Camera* get_camera() { return m_kind == Kind::Camera ? m_camera : nullptr; }
@@ -332,6 +443,9 @@ namespace mdl_d3d12
             m_local_transformation = transform; 
         }
 
+        const Bounding_box& get_global_bounding_box() const { return m_global_aabb; }
+        const Bounding_box& get_local_bounding_box() const;
+
         // get the world transformation of this node (read-only).
         const DirectX::XMMATRIX& get_global_transformation() { return m_global_transformation; }
 
@@ -340,6 +454,8 @@ namespace mdl_d3d12
         void update(const Update_args& args);
 
     private:
+        void update_bounding_volumes();
+
         Base_application* m_app;
 
         Kind m_kind;
@@ -348,11 +464,13 @@ namespace mdl_d3d12
         Scene_node* m_parent;
         Transform m_local_transformation;
         DirectX::XMMATRIX m_global_transformation;
+
+        Bounding_box m_global_aabb;
+
         bool m_transformed_on_last_update;
         std::vector<Scene_node*> m_children;
             
-        Mesh* m_mesh;
-        Raytracing_acceleration_structure::Instance_handle m_mesh_instance;
+        Mesh::Instance* m_mesh_instance;
 
         Camera* m_camera;
     };
@@ -372,11 +490,12 @@ namespace mdl_d3d12
         virtual ~IMaterial() = default;
         virtual const std::string& get_name() const = 0;
 
-        /// all per target resources can be access in this region of the descriptor heap
-        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;
+        /// get the id of the target code that contains this material. 
+        /// can be used with the material library for instance.
+        virtual size_t get_target_code_id() const = 0;
 
         /// get the GPU handle of to the first resource of this material in the descriptor heap
-        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const = 0;
+        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const = 0;
 
         // get material flags e.g. for optimization
         virtual Flags get_flags() const = 0;
@@ -409,7 +528,7 @@ namespace mdl_d3d12
         ///                 if the action returns false, the traversal is aborted.
         ///
         /// \returns        false if the traversal was aborted, true otherwise.
-        bool traverse(
+        bool visit(
             Scene_node::Kind mask,
             std::function<bool(const Scene_node* node)> action) const;
 
@@ -420,7 +539,7 @@ namespace mdl_d3d12
         ///                 if the action returns false, the traversal is aborted.
         ///
         /// \returns        false if the traversal was aborted, true otherwise.
-        bool traverse(
+        bool visit(
             Scene_node::Kind mask,
             std::function<bool(Scene_node* node)> action);
 
@@ -430,10 +549,10 @@ namespace mdl_d3d12
             const Transform& local_transform = Transform::identity,
             Scene_node* parent = nullptr);
 
-        void update(const Update_args& args) { m_root.update(args); }
 
-        size_t get_material_count() const { return m_materials.size(); }
-        IMaterial* get_material(size_t index);
+        Scene_node* get_root() { return &m_root; }
+
+        void update(const Update_args& args) { m_root.update(args); }
 
     private:
         Base_application* m_app;
@@ -441,7 +560,6 @@ namespace mdl_d3d12
 
         std::vector<Camera*> m_cameras;
         std::vector<Mesh*> m_meshes;
-        std::vector<IMaterial*> m_materials;
 
         Scene_node m_root;
         Raytracing_acceleration_structure* m_acceleration_structure;

@@ -374,10 +374,11 @@ Generated_code_value_layout::Generated_code_value_layout(
 // Get the size of the target argument block.
 size_t Generated_code_value_layout::get_size() const
 {
-    if (sizeof(Layout_struct) > m_layout_data.size()) return 0;
+    if (sizeof(Layout_struct) > m_layout_data.size())
+        return 0;
     Layout_struct const *layout = reinterpret_cast<Layout_struct const *>(&m_layout_data[0]);
 
-    return size_t  (layout->element_size + layout->alloc_size_padding);
+    return size_t(layout->element_size) + size_t(layout->alloc_size_padding);
 }
 
 // Returns the number of arguments / elements at the given layout state.
@@ -385,7 +386,8 @@ size_t Generated_code_value_layout::get_num_elements(
     IGenerated_code_value_layout::State state) const
 {
     mi::Uint32 offs = state.m_state_offs;
-    if (offs + sizeof(Layout_struct) > m_layout_data.size()) return ~size_t(0);
+    if (offs + sizeof(Layout_struct) > m_layout_data.size())
+        return ~size_t(0);
 
     Layout_struct const *layout = reinterpret_cast<Layout_struct const *>(&m_layout_data[offs]);
     return size_t(layout->num_children);

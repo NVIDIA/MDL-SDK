@@ -54,11 +54,11 @@ namespace mdl_d3d12
         {
         public:
             explicit Library(
-                IDxcBlob* dxil_library, 
+                const IDxcBlob* dxil_library,
                 bool owns_dxil_library, 
                 const std::vector<std::string>& exported_symbols);
 
-            IDxcBlob* m_dxil_library;
+            const IDxcBlob* m_dxil_library;
             bool m_owns_dxil_library;
             std::vector<std::wstring> m_exported_symbols;
             std::vector<D3D12_EXPORT_DESC> m_exports;
@@ -111,7 +111,7 @@ namespace mdl_d3d12
         ///                             Unused ones can be omitted.
         /// \return                     True in case of success.
         bool add_library(
-            IDxcBlob* dxil_library, 
+            const IDxcBlob* dxil_library,
             bool take_ownership, 
             const std::vector<std::string>& exported_symbols);
 
@@ -199,7 +199,7 @@ namespace mdl_d3d12
         ComPtr<ID3D12StateObjectProperties> m_pipeline_state_properties;
     };
 
-    class Raytracing_acceleration_structure
+    class Raytracing_acceleration_structure : public Resource
     {
         struct Bottom_level
         {
@@ -276,6 +276,8 @@ namespace mdl_d3d12
             std::string debug_name);
 
         virtual ~Raytracing_acceleration_structure();
+
+        std::string get_debug_name() const override { return m_debug_name; }
 
         /// Create a new bottom level acceleration structure, 
         /// to which multiple geometries can be added.

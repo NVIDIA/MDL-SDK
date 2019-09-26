@@ -1,5 +1,19 @@
 #include "common.hlsl"
 
+#ifndef TARGET_CODE_ID
+    #define TARGET_CODE_ID 0
+#endif
+
+// macros the append the target code ID to the function name.
+// this is required because the resulting DXIL libraries will be linked to same pipeline object
+// and for that, the entry point names have to be unique.
+#define export_name_impl(name, id) name ## _ ## id
+#define export_name_impl_2(name, id) export_name_impl(name, id)
+#define export_name(name) export_name_impl_2(name, TARGET_CODE_ID)
+
+#define MDL_RADIANCE_ANY_HIT_PROGRAM        export_name(MdlRadianceAnyHitProgram)
+#define MDL_RADIANCE_CLOSEST_HIT_PROGRAM    export_name(MdlRadianceClosestHitProgram)
+#define MDL_SHADOW_ANY_HIT_PROGRAM          export_name(MdlShadowAnyHitProgram)
 
 enum MaterialFlags
 {
@@ -12,8 +26,16 @@ enum MaterialFlags
 // defined in the global root signature
 // ------------------------------------------------------------------------------------------------
 
+// for some post processing effects or for AI denoising, auxiliary outputs are required.
+// from the MDL material perspective albedo (approximation) and normals can be generated.
+#ifdef ENABLE_AUXILIARY
+    // in order to limit the payload size, this data is written directly from the hit programs
+    RWTexture2D<float4> AlbedoBuffer : register(u2, space0);
+    RWTexture2D<float4> NormalBuffer : register(u3, space0);
+#endif
+
 // Ray tracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0);
+RaytracingAccelerationStructure SceneBVH : register(t0,space0);
 
 // Environment map and sample data for importance sampling
 Texture2D<float4> environment_texture : register(t0,space1);
@@ -30,7 +52,7 @@ cbuffer Geometry_constants : register(b2)
     uint geometry_index_offset;
 }
 
-cbuffer Material_constants : register(b3)
+cbuffer Material_constants : register(b0,MDL_MATERIAL_REGISTER_SPACE)
 {
     // shared for all material compiled from the same MDL material
     int scattering_function_index;
@@ -126,25 +148,28 @@ void setup_mdl_shading_state(
     const float4x4 world_to_object = float4x4(WorldToObject(), 0.0f, 0.0f, 0.0f, 1.0f);
 
     const uint3 vertex_indices = uint3(indices[index_offset + 0],
-                                 indices[index_offset + 1],
-                                 indices[index_offset + 2]);
+                                       indices[index_offset + 1],
+                                       indices[index_offset + 2]);
 
     const float3 pos0 = vertices[vertex_indices.x].position;
     const float3 pos1 = vertices[vertex_indices.y].position;
     const float3 pos2 = vertices[vertex_indices.z].position;
     const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
 
+    float3 hit_position = pos0 * barycentric.x + pos1 * barycentric.y + pos2 * barycentric.z;
+    hit_position = mul(object_to_world, float4(hit_position, 1)).xyz;
+
     const float3 normal = normalize(vertices[vertex_indices.x].normal * barycentric.x +
-                              vertices[vertex_indices.y].normal * barycentric.y +
-                              vertices[vertex_indices.z].normal * barycentric.z);
+                                    vertices[vertex_indices.y].normal * barycentric.y +
+                                    vertices[vertex_indices.z].normal * barycentric.z);
 
     // transform normals using inverse transpose
     float3 world_geom_normal = normalize(mul(float4(geom_normal, 0), world_to_object).xyz);
     const float3 world_normal = normalize(mul(float4(normal, 0), world_to_object).xyz);
 
     const float2 texcoord0 = vertices[vertex_indices.x].texcoord0 * barycentric.x +
-        vertices[vertex_indices.y].texcoord0 * barycentric.y +
-        vertices[vertex_indices.z].texcoord0 * barycentric.z;
+                             vertices[vertex_indices.y].texcoord0 * barycentric.y +
+                             vertices[vertex_indices.z].texcoord0 * barycentric.z;
 
     // flip geometry normal to the side of the incident ray
     if (dot(world_geom_normal, WorldRayDirection()) > 0.0)
@@ -153,8 +178,8 @@ void setup_mdl_shading_state(
     // reconstruct tangent frame from vertex data
     float3 world_tangent, world_binormal;
     float4 tangent0 = vertices[vertex_indices.x].tangent0 * barycentric.x +
-        vertices[vertex_indices.y].tangent0 * barycentric.y +
-        vertices[vertex_indices.z].tangent0 * barycentric.z;
+                      vertices[vertex_indices.y].tangent0 * barycentric.y +
+                      vertices[vertex_indices.z].tangent0 * barycentric.z;
     tangent0.xyz = normalize(tangent0.xyz);
     world_tangent = normalize(mul(object_to_world, float4(tangent0.xyz, 0)).xyz);
     world_tangent = normalize(world_tangent - dot(world_tangent, world_normal) * world_normal);
@@ -163,9 +188,15 @@ void setup_mdl_shading_state(
     // fill the actual state fields
     mdl_state.normal = world_normal;
     mdl_state.geom_normal = world_geom_normal;
-    mdl_state.position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+    mdl_state.position = hit_position;
     mdl_state.animation_time = 0.0f;
-    mdl_state.text_coords[0] = float3(texcoord0, 0);
+    #ifdef USE_DERIVS
+        mdl_state.text_coords[0].val = float3(texcoord0, 0);
+        mdl_state.text_coords[0].dx = float3(0, 0, 0); // float3(ddx(texcoord0), 0);
+        mdl_state.text_coords[0].dy = float3(0, 0, 0); // float3(ddy(texcoord0), 0);
+    #else
+        mdl_state.text_coords[0] = float3(texcoord0, 0);
+    #endif
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
     mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
@@ -184,9 +215,8 @@ void setup_mdl_shading_state(
 // MDL hit group shader
 // ------------------------------------------------------------------------------------------------
 
-
 [shader("anyhit")]
-void MdlRadianceAnyHitProgram(inout RadianceHitInfo payload, Attributes attrib)
+void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
     // back face culling
     if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED) && is_back_face())
@@ -216,7 +246,7 @@ void MdlRadianceAnyHitProgram(inout RadianceHitInfo payload, Attributes attrib)
 }
 
 [shader("closesthit")] 
-void MdlRadianceClosestHitProgram(inout RadianceHitInfo payload, Attributes attrib)
+void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
     // setup MDL state
     Shading_state_material mdl_state;
@@ -252,6 +282,24 @@ void MdlRadianceClosestHitProgram(inout RadianceHitInfo payload, Attributes attr
     const bool inside = has_flag(payload.flags, FLAG_INSIDE);
     const float ior1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
     const float ior2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+
+    // Write Auxiliary Buffers
+    //---------------------------------------------------------------------------------------------
+    #ifdef ENABLE_AUXILIARY
+    if (has_flag(payload.flags, FLAG_FIRST_PATH_SEGMENT))
+    {
+        Bsdf_auxiliary_data aux_data = (Bsdf_auxiliary_data) 0;
+        aux_data.ior1 = ior1;                    // IOR current medium
+        aux_data.ior2 = ior2;                    // IOR other side
+        aux_data.k1 = -WorldRayDirection();      // outgoing direction
+
+        mdl_bsdf_auxiliary(scattering_function_index, aux_data, mdl_state);
+
+        uint3 launch_index =  DispatchRaysIndex();
+        AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo, 1.0f);
+        NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
+    }
+    #endif
 
     // Sample Light Sources
     //---------------------------------------------------------------------------------------------
@@ -352,7 +400,7 @@ void MdlRadianceClosestHitProgram(inout RadianceHitInfo payload, Attributes attr
 // ------------------------------------------------------------------------------------------------
 
 [shader("anyhit")]
-void MdlShadowAnyHitProgram(inout ShadowHitInfo payload, Attributes attrib)
+void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
 {
     // back face culling
     if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED) && is_back_face())

@@ -50,7 +50,7 @@ namespace mdl_d3d12
         unorder_access = 1 << 3
     };
 
-    class Texture
+    class Texture : public Resource
     {
     public:
         explicit Texture(
@@ -69,6 +69,8 @@ namespace mdl_d3d12
             const std::string& debug_name);
 
         virtual ~Texture() = default;
+
+        std::string get_debug_name() const override { return m_debug_name; }
 
         ID3D12Resource* get_resource() { return m_resource.Get(); }
         bool get_srv_description(D3D12_SHADER_RESOURCE_VIEW_DESC& out_desc) const;

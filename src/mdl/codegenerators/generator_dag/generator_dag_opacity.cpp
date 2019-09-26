@@ -81,21 +81,23 @@ public:
 
     /// Analyze if the given instance is opaque or transparent.
     ///
-    /// \returns opaque      if the material instance has a cutout_opacity of 1.0
-    ///          transparent if the material instance has a cutout opacity < 1.0
+    /// \param skip_cutout   if true, the analysis of cutout opacity is skipped.
+    /// \returns opaque      if the material instance has an opacity of 1.0
+    ///          transparent if the material instance has an opacity < 1.0
     ///          unknown     otherwise (might depend on parameters)
-    Result analyze()
+    Result analyze(bool skip_cutout)
     {
-        IValue_float const *f_value = get_cutout_opacity();
-        if (f_value == NULL) {
-            // cannot analyze
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+        if (skip_cutout == false) {
+            IValue_float const *f_value = get_cutout_opacity();
+            if (f_value == NULL) {
+                // cannot analyze
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            }
+            if (f_value->get_value() < 1.0f) {
+                // not opaque
+                return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
+            }
         }
-        if (f_value->get_value() < 1.0f) {
-            // not opaque
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
-        }
-
         // We do not allow different transmission of front and back-side of an MDL material.
         // Hence it is enough to analyze the front-side.
         DAG_node const *frontside = skip_temp(m_constructor->get_argument("surface"));
@@ -454,7 +456,16 @@ Generated_code_dag::Material_instance::get_opacity() const
 {
     DAG_call const *expr = get_constructor();
 
-    return Opacity_analyzer(get_allocator(), expr).analyze();
+    return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/false);
+}
+
+/// Returns the opacity of this instance.
+IGenerated_code_dag::IMaterial_instance::Opacity
+Generated_code_dag::Material_instance::get_surface_opacity() const
+{
+    DAG_call const *expr = get_constructor();
+
+    return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/true);
 }
 
 // Returns the cutout opacity of this instance if it is constant.

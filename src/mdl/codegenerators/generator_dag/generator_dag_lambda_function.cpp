@@ -1516,7 +1516,10 @@ void Lambda_function::update_hash() const
     if (!m_roots.empty()) {
         for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
             DAG_node const *root = m_roots[i];
-            walker.walk_node(const_cast<DAG_node *>(root), &dag_hasher);
+            if (root == NULL)
+                md5_hasher.update(0);  // update hash to be able to differentiate different orders
+            else
+                walker.walk_node(const_cast<DAG_node *>(root), &dag_hasher);
         }
         md5_hasher.final(m_hash.data());
     } else {
@@ -1588,33 +1591,21 @@ void Lambda_function::initialize_derivative_infos(ICall_name_resolver const *res
     // inlining won't update the derivative information
     optimize(resolver, NULL);
 
-    // make sure that no nodes are used multiple times to properly create
-    // context-sensitive analysis information
-    enable_cse(false);
-
-    // collect information
+    // collect information and rebuild DAG with derivative types
     m_deriv_infos.set_call_name_resolver(resolver);
+
+    Deriv_DAG_builder deriv_builder(get_allocator(), *this, m_deriv_infos);
+
     if (!m_roots.empty()) {
         for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
             m_roots[i] = import_expr(m_roots[i]);
-            m_deriv_infos.find_initial_users(m_roots[i]);
+            m_roots[i] = deriv_builder.rebuild(m_roots[i], /*want_derivatives=*/ false);
         }
     } else {
         m_body_expr = import_expr(m_body_expr);
-        m_deriv_infos.find_initial_users(m_body_expr);
+        m_body_expr = deriv_builder.rebuild(m_body_expr, /*want_derivatives=*/ false);
     }
     m_deriv_infos.set_call_name_resolver(NULL);
-
-    // rebuild DAG with derivative types and enabled CSE
-    enable_cse(true);
-    Deriv_DAG_builder deriv_builder(get_allocator(), *this, m_deriv_infos);
-    if (!m_roots.empty()) {
-        for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
-            m_roots[i] = deriv_builder.rebuild(m_roots[i]);
-        }
-    } else {
-        m_body_expr = deriv_builder.rebuild(m_body_expr);
-    }
 
     m_deriv_infos_calculated = true;
 }
@@ -2117,21 +2108,14 @@ public:
         main_df->set_body(NULL);
 
         if (calc_derivative_infos) {
-            // make sure that no nodes are used multiple times to properly create
-            // context-sensitive analysis information
-            main_df->enable_cse(false);
-            DAG_node const *analysis_mat_root = main_df->import_expr(mat_root_node);
-
-            // calculate derivative information on analysis copy
+            // calculate derivative information and rebuild DAG with derivative types
             Derivative_infos *deriv_infos = dist_func->get_writable_derivative_infos();
             deriv_infos->set_call_name_resolver(resolver);
-            deriv_infos->find_initial_users(analysis_mat_root);
-            deriv_infos->set_call_name_resolver(NULL);
 
-            // rebuild DAG with derivative types and enabled CSE
-            main_df->enable_cse(true);
             Deriv_DAG_builder deriv_builder(alloc, *main_df.get(), *deriv_infos);
-            mat_root_node = deriv_builder.rebuild(analysis_mat_root);
+            mat_root_node = deriv_builder.rebuild(mat_root_node, /*want_derivatives=*/ false);
+
+            deriv_infos->set_call_name_resolver(NULL);
         }
 
         // split path at '.'
@@ -2167,8 +2151,9 @@ public:
             resolver,
             calc_derivative_infos,
             allow_double_expr_lambdas);
+        unsigned walk_id = 0;
         mat_builder.collect_flags_and_used_nodes(
-            df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL);
+            df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL, ++walk_id);
 
         // handle "geometry.normal" if requested
         if (include_geometry_normal) {
@@ -2187,7 +2172,7 @@ public:
             if (handle_normal) {
                 mat_builder.register_special_lambda(
                     normal_path,
-                    IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL);
+                    IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL, ++walk_id);
             }
         }
 
@@ -2198,17 +2183,17 @@ public:
         }
         if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_IOR) != 0) {
             mat_builder.register_special_lambda(
-                "ior", IDistribution_function::SK_MATERIAL_IOR);
+                "ior", IDistribution_function::SK_MATERIAL_IOR, ++walk_id);
         }
         if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_THIN_WALLED) != 0) {
             mat_builder.register_special_lambda(
-                "thin_walled", IDistribution_function::SK_MATERIAL_THIN_WALLED);
+                "thin_walled", IDistribution_function::SK_MATERIAL_THIN_WALLED, ++walk_id);
         }
         if ((mat_flags & Distribution_function_builder::FL_NEEDS_MATERIAL_VOLUME_ABSORPTION) != 0) {
             char const *absorp_coeff_path[] = { "volume", "absorption_coefficient" };
             mat_builder.register_special_lambda(
                 absorp_coeff_path,
-                IDistribution_function::SK_MATERIAL_VOLUME_ABSORPTION);
+                IDistribution_function::SK_MATERIAL_VOLUME_ABSORPTION, ++walk_id);
         }
 
         // first create all expression lambdas for special lambdas.
@@ -2254,12 +2239,13 @@ public:
     /// and determine, whether the node is evaluation state dependent.
     /// If so, the function returns true.
     /// The eval_state is only relevant for the used nodes part, not for the flags.
-    bool collect_flags_and_used_nodes(DAG_node const *expr, Eval_state eval_state)
+    bool collect_flags_and_used_nodes(
+        DAG_node const *expr, Eval_state eval_state, unsigned &walk_id)
     {
-        // Increment counter and stop when already visited and an expression lambda can be created
+        // Stop when already visited in this walk.
+        // Otherwise stop, if the node was already seen in at least two walks
         Node_info &info = m_node_info_map[expr];
-        if (info.inc_count(eval_state) > 1 &&
-                may_create_expr_lambda(expr))
+        if (info.already_visited(walk_id) || info.inc_count(eval_state, walk_id) > 1)
             return info.is_eval_state_dependent;
 
         bool res = false;
@@ -2269,7 +2255,7 @@ public:
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                res = collect_flags_and_used_nodes(expr, eval_state);
+                res = collect_flags_and_used_nodes(expr, eval_state, walk_id);
                 break;
             }
         case DAG_node::EK_CONSTANT:
@@ -2283,7 +2269,8 @@ public:
                 DAG_call const *call = cast<DAG_call>(expr);
                 IDefinition::Semantics sema = call->get_semantic();
 
-                if (is_df_semantics(sema)) {
+                bool is_df_sema = is_df_semantics(sema);
+                if (is_df_sema) {
                     if (needs_thin_walled(sema))
                         m_flags |= FL_NEEDS_MATERIAL_THIN_WALLED;
 
@@ -2294,8 +2281,15 @@ public:
                 res = is_eval_state_dependent_direct(call);
 
                 int n_args = call->get_argument_count();
-                for (int i = 0; i < n_args; ++i)
-                    res |= collect_flags_and_used_nodes(call->get_argument(i), eval_state);
+                for (int i = 0; i < n_args; ++i) {
+                    DAG_node const *arg = call->get_argument(i);
+
+                    // new walks start at all non-DFish arguments of DFs
+                    if (is_df_sema && !contains_df_type(arg->get_type()))
+                        ++walk_id;
+
+                    res |= collect_flags_and_used_nodes(arg, eval_state, walk_id);
+                }
             }
         }
         info.is_eval_state_dependent = res;
@@ -2353,11 +2347,12 @@ public:
     /// Collect nodes which will be used for the distribution function.
     /// Counts the nodes to find nodes used by multiple paths.
     /// The provided node should have been generated by the builder.
-    void collect_used_nodes(DAG_node const *expr, Eval_state eval_state)
+    void collect_used_nodes(DAG_node const *expr, Eval_state eval_state, unsigned walk_id)
     {
-        // Increment counter and stop when already visited and an expression lambda can be created
-        if (m_node_info_map[expr].inc_count(eval_state) > 1 &&
-                may_create_expr_lambda(expr))
+        // Stop when already visited in this walk.
+        // Otherwise stop, if the node was already seen in at least two walks
+        Node_info &info = m_node_info_map[expr];
+        if (info.already_visited(walk_id) || info.inc_count(eval_state, walk_id) > 1)
             return;
 
         switch (expr->get_kind()) {
@@ -2366,7 +2361,7 @@ public:
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                collect_used_nodes(expr, eval_state);
+                collect_used_nodes(expr, eval_state, walk_id);
                 return;
             }
         case DAG_node::EK_CONSTANT:
@@ -2377,7 +2372,7 @@ public:
                 DAG_call const *call = cast<DAG_call>(expr);
                 int n_args = call->get_argument_count();
                 for (int i = 0; i < n_args; ++i)
-                    collect_used_nodes(call->get_argument(i), eval_state);
+                    collect_used_nodes(call->get_argument(i), eval_state, walk_id);
                 return;
             }
         }
@@ -2542,13 +2537,14 @@ public:
     /// Register a special expression lambda and collect information about the needed nodes.
     void register_special_lambda(
         Array_ref<char const *> expr_path,
-        IDistribution_function::Special_kind kind)
+        IDistribution_function::Special_kind kind,
+        unsigned &walk_id)
     {
         DAG_node const *node = get_dag_arg(m_mat_root_node, expr_path, m_root_lambda.get());
 
         Eval_state eval_state = kind == IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL
             ? ES_BEGIN_STATE : ES_AFTER_GEOMETRY_NORMAL;
-        collect_used_nodes(node, eval_state);
+        collect_used_nodes(node, eval_state, walk_id);
 
         m_special_lambdas.push_back(Special_lambda_descr(kind, eval_state, node));
     }
@@ -2824,6 +2820,8 @@ private:
         DAG_node const *begin_state_node;   // also used as any node, if not state dependent
         DAG_node const *after_geometry_normal_node;
 
+        unsigned last_walk_id;              // used to differentiate between walks
+
         /// Constructor.
         Node_info()
             : is_eval_state_dependent(false)
@@ -2831,19 +2829,34 @@ private:
             , after_geometry_normal_count(0)
             , begin_state_node(NULL)
             , after_geometry_normal_node(NULL)
+            , last_walk_id(0)
         {}
 
-        /// Increment the counter for the according evaluation state and return the new counter.
-        unsigned inc_count(Eval_state eval_state) {
+        /// Return true, if this node has already been visited during the given walk.
+        bool already_visited(unsigned walk_id) {
+            return last_walk_id == walk_id;
+        }
+
+        /// Increment the counter for the according evaluation state, if the node has not been
+        /// visited in this walk, yet, mark as visited in this walk and return the new counter.
+        unsigned inc_count(Eval_state eval_state, unsigned walk_id) {
+            // only increment, if this node has not been seen in this walk, yet
+            unsigned inc_val = last_walk_id == walk_id ? 0 : 1;
+            last_walk_id = walk_id;
+
             // If not state dependent, begin_state_count is always used.
-            if (!is_eval_state_dependent)
-                return ++begin_state_count;
+            if (!is_eval_state_dependent) {
+                begin_state_count += inc_val;
+                return begin_state_count;
+            }
 
             switch (eval_state) {
             case ES_BEGIN_STATE:
-                return ++begin_state_count;
+                begin_state_count += inc_val;
+                return begin_state_count;
             case ES_AFTER_GEOMETRY_NORMAL:
-                return ++after_geometry_normal_count;
+                after_geometry_normal_count += inc_val;
+                return after_geometry_normal_count;
             }
             MDL_ASSERT("Unexpected evaluation state");
             return 0;

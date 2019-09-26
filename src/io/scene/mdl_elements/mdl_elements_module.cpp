@@ -429,9 +429,16 @@ static mi::mdl::IMDL::MDL_version get_stdlib_version(
     mi::base::Handle<mi::mdl::IModule const>  mdl_module,
     DB::Access<Mdl_function_definition> const &func)
 {
+    if (func->get_semantic() == mi::neuraylib::IFunction_definition::DS_CAST)
+        return mi::mdl::IMDL::MDL_VERSION_1_5;
+    else if (mi::mdl::semantic_is_operator(func->get_mdl_semantic()) ||
+        (func->get_semantic() >= mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_FIRST &&
+         func->get_semantic() <= mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_LAST))
+        return mi::mdl::IMDL::MDL_VERSION_1_0;
+
     mi::mdl::Module const     *mod = mi::mdl::impl_cast<mi::mdl::Module>(mdl_module.get());
     mi::mdl::Definition const *def = mi::mdl::impl_cast<mi::mdl::Definition>(mod->find_signature(
-        func->get_mdl_name(), /*only_exported=*/true));
+        func->get_mdl_name(), /*only_exported=*/!mod->is_builtins()));
 
     if (def == NULL) {
         // should not happen
@@ -455,7 +462,7 @@ static mi::mdl::IMDL::MDL_version get_version(
     DB::Access<Mdl_module> module(module_tag, transaction);
     mi::base::Handle<mi::mdl::IModule const> mdl_module(module->get_mdl_module());
 
-    if (mdl_module->is_stdlib() && !mdl_module->is_builtins()) {
+    if (mdl_module->is_stdlib() || mdl_module->is_builtins()) {
         return get_stdlib_version(mdl_module, def);
     } else {
         // get the version of the module
@@ -693,6 +700,15 @@ mi::Sint32 Mdl_module::create_module(
     if (symbol_importer.imports_mdle()) {
         mi::base::Handle<mi::mdl::IMDL_module_transformer> module_transformer(
             mdl->create_module_transformer());
+
+        Module_cache module_cache(transaction);
+        if (!module->restore_import_entries(&module_cache)) {
+            LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
+                "Failed to restore imports of module \"%s\".", module->get_name());
+            return -4;
+        }
+        Drop_import_scope scope(module.get());
+
         cmodule = module_transformer->inline_mdle(module.get());
         if (!cmodule) {
             LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,

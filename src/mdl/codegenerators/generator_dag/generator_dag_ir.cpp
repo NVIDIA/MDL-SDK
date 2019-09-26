@@ -1261,6 +1261,25 @@ DAG_node const *DAG_node_factory_impl::create_call(
                             MDL_ASSERT(!"Unexpected index on non-indexable type");
                             break;
                         }
+                    } else if (sema == IDefinition::DS_CONV_CONSTRUCTOR) {
+                        // vectorX(v)[n] ==> v, iff type(v) == element_type(vectorX)
+                        IType_vector const *v_tp = as<IType_vector>(a->get_type());
+                        if (v_tp != NULL && a->get_argument_count() == 1) {
+                            DAG_node const *node    = a->get_argument(0);
+                            IType const    *node_tp = node->get_type();
+
+                            if (ret_type->skip_type_alias() == node_tp->skip_type_alias()) {
+                                DAG_constant const *i  = cast<DAG_constant>(call_args[1].arg);
+                                IValue_int const   *iv = cast<IValue_int>(i->get_value());
+                                int                idx = iv->get_value();
+
+                                if (0 <= idx && idx < v_tp->get_size()) {
+                                    return node;
+                                }
+                                // this CAN happen, because MDL does not enforce valid
+                                // array indexes
+                            }
+                        }
                     }
                 } else if (is<DAG_constant>(base)) {
                     DAG_constant const      *i  = cast<DAG_constant>(call_args[1].arg);
@@ -2649,11 +2668,18 @@ DAG_node_factory_impl::create_ternary_call(
         }
     }
 
-    if (DAG_builder::is_user_type(type)) {
+    // skip arrays for detection of user types
+    IType const *tp = type;
+    while (IType_array const *a_type = as<IType_array>(tp)) {
+        tp = a_type->get_element_type();
+    }
+
+
+    if (DAG_builder::is_user_type(tp)) {
         // in case of a user type, the operator is "defined" locally in the module
         // of the type, extract that from the type name
 
-        printer.print(type);
+        printer.print(tp);
         name = printer.get_line();
 
         size_t pos = name.rfind("::");
@@ -2687,6 +2713,53 @@ DAG_node_factory_impl::create_ternary_call(
         name.c_str(), operator_to_semantic(IExpression::OK_TERNARY), args, 3, ret_type);
 
     return static_cast<Call_impl *>(identify_remember(res));
+}
+
+/// Get the name of a conversion constructor if there is one.
+static char const *conv_constructor_name(IType const *tp)
+{
+    tp = tp->skip_type_alias();
+    if (is<IType_color>(tp)) {
+        return "color(float)";
+    }
+    if (IType_vector const *v_tp = as<IType_vector>(tp)) {
+        IType_atomic const *e_tp = v_tp->get_element_type();
+        int                n     = v_tp->get_size();
+
+        switch (e_tp->get_kind()) {
+        case IType::TK_BOOL:
+            switch (n) {
+            case 2: return "bool2(bool)";
+            case 3: return "bool3(bool)";
+            case 4: return "bool4(bool)";
+            }
+            break;
+        case IType::TK_INT:
+            switch (n) {
+            case 2: return "int2(int)";
+            case 3: return "int3(int)";
+            case 4: return "int4(int)";
+            }
+            break;
+        case IType::TK_FLOAT:
+            switch (n) {
+            case 2: return "float2(float)";
+            case 3: return "float3(float)";
+            case 4: return "float4(float)";
+            }
+            break;
+        case IType::TK_DOUBLE:
+            switch (n) {
+            case 2: return "double2(double)";
+            case 3: return "double3(double)";
+            case 4: return "double4(double)";
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return NULL;
 }
 
 // Create a constructor call.
@@ -2745,22 +2818,7 @@ DAG_node_factory_impl::create_constructor_call(
     }
 
     if (m_opt_enabled && res == NULL) {
-        if (strcmp(name, "color(float,float,float)") == 0) {
-            // color(x,x,x) ==> color(x)
-            DAG_node const *r = call_args[0].arg;
-            if (r == call_args[1].arg && r == call_args[2].arg) {
-                DAG_call::Call_argument n_call_args[1];
-
-                n_call_args[0].arg = r;
-                n_call_args[0].param_name = "value";
-
-                res = alloc_call(
-                    "color(float)",
-                    IDefinition::DS_CONV_CONSTRUCTOR,
-                    n_call_args, 1,
-                    ret_type);
-            }
-        } else if (strcmp(name, "color(float3)") == 0) {
+        if (strcmp(name, "color(float3)") == 0) {
             // color(float3(x)) ==> color(x)
             DAG_node const *f3 = call_args[0].arg;
 
@@ -2780,18 +2838,72 @@ DAG_node_factory_impl::create_constructor_call(
                         ret_type);
                 }
             }
-        } else if (strcmp(name, "float3(float,float,float)") == 0) {
-            // float3(x,x,x)) ==> float3(x)
-            DAG_node const *x = call_args[0].arg;
+        } else if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
+            DAG_node const *x;
+            bool           all_same = false;
 
-            if (x == call_args[1].arg && x == call_args[2].arg) {
+            if (is<IType_vector>(ret_type->skip_type_alias())) {
+                // vectorX(x,...,x)) ==> vectorX(x)
+                x = call_args[0].arg;
+                all_same = true;
+                for (int i = 1; i < num_call_args; ++i) {
+                    if (x != call_args[i].arg) {
+                        all_same = false;
+                        break;
+                    }
+                }
+
+                // check for vectorX(a.x, a.y, a.z, ...) ==> a
+                if (!all_same) {
+                    if (DAG_call const *xc = as<DAG_call>(x)) {
+                        if (xc->get_semantic() == IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS) {
+                            x = xc->get_argument(0);
+
+                            if (x->get_type()->skip_type_alias()== ret_type->skip_type_alias()) {
+                                unsigned num_fields = 0;
+                                for (int i = 0; i < num_call_args; ++i) {
+                                    DAG_call const *arg = as<DAG_call>(call_args[i].arg);
+                                    if (arg == NULL)
+                                        break;
+                                    if (arg->get_semantic() !=
+                                        IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS)
+                                        break;
+                                    if (arg->get_argument(0) != x)
+                                        break;
+
+                                    DAG_constant const *c = as<DAG_constant>(arg->get_argument(1));
+                                    if (c == NULL)
+                                        break;
+                                    IValue_int const *iv = cast<IValue_int>(c->get_value());
+                                    if (iv->get_value() != i)
+                                        break;
+                                    ++num_fields;
+                                }
+
+                                if (num_fields == num_call_args) {
+                                    // all elements are used
+                                    return x;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (strcmp(name, "color(float,float,float)") == 0) {
+                // color(x,x,x) ==> color(x)
+                x = call_args[0].arg;
+                if (x == call_args[1].arg && x == call_args[2].arg) {
+                    all_same = true;
+                }
+            }
+
+            if (all_same) {
                 DAG_call::Call_argument n_call_args[1];
 
                 n_call_args[0].arg = x;
                 n_call_args[0].param_name = "value";
 
                 res = alloc_call(
-                    "float3(float)",
+                    conv_constructor_name(ret_type),
                     IDefinition::DS_CONV_CONSTRUCTOR,
                     n_call_args, 1,
                     ret_type);

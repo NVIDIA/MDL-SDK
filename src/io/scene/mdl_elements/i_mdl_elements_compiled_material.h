@@ -129,6 +129,8 @@ public:
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_opacity() const;
 
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_surface_opacity() const;
+
     bool get_cutout_opacity(mi::Float32 *cutout_opacity) const;
 
     // internal methods
@@ -218,6 +220,9 @@ private:
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity 
         m_opacity;                                    ///< Material opacity.
+
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
+        m_surface_opacity;                                    ///< Material surface opacity.
 
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.

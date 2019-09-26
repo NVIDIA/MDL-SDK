@@ -27,10 +27,12 @@
 #define LLVM_THREADING_USE_STD_CALL_ONCE 1
 #elif defined(LLVM_ON_UNIX) &&                                                 \
     (defined(_LIBCPP_VERSION) ||                                               \
-     !(defined(__NetBSD__) || defined(__OpenBSD__) || defined(__ppc__)))
+     !(defined(__NetBSD__) || defined(__OpenBSD__) || defined(__ppc__) || defined(__linux__)))
 // std::call_once from libc++ is used on all Unix platforms. Other
 // implementations like libstdc++ are known to have problems on NetBSD,
 // OpenBSD and PowerPC.
+//!! NVIDIA modified: also don't use std::call_once on Linux, since we see crashes at MDL SDK
+//   load with debugs builds otherwise
 #define LLVM_THREADING_USE_STD_CALL_ONCE 1
 #else
 #define LLVM_THREADING_USE_STD_CALL_ONCE 0

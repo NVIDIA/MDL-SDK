@@ -218,6 +218,7 @@ public:
     /// \param exec_ctx  if non-null, the execution context to retrieve the state from
     llvm::Value *get_lambda_results_parameter(llvm::Value *exec_ctx=NULL);
 
+
     /// Get the object_id value of the current function.
     llvm::Value *get_object_id_value();
 
@@ -1012,3 +1013,4 @@ private:
 }  // mi
 
 #endif // MDL_GENERATOR_JIT_CONTEXT_H
+

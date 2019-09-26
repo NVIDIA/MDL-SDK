@@ -349,6 +349,7 @@ Type_mapper::Type_mapper(
         m_type_void_ptr);
     m_type_exec_ctx_ptr          = get_ptr(m_type_exec_ctx);
 
+
     // these must be run last, as they expect fully initialized upper types
     m_type_core_tex_handler      = construct_core_texture_handler_type(context);
     m_type_core_tex_handler_ptr  = get_ptr(m_type_core_tex_handler);
@@ -1541,6 +1542,7 @@ llvm::StructType *Type_mapper::construct_exec_ctx_type(
     return llvm::StructType::create(context, members, "Execution_context", /*is_packed=*/false);
 }
 
+
 // Construct the texture handler vtable type.
 llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::LLVMContext &context)
@@ -2051,3 +2053,4 @@ llvm::StructType *Type_mapper::construct_bsdf_measurement_attribuute_entry_type(
 
 }  // mdl
 }  // mi
+

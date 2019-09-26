@@ -63,6 +63,7 @@ function(TARGET_BUILD_SETUP)
             ${MDL_ADDITIONAL_COMPILER_DEFINES}   # additional user defines
         )
 
+
     target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
         PRIVATE
             ${MDL_ADDITIONAL_COMPILER_OPTIONS}   # additional user options
@@ -203,8 +204,12 @@ function(SETUP_IDE_FOLDERS)
         endif()
 
         # relative files outside the current target
-        if(${_SOURCE} MATCHES "^../.*")
-            source_group("" FILES ${_SOURCE})
+        string(SUBSTRING ${_SOURCE} 0 3 _SOURCE_FIRST_3_CHARS)
+        if(_SOURCE_FIRST_3_CHARS STREQUAL "../")
+            get_filename_component(_FOLDER ${_SOURCE} DIRECTORY)
+            string(REPLACE "/" "\\" _FOLDER ${_FOLDER})
+            string(REPLACE "..\\" "" _FOLDER ${_FOLDER}) # drop leading points (could be replaced by "../", too)
+            source_group(${_FOLDER} FILES ${_SOURCE})
             continue()
         endif()
 
@@ -222,12 +227,13 @@ endfunction()
 
 function(SETUP_IDE)
     set(options)
-    set(oneValueArgs TARGET)
+    set(oneValueArgs TARGET VS_PROJECT_NAME)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(SETUP_IDE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
     # provides the following variables:
     # - SETUP_IDE_TARGET
     # - SETUP_IDE_SOURCES
+    # - SETUP_IDE_VS_PROJECT_NAME
 
     # not required without visual studio or xcode
     if(NOT MSVC AND NOT MSVC_IDE)
@@ -246,9 +252,13 @@ function(SETUP_IDE)
     get_filename_component(FOLDER_NAME ${FOLDER_PATH} NAME)         # last folder is used as project name
     get_filename_component(FOLDER_PATH ${FOLDER_PATH} PATH)         # drop the last folder (equals the project name)
 
+    if (SETUP_IDE_VS_PROJECT_NAME AND NOT (SETUP_IDE_VS_PROJECT_NAME STREQUAL ""))
+        set(FOLDER_NAME ${SETUP_IDE_VS_PROJECT_NAME})
+    endif()
+
     set_target_properties(${SETUP_IDE_TARGET} PROPERTIES 
-        VS_DEBUGGER_WORKING_DIRECTORY           "$(OutDir)"         # working directory
-        PROJECT_LABEL                           ${FOLDER_NAME}      # project name
+        VS_DEBUGGER_WORKING_DIRECTORY           ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)   # working directory
+        PROJECT_LABEL                           ${FOLDER_NAME}                          # project name
         MAP_IMPORTED_CONFIG_DEBUG               Debug
         MAP_IMPORTED_CONFIG_RELEASE             Release
         MAP_IMPORTED_CONFIG_MINSIZEREL          Release
@@ -559,7 +569,7 @@ endfunction()
 #
 function(CREATE_FROM_BASE_PRESET)
     set(options WIN32)
-    set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME EMBED_RC)
+    set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
@@ -652,7 +662,8 @@ function(CREATE_FROM_BASE_PRESET)
 
     # configure visual studio and maybe other IDEs
     setup_ide(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} 
-        SOURCES ${CREATE_FROM_BASE_PRESET_SOURCES})
+        SOURCES ${CREATE_FROM_BASE_PRESET_SOURCES}
+        VS_PROJECT_NAME ${CREATE_FROM_BASE_PRESET_VS_PROJECT_NAME})
 
 endfunction()
 
@@ -781,7 +792,7 @@ endfunction()
 #
 function(TARGET_ADD_CONTENT)
     set(options)
-    set(oneValueArgs TARGET)
+    set(oneValueArgs TARGET FILE_BASE)
     set(multiValueArgs FILES)
     cmake_parse_arguments(TARGET_ADD_CONTENT "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
@@ -793,25 +804,29 @@ function(TARGET_ADD_CONTENT)
     endif()
 
     # add to project
+    foreach(_FILE ${TARGET_ADD_CONTENT_FILES})
+        list(APPEND _ADD_TO_SOURCES ${TARGET_ADD_CONTENT_FILE_BASE}${_FILE})
+    endforeach()
+
     target_sources(${TARGET_ADD_CONTENT_TARGET}
         PRIVATE
-            ${TARGET_ADD_CONTENT_FILES}
+            ${_ADD_TO_SOURCES}
             ${_DEP}
         )
 
     # do not compile and set group (visual studio)
-    set_source_files_properties(${TARGET_ADD_CONTENT_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${_ADD_TO_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${_DEP} PROPERTIES GENERATED TRUE)
-    setup_ide_folders(FILES ${TARGET_ADD_CONTENT_FILES} ${_DEP})
+    setup_ide_folders(FILES ${_ADD_TO_SOURCES} ${_DEP})
 
     # collect files
     foreach(_FILE ${TARGET_ADD_CONTENT_FILES})
         if(MDL_LOG_FILE_DEPENDENCIES)
-            MESSAGE(STATUS "- content to copy:   ${_FILE}")
+            MESSAGE(STATUS "- content to copy:   ${TARGET_ADD_CONTENT_FILE_BASE}${_FILE}")
         endif()
-        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE} $<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/${_FILE})
+        list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${TARGET_ADD_CONTENT_FILE_BASE}${_FILE} $<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/${_FILE})
         list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E echo "update content file: ${_FILE}")
-        list(APPEND _COPY_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_FILE})
+        list(APPEND _COPY_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${TARGET_ADD_CONTENT_FILE_BASE}${_FILE})
     endforeach()
 
     # delete dependency files of other configurations to enforce an update after the build type changed
@@ -968,8 +983,6 @@ if(MDL_ENABLE_TESTS)
         PROJECT_LABEL   "check"
         FOLDER          "tests"
         )
-
-     set(MDL_TEST_LIST_POST "" CACHE INTERNAL "list of test directories to add after regular targets are defined")
 endif()
 
 # add tests to individual targets when defined in a corresponding sub-directory

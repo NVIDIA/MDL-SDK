@@ -64,9 +64,6 @@ endif()
 # enable tests if available
 if(MDL_ENABLE_TESTS)
     enable_testing()
-    if(MDL_LOG_PLATFORM_INFOS)
-        MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                   " ${MDL_ENABLE_TESTS})
-    endif()
 endif()
 
 # -------------------------------------------------------------------------------------------------
@@ -120,6 +117,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_dag)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compilercore)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_hlsl)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libbsdf)
+add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libmdlrt)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/devlib)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/generator_jit)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_glsl/generator_stub)

@@ -28,6 +28,7 @@
 
 #include "pch.h"
 
+#include <cstdint>
 #include <utility>
 
 #include <mi/mdl/mdl_expressions.h>
@@ -68,6 +69,9 @@ struct Expr_list_node
 bool is_math_deriv_args_supported(IDefinition::Semantics math_sema)
 {
     switch (math_sema) {
+    case IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR:
+        // derivative arguments not supported
+        return false;
     case IDefinition::DS_INTRINSIC_MATH_TRANSPOSE:
         // derivative arguments not supported, yet
         return false;
@@ -696,50 +700,6 @@ void set_known_function_argument_derivs(
 
 // ------------------------------- Derivative_infos class -------------------------------
 
-// Follow initial requests for analysis information from function calls expecting
-// derivatives up to the leafs of the corresponding arguments and mark all DAG nodes,
-// for which derivative information should be calculated.
-void Derivative_infos::find_initial_users(DAG_node const *expr)
-{
-    MDL_ASSERT(m_resolver != NULL && "set_call_name_resolver() not called");
-
-    switch (expr->get_kind()) {
-    case DAG_node::EK_TEMPORARY:
-        {
-            // should not happen, but we can handle it
-            DAG_temporary const *t = cast<DAG_temporary>(expr);
-            expr = t->get_expr();
-            find_initial_users(expr);
-        }
-        break;
-    case DAG_node::EK_CONSTANT:
-    case DAG_node::EK_PARAMETER:
-        break;
-    case DAG_node::EK_CALL:
-        {
-            DAG_call const *call = cast<DAG_call>(expr);
-            Bitset want_arg_derivs(call_wants_arg_derivatives(call));
-
-            int n_args = call->get_argument_count();
-            for (int i = 0; i < n_args; ++i) {
-                Flag_scope flag_scope(m_want_derivatives, want_arg_derivs.test_bit(i + 1));
-                DAG_node const *arg = call->get_argument(i);
-
-                // derivatives on matrices are not supported
-                if (is<IType_matrix>(arg->get_type()->skip_type_alias()))
-                    m_want_derivatives = false;
-
-                find_initial_users(arg);
-            }
-        }
-        break;
-    }
-
-    if (m_want_derivatives) {
-        mark_calc_derivatives(expr);
-    }
-}
-
 // Retrieve derivative infos for a function instance.
 Func_deriv_info const *Derivative_infos::get_function_derivative_infos(
     Function_instance const &func_inst) const
@@ -821,7 +781,7 @@ void Derivative_infos::mark_calc_derivatives(DAG_node const *node)
 }
 
 // Determine for which arguments of a call derivatives are needed.
-Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call)
+Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool want_derivatives)
 {
     Bitset arg_derivs(m_alloc, size_t(call->get_argument_count() + 1));
 
@@ -830,19 +790,19 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call)
     case IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
     case IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
         // want-derivatives only applies to the first argument, if set
-        if (m_want_derivatives) {
+        if (want_derivatives) {
             arg_derivs.set_bit(0);  // mark as any derivatives requested
             arg_derivs.set_bit(1);
         }
         return arg_derivs;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
         // want-derivatives applies to all arguments, if set
-        if (m_want_derivatives)
+        if (want_derivatives)
             arg_derivs.set_bits();
         return arg_derivs;
     case IDefinition::Semantics(IDefinition::DS_OP_BASE + IExpression::OK_TERNARY):
         // want-derivatives only applies to second and third argument, if set
-        if (m_want_derivatives) {
+        if (want_derivatives) {
             arg_derivs.set_bit(0);  // mark as any derivatives requested
             arg_derivs.set_bit(2);
             arg_derivs.set_bit(3);
@@ -865,13 +825,13 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call)
     if (def->get_kind() == IDefinition::DK_FUNCTION) {
         // handle function calls
         Function_instance::Array_instances arr_inst(m_alloc);
-        Function_instance func_inst(def, arr_inst, m_want_derivatives);
+        Function_instance func_inst(def, arr_inst, want_derivatives);
         Func_deriv_info *infos = get_or_calc_function_derivative_infos(module, func_inst);
         arg_derivs.copy_data(infos->args_want_derivatives);
         return arg_derivs;
     } else {
         // handle calls to known constructors and operators
-        set_known_function_argument_derivs(def, m_want_derivatives, arg_derivs);
+        set_known_function_argument_derivs(def, want_derivatives, arg_derivs);
         return arg_derivs;
     }
 }
@@ -897,6 +857,7 @@ Deriv_DAG_builder::Deriv_DAG_builder(
 , m_tf(*lambda.get_type_factory())
 , m_deriv_infos(deriv_infos)
 , m_deriv_type_map(alloc)
+, m_result_cache(alloc)
 , m_name_id(0)
 {
     Symbol_table *sym_table = m_tf.get_symbol_table();
@@ -1001,8 +962,14 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
 }
 
 // Rebuild an expression with derivative information applied.
-DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
+DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_derivatives)
 {
+    DAG_node const *cache_key = reinterpret_cast<DAG_node const *>(
+        reinterpret_cast<std::uintptr_t>(expr) | (want_derivatives ? 1 : 0));
+    auto it = m_result_cache.find(cache_key);
+    if (it != m_result_cache.end())
+        return it->second;
+
     DAG_node const *res;
     switch (expr->get_kind()) {
     case DAG_node::EK_TEMPORARY:
@@ -1010,13 +977,14 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
             // should not happen, but we can handle it
             DAG_temporary const *t = cast<DAG_temporary>(expr);
             expr = t->get_expr();
-            res = rebuild(expr);
+            res = rebuild(expr, want_derivatives);
         }
         break;
+
     case DAG_node::EK_CONSTANT:
         {
-            if (!m_deriv_infos.should_calc_derivatives(expr))
-                return m_lambda.import_expr(expr);
+            if (!want_derivatives)
+                return expr;
 
             // create (val, 0, 0) constant
             DAG_constant const *dag_const = cast<DAG_constant>(expr);
@@ -1032,8 +1000,8 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
 
     case DAG_node::EK_PARAMETER:
         {
-            if (!m_deriv_infos.should_calc_derivatives(expr))
-                return m_lambda.import_expr(expr);
+            if (!want_derivatives)
+                return expr;
 
             // a parameter can never provide derivatives, so wrap it in a make_deriv() call
             DAG_call::Call_argument wrap_args[1] = {
@@ -1042,25 +1010,34 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
                 "make_deriv()",
                 IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV,
                 wrap_args, 1,
-                expr->get_type());
+                get_deriv_type(expr->get_type()));
         }
         break;
 
     case DAG_node::EK_CALL:
         {
             DAG_call const *call = cast<DAG_call>(expr);
-            bool calc_derivs = m_deriv_infos.should_calc_derivatives(expr);
+            Bitset want_arg_derivs(
+                m_deriv_infos.call_wants_arg_derivatives(call, want_derivatives));
 
             string call_name(m_alloc);
-            if (calc_derivs)
+            if (want_derivatives)
                 call_name += '#';
             call_name += call->get_name();
 
             int n_args = call->get_argument_count();
             Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, size_t(n_args));
             for (int i = 0; i < n_args; ++i) {
+                DAG_node const *arg = call->get_argument(i);
+
+                bool calc_arg_derivs = want_arg_derivs.test_bit(i + 1);
+
+                // derivatives on matrices are not supported
+                if (is<IType_matrix>(arg->get_type()->skip_type_alias()))
+                    calc_arg_derivs = false;
+
                 args[i].param_name = call->get_parameter_name(i);
-                args[i].arg = rebuild(call->get_argument(i));
+                args[i].arg = rebuild(arg, calc_arg_derivs);
             }
 
             IDefinition::Semantics sema = call->get_semantic();
@@ -1068,10 +1045,10 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
                 call_name.c_str(),
                 sema,
                 args.data(), n_args,
-                calc_derivs ? get_deriv_type(call->get_type()) : call->get_type());
+                want_derivatives ? get_deriv_type(call->get_type()) : call->get_type());
 
             // function always returns derivatives, but we don't want them?
-            if (!calc_derivs &&
+            if (!want_derivatives &&
                 sema == IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE)
             {
                 // wrap it in a get_deriv_val() call
@@ -1090,9 +1067,10 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr)
         return NULL;
     }
 
-    // copy over calc_derivatives information from original DAG node to rebuilt DAG node
-    if (m_deriv_infos.should_calc_derivatives(expr))
+    if (want_derivatives)
         m_deriv_infos.mark_calc_derivatives(res);
+
+    m_result_cache[cache_key] = res;
 
     return res;
 }

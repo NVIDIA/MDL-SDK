@@ -281,7 +281,8 @@ private:
     /// See MDL spec, section 2.2 for details.
     ///
     /// \param file_path                   The file path to normalize (SLASH).
-    /// \param file_mask                   The file mask tp normalize (SLASH).
+    /// \param file_mask                   The file mask to normalize (SLASH).
+    /// \param file_mask_is_regex          True, if file_mask is a regular expression.
     /// \param directory_path              The directory path split from the file path (SLASH).
     /// \param file_name                   The file name split from the file path (SLASH).
     /// \param nesting_level               The nesting level of the importing MDL module.
@@ -296,6 +297,7 @@ private:
     string normalize_file_path(
         string const &file_path,
         string const &file_mask,
+        bool         file_mask_is_regex,
         string const &directory_path,
         string const &file_name,
         size_t       nesting_level,
@@ -332,6 +334,8 @@ private:
     ///
     /// \param resolved_file_system_location  The resolved file system location to be checked (OS).
     /// \param canonical_file_path            The canonical file path (SLASH).
+    /// \param is_regex                       True, if the canonical file path is a
+    ///                                       regular expression.
     /// \param file_path                      The (original) file path (to select the type of check
     ///                                       and error messages, SLASH).
     /// \param current_working_directory      The current working directory (OS).
@@ -343,6 +347,7 @@ private:
     bool check_consistency(
         string const &resolved_file_system_location,
         string const &canonical_file_path,
+        bool         is_regex,
         string const &file_path,
         string const &current_working_directory,
         string const &current_search_path,
@@ -398,9 +403,11 @@ private:
     /// Check if the given file name (UTF8 encoded) names a file on the file system or inside
     /// an archive.
     ///
-    /// \param fname  a file name (might contain a regex)
+    /// \param fname     a file name
+    /// \param is_regex  if true, threat fname as a regular expression
     bool file_exists(
-        char const *fname) const;
+        char const *fname,
+        bool       is_regex) const;
 
     /// Resolve a MDL file name
     ///

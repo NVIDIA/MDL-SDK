@@ -108,9 +108,9 @@ public:
         if (it != m_tmp_value_map.end()) {
             DAG_node const *node = it->second;
             if (node->get_kind() == DAG_node::EK_CONSTANT)
-                return as<DAG_constant>(node)->get_value();
+                return m_value_factory->import(as<DAG_constant>(node)->get_value());
         }
-        return m_module->get_value_factory()->create_bad();
+        return m_value_factory->create_bad();
     }
 
     /// Check whether evaluate_intrinsic_function should be called for an unhandled
@@ -131,19 +131,21 @@ public:
         size_t n_arguments) MDL_FINAL
     {
         if (m_call_evaluator == NULL)
-            return m_module->get_value_factory()->create_bad();
+            return m_value_factory->create_bad();
 
         return m_call_evaluator->evaluate_intrinsic_function(
-            m_module->get_value_factory(), semantic, arguments, n_arguments);
+            m_value_factory, semantic, arguments, n_arguments);
     }
 
 
     /// Constructor.
     explicit Variable_lookup_handler(
         IModule const *module,
+        IValue_factory *value_factory,
         ICall_evaluator const *call_evaluator,
         DAG_builder::Definition_temporary_map &tmp_value_map)
         : m_module(module)
+        , m_value_factory(value_factory)
         , m_call_evaluator(call_evaluator)
         , m_tmp_value_map(tmp_value_map)
         , m_error_state(false)
@@ -186,8 +188,11 @@ public:
     bool update_iteration_variable(IExpression const *update_expr);
 
 private:
-    /// The module owning used for folding values;
+    /// The module owning the folding expressions.
     IModule const *m_module;
+
+    /// The value factory to create new values.
+    IValue_factory *m_value_factory;
 
     /// The call evaluator.
     ICall_evaluator const *m_call_evaluator;
@@ -206,7 +211,6 @@ private:
 bool Variable_lookup_handler::update_iteration_variable(IExpression const *update_expr)
 {
     IValue const *new_val = NULL;
-    IValue_factory *factory = m_module->get_value_factory();
 
     if (IExpression_binary const *bin_expr = as<IExpression_binary>(update_expr)) {
         // make sure lhs points to a reference to the iteration variable
@@ -217,7 +221,7 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
             return false;
 
         // const fold rhs
-        IValue const *rhs = bin_expr->get_right_argument()->fold(m_module, this);
+        IValue const *rhs = bin_expr->get_right_argument()->fold(m_module, m_value_factory, this);
         if (is<IValue_bad>(rhs))
             return false;
 
@@ -247,51 +251,51 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
             return false;
 
         case IExpression_binary::OK_ASSIGN:
-            new_val = rhs;
+            new_val = m_value_factory->import(rhs);
             break;
 
         case IExpression_binary::OK_MULTIPLY_ASSIGN:
-            new_val = m_iter_value->multiply(factory, rhs);
+            new_val = m_iter_value->multiply(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_DIVIDE_ASSIGN:
-            new_val = m_iter_value->divide(factory, rhs);
+            new_val = m_iter_value->divide(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_MODULO_ASSIGN:
-            new_val = m_iter_value->modulo(factory, rhs);
+            new_val = m_iter_value->modulo(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_PLUS_ASSIGN:
-            new_val = m_iter_value->add(factory, rhs);
+            new_val = m_iter_value->add(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_MINUS_ASSIGN:
-            new_val = m_iter_value->sub(factory, rhs);
+            new_val = m_iter_value->sub(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_SHIFT_LEFT_ASSIGN:
-            new_val = m_iter_value->shl(factory, rhs);
+            new_val = m_iter_value->shl(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_SHIFT_RIGHT_ASSIGN:
-            new_val = m_iter_value->asr(factory, rhs);
+            new_val = m_iter_value->asr(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT_ASSIGN:
-            new_val = m_iter_value->lsr(factory, rhs);
+            new_val = m_iter_value->lsr(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_BITWISE_AND_ASSIGN:
-            new_val = m_iter_value->bitwise_and(factory, rhs);
+            new_val = m_iter_value->bitwise_and(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_BITWISE_XOR_ASSIGN:
-            new_val = m_iter_value->bitwise_xor(factory, rhs);
+            new_val = m_iter_value->bitwise_xor(m_value_factory, rhs);
             break;
 
         case IExpression_binary::OK_BITWISE_OR_ASSIGN:
-            new_val = m_iter_value->bitwise_or(factory, rhs);
+            new_val = m_iter_value->bitwise_or(m_value_factory, rhs);
             break;
         }
     } else if (IExpression_unary const *un_expr = as<IExpression_unary>(update_expr)) {
@@ -313,12 +317,12 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
         case IExpression_unary::OK_PRE_INCREMENT:
         case IExpression_unary::OK_POST_INCREMENT:
             new_val = m_iter_value->add(
-                factory, create_pre_post_one(m_iter_value->get_type(), factory));
+                m_value_factory, create_pre_post_one(m_iter_value->get_type(), m_value_factory));
             break;
         case IExpression_unary::OK_PRE_DECREMENT:
         case IExpression_unary::OK_POST_DECREMENT:
             new_val = m_iter_value->sub(
-                factory, create_pre_post_one(m_iter_value->get_type(), factory));
+                m_value_factory, create_pre_post_one(m_iter_value->get_type(), m_value_factory));
             break;
         }
     } else {
@@ -341,6 +345,7 @@ public:
     /// Constructor.
     ///
     /// \param module              the module used for folding values
+    /// \param value_factory       the value factory used to create new values
     /// \param call_evaluator      the call evaluator for handling some intrinsics
     /// \param func_decl           a function represented by its declaration
     /// \param call                a call-site of this function
@@ -348,17 +353,19 @@ public:
     /// \param tmp_value_map       map of argument values
     Inline_checker(
         IModule const                          *module,
+        IValue_factory                         *value_factory,
         ICall_evaluator const                  *call_evaluator,
         IDeclaration_function const            *func_decl,
         IExpression_call const                 *call,
         bool                                   forbid_local_calls,
         DAG_builder::Definition_temporary_map  &tmp_value_map)
     : m_module(module)
+    , m_value_factory(value_factory)
     , m_func_decl(func_decl)
     , m_call(call)
     , m_arg_types(NULL)
     , m_forbid_local_calls(forbid_local_calls)
-    , m_var_lookup_handler(module, call_evaluator, tmp_value_map)
+    , m_var_lookup_handler(module, value_factory, call_evaluator, tmp_value_map)
     , m_skip_flags(INL_NO_SKIP)
     {
     }
@@ -366,6 +373,7 @@ public:
     /// Constructor.
     ///
     /// \param module              the module used for folding values
+    /// \param value_factory       the value factory used to create new values
     /// \param call_evaluator      the call evaluator for handling some intrinsics
     /// \param func_decl           a function represented by its declaration
     /// \param arg_types           list of argument types of the call site
@@ -373,17 +381,19 @@ public:
     /// \param tmp_value_map       map of argument values
     Inline_checker(
         IModule const                          *module,
+        IValue_factory                         *value_factory,
         ICall_evaluator const                  *call_evaluator,
         IDeclaration_function const            *func_decl,
         Type_vector const                      &arg_types,
         bool                                   forbid_local_calls,
         DAG_builder::Definition_temporary_map  &tmp_value_map)
     : m_module(module)
+    , m_value_factory(value_factory)
     , m_func_decl(func_decl)
     , m_call(NULL)
     , m_arg_types(&arg_types)
     , m_forbid_local_calls(forbid_local_calls)
-    , m_var_lookup_handler(module, call_evaluator, tmp_value_map)
+    , m_var_lookup_handler(module, value_factory, call_evaluator, tmp_value_map)
     , m_skip_flags(INL_NO_SKIP)
     {
     }
@@ -430,6 +440,9 @@ private:
 private:
     /// The module used for folding values.
     IModule const *m_module;
+
+    /// The value factory to be used to create new values.
+    IValue_factory *m_value_factory;
 
     /// The declaration of the function to inline.
     IDeclaration_function const *m_func_decl;
@@ -682,7 +695,8 @@ bool Inline_checker::allow_call(IExpression_call const *call)
 // Check if we can inline the given statement.
 bool Inline_checker::can_inline(IStatement const *stmt)
 {
-    if (m_skip_flags != INL_NO_SKIP) return true;
+    if (m_skip_flags != INL_NO_SKIP)
+        return true;
 
     // check statements, for now only simple expressions
     switch (stmt->get_kind()) {
@@ -747,7 +761,7 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             IStatement_if const *if_stmt = cast<IStatement_if>(stmt);
 
             IValue const *cond_result = if_stmt->get_condition()->fold(
-                m_module, &m_var_lookup_handler);
+                m_module, m_value_factory, &m_var_lookup_handler);
             if (is<IValue_bad>(cond_result))
                 return false;
 
@@ -767,7 +781,7 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             IStatement_switch const *switch_stmt = cast<IStatement_switch>(stmt);
 
             IValue const *cond_result = switch_stmt->get_condition()->fold(
-                m_module, &m_var_lookup_handler);
+                m_module, m_value_factory, &m_var_lookup_handler);
             if (is<IValue_bad>(cond_result))
                 return false;
             IValue_int_valued const *cond_val = cast<IValue_int_valued>(cond_result);
@@ -844,7 +858,7 @@ bool Inline_checker::can_inline(IStatement const *stmt)
                 cast<IDeclaration_variable>(decl_stmt->get_declaration());
             if (decl == NULL || decl->get_variable_count() != 1) return false;
             IValue const *init_val = decl->get_variable_init(0)->fold(
-                m_module, &m_var_lookup_handler);
+                m_module, m_value_factory, &m_var_lookup_handler);
             if (is<IValue_bad>(init_val))
                 return false;
 
@@ -859,7 +873,8 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             bool res = true;
             int steps;
             for (steps = 0; steps <= max_steps; ++steps) {
-                IValue const *cond_result = cond->fold(m_module, &m_var_lookup_handler);
+                IValue const *cond_result = cond->fold(
+                    m_module, m_value_factory, &m_var_lookup_handler);
                 if (cond_result->is_zero()) {
                     break;
                 } else if (!cond_result->is_one()) {
@@ -1339,10 +1354,14 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IStatement_if const *if_stmt = cast<IStatement_if>(stmt);
             Variable_lookup_handler var_lookup_handler(
                 tos_module(),
+                m_node_factory.get_value_factory(),
                 m_node_factory.get_call_evaluator(),
                 m_tmp_value_map);
             IValue const *cond_result =
-                if_stmt->get_condition()->fold(tos_module(), &var_lookup_handler);
+                if_stmt->get_condition()->fold(
+                    tos_module(),
+                    m_node_factory.get_value_factory(),
+                    &var_lookup_handler);
             if (is<IValue_bad>(cond_result)) {
                 MDL_ASSERT(!"try_inline lied about condition of if statement");
                 return NULL;
@@ -1367,10 +1386,12 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IStatement_switch const *switch_stmt = cast<IStatement_switch>(stmt);
             Variable_lookup_handler var_lookup_handler(
                 tos_module(),
+                m_node_factory.get_value_factory(),
                 m_node_factory.get_call_evaluator(),
                 m_tmp_value_map);
             IValue const *cond_result =
-                switch_stmt->get_condition()->fold(tos_module(), &var_lookup_handler);
+                switch_stmt->get_condition()->fold(
+                    tos_module(), m_node_factory.get_value_factory(), &var_lookup_handler);
             if (is<IValue_bad>(cond_result)) {
                 MDL_ASSERT(!"try_inline lied about condition of switch statement");
                 return NULL;
@@ -1426,6 +1447,7 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IModule const *module = tos_module();
             Variable_lookup_handler var_lookup_handler(
                 tos_module(),
+                m_node_factory.get_value_factory(),
                 m_node_factory.get_call_evaluator(),
                 m_tmp_value_map);
             IExpression const *cond = for_stmt->get_condition();
@@ -1437,7 +1459,8 @@ DAG_node const *DAG_builder::stmt_to_dag(
             const unsigned max_steps = 4;
             unsigned steps;
             for (steps = 0; steps <= max_steps; ++steps) {
-                IValue const *cond_result = cond->fold(module, &var_lookup_handler);
+                IValue const *cond_result = cond->fold(
+                    module, m_node_factory.get_value_factory(),  &var_lookup_handler);
                 if (cond_result->is_zero()) {
                     break;
                 } else if (!cond_result->is_one()) {
@@ -1446,7 +1469,8 @@ DAG_node const *DAG_builder::stmt_to_dag(
                 }
 
                 stmt_to_dag(for_stmt->get_body());
-                if (m_skip_flags != INL_NO_SKIP) break;
+                if (m_skip_flags != INL_NO_SKIP)
+                    break;
 
                 exp_to_dag(for_stmt->get_update());
             }
@@ -1743,8 +1767,7 @@ DAG_node const *DAG_builder::unary_to_dag(
     if (IType_vector const *v_type = as<IType_vector>(type))
         type = v_type->get_element_type();
 
-    IValue_factory *vf    = tos_module()->get_value_factory();
-    IValue const   *v_one = create_pre_post_one(type, vf);
+    IValue const   *v_one = create_pre_post_one(type, &m_value_factory);
 
     DAG_constant const *one = m_node_factory.create_constant(v_one);
 
@@ -2475,7 +2498,14 @@ string DAG_builder::get_cond_name(IExpression_conditional const *cond) const
 
     string name("", get_allocator());
 
-    if (is_user_type(arg_type)) {
+
+    // skip arrays for detection of user types
+    IType const *tp = arg_type;
+    while (IType_array const *a_type = as<IType_array>(tp)) {
+        tp = a_type->get_element_type();
+    }
+
+    if (is_user_type(tp)) {
         // in case of a user type, the operator is "defined" locally in the module
         // of the type, extract that from the type name
 
@@ -2518,30 +2548,8 @@ DAG_node const *DAG_builder::cond_to_dag(
     IExpression::Operator op = IExpression::OK_TERNARY;
 
     IType const *ret_type = m_type_factory.import(cond->get_type());
-    IType const *arg_type = ret_type->skip_type_alias();
 
-    string name("", get_allocator());
-
-    if (is_user_type(arg_type)) {
-        // in case of a user type, the operator is "defined" locally in the module
-        // of the type, extract that from the type name
-
-        m_printer.print(arg_type);
-        name = m_printer.get_line();
-
-        size_t pos = name.rfind("::");
-        MDL_ASSERT(pos != string::npos);
-
-        name = name.substr(0, pos + 2);
-    }
-
-    m_printer.print(ternary_op_to_name());
-    m_printer.print("(bool,");
-    m_printer.print(arg_type);
-    m_printer.print(',');
-    m_printer.print(arg_type);
-    m_printer.print(')');
-    name += m_printer.get_line();
+    string name(get_cond_name(cond));
 
     DAG_call::Call_argument call_args[3];
     call_args[0].arg        = sel;
@@ -2627,6 +2635,7 @@ DAG_node const *DAG_builder::try_inline(
     if (!is_material) {
         Inline_checker checker(
             tos_module(),
+            m_node_factory.get_value_factory(),
             m_node_factory.get_call_evaluator(),
             func_decl,
             call,
@@ -2701,6 +2710,7 @@ DAG_node const *DAG_builder::try_inline(
         }
         Inline_checker checker(
             tos_module(),
+            m_node_factory.get_value_factory(),
             m_node_factory.get_call_evaluator(),
             func_decl,
             arg_types,
@@ -2971,7 +2981,7 @@ DAG_node const *DAG_builder::create_hidden_annotation()
 
     const char *hidden_sig = "::anno::hidden()";
     return m_node_factory.create_call(
-        hidden_sig, IDefinition::DS_UNKNOWN, NULL, 0, /*ret_type=*/NULL);
+        hidden_sig, IDefinition::DS_HIDDEN_ANNOTATION, NULL, 0, /*ret_type=*/NULL);
 }
 
 // Find a parameter for a given array size symbol.
@@ -3111,7 +3121,7 @@ IValue_resource const *DAG_builder::process_resource_urls(
     char const *url = res->get_string_value();
     if (url != NULL && url[0] != '\0') {
 
-        for (int i = 0; i < strlen(url); ++i) {
+        for (size_t i = 0, n = strlen(url); i < n; ++i) {
             if (url[i] == '|') // special marker for non-resolved  weak rel. paths, keep it.
                 return res;
         }

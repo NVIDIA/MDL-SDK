@@ -383,7 +383,7 @@ public:
     /// Get the module declaration of this module if any.
     ///
     /// \return the module declaration or NULL if there was none.
-    virtual IDeclaration_module const *get_module_declararation() const = 0;
+    virtual IDeclaration_module const *get_module_declaration() const = 0;
 
     /// Get the semantic version of this module if one was set.
     virtual ISemantic_version const *get_semantic_version() const = 0;

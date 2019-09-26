@@ -36,9 +36,6 @@ set(THIRDPARTY_SOURCES
     "../../thirdparty/gltf/nlohmann/json.hpp"
     )
 
-source_group("thirdparty" FILES ${THIRDPARTY_SOURCES})
-
-
 # collect headers
 set(PROJECT_HEADERS
     "mdl_d3d12/base_application.h"
@@ -78,11 +75,14 @@ set(PROJECT_SOURCES
     "mdl_d3d12/window_win32.cpp"
     "mdl_d3d12/window_image_file.cpp"
     "gui.cpp"
-    "example_dxr.cpp"
     
     ${PROJECT_HEADERS}
     ${THIRDPARTY_SOURCES}
     )
+
+
+# -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 
 # create target from template
 create_from_base_preset(
@@ -90,7 +90,9 @@ create_from_base_preset(
     TYPE EXECUTABLE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "dxr"
-    SOURCES ${PROJECT_SOURCES}
+    SOURCES 
+        ${PROJECT_SOURCES}
+         "example_dxr.cpp"
     ADDITIONAL_INCLUDE_DIRS
         "../../thirdparty/d3dx12"
         "../../thirdparty/gltf"
@@ -121,6 +123,42 @@ target_add_content(TARGET ${PROJECT_NAME}
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
+
+# -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+
+set(PROJECT_NAME examples-mdl_sdk-dxr_parallel)
+
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME} WIN32
+    TYPE EXECUTABLE
+    NAMESPACE mdl_sdk
+    OUTPUT_NAME "dxr_parallel"
+    VS_PROJECT_NAME "dxr_parallel"
+    SOURCES 
+        ${PROJECT_SOURCES}
+         "example_dxr_parallel.cpp"
+    ADDITIONAL_INCLUDE_DIRS
+        "../../thirdparty/d3dx12"
+        "../../thirdparty/gltf"
+)
+
+# add dependencies
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
+        d3d12
+        imgui
+        mdl::mdl_sdk
+        mdl_sdk::shared
+        examples-mdl_sdk-dxr
+    )
+
+# creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+target_create_vs_user_settings(TARGET ${PROJECT_NAME})
+
+# -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
 
 # add tests if available
 add_tests()

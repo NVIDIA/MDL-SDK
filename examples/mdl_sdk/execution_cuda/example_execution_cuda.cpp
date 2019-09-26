@@ -169,7 +169,7 @@ void usage(char const *prog_name)
         << "  -o <outputfile>      image file to write result to\n"
         << "                       (default: example_cuda_<material_pattern>.png)\n"
         << "  --mdl_path <path>    mdl search path, can occur multiple times.\n"
-        << " --fold_ternary_on_df  fold all ternary operators on *df types\n"
+        << "  --fold_ternary_on_df fold all ternary operators on *df types\n"
         << "  <material_pattern>   a number from 1 to 2 ^ num_materials - 1 choosing which\n"
         << "                       material combination to use (default: 2 ^ num_materials - 1)\n"
         << "  <material_name*>     qualified name of materials to use. The example will try to\n"
@@ -280,9 +280,10 @@ int main(int argc, char* argv[])
                 transaction.get(),
                 /*num_texture_results=*/ 0,
                 options.enable_derivatives,
-                options.fold_ternary_on_df);
+                options.fold_ternary_on_df,
+                /*enable_axuiliary_output*/ false);
 
-            for (unsigned i = 0, n = unsigned(options.material_names.size()); i < n; ++i) {
+            for (std::size_t i = 0, n = options.material_names.size(); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {
                     mc.add_material_subexpr(
                         options.material_names[i],

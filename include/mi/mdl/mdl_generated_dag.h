@@ -676,6 +676,9 @@ public:
         /// Returns the opacity of this instance.
         virtual Opacity get_opacity() const = 0;
 
+        /// Returns the surface opacity of this instance.
+        virtual Opacity get_surface_opacity() const = 0;
+
         /// Returns the cutout opacity of this instance if it is constant.
         ///
         /// \return if the cutout opacity is a constant (and was read),

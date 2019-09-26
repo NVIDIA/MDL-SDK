@@ -29,6 +29,9 @@
 # name of the target and the resulting library
 set(PROJECT_NAME mdl-jit-libbsdf)
 
+# additional clang flags
+set (CLANG_FLAGS "")
+
 # create the project
 project(${PROJECT_NAME})
 
@@ -59,7 +62,8 @@ set(PROJECT_SOURCES
     ${PROJECT_HEADERS}
     )
 
-# disable compiling
+
+# disable compiling by the main compiler (only clang will)
 set_source_files_properties("libbsdf.cpp" PROPERTIES HEADER_FILE_ONLY ON)
 
 # mark files as generated to disable the check for existence during configure
@@ -92,14 +96,14 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf bytecode using clang ..."
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
     COMMAND ${clang_PATH} 
-        -emit-llvm -c -O2 -ffast-math -target x86_64-pc-win32 ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+        -emit-llvm -c -O2 -ffast-math -target x86_64-pc-win32 ${CLANG_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
         -o ${_GENERATED_DIR}/libbsdf.bc -MD -MT ${_GENERATED_DIR}/libbsdf.bc -MP -MF ${_GENERATED_DIR}/libbsdf.d.tmp
     COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf.d.tmp ${_GENERATED_DIR}/libbsdf.d
     COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf.d.tmp
     COMMAND ${clang_PATH} 
-        -emit-llvm -S -O2 -ffast-math -target x86_64-pc-win32 ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+        -emit-llvm -S -O2 -ffast-math -target x86_64-pc-win32 ${CLANG_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
         -o ${_GENERATED_DIR}/libbsdf.ll
-    DEPENDS     
+    DEPENDS
         ${PROJECT_SOURCES}
     VERBATIM
     )

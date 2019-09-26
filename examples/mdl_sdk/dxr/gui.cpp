@@ -45,9 +45,17 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam
 // ------------------------------------------------------------------------------------------------
 
 
-Camera_controls::Camera_controls(mdl_d3d12::Scene_node* node)
-    : movement_speed(1.0f)
+Camera_controls::Camera_controls(mdl_d3d12::Base_application* app, mdl_d3d12::Scene_node* node)
+    : m_app(app)
+    , movement_speed(1.0f)
     , rotation_speed(1.0f)
+    , m_left_mouse_button_held(false)
+    , m_middle_mouse_button_held(false)
+    , m_right_mouse_button_held(false)
+    , m_mouse_move_start_x(0)
+    , m_mouse_move_start_y(0)
+    , m_target(nullptr)
+    , m_has_focus(false)
 {
     set_target(node);
 }
@@ -67,6 +75,57 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
     float delta_up = 0.0f;
     float delta_forward = 0.0f;
 
+    bool has_focus = m_app->get_window()->has_focus();
+    bool orbit_mode = false;
+
+    // lost focus
+    if (m_has_focus && !has_focus)
+    {
+        for (size_t k = 0; k < 512; k++) {
+            io.KeysDown[k] = false;
+        }
+    }
+    m_has_focus = has_focus;
+
+    if (!io.WantCaptureKeyboard && has_focus)
+    {
+        if (io.KeysDown['W'])
+        {
+            delta_forward += float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+
+        if (io.KeysDown['S'])
+        {
+            delta_forward -= float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+
+        if (io.KeysDown['A'])
+        {
+            delta_right -= float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+
+        if (io.KeysDown['D'])
+        {
+            delta_right += float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+
+        if (io.KeysDown['R'])
+        {
+            delta_up += float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+
+        if (io.KeysDown['F'])
+        {
+            delta_up -= float(args.elapsed_time * 4.0f * movement_speed);
+            camera_changed = true;
+        }
+    }
+
     if (!io.WantCaptureMouse)
     {
         // zooming (actually moving in view direction)
@@ -76,9 +135,11 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
             camera_changed = true;
         }
 
-        // rotation
-        if (io.MouseDown[0] && !io.MouseDown[2])
+        // rotation around focus
+        if (io.KeyAlt && io.MouseDown[0] && !io.MouseDown[1] && !io.MouseDown[2])
         {
+            orbit_mode = true;
+
             if (!m_left_mouse_button_held)
             {
                 m_left_mouse_button_held = true;
@@ -104,8 +165,37 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
         else
             m_left_mouse_button_held = false;
 
+
+        // rotation of camera
+        if (!io.MouseDown[0] && io.MouseDown[1] && !io.MouseDown[2])
+        {
+            if (!m_right_mouse_button_held)
+            {
+                m_right_mouse_button_held = true;
+                m_mouse_move_start_x = int32_t(io.MousePos.x);
+                m_mouse_move_start_y = int32_t(io.MousePos.y);
+            }
+            else
+            {
+                int32_t move_dx = int32_t(io.MousePos.x) - m_mouse_move_start_x;
+                int32_t move_dy = int32_t(io.MousePos.y) - m_mouse_move_start_y;
+                if (abs(move_dx) > 0 || abs(move_dy) > 0)
+                {
+                    m_mouse_move_start_x = int32_t(io.MousePos.x);
+                    m_mouse_move_start_y = int32_t(io.MousePos.y);
+
+                    // Update camera
+                    delta_phi += float(move_dx * 0.003f * rotation_speed);
+                    delta_theta += float(move_dy * 0.003f * rotation_speed);
+                    camera_changed = true;
+                }
+            }
+        }
+        else
+            m_right_mouse_button_held = false;
+
         // panning
-        if (!io.MouseDown[0] && io.MouseDown[2])
+        if (!io.MouseDown[0] && !io.MouseDown[1] && io.MouseDown[2])
         {
             if (!m_middle_mouse_button_held)
             {
@@ -138,37 +228,82 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
     {
         auto& trafo = m_target->get_local_transformation();
 
-        // orientation
+        if (orbit_mode)
+        {
+            DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&trafo.translation);
+            DirectX::XMVECTOR target{ 0, 0, 0, 1 };
 
-        // get axis
-        DirectX::XMVECTOR right = 
-            DirectX::XMVector3Rotate({1.0f, 0.0f, 0.0f, 0.0f}, trafo.rotation);
+            // compute distance to target
+            DirectX::XMVECTOR dir = DirectX::XMVectorSubtract(target, pos);
+            DirectX::XMVECTOR distance = DirectX::XMVector3Length(dir);
 
-        DirectX::XMVECTOR up = 
-            DirectX::XMVector3Rotate({0.0f, 1.0f, 0.0f, 0.0f}, trafo.rotation);
+            // compute the actual focus point (camera does probably not face the target directly)
+            DirectX::XMVECTOR forward =
+                DirectX::XMVector3Rotate({ 0.0f, 0.0f, -1.0f, 0.0f }, trafo.rotation);
+            target = DirectX::XMVectorMultiplyAdd(forward, distance, pos);
 
-        DirectX::XMVECTOR forward = 
-            DirectX::XMVector3Rotate({0.0f, 0.0f, -1.0f, 0.0f}, trafo.rotation);
+            // rotate around that focus point
+            dir = DirectX::XMVectorSubtract(pos, target);
+            distance = DirectX::XMVector3Length(dir);
+            dir = DirectX::XMVector3Normalize(dir);
 
-        // get sphere coords
-        float theta = std::acosf(forward.m128_f32[1]) - mdl_d3d12::PI_OVER_2;
-        float phi = std::atan2f(forward.m128_f32[2], forward.m128_f32[0]) + mdl_d3d12::PI_OVER_2;
+            // rotate around world-up 
+            DirectX::XMVECTOR rot = DirectX::XMQuaternionRotationAxis({ 0.0f, 1.0f, 0.0f, 0.0f }, -delta_phi);
+            DirectX::XMVECTOR new_dir = DirectX::XMVector3Rotate(dir, rot);
 
-        // apply rotation 
-        theta = std::max(-mdl_d3d12::PI_OVER_2 * 0.99f, 
-                         std::min(theta + delta_theta, mdl_d3d12::PI_OVER_2 * 0.99f));
-        phi += delta_phi;
+            // compute new rotation 
+            float theta = std::acosf(-new_dir.m128_f32[1]) - mdl_d3d12::PI_OVER_2;
+            float phi = std::atan2f(-new_dir.m128_f32[2], -new_dir.m128_f32[0]) + mdl_d3d12::PI_OVER_2;
+            theta = std::max(-mdl_d3d12::PI_OVER_2 * 0.99f, std::min(theta, mdl_d3d12::PI_OVER_2 * 0.99f));
+            trafo.rotation = DirectX::XMQuaternionRotationRollPitchYaw(-theta, -phi, 0.0f);
+            trafo.rotation = DirectX::XMQuaternionNormalize(trafo.rotation);
 
-        trafo.rotation = DirectX::XMQuaternionRotationRollPitchYaw(-theta, -phi, 0.0f);
-        trafo.rotation = DirectX::XMQuaternionNormalize(trafo.rotation);
+            // rotate around right
+            if ((theta + delta_theta > -mdl_d3d12::PI_OVER_2 * 0.99f) && 
+                 (theta + delta_theta < mdl_d3d12::PI_OVER_2 * 0.99f))
+            {
+                DirectX::XMVECTOR right = DirectX::XMVector3Rotate({ 1.0f, 0.0f, 0.0f, 0.0f }, trafo.rotation);
+                rot = DirectX::XMQuaternionRotationAxis(right, -delta_theta);
+                new_dir = DirectX::XMVector3Rotate(new_dir, rot);
 
-        // apply translation
-        DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&trafo.translation);
-        pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(right, delta_right));
-        pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(up, delta_up));
-        pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(forward, delta_forward));
+                // compute new rotation
+                theta += delta_theta;
+                trafo.rotation = DirectX::XMQuaternionRotationRollPitchYaw(-theta, -phi, 0.0f);
+                trafo.rotation = DirectX::XMQuaternionNormalize(trafo.rotation);
+            }
 
-        DirectX::XMStoreFloat3(&trafo.translation, pos);
+            // set position
+            DirectX::XMVECTOR new_pos = DirectX::XMVectorMultiplyAdd(new_dir, distance, target);
+            DirectX::XMStoreFloat3(&trafo.translation, new_pos);
+        }
+        else
+        {
+            // orientation
+            // get axis
+            DirectX::XMVECTOR right = DirectX::XMVector3Rotate({ 1.0f, 0.0f, 0.0f, 0.0f }, trafo.rotation);
+            DirectX::XMVECTOR up = DirectX::XMVector3Rotate({ 0.0f, 1.0f, 0.0f, 0.0f }, trafo.rotation);
+            DirectX::XMVECTOR forward = DirectX::XMVector3Rotate({ 0.0f, 0.0f, -1.0f, 0.0f }, trafo.rotation);
+
+            // get sphere coords
+            float theta = std::acosf(forward.m128_f32[1]) - mdl_d3d12::PI_OVER_2;
+            float phi = std::atan2f(forward.m128_f32[2], forward.m128_f32[0]) + mdl_d3d12::PI_OVER_2;
+
+            // apply rotation 
+            theta = std::max(-mdl_d3d12::PI_OVER_2 * 0.99f,
+                std::min(theta + delta_theta, mdl_d3d12::PI_OVER_2 * 0.99f));
+            phi += delta_phi;
+
+            trafo.rotation = DirectX::XMQuaternionRotationRollPitchYaw(-theta, -phi, 0.0f);
+            trafo.rotation = DirectX::XMQuaternionNormalize(trafo.rotation);
+
+            // apply translation
+            DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&trafo.translation);
+            pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(right, delta_right));
+            pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(up, delta_up));
+            pos = DirectX::XMVectorAdd(pos, DirectX::XMVectorScale(forward, delta_forward));
+
+            DirectX::XMStoreFloat3(&trafo.translation, pos);
+        }
     }
 
     return camera_changed;
@@ -181,8 +316,11 @@ void Camera_controls::set_target(mdl_d3d12::Scene_node* node)
 
     m_target = node;
     m_left_mouse_button_held = false;
+    m_middle_mouse_button_held = false;
+    m_right_mouse_button_held = false;
     m_mouse_move_start_x = 0;
     m_mouse_move_start_y = 0;
+    m_has_focus = false;
 }
 
 
@@ -190,7 +328,8 @@ void Camera_controls::set_target(mdl_d3d12::Scene_node* node)
 
 Gui::Gui(Base_application* app)
     : m_app(app)
-    , m_selected_material("")
+    , m_camera_controls(app)
+    , m_selected_material(nullptr)
     , m_selected_camera("")
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -253,7 +392,7 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
     {
         m_camera_map.clear();
 
-        scene->traverse(Scene_node::Kind::Camera, [&](Scene_node* node)
+        scene->visit(Scene_node::Kind::Camera, [&](Scene_node* node)
         {
             std::string name = node->get_camera()->get_name();
             if (m_camera_map.find(name) == m_camera_map.end())
@@ -282,37 +421,21 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
     }
 
     // setup material selection
-    size_t mat_count = scene->get_material_count();
-    static std::map<std::string, IMaterial*> material_map;
-    if (material_map.size() != mat_count)
+    Mdl_material_library& mat_lib = *m_app->get_mdl_sdk().get_library();
+
+    // select the first material if there is none selected
+    if (m_selected_material == nullptr)
     {
-        material_map.clear();
-        for (size_t i = 0; i < mat_count; ++i)
+        if (mat_lib.visit_materials([&](Mdl_material* mat) {
+                m_selected_material = mat;
+                return false; // stop visits
+            }))
         {
-            auto mat = scene->get_material(i);
-            std::string name = mat->get_name();
-            if (material_map.find(name) == material_map.end())
-            {
-                if (m_selected_material.empty())
-                    m_selected_material = name;
-
-                material_map[name] = mat;
-                continue;
-            }
-
-            size_t n = 0;
-            while (true)
-            {
-                std::string test = name + " (" + std::to_string(++n) + ")";
-                if (material_map.find(test) == material_map.end())
-                {
-                    material_map[test] = mat;
-                    break;
-                }
-            }
+            // if visit returns 'true' then there was no material at all
+            m_selected_material = nullptr;
         }
     }
-
+ 
     // handle camera controls
     reset_rendering |= m_camera_controls.update(args);
 
@@ -325,6 +448,11 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
     // show camera selection combo box
     if (m_camera_map.size() > 0)
     {
+        ImGui::Dummy(ImVec2(0.0f, 3.0f));
+        ImGui::Text("Camera options");
+        ImGui::Separator();
+
+
         if (ImGui::BeginCombo("camera", m_selected_camera.c_str()))
         {
             for (const auto& it : m_camera_map)
@@ -343,24 +471,53 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
 
         ImGui::SliderFloat("movement speed", &m_camera_controls.movement_speed, 0.0f, 20.0f);
         ImGui::SliderFloat("rotation speed", &m_camera_controls.rotation_speed, 0.0f, 20.0f);
+
+        if (ImGui::Button("fit all scene objects"))
+        {
+            const Bounding_box& aabb = scene->get_root()->get_global_bounding_box();
+            DirectX::XMFLOAT3 focus = aabb.center();
+            DirectX::XMFLOAT3 pos = focus;
+
+            DirectX::XMFLOAT3 size = aabb.size();
+            pos.x += 0.5f * size.x;
+            pos.y += 0.5f * size.y;
+            pos.z += 2.0f * size.z;
+
+            m_camera_controls.get_target()->set_local_transformation(
+                Transform::look_at(pos, focus, {0.0f, 1.0f, 0.0f}));
+
+            reset_rendering = true;
+        }
     }
 
     // show material selection combo box
-
-    if (mat_count > 0)
+    if (m_selected_material != nullptr)
     {
-        if (ImGui::BeginCombo("material", m_selected_material.c_str()))
+        ImGui::Dummy(ImVec2(0.0f, 3.0f));
+        ImGui::Text("Material options");
+        ImGui::Separator();
+
+        std::string current_label = m_selected_material->get_name() + 
+            " (id: " + std::to_string(m_selected_material->get_id()) + ")";
+
+        if (ImGui::BeginCombo("material", current_label.c_str()))
         {
-            for (const auto& it : material_map)
-            {
-                bool is_selected = it.first == m_selected_material;
-                if (ImGui::Selectable(it.first.c_str(), is_selected))
+            // add selectable materials to the combo box
+            mat_lib.visit_materials([&](Mdl_material* mat)
                 {
-                    m_selected_material = it.first;
-                }
-                if (is_selected)
-                    ImGui::SetItemDefaultFocus();
-            }
+                    bool is_selected = mat == m_selected_material;
+                    std::string label = mat->get_name() + 
+                        " (id: " + std::to_string(mat->get_id()) + ")";
+                    if (ImGui::Selectable(label.c_str(), is_selected))
+                    {
+                        m_selected_material = mat;
+                    }
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+
+                    return true; // continue visits
+                });
+
             ImGui::EndCombo();
         }
 
@@ -368,9 +525,9 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
         Mdl_material_info* mat_info = nullptr;
         Mdl_material* mdl_mat = nullptr;
         
-        if (!m_selected_material.empty())
+        if (m_selected_material)
         {
-            mdl_mat = dynamic_cast<Mdl_material*>(material_map[m_selected_material]);
+            mdl_mat = dynamic_cast<Mdl_material*>(m_selected_material);
             if(mdl_mat)
                 mat_info = mdl_mat->get_info();
         }

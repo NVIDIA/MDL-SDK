@@ -81,6 +81,9 @@ namespace mdl_d3d12
         << "--res <res_x> <res_y>     Resolution (default: " << defaults.window_width 
                                       << "x" << defaults.window_height << ")\n"
 
+        << "--gpu <num>               Select a specific (non-default GPU) in case there are.\n"
+        << "                          multiple available. See log output for option.\n"
+
         << "--nogui                   Don't open interactive display\n"
 
         << "--gui_scale <factor>      GUI scaling factor (default: " << defaults.gui_scale << ")\n"
@@ -88,6 +91,8 @@ namespace mdl_d3d12
         << "--hide_gui                GUI is hidden by default, press SPACE to show it\n"
 
         << "--nocc                    Don't use class-compilation\n"
+        << "--noaux                   Don't generate code for albedo and normal buffers\n"
+        << "--nothreads               Disable parallel loading, e.g. of textures.\n"
 
         << "--hdr <filename>          HDR environment map\n"
         << "                          (default: <scene_folder>/" << 
@@ -101,8 +106,10 @@ namespace mdl_d3d12
         << "--max_path_length <num>   Maximum path length (up to one total internal reflection),\n"
         << "                          clamped to 2..100, default " << defaults.ray_depth << "\n"
 
-        << "--iterations              Number of progressive iterations. In GUI-mode, this is the\n"
+        << "--iterations <num>        Number of progressive iterations. In GUI-mode, this is the\n"
         << "                          iterations per frame. In NO-GUI-mode it is the total count.\n"
+
+        << "--no_derivs               Disables automatic derivatives.\n"
 
         << "--no_firefly_clamp        Disables firefly clamping used to suppress white pixels\n"
         << "                          because of low probability paths at early iterations.\n"
@@ -110,8 +117,11 @@ namespace mdl_d3d12
         << "-l <x> <y> <z> <r> <g> <b>      Add an isotropic point light with given coordinates\n"
         << "                                and intensity (flux) (default: none)\n"
             
-        << "--mat <qualified_name>     override all materials using a qualified material name."
-        << "\n";
+        << "--mat <qualified_name>    override all materials using a qualified material name.\n"
+        << "--z_axis_up               flip coordinate axis while loading the scene to (x, -z, y).\n"
+        << "--upm <value>             units per meter. the inverse is applied while loading the\n"
+           "                          the scene. (default: " << defaults.units_per_meter << ")\n"
+        ;
 
         log_info(ss.str());
     }
@@ -135,6 +145,10 @@ namespace mdl_d3d12
                     {
                         options.use_class_compilation = false;
                     }
+                    if (strcmp(opt, "--noaux") == 0)
+                    {
+                        options.enable_auxiliary = false;
+                    }
                     else if (strcmp(opt, "--nogui") == 0)
                     {
                         options.no_gui = true;
@@ -146,6 +160,10 @@ namespace mdl_d3d12
                     else if (strcmp(opt, "--hide_gui") == 0)
                     {
                         options.hide_gui = true;
+                    }
+                    else if (strcmp(opt, "--nothreads") == 0)
+                    {
+                        options.force_single_theading = true;
                     }
                     else if (strcmp(opt, "--gui_scale") == 0 && i < argc - 1)
                     {
@@ -160,16 +178,35 @@ namespace mdl_d3d12
                     {
                         options.iterations = std::max(atoi(argv[++i].c_str()), 1);
                     }
+                    else if (strcmp(opt, "--gpu") == 0 && i < argc - 1)
+                    {
+                        options.gpu = std::max(atoi(argv[++i].c_str()), -1);
+                    }
                     else if (strcmp(opt, "-o") == 0 && i < argc - 1)
                     {
                         options.output_file = argv[++i];
                         std::replace(options.output_file.begin(), options.output_file.end(), 
                                      '\\', '/');
+
+                        if (!str_remove_quotes(options.output_file))
+                        {
+                            log_error("Unexpected quotes in: '" + options.output_file + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
                     }
                     else if (strcmp(opt, "--hdr") == 0 && i < argc - 1)
                     {
                         std::string environment = argv[++i];
                         std::replace(environment.begin(), environment.end(), '\\', '/');
+
+                        if (!str_remove_quotes(environment))
+                        {
+                            log_error("Unexpected quotes in: '" + environment + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+
                         options.user_options["environment"] = environment;
                     }
                     else if (strcmp(opt, "--hdr_scale") == 0 && i < argc - 1)
@@ -183,6 +220,10 @@ namespace mdl_d3d12
                     else if (strcmp(opt, "--no_firefly_clamp") == 0)
                     {
                         options.firefly_clamp = false;
+                    }
+                    else if (strcmp(opt, "--no_derivs") == 0)
+                    {
+                        options.automatic_derivatives = true;
                     }
                     else if (strcmp(opt, "-h") == 0 || strcmp(opt, "--help") == 0)
                     {
@@ -211,7 +252,23 @@ namespace mdl_d3d12
                     }
                     else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1)
                     {
-                        options.mdl_paths.push_back(argv[++i]);
+                        std::string mdl_path = argv[++i];
+                        if (!str_remove_quotes(mdl_path))
+                        {
+                            log_error("Unexpected quotes in: '" + mdl_path + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+
+                        options.mdl_paths.push_back(mdl_path);
+                    }
+                    else if (strcmp(opt, "--z_axis_up") == 0)
+                    {
+                    options.handle_z_axis_up = true;
+                    }
+                    else if (strcmp(opt, "--upm") == 0 && i < argc - 1)
+                    {
+                    options.units_per_meter = static_cast<float>(atof(argv[++i].c_str()));
                     }
                     else
                     {
@@ -226,10 +283,21 @@ namespace mdl_d3d12
                     // default argument is the GLTF scene to load
                     options.scene = argv[i];
                     std::replace(options.scene.begin(), options.scene.end(), '\\', '/');
+
+                    if (!str_remove_quotes(options.scene))
+                    {
+                        log_error("Unexpected quotes in: '" + options.scene + "'.", SRC);
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
                 }
             }
         }
 
+        // set log to output
+        std::string log_path = options.output_file;
+        log_path = log_path.substr(0, log_path.find_last_of('.') + 1) + "log";
+        log_set_file_path(log_path.c_str());
 
         std::string cwd = get_working_directory();
         log_info("Current working directory: " + cwd);

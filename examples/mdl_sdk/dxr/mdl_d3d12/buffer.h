@@ -38,12 +38,14 @@ namespace mdl_d3d12
 {
     class Base_application;
 
-    class Buffer
+    class Buffer : public Resource
     {
 
     public:
         explicit Buffer(Base_application* app, size_t size_in_byte, std::string debug_name);
         virtual ~Buffer() = default;
+
+        std::string get_debug_name() const override { return m_debug_name; }
 
         size_t get_size_in_byte() const { return m_size_in_byte; }
 
@@ -168,7 +170,7 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
-    class Constant_buffer_base
+    class Constant_buffer_base : public Resource
     {
     public:
         explicit Constant_buffer_base(
@@ -205,14 +207,15 @@ namespace mdl_d3d12
 
         virtual ~Constant_buffer_base() = default;
 
+        std::string get_debug_name() const override { return m_debug_name; }
+
         ID3D12Resource* get_resource() const { return m_resource.Get(); }
 
-        D3D12_CONSTANT_BUFFER_VIEW_DESC get_constant_buffer_view_description() const
+        bool get_constant_buffer_view_description(D3D12_CONSTANT_BUFFER_VIEW_DESC& desc) const
         {
-            D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
             desc.BufferLocation = m_resource->GetGPUVirtualAddress();
             desc.SizeInBytes = static_cast<UINT>(m_size_in_byte);
-            return std::move(desc);
+            return true;
         }
 
         bool get_shader_resource_view_description(

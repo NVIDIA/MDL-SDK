@@ -209,9 +209,11 @@ void LLVM_code_generator::hlsl_compile(llvm::Module *module, string &code)
         String_stream_writer out(code);
 
         llvm::legacy::PassManager mpm;
-        mpm.add(llvm::createCFGSimplificationPass());  // must be executed before CNS
+        mpm.add(llvm::createCFGSimplificationPass(     // must be executed before CNS
+            1, false, false, true, false, /*AvoidPointerPHIs=*/ true));
         mpm.add(llvm::hlsl::createControlledNodeSplittingPass());  // resolve irreducible CF
-        mpm.add(llvm::createCFGSimplificationPass());  // eliminate dead blocks created by CNS
+        mpm.add(llvm::createCFGSimplificationPass(     // eliminate dead blocks created by CNS
+            1, false, false, true, false, /*AvoidPointerPHIs=*/ true));
         mpm.add(llvm::createLoopSimplifyCFGPass());    // ensure all exit blocks are dominated by
                                                        // the loop header
         mpm.add(llvm::hlsl::createLoopExitEnumerationPass());  // ensure all loops have <= 1 exits

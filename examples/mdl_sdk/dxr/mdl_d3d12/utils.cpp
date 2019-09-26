@@ -30,9 +30,17 @@
 #include <Windows.h>
 #include <d3d12.h>
 #include <iostream>
+#include <fstream>
+#include <mutex>
+#include <thread>
 
 namespace
 {
+    static std::mutex s_cerr_mtx;
+    static std::mutex s_vs_console_mtx;
+    static std::mutex s_log_file_mtx;
+    static std::ofstream s_log_file;
+
     void print(
         const std::string& prefix, 
         const std::string& message, 
@@ -53,8 +61,30 @@ namespace
         {
             m.append("\n");
         }
-        std::cerr << m.c_str();
-        OutputDebugStringA(m.c_str());
+
+        std::thread task_cerr([&, m]() {
+            s_cerr_mtx.lock();
+            std::cerr << m.c_str(); 
+            s_cerr_mtx.unlock();
+        });
+        task_cerr.detach();
+
+        std::thread task_vs_console([&, m]() {
+            s_vs_console_mtx.lock();
+            OutputDebugStringA(m.c_str());
+            s_vs_console_mtx.unlock();
+            });
+        task_vs_console.detach();
+        
+        if (s_log_file.is_open())
+        {
+            std::thread task_log_file([&, m]() {
+                s_log_file_mtx.lock();
+                s_log_file << m.c_str();
+                s_log_file_mtx.unlock();
+                });
+            task_log_file.detach();
+        }
     }
 
     std::string to_string(HRESULT error_code)
@@ -152,6 +182,30 @@ namespace mdl_d3d12
             throw(message.c_str());
     }
 
+
+    void log_set_file_path(const char* log_file_path)
+    {
+        s_log_file_mtx.lock();
+
+        // close current log file
+        if (s_log_file.is_open())
+            s_log_file.close();
+
+        // open new log file
+        if (log_file_path)
+        {
+            s_log_file = std::ofstream();
+            s_log_file.open(log_file_path, std::ofstream::out | std::ofstream::trunc);
+
+            if (!s_log_file.is_open())
+                log_error("Failed to open log file for writing: " + 
+                    std::string(log_file_path), SRC);
+
+            s_log_file.seekp(std::ios_base::beg);
+        }
+
+        s_log_file_mtx.unlock();
+    }
 
     void set_debug_name(ID3D12Object* obj, const std::string& name)
     {

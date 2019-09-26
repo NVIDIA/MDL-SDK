@@ -105,7 +105,6 @@ public:
     , m_resolver(NULL)
     , m_deriv_info_dag_map(alloc)
     , m_deriv_func_inst_map(alloc)
-    , m_want_derivatives(false)
     {
     }
 
@@ -131,27 +130,20 @@ public:
     /// Mark the given DAG node as a node for which derivatives should be calculated.
     void mark_calc_derivatives(DAG_node const *node);
 
-    /// Follow initial requests for analysis information from function calls expecting
-    /// derivatives up to the leafs of the corresponding arguments and mark all DAG nodes,
-    /// for which derivative information should be calculated.
-    ///
-    /// \param expr  the DAG node for which the analysis information should be calculated
-    void find_initial_users(DAG_node const *expr);
-
     /// Allocate a Func_deriv_info object owned by this Derivative_infos object.
     ///
     /// \param num_params  the number of parameters of the function
     Func_deriv_info *alloc_function_derivative_infos(size_t num_params) const;
 
-private:
     /// Determine for which arguments of a call derivatives are needed.
     ///
-    /// \param call  the DAG call to check
+    /// \param call              the DAG call to check
+    /// \param want_derivatives  if true, the call should return derivatives
     ///
     /// \returns a bitset with the first bit stating whether any derivatives are needed for
     ///     the arguments and one bot per argument specifying whether this argument needs
     ///     derivatives.
-    Bitset call_wants_arg_derivatives(DAG_call const *call);
+    Bitset call_wants_arg_derivatives(DAG_call const *call, bool want_derivatives);
 
 private:
     /// The allocator.
@@ -183,10 +175,6 @@ private:
     /// semantics, because for example sin(float3) internally uses sin(float) which is not
     /// visible on DAG/AST level.
     mutable Deriv_func_inst_map m_deriv_func_inst_map;
-
-    /// Current state specifying whether derivatives should be calculated.
-    /// Used during calculating the analysis information.
-    bool m_want_derivatives;
 };
 
 
@@ -211,10 +199,11 @@ public:
 
     /// Rebuild an expression with derivative information applied.
     /// This results in a DAG with derivative types and calls returning derivatives marked
-    /// with a '#' prefix in the call name. CSE should be enabled at this point.
+    /// with a '#' prefix in the call name, if derivatives are required for this node.
     ///
-    /// \param expr  the expression to rebuild
-    DAG_node const *rebuild(DAG_node const *expr);
+    /// \param expr              the expression to rebuild
+    /// \param want_derivatives  if true, the rebuilt node should return derivatives
+    DAG_node const *rebuild(DAG_node const *expr, bool want_derivatives);
 
     /// Creates a zero value for use a dx or dy component of a dual.
     ///
@@ -241,6 +230,11 @@ private:
 
     /// Map from MDL types to their derivative type versions.
     Deriv_type_map m_deriv_type_map;
+
+    typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Result_cache;
+
+    /// Map from DAG node pointers with want_derivatives encoded in lowest bit to result a DAG node.
+    Result_cache m_result_cache;
 
     /// ID to make type names unique for this builder.
     unsigned m_name_id;

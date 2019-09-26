@@ -62,6 +62,7 @@ Mdl_compiled_material::Mdl_compiled_material()
     m_mdl_wavelength_max( 0.0f),
     m_properties( 0),  // avoid ubsan warning with swap() and temporaries
     m_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_surface_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
     m_cutout_opacity( -1.0f),
     m_has_cutout_opacity( false)
 {
@@ -141,6 +142,7 @@ Mdl_compiled_material::Mdl_compiled_material(
     }
 
     m_opacity = instance->get_opacity();
+    m_surface_opacity = instance->get_surface_opacity();
     m_has_cutout_opacity = false;
     if (mi::mdl::IValue_float const *v_cutout = instance->get_cutout_opacity()) {
         m_has_cutout_opacity = true;
@@ -293,6 +295,7 @@ void Mdl_compiled_material::swap( Mdl_compiled_material& other)
     std::swap( m_properties, other.m_properties);
     std::swap( m_internal_space, other.m_internal_space);
     std::swap( m_opacity, other.m_opacity);
+    std::swap( m_surface_opacity, other.m_surface_opacity);
     std::swap( m_cutout_opacity, other.m_cutout_opacity);
     std::swap( m_has_cutout_opacity, other.m_has_cutout_opacity);
 }
@@ -386,9 +389,16 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     return call_tag;
 }
 
-mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity Mdl_compiled_material::get_opacity() const
+mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
+Mdl_compiled_material::get_opacity() const
 {
     return m_opacity;
+}
+
+mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
+Mdl_compiled_material::get_surface_opacity() const
+{
+    return m_surface_opacity;
 }
 
 bool Mdl_compiled_material::get_cutout_opacity(mi::Float32* cutout_opacity) const
@@ -419,6 +429,7 @@ const SERIAL::Serializable* Mdl_compiled_material::serialize(
     serializer->write( m_properties);
     serializer->write( m_internal_space);
     serializer->write( static_cast<mi::Uint32>( m_opacity));
+    //serializer->write( static_cast<mi::Uint32>( m_surface_opacity));
     serializer->write( m_cutout_opacity);
     serializer->write( m_has_cutout_opacity);
     return this + 1;
@@ -447,7 +458,9 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     mi::Uint32 opacity_as_uint32;
     deserializer->read(&opacity_as_uint32);
     m_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
-
+    //deserializer->read(&opacity_as_uint32);
+    //m_surface_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
+    m_surface_opacity = mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
     deserializer->read( &m_cutout_opacity);
     deserializer->read( &m_has_cutout_opacity);
     return this + 1;
@@ -489,6 +502,10 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     const char *opacity_str = m_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
         "opaque" : (mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT ? "transparent" : "unknown");
     s << "Opacity: " << opacity_str << std::endl;
+
+    const char *surf_opacity_str = m_surface_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
+        "opaque" : (mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT ? "transparent" : "unknown");
+    s << "Surface opacity: " << surf_opacity_str << std::endl;
 
     if (m_has_cutout_opacity) {
         s << "Cutout_opacity: " << m_cutout_opacity << std::endl;

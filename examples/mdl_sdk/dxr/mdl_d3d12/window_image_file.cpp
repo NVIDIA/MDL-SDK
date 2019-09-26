@@ -62,8 +62,14 @@ namespace mdl_d3d12
             "BackBuffer");
 
         // create render target view
-        m_back_buffer_rtv = 
-            m_app->get_render_target_descriptor_heap()->add_render_target_view(m_back_buffer);;
+        m_back_buffer_rtv = m_app->get_render_target_descriptor_heap()->reserve_views(1);
+        if (!m_app->get_render_target_descriptor_heap()->create_render_target_view(
+            m_back_buffer, m_back_buffer_rtv))
+        {
+            std::string msg = "Failed to create resource view for back buffer.";
+            log_error(msg, SRC);
+            throw(msg);
+        }
     }
 
     Window_image_file::~Window_image_file()
@@ -125,6 +131,6 @@ namespace mdl_d3d12
 
     D3D12_CPU_DESCRIPTOR_HANDLE Window_image_file::get_back_buffer_rtv() const
     {
-        return m_app->get_render_target_descriptor_heap()->get_cpu_handle(m_back_buffer_rtv);
+        return m_back_buffer_rtv.get_cpu_handle();
     }
 }

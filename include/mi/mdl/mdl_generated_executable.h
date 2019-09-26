@@ -186,7 +186,8 @@ public:
         FK_DF_INIT,
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
-        FK_DF_PDF
+        FK_DF_PDF,
+        FK_DF_AUXILIARY
     };
 
     /// Language to use for the function prototype.

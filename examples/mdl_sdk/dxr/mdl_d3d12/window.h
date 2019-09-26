@@ -55,6 +55,9 @@ namespace mdl_d3d12
         /// closes the window after finishing the current frame
         virtual void close() = 0;
 
+        /// returns true if the window is the foreground window
+        virtual bool has_focus() const = 0;
+
         virtual Texture* get_back_buffer() const = 0;
         virtual D3D12_CPU_DESCRIPTOR_HANDLE get_back_buffer_rtv() const = 0;
         virtual bool present_back_buffer() = 0;

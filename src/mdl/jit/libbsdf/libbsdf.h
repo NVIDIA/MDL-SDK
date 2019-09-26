@@ -119,6 +119,19 @@ struct BSDF_pdf_data
     float pdf;
 };
 
+struct BSDF_auxiliary_data
+{
+    // Input fields
+    float3 ior1; // IOR current medium
+    float3 ior2; // IOR other side
+    float3 k1;   // outgoing direction
+
+    // Output fields
+    float3 albedo;
+    float3 normal;
+};
+
+
 // functions provided by libbsdf
 typedef void (*mdl_bsdf_sample_function)  (BSDF_sample_data *,
                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
@@ -126,8 +139,8 @@ typedef void (*mdl_bsdf_evaluate_function)(BSDF_evaluate_data *,
                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 typedef void (*mdl_bsdf_pdf_function)     (BSDF_pdf_data *,
                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-
-
+typedef void(*mdl_bsdf_auxiliary_function)(BSDF_auxiliary_data *,
+                                           MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
 // type of events created by EDF importance sampling
 enum EDF_event_type
@@ -168,12 +181,23 @@ struct EDF_pdf_data
     float pdf;              // pdf (non-projected hemisphere)
 };
 
-typedef void(*mdl_edf_sample_function)  (EDF_sample_data *,
-                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-typedef void(*mdl_edf_evaluate_function)(EDF_evaluate_data *,
-                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-typedef void(*mdl_edf_pdf_function)     (EDF_pdf_data *,
-                                         MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+struct EDF_auxiliary_data
+{
+    // Input fields
+    float3 k1;              // outgoing direction
+
+    // Output fields
+    // reserved for future use
+};
+
+typedef void(*mdl_edf_sample_function)      (EDF_sample_data *,
+                                             MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void(*mdl_edf_evaluate_function)    (EDF_evaluate_data *,
+                                             MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void(*mdl_edf_pdf_function)         (EDF_pdf_data *,
+                                             MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void(*mdl_edf_auxiliary_function)   (EDF_auxiliary_data *,
+                                             MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
 
 #endif // MDL_LIBBSDF_H

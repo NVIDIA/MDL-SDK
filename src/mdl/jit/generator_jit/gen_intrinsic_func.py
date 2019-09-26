@@ -360,6 +360,11 @@ class SignatureParser:
 		o = self.parse_file(f)
 		f.close()
 
+	def parse_builtins(self, buffer):
+		"""Parse a mdl module given as buffer."""
+		self.curr_module = ""
+		o = self.parse_buffer(buffer)
+
 	def as_intrinsic_function(self, decl):
 		"""Check if the given declaration is an intrinsic function declaration."""
 		if decl[:5] == "const":
@@ -608,6 +613,17 @@ class SignatureParser:
 				return True
 		return False
 
+	def is_builtin_supported(self, name, signature):
+		"""Checks if the given builtin intrinsic is supported."""
+		ret_type, params = self.split_signature(signature)
+
+		if name == "color":
+			if len(params) == 2:
+				# support color(float[<N>], float[N])
+				self.intrinsic_modes[name + signature] = "spectrum_constructor"
+				return True
+		return False
+
 	def is_debug_supported(self, name, signature):
 		"""Checks if the given debug intrinsic is supported."""
 		ret_type, params = self.split_signature(signature)
@@ -669,8 +685,8 @@ class SignatureParser:
 				self.intrinsic_modes[name + signature] = "math::distance"
 				return True
 			elif name == "emission_color":
-				# unsupported emission_color(float[<N>], float[N]), emission_color(color)
-				self.unsupported_intrinsics[name] = "unsupported"
+				# support emission_color(float[<N>], float[N])
+				self.intrinsic_modes[name + signature] = "math::emission_color"
 				return True
 			elif name == "eval_at_wavelength":
 				# support eval_at_wavelength(color,float)
@@ -711,6 +727,10 @@ class SignatureParser:
 			elif name == "blackbody":
 				# support blackbody with 1 argument
 				self.intrinsic_modes[name + signature] = "math::blackbody"
+				return True
+			elif name == "emission_color":
+				# supported emission_color(color)
+				self.intrinsic_modes[name + signature] = "math::first_arg"
 				return True
 			elif name == "length":
 				# support length(floatX)
@@ -797,6 +817,8 @@ class SignatureParser:
 			return self.is_tex_supported(name, signature)
 		elif modname == "debug":
 			return self.is_debug_supported(name, signature)
+		elif modname == "":
+			return self.is_builtin_supported(name, signature)
 		return False
 
 	def skip_until(self, token_set, tokens):
@@ -887,12 +909,12 @@ class SignatureParser:
 		else:
 			warning("Cannot generate code for %s" % decl)
 
-	def parse_file(self, f):
-		"""Parse a file and retrieve intrinsic function definitions."""
+	def parse_lines(self, lines):
+		"""Parse lines and retrieve intrinsic function definitions."""
 
 		start = False
 		curr_line = ""
-		for line in f.readlines():
+		for line in lines:
 			l = line.strip();
 
 			# strip line comments
@@ -915,6 +937,14 @@ class SignatureParser:
 					if self.debug:
 						print decl
 					self.get_signature(decl)
+
+	def parse_file(self, f):
+		"""Parse a file and retrieve intrinsic function definitions."""
+		self.parse_lines(f.readlines())
+
+	def parse_buffer(self, buffer):
+		"""Parse a string and retrieve intrinsic function definitions."""
+		self.parse_lines(buffer.splitlines())
 
 	def gen_condition(self, f, params, as_assert, pre_if = ""):
 		"""Generate the condition for the parameter type check."""
@@ -1043,17 +1073,21 @@ class SignatureParser:
 		if mode == None:
 			print "error: ", intrinsic + signature
 
-		self.write(f, 'Function_instance inst(m_code_gen.get_allocator(), func_def, return_derivs);\n')
-		self.write(f, 'LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::%s");\n' % self.m_intrinsic_mods[intrinsic])
-		self.write(f, "llvm::Function    *func     = ctx_data->get_function();\n")
+		params = { "mode" : "::" + self.m_intrinsic_mods[intrinsic] }
+		if params["mode"] == "::":
+			params["mode"] = "::<builtins>"
+		code = """
+		Function_instance inst(m_code_gen.get_allocator(), func_def, return_derivs);
+		LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "%(mode)s");
+		llvm::Function    *func     = ctx_data->get_function();
+		unsigned          flags     = ctx_data->get_function_flags();
 
-		self.write(f, "unsigned          flags     = ctx_data->get_function_flags();\n\n")
+		Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+		llvm::Value *res;
 
-		self.write(f, "Function_context ctx(m_alloc, m_code_gen, inst, func, flags);\n")
-		self.write(f, "llvm::Value *res;\n")
-
-		# all intrinsics have internal linkage
-		self.write(f, "func->setLinkage(llvm::GlobalValue::InternalLinkage);\n")
+		func->setLinkage(llvm::GlobalValue::InternalLinkage);
+		"""
+		self.format_code(f, code % params)
 
 		ret_type, params = self.split_signature(signature)
 
@@ -2706,33 +2740,115 @@ class SignatureParser:
 
 		elif mode == "math::blackbody":
 			code = """
-			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
-			if (m_has_res_handler) {
-				llvm::Function  *bb_func = get_runtime_func(RT_MDL_BLACKBODY);
-				llvm::ArrayType *arr_tp  = m_code_gen.m_type_mapper.get_arr_float_3_type();
-				llvm::Value     *tmp     = ctx.create_local(arr_tp, "tmp");
-				ctx->CreateCall(bb_func, { tmp, ctx.get_dual_val(a) });
+			llvm::Type      *ret_tp  = ctx.get_non_deriv_return_type();
+			llvm::Function  *bb_func = get_runtime_func(RT_MDL_BLACKBODY);
+			llvm::ArrayType *arr_tp  = m_code_gen.m_type_mapper.get_arr_float_3_type();
+			llvm::Value     *tmp     = ctx.create_local(arr_tp, "tmp");
+			ctx->CreateCall(bb_func, { tmp, ctx.get_dual_val(a) });
 
-				if (ret_tp->isArrayTy()) {
-					res = ctx->CreateLoad(tmp);
-				} else {
-					llvm::Value *arr = ctx->CreateLoad(tmp);
-					res = llvm::ConstantAggregateZero::get(ret_tp);
-					for (unsigned i = 0; i < 3; ++i) {
-						unsigned idxes[1] = { i };
-						tmp = ctx->CreateExtractValue(arr, idxes);
-						llvm::Value *idx = ctx.get_constant(int(i));
-						res = ctx->CreateInsertElement(res, tmp, idx);
-					}
-				}
+			if (ret_tp->isArrayTy()) {
+				res = ctx->CreateLoad(tmp);
 			} else {
-				res = llvm::Constant::getNullValue(ret_tp);
+				llvm::Value *arr = ctx->CreateLoad(tmp);
+				res = llvm::ConstantAggregateZero::get(ret_tp);
+				for (unsigned i = 0; i < 3; ++i) {
+					unsigned idxes[1] = { i };
+					tmp = ctx->CreateExtractValue(arr, idxes);
+					llvm::Value *idx = ctx.get_constant(int(i));
+					res = ctx->CreateInsertElement(res, tmp, idx);
+				}
+			}
+			if (!m_has_res_handler) {
+				// need libmdlrt
+				m_code_gen.m_link_libmdlrt = true;
 			}
 			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
 			}
 			"""
 			self.format_code(f, code)
+
+		elif mode == "math::first_arg":
+			code = ""
+			first = True
+			for param in params:
+				if first:
+					first = False
+				else:
+					code += """
+						(void)%s;""" % chr(ord('a') + idx)
+				idx = idx + 1
+			code += """
+			res = a;
+			"""
+			self.format_code(f, code)
+
+		elif mode == "math::emission_color" or mode == "spectrum_constructor":
+			params = {}
+			if mode == "math::emission_color":
+				params["intrinsic"] = "RT_MDL_EMISSION_COLOR"
+			else:
+				params["intrinsic"] = "RT_MDL_REFLECTION_COLOR"
+
+			code = """
+			llvm::Type      *ret_tp  = ctx.get_non_deriv_return_type();
+			llvm::Function  *bb_func = get_runtime_func(%(intrinsic)s);
+			llvm::ArrayType *arr_tp  = m_code_gen.m_type_mapper.get_arr_float_3_type();
+			llvm::Value     *tmp     = ctx.create_local(arr_tp, "tmp");
+			llvm::Value     *a_desc  = ctx.get_dual_val(a);
+			llvm::Value     *b_desc  = ctx.get_dual_val(b);
+
+			// this is a runtime function, and as such it is not instantiated, so the arrays are
+			// passed by array descriptors
+
+			if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+				// passed by value
+
+				// we must always inline this for HLSL to avoid pointer type arguments
+				func->addFnAttr(llvm::Attribute::AlwaysInline);
+
+				llvm::Value *args[] = {
+					ctx->CreateBitCast(tmp, m_code_gen.m_type_mapper.get_float_ptr_type()),
+					ctx.get_deferred_base(a_desc),
+					ctx.get_deferred_base(b_desc),
+					ctx->CreateTrunc(
+						ctx.get_deferred_size(a_desc),
+						m_code_gen.m_type_mapper.get_int_type())
+				};
+				ctx->CreateCall(bb_func, args);
+			} else {
+				// passed by pointer
+				llvm::Value *args[] = {
+					ctx->CreateBitCast(tmp, m_code_gen.m_type_mapper.get_float_ptr_type()),
+					ctx.get_deferred_base_from_ptr(a_desc),
+					ctx.get_deferred_base_from_ptr(b_desc),
+					ctx->CreateTrunc(
+						ctx.get_deferred_size_from_ptr(a_desc),
+						m_code_gen.m_type_mapper.get_int_type())
+				};
+				ctx->CreateCall(bb_func, args);
+			}
+
+			if (ret_tp->isArrayTy()) {
+				res = ctx->CreateLoad(tmp);
+			} else {
+				llvm::Value *arr = ctx->CreateLoad(tmp);
+				res = llvm::ConstantAggregateZero::get(ret_tp);
+				for (unsigned i = 0; i < 3; ++i) {
+					unsigned idxes[1] = { i };
+					tmp = ctx->CreateExtractValue(arr, idxes);
+					llvm::Value *idx = ctx.get_constant(int(i));
+					res = ctx->CreateInsertElement(res, tmp, idx);
+				}
+			}
+			// need libmdlrt
+			m_code_gen.m_link_libmdlrt = true;
+
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
+			"""
+			self.format_code(f, code % params)
 
 		elif mode == "state::core_set":
 			code = """
@@ -4791,87 +4907,128 @@ class SignatureParser:
 		self.write(f, "f_type->get_parameter(%s, p_type, p_sym);\n" % idx)
 		self.write(f, "p_type = p_type->skip_type_alias();\n")
 		if atomic_chk:
-			self.write(f, "if (p_type->get_kind() != %s)\n" % (atomic_chk))
-			self.indent += 1
-			self.write(f, "return false;\n")
-			self.indent -= 1
+			code = """
+			if (p_type->get_kind() != %s) {
+				return false;
+			}
+			""" % atomic_chk
+			self.format_code(f, code)
 		elif type_code[0] == 'E':
 			# check for enum type only, should be enough, we do not expect overloads with different
 			# enum types
-			self.write(f, "if (p_type->get_kind() != mi::mdl::IType::TK_ENUM)\n")
-			self.indent += 1
-			self.write(f, "return false;\n")
-			self.indent -= 1
+			code = """
+				if (p_type->get_kind() != mi::mdl::IType::TK_ENUM) {
+					return false;
+				}
+			"""
+			self.format_code(f, code)
+		elif type_code[0] == 'U':
+			# unsupported types
+			code = ""
+		elif type_code[1] == 'A':
+			# handle arrays
+			code = "{\n";
+			code += """
+			if (p_type->get_kind() != mi::mdl::IType::TK_ARRAY) {
+				return false;
+			}
+			mi::mdl::IType_array const *a_type = mi::mdl::cast<mi::mdl::IType_array>(p_type);
+			(void)a_type;
+			"""
+			if type_code[2] == 'N' or type_code[2] == 'n':
+				# deferred size array
+				code += """
+				if (a_type->is_immediate_sized()) {
+					return false;
+				}
+				"""
+				if type_code[0] == 'F':
+					code += """
+					mi::mdl::IType const *e_type = a_type->get_element_type();
+					if (e_type->get_kind() != mi::mdl::IType::TK_FLOAT) {
+						return false;
+					}
+					"""
+				else:
+					code += """
+					// Unsupported
+					return false;
+					"""
+					error("Unsupported type code " + type_code)
+			else:
+				code += """
+				// Unsupported
+				return false;
+				"""
+				error("Unsupported type code " + type_code)
+			code += "\n}\n"
+			self.format_code(f, code)
 		else:
 			vector_chk = self.get_vector_type_kind(type_code)
 			matrix_chk = self.get_matrix_type_kind(type_code)
 			text_shape = self.get_texture_shape(type_code)
 			if vector_chk:
-				self.write(f, "if (mi::mdl::IType_vector const *v_type = as<mi::mdl::IType_vector>(p_type)) {\n")
-				self.indent += 1
+				params = {
+					"size"   : type_code[-1],
+					"e_kind" : vector_chk
+				}
+				code = """
+				if (mi::mdl::IType_vector const *v_type = as<mi::mdl::IType_vector>(p_type)) {
+					if (v_type->get_size() != %(size)s) {
+						return false;
+					}
 
-				self.write(f, "if (v_type->get_size() != %s)\n" % type_code[-1])
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.write(f, "mi::mdl::IType_atomic const *e_type = v_type->get_element_type();\n")
-				self.write(f, "if (e_type->get_kind() != %s)\n" % vector_chk)
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.indent -= 1
-
-				self.write(f, "} else {\n")
-
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.write(f, "}\n")
+					mi::mdl::IType_atomic const *e_type = v_type->get_element_type();
+					if (e_type->get_kind() != %(e_kind)s) {
+						return false;
+					}
+				} else {
+					return false;
+				}
+				"""
+				self.format_code(f, code % params)
 			elif matrix_chk:
-				self.write(f, "if (mi::mdl::IType_matrix const *m_type = as<mi::mdl::IType_matrix>(p_type)) {\n")
-				self.indent += 1
+				params = {
+					"columns" : type_code[-2],
+					"size"    : type_code[-1],
+					"e_kind"  : matrix_chk
+				}
+				code = """
+				if (mi::mdl::IType_matrix const *m_type = as<mi::mdl::IType_matrix>(p_type)) {
+					if (m_type->get_columns() != %(columns)s) {
+						return false;
+					}
 
-				self.write(f, "if (m_type->get_columns() != %s)\n" % type_code[-2])
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
+					mi::mdl::IType_vector const *v_type = m_type->get_element_type();
+					if (v_type->get_size() != %(size)s) {
+						return false;
+					}
 
-				self.write(f, "mi::mdl::IType_vector const *v_type = m_type->get_element_type();\n")
-				self.write(f, "if (v_type->get_size() != %s)\n" % type_code[-1])
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.write(f, "mi::mdl::IType_atomic const *e_type = v_type->get_element_type();\n")
-				self.write(f, "if (e_type->get_kind() != %s)\n" % matrix_chk)
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.indent -= 1
-
-				self.write(f, "} else {\n")
-
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-
-				self.write(f, "}\n")
+					mi::mdl::IType_atomic const *e_type = v_type->get_element_type();
+					if (e_type->get_kind() != %(e_kind)s) {
+						return false;
+					}
+				} else {
+					return false;
+				}
+				"""
+				self.format_code(f, code % params)
 			elif text_shape:
-				self.write(f, "if (mi::mdl::IType_texture const *t_type = as<mi::mdl::IType_texture>(p_type)) {\n")
-				self.indent += 1
-				self.write(f, "if (t_type->get_shape() != %s)\n" % text_shape)
-				self.indent += 1
-				self.write(f, "return false;\n")
-				self.indent -= 1
-				self.indent -= 1
-				self.write(f, "}\n")
+				code = """
+				if (mi::mdl::IType_texture const *t_type = as<mi::mdl::IType_texture>(p_type)) {
+					if (t_type->get_shape() != %s) {
+						return false;
+					}
+				}
+				"""
+				self.format_code(f, code % text_shape)
 			else:
-				self.write(f, "// Unsupported\n");
-				self.write(f, "return false;\n")
+				code = """
+				// Unsupported
+				return false;
+				"""
+				error("Unsupported type code " + type_code)
+				self.format_code(f, code)
 
 	def create_signature_checker(self, f):
 		"""Create all signature checker functions."""
@@ -5137,7 +5294,10 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_sign",        "DD_DD")
 		self.register_mdl_runtime_func("mdl_smoothstepf", "FF_FFFFFF")
 		self.register_mdl_runtime_func("mdl_smoothstep",  "DD_DDDDDD")
-		self.register_mdl_runtime_func("mdl_blackbody",   "FA3_FF")
+		# from libmdlrt
+		self.register_mdl_runtime_func("mdl_blackbody",        "FA3_FF")
+		self.register_mdl_runtime_func("mdl_emission_color",   "vv_ffffffII")
+		self.register_mdl_runtime_func("mdl_reflection_color", "vv_ffffffII")
 		# extra used by other functions
 		self.register_mdl_runtime_func("mdl_mini",        "II_IIII")
 		self.register_mdl_runtime_func("mdl_minf",        "FF_FFFF")
@@ -5651,6 +5811,10 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_get_ro_data_segment(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::object_id()\n")
 		self.write(f, "llvm::Function *create_state_object_id(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for state::get_material_ior()\n")
+		self.write(f, "llvm::Function *create_state_get_material_ior(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for state::get_thin_walled()\n")
+		self.write(f, "llvm::Function *create_state_get_thin_walled(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_resolution()\n")
 		self.write(f, "llvm::Function *create_df_bsdf_measurement_resolution(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_evaluate()\n")
@@ -5708,7 +5872,10 @@ class SignatureParser:
 
 		for intrinsic in intrinsics:
 			mod_name = self.m_intrinsic_mods[intrinsic]
-			self.write(f, "case mi::mdl::IDefinition::DS_INTRINSIC_%s_%s:\n" % (mod_name.upper(), intrinsic.upper()))
+			if mod_name == "" and intrinsic == "color":
+				self.write(f, "case mi::mdl::IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:\n")
+			else:
+				self.write(f, "case mi::mdl::IDefinition::DS_INTRINSIC_%s_%s:\n" % (mod_name.upper(), intrinsic.upper()))
 			self.indent += 1
 
 			self.handle_intrinsic(f, intrinsic)
@@ -5718,7 +5885,10 @@ class SignatureParser:
 
 		for intrinsic in unsupported:
 			mod_name = self.m_intrinsic_mods[intrinsic]
-			self.write(f, "case mi::mdl::IDefinition::DS_INTRINSIC_%s_%s:\n" % (mod_name.upper(), intrinsic.upper()))
+			if mod_name == "" and intrinsic == "color":
+				self.write(f, "case mi::mdl::IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:\n")
+			else:
+				self.write(f, "case mi::mdl::IDefinition::DS_INTRINSIC_%s_%s:\n" % (mod_name.upper(), intrinsic.upper()))
 
 		if len(unsupported) > 0:
 			self.indent += 1
@@ -5797,6 +5967,12 @@ def main(args):
 		parser.parse("df")
 		parser.parse("tex")
 		parser.parse("debug")
+		parser.parse_builtins(
+			"""
+			// spectrum constructor
+			export color color(float[<N>] wavelenghts, float[N] amplitudes) uniform [[ intrinsic() ]];
+
+			""")
 		parser.finalize()
 
 	except IOError, e:

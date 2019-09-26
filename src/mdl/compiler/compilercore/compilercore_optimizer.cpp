@@ -1242,8 +1242,8 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                             n = a_type->get_size();
 
                             VLA<IValue const *> c_args(m_module.get_allocator(), n);
-                            IValue const *def_val =
-                                m_module.create_default_value(a_type->get_element_type());
+                            IValue const *def_val = m_module.create_default_value(
+                                m_module.get_value_factory(), a_type->get_element_type());
                             for (int i = 0; i < n; ++i)
                                 c_args[i] = def_val;
                             v = m_value_factory.create_compound(a_type, c_args.data(), n);
@@ -1263,7 +1263,8 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                         IDefinition::Semantics sema = def->get_semantics();
 
                         if (sema != IDefinition::DS_UNKNOWN) {
-                            IValue const *v = expr->fold(&m_module, NULL);
+                            IValue const *v = expr->fold(
+                                &m_module, m_module.get_value_factory(), NULL);
                             if (!is<IValue_bad>(v)) {
                                 Position const *pos = &expr->access_position();
 
@@ -1313,7 +1314,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
         // We don't need the deep recursion here because the optimizer walks the tree
         // in DFS order, hence we limit the fold call to places where all sub-expressions
         // are constant.
-        IValue const *v = expr->fold(&m_module, NULL);
+        IValue const *v = expr->fold(&m_module, m_module.get_value_factory(), NULL);
         if (!is<IValue_bad>(v)) {
             Position const *pos = &expr->access_position();
 

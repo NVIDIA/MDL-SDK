@@ -70,6 +70,7 @@ namespace mdl_d3d12
         ComPtr<ID3D12CommandQueue> m_command_queue;
         Fence* m_fence;
 
+        std::mutex m_mtx;
         std::vector<ComPtr<ID3D12CommandAllocator>> m_all_command_allocators;
         std::queue<Allocator_queue_item> m_command_allocator_queue;
 
@@ -89,6 +90,7 @@ namespace mdl_d3d12
 
     private:
         Base_application* m_app;
+        std::mutex m_mtx;
         Command_queue* m_command_queue;
         ComPtr<ID3D12Fence> m_fence;
         HANDLE m_fence_event;

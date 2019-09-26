@@ -994,6 +994,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_finite_math(false)
 , m_reciprocal_math(false)
 , m_hlsl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA))
+, m_in_intrinsic_generator(false)
 , m_runtime(create_mdl_runtime(
     m_arena_builder,
     this,
@@ -1073,6 +1074,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_lambda_force_no_lambda_results(false)
 , m_use_ro_data_segment(false)
 , m_link_libdevice(target_lang == TL_PTX && options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE))
+, m_link_libmdlrt(false)
 , m_incremental(incremental)
 , m_texruntime_with_derivs(options.get_bool_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES))
 , m_deriv_infos(NULL)
@@ -1081,8 +1083,10 @@ LLVM_code_generator::LLVM_code_generator(
     options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE)))
 , m_dist_func(NULL)
 , m_dist_func_state(DFSTATE_NONE)
-, m_dist_func_lambda_map(0, Dist_func_lambda_map::hasher(), Dist_func_lambda_map::key_equal(),
-    get_allocator())
+, m_libbsdf_template_funcs(get_allocator())
+, m_enable_auxiliary(options.get_bool_option(MDL_JIT_OPTION_ENABLE_AUXILIARY))
+, m_module_lambda_funcs(get_allocator())
+, m_module_lambda_index_map(get_allocator())
 , m_lambda_results_struct_type(NULL)
 , m_lambda_result_indices(get_allocator())
 , m_texture_results_struct_type(NULL)
@@ -1095,12 +1099,16 @@ LLVM_code_generator::LLVM_code_generator(
 , m_type_bsdf_evaluate_data(NULL)
 , m_type_bsdf_pdf_func(NULL)
 , m_type_bsdf_pdf_data(NULL)
+, m_type_bsdf_auxiliary_func(NULL)
+, m_type_bsdf_auxiliary_data(NULL)
 , m_type_edf_sample_func(NULL)
 , m_type_edf_sample_data(NULL)
 , m_type_edf_evaluate_func(NULL)
 , m_type_edf_evaluate_data(NULL)
 , m_type_edf_pdf_func(NULL)
 , m_type_edf_pdf_data(NULL)
+, m_type_edf_auxiliary_func(NULL)
+, m_type_edf_auxiliary_data(NULL)
 , m_bsdf_param_metadata_id(0)
 , m_edf_param_metadata_id(0)
 , m_int_func_state_set_normal(NULL)
@@ -1110,6 +1118,9 @@ LLVM_code_generator::LLVM_code_generator(
 , m_int_func_state_object_id(NULL)
 , m_int_func_state_call_lambda_float(NULL)
 , m_int_func_state_call_lambda_float3(NULL)
+, m_int_func_state_call_lambda_uint(NULL)
+, m_int_func_state_get_material_ior(NULL)
+, m_int_func_state_get_measured_curve_value(NULL)
 , m_int_func_df_bsdf_measurement_resolution(NULL)
 , m_int_func_df_bsdf_measurement_evaluate(NULL)
 , m_int_func_df_bsdf_measurement_sample(NULL)
@@ -1189,7 +1200,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_get_texture_results = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::get_texture_results()",
-        "_ZN5state19get_texture_resultsE",
+        "_ZN5state19get_texture_resultsEv",
         Internal_function::KI_STATE_GET_TEXTURE_RESULTS,
         Internal_function::FL_HAS_STATE,
         /*ret_type=*/ m_type_mapper.get_char_ptr_type(),
@@ -1199,7 +1210,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_get_arg_block = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::get_arg_block()",
-        "_ZN5state13get_arg_blockE",
+        "_ZN5state13get_arg_blockEv",
         Internal_function::KI_STATE_GET_ARG_BLOCK,
         Internal_function::FL_HAS_CAP_ARGS,
         /*ret_type=*/ m_type_mapper.get_char_ptr_type(),
@@ -1209,7 +1220,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_get_ro_data_segment = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::get_ro_data_segment()",
-        "_ZN5state19get_ro_data_segmentE",
+        "_ZN5state19get_ro_data_segmentEv",
         Internal_function::KI_STATE_GET_RO_DATA_SEGMENT,
         Internal_function::FL_HAS_STATE,
         /*ret_type=*/ m_type_mapper.get_char_ptr_type(),
@@ -1219,7 +1230,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_object_id = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::object_id()",
-        "_ZN5state9object_idE",
+        "_ZN5state9object_idEv",
         Internal_function::KI_STATE_OBJECT_ID,
         Internal_function::FL_HAS_STATE,
         /*ret_type=*/ m_type_mapper.get_int_type(),
@@ -1231,7 +1242,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::state::call_lambda_float(int)",
         "_ZN5state17call_lambda_floatEi",
         Internal_function::KI_STATE_CALL_LAMBDA_FLOAT,
-        Internal_function::FL_HAS_STATE | Internal_function::FL_SRET |
+        Internal_function::FL_HAS_STATE |
         Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
         Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
         /*ret_type=*/ m_type_mapper.get_float_type(),
@@ -1243,12 +1254,58 @@ void LLVM_code_generator::prepare_internal_functions()
         "::state::call_lambda_float3(int)",
         "_ZN5state18call_lambda_float3Ei",
         Internal_function::KI_STATE_CALL_LAMBDA_FLOAT3,
-        Internal_function::FL_HAS_STATE | Internal_function::FL_SRET |
+        Internal_function::FL_HAS_STATE |
         Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
         Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const *>(int_type),
         /*param_names=*/ Array_ref<char const *>("lambda_index"));
+
+    m_int_func_state_call_lambda_uint = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::call_lambda_uint(int)",
+        "_ZN5state16call_lambda_uintEi",
+        Internal_function::KI_STATE_CALL_LAMBDA_UINT,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_int_type(),
+        /*param_types=*/ Array_ref<IType const *>(int_type),
+        /*param_names=*/ Array_ref<char const *>("lambda_index"));
+
+    m_int_func_state_get_material_ior = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_material_ior()",
+        "_ZN5state16get_material_iorEv",
+        Internal_function::KI_STATE_GET_MATERIAL_IOR,
+        Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_float3_type(),
+        /*param_types=*/ Array_ref<IType const *>(),
+        /*param_names=*/ Array_ref<char const *>());
+
+    IType const* measured_param_types[] = { int_type, int_type };
+    char const* measured_param_names[] = { "measured_curve_idx", "value_idx" };
+    m_int_func_state_get_measured_curve_value = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_measured_curve_value(int,int)",
+        "_ZN5state24get_measured_curve_valueERK6float3ii",
+        Internal_function::KI_STATE_GET_MEASURED_CURVE_VALUE,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_float3_type(),
+        /*param_types=*/ Array_ref<IType const *>(measured_param_types),
+        /*param_names=*/ Array_ref<char const *>(measured_param_names));
+
+    m_int_func_state_get_thin_walled = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_thin_walled()",
+        "_ZN5state15get_thin_walledEv",
+        Internal_function::KI_STATE_GET_THIN_WALLED,
+        Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_int_type(),
+        /*param_types=*/ Array_ref<IType const *>(),
+        /*param_names=*/ Array_ref<char const *>());
 
     IType const* resolution_param_types[] = { int_type, int_type };
     char const* resolution_param_names[] = { "bm_index", "part" };
@@ -1257,7 +1314,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::bsdf_measurement_resolution(int,int)",
         "_ZN2df28bsdf_measurement_resolutionEii",
         Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET,
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_int3_type(),
         /*param_types=*/ Array_ref<IType const *>(resolution_param_types),
         /*param_names=*/ Array_ref<char const *>(resolution_param_names));
@@ -1271,7 +1328,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::bsdf_measurement_evaluate(int,float2,float2,int)",
         "_ZNK5State25bsdf_measurement_evaluateEi6float2S0_i",
         Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const *>(lookup_param_types),
         /*param_names=*/ Array_ref<char const *>(lookup_param_names));
@@ -1283,7 +1340,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::bsdf_measurement_sample(int,float2,float3,int)",
         "_ZNK5State23bsdf_measurement_sampleEiRK6float2RK6float3i",
         Internal_function::KI_DF_BSDF_MEASUREMENT_SAMPLE,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const *>(sample_param_types),
         /*param_names=*/ Array_ref<char const *>(sample_param_names));
@@ -1293,7 +1350,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::bsdf_measurement_pdf(int,float2,float2,int)",
         "_ZNK5State20bsdf_measurement_pdfEiRK6float2S2_i",
         Internal_function::KI_DF_BSDF_MEASUREMENT_PDF,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET,
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float_type(),
         /*param_types=*/ Array_ref<IType const *>(lookup_param_types),
         /*param_names=*/ Array_ref<char const *>(lookup_param_names));
@@ -1305,7 +1362,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::bsdf_measurement_albedos(int,float2)",
         "_ZNK5State24bsdf_measurement_albedosEiRK6float2",
         Internal_function::KI_DF_BSDF_MEASUREMENT_ALBEDOS,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float4_type(),
         /*param_types=*/ Array_ref<IType const *>(bmidx_polar_param_types),
         /*param_names=*/ Array_ref<char const *>(bmidx_polar_param_names));
@@ -1317,7 +1374,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::light_profile_evaluate(int,float2)",
         "_ZNK5State22light_profile_evaluateEiRK6float2",
         Internal_function::KI_DF_LIGHT_PROFILE_EVALUATE,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float_type(),
         /*param_types=*/ Array_ref<IType const *>(lpidx_polar_param_types),
         /*param_names=*/ Array_ref<char const *>(lpidx_polar_param_names));
@@ -1329,7 +1386,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::light_profile_sample(int,float3)",
         "_ZNK5State20light_profile_sampleEiRK6float3",
         Internal_function::KI_DF_LIGHT_PROFILE_SAMPLE,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const *>(lpidx_xi_param_types),
         /*param_names=*/ Array_ref<char const *>(lpidx_xi_param_names));
@@ -1339,7 +1396,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::df::light_profile_pdf(int,float2)",
         "_ZNK5State17light_profile_pdfEiRK6float2",
         Internal_function::KI_DF_LIGHT_PROFILE_PDF,
-        Internal_function::FL_HAS_RES | Internal_function::FL_SRET, 
+        Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float_type(),
         /*param_types=*/ Array_ref<IType const *>(lpidx_polar_param_types),
         /*param_names=*/ Array_ref<char const *>(lpidx_polar_param_names));
@@ -1409,6 +1466,7 @@ bool LLVM_code_generator::optimize(llvm::Module *module)
 
     llvm::PassManagerBuilder builder;
     builder.OptLevel = m_opt_level;
+    builder.AvoidPointerPHIs = m_target_lang == TL_HLSL;
 
     // TODO: in PTX mode we don't use the C-library, but libdevice, this probably must
     // be registered somewhere, or libcall simplification can happen
@@ -1443,7 +1501,7 @@ llvm::Type *LLVM_code_generator::lookup_type(
         // we should NEVER see a deferred array type here
         IType_array const *a_type = as<IType_array>(type);
         if (a_type != NULL) {
-            MDL_ASSERT(a_type->is_immediate_sized() || arr_size >= 0);
+            MDL_ASSERT(m_in_intrinsic_generator || a_type->is_immediate_sized() || arr_size >= 0);
         }
     }
 #endif
@@ -1460,6 +1518,9 @@ llvm::Type *LLVM_code_generator::lookup_type(
 
         case DFSTATE_PDF:
             return m_type_bsdf_pdf_data;
+
+        case DFSTATE_AUXILIARY:
+            return m_type_bsdf_auxiliary_data;
 
         default:
             MDL_ASSERT(!"Unsupported distribution function state (bsdf)");
@@ -1482,6 +1543,9 @@ llvm::Type *LLVM_code_generator::lookup_type(
 
         case DFSTATE_PDF:
             return m_type_edf_pdf_data;
+
+        case DFSTATE_AUXILIARY:
+            return m_type_edf_auxiliary_data;
 
         default:
             MDL_ASSERT(!"Unsupported distribution function state (edf)");
@@ -2370,7 +2434,9 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     bool                    is_prototype)
 {
     mi::mdl::IDefinition const *def = inst.get_def();
-    MDL_ASSERT(def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION);
+    MDL_ASSERT(
+        def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION ||
+        def->get_kind() == mi::mdl::IDefinition::DK_CONSTRUCTOR);
 
     IType_function const     *func_type = cast<mi::mdl::IType_function>(def->get_type());
     LLVM_context_data::Flags flags      = LLVM_context_data::FL_NONE;
@@ -4192,7 +4258,7 @@ Expression_result LLVM_code_generator::translate_expression(
     ctx.set_curr_pos(expr->access_position());
 
     // matrices currently don't support derivatives
-    if (is<IType_matrix>(expr->get_type()))
+    if (is<IType_matrix>(expr->get_type()->skip_type_alias()))
         return_derivs = false;
 
     Expression_result res = Expression_result::unset();
@@ -6356,18 +6422,19 @@ Expression_result LLVM_code_generator::translate_call(
         return translate_elemental_constructor(ctx, call_expr);
 
     case mi::mdl::IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
-        // translate to rgb color
-        return translate_color_from_spectrum(ctx, call_expr);
+        // translate to rgb color, fall into the default case
+        break;
 
     case mi::mdl::IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR:
-        if (call_expr->get_argument_count() == 2) {
-            // translate to rgb color
-            return translate_color_from_spectrum(ctx, call_expr);
-        } else {
-            MDL_ASSERT(call_expr->get_argument_count() == 1);
+        if (call_expr->get_argument_count() == 1) {
             // a no-op in the RGB case
-            return call_expr->translate_argument(*this, ctx, 0, return_derivs);
+            Expression_result res = call_expr->translate_argument(
+                *this, ctx, 0, return_derivs);  // for DAG return_derivs is ignored
+            res.ensure_deriv_result(ctx, return_derivs);
+            return res;
         }
+        // else fall into the default case
+        break;
 
     case mi::mdl::IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
         return translate_matrix_elemental_constructor(ctx, call_expr);
@@ -7649,20 +7716,6 @@ Expression_result LLVM_code_generator::translate_matrix_diagonal_constructor(
     return Expression_result::value(matrix);
 }
 
-// Translate a color from spectrum constructor call to LLVM IR.
-Expression_result LLVM_code_generator::translate_color_from_spectrum(
-    Function_context          &ctx,
-    mi::mdl::ICall_expr const *call_expr)
-{
-    MDL_ASSERT(call_expr->get_argument_count() == 2);
-
-    // FIXME: add a warning here
-
-    // not supported yet, create black (just like the DAG BE)
-    llvm::Type *res_tp = lookup_type(call_expr->get_type());
-    return Expression_result::value(llvm::ConstantAggregateZero::get(res_tp));
-}
-
 // Translate an array constructor call to LLVM IR.
 Expression_result LLVM_code_generator::translate_array_constructor_call(
     Function_context &ctx,
@@ -8423,6 +8476,7 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
 
     llvm::PassManagerBuilder builder;
     builder.OptLevel = m_opt_level;
+    builder.AvoidPointerPHIs = m_target_lang == TL_HLSL;
     builder.populateFunctionPassManager(*m_func_pass_manager);
     m_func_pass_manager->doInitialization();
 }
@@ -8455,6 +8509,16 @@ llvm::Module *LLVM_code_generator::finalize_module()
 
     m_func_pass_manager->doFinalization();
 
+    // avoid optimizing unused functions
+    for (llvm::Function *func : m_libbsdf_template_funcs) {
+        // the "gen_black_bsdf/edf" functions are not cloned, but used directly -> don't remove
+        if (func->getName().startswith("gen_black_"))
+            continue;
+
+        func->eraseFromParent();
+    }
+
+
     string errorInfo(get_allocator());
     raw_string_ostream os(errorInfo);
     if (llvm::verifyModule(*llvm_module, &os)) {
@@ -8466,6 +8530,12 @@ llvm::Module *LLVM_code_generator::finalize_module()
         drop_llvm_module(llvm_module);
         return NULL;
     } else {
+        if (m_link_libmdlrt) {
+            if (!load_and_link_libmdlrt(llvm_module)) {
+                drop_llvm_module(llvm_module);
+                return NULL;
+            }
+        }
         if (m_link_libdevice) {
             std::unique_ptr<llvm::Module> libdevice(
                 load_libdevice(m_llvm_context, m_min_ptx_version));

@@ -737,9 +737,10 @@ public:
 
         size_t index;
         switch (state) {
-        case LLVM_code_generator::Distribution_function_state::DFSTATE_SAMPLE:   index = 0; break;
-        case LLVM_code_generator::Distribution_function_state::DFSTATE_EVALUATE: index = 1; break;
-        case LLVM_code_generator::Distribution_function_state::DFSTATE_PDF:      index = 2; break;
+        case LLVM_code_generator::Distribution_function_state::DFSTATE_SAMPLE:    index = 0; break;
+        case LLVM_code_generator::Distribution_function_state::DFSTATE_EVALUATE:  index = 1; break;
+        case LLVM_code_generator::Distribution_function_state::DFSTATE_PDF:       index = 2; break;
+        case LLVM_code_generator::Distribution_function_state::DFSTATE_AUXILIARY: index = 3; break;
         default:
             MDL_ASSERT(!"Invalid state for getting a DF function");
             return NULL;
@@ -841,9 +842,9 @@ private:
     llvm::SmallVector<DAG_node const *, 8> m_component_dfs;
 
     /// The on-demand generated LLVM DF functions for sample, evaluate and pdf.
-    llvm::Function *m_df_funcs[3];
+    llvm::Function *m_df_funcs[4];
 
-    /// kind of distribution function
+    /// Kind of distribution function.
     IType::Kind m_kind;
 };
 
@@ -857,6 +858,7 @@ void LLVM_code_generator::create_bsdf_function_types()
     m_type_bsdf_sample_data = m_module->getTypeByName("struct.BSDF_sample_data");
     m_type_bsdf_evaluate_data = m_module->getTypeByName("struct.BSDF_evaluate_data");
     m_type_bsdf_pdf_data = m_module->getTypeByName("struct.BSDF_pdf_data");
+    m_type_bsdf_auxiliary_data = m_module->getTypeByName("struct.BSDF_auxiliary_data");
 
     // create function types for the BSDF functions
 
@@ -900,6 +902,17 @@ void LLVM_code_generator::create_bsdf_function_types()
     };
 
     m_type_bsdf_pdf_func = llvm::FunctionType::get(ret_tp, arg_types_pdf, false);
+
+    // BSDF_API void diffuse_reflection_bsdf_auxiliary(
+    //     BSDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal)
+
+    llvm::Type *arg_types_auxiliary[] = {
+        Type_mapper::get_ptr(m_type_bsdf_auxiliary_data),
+        second_param_type,
+        float3_struct_ptr_type
+    };
+
+    m_type_bsdf_auxiliary_func = llvm::FunctionType::get(ret_tp, arg_types_auxiliary, false);
 }
 
 
@@ -912,6 +925,7 @@ void LLVM_code_generator::create_edf_function_types()
     m_type_edf_sample_data = m_module->getTypeByName("struct.EDF_sample_data");
     m_type_edf_evaluate_data = m_module->getTypeByName("struct.EDF_evaluate_data");
     m_type_edf_pdf_data = m_module->getTypeByName("struct.EDF_pdf_data");
+    m_type_edf_auxiliary_data = m_module->getTypeByName("struct.EDF_auxiliary_data");
 
     // create function types for the EDF functions
 
@@ -955,6 +969,17 @@ void LLVM_code_generator::create_edf_function_types()
     };
 
     m_type_edf_pdf_func = llvm::FunctionType::get(ret_tp, arg_types_pdf, false);
+
+    // BSDF_API void diffuse_reflection_edf_auxiliary(
+    //     EDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal)
+
+    llvm::Type *arg_types_auxiliary[] = {
+        Type_mapper::get_ptr(m_type_edf_auxiliary_data),
+        second_param_type,
+        float3_struct_ptr_type
+    };
+
+    m_type_edf_auxiliary_func = llvm::FunctionType::get(ret_tp, arg_types_auxiliary, false);
 }
 
 // Compile a distribution function into an LLVM Module and return the LLVM module.
@@ -1075,7 +1100,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
             context.create_return(res.as_value(context));
         }
 
-        m_dist_func_lambda_map[&lambda] = func;
+        m_module_lambda_index_map[&lambda] = m_module_lambda_funcs.size();
+        m_module_lambda_funcs.push_back(func);
     }
 
     reset_lambda_state();
@@ -1102,6 +1128,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         break;
     }
 
+    llvm::GlobalVariable *mat_data_global = NULL;
+
     // create one LLVM function for each distribution function state
     for (int i = DFSTATE_INIT; i < DFSTATE_END_STATE; ++i)
     {
@@ -1124,14 +1152,19 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         IGenerated_code_executable::Function_kind func_kind =
             IGenerated_code_executable::FK_INVALID;
         switch (i) {
-        case DFSTATE_INIT:     func_kind = IGenerated_code_executable::FK_DF_INIT;     break;
-        case DFSTATE_SAMPLE:   func_kind = IGenerated_code_executable::FK_DF_SAMPLE;   break;
-        case DFSTATE_EVALUATE: func_kind = IGenerated_code_executable::FK_DF_EVALUATE; break;
-        case DFSTATE_PDF:      func_kind = IGenerated_code_executable::FK_DF_PDF;      break;
+        case DFSTATE_INIT:      func_kind = IGenerated_code_executable::FK_DF_INIT;        break;
+        case DFSTATE_SAMPLE:    func_kind = IGenerated_code_executable::FK_DF_SAMPLE;      break;
+        case DFSTATE_EVALUATE:  func_kind = IGenerated_code_executable::FK_DF_EVALUATE;    break;
+        case DFSTATE_PDF:       func_kind = IGenerated_code_executable::FK_DF_PDF;         break;
+        case DFSTATE_AUXILIARY: func_kind = IGenerated_code_executable::FK_DF_AUXILIARY;   break;
         default:
             MDL_ASSERT(!"Unexpected DF state");
             break;
         }
+
+        // skip the auxiliary functions if deactivated
+        if (!m_enable_auxiliary && i == DFSTATE_AUXILIARY)
+            continue;
 
         m_exported_func_list.push_back(
             Exported_function(
@@ -1149,7 +1182,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
                 context, texture_result_exprs, lambda_result_exprs_init);
         } else {
             // translate the distribution function
-            translate_distribution_function(context, lambda_result_exprs_others);
+            translate_distribution_function(context, lambda_result_exprs_others, mat_data_global);
         }
         context.create_void_return();
     }
@@ -1161,7 +1194,6 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
     // reset some fields
     m_deriv_infos = NULL;
-    m_dist_func_lambda_map.clear();
     m_dist_func = NULL;
 
     if (!incremental) {
@@ -1178,10 +1210,11 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 char const *LLVM_code_generator::get_dist_func_state_suffix(Distribution_function_state state)
 {
     switch (state) {
-        case DFSTATE_INIT:     return "_init";
-        case DFSTATE_SAMPLE:   return "_sample";
-        case DFSTATE_EVALUATE: return "_evaluate";
-        case DFSTATE_PDF:      return "_pdf";
+        case DFSTATE_INIT:      return "_init";
+        case DFSTATE_SAMPLE:    return "_sample";
+        case DFSTATE_EVALUATE:  return "_evaluate";
+        case DFSTATE_PDF:       return "_pdf";
+        case DFSTATE_AUXILIARY: return "_auxiliary";
         default:
             MDL_ASSERT(!"Invalid distribution function state");
             return "";
@@ -1203,6 +1236,8 @@ LLVM_code_generator::get_dist_func_state_from_call(llvm::CallInst *call)
         return DFSTATE_EVALUATE;
     else if (df_data_type == m_type_bsdf_pdf_data || df_data_type == m_type_edf_pdf_data)
         return DFSTATE_PDF;
+    else if (df_data_type == m_type_bsdf_auxiliary_data || df_data_type == m_type_edf_auxiliary_data)
+        return DFSTATE_AUXILIARY;
 
     MDL_ASSERT(!"Invalid distribution function type called");
     return DFSTATE_NONE;
@@ -1321,6 +1356,8 @@ IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(llvm:
         basename = name.drop_back(9);
     else if (name.endswith("_pdf"))
         basename = name.drop_back(4);
+    else if (name.endswith("_auxiliary"))
+        basename = name.drop_back(10);
     else
         return IDefinition::DS_UNKNOWN;
 
@@ -1446,6 +1483,42 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             p_data = get_context_data(inst);
             handled = true;
         }
+        else if (demangled_name == "::state::call_lambda_uint(int)")
+        {
+            func = get_internal_function(m_int_func_state_call_lambda_uint);
+
+            Function_instance inst(
+                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_call_lambda_uint));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_material_ior()")
+        {
+            func = get_internal_function(m_int_func_state_get_material_ior);
+
+            Function_instance inst(get_allocator(),
+                reinterpret_cast<size_t>(m_int_func_state_get_material_ior));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_measured_curve_value(int,int)")
+        {
+            func = get_internal_function(m_int_func_state_get_measured_curve_value);
+
+            Function_instance inst(get_allocator(),
+                reinterpret_cast<size_t>(m_int_func_state_get_measured_curve_value));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_thin_walled()")
+        {
+            func = get_internal_function(m_int_func_state_get_thin_walled);
+
+            Function_instance inst(get_allocator(),
+                reinterpret_cast<size_t>(m_int_func_state_get_thin_walled));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
         else if (demangled_name == "::state::bsdf_measurement_resolution(int,int)")
         {
             func = get_internal_function(m_int_func_df_bsdf_measurement_resolution);
@@ -1518,7 +1591,7 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             p_data = get_context_data(inst);
             handled = true;
         }
-    } 
+    }
 
     if (!handled)
     {
@@ -1592,7 +1665,8 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
     if (use_state_from_this) {
         // first arg may be return value pointer
         exec_ctx = ctx->CreateBitCast(
-            call->getArgOperand(num_params_eaten - 1), m_type_mapper.get_exec_ctx_ptr_type());
+            call->getArgOperand(num_params_eaten - 1),
+                m_type_mapper.get_exec_ctx_ptr_type());
     }
 
     if (p_data->has_exec_ctx_param()) {
@@ -1684,9 +1758,17 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             res = ctx.load_and_convert(orig_res_type, runtime_res_ptr);
     } else if (ret_array_size == 0) {
         // Case: res = f_r(a,b)
-        llvm::Value *convert_tmp_ptr = ctx.create_local(res->getType(), "convert_tmp");
-        ctx->CreateStore(res, convert_tmp_ptr);
-        res = ctx.load_and_convert(orig_res_type, convert_tmp_ptr);
+        if (res->getType() != orig_res_type) {
+            // conversion to bool? -> avoid tmp var
+            if (llvm::isa<llvm::IntegerType>(res->getType()) &&
+                    orig_res_type == llvm::IntegerType::get(m_llvm_context, 1)) {
+                res = ctx->CreateICmpNE(res, llvm::ConstantInt::getNullValue(res->getType()));
+            } else {
+                llvm::Value *convert_tmp_ptr = ctx.create_local(res->getType(), "convert_tmp");
+                ctx->CreateStore(res, convert_tmp_ptr);
+                res = ctx.load_and_convert(orig_res_type, convert_tmp_ptr);
+            }
+        }
     }
 
     // Original call case: f(&res,a,b)?
@@ -1765,11 +1847,16 @@ void LLVM_code_generator::mark_df_calls(
 }
 
 // Returns the set of context data flags to use for functions used with distribution functions.
-LLVM_context_data::Flags LLVM_code_generator::get_df_function_flags()
+LLVM_context_data::Flags LLVM_code_generator::get_df_function_flags(const llvm::Function *func)
 {
     LLVM_context_data::Flags flags = LLVM_context_data::FL_HAS_STATE;
+
+    llvm::Type *ret_tp = func->getReturnType();
+    auto it = func->arg_begin();
+    if (ret_tp->isVoidTy() && it != func->arg_end() && it->getType()->isPointerTy())
+        flags |= LLVM_context_data::FL_SRET; // set SRET if the function returns void
     //if (target_supports_sret_for_lambda())
-        flags |= LLVM_context_data::FL_SRET;  // will be mapped to inout
+    //    flags |= LLVM_context_data::FL_SRET;  // will be mapped to inout
     if (target_uses_resource_data_parameter())
         flags |= LLVM_context_data::FL_HAS_RES;
     if (target_uses_exception_state_parameter())
@@ -1797,12 +1884,14 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     libbsdf->setDataLayout(m_module->getDataLayout());
 
     // collect all functions available before linking
-    ptr_hash_set<llvm::Function>::Type old_funcs(get_allocator());
+    // note: we cannot use the function pointers, as linking removes some function declarations and
+    //       may reuse the old pointers
+    hash_set<string, string_hash<string> >::Type old_func_names(get_allocator());
     for (llvm::Function &f : m_module->functions()) {
-        old_funcs.insert(&f);
+        if (!f.isDeclaration())
+            old_func_names.insert(string(f.getName().begin(), f.getName().end(), get_allocator()));
     }
 
-    std::string errorInfo;
     if (llvm::Linker::linkModules(*m_module, std::move(libbsdf))) {
         // true means linking has failed
         error(LINKING_LIBBSDF_FAILED, "unknown linker error");
@@ -1811,14 +1900,21 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     }
 
     m_float3_struct_type = m_module->getTypeByName("struct.float3");
+    if (m_float3_struct_type == NULL) {
+        // name was lost during linking? get it from
+        //    void @black_bsdf_sample(
+        //        %struct.BSDF_sample_data* nocapture %data,
+        //        %class.State* nocapture readnone %state,
+        //        %struct.float3* nocapture readnone %inherited_normal)
 
-    // find all functions which were added by linking the libbsdf module
-    llvm::SetVector<llvm::Function *> libbsdf_funcs;
-    for (llvm::Function &f : m_module->functions()) {
-        // did not exist before linking already -> libbsdf function
-        if (old_funcs.count(&f) == 0)
-            libbsdf_funcs.insert(&f);
+        llvm::Function *func = m_module->getFunction("black_bsdf_sample");
+        MDL_ASSERT(func);
+        llvm::FunctionType *func_type = func->getFunctionType();
+        m_float3_struct_type = llvm::cast<llvm::StructType>(
+            func_type->getParamType(2)->getPointerElementType());
+        MDL_ASSERT(m_float3_struct_type);
     }
+
 
     create_bsdf_function_types();
     create_edf_function_types();
@@ -1829,12 +1925,21 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     llvm::Type *int_type = m_type_mapper.get_int_type();
     unsigned alloca_addr_space = m_module->getDataLayout().getAllocaAddrSpace();
 
-    // iterate over all functions added from the libbsdf module
-    for (llvm::Function *func : libbsdf_funcs) {
-        // skip function declarations
-        if (func->isDeclaration())
+    // find all functions which were added by linking the libbsdf module,
+    // collect in vector as module functions will be modified, later
+    vector<llvm::Function *>::Type libbsdf_funcs(get_allocator());
+    for (llvm::Function &f : m_module->functions()) {
+        // just a declaration or did already exist before linking? -> skip
+        if (f.isDeclaration() || old_func_names.count(
+                string(f.getName().begin(), f.getName().end(), get_allocator())) != 0)
             continue;
 
+        // Found a libbsdf function
+        libbsdf_funcs.push_back(&f);
+    }
+
+    // iterate over all functions added from the libbsdf module
+    for (llvm::Function *func : libbsdf_funcs) {
         // make all functions from libbsdf internal to allow global dead code elimination
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
 
@@ -1844,7 +1949,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 get_allocator(),
                 *this,
                 func,
-                get_df_function_flags(),  // note, the lambda results are not really used
+                get_df_function_flags(func),  // note, the lambda results are not really used
                 false);  // don't optimize, because of parameter handling via uninitialized allocas
 
             // search for all CallInst instructions and link runtime function calls to the
@@ -1886,6 +1991,10 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                     new_func_type = m_type_bsdf_pdf_func;
                     df_kind = IType::TK_BSDF;
                 }
+                else if (df_data_type == m_type_bsdf_auxiliary_data) {
+                    new_func_type = m_type_bsdf_auxiliary_func;
+                    df_kind = IType::TK_BSDF;
+                }
                 // edf
                 else if (df_data_type == m_type_edf_sample_data) {
                     new_func_type = m_type_edf_sample_func;
@@ -1897,6 +2006,10 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 }
                 else if (df_data_type == m_type_edf_pdf_data) {
                     new_func_type = m_type_edf_pdf_func;
+                    df_kind = IType::TK_EDF;
+                }
+                else if (df_data_type == m_type_edf_auxiliary_data) {
+                    new_func_type = m_type_edf_auxiliary_func;
                     df_kind = IType::TK_EDF;
                 }
                 else
@@ -1949,6 +2062,8 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                     new_func->setName("gen_" + func->getName());
                     new_func->getBasicBlockList().splice(
                         new_func->begin(), old_func->getBasicBlockList());
+
+                    m_libbsdf_template_funcs.push_back(new_func);
 
                     // make sure we don't introduce initialization code before alloca instructions
                     llvm::BasicBlock::iterator param_init_insert_point = new_func->front().begin();
@@ -2005,6 +2120,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                                 &*new_func->getEntryBlock().begin());
 
                             if (elem_type->isStructTy() &&
+                                !llvm::cast<llvm::StructType>(elem_type)->isLiteral() &&
                                 elem_type->getStructName() == df_struct_name.c_str())
                             {
                                 // for DF parameters, we mark the calls to the DF methods
@@ -2060,21 +2176,19 @@ bool LLVM_code_generator::load_and_link_libbsdf()
     return true;
 }
 
-/// Generate a call to an expression lambda function.
+// Generate a call to an expression lambda function.
 Expression_result LLVM_code_generator::generate_expr_lambda_call(
-    Function_context &ctx,
-    size_t           lambda_index,
-    llvm::Value      *opt_results_buffer,
-    size_t           opt_result_index)
+    Function_context                &ctx,
+    mi::mdl::ILambda_function const *expr_lambda,
+    llvm::Value                     *opt_results_buffer,
+    size_t                          opt_result_index)
 {
-    mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
-        m_dist_func->get_expr_lambda(lambda_index));
-    Lambda_function const *expr_lambda_impl = impl_cast<Lambda_function>(expr_lambda.get());
+    Lambda_function const *expr_lambda_impl = impl_cast<Lambda_function>(expr_lambda);
 
     // expression and special lambdas always return by reference via first parameter,
     // if supported by the target
 
-    llvm::Function *func = m_dist_func_lambda_map[expr_lambda.get()];
+    llvm::Function *func = m_module_lambda_funcs[m_module_lambda_index_map[expr_lambda]];
     llvm::Type *lambda_retptr_type = func->getFunctionType()->getParamType(0);
     llvm::Type *lambda_res_type = lambda_retptr_type->getPointerElementType();
     llvm::Type *dest_type = NULL;
@@ -2126,6 +2240,18 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
     }
 
     return Expression_result::ptr(res_pointer);
+}
+
+// Generate a call to an expression lambda function.
+Expression_result LLVM_code_generator::generate_expr_lambda_call(
+    Function_context &ctx,
+    size_t           lambda_index,
+    llvm::Value      *opt_results_buffer,
+    size_t           opt_result_index)
+{
+    mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
+        m_dist_func->get_expr_lambda(lambda_index));
+    return generate_expr_lambda_call(ctx, expr_lambda.get(), opt_results_buffer, opt_result_index);
 }
 
 // Store a value inside a float4 array at the given byte offset, updating the offset.
@@ -2645,6 +2771,7 @@ void LLVM_code_generator::handle_df_array_parameter(
         // is it a BSDF_component array?
         bool color_df_component = false;
         if (elem_type->isStructTy() && (
+                !llvm::cast<llvm::StructType>(elem_type)->isLiteral() &&
                 elem_type->getStructName() == "struct.BSDF_component" ||
                 elem_type->getStructName() == "struct.EDF_component" ||
                 (color_df_component = (
@@ -2782,6 +2909,7 @@ void LLVM_code_generator::handle_df_array_parameter(
     // is it a BSDF_component array?
     bool color_df_component = false;
     if (elem_type->isStructTy() && (
+            !llvm::cast<llvm::StructType>(elem_type)->isLiteral() &&
             elem_type->getStructName() == "struct.BSDF_component" ||
             elem_type->getStructName() == "struct.EDF_component" ||
             (color_df_component = (
@@ -2882,9 +3010,10 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
         {
             switch (m_dist_func_state)
             {
-                case DFSTATE_SAMPLE:   func_type = m_type_bsdf_sample_func; break;
-                case DFSTATE_EVALUATE: func_type = m_type_bsdf_evaluate_func; break;
-                case DFSTATE_PDF:      func_type = m_type_bsdf_pdf_func; break;
+                case DFSTATE_SAMPLE:    func_type = m_type_bsdf_sample_func; break;
+                case DFSTATE_EVALUATE:  func_type = m_type_bsdf_evaluate_func; break;
+                case DFSTATE_PDF:       func_type = m_type_bsdf_pdf_func; break;
+                case DFSTATE_AUXILIARY: func_type = m_type_bsdf_auxiliary_func; break;
                 default:
                     MDL_ASSERT(!"Invalid bsdf distribution function state");
                     return NULL;
@@ -2897,9 +3026,10 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
         {
             switch (m_dist_func_state)
             {
-                case DFSTATE_SAMPLE:   func_type = m_type_edf_sample_func; break;
-                case DFSTATE_EVALUATE: func_type = m_type_edf_evaluate_func; break;
-                case DFSTATE_PDF:      func_type = m_type_edf_pdf_func; break;
+                case DFSTATE_SAMPLE:    func_type = m_type_edf_sample_func; break;
+                case DFSTATE_EVALUATE:  func_type = m_type_edf_evaluate_func; break;
+                case DFSTATE_PDF:       func_type = m_type_edf_pdf_func; break;
+                case DFSTATE_AUXILIARY:   func_type = m_type_edf_auxiliary_func; break;
                 default:
                     MDL_ASSERT(!"Invalid edf distribution function state");
                     return NULL;
@@ -2929,7 +3059,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
             get_allocator(),
             *this,
             func,
-            get_df_function_flags(),
+            get_df_function_flags(func),
             true);
 
         ctx->SetInsertPoint(body_bb);
@@ -3064,7 +3194,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
         get_allocator(),
         *this,
         bsdf_func,
-        get_df_function_flags(),
+        get_df_function_flags(bsdf_func),
         true);
 
     llvm::SmallVector<llvm::Instruction *, 16> delete_list;
@@ -3149,7 +3279,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
                 // check for calls to special functions
                 llvm::StringRef func_name = called_func->getName();
-                if (!called_func->isDeclaration() || !func_name.startswith("get_"))
+                if (!func_name.startswith("get_"))
                     continue;
 
                 IDistribution_function::Special_kind special_kind;
@@ -3199,7 +3329,8 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 // Translate a DAG node pointing to a DF to LLVM IR.
 Expression_result LLVM_code_generator::translate_distribution_function(
     Function_context &ctx,
-    llvm::SmallVector<unsigned, 8> const &lambda_result_exprs)
+    llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
+    llvm::GlobalVariable                 *mat_data_global)
 {
     mi::base::Handle<ILambda_function> root_lambda(m_dist_func->get_main_df());
     DAG_node const *body = root_lambda->get_body();
@@ -3248,6 +3379,10 @@ Expression_result LLVM_code_generator::translate_distribution_function(
 
     // create and initialize execution context
     llvm::Value *exec_ctx = nullptr;
+
+    // avoid warning about unused parameter
+    (void) mat_data_global;
+
     if (target_supports_lambda_results_parameter()) {
         exec_ctx = ctx.create_local(
             m_type_mapper.get_exec_ctx_type(), "exec_ctx");
@@ -3267,7 +3402,6 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             ctx.get_lambda_results_parameter(),  // actually our overridden local struct
             ctx.create_simple_gep_in_bounds(exec_ctx, 4u));
     }
-
     // recursively instantiate the DF
     llvm::Function *df_func = instantiate_df(body);
     if (df_func == NULL) {

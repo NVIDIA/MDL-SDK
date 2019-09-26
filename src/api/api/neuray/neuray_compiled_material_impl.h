@@ -107,6 +107,8 @@ public:
 
     mi::neuraylib::Material_opacity get_opacity() const NEURAY_FINAL;
 
+    mi::neuraylib::Material_opacity get_surface_opacity() const NEURAY_FINAL;
+
     bool get_cutout_opacity(mi::Float32 *cutout_opacity) const NEURAY_FINAL;
 
     // own methods

@@ -1418,7 +1418,8 @@ HoistTerminator:
 // PHI node (because an operand varies in each input block), add to PHIOperands.
 static bool canSinkInstructions(
     ArrayRef<Instruction *> Insts,
-    DenseMap<Instruction *, SmallVector<Value *, 4>> &PHIOperands) {
+    DenseMap<Instruction *, SmallVector<Value *, 4>> &PHIOperands,
+    bool avoidPointerPHIs) {
   // Prune out obviously bad instructions to move. Any non-store instruction
   // must have exactly one use, and we check later that use is by a single,
   // common PHI instruction in the successor.
@@ -1426,6 +1427,10 @@ static bool canSinkInstructions(
     // These instructions may change or break semantics if moved.
     if (isa<PHINode>(I) || I->isEHPad() || isa<AllocaInst>(I) ||
         I->getType()->isTokenTy())
+      return false;
+
+    // Avoid creating PHIs of pointers if requested
+    if (avoidPointerPHIs && (isa<LoadInst>(I) || isa<StoreInst>(I)))
       return false;
 
     // Conservatively return false if I is an inline-asm instruction. Sinking
@@ -1669,7 +1674,7 @@ namespace {
 /// true, sink any common code from the predecessors to BB.
 /// We also allow one predecessor to end with conditional branch (but no more
 /// than one).
-static bool SinkCommonCodeFromPredecessors(BasicBlock *BB) {
+static bool SinkCommonCodeFromPredecessors(BasicBlock *BB, bool avoidPointerPHIs) {
   // We support two situations:
   //   (1) all incoming arcs are unconditional
   //   (2) one incoming arc is conditional
@@ -1737,7 +1742,7 @@ static bool SinkCommonCodeFromPredecessors(BasicBlock *BB) {
   DenseMap<Instruction*, SmallVector<Value*,4>> PHIOperands;
   LockstepReverseIterator LRI(UnconditionalPreds);
   while (LRI.isValid() &&
-         canSinkInstructions(*LRI, PHIOperands)) {
+         canSinkInstructions(*LRI, PHIOperands, avoidPointerPHIs)) {
     LLVM_DEBUG(dbgs() << "SINK: instruction can be sunk: " << *(*LRI)[0]
                       << "\n");
     InstructionsToSink.insert((*LRI).begin(), (*LRI).end());
@@ -6026,7 +6031,7 @@ bool SimplifyCFGOpt::run(BasicBlock *BB) {
     return true;
 
   if (SinkCommon && Options.SinkCommonInsts)
-    Changed |= SinkCommonCodeFromPredecessors(BB);
+    Changed |= SinkCommonCodeFromPredecessors(BB, Options.AvoidPointerPHIs);
 
   IRBuilder<> Builder(BB);
 

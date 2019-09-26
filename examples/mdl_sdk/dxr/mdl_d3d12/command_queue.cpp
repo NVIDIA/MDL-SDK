@@ -45,6 +45,7 @@ namespace mdl_d3d12
         : m_app(app)
         , m_command_list_type(type)
         , m_fence(nullptr)
+        , m_mtx()
     {
         D3D12_COMMAND_QUEUE_DESC desc = {};
         desc.Type = m_command_list_type;
@@ -61,7 +62,19 @@ namespace mdl_d3d12
 
     Command_queue::~Command_queue()
     {
-        if (m_fence) delete m_fence;
+        m_mtx.lock();
+        m_all_command_allocators.clear();
+        while (!m_command_allocator_queue.empty())
+            m_command_allocator_queue.pop();
+
+        m_all_command_lists.clear();
+        while (!m_free_command_list_queue.empty())
+            m_free_command_list_queue.pop();
+
+        if (m_fence) 
+            delete m_fence;
+
+        m_mtx.unlock();
     }
 
     D3DCommandList* Command_queue::get_command_list()
@@ -69,6 +82,7 @@ namespace mdl_d3d12
         ID3D12CommandAllocator* command_allocator = nullptr;
         D3DCommandList* command_list = nullptr;
 
+        m_mtx.lock();
         if (!m_command_allocator_queue.empty() && 
             m_fence->is_completed(m_command_allocator_queue.front().handle))
         {
@@ -97,6 +111,7 @@ namespace mdl_d3d12
             m_all_command_lists.push_back(new_list);
             command_list = m_all_command_lists.back().Get();
         }
+        m_mtx.unlock();
 
         ID3D12CommandAllocator* pd_allocator[1] = {command_allocator};
         command_list->SetPrivateData(
@@ -111,6 +126,7 @@ namespace mdl_d3d12
 
     UINT64 Command_queue::execute_command_list(D3DCommandList* command_list)
     {
+       
         throw_on_failure(command_list->Close(), "Failed to close command list", SRC);
 
         UINT size = sizeof(Command_queue*);
@@ -129,11 +145,14 @@ namespace mdl_d3d12
 
         ID3D12CommandList* const ppCommandLists[] = { command_list };
 
+        // TODO batch command lists instead of waiting
+        m_mtx.lock();
         m_command_queue->ExecuteCommandLists(1, ppCommandLists);
         UINT64 handle = m_fence->signal();
-
+        
         m_command_allocator_queue.emplace(Allocator_queue_item{handle, allocator});
         m_free_command_list_queue.emplace(command_list);
+        m_mtx.unlock();
 
         return handle;
     }
@@ -164,6 +183,7 @@ namespace mdl_d3d12
 
     Fence::Fence(Base_application* app, Command_queue* queue)
         : m_app(app)
+        , m_mtx()
         , m_command_queue(queue)
     {
         throw_on_failure(
@@ -184,10 +204,12 @@ namespace mdl_d3d12
 
     UINT64 Fence::signal()
     {
+        m_mtx.lock();
         UINT64 handle = m_fence_value++;
         throw_on_failure(m_command_queue->get_queue()->Signal(m_fence.Get(), handle),
             "Failed to signal fence.", SRC);
 
+        m_mtx.unlock();
         return handle;
     }
 

@@ -44,6 +44,7 @@ namespace mdl_d3d12
     class Descriptor_heap;
     class Material;
     class Mdl_target;
+    class Mdl_transaction;
     class Mdl_material;
     class Mdl_material_info;
     class Mdl_material_library;
@@ -58,24 +59,30 @@ namespace mdl_d3d12
         bool is_running() const { return m_hlsl_backend.is_valid_interface(); }
 
         /// logs errors, warnings, infos, ... and returns true in case the was NO error
-        bool log_messages(const mi::neuraylib::IMdl_execution_context& context);
+        bool log_messages(const mi::neuraylib::IMdl_execution_context* context);
 
         mi::neuraylib::INeuray& get_neuray() { return *m_neuray; }
         mi::neuraylib::IDatabase& get_database() { return *m_database; }
         mi::neuraylib::IMdl_compiler& get_compiler() { return *m_mdl_compiler; }
         mi::neuraylib::IImage_api& get_image_api() { return *m_image_api; }
         mi::neuraylib::IMdl_backend& get_backend() { return *m_hlsl_backend; }
-        mi::neuraylib::IMdl_execution_context& get_context() { return *m_context; }
 
-        size_t get_num_texture_results() const { return 1; }
+        // Creates a new execution context. At least one per thread is required.
+        // This means you can share the context for multiple calls from the same thread.
+        // However, sharing is not required. Creating a context for each call is valid too but
+        // slightly more expensive.
+        // Use a neuray handle to hold the pointer returned by this function.
+        mi::neuraylib::IMdl_execution_context* create_context();
 
-        /// contains the global link unit to be use for all materials that are loaded
-        Mdl_target* get_global_target() { return m_global_target; }
+        size_t get_num_texture_results() const { return 16; }
+
+        /// access point to the database 
+        Mdl_transaction& get_transaction() { return *m_transaction; }
 
         /// keeps all materials that are loaded by the application
         Mdl_material_library* get_library() { return m_library; }
 
-        // enable or disable MDL class compilation mode
+        /// enable or disable MDL class compilation mode
         bool use_class_compilation;
 
     private:
@@ -85,10 +92,10 @@ namespace mdl_d3d12
         mi::base::Handle<mi::neuraylib::IDatabase> m_database;
         mi::base::Handle<mi::neuraylib::IMdl_compiler> m_mdl_compiler;
         mi::base::Handle<mi::neuraylib::IImage_api> m_image_api;
+        mi::base::Handle<mi::neuraylib::IMdl_factory> m_mdl_factory;
         mi::base::Handle<mi::neuraylib::IMdl_backend> m_hlsl_backend;
-        mi::base::Handle<mi::neuraylib::IMdl_execution_context> m_context;
-
-        Mdl_target* m_global_target;
+        
+        Mdl_transaction* m_transaction;
         Mdl_material_library* m_library;
     };
 
@@ -98,7 +105,7 @@ namespace mdl_d3d12
     class Mdl_material_library
     {
         friend Mdl_sdk::Mdl_sdk(Base_application*);
-        explicit Mdl_material_library(Base_application* app, Mdl_sdk* sdk);
+        explicit Mdl_material_library(Base_application* app, Mdl_sdk* sdk, bool share_target_code);
 
     public:
         // creates a new material or reuses an existing one
@@ -108,24 +115,131 @@ namespace mdl_d3d12
 
         virtual ~Mdl_material_library();
 
+        /// gets the global link unit to be use for all materials that are loaded
+        /// only available if this library was created with `share_target_code` set.
+        Mdl_target* get_shared_target_code();
+
+        /// gets a target code (and link unit) when library was created without `share_target_code`.
+        Mdl_target* get_target_code(size_t target_code_id);
+
+        /// iterate over all target codes inside a lock.
+        ///
+        /// \param action   action to run while visiting a target code.
+        ///                 if the action returns false, the iteration is aborted.
+        ///
+        /// \returns        false if the iteration was aborted, true otherwise.
+        bool visit_target_codes(std::function<bool(Mdl_target*)> action);
+
+        /// iterate over all materials inside a lock.
+        ///
+        /// \param action   action to run while visiting a material.
+        ///                 if the action returns false, the iteration is aborted.
+        ///
+        /// \returns        false if the iteration was aborted, true otherwise.
+        bool visit_materials(std::function<bool(Mdl_material*)> action);
+
+        /// get access to the texture data by the texture database name and create a resource.
+        /// if there resource is loaded already, no loading is required
+        Texture* access_texture_resource(std::string db_name, D3DCommandList* command_list);
+
     private:
+
+        /// depending 'share_target_code' flag, the shared target is returned or a new created one.
+        Mdl_target* get_target_code_for_material_creation();
+
         Base_application* m_app;
         Mdl_sdk* m_sdk;
 
+        bool m_share_target_code;
+
+        // all existing targets, either one shared target or one per (unique) material
+        std::map<size_t, Mdl_target*> m_target_codes;
+        std::mutex m_target_codes_mtx;
+
         // map stores the materials with a unique body and temporaries, to be reused materials
         // that differ only in their parameters
-        std::map<mi::base::Uuid, Mdl_material_shared*> m_map_shared;
+        //std::map<mi::base::Uuid, Mdl_material_shared*> m_map_shared;
+        std::map<std::string, Mdl_material_shared*> m_map_shared;
+        std::mutex m_map_shared_mtx;
+
+        // all texture resources used by MDL materials
+        // TODO: use ref counting when considering dynamic loading and unloading of materials
+        std::map<std::string, Texture*> m_textures;
+        std::mutex m_textures_mtx;
+
+        // all existing materials (owned by the scene), added here for easier DXR pipeline setup  
+        std::vector<Mdl_material*> m_materials;
+        std::mutex m_materials_mtx;
+    };
+
+    // --------------------------------------------------------------------------------------------
+
+    class Mdl_transaction
+    {
+        // make sure there is only one transaction
+        friend class Mdl_sdk;
+
+        explicit Mdl_transaction(Mdl_sdk* sdk);
+    public:
+        virtual ~Mdl_transaction();
+
+        // runs an operation on the database.
+        // concurrent calls are executed in sequence using a lock.
+        template<typename TRes>
+        TRes execute(std::function<TRes(mi::neuraylib::ITransaction* t)> action)
+        {
+            std::lock_guard<std::mutex> lock(m_transaction_mtx);
+            return action(m_transaction.get());
+        }
+
+        template<>
+        void execute<void>(std::function<void(mi::neuraylib::ITransaction* t)> action)
+        {
+            std::lock_guard<std::mutex> lock(m_transaction_mtx);
+            action(m_transaction.get());
+        }
+
+        // locked database access function
+        template<typename TIInterface>
+        const TIInterface* access(const char* db_name)
+        {
+            return execute<const TIInterface*>(
+                [&](mi::neuraylib::ITransaction* t) {
+                    return t->access<TIInterface>(db_name);
+                });
+        }
+
+        // locked database create function
+        template<typename TIInterface>
+        TIInterface* create(const char* type_name)
+        {
+            return execute<TIInterface*>(
+                [&](mi::neuraylib::ITransaction* t) {
+                    return t->create<TIInterface>(type_name);
+                });
+        }
+
+        // locked database commit function.
+        // For that, all handles to neuray objects have to be released.
+        // Initializes for further actions afterwards.
+        void commit();
+
+    private:
+        mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+        std::mutex m_transaction_mtx;
+        Mdl_sdk* m_sdk;
     };
 
     // --------------------------------------------------------------------------------------------
 
     class Mdl_target
     {
+    public:
         class Resource_callback
             : public mi::base::Interface_implement<mi::neuraylib::ITarget_resource_callback>
         {
         public:
-            explicit Resource_callback(Mdl_target* target);
+            explicit Resource_callback(Mdl_sdk* sdk, Mdl_target* target, Mdl_material* material);
             virtual ~Resource_callback() = default;
 
             /// Returns a resource index for the given resource value usable by the target code 
@@ -144,30 +258,40 @@ namespace mdl_d3d12
             mi::Uint32 get_string_index(mi::neuraylib::IValue_string const *s) override;
 
         private:
+            Mdl_sdk* m_sdk;
             Mdl_target* m_target;
+            Mdl_material* m_material;
         };
 
-    public:
+
         Mdl_target(Base_application* app, Mdl_sdk* sdk);
         ~Mdl_target();
 
-        mi::neuraylib::ITransaction& get_transaction() { return *m_transaction; }
+
         mi::neuraylib::ILink_unit& get_link_unit() { return *m_link_unit; }
-        mi::neuraylib::ITarget_resource_callback& get_resource_callback() { 
-            return *m_resource_callback; 
+        Mdl_target::Resource_callback get_resource_callback(Mdl_material* material) {
+            return std::move(Resource_callback(m_sdk, this, material));
         }
+
+        /// unique id of this target code.
+        size_t get_id() const { return m_id; }
 
         /// Get the generated target.
         /// Note, this is managed and has to put into a handle.
         const mi::neuraylib::ITarget_code* get_target_code() const;
 
-        void add_on_generated(std::function<bool(Mdl_target*, D3DCommandList*)> callback);
-       
+
+        /// generate HLSL code for all functions in the link unit.
         bool generate();
 
-        const std::string& get_hlsl_source_code() const { 
-            return m_hlsl_source_code; 
-        }
+        /// get the result of the generation step.
+        const std::string& get_hlsl_source_code() const { return m_hlsl_source_code; }
+
+        /// compiles the generated HLSL code into a DXIL library.
+        bool compile();
+
+        /// get the result of the compiling step.
+        const IDxcBlob* get_dxil_compiled_library() const { return m_dxil_compiled_library; }
 
         /// all per target resources can be access in this region of the descriptor heap
         D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const { 
@@ -179,29 +303,43 @@ namespace mdl_d3d12
             return m_resource_descriptor_table; 
         }
 
+        /// in case the material is reused with a different set of parameters, there have to
+        /// be texture slots for all possible textures in the generated code
+        size_t update_min_texture_count(size_t count);
 
         friend mi::Uint32 Resource_callback::get_resource_index(
             mi::neuraylib::IValue_resource const*);
         std::vector<std::string>& get_resource_names() { return m_resource_names; }
 
     private:
+
+        friend Mdl_material* Mdl_material_library::create(
+            const IScene_loader::Material&,
+            const mi::neuraylib::IExpression_list*);
+
+        // callback registered in 'Mdl_material_library::create'
+        void add_on_generated(std::function<bool(D3DCommandList*)> callback);
+       
         Base_application* m_app;
         Mdl_sdk* m_sdk;
+        const size_t m_id;
 
-        mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
         mi::base::Handle<mi::neuraylib::ILink_unit> m_link_unit;
         mi::base::Handle<const mi::neuraylib::ITarget_code> m_target_code;
         mi::base::Handle<Resource_callback> m_resource_callback;
         
-        std::vector<std::function<bool(Mdl_target*, D3DCommandList*)>> m_on_generated_callbacks;
+        std::vector<std::function<bool(D3DCommandList*)>> m_on_generated_callbacks;
         std::string m_hlsl_source_code;
+        IDxcBlob* m_dxil_compiled_library;
 
         D3D12_GPU_DESCRIPTOR_HANDLE m_first_descriptor_heap_gpu_handle;
         Descriptor_table m_resource_descriptor_table;
 
         Buffer* m_read_only_data_segment;
+        size_t m_min_texture_count;
         std::vector<std::string> m_resource_names;
-        std::vector<Texture*> m_textures;
+
+        std::atomic_bool m_finalized;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -226,9 +364,13 @@ namespace mdl_d3d12
         virtual ~Mdl_material_shared() = default;
 
         size_t m_material_shared_id;
+        std::string m_material_db_name; // to check for hash collisions (reduces changes at least..)
         Constants m_constants;
 
         mi::Size m_argument_layout_index;
+
+        Mdl_target* m_target;
+        size_t m_max_texture_count;
     };
     
     // --------------------------------------------------------------------------------------------
@@ -249,41 +391,46 @@ namespace mdl_d3d12
         explicit Mdl_material(Base_application* app, const IScene_loader::Material& material_desc);
         virtual ~Mdl_material();
 
+        uint32_t get_id() const { return m_material_id; }
+        const std::string& get_name() const override { return m_name; }
+
         virtual Flags get_flags() const override { return m_flags;  }
         virtual void set_flags(Flags flag_mask) override { m_flags = flag_mask; }
 
-        /// get a descriptor table that describes the resource layout in the materials heap region
-        static const Descriptor_table& get_descriptor_table();
+        /// get a descriptor table that describes the resource layout in the materials heap region.
+        /// Note, static table can be used only when shared target is used.
+        static const Descriptor_table& get_static_descriptor_table();
+
+        /// get a descriptor table that describes the resource layout in the materials heap region.
+        /// Note, non-static table has to be used when a target is created for each material.
+        const Descriptor_table get_descriptor_table();
 
         /// samplers used for mdl texture lookups
         static std::vector<D3D12_STATIC_SAMPLER_DESC> get_sampler_descriptions();
 
-        const std::string& get_name() const override { return m_name; }
+        /// get the id of the target code that contains this material. 
+        /// can be used with the material library for instance.
+        size_t get_target_code_id() const { return m_shared->m_target->get_id(); }
 
-        /// all per target resources can be access in this region of the descriptor heap
-        D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const override {
-            return m_target->get_descriptor_heap_region();
-        }
+        /// get the target code that contains this material. 
+        const Mdl_target* get_target_code() const { return m_shared->m_target; }
 
         /// get the GPU handle of to the first resource of this material in the descriptor heap
-        D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const override {
-            return m_material_descriptor_heap_region;
+        D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const override {
+            return m_descriptor_heap_region;
         }
 
         /// get the interface to get and set material arguments
         Mdl_material_info* get_info() { return m_info; }
-
+        /// after material parameters have been changed, they have to copied to the GPU
         void update_material_parameters();
-       
+
     private:
         bool on_target_code_generated(
-            Mdl_target* target,
             const mi::neuraylib::IMaterial_definition* material_definition,
             const mi::neuraylib::ICompiled_material* compiled_material,
             bool first_instance,
             D3DCommandList* command_list);
-
-        static Descriptor_table s_resource_descriptor_table;
 
         Base_application* m_app;
         Mdl_material_shared* m_shared;
@@ -291,16 +438,23 @@ namespace mdl_d3d12
         uint32_t m_material_id;
         IMaterial::Flags m_flags;
 
-        Mdl_target* m_target;
+        /// constant buffer for function indices, material id and flags
         Constant_buffer<Constants> m_constants;
-        Descriptor_heap_handle m_constants_cbv;
 
+        /// buffer that contains the material parameters, changing them during runtime is possible
         Buffer* m_argument_block_data;
-        Descriptor_heap_handle m_argument_block_data_srv;
-
+        /// helper structure that allows to access the 'm_argument_block_data' fields
         Mdl_material_info* m_info;
 
-        D3D12_GPU_DESCRIPTOR_HANDLE m_material_descriptor_heap_region;
+        /// all material resources have views on the descriptor heap (all in one continuous block)
+        Descriptor_heap_handle m_first_descriptor;              // first descriptor on the heap
+        D3D12_GPU_DESCRIPTOR_HANDLE m_descriptor_heap_region;   // GPU address of continuous block 
+
+        // TODO, refactor that
+        friend mi::Uint32 Mdl_target::Resource_callback::get_resource_index(
+            mi::neuraylib::IValue_resource const*);
+        std::vector<std::string>& get_resource_names() { return m_resource_names; }
+        std::vector<std::string> m_resource_names;
     };
 }
 

@@ -63,12 +63,13 @@ namespace mdl_d3d12
     class Base_options
     {
     public:
-        explicit Base_options() 
+        explicit Base_options()
             : window_title("MDL D3D12 Example Application")
             , window_width(1280)
             , window_height(720)
             , mdl_paths()
             , use_class_compilation(true)
+            , force_single_theading(false)
             , no_gui(false)
             , hide_gui(true)
             , gui_scale(1.0f)
@@ -76,6 +77,12 @@ namespace mdl_d3d12
             , scene_directory(".")
             , output_file("output.png")
             , iterations(1)
+            , share_target_code(true)
+            , enable_auxiliary(true)
+            , automatic_derivatives(true)
+            , handle_z_axis_up(false)
+            , units_per_meter(1.0f)
+            , gpu(-1)
         {
         }
         virtual ~Base_options() = default;
@@ -84,6 +91,7 @@ namespace mdl_d3d12
         size_t window_height;
         std::vector<std::string> mdl_paths;
         bool use_class_compilation;
+        bool force_single_theading;
         bool no_gui;
         bool hide_gui;
         float gui_scale;
@@ -91,6 +99,12 @@ namespace mdl_d3d12
         std::string scene_directory;
         std::string output_file;
         size_t iterations;
+        bool share_target_code;
+        bool enable_auxiliary;
+        bool automatic_derivatives;
+        bool handle_z_axis_up;
+        float units_per_meter;
+        int32_t gpu;
 
         std::unordered_map<std::string, std::string> user_options;
     };
@@ -126,7 +140,7 @@ namespace mdl_d3d12
 
     public:
         virtual ~Base_application();
-        int run(const Base_options* options, HINSTANCE hInstance, int nCmdShow);
+        int run(Base_options* options, HINSTANCE hInstance, int nCmdShow);
 
         // get access the applications options that have been parsed from the command line
         const Base_options* get_options() const { return m_options; }
@@ -159,6 +173,7 @@ namespace mdl_d3d12
     protected:
         explicit Base_application();
 
+        virtual bool initialize(Base_options* options) { return true; }
         virtual bool load() = 0;
         virtual void update(const Update_args& args) = 0;
         virtual void render(const Render_args& args) = 0;
@@ -170,7 +185,8 @@ namespace mdl_d3d12
         virtual void on_resize(size_t width, size_t height) = 0;
 
     private:
-        bool initialize();
+        // allow the application to see / change options before loading
+        bool initialize_internal(Base_options* options);
 
         void update();
         void render();

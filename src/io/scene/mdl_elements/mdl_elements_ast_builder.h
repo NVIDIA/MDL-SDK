@@ -35,6 +35,7 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_definitions.h>
+#include <mi/mdl/mdl_mdl.h>
 
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_expression.h"
@@ -248,6 +249,8 @@ private:
 
     /// List of used user types.
     User_type_list m_used_user_types;
+
+    mi::mdl::IMDL::MDL_version m_owner_version;
 };
 
 } // namespace MDL

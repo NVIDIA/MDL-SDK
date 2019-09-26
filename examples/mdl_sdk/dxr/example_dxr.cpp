@@ -34,6 +34,9 @@ struct Scene_constants
 
     // gamma correction while rendering to the frame buffer
     float output_gamma_correction;
+
+    // when auxiliary buffers are enabled, this index is used to select to one to display
+    uint32_t display_buffer_index;
 };
 
 enum class Ray_type
@@ -43,6 +46,26 @@ enum class Ray_type
 
     count,
 };
+
+enum class Display_buffer_options
+{
+    Beauty = 0,
+    Albedo,
+    Normal,
+
+    count
+};
+
+static std::string to_string(Display_buffer_options option)
+{
+    switch (option)
+    {
+        case Display_buffer_options::Beauty: return "Beauty";
+        case Display_buffer_options::Albedo: return "Albedo";
+        case Display_buffer_options::Normal: return "Normal";
+        default: return "";
+    }
+}
 
 // Shader hit record that connects mesh instances and geometry parts with their materials.
 struct Hit_record_root_arguments
@@ -56,7 +79,16 @@ struct Hit_record_root_arguments
 
 class Demo_rtx : public Base_application
 {
-public:
+protected:
+    bool initialize(Base_options* options) override
+    {
+        // even when using a shared link unit to produce a single HLSL code block for all materials,
+        // textures for instance can be loaded in parallel. Here, this is disabled.
+        options->force_single_theading = true;
+
+        return true;
+    }
+
     bool load() override
     { 
         Timing t("loading application");
@@ -73,6 +105,7 @@ public:
 
         // basic resource handling one large descriptor heap (array of different resource views)
         // ----------------------------------------------------------------------------------------
+        Descriptor_heap* resource_heap = get_resource_descriptor_heap();
 
         // create a UAV of output buffer as target texture ray tracing results 
         // and add a UAV to the resource heap
@@ -81,9 +114,9 @@ public:
             get_window()->get_width(), get_window()->get_height(), 1,
             DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingOutputBuffer");
 
-        m_output_buffer_uav = 
-            get_resource_descriptor_heap()->add_unordered_access_view(m_output_buffer);
-        if (!m_output_buffer_uav.is_valid()) return false;
+        m_output_buffer_uav = resource_heap->reserve_views(options->enable_auxiliary ? 4 : 2);
+        if (!resource_heap->create_unordered_access_view(m_output_buffer, m_output_buffer_uav))
+            return false;
 
         // the frame buffer uses the same format as the back buffer
         m_frame_buffer = new Texture(
@@ -91,9 +124,37 @@ public:
             get_window()->get_width(), get_window()->get_height(), 1,
             get_window()->get_back_buffer()->get_format(), "FrameBuffer");
 
-        m_frame_buffer_uav = 
-            get_resource_descriptor_heap()->add_unordered_access_view(m_frame_buffer);
-        if (!m_frame_buffer_uav.is_valid()) return false;
+        m_frame_buffer_uav = m_output_buffer_uav.create_offset(1);
+        if (!resource_heap->create_unordered_access_view(m_frame_buffer, m_frame_buffer_uav))
+            return false;
+
+        // for some post processing effects or for AI denoising, auxiliary outputs are required.
+        // from the MDL material perspective albedo (approximation) and normals can be generated.
+        if (options->enable_auxiliary)
+        {
+            m_albedo_buffer = new Texture(
+                this, GPU_access::unorder_access,
+                get_window()->get_width(), get_window()->get_height(), 1,
+                DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingAlbedoBuffer");
+
+            m_albedo_buffer_uav = m_output_buffer_uav.create_offset(2);
+            if (!resource_heap->create_unordered_access_view(m_albedo_buffer, m_albedo_buffer_uav))
+                return false;
+
+            m_normal_buffer = new Texture(
+                this, GPU_access::unorder_access,
+                get_window()->get_width(), get_window()->get_height(), 1,
+                DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingNormalBuffer");
+
+            m_normal_buffer_uav = m_output_buffer_uav.create_offset(3);
+            if (!resource_heap->create_unordered_access_view(m_normal_buffer, m_normal_buffer_uav))
+                return false;
+        } 
+        else
+        {
+            m_albedo_buffer = nullptr;
+            m_normal_buffer = nullptr;
+        }
 
         // load scene data
         // ----------------------------------------------------------------------------------------
@@ -102,7 +163,11 @@ public:
 
             // two stages, import scene from a specific format
             Loader_gltf loader;
-            if (!loader.load(options->scene)) return false;
+            IScene_loader::Scene_options scene_options;
+            scene_options.units_per_meter = options->units_per_meter;
+            scene_options.handle_z_axis_up = options->handle_z_axis_up;
+
+            if (!loader.load(options->scene, scene_options)) return false;
 
             // replace all materials (for debugging purposes)
             if (!options->user_options.at("override_material").empty())
@@ -121,7 +186,7 @@ public:
 
         // get the first camera
         m_camera_node = nullptr;
-        m_scene->traverse(Scene_node::Kind::Camera, [&](Scene_node* node)
+        m_scene->visit(Scene_node::Kind::Camera, [&](Scene_node* node)
         {
             m_camera_node = node;
             return false; // abort traversal
@@ -135,8 +200,8 @@ public:
 
             IScene_loader::Camera cam_desc;
             cam_desc.vertical_fov = mdl_d3d12::PI * 0.25f;
-            cam_desc.near_plane_distance = 0.01f;
-            cam_desc.far_plane_distance = 1000.0f;
+            cam_desc.near_plane_distance = 0.1f;
+            cam_desc.far_plane_distance = 10000.0f;
             cam_desc.name = "Default Camera";
 
             Transform trafo;
@@ -149,17 +214,15 @@ public:
                 return false;
         }
 
-        // keep the initial pose for resetting it on demand
-        m_camera_initial_pose = m_camera_node->get_local_transformation();
-
         // update aspect ratio
         m_camera_node->get_camera()->set_aspect_ratio(float(get_window()->get_width()) /
                                                       float(get_window()->get_height()));
 
         // add a CBV for the camera constants to the heap 
-        m_camera_cbv = get_resource_descriptor_heap()->add_constant_buffer_view(
-            m_camera_node->get_camera()->get_constants());
-        if (!m_camera_cbv.is_valid()) return false;
+        m_camera_cbv = resource_heap->reserve_views(1);
+        if (!resource_heap->create_constant_buffer_view(
+            m_camera_node->get_camera()->get_constants(), m_camera_cbv))
+            return false;
 
         // same for scene constants
         m_scene_constants = new Constant_buffer<Scene_constants>(this, "SceneConstants");
@@ -175,6 +238,7 @@ public:
         m_scene_constants->data.point_light_position = options->point_light_position;
         m_scene_constants->data.point_light_intensity = options->point_light_intensity;
         m_scene_constants->data.environment_intensity_factor = std::max(0.0f, options->hdr_scale);
+        m_scene_constants->data.display_buffer_index = 0;
 
         switch (get_window()->get_back_buffer()->get_format())
         {
@@ -191,18 +255,21 @@ public:
                 break;
         }
 
-        const Descriptor_heap_handle scene_cbv = 
-            get_resource_descriptor_heap()->add_constant_buffer_view(m_scene_constants);
-        if (!scene_cbv.is_valid()) return false;
+        // add a CBV for the scene constants to the heap 
+        Descriptor_heap_handle scene_cbv = resource_heap->reserve_views(1);
+        if (!resource_heap->create_constant_buffer_view(m_scene_constants, scene_cbv))
+            return false;
 
-        // add a RTV of the acceleration data structure to heap
-        const Descriptor_heap_handle acceleration_structure_srv = 
-            get_resource_descriptor_heap()->add_shader_resource_view(
-                m_scene->get_acceleration_structure());
-        if (!acceleration_structure_srv.is_valid()) return false;
+        // add a SRV of the acceleration data structure to heap
+        Descriptor_heap_handle acceleration_structure_srv = resource_heap->reserve_views(1);
+        if (!resource_heap->create_shader_resource_view(
+            m_scene->get_acceleration_structure(), acceleration_structure_srv))
+            return false;
 
         // compile the materials to HLSL
-        if (!get_mdl_sdk().get_global_target()->generate()) return false;
+        if (!get_mdl_sdk().get_library()->get_shared_target_code()->generate()) return false;
+        // compile that materials from HLSL to DXIL
+        if (!get_mdl_sdk().get_library()->get_shared_target_code()->compile()) return false;
 
         // load environment
         // Note, this uses the neuray and creates a new transaction, 
@@ -238,10 +305,14 @@ public:
         // Compile and libraries (and lists of symbols) to the pipeline 
         // (since this is the only pipeline, ownership is passed too)
         {
+            std::map<std::string, std::string> defines;
+            if(options->enable_auxiliary)
+                defines["ENABLE_AUXILIARY"] = std::to_string(1);
+
             Timing t("compiling HLSL");
             Shader_compiler compiler;
             if (!m_pipeline->add_library(compiler.compile_shader_library(
-                get_executable_folder() + "/content/ray_gen_program.hlsl"), true,
+                get_executable_folder() + "/content/ray_gen_program.hlsl", &defines), true,
                 {"RayGenProgram"}))
                 return false;
 
@@ -249,14 +320,15 @@ public:
                 get_executable_folder() + "/content/miss_programs.hlsl"), true,
                 {"RadianceMissProgram", "ShadowMissProgram"}))
                 return false;
-
-            if (!m_pipeline->add_library(compiler.compile_shader_library_from_string(
-                get_mdl_sdk().get_global_target()->get_hlsl_source_code(), 
-                get_executable_folder() + "/link_unit_source.hlsl"), true,
-                {"MdlRadianceClosestHitProgram", "MdlRadianceAnyHitProgram", 
-                 "MdlShadowAnyHitProgram"}))
-                return false;
         }
+
+        // link the mdl code to the pipeline
+        if (!m_pipeline->add_library(
+            get_mdl_sdk().get_library()->get_shared_target_code()->get_dxil_compiled_library(),
+            false,
+            { "MdlRadianceClosestHitProgram_0", "MdlRadianceAnyHitProgram_0",
+              "MdlShadowAnyHitProgram_0" }))
+            return false;
 
         {
             Timing t("setting up ray tracing pipeline");
@@ -265,12 +337,12 @@ public:
             // this one will handle the shading of objects with MDL materials
             if (!m_pipeline->add_hitgroup(
                 "MdlRadianceHitGroup", 
-                "MdlRadianceClosestHitProgram", "MdlRadianceAnyHitProgram", ""))
+                "MdlRadianceClosestHitProgram_0", "MdlRadianceAnyHitProgram_0", ""))
                     return false;
 
             // .. this one will deal with shadows cast by objects with MDL materials
             if (!m_pipeline->add_hitgroup(
-                "MdlShadowHitGroup", "", "MdlShadowAnyHitProgram", "")) 
+                "MdlShadowHitGroup", "", "MdlShadowAnyHitProgram_0", "")) 
                     return false;
 
             // Global root signature that is applicable to all shader called from dispatch ray
@@ -281,6 +353,15 @@ public:
 
             // use register(u1,space0) for the frame buffer
             global_root_signature_dt.register_uav(1, 0, m_frame_buffer_uav);
+
+            if (options->enable_auxiliary)
+            {
+                // use register(u2,space0) for the albedo buffer
+                global_root_signature_dt.register_uav(2, 0, m_albedo_buffer_uav);
+
+                // use register(u3,space0) for the normal buffer
+                global_root_signature_dt.register_uav(3, 0, m_normal_buffer_uav);
+            }
 
             // use register(b0,space0) for camera constants
             global_root_signature_dt.register_cbv(0, 0, m_camera_cbv);
@@ -330,10 +411,11 @@ public:
             signature->register_constants<uint32_t>(2);
 
             // all target level resource are handled by the target
-            signature->register_dt(get_mdl_sdk().get_global_target()->get_descriptor_table());
+            signature->register_dt(
+                get_mdl_sdk().get_library()->get_shared_target_code()->get_descriptor_table());
 
             // all material resource are handled by the material
-            signature->register_dt(Mdl_material::get_descriptor_table());
+            signature->register_dt(Mdl_material::get_static_descriptor_table());
             if (!signature->finalize()) return false;
             if (!m_pipeline->add_signature_association(signature, true, 
                 {"MdlRadianceHitGroup"})) return false;
@@ -386,12 +468,10 @@ public:
 
             // iterate over all scene nodes and create local root parameters 
             // for each geometry instance
-            if(!m_scene->traverse(Scene_node::Kind::Mesh, [&](const Scene_node* node)
+            if(!m_scene->visit(Scene_node::Kind::Mesh, [&](const Scene_node* node)
             {
-                const Raytracing_acceleration_structure::Instance_handle& instance = 
-                    node->get_mesh_instance();
-
-                const Mesh* mesh = node->get_mesh();
+                const Mesh::Instance* instance = node->get_mesh_instance();
+                const Mesh* mesh = instance->get_mesh();
 
                 // set mesh parameters for all parts
                 Hit_record_root_arguments local_root_arguments;
@@ -402,18 +482,19 @@ public:
                     mesh->get_index_buffer()->get_resource()->GetGPUVirtualAddress();
 
                 // iterate over all mesh parts
-                for (auto part : mesh->get_geometries())
+                return mesh->visit_geometries([&](const Mesh::Geometry* part)
                 {
                     // set parameters per mesh part
-                    local_root_arguments.geometry_index_offset = part.get_index_offset();
+                    local_root_arguments.geometry_index_offset = part->get_index_offset();
 
                     // target (link unit) specific resources
                     local_root_arguments.target_heap_region_start = 
-                        part.get_material()->get_target_descriptor_heap_region();
+                        get_mdl_sdk().get_library()->get_shared_target_code()->
+                            get_descriptor_heap_region();
 
                     // material specific resources
                     local_root_arguments.material_heap_region_start = 
-                        part.get_material()->get_material_descriptor_heap_region();
+                        instance->get_material(part)->get_descriptor_heap_region();
 
                     // index in the shader binding table
                     // compute the hit record index based on ray-type, 
@@ -421,8 +502,8 @@ public:
                     size_t hit_record_index = 
                         m_scene->get_acceleration_structure()->compute_hit_record_index(
                             static_cast<size_t>(Ray_type::Radiance),
-                            instance,
-                            part.get_geometry());
+                            instance->get_instance_handle(),
+                            part->get_geometry_handle());
 
                     // set data for this part
                     if (!m_shader_binding_table->set_shader_record(
@@ -434,15 +515,15 @@ public:
                     hit_record_index =
                         m_scene->get_acceleration_structure()->compute_hit_record_index(
                             static_cast<size_t>(Ray_type::Shadow),
-                            instance,
-                            part.get_geometry());
+                            instance->get_instance_handle(),
+                            part->get_geometry_handle());
 
                     if (!m_shader_binding_table->set_shader_record(
                         hit_record_index, shadow_hit_handle, &local_root_arguments))
                         return false;
-                }
 
-                return true; // continue traversal
+                    return true; // continue traversal
+                });
             })) return false; // failure in traversal action (returned false)
 
             // complete the table, no more new elements can be added 
@@ -460,6 +541,13 @@ public:
 
         // wait until all tasks are finished
         command_queue->flush();
+
+        // commit transaction
+        get_mdl_sdk().get_transaction().commit();
+
+        // print debug info
+        get_render_target_descriptor_heap()->print_debug_infos();
+        get_resource_descriptor_heap()->print_debug_infos();
         return true;
     }
 
@@ -469,6 +557,8 @@ public:
         delete m_scene;
         delete m_environment;
         delete m_output_buffer;
+        if(m_albedo_buffer) delete m_albedo_buffer;
+        if(m_normal_buffer) delete m_normal_buffer;
         delete m_frame_buffer;
         delete m_pipeline;
         delete m_scene_constants;
@@ -500,8 +590,8 @@ public:
                 camera->set_aspect_ratio(float(get_window()->get_width()) /
                                          float(get_window()->get_height()));
 
-                // exchange the CBV to the one of the new camera
-                get_resource_descriptor_heap()->replace_by_constant_buffer_view(
+                // exchange the CBV by the one of the new camera
+                get_resource_descriptor_heap()->create_constant_buffer_view(
                     camera->get_constants(), m_camera_cbv);
             }
       
@@ -513,41 +603,68 @@ public:
                 ImGui::Text("progressive iteration: %d", 
                             m_scene_constants->data.progressive_iteration);
 
-                ImGui::Text("iterations per frame: %d", 
-                            m_scene_constants->data.iterations_per_frame);
-
                 ImGui::Text("frame time: %f", args.elapsed_time);
+                ImGui::Text("frame per second: %f", 1.0 / args.elapsed_time);
                 ImGui::Text("total time: %f", args.total_time);
                 ImGui::Text("paths per second: %d",
                             size_t(double(m_output_buffer->get_width() * 
                             m_output_buffer->get_height() * 
                             m_scene_constants->data.iterations_per_frame) / args.elapsed_time));
 
-                if (ImGui::SliderUint("max path length", 
-                    &m_scene_constants->data.max_ray_depth, 1, 16))
+                if (get_options()->enable_auxiliary)
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Display options");
+                    ImGui::Separator();
+
+                    std::string current_display_buffer =
+                        to_string((Display_buffer_options) m_scene_constants->data.display_buffer_index);
+                    if (ImGui::BeginCombo("buffer", current_display_buffer.c_str()))
+                    {
+                        for (unsigned i = 0; i < (unsigned) Display_buffer_options::count; ++i)
+                        {
+                            const std::string &name = to_string((Display_buffer_options) i);
+                            bool is_selected = (current_display_buffer == name);
+                            if (ImGui::Selectable(name.c_str(), is_selected))
+                                m_scene_constants->data.display_buffer_index = i;
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Trace options");
+                    ImGui::Separator();
+
+                    if (ImGui::Button("restart progressive rendering"))
                         m_restart_progressive_rendering_required = true;
 
-                // vsync handling
-                bool vsync = get_window()->get_vsync();
-                if (ImGui::Checkbox("enable vsync", &vsync))
-                    get_window()->set_vsync(vsync);
+                    if (ImGui::SliderUint("max path length",
+                        &m_scene_constants->data.max_ray_depth, 1, 16))
+                        m_restart_progressive_rendering_required = true;
 
-                if (ImGui::Button("reset camera"))
-                    m_camera_node->set_local_transformation(m_camera_initial_pose);
+                    bool vsync = get_window()->get_vsync();
+                    if (ImGui::Checkbox("enable vsync", &vsync))
+                        get_window()->set_vsync(vsync);
+                }
 
-                if (ImGui::Button("restart progressive rendering"))
-                    m_restart_progressive_rendering_required = true;
+                {
+                    ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                    ImGui::Text("Environment and tone mapping options");
+                    ImGui::Separator();
 
-                if (ImGui::SliderFloat("environment intensity",
+                    if (ImGui::SliderFloat("environment intensity",
                         &m_scene_constants->data.environment_intensity_factor, 0.0f, 2.0f))
-                            m_restart_progressive_rendering_required = true;
+                        m_restart_progressive_rendering_required = true;
 
-                ImGui::SliderFloat("exposure [stops]",
-                                   &m_scene_constants->data.exposure_compensation, -3.0f, 3.0f);
+                    ImGui::SliderFloat("exposure [stops]",
+                                       &m_scene_constants->data.exposure_compensation, -3.0f, 3.0f);
 
-                ImGui::SliderFloat("burnout",
-                                   &m_scene_constants->data.burn_out, 0.0f, 1.0f);
-
+                    ImGui::SliderFloat("burnout",
+                                       &m_scene_constants->data.burn_out, 0.0f, 1.0f);
+                }
                 ImGui::End();
             }
         }
@@ -593,10 +710,11 @@ public:
         ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
         command_list->SetDescriptorHeaps(1, heaps);
 
+        // global root signature
+        // - first table: for output buffers, camera, scene constants, acceleration structure
         command_list->SetComputeRootDescriptorTable(
             0, heaps[0]->GetGPUDescriptorHandleForHeapStart());
-
-        // environment
+        // - second table  environment
         command_list->SetComputeRootDescriptorTable(
             1, heaps[0]->GetGPUDescriptorHandleForHeapStart());
 
@@ -662,12 +780,23 @@ public:
     void on_resize(size_t width, size_t height) override
     {
         m_output_buffer->resize(width, height);
-        get_resource_descriptor_heap()->replace_by_unordered_access_view(
+        get_resource_descriptor_heap()->create_unordered_access_view(
             m_output_buffer, m_output_buffer_uav);
 
         m_frame_buffer->resize(width, height);
-        get_resource_descriptor_heap()->replace_by_unordered_access_view(
+        get_resource_descriptor_heap()->create_unordered_access_view(
             m_frame_buffer, m_frame_buffer_uav);
+
+        if (m_albedo_buffer)
+        {
+            m_albedo_buffer->resize(width, height);
+            get_resource_descriptor_heap()->create_unordered_access_view(
+                m_albedo_buffer, m_albedo_buffer_uav);
+
+            m_normal_buffer->resize(width, height);
+            get_resource_descriptor_heap()->create_unordered_access_view(
+                m_normal_buffer, m_normal_buffer_uav);
+        }
 
         if (m_gui)
         {
@@ -728,6 +857,12 @@ private:
     Texture* m_output_buffer;
     Descriptor_heap_handle m_output_buffer_uav;
 
+    Texture* m_albedo_buffer;
+    Descriptor_heap_handle m_albedo_buffer_uav;
+
+    Texture* m_normal_buffer;
+    Descriptor_heap_handle m_normal_buffer_uav;
+
     Raytracing_pipeline* m_pipeline;
     Constant_buffer<Scene_constants>* m_scene_constants;
 
@@ -735,7 +870,6 @@ private:
 
     Scene_node* m_camera_node;
     Descriptor_heap_handle m_camera_cbv;
-    Transform m_camera_initial_pose;
 
     Environment* m_environment;
 
@@ -766,8 +900,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR command_line_args, int 
     if (parse_options(options, command_line_args, return_code))
     {
         // run the application
-        Base_application* app = new Demo_rtx();
-        return_code = app->run(&options, hInstance, nCmdShow);
+        Demo_rtx app;
+        return_code = app.run(&options, hInstance, nCmdShow);
     }
     return return_code;
 }

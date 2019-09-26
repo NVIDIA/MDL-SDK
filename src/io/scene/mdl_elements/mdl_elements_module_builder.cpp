@@ -1192,9 +1192,18 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
                 m_symbol_importer->collect_imports(init);
         }
     }
-    if (call)
-        m_symbol_importer->collect_imports(call);
-
+    const mi::mdl::IExpression* res_call = nullptr;
+    if (call) {
+        res_call = mi::mdl::promote_expressions_to_mdl_version(m_module.get(), call);
+        if (!res_call)
+        {
+            return add_error_message(
+                context, "Failed to promote expression.", -8);
+        }
+        if (mlet)
+            mlet->set_expression(res_call);
+        m_symbol_importer->collect_imports(res_call);
+    }
     mi::mdl::IStatement *body;
     if (md->m_is_material) {
         body = m_statement_factory->create_expression(mlet);
@@ -1203,7 +1212,7 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
 
         const mi::mdl::IExpression *ret_expr = nullptr;
         if (maps_to_mdl_function) {
-            ret_expr = call;
+            ret_expr = res_call;
         }
         else {
             ast_builder.remove_parameters();
@@ -1380,8 +1389,8 @@ mi::mdl::IModule const* Mdl_module_builder::build(
     // add all collected imports
     m_symbol_importer->add_imports();
 
-    //Module_cache module_cache(m_transaction);
-    m_module->analyze(/*cache=*/NULL, m_thread_context.get());
+    Module_cache module_cache(m_transaction);
+    m_module->analyze(&module_cache, m_thread_context.get());
     if (!m_module->is_valid())
     {
         report_messages(m_module->access_messages(), context);

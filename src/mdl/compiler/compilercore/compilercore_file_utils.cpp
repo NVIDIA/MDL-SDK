@@ -465,7 +465,8 @@ Directory::~Directory()
 
 // Open a directory for reading names in it.
 bool Directory::open(
-    char const *utf8_path)
+    char const *utf8_path,
+    char const *utf8_filter)
 {
     m_eof = false;
     if (m_dir->m_opened && !close())
@@ -476,20 +477,21 @@ bool Directory::open(
 
     // if we find a '*', just leave things as they are
     // note that this will likely not work for a 'c:/users/*/log' call
-    if (strchr(new_path.c_str(), '*') == NULL) {
+    if (new_path.find('*') == string::npos) {
         size_t len = new_path.length();
 
         // need this as m_path is const char *
         string temp_path(new_path);
 
         if (len == 0) { // empty string -- assume they just want the curr dir
-            temp_path = "*";
+            temp_path = utf8_filter == NULL ? "*" : utf8_filter;
         } else if (new_path[len - 1] == '/' || new_path[len - 1] == '\\') {
             // there is a trailing delimiter, so we just add the wildcard
-            temp_path += '*';
+            temp_path += utf8_filter == NULL ? "*" : utf8_filter;
         } else {
             // no trailing delimiter -- add one (and also the '*')
-            temp_path += "/*";
+            temp_path += '/';
+            temp_path += utf8_filter == NULL ? "*" : utf8_filter;
         }
 
         m_path = temp_path;
@@ -628,7 +630,8 @@ Directory::~Directory()
 
 // Open a directory for reading names in it.
 bool Directory::open(
-    char const *utf8_path)
+    char const *utf8_path,
+    char const *utf8_filter)
 {
     m_eof = false;
     if (m_dir->m_dp && !close())

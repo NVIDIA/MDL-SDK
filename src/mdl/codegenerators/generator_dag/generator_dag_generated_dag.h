@@ -818,6 +818,9 @@ public:
         /// Returns the opacity of this instance.
         Opacity get_opacity() const MDL_FINAL;
 
+        /// Returns the surface opacity of this instance.
+        Opacity get_surface_opacity() const MDL_FINAL;
+
         /// Returns the cutout opacity of this instance if it is constant.
         ///
         /// \return if the cutout opacity is a constant (and was read),

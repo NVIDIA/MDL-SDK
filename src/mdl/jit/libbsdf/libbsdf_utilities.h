@@ -47,6 +47,12 @@ BSDF_INLINE void absorb(BSDF_pdf_data *data)
     data->pdf  = 0.0f;
 }
 
+BSDF_INLINE void absorb(BSDF_auxiliary_data *data, const float3& normal)
+{
+    data->albedo = make_float3(0.0f, 0.0f, 0.0f);
+    data->normal = normal;
+}
+
 BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
 {
     BSDF_pdf_data res;
@@ -77,6 +83,10 @@ BSDF_INLINE void no_emission(EDF_pdf_data *data)
     data->pdf = 0.0f;
 }
 
+BSDF_INLINE void no_emission(EDF_auxiliary_data *data)
+{
+}
+
 
 
 BSDF_INLINE EDF_evaluate_data to_eval_data(const EDF_sample_data* sample_data)
@@ -95,23 +105,34 @@ BSDF_INLINE EDF_pdf_data to_pdf_data(const EDF_sample_data* sample_data)
 }
 
 template<typename TDF_data>
-BSDF_INLINE void no_contribution(TDF_data* data);
-template<> BSDF_INLINE void no_contribution(BSDF_sample_data* data) { absorb(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data) { absorb(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data) { absorb(data); }
-template<> BSDF_INLINE void no_contribution(EDF_sample_data* data) { no_emission(data); }
-template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data) { no_emission(data); }
-template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data) { no_emission(data); }
+BSDF_INLINE void no_contribution(TDF_data* data, const float3& normal);
+
+template<> BSDF_INLINE void no_contribution(BSDF_sample_data* data, const float3& normal) { 
+    absorb(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data, const float3& normal) { 
+    absorb(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data, const float3& normal) { 
+    absorb(data); }
+template<> BSDF_INLINE void no_contribution(EDF_sample_data* data, const float3& normal) { 
+    no_emission(data); }
+template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data, const float3& normal) { 
+    no_emission(data); }
+template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data, const float3& normal) { 
+    no_emission(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_auxiliary_data* data, const float3& normal) { 
+    absorb(data, normal); }
+template<> BSDF_INLINE void no_contribution(EDF_auxiliary_data* data, const float3& normal) {
+    no_emission(data); }
 
 // using color IORs would require some sort of spectral rendering, as of now libbsdf
 // reduces that to scalar by averaging
 template<typename Data>
-BSDF_INLINE float2 process_ior(Data *data)
+BSDF_INLINE float2 process_ior(Data *data, State *state)
 {
     if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
-        data->ior1 = get_material_ior();
+        data->ior1 = get_material_ior(state);
     if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
-        data->ior2 = get_material_ior();
+        data->ior2 = get_material_ior(state);
 
     float2 ior = make_float2(
         (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0),
@@ -744,10 +765,9 @@ BSDF_INLINE float microfacet_mask_smith_ggx(
     const float ax = roughness_u * k.x;
     const float ay = roughness_v * k.z;
 
-    const float alpha0 = /*math::sqrt*/(ax * ax + ay * ay); // see below
-    const float nk_2 = k.y * k.y;
-    const float tan2 = (1.0f - nk_2) / nk_2;
-    return 2.0f / (1.0f + math::sqrt(1.0f + tan2 * /*alpha0 **/ alpha0));
+    const float inv_a_2 = (ax * ax + ay * ay) / (k.y * k.y);
+
+    return 2.0f / (1.0f + math::sqrt(1.0f + inv_a_2));
 }
 
 // Smith-masking for anisotropic Beckmann
@@ -759,8 +779,8 @@ BSDF_INLINE float microfacet_mask_smith_beckmann(
     const float ax = roughness_u * k.x;
     const float ay = roughness_v * k.z;
 
-    const float tmp = ax * ax + ay * ay;
-    const float a = k.y / math::sqrt(tmp - tmp * k.y * k.y);
+    const float a = k.y / math::sqrt(ax * ax + ay * ay);
+
 #if 0
     // exact formula
     return 2.0f / (1.0f + erff(a) + 1.0f / (a * (float)(math::sqrt(M_PI))) * math::exp(-(a * a)));
@@ -902,6 +922,29 @@ BSDF_INLINE float3 measured_curve_factor_eval(
         return make_float3(0, 0, 0);
     else
         return math::saturate(measured_curve_factor(cosine, values, num_values));
+}
+
+BSDF_INLINE float3 measured_curve_factor_eval(
+    const float cosine,
+    const unsigned int measured_curve_idx,
+    const unsigned int num_values,
+    State *state)
+{
+    if (num_values == 0)
+        return make_float3(0, 0, 0);
+    else {
+        const float angle01 = math::acos(math::min(cosine, 1.0f)) * (float)(2.0 / M_PI);
+        const float f1 = angle01 * (float)(num_values - 1);
+        const int idx0 = math::min((int)f1, (int)num_values - 1);
+        const int idx1 = math::min(idx0 + 1, (int)num_values - 1);
+
+        const float cw1 = f1 - (float)idx0;
+        const float cw0 = 1.0f - cw1;
+
+        float3 res = state->get_measured_curve_value(measured_curve_idx, idx0) * cw0 +
+            state->get_measured_curve_value(measured_curve_idx, idx1) * cw1;
+        return math::saturate(res);
+    }
 }
 
 BSDF_INLINE float measured_curve_factor_estimate(
