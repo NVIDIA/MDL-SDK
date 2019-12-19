@@ -590,8 +590,8 @@ public:
     CharT *erase(CharT *first, CharT *last) {
         if (first != last) {
             // The move includes the terminating _CharT().
+            Traits::move(first, last, end() - last + 1);
             this->m_size -= (last - first);
-            Traits::move(first, last, last - first);
         }
         return first;
     }

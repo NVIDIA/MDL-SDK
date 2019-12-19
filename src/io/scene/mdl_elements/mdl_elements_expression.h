@@ -124,20 +124,40 @@ private:
 class Expression_direct_call : public Expression_base<IExpression_direct_call>
 {
 public:
-    Expression_direct_call( const IType* type, DB::Tag tag, IExpression_list* arguments)
-       : Base( type), m_tag( tag), m_arguments( arguments, mi::base::DUP_INTERFACE)
-    { ASSERT( M_SCENE, tag); ASSERT( M_SCENE, arguments); }
+    Expression_direct_call(
+        const IType* type,
+        DB::Tag module_tag,
+        Mdl_tag_ident definition_ident,
+        const std::string& definition_db_name,
+        IExpression_list* arguments)
+        : Base(type)
+        , m_module_tag(module_tag)
+        , m_definition_ident(definition_ident)
+        , m_definition_db_name(definition_db_name)
+        , m_arguments(arguments, mi::base::DUP_INTERFACE)
+    {
+        ASSERT(M_SCENE, definition_ident.first); ASSERT(M_SCENE, module_tag); ASSERT(M_SCENE, arguments);
+    }
+   
+    DB::Tag get_definition(DB::Transaction *transaction) const;
 
-    DB::Tag get_definition() const { return m_tag; }
+    DB::Tag get_module() const { return m_module_tag; }
 
-    mi::Sint32 set_definition( DB::Tag tag) { if( !tag) return -1; m_tag = tag; return 0; }
+    Mdl_ident get_definition_ident() const { return m_definition_ident.second; }
+
+    const char* get_definition_db_name() const { return m_definition_db_name.c_str(); }
+
+    mi::Sint32 set_definition(Mdl_tag_ident definition_ident) { if( !definition_ident.first) return -1; m_definition_ident = definition_ident; return 0; }
 
     const IExpression_list* get_arguments() const;
 
     mi::Size get_memory_consumption() const;
 
 private:
-    DB::Tag m_tag;
+    DB::Tag m_module_tag;
+    Mdl_tag_ident m_definition_ident;
+    std::string m_definition_db_name;
+    
     mi::base::Handle<IExpression_list> m_arguments;
 };
 
@@ -343,7 +363,11 @@ public:
     IExpression_parameter* create_parameter( const IType* type, mi::Size index) const;
 
     IExpression_direct_call* create_direct_call(
-        const IType* type, DB::Tag tag, IExpression_list* arguments) const;
+        const IType* type,
+        DB::Tag module_tag,
+        Mdl_tag_ident definition_ident,
+        const std::string& definition_db_name,
+        IExpression_list* arguments) const;
 
     IExpression_temporary* create_temporary( const IType* type, mi::Size index) const;
 
@@ -525,7 +549,7 @@ public:
 
 private:
     std::vector<mi::base::Handle<const IAnnotation_definition>> m_anno_definitions;
-    std::map<std::string, int> m_name_to_index;
+    std::map<std::string, mi::Size> m_name_to_index;
 };
 
 } // namespace MDL

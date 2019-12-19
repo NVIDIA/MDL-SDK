@@ -55,6 +55,7 @@
 #include "compilercore_positions.h"
 #include "compilercore_file_resolution.h"
 #include "compilercore_file_utils.h"
+#include "compilercore_wchar_support.h"
 
 #ifdef WIN_NT
 #define strcasecmp(s1, s2) _stricmp(s1, s2)
@@ -263,6 +264,10 @@ void dump_def(IDefinition const *def)
         printer->print(def->get_symbol());
         printer->print(">");
         break;
+    case IDefinition::DK_NAMESPACE:
+        printer->print("namespace ");
+        printer->print(def->get_symbol());
+        break;
     }
 }
 
@@ -359,9 +364,10 @@ IValue_resource const *retarget_resource_url(
         case IValue::VK_TEXTURE:
             {
                 IValue_texture const *tex = cast<IValue_texture>(r);
-                IType const *t = tf.import(tex->get_type());
+                IType_texture const *t = cast<IType_texture>(tf.import(tex->get_type()));
+                MDL_ASSERT(t->get_shape() != IType_texture::TS_BSDF_DATA);
                 return vf.create_texture(
-                    cast<IType_texture>(t),
+                    t,
                     abs_url.c_str(),
                     tex->get_gamma_mode(),
                     tex->get_tag_value(),
@@ -740,6 +746,9 @@ static void replace_since_version(
         case 6:
             flags |= unsigned(IMDL::MDL_VERSION_1_6);
             break;
+        case 7:
+            flags |= unsigned(IMDL::MDL_VERSION_1_7);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -781,6 +790,9 @@ static void replace_removed_version(
             break;
         case 6:
             flags |= (unsigned(IMDL::MDL_VERSION_1_6) << 8);
+            break;
+        case 7:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_7) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -1227,6 +1239,14 @@ public:
         return NULL;
     }
 
+    /// Get the module loading callback.
+    IModule_loaded_callback *get_module_loading_callback() const MDL_FINAL {
+        if (m_cache != NULL)
+            return m_cache->get_module_loading_callback();
+
+        return NULL;
+    }
+
 private:
     /// The module whose import list should be lookup'ed.
     Module const &m_mod;
@@ -1615,10 +1635,9 @@ IType const *Analysis::get_result_type(IDefinition const *def)
         return type;
     case IType::TK_FUNCTION:
         {
-            IType_function const *func_type = static_cast<IType_function const *>(type);
+            IType_function const *func_type = cast<IType_function>(type);
             return func_type->get_return_type();
         }
-
     default:
         break;
     }
@@ -1925,7 +1944,7 @@ private:
 }  // anonymous
 
 // Check if a given definition kind is allowed under the given match restriction.
-bool Analysis::allow_defition(
+bool Analysis::allow_definition(
     IDefinition::Kind kind,
     Match_restriction restriction)
 {
@@ -1944,7 +1963,7 @@ bool Analysis::allow_defition(
             return false;
         }
     case MR_NON_CALLABLE:
-        return !allow_defition(kind, MR_CALLABLE);
+        return !allow_definition(kind, MR_CALLABLE);
     case MR_TYPE:
         return kind == IDefinition::DK_TYPE;
     case MR_ANNO:
@@ -1988,7 +2007,7 @@ ISymbol const *Analysis::find_best_match(
         ++it)
     {
         Definition const *def = *it;
-        if (allow_defition(def->get_kind(), restriction))
+        if (allow_definition(def->get_kind(), restriction))
             matcher.eval_candidate(def->get_symbol());
     }
     return matcher.get_best_match();
@@ -2660,6 +2679,27 @@ void NT_analysis::enter_builtin_annotations()
         Definition *def = m_def_tab->enter_definition(Definition::DK_ANNOTATION, sym, type, NULL);
         def->set_semantic(Definition::DS_DERIVABLE_ANNOTATION);
     }
+
+    // the experimental() annotation: assigns a experimental MDL version to a declaration
+    {
+        ISymbol const        *sym = m_st->get_symbol("experimental");
+        IType_function const *type = m_tc.create_function(
+            NULL, Array_ref<IType_factory::Function_parameter>());
+
+        Definition *def = m_def_tab->enter_definition(Definition::DK_ANNOTATION, sym, type, NULL);
+        def->set_semantic(Definition::DS_EXPERIMENTAL_ANNOTATION);
+    }
+
+    // the literal_param() annotation: marks teh first parameter of a function accepting literals
+    // only (const_expr)
+    {
+        ISymbol const        *sym = m_st->get_symbol("literal_param");
+        IType_function const *type = m_tc.create_function(
+            NULL, Array_ref<IType_factory::Function_parameter>());
+
+        Definition *def = m_def_tab->enter_definition(Definition::DK_ANNOTATION, sym, type, NULL);
+        def->set_semantic(Definition::DS_LITERAL_PARAM_ANNOTATION);
+    }
 }
 
 // Enter builtin annotations for native modules.
@@ -3249,20 +3289,35 @@ Module const *NT_analysis::load_module_to_import(
         ISimple_name const *sname = rel_name->get_component(i);
         ISymbol const      *sym   = sname->get_symbol();
 
+         if (Definition const *def = m_def_tab->get_namespace_alias(sym)) {
+            sym = def->get_namespace();
+        }
+
         if (i > 0)
             import_name += "::";
         import_name += sym->get_name();
     }
 
+    bool is_weak_16 = false;
+    if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
+        // from MDL 1.6 weak imports do not exists
+        if (!is_absolute && import_name[0] != '.') {
+            is_weak_16 = true;
+            // previous weak imports are relative now
+            import_name = ".::" + import_name;
+        }
+    }
+
     char const *abs_name = NULL;
 
+    Messages_impl messages(get_allocator(), m_module.get_filename());
     File_resolver resolver(
         *m_compiler,
         m_module_cache,
         m_compiler->get_external_resolver(),
         m_compiler->get_search_path(),
         m_compiler->get_search_path_lock(),
-        m_module.access_messages_impl(),
+        messages,
         m_ctx.get_front_path());
 
     // let the resolver find the absolute name
@@ -3272,8 +3327,59 @@ Module const *NT_analysis::load_module_to_import(
         &m_module,
         &rel_name->access_position()));
 
+    // copy messages
+    copy_resolver_messages_to_module(messages, /*is_resource=*/ false);
+
+    if (is_weak_16 &&
+        !result.is_valid_interface() &&
+        messages.get_error_message_count() == 1)
+    {
+        // resolving a formally weak reference failed, check if it is absolute
+        mi::base::Handle<IMDL_import_result> result(m_compiler->resolve_import(
+            resolver,
+            import_name.c_str() + 1,
+            &m_module,
+            &rel_name->access_position()));
+        if (result.is_valid_interface()) {
+            // .. and add a note
+            add_note(
+                POSSIBLE_ABSOLUTE_IMPORT,
+                rel_name->access_position(),
+                Error_params(*this).add(import_name.c_str() + 1));
+        }
+    }
+
     if (!result.is_valid_interface()) {
         // name could not be resolved
+
+        // notify via callback
+        mi::mdl::IModule_loaded_callback* callback = m_module_cache
+            ? m_module_cache->get_module_loading_callback()
+            : nullptr;
+
+        if (callback) {
+            // produce the qualified name for a proper cache lookup
+            string module_name = import_name;
+            if (!is_absolute) {
+                module_name = "";
+                module_name.append(m_module.get_name());
+
+                if(import_name.size() > 3 && import_name[0] == '.' && 
+                    import_name[1] == ':' && import_name[2] == ':') {
+
+                    // strict absolute
+                    module_name.append(import_name.c_str() + 1); // drop the 'absolute'-dot
+                } else {
+                    // weak absolute or starting with '..' (upwards)
+                    module_name.append("::");
+                    module_name.append(import_name);
+                }
+
+                string sep("::", m_builder.get_allocator());
+                module_name = mi::mdl::simplify_path(m_builder.get_allocator(), module_name, sep);
+            }
+            callback->module_loading_failed(module_name.c_str());
+        }
         return NULL;
     }
     abs_name = result->get_absolute_name();
@@ -3379,16 +3485,19 @@ size_t NT_analysis::handle_reexported_entity(
 
 // Enter the relative scope starting at the current scope
 // of an imported module given by the module name and a prefix skip.
-Scope *NT_analysis::enter_import_scope(IQualified_name const *from_name, int prefix_skip)
+Scope *NT_analysis::enter_import_scope(
+    IQualified_name const *name_space,
+    int                   prefix_skip,
+    bool                  ignore_last)
 {
-    int from_len = from_name->get_component_count();
+    int ns_len = name_space->get_component_count() - (ignore_last ? 1 : 0);
 
-    MDL_ASSERT(prefix_skip <= from_len && "prefix skip to long in import");
+    MDL_ASSERT(prefix_skip <= ns_len && "prefix skip to long in import");
 
     Scope *scope = m_def_tab->get_global_scope();
 
-    for (int i = prefix_skip; i < from_len; ++i) {
-        ISimple_name const *name    = from_name->get_component(i);
+    for (int i = prefix_skip; i < ns_len; ++i) {
+        ISimple_name const *name    = name_space->get_component(i);
         ISymbol const      *imp_sym = m_module.import_symbol(name->get_symbol());
 
         Scope *n = scope->find_named_subscope(imp_sym);
@@ -3434,13 +3543,8 @@ void NT_analysis::import_qualified(
             // errors already reported
             return;
         }
-        IQualified_name const *imp_name = imp_mod->get_qualified_name();
-        int prefix_len = imp_name->get_component_count() - (count - 1);
-
-        MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
-
         // import it under the relative name
-        import_all_definitions(imp_mod.get(), prefix_len, err_pos);
+        import_all_definitions(imp_mod.get(), rel_name, skip_dots, err_pos);
     } else {
         // import a qualified entity
         mi::base::Handle<const Module> imp_mod;
@@ -3453,7 +3557,7 @@ void NT_analysis::import_qualified(
         }
 
         // import only one entity
-        import_qualified_entity(rel_name, imp_mod.get());
+        import_qualified_entity(rel_name, imp_mod.get(), skip_dots);
     }
 }
 
@@ -3534,19 +3638,19 @@ Definition const *NT_analysis::import_definition(
 
 // Import a complete module.
 void NT_analysis::import_all_definitions(
-    Module const   *from,
-    int            prefix_skip,
-    Position const &err_pos)
+    Module const          *from,
+    IQualified_name const *name_space,
+    int                   prefix_skip,
+    Position const        &err_pos)
 {
     Definition_table const &def_tab   = from->get_definition_table();
-    IQualified_name const  *from_name = from->get_qualified_name();
     size_t                 from_idx   = m_module.register_import(from);
 
-    MDL_ASSERT(prefix_skip <= from_name->get_component_count() && "prefix skip to long in import");
+    MDL_ASSERT(prefix_skip < name_space->get_component_count() && "prefix skip to long in import");
     {
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
-        enter_import_scope(from_name, prefix_skip);
+        enter_import_scope(name_space, prefix_skip, /*ignore_last=*/true);
 
         // Note: only entities at global scope can be imported, so check for them only there
         Scope const *global_scope = def_tab.get_global_scope();
@@ -3558,7 +3662,7 @@ void NT_analysis::import_all_definitions(
 
 // Import a type scope.
 void NT_analysis::import_type_scope(
-    Definition const *imported, 
+    Definition const *imported,
     Module const     *from,
     size_t           from_idx,
     Definition       *new_def,
@@ -3863,8 +3967,6 @@ bool NT_analysis::import_entity(
     {
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
-        IQualified_name const *imp_name = imp_mod->get_qualified_name();
-
         // skip "." and ".."
         int rel_name_len = rel_name->get_component_count();
         int first = 0;
@@ -3875,13 +3977,7 @@ bool NT_analysis::import_entity(
             if (id != ISymbol::SYM_DOT && id != ISymbol::SYM_DOTDOT)
                 break;
         }
-        rel_name_len -= first;
-
-        int prefix_len = imp_name->get_component_count() - rel_name_len;
-
-        MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
-
-        enter_import_scope(imp_name, prefix_len);
+        enter_import_scope(rel_name, first, /*ignore_last=*/false);
 
         // qualified imports are never exported
         Definition const *clash_def = import_definition(
@@ -3934,30 +4030,11 @@ bool NT_analysis::import_entity(
     return true;
 }
 
-/// Computes the package length, handling '.' and '..' prefixes of an entity qualified name.
-///
-/// \param entity_name  a qualified name of an entity
-static int package_len(IQualified_name const *entity_name)
-{
-    int n = entity_name->get_component_count() - 1;
-    for (int i = 0; i < n; ++i) {
-        ISimple_name const *sname = entity_name->get_component(i);
-        ISymbol const      *sym   = sname->get_symbol();
-
-        size_t id = sym->get_id();
-        if (id == ISymbol::SYM_DOT || id == ISymbol::SYM_DOTDOT) {
-            // skip '.' or '..::*' prefixed
-            continue;
-        }
-        return n - i;
-    }
-    return n;
-}
-
 // Import a qualified entity from a module.
 bool NT_analysis::import_qualified_entity(
     IQualified_name const *entity_name,
-    Module const          *imp_mod)
+    Module const          *imp_mod,
+    int                   prefix_skip)
 {
     Definition_table const &imp_deftab = imp_mod->get_definition_table();
     size_t                 imp_idx     = m_module.get_import_index(imp_mod);
@@ -4042,12 +4119,7 @@ bool NT_analysis::import_qualified_entity(
     {
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
-        IQualified_name const *imp_name = imp_mod->get_qualified_name();
-        int prefix_len = imp_name->get_component_count() - package_len(entity_name);
-
-        MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
-
-        enter_import_scope(imp_name, prefix_len);
+        enter_import_scope(entity_name, prefix_skip, /*ignore_last=*/true);
 
         // qualified imports are never exported
         Definition const *clash_def = import_definition(
@@ -4134,8 +4206,6 @@ void NT_analysis::import_all_entities(
     {
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
 
-        IQualified_name const *imp_name = imp_mod->get_qualified_name();
-
         // skip "." and ".."
         int rel_name_len = rel_name->get_component_count();
         int first = 0;
@@ -4146,13 +4216,8 @@ void NT_analysis::import_all_entities(
             if (id != ISymbol::SYM_DOT && id != ISymbol::SYM_DOTDOT)
                 break;
         }
-        rel_name_len -= first;
 
-        int prefix_len = imp_name->get_component_count() - rel_name_len;
-
-        MDL_ASSERT(prefix_len >= 0 && "Wrong prefix len");
-
-        enter_import_scope(imp_name, prefix_len);
+        enter_import_scope(rel_name, first, /*ignore_last=*/false);
 
         import_scope_entities(
             imp_scope, imp_mod, imp_idx, /*is_exported=*/false, /*forced=*/false, err_pos);
@@ -5383,7 +5448,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
         if (body != NULL) {
             Enter_function enter(*this, f_def);
             Flag_store     can_thow_bounds(m_can_throw_bounds, false);
-            Flag_store     can_thow_diczero(m_can_throw_divzero, false);
+            Flag_store     can_thow_divzero(m_can_throw_divzero, false);
 
             // this is a function definition
             if (IStatement_compound const *block = as<IStatement_compound>(body)) {
@@ -5400,13 +5465,23 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                 // an invalid statement, we are ready
                 visit(body);
             } else {
+                bool single_expr_func = false;
+                if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
+                   if (is<IStatement_expression>(body)) {
+                       single_expr_func = true;
+                   }
+                }
+
+                Flag_store allow_let(m_allow_let_expression, single_expr_func);
                 visit(body);
 
-                // not a compound statement
-                error(
-                    FUNCTION_BODY_NOT_BLOCK,
-                    body->access_position(),
-                    Error_params(*this));
+                if (!single_expr_func) {
+                    // not a compound statement
+                    error(
+                        FUNCTION_BODY_NOT_BLOCK,
+                        body->access_position(),
+                        Error_params(*this));
+                }
             }
         } else {
             // declaration only
@@ -5728,7 +5803,8 @@ error_found:
                 }
             }
             // register for waiting fix, see above
-            m_initializers_must_be_fixed.push_back(con_def);
+            if (!is_error(con_def))
+                m_initializers_must_be_fixed.push_back(con_def);
         }
     }
 
@@ -6531,7 +6607,8 @@ error_found:
                 }
             }
             // register for waiting fix, see above
-            m_initializers_must_be_fixed.push_back(con_def);
+            if (!is_error(con_def))
+                m_initializers_must_be_fixed.push_back(con_def);
         }
     }
 
@@ -7360,6 +7437,8 @@ static void update_flags(
         REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
         SINCE_1_6   = IMDL::MDL_VERSION_1_6,
         REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),
+        SINCE_1_7   = IMDL::MDL_VERSION_1_7,
+        REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),
     };
 
     size_t id = sym->get_id();
@@ -10942,10 +11021,8 @@ bool NT_analysis::pre_visit(IDeclaration_function *fkt_decl)
 }
 
 // Start of module declaration
-bool NT_analysis::pre_visit(IDeclaration_module *mod_decl)
+bool NT_analysis::pre_visit(IDeclaration_module *d)
 {
-    IDeclaration_module *d = const_cast<IDeclaration_module *>(mod_decl);
-
     if (IAnnotation_block const *anno = d->get_annotations()) {
         Flag_store is_module_annotation(m_is_module_annotation, true);
 
@@ -10956,7 +11033,87 @@ bool NT_analysis::pre_visit(IDeclaration_module *mod_decl)
     return false;
 }
 
-// start of a variable declaration
+/// Check restrictions on package names.
+static char check_allowed_chars(char const *s)
+{
+    /// The package names and the module name are regular MDL identifiers(Section 5.5)
+    /// or string literals (Section 5.7.5).The string literals enable the use of Unicode names
+    /// for modules and packages.They must not contain control codes(ASCII code < 32), delete
+    /// (ASCII code 127), colon ':', back slash '\', and forward slash '/', which is reserved
+    /// as a path separator.These restrictions match the ones for file paths in Section 2.2.
+    for (char const *p = s; *p != '\0';) {
+        unsigned res = 0;
+        p = utf8_to_unicode_char(p, res);
+
+        switch (res) {
+        case 127:
+        case ':':
+        case '\\':
+        case '/':
+            return res;
+        default:
+            if (res < 32)
+                return res;
+            break;
+        }
+    }
+    return 'A';
+}
+
+// Start of a namespace alias
+bool NT_analysis::pre_visit(IDeclaration_namespace_alias *alias_decl)
+{
+    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_6) {
+        // this feature does not exists prior to 1.6;
+        // we could either handle it, assuming just the version number is wrong, or
+        // ignore it (which probably creates more errors)
+        error(
+            USING_ALIAS_DECL_FORBIDDEN,
+            alias_decl->access_position(),
+            Error_params(*this));
+    }
+
+    ISimple_name const *alias = alias_decl->get_alias();
+    ISymbol const      *a_sym = alias->get_symbol();
+
+    IQualified_name const *ns = alias_decl->get_namespace();
+
+    string ns_name(get_allocator());
+
+    for (int i = 0, n = ns->get_component_count(); i < n; ++i) {
+        if (i > 0)
+            ns_name.append("::");
+        char const *s = ns->get_component(i)->get_symbol()->get_name();
+
+        char bad = check_allowed_chars(s);
+        if (bad != 'A') {
+            error(
+                PACKAGE_NAME_CONTAINS_FORBIDDEN_CHAR,
+                ns->get_component(i)->access_position(),
+                Error_params(*this).add_char(bad));
+        }
+        ns_name.append(s);
+    }
+
+    Definition const *def = m_def_tab->get_namespace_alias(a_sym);
+    if (def != NULL) {
+        err_redeclaration(
+            IDefinition::DK_NAMESPACE,
+            def,
+            alias->access_position(),
+            USING_ALIAS_REDECLARATION);
+        def = get_error_definition();
+    } else {
+        ISymbol const *ns = m_st->create_shared_symbol(ns_name.c_str());
+        def = m_def_tab->enter_namespace_alias(a_sym, ns, alias_decl);
+    }
+    const_cast<ISimple_name *>(alias)->set_definition(def);
+
+    // don't visit children anymore
+    return false;
+}
+
+// Start of a variable declaration
 bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
 {
     IType_name const *t_name = var_decl->get_type_name();
@@ -12749,6 +12906,8 @@ Definition const *NT_analysis::handle_known_annotation(
             case Definition::DS_CONST_EXPR_ANNOTATION:
             case Definition::DS_DERIVABLE_ANNOTATION:
             case Definition::DS_NATIVE_ANNOTATION:
+            case Definition::DS_EXPERIMENTAL_ANNOTATION:
+            case Definition::DS_LITERAL_PARAM_ANNOTATION:
             case Definition::DS_UNUSED_ANNOTATION:
             case Definition::DS_NOINLINE_ANNOTATION:
             case Definition::DS_SOFT_RANGE_ANNOTATION:
@@ -12976,6 +13135,28 @@ Definition const *NT_analysis::handle_known_annotation(
                 replace_removed_version(m_annotated_def, v_major, v_minor);
             }
             // ensure the REMOVED annotation is deleted from the source for later ...
+            def = get_error_definition();
+        }
+        break;
+    case Definition::DS_EXPERIMENTAL_ANNOTATION:
+        {
+            int v_major = 0;
+            int v_minor = 0;
+
+            Module::get_version(IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 1), v_major, v_minor);
+
+            replace_since_version(m_annotated_def, v_major, v_minor);
+
+            // ensure the experimental annotation is deleted from the source for later ...
+            def = get_error_definition();
+        }
+        break;
+    case Definition::DS_LITERAL_PARAM_ANNOTATION:
+        {
+            // just mark it
+            m_annotated_def->set_flag(Definition::DEF_LITERAL_PARAM);
+
+            // ensure the literal_param annotation is deleted from the source for later ...
             def = get_error_definition();
         }
         break;
@@ -14386,17 +14567,22 @@ void NT_analysis::add_resource_entry(
 
 }
 
-// Copy the given messages to the current module message.
-void NT_analysis::copy_messages_to_module(
+// Copy the given resolver messages to the current module.
+void NT_analysis::copy_resolver_messages_to_module(
     Messages_impl const &messages,
-    bool                map_err_to_warn)
+    bool is_resource)
 {
+    bool map_res_err_to_warn = false;
+    if (is_resource && m_module.get_mdl_version() < IMDL::MDL_VERSION_1_4) {
+        map_res_err_to_warn = true;
+    }
+
     for (int i = 0, n = messages.get_error_message_count(); i < n; ++i) {
         IMessage const *msg = messages.get_message(i);
 
         IMessage::Severity sev = msg->get_severity();
 
-        if (map_err_to_warn) {
+        if (map_res_err_to_warn) {
             // map resource error to warning for MDL < 1.4
             if (sev == IMessage::MS_ERROR)
                 sev = IMessage::MS_WARNING;
@@ -14428,6 +14614,7 @@ void NT_analysis::copy_messages_to_module(
                 note->get_position()->get_end_line(),
                 note->get_position()->get_end_column());
         }
+        m_last_msg_idx = index;
     }
 }
 
@@ -14570,7 +14757,7 @@ bool NT_analysis::auto_import(
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
         IQualified_name const *imp_name = imp_mod->get_qualified_name();
 
-        enter_import_scope(imp_name, 0);
+        enter_import_scope(imp_name, 0, /*ignore_last=*/false);
         // qualified imports are never exported
 
         Definition const *clash_def = import_definition(
@@ -15143,17 +15330,6 @@ void NT_analysis::handle_resource_url(
     bool resource_exists = true;
     int resource_tag = 0;
     if (m_resolve_resources) {
-        Messages_impl messages(get_allocator(), m_module.get_filename());
-
-        File_resolver resolver(
-            *m_compiler,
-            m_module_cache,
-            m_compiler->get_external_resolver(),
-            m_compiler->get_search_path(),
-            m_compiler->get_search_path_lock(),
-            messages,
-            m_ctx.get_front_path());
-
         resource_exists = true;
         if (abs_url.empty() && rval != NULL && rval->get_tag_value() != 0) {
             // this is a "neuray-style" in-memory resource, represented by a tag;
@@ -15161,11 +15337,37 @@ void NT_analysis::handle_resource_url(
             resource_tag = rval->get_tag_value();
         } else {
             // try to resolve it
+            Messages_impl messages(get_allocator(), m_module.get_filename());
+
+            File_resolver resolver(
+                *m_compiler,
+                m_module_cache,
+                m_compiler->get_external_resolver(),
+                m_compiler->get_search_path(),
+                m_compiler->get_search_path_lock(),
+                messages,
+                m_ctx.get_front_path());
+
+            string murl(url, get_allocator());
+
+            bool is_weak_16 = false;
+            if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
+                // from MDL 1.6 weak imports do not exists
+                if (url[0] != '/' && url[0] != '.') {
+                    is_weak_16 = true;
+                    // previous weak imports are relative now
+                    murl = "./" + murl;
+                }
+            }
+
             mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
                 lit->access_position(),
-                url,
+                murl.c_str(),
                 m_module.get_name(),
                 m_module.get_filename()));
+
+            // copy messages
+            copy_resolver_messages_to_module(messages, /*is_resource=*/ true);
 
             if (res.is_valid_interface()) {
                 abs_url       = res->get_mdl_url_mask();
@@ -15174,6 +15376,25 @@ void NT_analysis::handle_resource_url(
 
             if (messages.get_error_message_count() > 0 || !res.is_valid_interface()) {
                 resource_exists = false;
+
+                if (is_weak_16 &&
+                    !res.is_valid_interface() &&
+                    messages.get_error_message_count() == 1)
+                {
+                    // resolving a formally weak reference failed, check if it is absolute
+                    mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
+                        lit->access_position(),
+                        murl.c_str() + 1,
+                        m_module.get_name(),
+                        m_module.get_filename()));
+                    if (res.is_valid_interface()) {
+                        // .. and add a note
+                        add_note(
+                            POSSIBLE_ABSOLUTE_IMPORT,
+                            lit->access_position(),
+                            Error_params(*this).add(murl.c_str() + 1));
+                    }
+                }
 
                 // Resolver failed. This is bad, because letting the name unchanged
                 // might lead to "wrong" fixes later. One possible solution would be to
@@ -15190,27 +15411,29 @@ void NT_analysis::handle_resource_url(
                 }
             }
         }
-
-        // copy messages
-        bool map_err_to_warn = false;
-        if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_4) {
-            map_err_to_warn = true;
-        }
-        copy_messages_to_module(messages, map_err_to_warn);
     } else {
-        if (url[0] == '/')
+        // do NOT resolve resources
+        if (url[0] == '/') {
             // an absolute url, keep it.
             abs_url = url;
-        else if ((url[0] == '.' && url[1] == '/') ||
-                 (url[0] == '.' && url[1] == '.' && url[2] == '/' )) { 
+        } else if ((url[0] == '.' && url[1] == '/') ||
+                 (url[0] == '.' && url[1] == '.' && url[2] == '/' )) {
             // strict relative, make absolute
             abs_url = make_absolute_package(
                 get_allocator(), url, m_module.get_name());
         } else {
-            // weak relative, prepend module name separated by a |
-            abs_url = m_module.get_name();
-            abs_url += "|";
-            abs_url += url;
+            if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
+                // formally weak relatives are mapped to strict
+                string murl("./", get_allocator());
+                murl += url;
+                abs_url = make_absolute_package(
+                    get_allocator(), murl.c_str(), m_module.get_name());
+            } else {
+                // weak relative, prepend module name separated by a |
+                abs_url = m_module.get_name();
+                abs_url += "|";
+                abs_url += url;
+            }
         }
         // unknown file name
         abs_file_name = "";
@@ -15242,8 +15465,10 @@ void NT_analysis::handle_resource_url(
         case IValue::VK_TEXTURE:
             {
                 IValue_texture const *tval = cast<IValue_texture>(val);
+                IType_texture const *t = tval->get_type();
+                MDL_ASSERT(t->get_shape() != IType_texture::TS_BSDF_DATA);
                 val = m_module.get_value_factory()->create_texture(
-                    tval->get_type(),
+                    t,
                     abs_url.c_str(),
                     tval->get_gamma_mode(),
                     tval->get_tag_value(),

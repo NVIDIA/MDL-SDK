@@ -37,6 +37,7 @@
 #include "neuray_expression_impl.h"
 #include "neuray_function_call_impl.h"
 #include "neuray_function_definition_impl.h"
+#include "neuray_mdl_execution_context_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
 
@@ -187,6 +188,14 @@ const char* Function_definition_impl::get_thumbnail() const
     return get_db_element()->get_thumbnail();
 }
 
+bool Function_definition_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+
+    return  get_db_element()->is_valid(get_db_transaction(), mdl_context);
+}
+
 mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
     const mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const
 {
@@ -200,6 +209,28 @@ mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
         = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call");
     static_cast<Function_call_impl* >( api_call)->get_db_element()->swap( *db_call.get());
     return api_call;
+}
+
+const mi::neuraylib::IExpression_direct_call* Function_definition_impl::get_body() const
+{
+    mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
+    mi::base::Handle<const MDL::IExpression_direct_call> result_int(
+        get_db_element()->get_body( get_db_transaction()));
+    return ef->create<mi::neuraylib::IExpression_direct_call>(
+        result_int.get(), this->cast_to_major());
+}
+
+mi::Size Function_definition_impl::get_temporary_count() const
+{
+    return get_db_element()->get_temporary_count( get_db_transaction());
+}
+
+const mi::neuraylib::IExpression* Function_definition_impl::get_temporary( mi::Size index) const
+{
+    mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
+    mi::base::Handle<const MDL::IExpression> result_int(
+        get_db_element()->get_temporary( get_db_transaction(), index));
+    return ef->create( result_int.get(), this->cast_to_major());
 }
 
 } // namespace NEURAY

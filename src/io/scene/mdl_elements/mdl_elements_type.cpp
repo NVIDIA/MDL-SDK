@@ -670,6 +670,7 @@ static const Type_texture          the_texture_2d_type(IType_texture::TS_2D);
 static const Type_texture          the_texture_3d_type(IType_texture::TS_3D);
 static const Type_texture          the_texture_cube_type(IType_texture::TS_CUBE);
 static const Type_texture          the_texture_ptex_type(IType_texture::TS_PTEX);
+static const Type_texture          the_texture_bsdf_data_type(IType_texture::TS_BSDF_DATA);
 static const Type_bsdf             the_bsdf_type;
 static const Type_hair_bsdf        the_hair_bsdf_type;
 static const Type_vdf              the_vdf_type;
@@ -989,10 +990,11 @@ const IType_texture* Type_factory::create_texture(
     IType_texture::Shape shape) const
 {
     switch (shape) {
-    case IType_texture::TS_2D:   return &TYPES::the_texture_2d_type;
-    case IType_texture::TS_3D:   return &TYPES::the_texture_3d_type;
-    case IType_texture::TS_CUBE: return &TYPES::the_texture_cube_type;
-    case IType_texture::TS_PTEX: return &TYPES::the_texture_ptex_type;
+    case IType_texture::TS_2D:        return &TYPES::the_texture_2d_type;
+    case IType_texture::TS_3D:        return &TYPES::the_texture_3d_type;
+    case IType_texture::TS_CUBE:      return &TYPES::the_texture_cube_type;
+    case IType_texture::TS_PTEX:      return &TYPES::the_texture_ptex_type;
+    case IType_texture::TS_BSDF_DATA: return &TYPES::the_texture_bsdf_data_type;
     case IType_texture::TS_FORCE_32_BIT:
         break;
     }
@@ -1700,6 +1702,8 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
             case IType_texture::TS_3D:   return "texture_3d";
             case IType_texture::TS_CUBE: return "texture_cube";
             case IType_texture::TS_PTEX: return "texture_ptex";
+            case IType_texture::TS_BSDF_DATA:
+                ASSERT(M_SCENE, false); return "";
             case IType_texture::TS_FORCE_32_BIT:
                 ASSERT(M_SCENE, false); return "";
             }

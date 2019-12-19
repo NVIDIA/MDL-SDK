@@ -367,6 +367,7 @@ public:
         TS_3D           = 1,
         TS_CUBE         = 2,
         TS_PTEX         = 3,
+        TS_BSDF_DATA    = 4,
         TS_FORCE_32_BIT = 0xffffffffU
     };
 

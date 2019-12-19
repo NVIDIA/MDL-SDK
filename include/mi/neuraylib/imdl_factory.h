@@ -221,6 +221,18 @@ public:
     virtual IMdl_execution_context* create_execution_context() = 0;
 };
 
+/// Options for repairing material instances and function calls.
+///
+/// \see #mi::neuraylib::IMaterial_instance::repair() and  #mi::neuraylib::IFunction_call::repair().
+enum Mdl_repair_options {
+    MDL_REPAIR_DEFAULT = 0,           ///< Default mode, do not alter any inputs.
+    MDL_REMOVE_INVALID_ARGUMENTS = 1, ///< Remove an invalid call attached to an argument.
+    MDL_REPAIR_INVALID_ARGUMENTS = 2, ///< Attempt to repair invalid calls attached to an argument.
+    MDL_REPAIR_OPTIONS_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+};
+
+mi_static_assert(sizeof(Mdl_repair_options) == sizeof(Uint32));
+
 /*@}*/ // end group mi_neuray_mdl_types
 
 } // namespace neuraylib

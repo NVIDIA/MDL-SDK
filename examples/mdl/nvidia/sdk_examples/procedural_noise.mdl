@@ -29,17 +29,17 @@
 mdl 1.4;
 
 
-import base::perlin_noise_texture;
-import base::worley_noise_texture;
-import base::perlin_noise_bump_texture;
-import base::worley_noise_bump_texture;
-import base::transform_coordinate;
-import base::coordinate_source;
-import base::texture_return;
-import base::rotation_translation_scale;
-import base::texture_coordinate_system;
-import nvidia::core_definitions::scratched_plastic;
-import anno::*;
+import ::base::perlin_noise_texture;
+import ::base::worley_noise_texture;
+import ::base::perlin_noise_bump_texture;
+import ::base::worley_noise_bump_texture;
+import ::base::transform_coordinate;
+import ::base::coordinate_source;
+import ::base::texture_return;
+import ::base::rotation_translation_scale;
+import ::base::texture_coordinate_system;
+import ::nvidia::core_definitions::scratched_plastic;
+import ::anno::*;
 
 export material noise_worley_glossy (
     uniform float ior = 3

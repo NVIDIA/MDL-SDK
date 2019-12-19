@@ -47,12 +47,14 @@
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/mdl_elements/mdl_elements_utilities.h>
+#include <io/scene/texture/i_texture.h>
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 #include <render/mdl/backends/backends_target_code.h>
 
 #include <mdl/codegenerators/generator_dag/generator_dag_lambda_function.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_dumper.h>
+#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
 #include <mdl/compiler/compilercore/compilercore_streams.h>
 
 #include "backends_link_unit.h"
@@ -64,21 +66,7 @@ namespace BACKENDS {
 
 namespace {
 
-/// Add message to context
-mi::Sint32 add_error_message(MDL::Execution_context* context, const std::string& message, mi::Sint32 result)
-{
-    if (!context)
-        return -1;
-
-    MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, message);
-    context->add_error_message(err);
-    context->add_message(err);
-    context->set_result(result);
-
-    return - 1;
-}
-
-template <typename T> 
+template <typename T>
 T get_context_option(MDL::Execution_context* context, const char* option)
 {
     if (context)
@@ -100,13 +88,15 @@ public:
     /// \param owner_module the owner module name of the texture
     /// \param gamma        the gamma value of the texture
     /// \param type         the type of the texture
+    /// \param df_data_kind the \c DF data kind of the texture
     virtual void register_texture(
         size_t                                     index,
         bool                                       is_resolved,
         char const                                 *name,
         char const                                 *owner_module,
         float                                      gamma,
-        mi::neuraylib::ITarget_code::Texture_shape type) = 0;
+        mi::neuraylib::ITarget_code::Texture_shape type,
+        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) = 0;
 
     /// Return the number of texture resources.
     virtual size_t get_texture_count() const = 0;
@@ -151,14 +141,17 @@ public:
 
     /// Constructor.
     ///
-    /// \param reg             a index register interface
-    /// \param lambda          currently processed lambda function
-    /// \param db_transaction  the current transaction
+    /// \param reg                       an index register interface
+    /// \param lambda                    currently processed lambda function
+    /// \param db_transaction            the current transaction
+    /// \param keep_unresolved_resources if \c true, unresolved resources are kept
+    /// \param store_df_data             if \c true, df data tables are stored in the database
     Function_enumerator(
         IResource_register        &reg,
         mi::mdl::ILambda_function *lambda,
         DB::Transaction           *db_transaction,
-        bool                      keep_unresolved_resources)
+        bool                      keep_unresolved_resources,
+        bool                      store_df_data)
     : m_register(reg)
     , m_lambda(lambda)
     , m_additional_lambda(NULL)
@@ -171,18 +164,21 @@ public:
     , m_lp_idx(m_lp_idx_store)
     , m_bm_idx(m_bm_idx_store)
     , m_keep_unresolved_resources(keep_unresolved_resources)
+    , m_store_df_data(store_df_data)
     {
     }
 
     /// Constructor.
     ///
-    /// \param reg       a index register interface
-    /// \param lambda    currently processed lambda function
-    /// \param trans     the current transaction
-    /// \param tex_idx  next texture index Current texture index.
-    /// \param lp_idx   next light profile index.
-    /// \param bm_idx   next bsdf measurement index.
-    /// \param res_map  a map to track which resources are already known
+    /// \param reg                       an index register interface
+    /// \param lambda                    currently processed lambda function
+    /// \param trans                     the current transaction
+    /// \param tex_idx                   next texture index.
+    /// \param lp_idx                    next light profile index.
+    /// \param bm_idx                    next bsdf measurement index.
+    /// \param res_map                   a map to track which resources are already known
+    /// \param keep_unresolved_resources if \c true, unresolved resources are kept
+    /// \param store_df_data             if \c true, df data tables are stored in the database
     Function_enumerator(
         IResource_register        &reg,
         mi::mdl::ILambda_function *lambda,
@@ -191,7 +187,8 @@ public:
         size_t                    &lp_idx,
         size_t                    &bm_idx,
         Resource_index_map        &res_map,
-        bool                      keep_unresolved_resources)
+        bool                      keep_unresolved_resources,
+        bool                      store_df_data)
     : m_register(reg)
     , m_lambda(lambda)
     , m_additional_lambda(NULL)
@@ -204,6 +201,7 @@ public:
     , m_lp_idx(lp_idx)
     , m_bm_idx(bm_idx)
     , m_keep_unresolved_resources(keep_unresolved_resources)
+    , m_store_df_data(store_df_data)
     {
     }
 
@@ -215,18 +213,39 @@ public:
         if (m_register.get_texture_count() == 0) {
             // index 0 is always the only invalid texture index
             m_register.register_texture(
-                0, false, "", "", 0.0f, mi::neuraylib::ITarget_code::Texture_shape_invalid);
+                0, false, "", "", 0.0f,
+                mi::neuraylib::ITarget_code::Texture_shape_invalid,
+                mi::mdl::IValue_texture::BDK_NONE);
         }
 
         if (mi::mdl::IValue_texture const *r = mi::mdl::as<mi::mdl::IValue_texture>(v)) {
             bool valid = false, is_uvtile = false;
             int width = 0, height = 0, depth = 0;
 
+            char const *name = nullptr;
+            bool is_resolved = false;
+
             MI::MDL::get_texture_attributes(
                 m_db_transaction, r, valid, is_uvtile, width, height, depth);
 
+            mi::mdl::IValue_texture::Bsdf_data_kind kind = r->get_bsdf_data_kind();
+            if (kind != mi::mdl::IValue_texture::BDK_NONE) {
+                if (m_store_df_data) {
+                    Df_data_helper helper(m_db_transaction);
+                    helper.store_df_data(kind);
+                    name = helper.get_texture_db_name(kind);
+                    is_resolved = true;
+                }
+                else
+                    name = "";
+            }
+            else {
+                is_resolved = r->get_tag_value() != 0;
+            }
+
             if (valid || m_keep_unresolved_resources) {
-                char const *name = resource_to_name(r);
+               if (!name)
+                   name = resource_to_name(r);
 
                 bool new_entry = true;
                 size_t tex_idx;
@@ -252,7 +271,13 @@ public:
                     float gamma = r->get_gamma_mode() == mi::mdl::IValue_texture::gamma_default ? 0.0f :
                         (r->get_gamma_mode() == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
                     m_register.register_texture(
-                        tex_idx, /*is_resolved=*/r->get_tag_value() != 0, name, "", gamma, get_texture_shape(r->get_type()));
+                        tex_idx,
+                        is_resolved,
+                        name,
+                        /*owner_module=*/"",
+                        gamma,
+                        get_texture_shape(r->get_type()),
+                        r->get_bsdf_data_kind());
                 }
                 m_lambda->map_tex_resource(v, tex_idx, /*valid=*/true, width, height, depth);
                 if (m_additional_lambda)
@@ -387,6 +412,7 @@ public:
     }
 
 private:
+
     /// Get the DB name of a resource.
     char const *resource_to_name(mi::mdl::IValue_resource const *r)
     {
@@ -415,6 +441,9 @@ private:
             break;
         case mi::mdl::IType_texture::TS_PTEX:
             return mi::neuraylib::ITarget_code::Texture_shape_ptex;
+            break;
+        case mi::mdl::IType_texture::TS_BSDF_DATA:
+            return mi::neuraylib::ITarget_code::Texture_shape_bsdf_data;
             break;
         }
         ASSERT(M_BACKENDS, !"Unsupported MDL texture shape");
@@ -457,6 +486,9 @@ private:
 
     /// If true, unresolved resources will be retained.
     bool m_keep_unresolved_resources;
+
+    /// If true, DF data textures are stored into the database.
+    bool m_store_df_data;
 };
 
 /// Converts a MI::MDL::IType to a mi::mdl::IType.
@@ -616,6 +648,8 @@ static mi::mdl::IType const *convert_type(
                 return tf->create_texture(mi::mdl::IType_texture::TS_CUBE);
             case MI::MDL::IType_texture::TS_PTEX:
                 return tf->create_texture(mi::mdl::IType_texture::TS_PTEX);
+            case MI::MDL::IType_texture::TS_BSDF_DATA:
+                return tf->create_texture(mi::mdl::IType_texture::TS_BSDF_DATA);
             case MI::MDL::IType_texture::TS_FORCE_32_BIT:
                 break;
             }
@@ -680,8 +714,14 @@ public:
             return NULL;
         }
 
+        DB::Tag def_tag = function_call->get_function_definition(m_db_transaction);
+        if (!def_tag.is_valid()) {
+            m_error = -2;
+            m_error_string = "Invalid expression.";
+            return NULL;
+        }
         DB::Access<MDL::Mdl_function_definition> definition(
-            function_call->get_function_definition(), m_db_transaction);
+            def_tag, m_db_transaction);
 
         if (!definition.is_valid()) {
             m_error = -2;
@@ -986,7 +1026,13 @@ public:
 
         mi::base::Handle<const MI::MDL::IExpression_direct_call> mat_body(
             compiled_material->get_body());
-        DB::Tag tag = mat_body->get_definition();
+        DB::Tag tag = mat_body->get_definition(m_db_transaction);
+        if (!tag.is_valid()) {
+            m_error = -2;
+            m_error_string = "Invalid expression.";
+            return NULL;
+        }
+
         DB::Access<MI::MDL::Mdl_function_definition> definition(tag, m_db_transaction);
         mi::mdl::IType const *mat_type = definition->get_mdl_return_type(m_db_transaction);
 
@@ -1198,13 +1244,15 @@ public:
             std::string const                          &owner_module,
             bool                                       is_resolved,
             float                                      gamma,
-            mi::neuraylib::ITarget_code::Texture_shape type)
+            mi::neuraylib::ITarget_code::Texture_shape type,
+            mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
         : m_index(index)
         , m_name(name)
         , m_owner_module(owner_module)
         , m_is_resolved(is_resolved)
         , m_gamma(gamma)
         , m_type(type)
+        , m_df_data_kind(df_data_kind)
         {
         }
 
@@ -1214,6 +1262,7 @@ public:
         bool                                       m_is_resolved;
         float                                      m_gamma;
         mi::neuraylib::ITarget_code::Texture_shape m_type;
+        mi::mdl::IValue_texture::Bsdf_data_kind    m_df_data_kind;
     };
 
     typedef std::vector<Texture_entry> Texture_resource_table;
@@ -1261,9 +1310,10 @@ public:
         char const                                 *name,
         char const                                 *owner_module,
         float                                      gamma,
-        mi::neuraylib::ITarget_code::Texture_shape type)
+        mi::neuraylib::ITarget_code::Texture_shape type,
+        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
     {
-        m_texture_table.push_back(Texture_entry(index, name, owner_module, is_resolved, gamma, type));
+        m_texture_table.push_back(Texture_entry(index, name, owner_module, is_resolved, gamma, type, df_data_kind));
     }
 
     /// Return the number of texture resources.
@@ -1351,7 +1401,8 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
             entry.m_is_resolved ? entry.m_name : "",
             !entry.m_is_resolved ? entry.m_name : "",
             entry.m_gamma,
-            entry.m_type);
+            entry.m_type,
+            entry.m_df_data_kind); 
     }
 
     typedef Target_code_register::Resource_table RT;
@@ -1549,8 +1600,21 @@ mi::Sint32 Target_value_layout::set_value(
 
         case mi::neuraylib::IValue::VK_STRING:
         {
-            ASSERT(M_BACKENDS, !"unsupported string value");
-            return -5;
+            if (m_strings_mapped_to_ids)
+            {
+                mi::Uint32 id =
+                    resource_callback != NULL ?
+                    resource_callback->get_string_index(
+                        static_cast<mi::neuraylib::IValue_string const *>(value)) :
+                    0u;
+                *reinterpret_cast<mi::Uint32 *>(block + offs) = id;
+            }
+            else
+            {
+                // unmapped string are not supported
+                *reinterpret_cast<char **>(block + offs) = NULL;
+            }
+            return 0;
         }
 
         case mi::neuraylib::IValue::VK_VECTOR:
@@ -1782,13 +1846,21 @@ mi::Sint32 Link_unit::add_environment(
 {
     if (function_call == NULL || m_transaction == NULL)
     {
-        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
     }
-
+    DB::Tag_set tags_seen;
+    if (!function_call->is_valid(m_transaction, tags_seen, context)) {
+        MDL::add_context_error(context, "Invalid function call.", -1);
+        return -1;
+    }
+    DB::Tag def_tag = function_call->get_function_definition(m_transaction);
+    if (!def_tag.is_valid()) {
+        MDL::add_context_error(context, "Function does not point to a valid definition.", -1);
+        return -1;
+    }
     // check internal space configuration
-    DB::Access<MDL::Mdl_function_definition> function_definition(
-        function_call->get_function_definition(), m_transaction);
+    DB::Access<MDL::Mdl_function_definition> function_definition(def_tag, m_transaction);
     DB::Access<MDL::Mdl_module> module(
         function_definition->get_module(m_transaction), m_transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
@@ -1797,7 +1869,7 @@ mi::Sint32 Link_unit::add_environment(
         m_internal_space = code_dag->get_internal_space();
     else
         if (m_internal_space != code_dag->get_internal_space()) {
-            add_error_message(context, "Functions and materials compiled with different "
+            MDL::add_context_error(context, "Functions and materials compiled with different "
                 "internal_space configurations cannot be mixed.", -1);
             return -1;
         }
@@ -1814,11 +1886,13 @@ mi::Sint32 Link_unit::add_environment(
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
     if (!lambda.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             builder.get_error_string(), builder.get_error_code());
         return -1;
     }
+
     // enumerate resources ...
+    bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
     Function_enumerator enumerator(
         *m_tc_reg,
         lambda.get(),
@@ -1827,9 +1901,10 @@ mi::Sint32 Link_unit::add_environment(
         m_lp_idx,
         m_bm_idx,
         m_res_index_map,
-        !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+        !resolve_resources,
+        resolve_resources);
     lambda->enumerate_resources(enumerator, lambda->get_body());
-    if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+    if (!resolve_resources)
         lambda->set_has_resource_attributes(false);
 
     // ... and add it to the compilation unit
@@ -1844,7 +1919,7 @@ mi::Sint32 Link_unit::add_environment(
         &arg_block_index,
         NULL);
     if (!res) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The backend failed to compile the function.", -3);
         return -1;
     }
@@ -1860,6 +1935,12 @@ mi::Sint32 Link_unit::add_material_expression(
     char const                       *base_fname,
     MDL::Execution_context           *context)
 {
+    if (!compiled_material->is_valid(m_transaction, context)) {
+        if (context)
+            MDL::add_context_error(context,
+                "The compiled material is invalid.", -1);
+        return -1;
+    }
     mi::neuraylib::Target_function_description desc(path, base_fname);
     mi::Sint32 result = add_material(compiled_material, &desc, 1, context);
     // store legacy error code
@@ -1876,6 +1957,12 @@ mi::Sint32 Link_unit::add_material_df(
     char const *base_fname,
     MDL::Execution_context* context)
 {
+    if (!compiled_material->is_valid(m_transaction, context)) {
+        if (context)
+            MDL::add_context_error(context,
+                "The compiled material is invalid.", -1);
+        return -1;
+    }
     mi::neuraylib::Target_function_description desc(path, base_fname);
     mi::Sint32 result = add_material(compiled_material, &desc, 1, context);
     // store legacy error code
@@ -1892,8 +1979,14 @@ mi::Sint32 Link_unit::add_material(
     mi::Size                                      description_count,
     MDL::Execution_context                       *context)
 {
-    if (m_transaction == NULL || compiled_material == NULL) {
-        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
+    if (compiled_material == NULL) {
+        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        return -1;
+    }
+    if (!compiled_material->is_valid(m_transaction, context)) {
+        if (context)
+            MDL::add_context_error(context,
+                "The compiled material is invalid.", -1);
         return -1;
     }
     // argument block index for the entire material
@@ -1911,7 +2004,7 @@ mi::Sint32 Link_unit::add_material(
     }
     else
         if (m_internal_space != compiled_material->get_internal_space()) {
-                add_error_message(context, "Materials compiled with different internal_space "
+                MDL::add_context_error(context, "Materials compiled with different internal_space "
                     "configurations cannot be mixed.", -1);
             return -1;
         }
@@ -1924,7 +2017,7 @@ mi::Sint32 Link_unit::add_material(
         if (function_descriptions[i].path == NULL)
         {
             function_descriptions[i].return_code =
-                add_error_message(context, "Invalid parameters (NULL pointer) for function at index" + 
+                MDL::add_context_error(context, "Invalid parameters (NULL pointer) for function at index" + 
                     std::to_string(i), -1);
             return -1;
         }
@@ -1947,7 +2040,7 @@ mi::Sint32 Link_unit::add_material(
         if (!field)
         {
             function_descriptions[i].return_code = 
-                add_error_message(context, "Invalid path (non-existing) for function at index" + 
+                MDL::add_context_error(context, "Invalid path (non-existing) for function at index" + 
                     std::to_string(i) + ".", -2);
             return -1;
         }
@@ -1994,7 +2087,7 @@ mi::Sint32 Link_unit::add_material(
 
                     default:
                         function_descriptions[i].return_code =  
-                            add_error_message(
+                            MDL::add_context_error(
                                 context,
                                 "VDFs are not supported for function at index" +
                                 std::to_string(i),
@@ -2021,7 +2114,7 @@ mi::Sint32 Link_unit::add_material(
                 if (!dist_func.is_valid_interface())
                 {
                     function_descriptions[i].return_code = 
-                        add_error_message(
+                        MDL::add_context_error(
                             context, builder.get_error_string(), builder.get_error_code() * 100);
                     return -1;
                 }
@@ -2042,12 +2135,14 @@ mi::Sint32 Link_unit::add_material(
 
                 // ... enumerate resources: must be done before we compile ...
                 //     all resource information will be collected in main_df
+                bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+
                 Function_enumerator enumerator(
                     *m_tc_reg, main_df.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map,
-                    !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+                    !resolve_resources, resolve_resources);
                 main_df->enumerate_resources(enumerator, main_df->get_body());
-                if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+                if (!resolve_resources)
                     main_df->set_has_resource_attributes(false);
 
                 // ... also enumerate resources from arguments ...
@@ -2095,7 +2190,7 @@ mi::Sint32 Link_unit::add_material(
                 {
                     MDL::report_messages(m_unit->access_messages(), context);
                     function_descriptions[i].return_code = 
-                        add_error_message(context, 
+                        MDL::add_context_error(context, 
                             "The JIT backend failed to compile the function at index " 
                             + std::to_string(i) + ".", -300);
                     return -1;
@@ -2117,7 +2212,7 @@ mi::Sint32 Link_unit::add_material(
                 if (!lambda.is_valid_interface())
                 {
                     function_descriptions[i].return_code =
-                        add_error_message(
+                        MDL::add_context_error(
                             context, builder.get_error_string(), builder.get_error_code() * 10);
                     return -1;
                 }
@@ -2127,12 +2222,13 @@ mi::Sint32 Link_unit::add_material(
                     lambda->initialize_derivative_infos(&resolver);
 
                 // Enumerate resources ...
+                bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
                 Function_enumerator enumerator(
                     *m_tc_reg, lambda.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map,
-                    !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+                    !resolve_resources, resolve_resources);
                 lambda->enumerate_resources(enumerator, lambda->get_body());
-                if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+                if (!resolve_resources)
                     lambda->set_has_resource_attributes(false);
 
                 // ... also enumerate resources from arguments ...
@@ -2154,7 +2250,7 @@ mi::Sint32 Link_unit::add_material(
                 {
                     MDL::report_messages(m_unit->access_messages(), context);
                     function_descriptions[i].return_code =
-                        add_error_message(
+                        MDL::add_context_error(
                             context, "The JIT backend failed to compile the function at index" + 
                             std::to_string(i), -30);
                     return -1;
@@ -2398,6 +2494,19 @@ mi::Sint32 Mdl_llvm_backend::set_option(
 
     // llvm specific options
 
+    if (strcmp(name, "df_handle_slot_mode") == 0) {
+        if (strcmp(value, "none") == 0 ||
+           (strcmp(value, "fixed_1") == 0) ||
+           (strcmp(value, "fixed_2") == 0) ||
+           (strcmp(value, "fixed_4") == 0) ||
+           (strcmp(value, "fixed_8") == 0) || 
+           (strcmp(value, "pointer") == 0 && m_kind != mi::neuraylib::IMdl_compiler::MB_HLSL))
+        {
+            jit_options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, value);
+            return 0;
+        }
+        return -2;
+    }
     if (strcmp(name, "enable_auxiliary") == 0)
     {
         if (strcmp(value, "off") == 0) {
@@ -2409,7 +2518,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         else {
             return -2;
         }
-        m_jit->access_options().set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, value);
+        jit_options.set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, value);
         return 0;
     }
     if (strcmp(name, "enable_exceptions") == 0) {
@@ -2456,9 +2565,15 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         } else {
             return -2;
         }
-        m_jit->access_options().set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, value);
+        jit_options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, value);
         return 0;
     }
+
+    if (strcmp(name, "scene_data_names") == 0) {
+        jit_options.set_option(MDL_JIT_OPTION_SCENE_DATA_NAMES, value);
+        return 0;
+    }
+
 
     switch (m_kind) {
     case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
@@ -2479,7 +2594,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             } else {
                 return -2;
             }
-            m_jit->access_options().set_option(MDL_JIT_OPTION_LINK_LIBDEVICE, value);
+            jit_options.set_option(MDL_JIT_OPTION_LINK_LIBDEVICE, value);
             return 0;
         }
         if (strcmp(name, "output_format") == 0) {
@@ -2598,12 +2713,20 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     MDL::Execution_context       *context)
 {
     if (transaction == NULL || function_call == NULL) {
-        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
-
-    DB::Access<MDL::Mdl_function_definition> function_definition(
-        function_call->get_function_definition(), transaction);
+    DB::Tag_set tags_seen;
+    if (!function_call->is_valid(transaction, tags_seen, context)) {
+        MDL::add_context_error(context, "Invalid function call.", -1);
+        return NULL;
+    }
+    DB::Tag def_tag = function_call->get_function_definition(transaction);
+    if (!def_tag.is_valid()) {
+        MDL::add_context_error(context, "Function does not point to a valid definition.", -1);
+        return NULL;
+    }
+    DB::Access<MDL::Mdl_function_definition> function_definition(def_tag, transaction);
     DB::Access<MDL::Mdl_module> module(
         function_definition->get_module(transaction), transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
@@ -2622,17 +2745,18 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
     if (!lambda.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
 
     // enumerate resources: must be done before we compile
+    bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
     Target_code_register tc_reg;
     Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
-        !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+        !resolve_resources, resolve_resources);
     lambda->enumerate_resources(enumerator, lambda->get_body());
-    if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+    if (!resolve_resources)
         lambda->set_has_resource_attributes(false);
 
     // now compile
@@ -2675,7 +2799,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     }
 
     if (!code.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -2683,7 +2807,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        add_error_message(context, 
+        MDL::add_context_error(context, 
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -2721,9 +2845,14 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     MDL::Execution_context           *context)
 {
     if (!transaction || !compiled_material || !path) {
-        add_error_message(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
+    if (!compiled_material->is_valid(transaction, context)) {
+        MDL::add_context_error(context, "Compiled material is invalid.", -1);
+        return NULL;
+    }
+
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
@@ -2736,7 +2865,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.from_sub_expr(compiled_material, path, fname));
     if (!lambda.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
@@ -2749,11 +2878,12 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         lambda->initialize_derivative_infos(&resolver);
 
     // ... enumerate resources: must be done before we compile ...
+    bool resove_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
     Target_code_register tc_reg;
     Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
-        !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+        !resove_resources, resove_resources);
     lambda->enumerate_resources(enumerator, lambda->get_body());
-    if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+    if (!resove_resources)
         lambda->set_has_resource_attributes(false);
 
     // ... also enumerate resources from arguments ...
@@ -2800,7 +2930,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     if (!code.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -2808,7 +2938,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -2858,7 +2988,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         *errors = -1;
         return NULL;
     }
-
+    if (!compiled_material->is_valid(transaction, /*context=*/nullptr)) {
+        *errors = -1;
+        return NULL;
+    }
     if (compiled_material->get_parameter_count() > 0) {
         *errors = -6;
         return NULL;
@@ -2905,7 +3038,9 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
 
     // ... enumerate resources: must be done before we compile ...
     Target_code_register tc_reg;
-    Function_enumerator enumerator(tc_reg, lambda.get(), transaction, /*keep_unresolved_resources=*/false);
+    Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
+        /*keep_unresolved_resources=*/false,
+        /*store_df_data=*/false);
 
     for (mi::Uint32 i = 0; i < path_cnt; ++i) {
         lambda->enumerate_resources(enumerator, lambda->get_root_expr(i));
@@ -3026,6 +3161,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         *errors = -1;
         return NULL;
     }
+    if (!compiled_material->is_valid(transaction, /*context=*/nullptr)) {
+        *errors = -1;
+        return NULL;
+    }
 
     if (compiled_material->get_parameter_count() > 0) {
         *errors = -6;
@@ -3076,7 +3215,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
 
     // ... enumerate resources: must be done before we compile ...
     Target_code_register tc_reg;
-    Function_enumerator enumerator(tc_reg, lambda.get(), transaction,  /*keep_unresolved_resources=*/false);
+    Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
+        /*keep_unresolved_resources=*/false, /*store_df_data=*/false);
     lambda->enumerate_resources(enumerator, body);
 
     // ... also enumerate resources from arguments ...
@@ -3170,6 +3310,11 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     const char* base_fname,
     MDL::Execution_context* context)
 {
+    if (!compiled_material->is_valid(transaction, context)) {
+        MDL::add_context_error(context, "Compiled material is invalid.", -1);
+        return NULL;
+    }
+
     Lambda_builder lambda_builder(
         m_compiler.get(),
         transaction,
@@ -3196,7 +3341,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
             get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL),
             get_kind() != mi::neuraylib::IMdl_compiler::MB_HLSL));
     if (!dist_func.is_valid_interface()) {
-       add_error_message(
+       MDL::add_context_error(
            context, lambda_builder.get_error_string(), lambda_builder.get_error_code());
         return NULL;
     }
@@ -3206,11 +3351,12 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
 
     // ... enumerate resources: must be done before we compile ...
     //     all resource information will be collected in main_df
+    bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
     Target_code_register tc_reg;
     Function_enumerator enumerator(tc_reg, main_df.get(), transaction,
-        !get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES));
+        !resolve_resources, resolve_resources);
     main_df->enumerate_resources(enumerator, main_df->get_body());
-    if (!get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES))
+    if (!resolve_resources)
         main_df->set_has_resource_attributes(false);
 
     // ... also enumerate resources from arguments ...
@@ -3258,7 +3404,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     }
 
     if (!code.is_valid_interface()) {
-        add_error_message(
+        MDL::add_context_error(
             context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
@@ -3266,7 +3412,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        add_error_message(
+        MDL::add_context_error(
             context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
@@ -3325,7 +3471,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
         m_jit->compile_unit(mi::base::make_handle(lu->get_compilation_unit()).get()));
 
     if (!code.is_valid_interface()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
@@ -3333,7 +3479,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     MDL::report_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        add_error_message(context,
+        MDL::add_context_error(context,
             "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
@@ -3373,6 +3519,71 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     return tc.get();
 }
 
+
+mi::base::Lock Df_data_helper::m_lock;
+
+Df_data_helper::Df_data_map Df_data_helper::m_df_data_to_name =
+{
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_BECKMANN_VC_MULTISCATTER,            "bsdf_data_beckmann_vc_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_BECKMANN_SMITH_MULTISCATTER,         "bsdf_data_beckmann_smith_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_GGX_VC_MULTISCATTER,                 "bsdf_data_ggx_vcavities_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_GGX_SMITH_MULTISCATTER,              "bsdf_data_ggx_smith_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_WARD_GEISLER_MORODER_MULTISCATTER,   "bsdf_data_geisler_moroder_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_SIMPLE_GLOSSY_MULTISCATTER,          "bsdf_data_simple_glossy_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER,  "bsdf_data_bs_glossy_ms_texture" },
+    { mi::mdl::IValue_texture::Bsdf_data_kind::BDK_SHEEN_MULTISCATTER,                  "bsdf_data_sheen_ms_texture" }
+};
+
+void Df_data_helper::store_df_data(mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
+{
+    mi::base::Lock::Block block(&m_lock);
+
+    size_t rx=0, ry=0, rz=0;
+    const auto& entry = m_df_data_to_name.find(df_data_kind);
+    ASSERT(M_BACKENDS, entry != m_df_data_to_name.end());
+
+    std::string &bsdf_tex_name = entry->second;
+
+    DB::Tag tag = m_transaction->name_to_tag(bsdf_tex_name.c_str());
+    if (!tag.is_valid()) {
+
+        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(df_data_kind, rx, ry, rz);
+        size_t s;
+        unsigned char const *data = mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(df_data_kind, s);
+        store_texture(rx, ry, rz, reinterpret_cast<const float*>(data), bsdf_tex_name);
+    }
+}
+
+mi::Sint32 Df_data_helper::store_texture(
+    mi::Uint32 rx,
+    mi::Uint32 ry,
+    mi::Uint32 rz,
+    const float *data,
+    const std::string& tex_name)
+{
+    mi::base::Handle<Df_data_canvas> canvas(new Df_data_canvas(rx, ry, rz, data));
+
+    DBIMAGE::Image *img = new DBIMAGE::Image();
+    Df_image_set set(canvas.get());
+    img->reset(&set);
+    std::string img_name = tex_name + "_img";
+    DB::Tag img_tag = m_transaction->store_for_reference_counting(img, img_name.c_str());
+
+    TEXTURE::Texture *tex = new TEXTURE::Texture();
+    tex->set_gamma(1.0f);
+    tex->set_image(img_tag);
+    m_transaction->store(tex, tex_name.c_str());
+
+    return 0;
+}
+
+char const* Df_data_helper::get_texture_db_name(mi::mdl::IValue_texture::Bsdf_data_kind kind)
+{
+    auto const &entry = m_df_data_to_name.find(kind);
+    if (entry == m_df_data_to_name.end())
+        return nullptr;
+    return entry->second.c_str();
+}
 
 } // namespace BACKENDS
 

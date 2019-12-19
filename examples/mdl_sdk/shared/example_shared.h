@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_shared.h
+// examples/mdl_sdk/shared/example_shared.h
 //
 // Code shared by all examples
 
@@ -36,7 +36,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
-
 #include <mi/mdl_sdk.h>
 
 #ifdef MI_PLATFORM_WINDOWS
@@ -172,14 +171,53 @@ inline void check_start_success( mi::Sint32 result)
     exit( EXIT_FAILURE);
 }
 
-// Configures the MDL SDK by setting the default MDL search path and loading the 
-// freeimage plugin.
+// Default logger for the MDL SDK examples.
+//
+// This logger is similar to the default logger of the MDL SDK. The only difference is that, on
+// Windows, it does \em not convert the UTF8 log messages to UTF16 when stderr is connected to the
+// console. This conversion step is wrong for the MDL SDK examples, since they explicitly switch
+// the console to UTF8.
+class Default_logger : public mi::base::Interface_implement<mi::base::ILogger>
+{
+public:
+    void message(
+        mi::base::Message_severity level,
+        const char* /*module_category*/,
+        const mi::base::Message_details& /*details*/,
+        const char* message)
+    {
+        const char* severity = 0;
+        switch( level) {
+            case mi::base::MESSAGE_SEVERITY_FATAL:        severity = "fatal: "; break;
+            case mi::base::MESSAGE_SEVERITY_ERROR:        severity = "error: "; break;
+            case mi::base::MESSAGE_SEVERITY_WARNING:      severity = "warn:  "; break;
+            case mi::base::MESSAGE_SEVERITY_INFO:         severity = "info:  "; break;
+            case mi::base::MESSAGE_SEVERITY_VERBOSE:      return;
+            case mi::base::MESSAGE_SEVERITY_DEBUG:        return;
+            case mi::base::MESSAGE_SEVERITY_FORCE_32_BIT: return;
+        }
+
+        fprintf( stderr, "%s", severity);
+        fprintf( stderr, "%s", message);
+        putc( '\n', stderr);
+
+#ifdef MI_PLATFORM_WINDOWS
+        fflush( stderr);
+#endif
+    }
+};
+
+// Configures the MDL SDK by installing our logger, setting the default MDL search path, and
+// loading the freeimage plugin.
 //
 // \param neuray    pointer to the main MDL SDK interface
 inline void configure(mi::neuraylib::INeuray* neuray)
 {
     mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+
+    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
+    mdl_compiler->set_logger(logger.get());
 
     // Set the module and texture search path.
     const std::string mdl_root = get_samples_mdl_root();
@@ -451,7 +489,7 @@ namespace
     std::string get_known_folder(const KNOWNFOLDERID& id, const std::string& postfix)
     {
         // Fetch the 'knownFolder' path.
-        HRESULT hr = -1;
+        HRESULT hr = E_FAIL;
         wchar_t* knownFolderPath = nullptr;
         std::string result;
         #if(_WIN32_WINNT >= 0x0600)
@@ -584,5 +622,33 @@ inline std::string mdle_to_db_name_with_signature(
     db_name = value->get_c_str();
     return db_name;
 }
+
+#ifdef MI_PLATFORM_WINDOWS
+
+#define MAIN_UTF8 main_utf8
+
+#define COMMANDLINE_TO_UTF8 \
+int wmain(int argc, wchar_t* argv[]) { \
+    char** argv_utf8 = new char*[argc]; \
+    for (int i = 0; i < argc; i++) { \
+        LPWSTR warg = argv[i]; \
+        DWORD size = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL); \
+        check_success(size > 0); \
+        argv_utf8[i] = new char[size]; \
+        DWORD result = WideCharToMultiByte(CP_UTF8, 0, warg, -1, argv_utf8[i], size, NULL, NULL); \
+        check_success(result > 0); \
+    } \
+    SetConsoleOutputCP(CP_UTF8); \
+    int result = main_utf8(argc, argv_utf8); \
+    delete[] argv_utf8; \
+    return result; \
+}
+
+#else
+
+#define MAIN_UTF8 main
+#define COMMANDLINE_TO_UTF8
+
+#endif
 
 #endif // MI_EXAMPLE_SHARED_H

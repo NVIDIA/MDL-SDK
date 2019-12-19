@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_execution_cuda.cpp
+// examples/mdl_core/execution_cuda/example_execution_cuda.cpp
 //
 // Introduces execution of the generated code for compiled material sub-expressions
 // for the PTX backend with CUDA.
@@ -171,7 +171,7 @@ void usage(char const *prog_name)
 //
 //------------------------------------------------------------------------------
 
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     // Parse command line options
     Options options;
@@ -231,7 +231,8 @@ int main(int argc, char* argv[])
         Material_ptx_compiler mc(
             mdl_compiler.get(),
             /*num_texture_results=*/ 0,
-            options.enable_derivatives);
+            options.enable_derivatives,
+            /*df_handle_mode=*/ "none");
 
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
             mc.add_module_path(options.mdl_paths[i].c_str());
@@ -286,3 +287,6 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

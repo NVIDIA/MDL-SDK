@@ -219,6 +219,32 @@ mi::Sint32 Mdl_execution_context_impl::get_option(const char* name, const char*&
     return 0;
 }
 
+mi::Sint32 Mdl_execution_context_impl::get_option(
+    const char* name, 
+    mi::base::IInterface** value) const
+{
+    STLEXT::Any option;
+    if (m_context->get_option(name, option) == -1)
+        return -1;
+    if (option.type() != typeid(mi::base::Handle<mi::base::IInterface>))
+        return -2;
+
+    mi::base::Handle<mi::base::IInterface> handle = 
+        STLEXT::any_cast<mi::base::Handle<mi::base::IInterface>>(option);
+
+    if (handle)
+    {
+        *value = handle.get();
+        handle->retain();
+    }
+    else
+    {
+        *value = nullptr;
+    }
+
+    return 0;
+}
+
 mi::Sint32 Mdl_execution_context_impl::set_option(const char* name, const char* value)
 {
     return m_context->set_option(name, std::string(value));
@@ -232,6 +258,30 @@ mi::Sint32 Mdl_execution_context_impl::set_option(const char* name, mi::Float32 
 mi::Sint32 Mdl_execution_context_impl::set_option(const char* name, bool value)
 {
     return m_context->set_option(name, value);
+}
+
+mi::Sint32 Mdl_execution_context_impl::set_option(const char* name, mi::base::IInterface* value)
+{
+    mi::base::Handle<mi::base::IInterface> handle(mi::base::make_handle_dup(value));
+    return m_context->set_option(name, handle);
+}
+
+MDL::Execution_context* unwrap_and_clear_context(
+    mi::neuraylib::IMdl_execution_context* context,
+    MDL::Execution_context& default_context)
+{
+    if (context)
+    {
+        NEURAY::Mdl_execution_context_impl* context_impl =
+            static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+        if (context_impl) {
+            MDL::Execution_context& wrapped_context = context_impl->get_context();
+            wrapped_context.clear_messages();
+            wrapped_context.set_result(0);
+            return &wrapped_context;
+        }
+    }
+    return &default_context;
 }
 
 } // namespace NEURAY

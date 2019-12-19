@@ -43,7 +43,6 @@ class Dependence_node;
 class Generated_code_dag;
 class IDefinition;
 class Indexable;
-class Type_collector;
 
 /// A dependence edge.
 class Dependence_edge {
@@ -347,14 +346,12 @@ public:
     /// \param alloc           the allocator
     /// \param dag             the DAG to report errors
     /// \param dag_builder     the DAG builder this graph is constructed from.
-    /// \param collector       the type collector containing "interface types"
     /// \param invisible_sym   the invisible symbol of the current module
     /// \param include_locals  if true, include local entities in the dependence graph
     DAG_dependence_graph(
         IAllocator           *alloc,
         Generated_code_dag   &dag,
         DAG_builder          &dag_builder,
-        Type_collector const &collector,
         ISymbol const        *invisible_sym,
         bool                 include_locals);
 
@@ -423,37 +420,28 @@ private:
         IModule const     *module,
         IDefinition const *exp_def);
 
-    /// Create a DAG intrinsic index function node.
+    /// Create one-and-only index operator node.
     ///
-    /// \param indexable      the indexable type
-    /// \param this_name      the name of indexable's owner module or NULL if indexable
-    ///                       is a builtin type
-    /// \param int_type       the MDL integer type
+    /// \param indexable_type  the template type for all indexable types, (<0>[])
+    /// \param int_type        the MDL integer type
     void create_dag_index_function(
-        Indexable const &indexable,
-        char const      *this_name,
-        IType const     *int_type);
+        IType const *indexable_type,
+        IType const *int_type);
 
-    /// Create a DAG intrinsic array length function node.
+    /// Create one-and-only array length operator node.
     ///
-    /// \param e_type         the array element type
-    /// \param this_name      the name of e_type's owner module of NULL if e_type is a builtin type
-    /// \param int_type       the MDL integer type
-    /// \param is_exported    if true, the operator is defined in the current module and exported
+    /// \param indexable_type  the template type for all indexable types, (<0>[])
+    /// \param int_type        the MDL integer type
     Dependence_node *create_dag_array_len_operator(
-        IType const *e_type,
-        char const  *this_name,
-        IType const *int_type,
-        bool        is_exported);
+        IType const *indexable_type,
+        IType const *int_type);
 
-    /// Create a DAG intrinsic ternary operator function node.
+    /// Create the one-and-only ternary operator node.
     ///
     /// \param type           the type of the return type, true, and false expressions
-    /// \param this_name      the name of type's owner module or NULL if type is a builtin type
     /// \param bool_type      the MDL boolean type
     void create_dag_ternary_operator(
         IType const *type,
-        char const  *this_name,
         IType const *bool_type);
 
     /// Create the one-and-only array constructor node.

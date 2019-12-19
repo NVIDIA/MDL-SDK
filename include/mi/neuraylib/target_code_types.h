@@ -578,57 +578,128 @@ enum Bsdf_event_type {
 
 /// Input and output structure for BSDF sampling data.
 struct Bsdf_sample_data {
-    // Input fields
-    tct_float3       ior1;           ///< IOR current medium
-    tct_float3       ior2;           ///< IOR other side
-    tct_float3       k1;             ///< outgoing direction
-    tct_float3       xi;             ///< pseudo-random sample number
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
 
-    // Output fields
-    tct_float3       k2;             ///< incoming direction
-    tct_float        pdf;            ///< pdf (non-projected hemisphere)
-    tct_float3       bsdf_over_pdf;  ///< bsdf * dot(normal, k2) / pdf
-    Bsdf_event_type  event_type;     ///< the type of event for the generated sample
+    tct_float3       k2;             ///< output: incoming direction
+    tct_float4       xi;             ///< input: pseudo-random sample numbers
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
+    tct_int          handle;         ///< output: handle of the sampled elemental BSDF (lobe)
+};
+
+/// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
+enum Df_handle_slot_mode
+{
+    DF_HSM_POINTER = -2,    ///< Uses renderer defined buffers; not supported by all backends
+    DF_HSM_NONE    = -1,    ///< No slots, handles are ignored completely
+    DF_HSM_FIXED_1 =  1,    ///< fixed size array for processing 1 handle at a time
+    DF_HSM_FIXED_2 =  2,    ///< fixed size array for processing 2 handle at a time
+    DF_HSM_FIXED_4 =  4,    ///< fixed size array for processing 4 handle at a time
+    DF_HSM_FIXED_8 =  8,    ///< fixed size array for processing 8 handle at a time
 };
 
 /// Input and output structure for BSDF evaluation data.
-struct Bsdf_evaluate_data {
-    // Input fields
-    tct_float3       ior1;           ///< IOR current medium
-    tct_float3       ior2;           ///< IOR other side
-    tct_float3       k1;             ///< outgoing direction
-    tct_float3       k2;             ///< incoming direction
+struct Bsdf_evaluate_data_base {};
 
-    // Output fields
-    tct_float3       bsdf;           ///< bsdf * dot(normal, k2)
-    tct_float        pdf;            ///< pdf (non-projected hemisphere)
+template<Df_handle_slot_mode N>
+struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_float3       k2;             ///< input: incoming direction
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+    tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of the) 
+                                                           ///  bsdf * dot(normal, k2)
+    tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of the) 
+                                                           ///  bsdf * dot(normal, k2)
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_float3       k2;             ///< input: incoming direction
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many 
+                                     ///  handles using in multiple steps
+    tct_int          handle_count;   ///< input: number of elements of 'bsdf_diffuse', 'bsdf_glossy'
+    tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+    tct_float3*      bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_float3       k2;             ///< input: incoming direction
+    tct_float3       bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+    tct_float3       bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
 struct Bsdf_pdf_data {
-    // Input fields
-    tct_float3       ior1;           ///< IOR current medium
-    tct_float3       ior2;           ///< IOR other side
-    tct_float3       k1;             ///< outgoing direction
-    tct_float3       k2;             ///< incoming direction
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
 
-    // Output fields
-    tct_float        pdf;            ///< pdf (non-projected hemisphere)
+    tct_float3       k2;             ///< input: incoming direction
+    tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
-struct Bsdf_auxiliary_data
-{
-    // Input fields
-    tct_float3       ior1;           ///< IOR current medium
-    tct_float3       ior2;           ///< IOR other side
-    tct_float3       k1;             ///< outgoing direction
+struct Bsdf_auxiliary_data_base {};
 
-    // Output fields
-    tct_float3       albedo;         ///< albedo
-    tct_float3       normal;         ///< normal
+template<Df_handle_slot_mode N>
+struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+    tct_float3       albedo[static_cast<size_t>(N)];    ///< output: albedo
+    tct_float3       normal[static_cast<size_t>(N)];    ///< output: normal
 };
 
+template<>
+struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+    
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+    tct_int          handle_count;   ///< input: number of elements of 'albedo' and 'normal'
+    tct_float3*      albedo;         ///< output: albedo
+    tct_float3*      normal;         ///< output: normal
+};
+
+template<>
+struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
+{
+    tct_float3       ior1;           ///< mutual input: IOR current medium
+    tct_float3       ior2;           ///< mutual input: IOR other side
+    tct_float3       k1;             ///< mutual input: outgoing direction
+
+    tct_float3       albedo;         ///< output: albedo
+    tct_float3       normal;         ///< output: normal
+};
 
 // Signatures for generated target code functions.
 
@@ -765,11 +836,11 @@ typedef void (Bsdf_sample_function_with_derivs)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function)(
-    Bsdf_evaluate_data            *data,
-    Shading_state_material const  *state,
-    Resource_data const           *res_data,
-    void const                    *exception_state,
-    char const                    *arg_block_data);
+    Bsdf_evaluate_data_base               *data,
+    Shading_state_material const          *state,
+    Resource_data const                   *res_data,
+    void const                            *exception_state,
+    char const                            *arg_block_data);
 
 
 /// Signature of the evaluation function for material distribution functions created via
@@ -782,11 +853,11 @@ typedef void (Bsdf_evaluate_function)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function_with_derivs)(
-    Bsdf_evaluate_data                        *data,
-    Shading_state_material_with_derivs const  *state,
-    Resource_data const                       *res_data,
-    void const                                *exception_state,
-    char const                                *arg_block_data);
+    Bsdf_evaluate_data_base                     *data,
+    Shading_state_material_with_derivs const    *state,
+    Resource_data const                         *res_data,
+    void const                                  *exception_state,
+    char const                                  *arg_block_data);
 
 
 /// Signature of the probability density function for material distribution functions created via
@@ -832,7 +903,7 @@ typedef void (Bsdf_pdf_function_with_derivs)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function)(
-    Bsdf_auxiliary_data           *data,
+    Bsdf_auxiliary_data_base      *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     void const                    *exception_state,
@@ -849,7 +920,7 @@ typedef void (Bsdf_auxiliary_function)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function_with_derivs)(
-    Bsdf_auxiliary_data                       *data,
+    Bsdf_auxiliary_data_base                  *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     void const                                *exception_state,
@@ -868,48 +939,86 @@ enum Edf_event_type
 /// Input and output structure for EDF sampling data.
 struct Edf_sample_data
 {
-    // Input fields
-    tct_float3      xi;             ///< pseudo-random sample number
-
-    // Output fields
-    tct_float3      k1;             ///< outgoing direction
-    tct_float       pdf;            ///< pdf (non-projected hemisphere)
-    tct_float3      edf_over_pdf;   ///< edf * dot(normal,k1) / pdf
-    Edf_event_type  event_type;     ///< the type of event for the generated sample
+    tct_float4      xi;             ///< input: pseudo-random sample number
+    tct_float3      k1;             ///< output: outgoing direction
+    tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
+    tct_float3      edf_over_pdf;   ///< output: edf * dot(normal,k1) / pdf
+    Edf_event_type  event_type;     ///< output: the type of event for the generated sample
+    tct_int         handle;         ///< output: handle of the sampled elemental EDF (lobe)
 };
 
 /// Input and output structure for EDF evaluation data.
-struct Edf_evaluate_data
-{
-    // Input fields
-    tct_float3      k1;             ///< outgoing direction
+struct Edf_evaluate_data_base {};
 
-    // Output fields
-    tct_float       cos;            ///< dot(normal, k1)
-    tct_float3      edf;            ///< edf
-    tct_float       pdf;            ///< pdf (non-projected hemisphere)
+template<Df_handle_slot_mode N>
+struct Edf_evaluate_data : public Edf_evaluate_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+    tct_float       cos;                            ///< output: dot(normal, k1)
+    tct_float3      edf[static_cast<size_t>(N)];    ///< output: edf
+    tct_float       pdf;                            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+    tct_int         handle_count;   ///< input: number of elements of 'edf'
+    tct_float       cos;            ///< output: dot(normal, k1)
+    tct_float3*     edf;            ///< output: edf
+    tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
+};
+
+template<>
+struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_float       cos;            ///< output: dot(normal, k1)
+    tct_float3      edf;            ///< output: edf
+    tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.
 struct Edf_pdf_data
 {
-    // Input fields
-    tct_float3      k1;             ///< outgoing direction
-
-    // Output fields
-    tct_float       pdf;            ///< pdf (non-projected hemisphere)
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF auxiliary calculation data.
-struct Edf_auxiliary_data
-{
-    // Input fields
-    tct_float3      k1;             ///< outgoing direction
+struct Edf_auxiliary_data_base {};
 
-    // Output fields
+template<Df_handle_slot_mode N>
+struct Edf_auxiliary_data : public Edf_auxiliary_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     // reserved for future use
 };
 
+template<>
+struct Edf_auxiliary_data<DF_HSM_POINTER> : public Edf_auxiliary_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+    tct_int         handle_count;   ///< number of elements of 'edf'
+
+    // reserved for future use
+};
+
+template<>
+struct Edf_auxiliary_data<DF_HSM_NONE> : public Edf_auxiliary_data_base
+{
+    tct_float3      k1;             ///< input: outgoing direction
+
+    // reserved for future use
+};
 
 /// Signature of the initialization function for material distribution functions created via
 /// #mi::neuraylib::IMdl_backend::translate_material_df() and
@@ -993,7 +1102,7 @@ typedef void (Edf_sample_function_with_derivs)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function)(
-    Edf_evaluate_data             *data,
+    Edf_evaluate_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     void const                    *exception_state,
@@ -1010,7 +1119,7 @@ typedef void (Edf_evaluate_function)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function_with_derivs)(
-    Edf_evaluate_data                         *data,
+    Edf_evaluate_data_base                    *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     void const                                *exception_state,
@@ -1060,7 +1169,7 @@ typedef void (Edf_pdf_function_with_derivs)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function)(
-    Edf_auxiliary_data               *data,
+    Edf_auxiliary_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
     void const                    *exception_state,
@@ -1077,7 +1186,7 @@ typedef void (Edf_auxiliary_function)(
 /// \param exception_state  unused, should be NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function_with_derivs)(
-    Edf_auxiliary_data                           *data,
+    Edf_auxiliary_data_base                   *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
     void const                                *exception_state,

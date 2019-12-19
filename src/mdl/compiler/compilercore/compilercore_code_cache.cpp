@@ -92,9 +92,7 @@ Code_cache::Cache_entry::Cache_entry(
             cur_info->dist_kind = entry.func_infos[i].dist_kind;
             cur_info->func_kind = entry.func_infos[i].func_kind;
 
-            for (int j = 0; j < int(mi::mdl::IGenerated_code_executable::PL_NUM_LANGUAGES);
-                ++j)
-            {
+            for (int j = 0; j < int(mi::mdl::IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
                 len = strlen(entry.func_infos[i].prototypes[j]);
                 memcpy(p, entry.func_infos[i].prototypes[j], len + 1);
                 cur_info->prototypes[j] = p;
@@ -102,6 +100,23 @@ Code_cache::Cache_entry::Cache_entry(
             }
 
             cur_info->arg_block_index = entry.func_infos[i].arg_block_index;
+
+            cur_info->num_df_handles = entry.func_infos[i].num_df_handles;
+            if (cur_info->num_df_handles == 0) {
+                cur_info->df_handles = NULL;
+            } else {
+                // align
+                p = (char *)((uintptr_t(p) + sizeof(char *) - 1) & ~(sizeof(char *) - 1));
+
+                cur_info->df_handles = (char const **) p;
+                p += cur_info->num_df_handles * sizeof(char *);
+                for (size_t j = 0; j < cur_info->num_df_handles; ++j) {
+                    len = strlen(entry.func_infos[i].df_handles[j]);
+                    memcpy(p, entry.func_infos[i].df_handles[j], len + 1);
+                    cur_info->df_handles[j] = p;
+                    p += len + 1;
+                }
+            }
         }
     }
 

@@ -182,11 +182,11 @@ still retaining the alignment information.
 @# End module documentation #@
 @*/
 
-import tex::*;
-import state::*;
-import math::*;
-import anno::*;
-import limits::*;
+import ::tex::*;
+import ::state::*;
+import ::math::*;
+import ::anno::*;
+import ::limits::*;
 
 // --------------------------------------------------------------------------------
 // Enums
@@ -895,8 +895,7 @@ export float gloss_to_rough(
         ]]
 )
 [[
-    anno::description("Convert glossiness parameter to roughness parameter through simple inversion"),
-    anno::noinline()
+    anno::description("Convert glossiness parameter to roughness parameter through simple inversion")
 ]]
 {
     return 1-glossiness;
@@ -925,6 +924,21 @@ export color abbe_number_ior(
 }
 
 
+float sellmeier_coefficient_lambda(
+    uniform float3 sellmeier_B,
+    uniform float3 sellmeier_C,
+    uniform float lambda
+)
+{
+    float l2 = lambda * lambda;
+    float sum = 1.0 +
+                sellmeier_B.x * l2 / (l2 - sellmeier_C.x) +
+                sellmeier_B.y * l2 / (l2 - sellmeier_C.y) +
+                sellmeier_B.z * l2 / (l2 - sellmeier_C.z);
+    return sum >= 0.0 ? math::sqrt(sum) : 1.0;
+}
+
+
 export color sellmeier_coefficients_ior(
     uniform float3 sellmeier_B = float3(1.04, 0.23, 1.01)
         [[
@@ -940,13 +954,12 @@ export color sellmeier_coefficients_ior(
      anno::noinline()
 ]]
 {
-    float l2 = 0.5892 * 0.5892; // simplified to fixed wavelength of 589.2 nm
-    return
-        color(
-            math::sqrt(1.0 +
-                sellmeier_B.x * l2 / (l2 - sellmeier_C.x) +
-                sellmeier_B.y * l2 / (l2 - sellmeier_C.y) +
-                sellmeier_B.z * l2 / (l2 - sellmeier_C.z)));
+    // compute ior for 3 lambdas: 700 nm (red), 546.1 nm (green) and 435.8 nm (blue)
+    float r = sellmeier_coefficient_lambda(sellmeier_B, sellmeier_C, 700.0 / 1000.0);
+    float g = sellmeier_coefficient_lambda(sellmeier_B, sellmeier_C, 546.1 / 1000.0);
+    float b = sellmeier_coefficient_lambda(sellmeier_B, sellmeier_C, 435.8 / 1000.0);
+
+    return color(r, g, b);
 }
 
 

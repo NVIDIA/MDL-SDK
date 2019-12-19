@@ -86,7 +86,10 @@ namespace mdl_d3d12
         bool resize(size_t width, size_t height);
         bool resize(size_t width, size_t height, size_t depth);
 
-        bool upload(D3DCommandList* command_list, const uint8_t* data);
+        /// for odd resolutions the data needs to be aligned before uploading
+        /// this pitch returns the size in byte for one pixel row.
+        size_t get_gpu_row_pitch() const;
+        bool upload(D3DCommandList* command_list, const uint8_t* data, size_t data_row_pitch = -1);
         bool download(void* data);
 
 

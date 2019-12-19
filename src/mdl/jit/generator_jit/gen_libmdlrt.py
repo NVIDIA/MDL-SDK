@@ -45,7 +45,9 @@ def xxd(filename, fout):
     i = 0
     fout.write("\t")
     for byte in bytes:
-        fout.write("0x%02x, " % ord(byte))
+        if isinstance(byte, str):
+            byte = ord(byte)
+        fout.write("0x%02x, " % byte)
         if i == 7:
             fout.write("\n\t")
             i = 0
@@ -54,7 +56,7 @@ def xxd(filename, fout):
 
 
 def usage():
-    print "Usage: %s <inputfile> <output directory>" % sys.argv[0]
+    print("Usage: %s <inputfile> <output directory>" % sys.argv[0])
     return 1
 
 
@@ -67,7 +69,7 @@ def main(args):
 
     out_name = "libmdlrt_bitcode.h"
 
-    print "Generating", out_name, "...\n"
+    print("Generating %s ..." % out_name)
     with open(os.path.join(IntDir, out_name), "w") as f:
         f.write(copyright_str)
         f.write("\n// Automatically generated from libmdlrt.bc\n\n"

@@ -1,5 +1,29 @@
 /******************************************************************************
- * Copyright 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 #ifndef MDL_RENDERER_RUNTIME_HLSLI
@@ -8,30 +32,38 @@
 // compiler constants defined from outside:
 // - MDL_TARGET_REGISTER_SPACE
 // - MDL_MATERIAL_REGISTER_SPACE
+//
 // - MDL_RO_DATA_SEGMENT_SLOT
+//
 // - MDL_ARGUMENT_BLOCK_SLOT
-// - MDL_TARGET_TEXTURE_SLOT_BEGIN
-// - MDL_TARGET_TEXTURE_SLOT_COUNT
-// - MDL_MATERIAL_TEXTURE_SLOT_BEGIN
-// - MDL_MATERIAL_TEXTURE_SLOT_COUNT
+//
+// - MDL_TARGET_TEXTURE_COUNT
+// - MDL_TARGET_TEXTURE_2D_SLOT_BEGIN
+// - MDL_TARGET_TEXTURE_3D_SLOT_BEGIN
+//
+// - MDL_MATERIAL_TEXTURE_COUNT
+// - MDL_MATERIAL_TEXTURE_2D_SLOT_BEGIN
+// - MDL_MATERIAL_TEXTURE_3D_SLOT_BEGIN
+//
 // - MDL_TEXTURE_SAMPLER_SLOT
-
-
 
 // per target data
 ByteAddressBuffer mdl_ro_data_segment : register(MDL_RO_DATA_SEGMENT_SLOT, MDL_TARGET_REGISTER_SPACE);
-#if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-    Texture2D mdl_target_textures[MDL_TARGET_TEXTURE_SLOT_COUNT] : register(MDL_TARGET_TEXTURE_SLOT_BEGIN,MDL_TARGET_REGISTER_SPACE);
+#if (MDL_TARGET_TEXTURE_COUNT > 0)
+    Texture2D mdl_target_textures_2d[MDL_TARGET_TEXTURE_COUNT] : register(MDL_TARGET_TEXTURE_2D_SLOT_BEGIN,MDL_TARGET_REGISTER_SPACE);
+    Texture3D mdl_target_textures_3d[MDL_TARGET_TEXTURE_COUNT] : register(MDL_TARGET_TEXTURE_3D_SLOT_BEGIN,MDL_TARGET_REGISTER_SPACE);
 #endif
 
 // per material data
 ByteAddressBuffer mdl_argument_block : register(MDL_ARGUMENT_BLOCK_SLOT,MDL_MATERIAL_REGISTER_SPACE);
-#if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-    Texture2D mdl_material_textures[MDL_MATERIAL_TEXTURE_SLOT_COUNT] : register(MDL_MATERIAL_TEXTURE_SLOT_BEGIN,MDL_MATERIAL_REGISTER_SPACE);
+#if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+    Texture2D mdl_material_textures_2d[MDL_MATERIAL_TEXTURE_COUNT] : register(MDL_MATERIAL_TEXTURE_2D_SLOT_BEGIN,MDL_MATERIAL_REGISTER_SPACE);
+    Texture3D mdl_material_textures_3d[MDL_MATERIAL_TEXTURE_COUNT] : register(MDL_MATERIAL_TEXTURE_3D_SLOT_BEGIN,MDL_MATERIAL_REGISTER_SPACE);
 #endif
 
+
 // global samplers
-SamplerState mdl_sampler_2d : register(MDL_TEXTURE_SAMPLER_SLOT);
+SamplerState mdl_sampler_tex : register(MDL_TEXTURE_SAMPLER_SLOT);
 
 
 // If USE_RES_DATA is defined, add a Res_data parameter to all resource handler functions.
@@ -107,8 +139,9 @@ bool mdl_read_rodata_as_bool(uint offs)
     return (val & (0xff << (8 * (offs & 3)))) != 0;
 }
 
+
 // Note: UV tiles are not supported in this example
-uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
+uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex)
 {
     if (tex == 0)
         return 0;
@@ -118,24 +151,27 @@ uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
     uint height = 0;
 
     // texture at the target code level
-    #if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-        if (tex < MDL_TARGET_TEXTURE_SLOT_COUNT)
+    #if (MDL_TARGET_TEXTURE_COUNT > 0)
+        if (tex < MDL_TARGET_TEXTURE_COUNT)
         {
-            mdl_target_textures[NonUniformResourceIndex(tex)].GetDimensions(width, height);
-            return width;
+            mdl_target_textures_2d[NonUniformResourceIndex(tex)].GetDimensions(width, height);
+            return uint2(width, height);
         }
     #endif
 
     // texture at the material level
-    #if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-        mdl_material_textures[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_SLOT_COUNT)].GetDimensions(width, height);
+    #if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+        mdl_material_textures_2d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].GetDimensions(width, height);
     #endif
     
-    return width;
+    return uint2(width, height);
 }
 
-// Note: UV tiles are not supported in this example
-uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
+
+uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)  { return tex_res_2d(RES_DATA_PARAM tex).x; }
+uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile) { return tex_res_2d(RES_DATA_PARAM tex).y; }
+
+uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex)
 {
     if (tex == 0)
         return 0;
@@ -143,28 +179,30 @@ uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
     tex--;
     uint width = 0;
     uint height = 0;
+    uint depth = 0;
 
     // texture at the target code level
-    #if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-        if (tex < MDL_TARGET_TEXTURE_SLOT_COUNT)
-        {
-            mdl_target_textures[NonUniformResourceIndex(tex)].GetDimensions(width, height);
-            return height;
-        }
+    #if (MDL_TARGET_TEXTURE_COUNT > 0)
+    if (tex < MDL_TARGET_TEXTURE_COUNT)
+    {
+        mdl_target_textures_3d[NonUniformResourceIndex(tex)].GetDimensions(width, height, depth);
+        return uint3(width, height, depth);
+    }
     #endif
 
     // texture at the material level
-    #if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-        mdl_material_textures[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_SLOT_COUNT)].GetDimensions(width, height);
+    #if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+        mdl_material_textures_3d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].GetDimensions(width, height, depth);
     #endif
 
-    return height;
+    return uint3(width, height, depth);
 }
 
-// The example does not support 3D and cube textures
-uint tex_width_3d(RES_DATA_PARAM_DECL uint tex)     { return 0; }
-uint tex_height_3d(RES_DATA_PARAM_DECL uint tex)    { return 0; }
-uint tex_depth_3d(RES_DATA_PARAM_DECL uint tex)     { return 0; }
+uint tex_width_3d(RES_DATA_PARAM_DECL uint tex)     { return tex_res_3d(RES_DATA_PARAM tex).x; }
+uint tex_height_3d(RES_DATA_PARAM_DECL uint tex)    { return tex_res_3d(RES_DATA_PARAM tex).y; }
+uint tex_depth_3d(RES_DATA_PARAM_DECL uint tex)     { return tex_res_3d(RES_DATA_PARAM tex).z; }
+
+// The example does not support cube textures
 uint tex_width_cube(RES_DATA_PARAM_DECL uint tex)   { return 0; }
 uint tex_height_cube(RES_DATA_PARAM_DECL uint tex)  { return 0; }
 
@@ -173,51 +211,34 @@ bool tex_texture_isvalid(RES_DATA_PARAM_DECL uint tex)
     return tex != 0;  // TODO: need to check number of available textures
 }
 
-float2 apply_wrap_and_crop(
-    RES_DATA_PARAM_DECL
-    uint tex,
-    float2 coord,
-    int wrap_u,
-    int wrap_v,
-    float2 crop_u,
-    float2 crop_v)
+float apply_wrap_and_crop(
+    float coord,
+    int wrap,
+    float2 crop,
+    int res)
 {
-    if (wrap_u != TEX_WRAP_REPEAT || any(crop_u != float2(0, 1))) {
-        if (wrap_u == TEX_WRAP_REPEAT) {
-            coord.x -= floor(coord.x);
-        } else {
-            if (wrap_u == TEX_WRAP_CLIP && (coord.x < 0 || coord.x >= 1))
-                return float2(0, 0);
-            if (wrap_u == TEX_WRAP_MIRRORED_REPEAT) {
-                float floored_val = floor(coord.x);
-                if ((int(floored_val) & 1) != 0)
-                    coord.x = 1 - (coord.x - floored_val);
-                else
-                    coord.x -= floored_val;
-            }
-            float inv_hdim = 0.5f / tex_width_2d(RES_DATA_PARAM tex, int2(0, 0));
-            coord.x = min(max(coord.x, inv_hdim), 1.f - inv_hdim);
+    if (wrap != TEX_WRAP_REPEAT || any(crop != float2(0, 1)))
+    {
+        if (wrap == TEX_WRAP_REPEAT)
+        {
+            coord -= floor(coord);
         }
-        coord.x = coord.x * (crop_u.y - crop_u.x) + crop_u.x;
-    }
-
-    if (wrap_v != TEX_WRAP_REPEAT || any(crop_v != float2(0, 1))) {
-        if (wrap_v == TEX_WRAP_REPEAT) {
-            coord.y -= floor(coord.y);
-        } else {
-            if (wrap_v == TEX_WRAP_CLIP && (coord.y < 0 || coord.y >= 1))
-                return float2(0, 0);
-            if (wrap_v == TEX_WRAP_MIRRORED_REPEAT) {
-                float floored_val = floor(coord.y);
+        else
+        {
+            if (wrap == TEX_WRAP_CLIP && (coord < 0 || coord >= 1))
+                return 0.0f;
+            if (wrap == TEX_WRAP_MIRRORED_REPEAT)
+            {
+                float floored_val = floor(coord);
                 if ((int(floored_val) & 1) != 0)
-                    coord.y = 1 - (coord.y - floored_val);
+                    coord = 1 - (coord - floored_val);
                 else
-                    coord.y -= floored_val;
+                    coord -= floored_val;
             }
-            float inv_hdim = 0.5f / tex_height_2d(RES_DATA_PARAM tex, int2(0, 0));
-            coord.y = min(max(coord.y, inv_hdim), 1.f - inv_hdim);
+            float inv_hdim = 0.5f / float(res);
+            coord = clamp(coord, inv_hdim, 1.f - inv_hdim);
         }
-        coord.y = coord.y * (crop_v.y - crop_v.x) + crop_v.x;
+        coord = coord * (crop.y - crop.x) + crop.x;
     }
     return coord;
 }
@@ -233,8 +254,10 @@ float4 tex_lookup_float4_2d(
 {
     if (tex == 0)
         return float4(0, 0, 0, 0);  // invalid texture
-    
-    coord = apply_wrap_and_crop(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v);
+
+    uint2 res = tex_res_2d(RES_DATA_PARAM tex);
+    coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, res.x);
+    coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, res.y);
 
     // With HLSL 5.1
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
@@ -244,19 +267,61 @@ float4 tex_lookup_float4_2d(
     tex--;
 
     // texture at the target code level
-    #if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-        if (tex < MDL_TARGET_TEXTURE_SLOT_COUNT)
-            return mdl_target_textures[NonUniformResourceIndex(tex )].SampleLevel(
-                mdl_sampler_2d, coord, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
+    #if (MDL_TARGET_TEXTURE_COUNT > 0)
+        if (tex < MDL_TARGET_TEXTURE_COUNT)
+            return mdl_target_textures_2d[NonUniformResourceIndex(tex )].SampleLevel(
+                mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
     #endif
 
     // texture at the material level
-    #if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-        return mdl_material_textures[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_SLOT_COUNT)].SampleLevel(
-            mdl_sampler_2d, coord, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
+    #if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+        return mdl_material_textures_2d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].SampleLevel(
+            mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
     #endif
 
     return float4(0, 0, 0, 0); 
+}
+
+float4 tex_lookup_float4_3d(
+    RES_DATA_PARAM_DECL
+    uint tex,
+    float3 coord,
+    int wrap_u,
+    int wrap_v,
+    int wrap_w,
+    float2 crop_u,
+    float2 crop_v,
+    float2 crop_w)
+{
+    if (tex == 0)
+        return float4(0, 0, 0, 0);  // invalid texture
+
+    uint3 res = tex_res_3d(RES_DATA_PARAM tex);
+    coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, res.x);
+    coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, res.y);
+    coord.z = apply_wrap_and_crop(coord.z, wrap_w, crop_w, res.z);
+
+    // With HLSL 5.1
+    // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
+    // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
+    // need mipmaps. Manual mip level computation is possible though.
+
+    tex--;
+
+    // texture at the target code level
+    #if (MDL_TARGET_TEXTURE_COUNT > 0)
+    if (tex < MDL_TARGET_TEXTURE_COUNT)
+        return mdl_target_textures_3d[NonUniformResourceIndex(tex)].SampleLevel(
+            mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
+    #endif
+
+    // texture at the material level
+    #if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+    return mdl_material_textures_3d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].SampleLevel(
+        mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
+    #endif
+
+    return float4(0, 0, 0, 0);
 }
 
 float3 tex_lookup_float3_2d(
@@ -307,49 +372,60 @@ float tex_lookup_float_2d(
     return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).x;
 }
 
-// The example does not support 3D textures
-float4 tex_lookup_float4_3d(
-    RES_DATA_PARAM_DECL
-    uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,
-    float2 crop_u, float2 crop_v, float2 crop_w)
-{
-    return float4(0, 0, 0, 0);
-}
-
 float3 tex_lookup_float3_3d(
     RES_DATA_PARAM_DECL
-    uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,
-    float2 crop_u, float2 crop_v, float2 crop_w)
+    uint tex, 
+    float3 coord, 
+    int wrap_u, 
+    int wrap_v, 
+    int wrap_w,
+    float2 crop_u, 
+    float2 crop_v, 
+    float2 crop_w)
 {
-    return tex_lookup_float4_3d(
-        RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xyz;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xyz;
 }
 
 float3 tex_lookup_color_3d(
     RES_DATA_PARAM_DECL
-    uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,
-    float2 crop_u, float2 crop_v, float2 crop_w)
+    uint tex,
+    float3 coord,
+    int wrap_u,
+    int wrap_v,
+    int wrap_w,
+    float2 crop_u,
+    float2 crop_v,
+    float2 crop_w)
 {
-    return tex_lookup_float3_3d(
-        RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xyz;
 }
 
 float2 tex_lookup_float2_3d(
     RES_DATA_PARAM_DECL
-    uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,
-    float2 crop_u, float2 crop_v, float2 crop_w)
+    uint tex,
+    float3 coord,
+    int wrap_u,
+    int wrap_v,
+    int wrap_w,
+    float2 crop_u,
+    float2 crop_v,
+    float2 crop_w)
 {
-    return tex_lookup_float4_3d(
-        RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xy;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xy;
 }
 
 float tex_lookup_float_3d(
     RES_DATA_PARAM_DECL
-    uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,
-    float2 crop_u, float2 crop_v, float2 crop_w)
+    uint tex,
+    float3 coord,
+    int wrap_u,
+    int wrap_v,
+    int wrap_w,
+    float2 crop_u,
+    float2 crop_v,
+    float2 crop_w)
 {
-    return tex_lookup_float4_3d(
-        RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).x;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).x;
 }
 
 // The example does not support cube textures
@@ -416,15 +492,15 @@ float4 tex_texel_float4_2d(
     tex--;
 
     // texture at the target code level
-    #if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-        if (tex < MDL_TARGET_TEXTURE_SLOT_COUNT)
-            return mdl_target_textures[NonUniformResourceIndex(tex )].Load(
+    #if (MDL_TARGET_TEXTURE_COUNT > 0)
+        if (tex < MDL_TARGET_TEXTURE_COUNT)
+            return mdl_target_textures_2d[NonUniformResourceIndex(tex )].Load(
                 int3(coord, /*mipmaplevel=*/ 0));
     #endif
 
     // texture at the material level
-    #if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-        return mdl_material_textures[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_SLOT_COUNT)].Load(
+    #if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+        return mdl_material_textures_2d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].Load(
             int3(coord, /*mipmaplevel=*/ 0));
     #endif
 
@@ -471,6 +547,7 @@ float tex_texel_float_2d(
     return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile).x;
 }
 
+#ifdef USE_DERIVS
 float4 tex_lookup_deriv_float4_2d(
     RES_DATA_PARAM_DECL
     uint tex,
@@ -483,7 +560,10 @@ float4 tex_lookup_deriv_float4_2d(
     if (tex == 0)
         return float4(0, 0, 0, 0);  // invalid texture
 
-    float2 coord_uv = apply_wrap_and_crop(RES_DATA_PARAM tex, coord.val, wrap_u, wrap_v, crop_u, crop_v);
+    uint2 res = tex_res_2d(RES_DATA_PARAM tex);
+    float2 coord_uv(
+        apply_wrap_and_crop(coord.val.x, wrap_u, crop_u, res.x),
+        apply_wrap_and_crop(coord.val.y, wrap_v, crop_v, res.y));
 
     // With HLSL 5.1
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
@@ -493,16 +573,16 @@ float4 tex_lookup_deriv_float4_2d(
     tex--;
 
     // texture at the target code level
-#if (MDL_TARGET_TEXTURE_SLOT_COUNT > 0)
-    if (tex < MDL_TARGET_TEXTURE_SLOT_COUNT)
-        return mdl_target_textures[NonUniformResourceIndex(tex)].SampleLevel(
-            mdl_sampler_2d, coord_uv, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
+#if (MDL_TARGET_TEXTURE_COUNT > 0)
+    if (tex < MDL_TARGET_TEXTURE_COUNT)
+        return mdl_target_textures_2d[NonUniformResourceIndex(tex)].SampleLevel(
+            mdl_sampler_tex, coord_uv, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
 #endif
 
     // texture at the material level
-#if (MDL_MATERIAL_TEXTURE_SLOT_COUNT > 0)
-    return mdl_material_textures[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_SLOT_COUNT)].SampleLevel(
-        mdl_sampler_2d, coord_uv, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
+#if (MDL_MATERIAL_TEXTURE_COUNT > 0)
+    return mdl_material_textures_2d[NonUniformResourceIndex(tex - MDL_TARGET_TEXTURE_COUNT)].SampleLevel(
+        mdl_sampler_tex, coord_uv, /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0);
 #endif
 
     return float4(0, 0, 0, 0);
@@ -557,6 +637,7 @@ float tex_lookup_deriv_float_2d(
 {
     return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).x;
 }
+#endif  // USE_DERIVS
 
 // The example does not support 3D textures
 float4 tex_texel_float4_3d(RES_DATA_PARAM_DECL uint tex, int3 coord)

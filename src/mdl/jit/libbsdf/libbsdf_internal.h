@@ -321,6 +321,12 @@ BSDF_INLINE TTarget make(const TComponent& ... args)
 
 
 //-----------------------------------------------------------------------------
+// Swizzle replacement functions
+//-----------------------------------------------------------------------------
+BSDF_INLINE float3 xyz(float4 v) { return  make<float3>(v.x, v.y, v.z); }
+
+
+//-----------------------------------------------------------------------------
 // Function to mimic a ternary operator (?:) 
 //-----------------------------------------------------------------------------
 
@@ -592,6 +598,20 @@ namespace state
     };
 }
 
+/// The kind of BSDF data in case of BSDF data textures (otherwise BDK_NONE).
+/// Must be in-sync with mi::mdl::IValue_texture::Bsdf_data_kind.
+enum Bsdf_data_kind {
+    BDK_NONE,
+    BDK_SIMPLE_GLOSSY_MULTISCATTER,
+    BDK_BACKSCATTERING_GLOSSY_MULTISCATTER,
+    BDK_BECKMANN_SMITH_MULTISCATTER,
+    BDK_GGX_SMITH_MULTISCATTER,
+    BDK_BECKMANN_VC_MULTISCATTER,
+    BDK_GGX_VC_MULTISCATTER,
+    BDK_WARD_GEISLER_MORODER_MULTISCATTER,
+    BDK_SHEEN_MULTISCATTER,
+};
+
 class State
 {
 public:
@@ -610,6 +630,10 @@ public:
     float call_lambda_float(int index) const;
     float3 call_lambda_float3(int index) const;
     unsigned int call_lambda_uint(int index) const;
+    float get_arg_block_float(int offset) const;
+    float3 get_arg_block_float3(int offset) const;
+    unsigned int get_arg_block_uint(int offset) const;
+    bool get_arg_block_bool(int offset) const;
     float3 get_material_ior() const;
     float3 get_measured_curve_value(int measured_curve_idx, int value_idx);
     unsigned int get_thin_walled() const;
@@ -651,6 +675,26 @@ public:
     float light_profile_pdf(
         int light_profile_index,
         const float2& theta_phi) const;
+
+    float3 tex_lookup_float3_2d(
+        int texture_index,
+        const float2& coord,
+        int wrap_u,
+        int wrap_v,
+        const float2& crop_u,
+        const float2& crop_v) const;
+
+    float3 tex_lookup_float3_3d(
+        int texture_index,
+        const float3& coord,
+        int wrap_u,
+        int wrap_v,
+        int wrap_w,
+        const float2& crop_u,
+        const float2& crop_v,
+        const float2& crop_w) const;
+
+    unsigned get_bsdf_data_texture_id(Bsdf_data_kind bsdf_data_kind) const;
 };
 
 #include "libbsdf_runtime.h"
@@ -658,10 +702,27 @@ public:
 
 struct BSDF
 {
-    void(*sample)(BSDF_sample_data *data, State *state, float3 const &inherited_normal);
-    void(*evaluate)(BSDF_evaluate_data *data, State *state, float3 const &inherited_normal);
-    void(*pdf)(BSDF_pdf_data *data, State *state, float3 const &inherited_normal);
-    void(*auxiliary)(BSDF_auxiliary_data *data, State *state, float3 const &inherited_normal);
+    void(*sample)(
+        BSDF_sample_data *data, 
+        State *state, 
+        float3 const &inherited_normal);
+
+    void(*evaluate)(
+        BSDF_evaluate_data *data,
+        State *state,
+        float3 const &inherited_normal,
+        float3 const &inherited_weight);
+
+    void(*pdf)(
+        BSDF_pdf_data *data, 
+        State *state, 
+        float3 const &inherited_normal);
+
+    void(*auxiliary)(
+        BSDF_auxiliary_data *data, 
+        State *state, 
+        float3 const &inherited_normal,
+        float3 const &inherited_weight);
 
     // returns true, if the attached BSDF is "bsdf()".
     // note: this is currently unsupported for BSDFs in BSDF_component
@@ -682,10 +743,27 @@ struct color_BSDF_component
 
 struct EDF
 {
-    void(*sample)(EDF_sample_data *data, State *state, float3 const &inherited_normal);
-    void(*evaluate)(EDF_evaluate_data *data, State *state, float3 const &inherited_normal);
-    void(*pdf)(EDF_pdf_data *data, State *state, float3 const &inherited_normal);
-    void(*auxiliary)(EDF_auxiliary_data *data, State *state, float3 const &inherited_normal);
+    void(*sample)(
+        EDF_sample_data *data, 
+        State *state, 
+        float3 const &inherited_normal);
+
+    void(*evaluate)(
+        EDF_evaluate_data *data,
+        State *state,
+        float3 const &inherited_normal,
+        float3 const &inherited_weight);
+
+    void(*pdf)(
+        EDF_pdf_data *data, 
+        State *state, 
+        float3 const &inherited_normal);
+
+    void(*auxiliary)(
+        EDF_auxiliary_data *data, 
+        State *state, 
+        float3 const &inherited_normal,
+        float3 const &inherited_weight);
 
     // returns true, if the attached BSDF is "edf()".
     // note: this is currently unsupported for EDFs in EDF_component

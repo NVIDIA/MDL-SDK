@@ -33,6 +33,8 @@
 #include "pch.h"
 
 #include "neuray_expression_impl.h"
+#include "neuray_impexp_utilities.h"
+#include "neuray_mdl_execution_context_impl.h"
 #include "neuray_module_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
@@ -42,11 +44,13 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/idynamic_array.h>
+#include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/istring.h>
 #include <base/system/main/access_module.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
+#include <io/scene/scene/i_scene_journal_types.h>
 
 namespace MI {
 
@@ -248,6 +252,51 @@ const mi::neuraylib::IAnnotation_definition* Module_impl::get_annotation_definit
         get_db_element()->get_annotation_definition(name));
     mi::base::Handle<Expression_factory> ef(get_transaction()->get_expression_factory());
     return ef->create_annotation_definition(result_int.get(), this->cast_to_major());
+}
+
+bool Module_impl::is_valid(mi::neuraylib::IMdl_execution_context *context) const
+{
+    MDL::Execution_context default_context;
+    return get_db_element()->is_valid(
+        get_db_transaction(),
+        unwrap_and_clear_context(context, default_context));
+}
+
+mi::Sint32 Module_impl::reload(
+    bool recursive,
+    mi::neuraylib::IMdl_execution_context *context)
+{
+    MDL::Execution_context default_context;
+    mi::Sint32 result = get_db_element()->reload(
+        get_db_transaction(),
+        recursive,
+        unwrap_and_clear_context(context, default_context));
+
+    add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return result;
+}
+
+mi::Sint32 Module_impl::reload_from_string(
+    const char* module_source,
+    bool recursive,
+    mi::neuraylib::IMdl_execution_context *context)
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* ctx = unwrap_and_clear_context(context, default_context);
+    if (!module_source || strlen(module_source) == 0) {
+        return MDL::add_context_error(ctx, "Module source cannot be empty.", -1);
+    }
+
+    mi::base::Handle<mi::neuraylib::IReader> reader(
+        NEURAY::Impexp_utilities::create_reader(module_source, strlen(module_source)));
+    mi::Sint32 result = get_db_element()->reload_from_string(
+        get_db_transaction(),
+        reader.get(),
+        recursive,
+        ctx);
+
+    add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return result;
 }
 
 } // namespace NEURAY

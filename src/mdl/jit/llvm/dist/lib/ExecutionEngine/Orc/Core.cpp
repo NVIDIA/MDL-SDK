@@ -14,7 +14,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
 
-#if LLVM_ENABLE_THREADS
+#if LLVM_ENABLE_THREADS && LLVM_THREADING_USE_STD_CALL_ONCE
 #include <future>
 #endif
 
@@ -162,7 +162,7 @@ Expected<SymbolMap> ExecutionSessionBase::legacyLookup(
     ExecutionSessionBase &ES, LegacyAsyncLookupFunction AsyncLookup,
     SymbolNameSet Names, bool WaitUntilReady,
     RegisterDependenciesFunction RegisterDependencies) {
-#if LLVM_ENABLE_THREADS
+#if LLVM_ENABLE_THREADS && LLVM_THREADING_USE_STD_CALL_ONCE
   // In the threaded case we use promises to return the results.
   std::promise<SymbolMap> PromisedResult;
   std::mutex ErrMutex;
@@ -249,7 +249,7 @@ Expected<SymbolMap> ExecutionSessionBase::legacyLookup(
       ES.reportError(std::move(Err));
   }
 
-#if LLVM_ENABLE_THREADS
+#if LLVM_ENABLE_THREADS && LLVM_THREADING_USE_STD_CALL_ONCE
   auto ResultFuture = PromisedResult.get_future();
   auto Result = ResultFuture.get();
 
@@ -368,7 +368,7 @@ Expected<SymbolMap>
 ExecutionSessionBase::lookup(const VSOList &VSOs, const SymbolNameSet &Symbols,
                              RegisterDependenciesFunction RegisterDependencies,
                              bool WaitUntilReady) {
-#if LLVM_ENABLE_THREADS
+#if LLVM_ENABLE_THREADS && LLVM_THREADING_USE_STD_CALL_ONCE
   // In the threaded case we use promises to return the results.
   std::promise<SymbolMap> PromisedResult;
   std::mutex ErrMutex;
@@ -436,7 +436,7 @@ ExecutionSessionBase::lookup(const VSOList &VSOs, const SymbolNameSet &Symbols,
   // Perform the asynchronous lookup.
   lookup(VSOs, Symbols, OnResolve, OnReady, RegisterDependencies);
 
-#if LLVM_ENABLE_THREADS
+#if LLVM_ENABLE_THREADS && LLVM_THREADING_USE_STD_CALL_ONCE
   auto ResultFuture = PromisedResult.get_future();
   auto Result = ResultFuture.get();
 

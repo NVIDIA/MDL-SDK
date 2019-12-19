@@ -192,6 +192,8 @@ if(MDL_BUILD_CORE_EXAMPLES)
     endif()
 endif()
 
+
+
 # add tests with the POST option; there require all regular targets to be defined already
 foreach(_TEST_POST ${MDL_TEST_LIST_POST})
     add_subdirectory(${_TEST_POST})

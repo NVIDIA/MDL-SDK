@@ -32,6 +32,7 @@
 
 #include "i_mdl_elements_expression.h"
 #include "i_mdl_elements_function_call.h"
+#include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_utilities.h"
@@ -62,10 +63,11 @@ Mdl_function_definition::Mdl_function_definition()
 , m_ef( get_expression_factory())
 , m_module_db_name()
 , m_function_tag()
-, m_function_index( ~0u)
+, m_function_ident(-1)
 , m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN)
 , m_semantic( mi::neuraylib::IFunction_definition::DS_UNKNOWN)
 , m_name()
+, m_db_name()
 , m_original_name()
 , m_thumbnail()
 , m_prototype_tag()
@@ -79,13 +81,14 @@ Mdl_function_definition::Mdl_function_definition()
 , m_return_annotations()
 , m_enable_if_conditions()
 , m_enable_if_users()
+, m_function_hash()
 {
 }
 
 Mdl_function_definition::Mdl_function_definition(
     DB::Transaction* transaction,
-    DB::Tag module_tag,
     DB::Tag function_tag,
+    Mdl_ident function_ident,
     const mi::mdl::IGenerated_code_dag* code_dag,
     mi::Uint32 function_index,
     const char* module_filename,
@@ -94,12 +97,13 @@ Mdl_function_definition::Mdl_function_definition(
 : m_tf( get_type_factory())
 , m_vf( get_value_factory())
 , m_ef( get_expression_factory())
-, m_module_db_name(add_mdl_db_prefix(module_name))
+, m_module_db_name(add_mdl_db_prefix( module_name))
 , m_function_tag( function_tag)
-, m_function_index( function_index)
+, m_function_ident( function_ident)
 , m_mdl_semantic( code_dag->get_function_semantics( function_index))
 , m_semantic( mdl_semantics_to_ext_semantics( m_mdl_semantic))
 , m_name( code_dag->get_function_name( function_index))
+, m_db_name(add_mdl_db_prefix(m_name))
 , m_original_name()
 , m_thumbnail()
 , m_prototype_tag()
@@ -139,7 +143,8 @@ Mdl_function_definition::Mdl_function_definition(
         module_filename,
         module_name,
         m_prototype_tag,
-        load_resources);
+        load_resources,
+        /*user_modules_seen*/ nullptr);
 
     const mi::mdl::IType* return_type = code_dag->get_function_return_type( function_index);
     m_return_type = mdl_type_to_int_type( m_tf.get(), return_type);
@@ -236,19 +241,230 @@ Mdl_function_definition::Mdl_function_definition(
     }
 }
 
+DB::Tag Mdl_function_definition::get_module(DB::Transaction* transaction) const
+{
+    return transaction->name_to_tag(m_module_db_name.c_str());
+}
+
+const char* Mdl_function_definition::get_mdl_name() const
+{
+    return m_name.c_str();
+}
+
+DB::Tag Mdl_function_definition::get_prototype() const
+{
+    return m_prototype_tag;
+}
+
+mi::neuraylib::IFunction_definition::Semantics Mdl_function_definition::get_semantic() const
+{
+    return m_semantic;
+}
+
+bool Mdl_function_definition::is_exported() const
+{
+    return m_is_exported;
+}
+
+bool Mdl_function_definition::is_uniform() const
+{
+    return m_is_uniform;
+}
+
+const IType* Mdl_function_definition::get_return_type() const
+{
+    m_return_type->retain();
+    return m_return_type.get();
+}
+
+mi::Size Mdl_function_definition::get_parameter_count() const
+{
+    return m_parameter_types->get_size();
+}
+
+const char* Mdl_function_definition::get_parameter_name( mi::Size index) const
+{
+    return m_parameter_types->get_name( index);
+}
+
+mi::Size Mdl_function_definition::get_parameter_index( const char* name) const
+{
+    return m_parameter_types->get_index( name);
+}
+
+const IType_list* Mdl_function_definition::get_parameter_types() const
+{
+    m_parameter_types->retain();
+    return m_parameter_types.get();
+}
+
+const IExpression_list* Mdl_function_definition::get_defaults() const
+{
+    m_defaults->retain();
+    return m_defaults.get();
+}
+
+const IExpression_list* Mdl_function_definition::get_enable_if_conditions() const
+{
+    m_enable_if_conditions->retain();
+    return m_enable_if_conditions.get();
+}
+
+mi::Size Mdl_function_definition::get_enable_if_users(mi::Size index) const
+{
+    if (index < m_enable_if_users.size())
+        return m_enable_if_users[index].size();
+    return 0;
+}
+
+mi::Size Mdl_function_definition::get_enable_if_user(mi::Size index, mi::Size u_index) const
+{
+    if (index < m_enable_if_users.size()) {
+        if (u_index < m_enable_if_users[index].size()) {
+            return m_enable_if_users[index][u_index];
+        }
+    }
+    return ~mi::Size(0);
+}
+
+const IAnnotation_block* Mdl_function_definition::get_annotations() const
+{
+    if( !m_annotations)
+        return nullptr;
+    m_annotations->retain();
+    return m_annotations.get();
+}
+
+const IAnnotation_block* Mdl_function_definition::get_return_annotations() const
+{
+    if( !m_return_annotations)
+        return nullptr;
+    m_return_annotations->retain();
+    return m_return_annotations.get();
+}
+
+const IAnnotation_list* Mdl_function_definition::get_parameter_annotations() const
+{
+    m_parameter_annotations->retain();
+    return m_parameter_annotations.get();
+}
+
+const IExpression_direct_call* Mdl_function_definition::get_body( DB::Transaction* transaction) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context=*/nullptr))
+        return nullptr;
+    if( module->has_function_definition( m_db_name.c_str(), m_function_ident) != 0)
+        return nullptr;
+
+    mi::Size function_index = module->get_function_defintion_index( m_db_name, m_function_ident);
+    ASSERT( M_SCENE, (int)function_index != -1);
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+    const mi::mdl::DAG_node* body = code_dag->get_function_body( function_index);
+    if( !body)
+        return nullptr;
+
+    Mdl_dag_converter converter(
+        m_ef.get(),
+        transaction,
+        /*immutable*/ true,
+        /*create_direct_calls*/ true,
+        /*module_filename*/ nullptr,
+        /*module_name*/ nullptr,
+        m_prototype_tag,
+        /*load_resources*/ false,
+        /*user_modules_seen*/ nullptr);
+
+    mi::base::Handle<const IExpression> body_int( converter.mdl_dag_node_to_int_expr( body, nullptr));
+    return body_int->get_interface<const IExpression_direct_call>();
+}
+
+mi::Size Mdl_function_definition::get_temporary_count( DB::Transaction* transaction) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context=*/nullptr))
+        return 0;
+    if( module->has_function_definition( m_db_name.c_str(), m_function_ident) != 0)
+        return 0;
+
+    mi::Size function_index = module->get_function_defintion_index( m_db_name, m_function_ident);
+    ASSERT( M_SCENE, (int)function_index != -1);
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+    return code_dag->get_function_temporary_count( function_index);
+}
+
+const IExpression* Mdl_function_definition::get_temporary(
+    DB::Transaction* transaction, mi::Size index) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context=*/nullptr))
+        return nullptr;
+    if( module->has_function_definition( m_db_name.c_str(), m_function_ident) != 0)
+        return nullptr;
+
+    mi::Size function_index = module->get_function_defintion_index( m_db_name, m_function_ident);
+    ASSERT( M_SCENE, (int)function_index != -1);
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+    if( index >= (mi::Size)code_dag->get_function_temporary_count( function_index))
+        return nullptr;
+
+    const mi::mdl::DAG_node* temporary = code_dag->get_function_temporary( function_index, index);
+
+    Mdl_dag_converter converter(
+        m_ef.get(),
+        transaction,
+        /*immutable*/ true,
+        /*create_direct_calls*/ true,
+        /*module_filename*/ nullptr,
+        /*module_name*/ nullptr,
+        m_prototype_tag,
+        /*load_resources*/ false,
+        /*user_modules_seen*/ nullptr);
+
+    return converter.mdl_dag_node_to_int_expr( temporary, nullptr);
+}
+
+const char* Mdl_function_definition::get_thumbnail() const
+{
+    return m_thumbnail.empty() ? nullptr : m_thumbnail.c_str();
+}
+
 Mdl_function_call* Mdl_function_definition::create_function_call(
    DB::Transaction* transaction, const IExpression_list* arguments, mi::Sint32* errors) const
 {
-    if (m_mdl_semantic == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
+    Execution_context context;
+    if (!is_valid(transaction, &context)) {
+        if (errors)
+            *errors = -9;
+        return nullptr;
+    }
+
+    if (m_mdl_semantic == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR)
         return create_array_constructor_call_internal(
             transaction, arguments, /*immutable=*/ false, errors);
-    }
-    else if (m_semantic == mi::neuraylib::IFunction_definition::DS_CAST) {
+
+    if (m_semantic == mi::neuraylib::IFunction_definition::DS_CAST)
         return create_cast_call_internal(
             transaction, arguments, /*immutable=*/ false, errors);
-    }
+
+    if (m_semantic == mi::neuraylib::IFunction_definition::DS_TERNARY)
+        return create_ternary_operator_call_internal(
+            transaction, arguments, /*immutable=*/ false, errors);
+
     return create_function_call_internal(
-            transaction, arguments, /*allow_ek_parameter=*/ false, /*immutable=*/ false, errors);
+        transaction, arguments, /*allow_ek_parameter=*/ false, /*immutable=*/ false, errors);
 }
 
 Mdl_function_call* Mdl_function_definition::create_function_call_internal(
@@ -378,7 +594,7 @@ Mdl_function_call* Mdl_function_definition::create_function_call_internal(
     Mdl_function_call* function_call = new Mdl_function_call(
         get_module(transaction),
         m_function_tag,
-        m_function_index,
+        m_function_ident,
         complete_arguments.get(),
         m_mdl_semantic,
         m_name.c_str(),
@@ -454,12 +670,299 @@ Mdl_function_call* Mdl_function_definition::create_cast_call_internal(
     Mdl_function_call* function_call = new Mdl_function_call(
         get_module(transaction),
         m_function_tag,
-        m_function_index,
+        m_function_ident,
         new_args.get(),
         m_mdl_semantic,
         m_name.c_str(),
         parameter_types.get(),
         cast_to_type.get(),
+        immutable,
+        m_enable_if_conditions.get());
+
+    *errors = 0;
+    return function_call;
+}
+
+Mdl_function_call* Mdl_function_definition::create_ternary_operator_call_internal(
+    DB::Transaction* transaction,
+    const IExpression_list* arguments,
+    bool immutable,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if (errors == NULL)
+        errors = &dummy_errors;
+
+    // check that this method is only used for the ternary operator operator
+    ASSERT(M_SCENE, m_semantic == mi::neuraylib::IFunction_definition::DS_TERNARY);
+
+    // the ternary operator is always exported
+    ASSERT(M_SCENE, m_is_exported);
+
+    // the ternary operator has no defaults
+    if (!arguments) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // we need exactly three arguments
+    mi::Size n = arguments->get_size();
+    if (n != 3) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // check names
+    if (strcmp(arguments->get_name(0), "cond") != 0 ||
+        strcmp(arguments->get_name(1), "true_exp") != 0 ||
+        strcmp(arguments->get_name(2), "false_exp") != 0)
+    {
+        *errors = -3;
+        return NULL;
+    }
+
+    mi::base::Handle<const IExpression> cond(
+        arguments->get_expression(mi::Size(0)));
+    mi::base::Handle<const IType> cond_type(cond->get_type());
+
+    mi::base::Handle<const IExpression> true_exp(
+        arguments->get_expression(1));
+    mi::base::Handle<const IType> true_type(true_exp->get_type());
+
+    mi::base::Handle<const IExpression> false_exp(
+        arguments->get_expression(2));
+    mi::base::Handle<const IType> false_type(false_exp->get_type());
+
+    if (m_tf->compare(true_type.get(), false_type.get()) != 0) {
+        *errors = -2;
+        return NULL;
+    }
+
+    // the actual call has three arguments, clone them and create a new list
+    mi::base::Handle<IExpression_list> new_args(m_ef->create_expression_list());
+    mi::base::Handle<IExpression> new_cond(
+        m_ef->clone(cond.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("cond", new_cond.get());
+    mi::base::Handle<IExpression> new_true(
+        m_ef->clone(true_exp.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("true_exp", new_true.get());
+    mi::base::Handle<IExpression> new_false(
+        m_ef->clone(false_exp.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("false_exp", new_false.get());
+    ASSERT(M_SCENE, new_args);
+
+    // create parameter type list
+    mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
+    parameter_types->add_type("cond", cond_type.get());
+    parameter_types->add_type("true_exp", true_type.get());
+    parameter_types->add_type("false_exp", false_type.get());
+
+    Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
+        m_function_tag,
+        m_function_ident,
+        new_args.get(),
+        m_mdl_semantic,
+        m_name.c_str(),
+        parameter_types.get(),
+        /*return_type=*/true_type.get(),
+        immutable,
+        m_enable_if_conditions.get());
+
+    *errors = 0;
+    return function_call;
+}
+
+Mdl_function_call* Mdl_function_definition::create_index_operator_call_internal(
+    DB::Transaction* transaction,
+    const IExpression_list* arguments,
+    bool immutable,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if (errors == NULL)
+        errors = &dummy_errors;
+
+    // check that this method is only used for the index operator operator
+    ASSERT(M_SCENE, m_semantic == mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX);
+
+    // the index operator is always exported
+    ASSERT(M_SCENE, m_is_exported);
+
+    // the index operator has no defaults
+    if (!arguments) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // we need exactly two arguments
+    mi::Size n = arguments->get_size();
+    if (n != 2) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // check names
+    if (strcmp(arguments->get_name(0), "a") != 0 ||
+        strcmp(arguments->get_name(1), "i") != 0)
+    {
+        *errors = -3;
+        return NULL;
+    }
+
+    mi::base::Handle<const IExpression> base_expr(
+        arguments->get_expression(mi::Size(0)));
+    mi::base::Handle<const IType> base_type(base_expr->get_type());
+    mi::base::Handle<const IType> s_base_type(base_type->skip_all_type_aliases());
+
+    mi::base::Handle<const IExpression> index_expr(
+        arguments->get_expression(1));
+    mi::base::Handle<const IType> index_type(index_expr->get_type());
+    mi::base::Handle<const IType> s_index_type(index_type->skip_all_type_aliases());
+
+    if (s_index_type->get_kind() != IType::TK_INT) {
+        *errors = -2;
+        return NULL;
+    }
+
+    mi::base::Handle<const IType> ret_type;
+
+    IType::Kind base_kind = s_base_type->get_kind();
+    switch (base_kind) {
+    case MI::MDL::IType::TK_VECTOR:
+        {
+            mi::base::Handle<const IType_vector> v_tp(s_base_type->get_interface<IType_vector>());
+            ret_type = mi::base::make_handle(v_tp->get_element_type());
+        }
+        break;
+    case MI::MDL::IType::TK_MATRIX:
+        {
+            mi::base::Handle<const IType_matrix> m_tp(s_base_type->get_interface<IType_matrix>());
+            ret_type = mi::base::make_handle(m_tp->get_element_type());
+        }
+        break;
+    case MI::MDL::IType::TK_ARRAY:
+        {
+            mi::base::Handle<const IType_array> a_tp(s_base_type->get_interface<IType_array>());
+            ret_type = mi::base::make_handle(a_tp->get_element_type());
+        }
+        break;
+    default:
+        // not indexable
+        *errors = -2;
+        return NULL;
+    }
+
+    if ((base_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0 &&
+        (index_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0) {
+        // uniform result
+        IType_factory *tf = get_type_factory();
+        ret_type = mi::base::make_handle(tf->create_alias(ret_type.get(), IType::MK_UNIFORM, NULL));
+    }
+
+    // the actual call has three arguments, clone them and create a new list
+    mi::base::Handle<IExpression_list> new_args(m_ef->create_expression_list());
+    mi::base::Handle<IExpression> new_base(
+        m_ef->clone(base_expr.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("a", new_base.get());
+    mi::base::Handle<IExpression> new_index(
+        m_ef->clone(index_expr.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("i", new_index.get());
+    ASSERT(M_SCENE, new_args);
+
+    // create parameter type list
+    mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
+    parameter_types->add_type("a", base_type.get());
+    parameter_types->add_type("i", index_type.get());
+
+    Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
+        m_function_tag,
+        m_function_ident,
+        new_args.get(),
+        m_mdl_semantic,
+        m_name.c_str(),
+        parameter_types.get(),
+        ret_type.get(),
+        immutable,
+        m_enable_if_conditions.get());
+
+    *errors = 0;
+    return function_call;
+}
+
+Mdl_function_call* Mdl_function_definition::create_array_length_operator_call_internal(
+    DB::Transaction* transaction,
+    const IExpression_list* arguments,
+    bool immutable,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if (errors == NULL)
+        errors = &dummy_errors;
+
+    // check that this method is only used for the array length operator operator
+    ASSERT(
+        M_SCENE, m_semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH);
+
+    // the array length operator is always exported
+    ASSERT(M_SCENE, m_is_exported);
+
+    // the array_length operator has no defaults
+    if (!arguments) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // we need exactly one argument
+    mi::Size n = arguments->get_size();
+    if (n != 1) {
+        *errors = -3;
+        return NULL;
+    }
+
+    // check names
+    if (strcmp(arguments->get_name(0), "a") != 0) {
+        *errors = -3;
+        return NULL;
+    }
+
+    mi::base::Handle<const IExpression> arr_expr(
+        arguments->get_expression(mi::Size(0)));
+    mi::base::Handle<const IType> arr_type(arr_expr->get_type());
+    mi::base::Handle<const IType> s_arr_type(arr_type->skip_all_type_aliases());
+
+    if (s_arr_type->get_kind() != IType::TK_ARRAY) {
+        *errors = -2;
+        return NULL;
+    }
+
+    IType_factory *tf = get_type_factory();
+    mi::base::Handle<const IType> ret_type(tf->create_int());
+
+    // the result is always uniform
+    ret_type = mi::base::make_handle(tf->create_alias(ret_type.get(), IType::MK_UNIFORM, NULL));
+
+    // the actual call has three arguments, clone them and create a new list
+    mi::base::Handle<IExpression_list> new_args(m_ef->create_expression_list());
+    mi::base::Handle<IExpression> new_arr(
+        m_ef->clone(arr_expr.get(), transaction, /*copy_immutable_calls=*/!immutable));
+    new_args->add_expression("a", new_arr.get());
+    ASSERT(M_SCENE, new_args);
+
+    // create parameter type list
+    mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
+    parameter_types->add_type("a", arr_type.get());
+
+    Mdl_function_call* function_call = new Mdl_function_call(
+        get_module(transaction),
+        m_function_tag,
+        m_function_ident,
+        new_args.get(),
+        m_mdl_semantic,
+        m_name.c_str(),
+        parameter_types.get(),
+        ret_type.get(),
         immutable,
         m_enable_if_conditions.get());
 
@@ -576,7 +1079,7 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
     Mdl_function_call* function_call = new Mdl_function_call(
         get_module(transaction),
         m_function_tag,
-        m_function_index,
+        m_function_ident,
         complete_arguments.get(),
         m_mdl_semantic,
         m_name.c_str(),
@@ -587,119 +1090,6 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
 
     *errors = 0;
     return function_call;
-}
-
-DB::Tag Mdl_function_definition::get_module(DB::Transaction* transaction) const
-{
-    return transaction->name_to_tag(m_module_db_name.c_str());
-}
-
-const char* Mdl_function_definition::get_mdl_name() const
-{
-    return m_name.c_str();
-}
-
-DB::Tag Mdl_function_definition::get_prototype() const
-{
-    return m_prototype_tag;
-}
-
-mi::neuraylib::IFunction_definition::Semantics Mdl_function_definition::get_semantic() const
-{
-    return m_semantic;
-}
-
-bool Mdl_function_definition::is_exported() const
-{
-    return m_is_exported;
-}
-
-bool Mdl_function_definition::is_uniform() const
-{
-    return m_is_uniform;
-}
-
-const IType* Mdl_function_definition::get_return_type() const
-{
-    m_return_type->retain();
-    return m_return_type.get();
-}
-
-mi::Size Mdl_function_definition::get_parameter_count() const
-{
-    return m_parameter_types->get_size();
-}
-
-const char* Mdl_function_definition::get_parameter_name( mi::Size index) const
-{
-    return m_parameter_types->get_name( index);
-}
-
-mi::Size Mdl_function_definition::get_parameter_index( const char* name) const
-{
-    return m_parameter_types->get_index( name);
-}
-
-const IType_list* Mdl_function_definition::get_parameter_types() const
-{
-    m_parameter_types->retain();
-    return m_parameter_types.get();
-}
-
-const IExpression_list* Mdl_function_definition::get_defaults() const
-{
-    m_defaults->retain();
-    return m_defaults.get();
-}
-
-const IExpression_list* Mdl_function_definition::get_enable_if_conditions() const
-{
-    m_enable_if_conditions->retain();
-    return m_enable_if_conditions.get();
-}
-
-mi::Size Mdl_function_definition::get_enable_if_users(mi::Size index) const
-{
-    if (index < m_enable_if_users.size())
-        return m_enable_if_users[index].size();
-    return 0;
-}
-
-mi::Size Mdl_function_definition::get_enable_if_user(mi::Size index, mi::Size u_index) const
-{
-    if (index < m_enable_if_users.size()) {
-        if (u_index < m_enable_if_users[index].size()) {
-            return m_enable_if_users[index][u_index];
-        }
-    }
-    return ~mi::Size(0);
-}
-
-const IAnnotation_block* Mdl_function_definition::get_annotations() const
-{
-    if( !m_annotations)
-        return 0;
-    m_annotations->retain();
-    return m_annotations.get();
-}
-
-const IAnnotation_block* Mdl_function_definition::get_return_annotations() const
-{
-    if( !m_return_annotations)
-        return 0;
-    m_return_annotations->retain();
-    return m_return_annotations.get();
-}
-
-const IAnnotation_list* Mdl_function_definition::get_parameter_annotations() const
-{
-    m_parameter_annotations->retain();
-    return m_parameter_annotations.get();
-}
-
-const char* Mdl_function_definition::get_thumbnail() const
-{
-    return m_thumbnail.empty() ? 0 : m_thumbnail.c_str();
 }
 
 mi::mdl::IDefinition::Semantics Mdl_function_definition::get_mdl_semantic() const
@@ -714,9 +1104,18 @@ const mi::mdl::IType* Mdl_function_definition::get_mdl_return_type(
         "DAG array constructor return type must be calculated");
     DB::Tag module_tag = transaction->name_to_tag(m_module_db_name.c_str());
     ASSERT( M_SCENE, module_tag);
+
     DB::Access<Mdl_module> module( module_tag, transaction);
+    if (!module->is_valid(transaction, /*context=*/nullptr))
+        return nullptr;
+    if (module->has_function_definition(m_db_name.c_str(), m_function_ident) != 0)
+        return nullptr;
+
+    int function_index = int(module->get_function_defintion_index(m_db_name, m_function_ident));
+    ASSERT(M_SCENE, function_index != -1);
+    
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
-    return code_dag->get_function_return_type( m_function_index);
+    return code_dag->get_function_return_type(function_index);
 }
 
 const mi::mdl::IType* Mdl_function_definition::get_mdl_parameter_type(
@@ -726,14 +1125,23 @@ const mi::mdl::IType* Mdl_function_definition::get_mdl_parameter_type(
         "DAG array constructor parameter types cannot be retrieved, signature is (...)");
     DB::Tag module_tag = transaction->name_to_tag(m_module_db_name.c_str());
     ASSERT(M_SCENE, module_tag);
+
     DB::Access<Mdl_module> module(module_tag, transaction);
+    if (!module->is_valid(transaction, /*context=*/nullptr))
+        return nullptr;
+    if (module->has_function_definition(m_db_name.c_str(), m_function_ident) != 0)
+        return nullptr;
+
+    int function_index = int(module->get_function_defintion_index(m_db_name, m_function_ident));
+    ASSERT(M_SCENE, function_index != -1);
+
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
-    return code_dag->get_function_parameter_type( m_function_index, index);
+    return code_dag->get_function_parameter_type(function_index, index);
 }
 
 const char* Mdl_function_definition::get_mdl_original_name() const
 {
-    return m_original_name.empty() ? 0 : m_original_name.c_str();
+    return m_original_name.empty() ? nullptr : m_original_name.c_str();
 }
 
 const char* Mdl_function_definition::get_module_name() const
@@ -748,6 +1156,110 @@ const char* Mdl_function_definition::get_module_db_name() const
     return m_module_db_name.c_str();
 }
 
+bool Mdl_function_definition::is_valid(
+    DB::Transaction* transaction,
+    Execution_context* context) const
+{
+    DB::Tag module_tag = get_module(transaction);
+    DB::Access<Mdl_module> module(module_tag, transaction);
+    if (!module->is_valid(transaction, context))
+        return false;
+
+    if (module->has_function_definition(m_db_name.c_str(), m_function_ident) < 0)
+        return false;
+
+    // check defaults. is this really needed?
+    for (mi::Size i = 0; i < m_defaults->get_size(); ++i) {
+
+        mi::base::Handle<const IExpression_call> expr(
+            m_defaults->get_expression<IExpression_call>(i));
+        if (expr.is_valid_interface()) {
+            DB::Tag call_tag = expr->get_call();
+            SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
+            if (class_id == ID_MDL_MATERIAL_INSTANCE) {
+                DB::Access<Mdl_material_instance> minst(call_tag, transaction);
+                DB::Tag_set tags_seen;
+                if (!minst->is_valid(transaction, tags_seen, context))
+                    return false;
+            }
+            else if (class_id == ID_MDL_FUNCTION_CALL) {
+                DB::Access<Mdl_function_call> fcall(call_tag, transaction);
+                DB::Tag_set tags_seen;
+                if (!fcall->is_valid(transaction, tags_seen, context))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool Mdl_function_definition::is_compatible(const Mdl_function_definition& other) const
+{
+    if (m_semantic != other.m_semantic)
+        return false;
+
+    if (m_is_exported != other.m_is_exported)
+        return false;
+
+    if (m_is_uniform != other.m_is_uniform)
+        return false;
+
+    if (m_prototype_tag != other.m_prototype_tag)
+        return false;
+
+    if (m_original_name != other.m_original_name)
+        return false;
+
+    if (m_tf->compare(m_return_type.get(), other.m_return_type.get()) != 0)
+        return false;
+
+    if (m_tf->compare(m_parameter_types.get(), other.m_parameter_types.get()) != 0)
+        return false;
+
+    if (m_ef->compare(m_defaults.get(), other.m_defaults.get()) != 0)
+        return false;
+
+    // check annotations
+    if (m_annotations) {
+        if (!other.m_annotations)
+            return false;
+
+        if (m_annotations->get_size() != other.m_annotations->get_size())
+            return false;
+
+        // for now, annotations must match. this implies, that all annotations
+        // used by this definition that are part of the module the definition
+        // comes from, also still exist.
+        for (mi::Size i = 0, n = m_annotations->get_size(); i < n; ++i) {
+
+            mi::base::Handle<const IAnnotation> anno(m_annotations->get_annotation(i));
+            mi::base::Handle<const IAnnotation> other_anno(
+                other.m_annotations->get_annotation(i));
+
+            const char* anno_name = anno->get_name();
+            const char* other_anno_name = other_anno->get_name();
+            if (strcmp(anno_name, other_anno_name) != 0)
+                return false;
+
+            mi::base::Handle<const IExpression_list> anno_args(anno->get_arguments());
+            mi::base::Handle<const IExpression_list> other_anno_args(other_anno->get_arguments());
+
+            if (m_ef->compare(anno_args.get(), other_anno_args.get()) != 0)
+                return false;
+        }
+    }
+    else
+        if (other.m_annotations)
+            return false;
+
+    return true;
+}
+
+Mdl_ident Mdl_function_definition::get_ident() const
+{
+    return m_function_ident;
+}
+
 const SERIAL::Serializable* Mdl_function_definition::serialize(
     SERIAL::Serializer* serializer) const
 {
@@ -755,10 +1267,11 @@ const SERIAL::Serializable* Mdl_function_definition::serialize(
 
     serializer->write( m_module_db_name);
     serializer->write( m_function_tag);
-    serializer->write( m_function_index);
+    serializer->write( m_function_ident);
     serializer->write( static_cast<mi::Uint32>( m_mdl_semantic));
     serializer->write( static_cast<mi::Uint32>( m_semantic));
     serializer->write( m_name);
+    serializer->write( m_db_name);
     serializer->write( m_original_name);
     serializer->write( m_thumbnail);
     serializer->write( m_prototype_tag);
@@ -785,13 +1298,14 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
 
     deserializer->read( &m_module_db_name);
     deserializer->read( &m_function_tag);
-    deserializer->read( &m_function_index);
+    deserializer->read( &m_function_ident);
     mi::Uint32 semantic;
     deserializer->read( &semantic);
     m_mdl_semantic = static_cast<mi::mdl::IDefinition::Semantics>( semantic);
     deserializer->read( &semantic);
     m_semantic = static_cast<mi::neuraylib::IFunction_definition::Semantics>( semantic);
     deserializer->read( &m_name);
+    deserializer->read( &m_db_name);
     deserializer->read( &m_original_name);
     deserializer->read( &m_thumbnail);
     deserializer->read( &m_prototype_tag);
@@ -824,10 +1338,11 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     mi::base::Handle<const mi::IString> tmp;
     s << "Module DB name: " << m_module_db_name << std::endl;
     s << "Function definition tag: " << m_function_tag.get_uint() << std::endl;
-    s << "Function index: " << m_function_index << std::endl;
+    s << "Function definition ID: " << m_function_ident << std::endl;
     s << "Function MDL semantic: " << m_mdl_semantic << std::endl;
     s << "Function semantic: " << m_semantic << std::endl;
     s << "Function definition MDL name: " << m_name << std::endl;
+    s << "Function definition DB name: "  << m_db_name << std::endl;
     s << "Function definition MDL original name: " << m_original_name << std::endl;
     s << "Prototype tag: " << m_prototype_tag.get_uint() << std::endl;
     s << "Is exported: " << m_is_exported << std::endl;
@@ -837,15 +1352,15 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     s << "Parameter types: " << tmp->get_c_str() << std::endl;
     tmp = m_tf->dump( m_return_type.get());
     s << "Return type: " << tmp->get_c_str() << std::endl;
-    tmp = m_ef->dump( transaction, m_defaults.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_defaults.get(), /*name*/ nullptr);
     s << "Defaults: " << tmp->get_c_str() << std::endl;
-    tmp = m_ef->dump( transaction, m_annotations.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_annotations.get(), /*name*/ nullptr);
     s << "Annotations: " << tmp->get_c_str() << std::endl;
-    tmp = m_ef->dump( transaction, m_parameter_annotations.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_parameter_annotations.get(), /*name*/ nullptr);
     s << "Parameter annotations: " << tmp->get_c_str() << std::endl;
-    tmp = m_ef->dump( transaction, m_return_annotations.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_return_annotations.get(), /*name*/ nullptr);
     s << "Return annotations: " << tmp->get_c_str() << std::endl;
-    tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
     s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
@@ -856,6 +1371,7 @@ size_t Mdl_function_definition::get_size() const
         + SCENE::Scene_element<Mdl_function_definition, Mdl_function_definition::id>::get_size()
             - sizeof( SCENE::Scene_element<Mdl_function_definition, Mdl_function_definition::id>)
         + dynamic_memory_consumption( m_name)
+        + dynamic_memory_consumption( m_db_name)
         + dynamic_memory_consumption( m_original_name)
         + dynamic_memory_consumption( m_thumbnail)
         + dynamic_memory_consumption( m_parameter_types)

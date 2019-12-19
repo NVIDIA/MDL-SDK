@@ -216,6 +216,10 @@ mi::base::IInterface* Transaction_impl::edit(
     if( !tag.is_valid())
         return 0;
 
+    SERIAL::Class_id id = m_db_transaction->get_class_id(tag);
+    if (id == MDL::ID_MDL_MATERIAL_DEFINITION || id == MDL::ID_MDL_FUNCTION_DEFINITION)
+        return 0;
+
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
         "TX %u editing \"%s\" tag %u ...", m_id_as_uint, name, tag.get_uint());
@@ -422,41 +426,6 @@ mi::neuraylib::IScope* Transaction_impl::get_scope() const
     return new Scope_impl( db_scope, m_class_factory);
 }
 
-namespace {
-
-/// Maps class names from the old MDL API to the new MDL API
-std::string map_old_mdl_api_class_names( const char* s)
-{
-    struct Mapping { const char* old_name; const char* new_name; };
-    Mapping map[] = {
-        { "Mdl_module", "Module"},
-        { "Mdl_function_definition", "Function_definition" },
-        { "Mdl_material_definition", "Material_definition" },
-        { "Mdl_function_call", "Function_call" },
-        { "Mdl_material_instance", "Material_instance" }
-    };
-
-    mi::Size n = sizeof( map) / sizeof( map[0]);
-    bool starts_with_two_underscores = strlen( s) >= 2 && s[0] == '_' && s[1] == '_';
-    for( mi::Size i = 0; i < n; ++i) {
-        if( strcmp( s, map[i].old_name) == 0) {
-            LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-                "The type name \"%s\" passed to ITransaction::list_elements() is deprecated. "
-                "Please use \"%s\" instead.", s, map[i].new_name);
-            return map[i].new_name;
-        }
-        if( starts_with_two_underscores && strcmp( s+2, map[i].old_name) == 0) {
-            LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-                "The type name \"%s\" passed to ITransaction::list_elements() is deprecated. "
-                "Please use \"%s\" instead.", s, map[i].new_name);
-            return map[i].new_name;
-        }
-    }
-    return s;
-}
-
-}
-
 mi::IArray* Transaction_impl::list_elements(
     const char* root_element, const char* name_pattern, const mi::IArray* type_names) const
 {
@@ -488,7 +457,7 @@ mi::IArray* Transaction_impl::list_elements(
             LOG::mod_log->vdebug( M_NEURAY_API, LOG::Mod_log::C_MISC, s, i);
             continue;
         }
-        std::string type_name = map_old_mdl_api_class_names( type_name_istring->get_c_str());
+        std::string type_name = type_name_istring->get_c_str();
         SERIAL::Class_id class_id = m_class_factory->get_class_id( type_name.c_str());
         if( class_id == 0) {
             // try again with "__" prefix

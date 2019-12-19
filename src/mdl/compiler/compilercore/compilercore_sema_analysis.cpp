@@ -107,7 +107,7 @@ Sema_analysis::Sema_analysis(
 , m_last_stmt_is_reachable(false)
 , m_has_side_effect(true)
 , m_has_call(true)
-, m_inside_material_body(false)
+, m_inside_single_expr_body(false)
 , m_curr_assigned_def(NULL)
 , m_curr_entity_decl(NULL)
 , m_context_stack(module.get_allocator())
@@ -441,7 +441,7 @@ void Sema_analysis::report_unused_entities()
 
         void visit(Definition const *def) const MDL_FINAL
         {
-            if (is_error(def) || def->get_sym()->get_id() == ISymbol::SYM_ERROR)
+            if (is_error(def))
                 return;
             if (def->has_flag(Definition::DEF_IS_USED)) {
                 if (def->has_flag(Definition::DEF_IS_UNUSED)) {
@@ -1061,7 +1061,7 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
     m_next_stmt_is_reachable = true;
     m_last_stmt_is_reachable = true;
 
-    m_inside_material_body = false;
+    m_inside_single_expr_body = false;
 
     IDefinition const *def = decl->get_definition();
     if (!is_error(def)) {
@@ -1069,11 +1069,11 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
         IType const          *rtype = ftype->get_return_type();
 
         if (rtype == m_tc.material_type) {
-            m_inside_material_body = true;
+            m_inside_single_expr_body = true;
         }
     }
 
-    set_curr_funcname(def, m_inside_material_body);
+    set_curr_funcname(def, m_inside_single_expr_body);
 
     IType_name const *rname = decl->get_return_type_name();
     visit(rname);
@@ -1090,6 +1090,13 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
     }
 
     if (IStatement const *body = decl->get_body()) {
+        if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6 &&
+            is<IStatement_expression>(body))
+        {
+            // check for single expression functions
+            m_inside_single_expr_body = true;
+        }
+
         // set the current decl only INSIDE the body
         if (!is_error(def))
             m_curr_entity_decl = decl;
@@ -1115,8 +1122,6 @@ void Sema_analysis::post_visit(IStatement_while *stmt)
     m_next_stmt_is_reachable = info.m_reachable_start;
 
     end_statement(info);
-
-    m_curr_funcname.clear();
 }
 
 // end of for
@@ -1314,7 +1319,7 @@ void Sema_analysis::post_visit(IStatement_return *stmt)
 void Sema_analysis::post_visit(IStatement_expression *stmt)
 {
     // check for useless expression statements
-    if (!m_inside_material_body) {
+    if (!m_inside_single_expr_body) {
         if (!m_has_side_effect) {
             IExpression const *expr = stmt->get_expression();
             if (expr != NULL) {
@@ -1408,14 +1413,14 @@ void Sema_analysis::post_visit(IDeclaration_function *decl)
 
                         error(
                             FUNCTION_MUST_RETURN_VALUE,
-                            end_pos,    
+                            end_pos,
                             Error_params(*this).add(def->get_symbol()));
                     }
                 }
             }
         }
     }
-    if (m_inside_material_body) {
+    if (m_inside_single_expr_body) {
         if (IStatement_expression const *body = as<IStatement_expression>(decl->get_body())) {
             if (IExpression const *expr = body->get_expression()) {
                 // ensure that the material body expression is treated as "has effect", but skip
@@ -1440,7 +1445,9 @@ void Sema_analysis::post_visit(IDeclaration_function *decl)
             }
         }
     }
-    m_inside_material_body = false;
+    m_inside_single_expr_body = false;
+
+    m_curr_funcname.clear();
 }
 
 // Start of an expression.
@@ -1801,12 +1808,13 @@ bool Sema_analysis::identical_declarations(
     case IDeclaration::DK_ANNOTATION:
     case IDeclaration::DK_CONSTANT:
     case IDeclaration::DK_FUNCTION:
+    case IDeclaration::DK_MODULE:
+    case IDeclaration::DK_NAMESPACE_ALIAS:
         // only allowed at global scope, ignore
         return false;
     case IDeclaration::DK_TYPE_ALIAS:
     case IDeclaration::DK_TYPE_STRUCT:
     case IDeclaration::DK_TYPE_ENUM:
-    case IDeclaration::DK_MODULE:
         // TODO: implement
         return false;
     case IDeclaration::DK_VARIABLE:
@@ -2076,7 +2084,7 @@ bool Sema_analysis::pre_visit(IExpression_binary *expr)
                 expr->access_position(),
                 Error_params(*this).add(op));
         }
-        if (m_inside_material_body) {
+        if (m_inside_single_expr_body) {
             // short-cut operator is allowed in materials, but work strict here
             warning(
                 OPERATOR_IS_STRICT_IN_MATERIAL,
@@ -2096,7 +2104,7 @@ bool Sema_analysis::pre_visit(IExpression_binary *expr)
         }
         break;
     case IExpression_binary::OK_SEQUENCE:
-        if (m_inside_material_body) {
+        if (m_inside_single_expr_body) {
             warning(
                 SEQUENCE_WITHOUT_EFFECT_INSIDE_MATERIAL,
                 expr->access_position(),
@@ -2227,6 +2235,42 @@ void Sema_analysis::post_visit(IExpression_call *expr)
     if (has_effect)
         m_has_side_effect = true;
 
+    if (IExpression_reference const *ref = as<IExpression_reference>(expr->get_reference())) {
+        if (!ref->is_array_constructor()) {
+            Definition const *def = impl_cast<Definition>(ref->get_definition());
+
+            if (!is_error(def)) {
+                if (def->has_flag(Definition::DEF_LITERAL_PARAM)) {
+                    IArgument const   *arg  = expr->get_argument(0);
+                    IExpression const *expr = arg->get_argument_expr();
+
+                    if (!is<IExpression_literal>(expr)) {
+                        // the first argument should be a literal: try to const-fold
+                        bool is_invalid = false;
+                        if (is_const_expression(expr, is_invalid)) {
+                            IValue const *val =
+                                expr->fold(&m_module, m_module.get_value_factory(), NULL);
+
+                            if (!is<IValue_bad>(val)) {
+                                Position const *pos = &expr->access_position();
+                                expr = m_module.create_literal(val, pos);
+                                const_cast<IArgument *>(arg)->set_argument_expr(expr);
+                            } else {
+                                MDL_ASSERT(is_invalid && "Const fold failed for valid const_expr");
+                            }
+                        } else {
+                            error(
+                                CONST_EXPR_ARGUMENT_REQUIRED,
+                                expr->access_position(),
+                                Error_params(*this)
+                                .add_signature(def));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     end_expression(expr);
 }
 
@@ -2270,7 +2314,7 @@ void Sema_analysis::post_visit(IExpression_conditional *expr)
             expr->access_position(),
             Error_params(*this).add("?:"));
     }
-    if (m_inside_material_body) {
+    if (m_inside_single_expr_body) {
         // ternary operator is allowed in materials, but work strict here, not
         // lazy
         warning(

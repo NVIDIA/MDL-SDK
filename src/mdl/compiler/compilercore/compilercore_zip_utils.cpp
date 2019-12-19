@@ -344,16 +344,32 @@ char const *MDL_zip_resource_reader::get_mdl_url() const
     return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
 }
 
+// Returns the associated hash of this resource.
+bool MDL_zip_resource_reader::get_resource_hash(unsigned char hash[16])
+{
+    if (MDL_zip_container_file *z_f = m_file->get_container_file()) {
+        size_t length = 0;
+        unsigned char const *stored_hash =
+            z_f->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
+
+        if (stored_hash != NULL && length == 16) {
+            memcpy(hash, stored_hash, 16);
+            return true;
+        }
+    }
+    return false;
+}
+
 // Constructor.
 MDL_zip_resource_reader::MDL_zip_resource_reader(
     IAllocator  *alloc,
     File_handle *f,
     char const  *filename,
     char const  *mdl_url)
-    : Base(alloc)
-    , m_file(f)
-    , m_file_name(filename, alloc)
-    , m_mdl_url(mdl_url, alloc)
+: Base(alloc)
+, m_file(f)
+, m_file_name(filename, alloc)
+, m_mdl_url(mdl_url, alloc)
 {
 }
 
@@ -481,7 +497,7 @@ MDL_zip_container_header::MDL_zip_container_header(
     uint8_t prefix_size,
     uint16_t major,
     uint16_t minor)
-    : MDL_zip_container_header(prefix, prefix_size, major, minor, major, minor)
+: MDL_zip_container_header(prefix, prefix_size, major, minor, major, minor)
 {
 }
 
@@ -493,11 +509,11 @@ MDL_zip_container_header::MDL_zip_container_header(
     uint16_t minor_min,
     uint16_t major_max,
     uint16_t minor_max)
-    : prefix()
-    , major_version_min(major_min)
-    , minor_version_min(minor_min)
-    , major_version_max(major_max)
-    , minor_version_max(minor_max)
+: prefix()
+, major_version_min(major_min)
+, minor_version_min(minor_min)
+, major_version_max(major_max)
+, minor_version_max(minor_max)
 {
     memset((void*) (&this->prefix[0]), 0, 4);
     MDL_ASSERT(prefix_size <= 4);
@@ -616,8 +632,7 @@ zip_t *MDL_zip_container::open(
     header_info.minor_version_min = minor;
 
     // MDLE format version
-    if (strncmp(header_info.prefix, "MDLE", 4) == 0)
-    {
+    if (strncmp(header_info.prefix, "MDLE", 4) == 0) {
         // since MDLE version 0.2 there is a 16 byte MD5 hash in the header
         if (mask >= 2) {
             if (fread(header_info.hash, 1, 16, fp) != 16) {
@@ -642,7 +657,7 @@ zip_t *MDL_zip_container::open(
         return NULL;
     }
 
-    zip_t *za = zip_open_from_source(zs, ZIP_RDONLY, &error);
+    zip_t *za = zip_open_from_source(zs, ZIP_RDONLYNOLASTMOD, &error);
     if (za == NULL) {
         err = translate_zip_error(error);
         return NULL;
@@ -708,7 +723,7 @@ MDL_zip_container_file *MDL_zip_container::file_open(char const *name) const
 }
 
 // Compute the MD5 hash for a file inside a container.
-bool MDL_zip_container::get_file_hash(char const *name, unsigned char md5[16]) const
+bool MDL_zip_container::compute_file_hash(char const *name, unsigned char md5[16]) const
 {
     MDL_zip_container_file *file = file_open(name);
     if (file == NULL)

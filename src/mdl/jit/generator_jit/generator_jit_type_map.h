@@ -476,6 +476,9 @@ public:
     /// Get the LLVM float4 * type.
     llvm::PointerType *get_float4_ptr_type() const { return get_ptr(m_type_float4); }
 
+    /// Get the LLVM int2 type.
+    llvm::Type *get_int2_type() const { return m_type_int2; }
+
     /// Get the LLVM int3 type.
     llvm::Type *get_int3_type() const { return m_type_int3; }
 

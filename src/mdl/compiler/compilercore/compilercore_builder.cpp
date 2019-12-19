@@ -173,6 +173,8 @@ enum Version_flags {
     REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
     SINCE_1_6   = IMDL::MDL_VERSION_1_6,
     REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),
+    SINCE_1_7   = IMDL::MDL_VERSION_1_7,
+    REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),
 };
 
 // compilercore_known_defs.h is too big to be compiled in one function, use this class to split
@@ -240,7 +242,7 @@ private:
     ISymbol const *get_predef_symbol(const char *name) {
         ISymbol const *sym = m_sym_tab.get_symbol(name);
 
-        MDL_ASSERT(sym->get_id() < ISymbol::SYM_USER_TYPE_NAME &&
+        MDL_ASSERT(sym->get_id() < ISymbol::SYM_SHARED_NAME &&
             "symbols used in predefined types must be also predefined");
         return sym;
     }

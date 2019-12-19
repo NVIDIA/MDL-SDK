@@ -45,7 +45,7 @@
 #include <io/image/image/i_image.h>
 #include <io/scene/dbimage/i_dbimage.h>
 
-namespace mi { namespace mdl { 
+namespace mi { namespace mdl {
     class IArchive_tool;
     class IMDL_resource_reader;
 } }
@@ -55,8 +55,6 @@ namespace MI {
 namespace DB { class Transaction; }
 
 namespace MDL {
-
-using mi::mdl::as;
 
 namespace DETAIL {
 
@@ -280,10 +278,11 @@ inline mi::mdl::IType_struct::Predefined_id int_struct_id_to_mdl_struct_id(
 inline IType_texture::Shape mdl_shape_to_int_shape( mi::mdl::IType_texture::Shape shape)
 {
     switch( shape) {
-        case mi::mdl::IType_texture::TS_2D:   return IType_texture::TS_2D;
-        case mi::mdl::IType_texture::TS_3D:   return IType_texture::TS_3D;
-        case mi::mdl::IType_texture::TS_CUBE: return IType_texture::TS_CUBE;
-        case mi::mdl::IType_texture::TS_PTEX: return IType_texture::TS_PTEX;
+        case mi::mdl::IType_texture::TS_2D:        return IType_texture::TS_2D;
+        case mi::mdl::IType_texture::TS_3D:        return IType_texture::TS_3D;
+        case mi::mdl::IType_texture::TS_CUBE:      return IType_texture::TS_CUBE;
+        case mi::mdl::IType_texture::TS_PTEX:      return IType_texture::TS_PTEX;
+        case mi::mdl::IType_texture::TS_BSDF_DATA: return IType_texture::TS_BSDF_DATA;
     }
 
     ASSERT( M_SCENE, false);
@@ -298,6 +297,7 @@ inline mi::mdl::IType_texture::Shape int_shape_to_mdl_shape( IType_texture::Shap
         case IType_texture::TS_3D:           return mi::mdl::IType_texture::TS_3D;
         case IType_texture::TS_CUBE:         return mi::mdl::IType_texture::TS_CUBE;
         case IType_texture::TS_PTEX:         return mi::mdl::IType_texture::TS_PTEX;
+        case IType_texture::TS_BSDF_DATA:    return mi::mdl::IType_texture::TS_BSDF_DATA;
         case IType_texture::TS_FORCE_32_BIT:
             ASSERT( M_SCENE, false); return mi::mdl::IType_texture::TS_2D;
     }

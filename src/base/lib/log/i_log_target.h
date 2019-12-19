@@ -68,10 +68,10 @@ public:
     virtual bool message(
         const char* mod,
         ILogger::Category cat,
-        int sev,
+        ILogger::Severity sev,
+        const mi::base::Message_details&,
         const char* pfx,
-        const char* msg,
-        bool handled) = 0;
+        const char* msg) = 0;
 };
 
 } // namespace LOG

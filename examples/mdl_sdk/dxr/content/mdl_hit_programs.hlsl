@@ -133,7 +133,7 @@ bool is_back_face()
 }
 
 void setup_mdl_shading_state(
-    inout Shading_state_material mdl_state, 
+    out Shading_state_material mdl_state,
     Attributes attrib,
     out float3 shading_normal)
 {
@@ -263,13 +263,21 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         // evaluate EDF
         Edf_evaluate_data eval_data = (Edf_evaluate_data) 0;
         eval_data.k1 = -WorldRayDirection();
+        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+            eval_data.handle_offset = 0;
+        #endif
+
         mdl_edf_evaluate(emission_function_index, eval_data, mdl_state);
 
         // evaluate intensity expression
         float3 intensity = mdl_emission_intensity(emission_intensity_function_index, mdl_state);
 
         // add emission
-        payload.contribution += payload.weight * intensity * eval_data.edf;
+        #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+            payload.contribution += payload.weight * intensity * eval_data.edf;
+        #else
+            payload.contribution += payload.weight * intensity * eval_data.edf[0];
+        #endif
     }
 
     // pre-compute and cache data that shared among 'mdl_bsdf_evaluate' and 'mdl_bsdf_sample' calls
@@ -292,12 +300,19 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         aux_data.ior1 = ior1;                    // IOR current medium
         aux_data.ior2 = ior2;                    // IOR other side
         aux_data.k1 = -WorldRayDirection();      // outgoing direction
-
+        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+            aux_data.handle_offset = 0;
+        #endif
         mdl_bsdf_auxiliary(scattering_function_index, aux_data, mdl_state);
 
         uint3 launch_index =  DispatchRaysIndex();
-        AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo, 1.0f);
-        NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
+        #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+            AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo, 1.0f);
+            NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
+        #else
+            AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo[0], 1.0f);
+            NormalBuffer[launch_index.xy] = float4(aux_data.normal[0], 1.0f);
+        #endif
     }
     #endif
 
@@ -341,6 +356,9 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             eval_data.ior2 = ior2;
             eval_data.k1 = -WorldRayDirection();
             eval_data.k2 = to_light;
+            #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+                eval_data.handle_offset = 0;
+            #endif
 
             mdl_bsdf_evaluate(scattering_function_index, eval_data, mdl_state);
 
@@ -349,8 +367,15 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
                 ? 1.0f 
                 : pdf / (pdf + eval_data.pdf);
 
-            payload.contribution += 
-                payload.weight * radiance_over_pdf * eval_data.bsdf * mis_weight;
+            // sample weight
+            const float3 w = payload.weight * radiance_over_pdf * mis_weight;
+            #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+                payload.contribution += w * eval_data.bsdf_diffuse;
+                payload.contribution += w * eval_data.bsdf_glossy;
+            #else
+                payload.contribution += w * eval_data.bsdf_diffuse[0];
+                payload.contribution += w * eval_data.bsdf_glossy[0];
+            #endif
         }
     }
 
@@ -362,7 +387,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     sample_data.ior1 = ior1;                    // IOR current medium
     sample_data.ior2 = ior2;                    // IOR other side
     sample_data.k1 = -WorldRayDirection();      // outgoing direction
-    sample_data.xi = rnd3(payload.seed);        // random sample number
+    sample_data.xi = rnd4(payload.seed);        // random sample number
 
     mdl_bsdf_sample(scattering_function_index, sample_data, mdl_state);
 

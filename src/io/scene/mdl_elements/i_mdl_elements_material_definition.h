@@ -33,6 +33,7 @@
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
+#include "i_mdl_elements_module.h"
 
 namespace mi { namespace mdl { class IGenerated_code_dag; class IType; } }
 
@@ -42,6 +43,7 @@ namespace NEURAY { class Material_definition_impl; }
 
 namespace MDL {
 
+class Execution_context;
 class IAnnotation_block;
 class IAnnotation_list;
 class IExpression;
@@ -67,9 +69,11 @@ public:
     ///
     /// \param transaction            The DB transaction to access the module and to resolved MDL
     ///                               resources.
-    /// \param module_tag             The module this definition belongs to.
     /// \param material_tag           The tag this definition will eventually get (needed to pass
     ///                               on to material instances calls later).
+    /// \param material_ident         The identifier of this definition will be used to check if it
+    ///                               is still valid and has not been removed/altered due to a module
+    ///                               reload.
     /// \param code_dag               The DAG representation of \p module_tag.
     /// \param material_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
@@ -77,8 +81,8 @@ public:
     /// \param load_resources         True, if resources are supposed to be loaded into the DB.
     Mdl_material_definition(
         DB::Transaction* transaction,
-        DB::Tag module_tag,
         DB::Tag material_tag,
+        Mdl_ident material_ident,
         const mi::mdl::IGenerated_code_dag* code_dag,
         mi::Uint32 material_index,
         const char* module_filename,
@@ -114,6 +118,12 @@ public:
     const IAnnotation_block* get_annotations() const;
 
     const IAnnotation_list* get_parameter_annotations() const;
+
+    const IExpression_direct_call* get_body( DB::Transaction* transaction) const;
+
+    mi::Size get_temporary_count( DB::Transaction* transaction) const;
+
+    const IExpression* get_temporary( DB::Transaction* transaction, mi::Size index) const;
 
     const char* get_thumbnail() const;
 
@@ -156,6 +166,15 @@ public:
     /// Returns the database name of the module this definition belongs to.
     const char* get_module_db_name() const;
 
+    /// Returns true if this definition still exists in the module.
+    bool is_valid(DB::Transaction* transaction, Execution_context *context) const;
+
+    /// Checks if this definition is compatible to the given definition.
+    bool is_compatible(const Mdl_material_definition& other) const;
+
+    /// Returns the identifier of this material definition.
+    Mdl_ident get_ident() const;
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -195,8 +214,9 @@ private:
 
     std::string m_module_db_name;                ///< The DB name of the corresponding module.
     DB::Tag m_material_tag;                      ///< The tag of this material definition.
-    mi::Uint32 m_material_index;                 ///< The index in the corresponding module.
+    Mdl_ident m_material_ident;                  ///< The identifier of this material definition.
     std::string m_name;                          ///< The MDL name of the material definition.
+    std::string m_db_name;                       ///< The DB name of the material definition.
     std::string m_original_name;                 ///< The original MDL function name (or empty).
     std::string m_thumbnail;                     ///< The thumbnail image for this definition.
     DB::Tag m_prototype_tag;                     ///< The prototype of this mat. def. (or inv. tag).

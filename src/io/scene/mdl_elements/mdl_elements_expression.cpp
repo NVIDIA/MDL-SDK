@@ -34,6 +34,7 @@
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_function_definition.h"
+#include "i_mdl_elements_material_definition.h"
 #include "i_mdl_elements_utilities.h"
 
 #include "mdl_elements_expression.h"
@@ -85,6 +86,24 @@ mi::Size Expression_parameter::get_memory_consumption() const
 {
     return sizeof( *this)
         + dynamic_memory_consumption( m_type);
+}
+
+DB::Tag Expression_direct_call::get_definition(DB::Transaction *transaction) const
+{ 
+    if (transaction == nullptr)
+        return m_definition_ident.first;
+
+    DB::Access<Mdl_module> module(m_module_tag, transaction);
+    SERIAL::Class_id class_id = transaction->get_class_id(m_definition_ident.first);
+    if (class_id == ID_MDL_MATERIAL_DEFINITION) {
+        if (module->has_material_definition(m_definition_db_name, m_definition_ident.second) == 0)
+            return m_definition_ident.first;
+    }
+    else if (class_id == ID_MDL_FUNCTION_DEFINITION) {
+        if (module->has_function_definition(m_definition_db_name, m_definition_ident.second) == 0)
+            return m_definition_ident.first;
+    }
+    return DB::Tag();
 }
 
 const IExpression_list* Expression_direct_call::get_arguments() const
@@ -473,9 +492,14 @@ IExpression_parameter* Expression_factory::create_parameter(
 }
 
 IExpression_direct_call* Expression_factory::create_direct_call(
-    const IType* type, DB::Tag tag, IExpression_list* arguments) const
+    const IType* type,
+    DB::Tag module_tag,
+    Mdl_tag_ident definition_ident,
+    const std::string& definition_db_name,
+    IExpression_list* arguments) const
 {
-    return type && tag && arguments ? new Expression_direct_call( type, tag, arguments) : 0;
+    return type && definition_ident.first && !definition_db_name.empty() && arguments 
+        ? new Expression_direct_call(type, module_tag, definition_ident, definition_db_name, arguments) : 0;
 }
 
 IExpression_temporary* Expression_factory::create_temporary(
@@ -591,8 +615,13 @@ IExpression* Expression_factory::clone(
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
             mi::base::Handle<IExpression_list> clone_arguments(
                 clone( arguments.get(), transaction, copy_immutable_calls));
+            Mdl_tag_ident def_ident(
+                expr_direct_call->get_definition(/*transaction=*/nullptr),
+                expr_direct_call->get_definition_ident());
+
             return create_direct_call(
-                type.get(), expr_direct_call->get_definition(), clone_arguments.get());
+                type.get(), expr_direct_call->get_module(), def_ident,
+                expr_direct_call->get_definition_db_name(), clone_arguments.get());
         }
         case IExpression::EK_TEMPORARY: {
             mi::base::Handle<const IType> type( expr->get_type());
@@ -748,7 +777,9 @@ IExpression* Expression_factory::create_cast(
     args->add_expression("cast", src_expr);
 
     if (direct_call) {
-        return create_direct_call(target_type, cast_def_tag, args.get());
+        return create_direct_call(target_type, cast_def->get_module(transaction),
+            Mdl_tag_ident(cast_def_tag, cast_def->get_ident()),
+            get_cast_operator_db_name(), args.get());
     }
 
     DB::Privacy_level level = 0;
@@ -825,8 +856,14 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             tf->serialize( serializer, type.get());
             mi::base::Handle<const IExpression_direct_call> expr_direct_call(
                 expr->get_interface<IExpression_direct_call>());
-            DB::Tag tag = expr_direct_call->get_definition();
+            DB::Tag module_tag = expr_direct_call->get_module();
+            serializer->write(module_tag);
+            DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
             serializer->write( tag);
+            Mdl_ident ident = expr_direct_call->get_definition_ident();
+            serializer->write(ident);
+            const char* definition_db_name = expr_direct_call->get_definition_db_name();
+            serializer->write(definition_db_name);
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
             serialize_list( serializer, arguments.get());
             return;
@@ -877,10 +914,18 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
         case IExpression::EK_DIRECT_CALL: {
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
             mi::base::Handle<const IType> type( tf->deserialize( deserializer));
+            DB::Tag module_tag;
+            deserializer->read(&module_tag);
             DB::Tag tag;
             deserializer->read( &tag);
+            Mdl_ident ident;
+            deserializer->read(&ident);
+            std::string defintion_db_name;
+            deserializer->read(&defintion_db_name);
             mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
-            return create_direct_call( type.get(), tag, arguments.get());
+            return create_direct_call(
+                type.get(),
+                module_tag, Mdl_tag_ident(tag, ident), defintion_db_name, arguments.get());
         }
         case IExpression::EK_TEMPORARY: {
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
@@ -1149,7 +1194,7 @@ void Expression_factory::dump_static(
 #endif
             if( name)
                 s << name << " = ";
-            DB::Tag tag = expr_direct_call->get_definition();
+            DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
             if( transaction)
                 s << "\"" << transaction->tag_to_name( tag) << "\" (";
             else
@@ -1370,10 +1415,14 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
                 lhs->get_interface<IExpression_direct_call>());
             mi::base::Handle<const IExpression_direct_call> rhs_direct_call(
                 rhs->get_interface<IExpression_direct_call>());
-            DB::Tag lhs_tag = lhs_direct_call->get_definition();
-            DB::Tag rhs_tag = rhs_direct_call->get_definition();
+            DB::Tag lhs_tag = lhs_direct_call->get_definition(/*transaction=*/nullptr);
+            DB::Tag rhs_tag = rhs_direct_call->get_definition(/*transaction=*/nullptr);
             if( lhs_tag < rhs_tag) return -1;
             if( lhs_tag > rhs_tag) return +1;
+            DB::Tag lhs_mtag = lhs_direct_call->get_module();
+            DB::Tag rhs_mtag = rhs_direct_call->get_module();
+            if (lhs_mtag < rhs_mtag) return -1;
+            if (lhs_mtag > rhs_mtag) return +1;
             mi::base::Handle<const IExpression_list> lhs_arguments(
                 lhs_direct_call->get_arguments());
             mi::base::Handle<const IExpression_list> rhs_arguments(

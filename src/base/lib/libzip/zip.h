@@ -69,6 +69,7 @@ extern "C" {
 #define ZIP_CHECKCONS 4
 #define ZIP_TRUNCATE 8
 #define ZIP_RDONLY 16
+#define ZIP_RDONLYNOLASTMOD 32 /* ignore last_mod times in directory entries (implies ZIP_RDONLY) */
 
 
 /* flags for zip_name_locate, zip_fopen, zip_stat, ... */

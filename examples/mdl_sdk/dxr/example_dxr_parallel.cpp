@@ -93,6 +93,18 @@ protected:
         options->share_target_code = false;
         //options->force_single_theading = true;
 
+        // when reloading modules and materials, the entire rendering pipeline and the binding
+        // tables can get invalid. Therefore the new ones are created after every change. If all
+        // updates have been successful, the new pipeline and binding table is swapped with the
+        // currently active one for rendering in the next frame.
+        m_pipeline[0] = nullptr;
+        m_pipeline[1] = nullptr;
+        m_shader_binding_table[0] = nullptr;
+        m_shader_binding_table[1] = nullptr;
+        m_active_pipeline_index = 1;
+        m_swap_next_frame = false;
+        m_currently_reloading = false;
+
         return true;
     }
 
@@ -103,7 +115,17 @@ protected:
 
         // basic initialization
         // ----------------------------------------------------------------------------------------
-        m_gui = options->no_gui ? nullptr : new Gui(this);  // gui only with a win32 windows
+        if (options->no_gui)
+        {
+            m_gui = nullptr;
+        }
+        else
+        {
+            m_gui = new Gui(this);  // gui only with a win32 windows
+            m_gui->set_reload_material_callback(
+                std::bind(&Demo_rtx::reload_material, this, std::placeholders::_1));
+        }
+
         m_show_gui = !options->hide_gui;                    // hide UI on start
         get_window()->set_vsync(false);                     // disable vsync for faster convergence
         m_restart_progressive_rendering_required = true;    // start rendering from scratch
@@ -265,54 +287,18 @@ protected:
         }
 
         // add a CBV for the scene constants to the heap 
-        Descriptor_heap_handle scene_cbv = resource_heap->reserve_views(1);
-        if (!resource_heap->create_constant_buffer_view(m_scene_constants, scene_cbv))
+        m_scene_cbv = resource_heap->reserve_views(1);
+        if (!resource_heap->create_constant_buffer_view(m_scene_constants, m_scene_cbv))
             return false;
 
         // add a SRV of the acceleration data structure to heap
-        Descriptor_heap_handle acceleration_structure_srv = resource_heap->reserve_views(1);
+        m_acceleration_structure_srv = resource_heap->reserve_views(1);
         if (!resource_heap->create_shader_resource_view(
-            m_scene->get_acceleration_structure(), acceleration_structure_srv))
+            m_scene->get_acceleration_structure(), m_acceleration_structure_srv))
                 return false;
 
-        Mdl_material_library& mat_library = *get_mdl_sdk().get_library();
-        {
-            // generate HLSL code and compile to DXIL
-            Timing t("generating all target code fragments");
-            {
-                std::atomic<bool> success = true;
-                std::vector<std::thread> tasks;
-
-                mat_library.visit_target_codes([&](Mdl_target* target) 
-                {
-                    // sequentially
-                    if (options->force_single_theading)
-                    {
-                        if (!target->generate() || !target->compile())
-                            success.store(false);
-                    }
-                    // asynchronously
-                    else
-                    {
-                        tasks.emplace_back(std::thread([&, target]() 
-                        {
-                            if (!target->generate() || !target->compile())
-                                success.store(false);
-                        }));
-                    }
-                    return true; // continue visits
-                });
-
-                for (auto &t : tasks)
-                    t.join();
-
-                // at least one task failed
-                if (!success.load())
-                    return false;
-            }
-        }
-
         // load environment
+        // ----------------------------------------------------------------------------------------
         // Note, this uses the neuray and creates a new transaction, 
         // so this can be done after generating the target code (or before creating the target)
         {
@@ -339,9 +325,87 @@ protected:
 
         }
 
+        // process materials, generate and compile HLSL Code
+        // ----------------------------------------------------------------------------------------
+        if (!get_mdl_sdk().get_library()->generate_and_compile_targets())
+            return false;
+
+        // commit transaction
+        get_mdl_sdk().get_transaction().commit();
+
         // create ray tracing pipeline, shader binding table
         // ----------------------------------------------------------------------------------------
-        m_pipeline = new Raytracing_pipeline(this, "MainRayTracingPipeline");
+        if (!update_pipeline())
+            return false;
+    
+        return true;
+    }
+
+    void reload_material(Mdl_material* material)
+    {
+        m_currently_reloading = true;
+        auto task = std::thread([&, material]()
+        {
+            log_info("Started reloading material: " + material->get_name());
+
+            bool targets_changed = false;
+            if (!get_mdl_sdk().get_library()->reload_material(material, targets_changed))
+            {
+                log_error("Reloading material failed.", SRC);
+                m_currently_reloading = false;
+                return;
+            }
+
+            if (!targets_changed)
+            {
+                log_info("All modules the material depends on were reloaded, but without influence "
+                         "on existing material in the scene.");
+                m_currently_reloading = false;
+                return;
+            }
+
+            if (!get_mdl_sdk().get_library()->generate_and_compile_targets())
+            {
+                log_error("generating and compiling the material library failed.", SRC);
+                m_currently_reloading = false;
+                return;
+            }
+
+            if (!update_pipeline())
+            {
+                log_error("updating the rendering pipeline failed after reload.", SRC);
+                m_currently_reloading = false;
+                return;
+            }
+
+            log_info("All modules the material depends on were reloaded successfully: " + 
+                     material->get_name());
+        });
+        task.detach();
+    }
+
+    bool update_pipeline()
+    {
+        const Example_dxr_options* options = static_cast<const Example_dxr_options*>(get_options());
+        Mdl_material_library& mat_library = *get_mdl_sdk().get_library();
+
+        Raytracing_pipeline* pipeline = new Raytracing_pipeline(this, "MainRayTracingPipeline");
+        Shader_binding_tables* binding_table = nullptr;
+
+        auto after_cleanup = [&]()
+        {
+            if (pipeline != nullptr)
+                delete pipeline;
+
+            if (binding_table != nullptr)
+                delete binding_table;
+
+            return false;
+        };
+
+        // print debug info
+        get_render_target_descriptor_heap()->print_debug_infos();
+        get_resource_descriptor_heap()->print_debug_infos();
 
         // Compile and libraries (and lists of symbols) to the pipeline 
         // (since this is the only pipeline, ownership is passed too)
@@ -353,15 +417,15 @@ protected:
                 defines["ENABLE_AUXILIARY"] = std::to_string(1);
 
             Shader_compiler compiler;
-            if (!m_pipeline->add_library(compiler.compile_shader_library(
+            if (!pipeline->add_library(compiler.compile_shader_library(
                 get_executable_folder() + "/content/ray_gen_program.hlsl", &defines), true,
                 {"RayGenProgram"}))
-                    return false;
+                return after_cleanup();
 
-            if (!m_pipeline->add_library(compiler.compile_shader_library(
+            if (!pipeline->add_library(compiler.compile_shader_library(
                 get_executable_folder() + "/content/miss_programs.hlsl"), true,
                 {"RadianceMissProgram", "ShadowMissProgram"}))
-                    return false;
+                return after_cleanup();
         }
 
         {
@@ -369,32 +433,32 @@ protected:
 
             // add DXIL libraries compiled for each materials and create individual hitgroups
             // for each material
-            if(!mat_library.visit_target_codes([&](Mdl_target* target)
+            if (!mat_library.visit_target_codes([&](Mdl_material_target* target)
             {
                 std::string target_code_id = "_" + std::to_string(target->get_id());
                 std::string radiance_closest_hit = "MdlRadianceClosestHitProgram" + target_code_id;
                 std::string radiance_any_hit = "MdlRadianceAnyHitProgram" + target_code_id;
                 std::string shadow_any_hit = "MdlShadowAnyHitProgram" + target_code_id;
 
-                if (!m_pipeline->add_library(target->get_dxil_compiled_library(), false,
-                    { radiance_closest_hit, radiance_any_hit, shadow_any_hit }))
-                        return false;
+                if (!pipeline->add_library(target->get_dxil_compiled_library(), false,
+                    {radiance_closest_hit, radiance_any_hit, shadow_any_hit}))
+                    return false;
 
                 // Create and add hit groups to the pipeline.
                 // this one will handle the shading of objects with MDL materials
-                if (!m_pipeline->add_hitgroup(
+                if (!pipeline->add_hitgroup(
                     "MdlRadianceHitGroup" + target_code_id,
                     radiance_closest_hit, radiance_any_hit, ""))
-                        return false;
+                    return false;
 
                 // .. this one will deal with shadows cast by objects with MDL materials
-                if (!m_pipeline->add_hitgroup(
-                    "MdlShadowHitGroup" + target_code_id, 
+                if (!pipeline->add_hitgroup(
+                    "MdlShadowHitGroup" + target_code_id,
                     "", shadow_any_hit, ""))
-                        return false;
+                    return false;
 
                 return true; // continue visits
-            })) return false;
+            })) return after_cleanup();
 
             // Global root signature that is applicable to all shader called from dispatch ray
             Descriptor_table global_root_signature_dt;
@@ -418,38 +482,38 @@ protected:
             global_root_signature_dt.register_cbv(0, 0, m_camera_cbv);
 
             // use register(b1,space0) for scene constants
-            global_root_signature_dt.register_cbv(1, 0, scene_cbv);
+            global_root_signature_dt.register_cbv(1, 0, m_scene_cbv);
 
             // use register(t0,space0) for the top-level acceleration structure
-            global_root_signature_dt.register_srv(0, 0, acceleration_structure_srv);  
-            m_pipeline->get_global_root_signature()->register_dt(global_root_signature_dt);
+            global_root_signature_dt.register_srv(0, 0, m_acceleration_structure_srv);
+            pipeline->get_global_root_signature()->register_dt(global_root_signature_dt);
 
             // also bind environment resources
-            m_pipeline->get_global_root_signature()->register_dt(
+            pipeline->get_global_root_signature()->register_dt(
                 m_environment->get_descriptor_table());
 
             // MDL uses a small static set of texture samplers 
             auto mdl_samplers = Mdl_material::get_sampler_descriptions();
             for (const auto& s : mdl_samplers)
-                m_pipeline->get_global_root_signature()->register_static_sampler(s);
+                pipeline->get_global_root_signature()->register_static_sampler(s);
 
             // Create local root signatures for the individual programs/groups
             Root_signature* signature = new Root_signature(this, "RayGenProgramSignature");
             signature->add_flag(D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
             if (!signature->finalize()) return false;
-            if (!m_pipeline->add_signature_association(signature, true, 
-                {"RayGenProgram"})) 
+            if (!pipeline->add_signature_association(signature, true,
+                {"RayGenProgram"}))
                 return false;
 
             signature = new Root_signature(this, "MissProgramSignature");
             signature->add_flag(D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
             if (!signature->finalize()) return false;
-            if (!m_pipeline->add_signature_association(signature, true, 
-                {"RadianceMissProgram", "ShadowMissProgram"})) 
+            if (!pipeline->add_signature_association(signature, true,
+                {"RadianceMissProgram", "ShadowMissProgram"}))
                 return false;
 
             // associate the signatures with the hit groups
-            if(!mat_library.visit_materials([&](Mdl_material* mat)
+            if (!mat_library.visit_materials([&](Mdl_material* mat)
             {
                 std::string target_code_id = "_" + std::to_string(mat->get_target_code_id());
 
@@ -474,64 +538,68 @@ protected:
                 signature->register_dt(material_descriptor_table);
                 if (!signature->finalize()) return false;
 
-                if (!m_pipeline->add_signature_association(signature, true,
-                    { "MdlRadianceHitGroup" + target_code_id })) return false;
+                if (!pipeline->add_signature_association(signature, true,
+                    {"MdlRadianceHitGroup" + target_code_id,
+                    "MdlRadianceAnyHitProgram" + target_code_id,
+                    "MdlRadianceClosestHitProgram" + target_code_id})) return false;
 
                 // since the shadow hit also needs access to the MDL material, at least the
                 // 'geometry.cutout_opacity' expression, we simply use the same signature.
                 // Without alpha blending or cutout support, an empty signature would be sufficient.
-                if (!m_pipeline->add_signature_association(signature, false /*owned by group above*/,
-                    { "MdlShadowHitGroup" + target_code_id })) return false;
+                if (!pipeline->add_signature_association(signature, false /*owned by group above*/,
+                    {"MdlShadowHitGroup" + target_code_id,
+                    "MdlShadowAnyHitProgram" + target_code_id})) return false;
 
                 return true; // continue visits
-            })) return false;
+            })) return after_cleanup();
 
             // ray tracing settings
-            m_pipeline->set_max_payload_size(13 * sizeof(float) + 2 * sizeof(uint32_t));
-            m_pipeline->set_max_attribute_size(2 * sizeof(float));
+            pipeline->set_max_payload_size(13 * sizeof(float) + 2 * sizeof(uint32_t));
+            pipeline->set_max_attribute_size(2 * sizeof(float));
 
             // we don't use recursion, only direct ray + next event estimation in a loop
-            m_pipeline->set_max_recursion_depth(2);
+            pipeline->set_max_recursion_depth(2);
 
             // complete the setup and make it ready for rendering
-            if (!m_pipeline->finalize()) return false;
+            if (!pipeline->finalize()) 
+                return after_cleanup();
         }
 
         // create and fill the binding table to provide resources to the individual programs
         {
             Timing t("creating shader binding table");
-            m_shader_binding_table = new Shader_binding_tables(
-                m_pipeline,
+            binding_table = new Shader_binding_tables(
+                pipeline,
                 m_scene->get_acceleration_structure()->get_ray_type_count(),
-                m_scene->get_acceleration_structure()->get_hit_record_count(), 
+                m_scene->get_acceleration_structure()->get_hit_record_count(),
                 "ShaderBindingTable");
 
-            const Shader_binding_tables::Shader_handle raygen_handle = 
-                m_shader_binding_table->add_ray_generation_program("RayGenProgram");
+            const Shader_binding_tables::Shader_handle raygen_handle =
+                binding_table->add_ray_generation_program("RayGenProgram");
 
             const Shader_binding_tables::Shader_handle miss_handle =
-                m_shader_binding_table->add_miss_program(
+                binding_table->add_miss_program(
                     static_cast<size_t>(Ray_type::Radiance), "RadianceMissProgram");
 
             const Shader_binding_tables::Shader_handle shadow_miss_handle =
-                m_shader_binding_table->add_miss_program(
+                binding_table->add_miss_program(
                     static_cast<size_t>(Ray_type::Shadow), "ShadowMissProgram");
 
             std::map<size_t, const Shader_binding_tables::Shader_handle> radiance_hit_handles;
             std::map<size_t, const Shader_binding_tables::Shader_handle> shadow_hit_handles;
 
-            mat_library.visit_target_codes([&](Mdl_target* target)
+            mat_library.visit_target_codes([&](Mdl_material_target* target)
             {
                 size_t tc_id = target->get_id();
                 std::string target_code_id = "_" + std::to_string(tc_id);
 
-                radiance_hit_handles.insert({ tc_id, m_shader_binding_table->add_hit_group(
+                radiance_hit_handles.insert({tc_id, binding_table->add_hit_group(
                     static_cast<size_t>(Ray_type::Radiance),
-                    "MdlRadianceHitGroup" + target_code_id) });
+                    "MdlRadianceHitGroup" + target_code_id)});
 
-                shadow_hit_handles.insert({ tc_id, m_shader_binding_table->add_hit_group(
+                shadow_hit_handles.insert({tc_id, binding_table->add_hit_group(
                     static_cast<size_t>(Ray_type::Shadow),
-                    "MdlShadowHitGroup" + target_code_id) });
+                    "MdlShadowHitGroup" + target_code_id)});
 
                 return true; // continue visit
             });
@@ -539,17 +607,17 @@ protected:
 
             // iterate over all scene nodes and create local root parameters 
             // for each geometry instance
-            if(!m_scene->visit(Scene_node::Kind::Mesh, [&](const Scene_node* node)
+            if (!m_scene->visit(Scene_node::Kind::Mesh, [&](const Scene_node* node)
             {
                 const Mesh::Instance* instance = node->get_mesh_instance();
                 const Mesh* mesh = instance->get_mesh();
 
                 // set mesh parameters for all parts
                 Hit_record_root_arguments local_root_arguments;
-                local_root_arguments.vbv_address = 
+                local_root_arguments.vbv_address =
                     mesh->get_vertex_buffer()->get_resource()->GetGPUVirtualAddress();
 
-                local_root_arguments.ibv_address = 
+                local_root_arguments.ibv_address =
                     mesh->get_index_buffer()->get_resource()->GetGPUVirtualAddress();
 
                 // iterate over all mesh parts
@@ -566,25 +634,25 @@ protected:
 
                     // target (link unit) specific resources
                     local_root_arguments.target_heap_region_start =
-                        mat_library.get_target_code(tc_id)->get_descriptor_heap_region();
+                        material->get_target_descriptor_heap_region();
 
                     // material specific resources
                     local_root_arguments.material_heap_region_start =
-                        material->get_descriptor_heap_region();
+                        material->get_material_descriptor_heap_region();
 
                     // index in the shader binding table
                     // compute the hit record index based on ray-type, 
                     // BLAS-instance and geometry index (in BLAS)
-                    size_t hit_record_index = 
+                    size_t hit_record_index =
                         m_scene->get_acceleration_structure()->compute_hit_record_index(
                             static_cast<size_t>(Ray_type::Radiance),
                             instance->get_instance_handle(),
                             part->get_geometry_handle());
 
                     // set data for this part
-                    if (!m_shader_binding_table->set_shader_record(
-                        hit_record_index, radiance_hit_handles[tc_id], &local_root_arguments)) 
-                            return false;
+                    if (!binding_table->set_shader_record(
+                        hit_record_index, radiance_hit_handles[tc_id], &local_root_arguments))
+                        return false;
 
                     // since shadow ray also need to evaluate the MDL expressions
                     // the same signature and therefore the same record is used
@@ -594,7 +662,7 @@ protected:
                             instance->get_instance_handle(),
                             part->get_geometry_handle());
 
-                    if (!m_shader_binding_table->set_shader_record(
+                    if (!binding_table->set_shader_record(
                         hit_record_index, shadow_hit_handles[tc_id], &local_root_arguments))
                         return false;
 
@@ -605,13 +673,14 @@ protected:
 
             // complete the table, no more new elements can be added 
             // (but existing could be changed though /* not implemented */)
-            if (!m_shader_binding_table->finalize()) return false;
+            if (!binding_table->finalize()) 
+                return after_cleanup();
         }
         // upload the table to the GPU
         Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
         D3DCommandList* command_list = command_queue->get_command_list();
 
-        m_shader_binding_table->upload(command_list);
+        binding_table->upload(command_list);
         m_environment->transition_to(command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         command_queue->execute_command_list(command_list);
@@ -619,12 +688,13 @@ protected:
         // wait until all tasks are finished
         command_queue->flush();
 
-        // commit transaction
-        get_mdl_sdk().get_transaction().commit();
 
-        // print debug info
-        get_render_target_descriptor_heap()->print_debug_infos();
-        get_resource_descriptor_heap()->print_debug_infos();
+        // set the active one, and swap when updating
+        size_t inactive = m_active_pipeline_index == 0 ? 1 : 0;
+        m_pipeline[inactive] = pipeline;
+        m_shader_binding_table[inactive] = binding_table;
+        m_swap_next_frame = true;
+
         return true;
     }
 
@@ -637,15 +707,46 @@ protected:
         if (m_albedo_buffer) delete m_albedo_buffer;
         if (m_normal_buffer) delete m_normal_buffer;
         delete m_frame_buffer;
-        delete m_pipeline;
         delete m_scene_constants;
-        delete m_shader_binding_table;
+        if (m_pipeline[0]) delete m_pipeline[0];
+        if (m_pipeline[1]) delete m_pipeline[1];
+        if (m_shader_binding_table[0]) delete m_shader_binding_table[0];
+        if (m_shader_binding_table[1]) delete m_shader_binding_table[1];
         return true;
     }
 
     // called once per frame before render is started
     void update(const Update_args& args) override 
     {
+        // swap pipeline if requested
+        if (m_swap_next_frame)
+        {
+            size_t inactive = m_active_pipeline_index;
+            m_active_pipeline_index = m_active_pipeline_index == 0 ? 1 : 0;
+            m_swap_next_frame = false;
+
+
+            auto cleanup_thead = std::thread([&, inactive]()
+            {
+                if (m_shader_binding_table[inactive] != nullptr)
+                {
+                    delete m_shader_binding_table[inactive];
+                    m_shader_binding_table[inactive] = nullptr;
+                }
+
+                if (m_pipeline[inactive] != nullptr)
+                {
+                    delete m_pipeline[inactive];
+                    m_pipeline[inactive] = nullptr;
+                }
+
+                m_currently_reloading = false;
+                m_restart_progressive_rendering_required = true;
+            });
+            cleanup_thead.detach(); // don't wait for this thread
+        }
+
+
         // record UI commands
         // ----------------------------------------------------------------------------------------
 
@@ -653,7 +754,8 @@ protected:
         // e.g., because of material changes
         if (m_gui)
         {
-            m_restart_progressive_rendering_required |= m_gui->update(m_scene, args, m_show_gui);
+            m_restart_progressive_rendering_required |= m_gui->update(
+                m_scene, args,  m_show_gui && !m_currently_reloading);
 
             // in case there are multiple cameras in the scene 
             // and the user activated a different one
@@ -675,7 +777,14 @@ protected:
             // render ui only if not hidden
             if (m_show_gui)
             {
-                ImGui::Begin("Rendering Settings", false, ImVec2(400, 350));
+                float w_width = 400.f * get_options()->gui_scale;
+                float w_height = float(get_window()->get_height()) - 20.f;
+                float w_pos_x = float(get_window()->get_width()) - w_width - 10.f;
+                float w_pos_y = 10.f;
+                ImGui::SetNextWindowPos(ImVec2(w_pos_x, w_pos_y), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(w_width, w_height), ImGuiCond_FirstUseEver);
+
+                ImGui::Begin("Rendering Settings");
 
                 ImGui::Text("progressive iteration: %d",
                             m_scene_constants->data.progressive_iteration);
@@ -780,27 +889,38 @@ protected:
         // ----------------------------------------------------------------------------------------
         m_frame_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        // resources references in global root signature
-        command_list->SetComputeRootSignature(
-            m_pipeline->get_global_root_signature()->get_signature());
+        // skip rendering while reloading to ensure that resources that are being deleted are not
+        // used for rendering. This simplifies the example. This assumes that only the module
+        // reload itself can fail, or instances get invalid because of definitions that do not
+        // exist anymore, or the list of parameters changed.
+        // When an error happens a later stage, during code generation, compiling or while updating
+        // the pipeline, the application will end up in undefined state as the resources and the
+        // heap might not fit to the old pipeline and binding table.
+        if (!m_currently_reloading)
+        {
+            // resources references in global root signature
+            command_list->SetComputeRootSignature(
+                m_pipeline[m_active_pipeline_index]->get_global_root_signature()->get_signature());
 
-        ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
-        command_list->SetDescriptorHeaps(1, heaps);
+            ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
+            command_list->SetDescriptorHeaps(1, heaps);
 
-        // global root signature
-        // - first table: for output buffers, camera, scene constants, acceleration structure
-        command_list->SetComputeRootDescriptorTable(
-            0, heaps[0]->GetGPUDescriptorHandleForHeapStart());
-        // - second table  environment
-        command_list->SetComputeRootDescriptorTable(
-            1, heaps[0]->GetGPUDescriptorHandleForHeapStart());
+            // global root signature
+            // - first table: for output buffers, camera, scene constants, acceleration structure
+            command_list->SetComputeRootDescriptorTable(
+                0, heaps[0]->GetGPUDescriptorHandleForHeapStart());
+            // - second table  environment
+            command_list->SetComputeRootDescriptorTable(
+                1, heaps[0]->GetGPUDescriptorHandleForHeapStart());
 
-        // dispatch rays
-        D3D12_DISPATCH_RAYS_DESC desc = m_shader_binding_table->get_dispatch_description();
-        desc.Width = static_cast<UINT>(args.back_buffer->get_width());
-        desc.Height = static_cast<UINT>(args.back_buffer->get_height());
-        command_list->SetPipelineState1(m_pipeline->get_state());
-        command_list->DispatchRays(&desc);
+            // dispatch rays
+            D3D12_DISPATCH_RAYS_DESC desc =
+                m_shader_binding_table[m_active_pipeline_index]->get_dispatch_description();
+            desc.Width = static_cast<UINT>(args.back_buffer->get_width());
+            desc.Height = static_cast<UINT>(args.back_buffer->get_height());
+            command_list->SetPipelineState1(m_pipeline[m_active_pipeline_index]->get_state());
+            command_list->DispatchRays(&desc);
+        }
         
         // copy the ray-tracing buffer to the back buffer
         // ----------------------------------------------------------------------------------------
@@ -926,8 +1046,6 @@ protected:
 
 private:
  
-    Shader_binding_tables* m_shader_binding_table;
-
     Texture* m_frame_buffer;
     Descriptor_heap_handle m_frame_buffer_uav;
 
@@ -940,10 +1058,16 @@ private:
     Texture* m_normal_buffer;
     Descriptor_heap_handle m_normal_buffer_uav;
 
-    Raytracing_pipeline* m_pipeline;
-    Constant_buffer<Scene_constants>* m_scene_constants;
+    Descriptor_heap_handle m_acceleration_structure_srv;
+    Raytracing_pipeline* m_pipeline[2];
+    Shader_binding_tables* m_shader_binding_table[2];
+    size_t m_active_pipeline_index; // pipeline and binding tables can be swapped after updates
+    bool m_swap_next_frame;
+    bool m_currently_reloading;
 
     Scene* m_scene;
+    Constant_buffer<Scene_constants>* m_scene_constants;
+    Descriptor_heap_handle m_scene_cbv;
 
     Scene_node* m_camera_node;
     Descriptor_heap_handle m_camera_cbv;
@@ -959,22 +1083,22 @@ private:
 
 
 // entry point of the application
-_Use_decl_annotations_
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR command_line_args, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdShow)
 {
     if(AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())
     {
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
+        SetConsoleOutputCP(CP_UTF8);
     }
     Example_dxr_options options;
-    options.window_title = "MDL Direct3D Raytracing";
+    options.window_title = L"MDL Direct3D Raytracing    [Press SPACE to toggle options]";
     options.window_width = 1280;
     options.window_height = 720;
 
     // parse command line options
     int return_code = 0;
-    if (parse_options(options, command_line_args, return_code))
+    if (parse_options(options, lpCmdLine, return_code))
     {
         // run the application
         Demo_rtx app;

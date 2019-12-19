@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_discovery.cpp
+// examples/mdl_sdk/discovery/example_discovery.cpp
 //
 // Discovers MDL files in file system and MDL archives and measures the traversal time
 
@@ -48,10 +48,14 @@ using namespace std;
 //
 void configure(mi::neuraylib::INeuray* neuray, const vector<string> &roots)
 {
-    // Add mdl search paths
     mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
 
+    // Install logger
+    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
+    mdl_compiler->set_logger(logger.get());
+
+    // Add mdl search paths
     for (size_t p = 0; p < roots.size(); ++p)
     {
         mi::Sint32 res = mdl_compiler->add_module_path(roots[p].c_str());
@@ -295,7 +299,7 @@ static void usage(const char *name)
 //-----------------------------------------------------------------------------
 // 
 //
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     vector<string>  mdl_paths;
     vector<string>  kind_filter;
@@ -415,3 +419,6 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

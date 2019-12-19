@@ -86,6 +86,9 @@ struct Callable_function_info
 
     /// The index of the target argument block associated with this function, or ~0 if not used.
     mi::Size m_arg_block_index;
+
+    /// The DF handle name table.
+    std::vector<std::string> m_df_handle_name_table;
 };
 
 /// Implementation of #mi::neuraylib::ITarget_code.
@@ -183,6 +186,20 @@ public:
     /// \return           The shape of the texture resource of the given
     ///                   index, or \c Texture_shape_invalid if \p index is out of range.
     Texture_shape get_texture_shape(Size index) const NEURAY_OVERRIDE;
+
+    /// Returns the distribution function data this texture refers to.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \param [out] rx   The resolution of the texture in x.
+    /// \param [out] ry   The resolution of the texture in y.
+    /// \param [out] rz   The resolution of the texture in z.
+    /// \return           A pointer to the texture data, if the texture is a  distribution function
+    ///                   data texture, \c NULL otherwise.
+    const mi::Float32* get_texture_df_data(
+        mi::Size index,
+        mi::Size &rx,
+        mi::Size &ry,
+        mi::Size &rz) const NEURAY_OVERRIDE;
 
     /// Returns the number of constant data initializers.
     Size get_ro_data_segment_count() const NEURAY_OVERRIDE;
@@ -335,6 +352,24 @@ public:
     /// \return The index of the target argument block for this function or ~0 if not used.
     Size get_callable_function_argument_block_index(Size index) const NEURAY_OVERRIDE;
 
+    /// Get the number of distribution function handles referenced by a callable function.
+    ///
+    /// \param func_index   The index of the callable function.
+    ///
+    /// \return The number of distribution function handles referenced or \c 0, if the callable
+    ///         function is not a distribution function.
+    Size get_callable_function_df_handle_count(Size func_index) const NEURAY_OVERRIDE;
+
+    /// Get the name of a distribution function handle referenced by a callable function.
+    ///
+    /// \param func_index     The index of the callable function.
+    /// \param handle_index   The index of the handle.
+    ///
+    /// \return The name of the distribution function handle or \c NULL, if the callable
+    ///         function is not a distribution function or \p index is invalid.
+    const char* get_callable_function_df_handle(Size func_index, Size handle_index)
+        const NEURAY_OVERRIDE;
+
     /// Run this code on the native CPU.
     ///
     /// \param[in]  index       The index of the callable function.
@@ -450,7 +485,7 @@ public:
     ///         function
     mi::Sint32 execute_bsdf_evaluate(
         mi::Size index,
-        mi::neuraylib::Bsdf_evaluate_data *data,
+        mi::neuraylib::Bsdf_evaluate_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
@@ -483,7 +518,7 @@ public:
     /// Run the BSDF auxiliary calculation function for this code on the native CPU.
     mi::Sint32 execute_bsdf_auxiliary (
         mi::Size index,
-        mi::neuraylib::Bsdf_auxiliary_data *data,
+        mi::neuraylib::Bsdf_auxiliary_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
@@ -507,7 +542,7 @@ public:
     /// Run the EDF evaluation function for this code on the native CPU.
     mi::Sint32 execute_edf_evaluate(
         mi::Size index,
-        mi::neuraylib::Edf_evaluate_data *data,
+        mi::neuraylib::Edf_evaluate_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
@@ -523,7 +558,7 @@ public:
     /// Run the EDF auxiliary calculation function for this code on the native CPU.
     mi::Sint32 execute_edf_auxiliary(
         mi::Size index,
-        mi::neuraylib::Edf_auxiliary_data *data,
+        mi::neuraylib::Edf_auxiliary_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
@@ -554,17 +589,19 @@ public:
 
     /// Registers a used texture index.
     ///
-    /// \param index    the texture index as used in compiled code
-    /// \param name     the name of the DB element this index refers to.
-    /// \param mdl_url  the mdl url.
-    /// \param gamma    texture gamma
-    /// \param shape    the texture shape of the texture
+    /// \param index                 the texture index as used in compiled code
+    /// \param name                  the name of the DB element this index refers to.
+    /// \param mdl_url               the mdl url.
+    /// \param gamma                 texture gamma
+    /// \param shape                 the texture shape of the texture
+    /// \param sema                  the semantic of the texture, typically \c DS_UNKNOWN.
     void add_texture_index(
         size_t index, 
         const std::string& name,
         const std::string& mdl_url,
         float gamma,
-        Texture_shape shape);
+        Texture_shape shape,
+        mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
 
     /// Registers a used light profile index.
     ///
@@ -653,12 +690,14 @@ private:
             std::string const &mdl_url,
             std::string const &owner,
             float gamma,
-            Texture_shape shape)
+            Texture_shape shape,
+            mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
         : m_db_name(db_name)
         , m_mdl_url(mdl_url)
         , m_owner_module(owner)
         , m_gamma(gamma)
         , m_texture_shape(shape)
+        , m_df_data_kind(df_data_kind)
         {
         }
 
@@ -686,6 +725,9 @@ private:
         /// Get the texture shape of the texture.
         Texture_shape get_texture_shape() const { return m_texture_shape; }
 
+        /// Get the semantic of the texture.
+        mi::mdl::IValue_texture::Bsdf_data_kind get_df_data_kind() const { return m_df_data_kind; }
+
     private:
         /// The db name of the texture.
         std::string  m_db_name;
@@ -701,6 +743,9 @@ private:
 
         /// The shape of the texture.
         Texture_shape   m_texture_shape;
+
+        /// The kind of the texture.
+        mi::mdl::IValue_texture::Bsdf_data_kind m_df_data_kind;
     };
 
     // reduce redundant code be wrapping bsdf, edf, ... calls

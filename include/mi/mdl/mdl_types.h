@@ -487,7 +487,13 @@ public:
     static Kind const s_kind = TK_TEXTURE;
 
     /// The possible texture shapes.
-    enum Shape { TS_2D, TS_3D, TS_CUBE, TS_PTEX };
+    enum Shape {
+        TS_2D,         ///< A 2D texture.
+        TS_3D,         ///< A 3D texture.
+        TS_CUBE,       ///< A cube texture.
+        TS_PTEX,       ///< A PTEX texture.
+        TS_BSDF_DATA,  ///< A 3D texture representing a BSDF data table.
+    };
 
     /// Get the texture shape.
     virtual Shape get_shape() const = 0;

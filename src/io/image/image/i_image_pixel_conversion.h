@@ -61,7 +61,10 @@ namespace MI {
 namespace IMAGE {
 
 
-/// Performs a gamma correction for pixel_types PT_RGB_FP or PT_COLOR.
+/// Performs a gamma correction for floating point pixel types.
+///
+/// For types with three \p components or less, every component is adjusted. For 4 components,
+/// i.e. \c PT_COLOR, the alpha component is skipped.
 ///
 /// \param data       The pixel data to be manipulated.
 /// \param count      The number of pixels in \p data.
@@ -345,10 +348,11 @@ inline void quantize_s(Dest& dest, const Src src)
 inline void adjust_gamma(
     mi::Float32* const data, const mi::Size count, const mi::Uint32 components, const mi::Float32 exponent)
 {
+    const mi::Uint32 active_components = std::min(components, 3u);
     for( mi::Size i = 0; i < count * components; i += components) {
-        data[i  ] = mi::math::fast_pow( data[i  ], exponent);
-        data[i+1] = mi::math::fast_pow( data[i+1], exponent);
-        data[i+2] = mi::math::fast_pow( data[i+2], exponent);
+        for ( mi::Uint32 c = 0; c < active_components; ++c) {
+            data[i+c] = mi::math::fast_pow( data[i+c], exponent);
+        }
     }
 }
 

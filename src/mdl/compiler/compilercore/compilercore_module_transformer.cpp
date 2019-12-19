@@ -154,7 +154,7 @@ static IExpression_reference const *promote_call_reference(
                     break;
                 case Definition::DS_INTRINSIC_TEX_WIDTH:
                 case Definition::DS_INTRINSIC_TEX_HEIGHT:
-                    rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
+                    rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
                     break;
                 case Definition::DS_INTRINSIC_TEX_TEXEL_COLOR:
                 case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
@@ -173,6 +173,18 @@ static IExpression_reference const *promote_call_reference(
                     if (t != NULL && is_material_type(t)) {
                         rules = Module::PR_MATERIAL_ADD_HAIR;
                     }
+                }
+            }
+            if (mod_minor >= 6 && minor < 6) {
+                if (sema == IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF ||
+                    sema == IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF||
+                    sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF ||
+                    sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF ||
+                    sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF ||
+                    sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF ||
+                    sema == IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF)
+                {
+                    rules = Module::PR_GLOSSY_ADD_MULTISCATTER;
                 }
             }
         }
@@ -625,12 +637,38 @@ IQualified_name *Module_inliner::clone_name(IQualified_name const *qname)
 {
     Definition const *def = impl_cast<Definition>(qname->get_definition());
 
+    string orig_module_name(m_alloc);
     if (def->get_original_import_idx() != 0) {
         Definition const *def_ori = m_module->get_original_definition(def);
+        mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
+        orig_module_name = mod_ori->get_name();
         def = def_ori;
     }
     Reference_map::iterator const& it = m_references.find(def);
     if (it == m_references.end()) {
+
+        if (!qname->is_absolute() && !orig_module_name.empty()) {
+            IQualified_name *res = m_nf.create_qualified_name();
+            int j = 2;
+            for (int i = 2, n = orig_module_name.size() - 1; i < n; ++i) {
+                if (orig_module_name[i] == ':' && orig_module_name[i + 1] == ':') {
+                    orig_module_name[i] = '\0';
+                    ISimple_name *sn = m_nf.create_simple_name(
+                        m_nf.create_symbol(&orig_module_name.c_str()[j]));
+                    res->add_component(sn);
+                    j = i + 2;
+                }
+            }
+            ISimple_name *sn = m_nf.create_simple_name(
+                m_nf.create_symbol(&orig_module_name.c_str()[j]));
+            res->add_component(sn);
+
+            MDL_ASSERT(qname->get_component_count() >= 1);
+            ISimple_name const *sname = m_target_module->clone_name(
+                qname->get_component(qname->get_component_count() - 1));
+            res->add_component(sname);
+            return res;
+        }
         return m_target_module->clone_name(qname, /*modifier=*/NULL);
     }
     ISimple_name    *sname = m_nf.create_simple_name(it->second);
@@ -862,19 +900,26 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
     return m_sf.create_invalid();
 }
 
-IAnnotation *Module_inliner::create_string_anno(
-    char const *anno_name,
-    char const *value) const
+IAnnotation *Module_inliner::create_anno(
+    char const *anno_name) const
 {
     IQualified_name *qn = m_nf.create_qualified_name();
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol("anno")));
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol(anno_name)));
 
+    IAnnotation *anno = m_af.create_annotation(qn);
+    return anno;
+}
+
+IAnnotation *Module_inliner::create_string_anno(
+    char const *anno_name,
+    char const *value) const
+{
     IValue_string const *s   = m_target_module->get_value_factory()->create_string(value);
     IExpression_literal *lit = m_ef.create_literal(s);
     IArgument_positional const *arg = m_ef.create_positional_argument(lit);
 
-    IAnnotation *anno = m_af.create_annotation(qn);
+    IAnnotation *anno = create_anno(anno_name);
     anno->add_argument(arg);
 
     return anno;
@@ -984,15 +1029,15 @@ IAnnotation_block const *Module_inliner::clone_parameter_annotations(
             if (def->get_semantics() == IDefinition::DS_UNUSED_ANNOTATION) {
                 register_import("::anno", "unused");
                 new_block->add_annotation(
-                    m_target_module->clone_annotation(anno, NULL));
+                    m_target_module->clone_annotation(anno, this));
             } else if (def->get_semantics() == IDefinition::DS_DISPLAY_NAME_ANNOTATION) {
                 new_block->add_annotation(
-                    m_target_module->clone_annotation(anno, /*modifier=*/ NULL));
+                    m_target_module->clone_annotation(anno, /*modifier=*/ this));
                 has_display_name = true;
             } else if (def->get_semantics() == IDefinition::DS_DESCRIPTION_ANNOTATION) {
                 register_import("::anno", "description");
                 new_block->add_annotation(
-                    m_target_module->clone_annotation(anno, /*modifier=*/ NULL));
+                    m_target_module->clone_annotation(anno, /*modifier=*/ this));
             }
         }
     }

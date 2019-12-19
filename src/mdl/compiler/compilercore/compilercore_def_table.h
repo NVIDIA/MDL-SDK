@@ -48,6 +48,7 @@ namespace mdl {
 
 /// Forward declaration of the interface to declarations.
 class IDeclaration;
+class IDeclaration_namespace_alias;
 class Position;
 class IType;
 class IType_error;
@@ -111,6 +112,7 @@ public:
         DEF_IS_CONST_EXPR,          ///< This function is declared const_expr.
         DEF_USES_DERIVATIVES,       ///< This function uses derivatives.
         DEF_IS_DERIVABLE,           ///< This parameter or return type is derivable.
+        DEF_LITERAL_PARAM,          ///< The argument of the first parameter must be a literal.
         DEF_LAST
     };
 
@@ -161,6 +163,9 @@ public:
 
     /// Return the parameter index of a parameter.
     int get_parameter_index() const MDL_FINAL;
+
+    /// Return the namespace of a namespace alias.
+    ISymbol const *get_namespace() const MDL_FINAL;
 
     /// Get the prototype declaration of the definition if any.
     IDeclaration const *get_prototype_declaration() const MDL_FINAL;
@@ -335,6 +340,12 @@ public:
     /// \param index  the index of this parameter
     void set_parameter_index(int index);
 
+    /// Set the namespace of a namespace alias.
+    ///
+    /// \param name_space  the namespace
+    void set_namespace(
+        ISymbol const *name_space);
+
 private:
     /// Constructor.
     explicit Definition(
@@ -423,6 +434,7 @@ private:
         int       param_index;          ///< For DK_PARAMETER, the parameter index.
         Semantics sema_code;            ///< For DK_FUNCTION, DK_OPERATOR, DK_CONSTRUCTOR, and
                                         ///  DK_ANNOTATION the semantics.
+        ISymbol const *name_space;      ///< For DK_NAMESPACE, the namespace.
     } m_u;
 
     /// Version flags of this definition.
@@ -780,6 +792,24 @@ public:
         Definition const *imported,
         size_t           owner_import_idx);
 
+    /// Get a namespace alias.
+    ///
+    /// \param alias  the symbol of the alias
+    ///
+    /// \return the namespace definition if this alias is known, NULL otherwise
+    Definition const *get_namespace_alias(
+        ISymbol const *alias);
+
+    /// Enter a new namespace alias.
+    ///
+    /// \param alias  the alias
+    /// \param ns     the namespace
+    /// \param decl   the namespace alias declaration
+    Definition *enter_namespace_alias(
+        ISymbol const                      *alias,
+        ISymbol const                      *ns,
+        IDeclaration_namespace_alias const *decl);
+
     /// Walk over all definitions of this definition table.
     ///
     /// \param visitor  the visitor
@@ -921,10 +951,15 @@ private:
     /// Builder for sub objects.
     Arena_builder m_builder;
 
-    typedef ptr_hash_map<const IType, Scope *>::Type Type_scope_map;
+    typedef ptr_hash_map<IType const, Scope *>::Type Type_scope_map;
 
     /// Associate types to scopes.
     Type_scope_map m_type_scopes;
+
+    typedef ptr_map<ISymbol const, Definition const *>::Type Namespace_aliases_map;
+
+    /// The namespace aliases.
+    Namespace_aliases_map m_namespace_aliases;
 
     typedef vector<Definition *>::Type Def_vector;
 

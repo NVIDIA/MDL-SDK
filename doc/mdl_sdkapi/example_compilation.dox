@@ -94,7 +94,7 @@ modes.
 \section example_compilation Example Source
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/example_compilation.cpp</tt>
+  <tt>examples/mdl_sdk/compilation/example_compilation.cpp</tt>
 
 \include compilation/example_compilation.cpp
 

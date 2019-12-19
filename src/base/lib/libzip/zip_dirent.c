@@ -326,7 +326,7 @@ _zip_dirent_new(void) {
 */
 
 zip_int64_t
-_zip_dirent_read(zip_dirent_t *zde, zip_source_t *src, zip_buffer_t *buffer, bool local, zip_error_t *error) {
+_zip_dirent_read(zip_dirent_t *zde, zip_source_t *src, zip_buffer_t *buffer, bool local, bool ignore_last_mod, zip_error_t *error) {
     zip_uint8_t buf[CDENTRYSIZE];
     zip_uint16_t dostime, dosdate;
     zip_uint32_t size, variable_size;
@@ -370,7 +370,8 @@ _zip_dirent_read(zip_dirent_t *zde, zip_source_t *src, zip_buffer_t *buffer, boo
     /* convert to time_t */
     dostime = _zip_buffer_get_16(buffer);
     dosdate = _zip_buffer_get_16(buffer);
-    zde->last_mod = _zip_d2u_time(dostime, dosdate);
+    if (!ignore_last_mod)
+	zde->last_mod = _zip_d2u_time(dostime, dosdate);
 
     zde->crc = _zip_buffer_get_32(buffer);
     zde->comp_size = _zip_buffer_get_32(buffer);

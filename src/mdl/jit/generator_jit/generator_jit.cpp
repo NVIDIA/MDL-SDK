@@ -43,6 +43,7 @@
 #include "generator_jit_generated_code.h"
 #include "generator_jit_llvm.h"
 #include "generator_jit_opt_pass_gate.h"
+#include "generator_jit_libbsdf_data.h"
 
 
 namespace mi {
@@ -98,6 +99,10 @@ Code_generator_jit::Code_generator_jit(
         "true",
         "Link libdevice into PTX module");
     m_options.add_option(
+        MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE,
+        "none",
+        "Defines the libbsdf version to link into the ouput.");    
+    m_options.add_option(
         MDL_JIT_OPTION_USE_BITANGENT,
         "false",
         "Use bitangent instead of tangent_u, tangent_v in the generated MDL core state");
@@ -133,6 +138,11 @@ Code_generator_jit::Code_generator_jit(
         MDL_JIT_OPTION_ENABLE_AUXILIARY,
         "false",
         "Enable code generation for auxiliary functions on DFs");
+    m_options.add_option(
+        MDL_JIT_OPTION_SCENE_DATA_NAMES,
+        "",
+        "Comma-separated list of names for which scene data may be available in the renderer "
+        "(use \"*\" to enforce that the renderer runtime is asked for all scene data names)");
 }
 
 // Get the name of the target language.
@@ -346,7 +356,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     // FIXME: ugly, but ok for now: request all resource meta data through the attr interface
     // a better solution would be to do this outside this compile call
     Const_function_enumerator enumerator(attr, *const_cast<Lambda_function *>(lambda));
-    lambda->enumerate_resources(enumerator, body);
+    const_cast<Lambda_function *>(lambda)->enumerate_resources(enumerator, body);
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -555,6 +565,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         hasher.final(cache_key);
 
@@ -1068,6 +1079,16 @@ void Code_generator_jit::enter_code_into_cache(
         mapped_strings[i] = code->get_string_constant(i);
     }
 
+    size_t n_total_handles = 0;
+    for (size_t i = 0, n = code->get_function_count(); i < n; ++i) {
+        n_total_handles += code->get_function_df_handle_count(i);
+    }
+
+    // for simplicity, allocate at least one element
+    Small_VLA<char const *, 8> handle_list(
+        get_allocator(), n_total_handles > 0 ? n_total_handles : 1);
+    size_t next_handle_index = 0;
+
     char const *empty_str = "";
     Small_VLA<ICode_cache::Entry::Func_info, 8> func_infos(
         get_allocator(), code->get_function_count());
@@ -1082,6 +1103,12 @@ void Code_generator_jit::enter_code_into_cache(
             char const *prototype = code->get_function_prototype(
                 i, IGenerated_code_executable::Prototype_language(j));
             info.prototypes[j] = prototype != NULL ? prototype : empty_str;
+        }
+        info.num_df_handles = code->get_function_df_handle_count(i);
+        info.df_handles = &handle_list[next_handle_index];
+        next_handle_index += info.num_df_handles;
+        for (size_t j = 0; j < info.num_df_handles; ++j) {
+            info.df_handles[j] = code->get_function_df_handle(i, j);
         }
     }
 
@@ -1178,6 +1205,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         if (code_kind == IGenerated_code_executable::CK_HLSL) {
             hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
@@ -1307,6 +1335,25 @@ unsigned char const *Code_generator_jit::get_libdevice_for_gpu(
 {
     unsigned min_ptx_version = 0;
     return LLVM_code_generator::get_libdevice(size, min_ptx_version);
+}
+
+// Get the resolution of the libbsdf multi-scattering lookup table data.
+bool Code_generator_jit::get_libbsdf_multiscatter_data_resolution(
+    IValue_texture::Bsdf_data_kind bsdf_data_kind,
+    size_t &out_theta,
+    size_t &out_roughness,
+    size_t &out_ior) const
+{
+    return libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+        bsdf_data_kind, out_theta, out_roughness, out_ior);
+}
+
+// Get access to the libbsdf multi-scattering lookup table data.
+unsigned char const *Code_generator_jit::get_libbsdf_multiscatter_data(
+    IValue_texture::Bsdf_data_kind bsdf_data_kind,
+    size_t                         &size) const
+{
+    return libbsdf_data::get_libbsdf_multiscatter_data(bsdf_data_kind, size);
 }
 
 // Create a link unit.

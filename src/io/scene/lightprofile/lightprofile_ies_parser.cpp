@@ -60,9 +60,11 @@ namespace LIGHTPROFILE {
 
 namespace {
 
-// Valid IES versions strings (so far ...)
+// Valid IES versions strings
 const static char* IESNA_1991 = "IESNA91";
 const static char* IESNA_1995 = "IESNA:LM-63-1995";
+const static char* IESNA_2002 = "IESNA:LM-63-2002";
+const static char* IESNA_UNKNOWN = "IESNA:LM-63-";
 
 // Specification used to give additional notes on parser errors
 //
@@ -91,7 +93,8 @@ public:
     enum Version {
         IESNA_LM_63_1986 = 0,
         IESNA_LM_63_1991,
-        IESNA_LM_63_1995
+        IESNA_LM_63_1995,
+        IESNA_LM_63_2002
     };
 
     // Orientation of the lamp within the luminaire (cp. Fig.1 in specification)
@@ -312,8 +315,26 @@ bool Lightprofile_ies_parser::parse_version(
         m_version = IESNA_LM_63_1995;
         return true;
     }
+    else if(!strncmp(IESNA_2002, version, strlen(IESNA_2002)))
+    {
+        m_version = IESNA_LM_63_2002;
+        return true;
+    }
+    else if(!strncmp(IESNA_UNKNOWN, version, strlen(IESNA_UNKNOWN)))
+    {
+        // if a future version comes up, interpret it is as the highest version
+        // known to the parser (instead of falling back to the old standard)
+        LOG::mod_log->warning(M_LIGHTPROFILE, LOG::Mod_log::C_IO,
+                "Unsupported IES version '%s' used in %s\n"
+                "Data might not be imported correctly",
+                version, m_filename.c_str());
+
+        m_version = IESNA_LM_63_2002;
+        return true;
+    }
     else
     {
+        // no header, fall back old standard
         m_version = IESNA_LM_63_1986;
         return false;
     }
@@ -516,7 +537,7 @@ bool Lightprofile_ies_parser::parse_label(char* label)
             label_contents = label_contents.substr(0, len);
     }
     else
-        label_contents = "<no lable>";
+        label_contents = "<no label>";
 
     return true;
 }
@@ -1570,6 +1591,8 @@ bool Lightprofile_ies_parser::setup_lightprofile(
         }
         else if((first_angle == 90.f) && (last_angle == 270.f) )      // 90-270 plane symmetry
         {
+            // note: this mode is no longer allowed in IESNA-LM-63-02 files
+            
             // TODO This method seems to assume that the value of the median horizontal angle is
             // 180 degrees.
             resolve_90_270_plane_symmetry_type_c(m_horizontal_angles, horizontal_angles,

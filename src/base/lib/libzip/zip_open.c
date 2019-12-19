@@ -95,6 +95,8 @@ zip_open_from_source(zip_source_t *src, int _flags, zip_error_t *error) {
 	zip_error_set(error, ZIP_ER_INVAL, 0);
 	return NULL;
     }
+    if ((_flags & ZIP_RDONLYNOLASTMOD) != 0)
+	_flags |= ZIP_RDONLY;
     flags = (unsigned int)_flags;
 
     supported = zip_source_supports(src);
@@ -258,6 +260,7 @@ _zip_read_cdir(zip_t *za, zip_buffer_t *buffer, zip_uint64_t buf_offset, zip_err
     zip_uint64_t i, left;
     zip_uint64_t eocd_offset = _zip_buffer_offset(buffer);
     zip_buffer_t *cd_buffer;
+    bool ignore_last_mod = (za->open_flags & ZIP_RDONLYNOLASTMOD) != 0;
 
     if (_zip_buffer_left(buffer) < EOCDLEN) {
 	/* not enough bytes left for comment */
@@ -368,7 +371,7 @@ _zip_read_cdir(zip_t *za, zip_buffer_t *buffer, zip_uint64_t buf_offset, zip_err
 	    grown = true;
 	}
 
-	if ((cd->entry[i].orig = _zip_dirent_new()) == NULL || (entry_size = _zip_dirent_read(cd->entry[i].orig, za->src, cd_buffer, false, error)) < 0) {
+	if ((cd->entry[i].orig = _zip_dirent_new()) == NULL || (entry_size = _zip_dirent_read(cd->entry[i].orig, za->src, cd_buffer, false, ignore_last_mod, error)) < 0) {
 	    if (grown && zip_error_code_zip(error) == ZIP_ER_NOZIP) {
 		zip_error_set(error, ZIP_ER_INCONS, 0);
 	    }
@@ -428,6 +431,7 @@ _zip_checkcons(zip_t *za, zip_cdir_t *cd, zip_error_t *error) {
     zip_uint64_t i;
     zip_uint64_t min, max, j;
     struct zip_dirent temp;
+    bool ignore_last_mod = (za->open_flags & ZIP_RDONLYNOLASTMOD) != 0;
 
     _zip_dirent_init(&temp);
     if (cd->nentry) {
@@ -458,7 +462,7 @@ _zip_checkcons(zip_t *za, zip_cdir_t *cd, zip_error_t *error) {
 	    return -1;
 	}
 
-	if (_zip_dirent_read(&temp, za->src, NULL, true, error) == -1) {
+	if (_zip_dirent_read(&temp, za->src, NULL, true, ignore_last_mod, error) == -1) {
 	    _zip_dirent_finalize(&temp);
 	    return -1;
 	}

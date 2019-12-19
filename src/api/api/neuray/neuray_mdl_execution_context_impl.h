@@ -74,11 +74,15 @@ public:
 
     mi::Sint32 get_option(const char* name, bool& value) const NEURAY_FINAL;
 
+    mi::Sint32 get_option(const char* name, mi::base::IInterface** value) const NEURAY_FINAL;
+
     mi::Sint32 set_option(const char* name, const char* value) NEURAY_FINAL;
 
     mi::Sint32 set_option(const char* name, mi::Float32 value) NEURAY_FINAL;
 
     mi::Sint32 set_option(const char* name, bool value) NEURAY_FINAL;
+
+    mi::Sint32 set_option(const char* name, mi::base::IInterface* value) NEURAY_FINAL;
 
     
     // own stuff
@@ -90,6 +94,10 @@ private:
     MI::MDL::Execution_context* m_context;
 };
 
+/// Unwrap execution context.
+MDL::Execution_context* unwrap_and_clear_context(
+    mi::neuraylib::IMdl_execution_context* context,
+    MDL::Execution_context& default_context);
 
 } // namespace NEURAY
 

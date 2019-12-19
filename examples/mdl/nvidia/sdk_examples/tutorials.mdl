@@ -26,14 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-mdl 1.4;
+mdl 1.6;
 
-import anno::*;
-import base::*;
-import df::*;
-import math::*;
-import state::*;
-import tex::*;
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+import ::tex::*;
 
 // A simple struct.
 export struct example_struct {
@@ -73,7 +73,7 @@ export material example_compilation(color tint = color(1.0))
 export material example_execution1(color tint = color(1.0))
 = let {
     float3 tex_coord = state::texture_coordinate(0);
-    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+    base::texture_return tex = base::file_texture(texture_2d("./resources/example.png"));
 }
 in material(
     surface: material_surface(
@@ -155,7 +155,7 @@ export material example_execution2(
         float2(0.35, 0.6));
     float3 grad = wave_gradient(wave_centers: wave_centers);
     base::texture_return tex = base::file_texture(
-        texture_2d("resources/example.png"),
+        texture_2d("./resources/example.png"),
         uvw: base::texture_coordinate_info(
             position: state::texture_coordinate(0) + 0.02 * grad
         ));
@@ -179,7 +179,7 @@ export material example_execution3()
     float3 pos = state::texture_coordinate(0) +
         (4 + math::cos(0.005 * time)) *
         float3(math::sin(0.005 * time), math::cos(0.005 * time), 0);
-    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+    base::texture_return tex = base::file_texture(texture_2d("./resources/example.png"));
 }
 in material(
     surface: material_surface(
@@ -213,9 +213,9 @@ in material(
 // simple material with textures and light profile
 export material example_modulemdl_material_examples(
     color tint = color(1.0),
-    uniform light_profile profile = light_profile("resources/example_modules.ies")
+    uniform light_profile profile = light_profile("./resources/example_modules.ies")
 ) = let {
-    base::texture_return tex = base::file_texture(texture_2d("resources/example.png"));
+    base::texture_return tex = base::file_texture(texture_2d("./resources/example.png"));
 }
 in material(
     surface: material_surface(
@@ -234,7 +234,7 @@ export material example_modules2()
  =  material (
     surface: material_surface(
         scattering: df::measured_bsdf(
-            measurement: bsdf_measurement("resources/example_modules.mbsdf"),
+            measurement: bsdf_measurement("./resources/example_modules.mbsdf"),
             multiplier: 1
         )
     )
@@ -297,7 +297,7 @@ export material example_df(
         anno::hard_range(0.0f, 10.0f)
     ]],
     uniform string emission_usage = "full",
-    uniform texture_2d tex = "resources/example.png"
+    uniform texture_2d tex = "./resources/example.png"
 )
 = let {
     float3 tex_coord3 = state::texture_coordinate(0);
@@ -313,22 +313,29 @@ in material(
     surface: material_surface(
         scattering: df::fresnel_layer(
             ior: clearcoat_ior,
-            layer: df::specular_bsdf(),
+            layer: df::specular_bsdf(
+                handle: "coat"
+            ),
             base: df::normalized_mix(
                 df::bsdf_component[2](
                     df::bsdf_component(
                         weight: diffuse_weight,
                         component: df::diffuse_reflection_bsdf(
-                            tint: tex_value * diffuse_tint)),
+                            tint: tex_value * diffuse_tint,
+                            handle: "base")),
                     df::bsdf_component(
                         weight: glossy_weight * cval.weight,
                         component: df::simple_glossy_bsdf(
-                            roughness_u: cval.roughness.x, roughness_v: cval.roughness.y, tint: glossy_tint))
+                            roughness_u: cval.roughness.x, 
+                            roughness_v: cval.roughness.y, 
+                            tint: glossy_tint,
+                            handle: "base"))
                 )
             )
         ),
         emission:  material_emission (
-            emission: df::diffuse_edf(),
+            emission: df::diffuse_edf(
+                handle: "glow"),
             intensity: scaled_intensity
         )
     )
@@ -405,7 +412,7 @@ export material example_edf(
 // A simple texture modulated material.
 export material example_mod_rough(color tint = color(1.0), float roughness = 0)
 = let {
-    uniform texture_2d tex = texture_2d("resources/example_roughness.png", ::tex::gamma_linear);
+    uniform texture_2d tex = texture_2d("./resources/example_roughness.png", ::tex::gamma_linear);
     float3 tex_coord = state::texture_coordinate(0);
     float mod_roughness = roughness * tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y)).x;
     bsdf tmp = df::diffuse_reflection_bsdf(tint, mod_roughness);
@@ -419,7 +426,7 @@ export material dxr_sphere_mat(
     float roughness_scale = 1.0,
     float roughness_offset = 0.25
 ) = let {
-    uniform texture_2d tex = texture_2d("resources/example_roughness.png", ::tex::gamma_linear);
+    uniform texture_2d tex = texture_2d("./resources/example_roughness.png", ::tex::gamma_linear);
     float3 tex_coord = state::texture_coordinate(0);
     float mod_roughness = roughness_offset + roughness_scale * tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y)).x;
 } in material(
@@ -434,7 +441,7 @@ export material dxr_sphere_mat(
 // simple measured material
 export material example_measured_bsdf(
     uniform df::scatter_mode mode = df::scatter_reflect_transmit,
-    uniform bsdf_measurement mbsdf = bsdf_measurement("resources/example_modules.mbsdf"),
+    uniform bsdf_measurement mbsdf = bsdf_measurement("./resources/example_modules.mbsdf"),
     uniform float multiplier = 1.0
 ) = material (
     surface: material_surface(
@@ -449,7 +456,7 @@ export material example_measured_bsdf(
 // simple material with a light profile
 export material example_measured_edf(
     color tint = color(0.0),
-    uniform light_profile profile = light_profile("resources/example_modules.ies"),
+    uniform light_profile profile = light_profile("./resources/example_modules.ies"),
     uniform bool global_distribution = false,
     uniform float multiplier = 1.0
     [[anno::hard_range(0.0f, 10.0f)]]
@@ -472,8 +479,8 @@ export material example_measured_edf(
 
 // sample material with some parameters for testing the mdle example
 export material example_texture_lookup_bsdf(
-    uniform texture_2d tex = texture_2d("resources/example.png", ::tex::gamma_default),
-    uniform texture_2d tex2 = texture_2d("resources/example.png", ::tex::gamma_default)
+    uniform texture_2d tex = texture_2d("./resources/example.png", ::tex::gamma_default),
+    uniform texture_2d tex2 = texture_2d("./resources/example.png", ::tex::gamma_default)
 ) [[
     anno::author("NVIDIA Corporation"),
     anno::display_name("aaa"),
@@ -490,15 +497,14 @@ export material example_texture_lookup_bsdf(
 );
 
 // A function with a single parameter with default.
-export int fd_1(int param0 = 42) { return param0; }
+export int fd_1(int param0 = 42) = param0;
 
 // A function which has another function as default.
-export int fd_default_call( int param0 = fd_1()) { return param0; }
+export int fd_default_call( int param0 = fd_1()) = param0;
 
 // An auto-uniform function.
-export color fd_auto_uniform() { return color(); }
+export color fd_auto_uniform() = color();
 
 // An auto-varying function.
-export color fd_auto_varying() { return color(state::normal()); }
-
+export color fd_auto_varying() = color(state::normal());
 

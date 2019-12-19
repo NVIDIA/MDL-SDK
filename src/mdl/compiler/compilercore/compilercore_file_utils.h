@@ -130,12 +130,24 @@ bool is_path_absolute(
 /// preserved.
 ///
 /// \param file_path  the file path to simplify
-/// \param sep        the separator (as string)
+/// \param sep        the separator (single character)
 /// The input must be valid w.r.t. to the number of directory names "..".
 string simplify_path(
     IAllocator   *alloc,
     string const &file_path,
     char         sep);
+
+/// Simplifies a file path by removing directory names "." and pairs of directory names like
+/// ("foo", ".."). Slashes are used as separators. Leading and trailing slashes in the input are
+/// preserved.
+///
+/// \param file_path  the file path to simplify
+/// \param sep        the separator (as string, possibly multiple characters like '::')
+/// The input must be valid w.r.t. to the number of directory names "..".
+string simplify_path(
+    IAllocator   *alloc,
+    string const &file_path,
+    string const &sep);
 
 /// Converts OS-specific directory separators into slashes.
 ///

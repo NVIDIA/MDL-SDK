@@ -205,6 +205,7 @@ struct Generated_code_function_info
     , m_kind(kind)
     , m_prototypes(name.get_allocator())
     , m_arg_block_index(arg_block_index)
+    , m_df_handle_name_table(name.get_allocator())
     {}
 
     /// The name of the function.
@@ -222,6 +223,9 @@ struct Generated_code_function_info
 
     /// The index of the target argument block associated with this function, or ~0 if not used.
     size_t m_arg_block_index;
+
+    /// The DF handle name table.
+    vector<string>::Type m_df_handle_name_table;
 };
 
 
@@ -307,6 +311,33 @@ public:
         IGenerated_code_executable::Distribution_kind dist_kind,
         IGenerated_code_executable::Function_kind func_kind,
         size_t arg_block_index) MDL_FINAL;
+
+    /// Get the number of distribution function handles referenced by a function.
+    ///
+    /// \param func_index   the index of the function
+    ///
+    /// \return The number of distribution function handles referenced or \c 0, if the
+    ///         function is not a distribution function.
+    size_t get_function_df_handle_count(size_t func_index) const MDL_FINAL;
+
+    /// Get the name of a distribution function handle referenced by a function.
+    ///
+    /// \param func_index     The index of the function.
+    /// \param handle_index   The index of the handle.
+    ///
+    /// \return The name of the distribution function handle or \c NULL, if the
+    ///         function is not a distribution function or \p index is invalid.
+    char const *get_function_df_handle(size_t func_index, size_t handle_index) const MDL_FINAL;
+
+    /// Add the name of a distribution function handle referenced by a function.
+    ///
+    /// \param func_index     The index of the function.
+    /// \param handle_name    The name of the handle.
+    ///
+    /// \return The index of the added handle.
+    size_t add_function_df_handle(
+        size_t func_index,
+        char const *handle_name) MDL_FINAL;
 
 private:
     typedef vector<Generated_code_function_info>::Type Func_info_vec;

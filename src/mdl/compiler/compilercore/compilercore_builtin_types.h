@@ -83,6 +83,8 @@ BUILTIN_TYPE(Type_texture,       the_texture_2d_type, (IType_texture::TS_2D,    
 BUILTIN_TYPE(Type_texture,       the_texture_3d_type, (IType_texture::TS_3D,     &the_float3_type))
 BUILTIN_TYPE(Type_texture,       the_texture_cube_type, (IType_texture::TS_CUBE, &the_float3_type))
 BUILTIN_TYPE(Type_texture,       the_texture_ptex_type, (IType_texture::TS_PTEX, NULL))
+BUILTIN_TYPE(Type_texture,       the_texture_bsdf_data_type,
+    (IType_texture::TS_BSDF_DATA, &the_float3_type))
 BUILTIN_TYPE(Type_bsdf_measurement, the_bsdf_measurement_type, )
 
 #undef BUILTIN_TYPE

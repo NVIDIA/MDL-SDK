@@ -26,12 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/compiled_material_traverser_base.cpp
-
 #include "compiled_material_traverser_base.h"
 
 void Compiled_material_traverser_base::traverse(
-    const mi::neuraylib::ICompiled_material* material, void* context) const
+    const mi::neuraylib::ICompiled_material* material, void* context)
 {
     mi::base::Handle<const mi::neuraylib::IExpression_direct_call> body(material->get_body());
 
@@ -69,7 +67,7 @@ void Compiled_material_traverser_base::traverse(
 
 void Compiled_material_traverser_base::traverse(const mi::neuraylib::ICompiled_material* material,
                                                 const Traversal_element& element,
-                                                void* context) const
+                                                void* context)
 {
     visit_begin(material, element, context);
 

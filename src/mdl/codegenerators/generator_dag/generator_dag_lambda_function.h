@@ -173,7 +173,7 @@ public:
     ///                    all roots of a switch function
     void enumerate_resources(
         ILambda_resource_enumerator &enumerator,
-        DAG_node const              *root = NULL) const MDL_FINAL;
+        DAG_node const              *root = NULL) MDL_FINAL;
 
     /// Register a texture resource mapping.
     ///
@@ -621,6 +621,28 @@ public:
     ///           the special lambda function has not been set
     size_t get_special_lambda_function_index(Special_kind kind) const MDL_FINAL;
 
+    /// Returns the number of distribution function handles referenced by this
+    /// distribution function.
+    size_t get_df_handle_count() const MDL_FINAL;
+
+    /// Returns a distribution function handle referenced by this distribution function.
+    ///
+    /// \param index  the index of the handle to return
+    ///
+    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
+    char const *get_df_handle(size_t index) const MDL_FINAL;
+
+    /// Register a distribution function handle.
+    ///
+    /// \param handle_name  the name of the new handle
+    ///
+    /// \return the index of the handle
+    size_t add_df_handle(char const *handle_name)
+    {
+        m_df_handles.push_back(handle_name);
+        return m_df_handles.size() - 1;
+    }
+
     /// Get the derivative information if they were requested during initialization.
     Derivative_infos const *get_derivative_infos() const;
 
@@ -661,6 +683,9 @@ private:
 
     /// The derivative analysis information, if requested during initialization.
     Derivative_infos m_deriv_infos;
+
+    /// List of DF handle strings owned by the value factory of the main lambda function.
+    vector<char const *>::Type m_df_handles;
 };
 
 }  // mdl

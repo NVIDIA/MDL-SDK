@@ -40,6 +40,7 @@ namespace mi {
 namespace neuraylib {
 
     class IMaterial_instance;
+    class IMdl_execution_context;
 
 /** \addtogroup mi_neuray_mdl_elements
 @{
@@ -116,23 +117,6 @@ public:
     /// Returns the direct call expression that represents the body of the compiled material.
     virtual const IExpression_direct_call* get_body() const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_8_1
-    const IExpression* get_field( const char* name) const
-    {
-        mi::base::Handle<const IExpression_direct_call> body( get_body());
-        mi::base::Handle<const IExpression_list> arguments( body->get_arguments());
-        return arguments->get_expression( name);
-    }
-
-    template<class T>
-    const T* get_field( const char* name) const
-    {
-        mi::base::Handle<const IExpression_direct_call> body( get_body());
-        mi::base::Handle<const IExpression_list> arguments( body->get_arguments());
-        return arguments->get_expression<T>( name);
-    }
-#endif
-
     /// Returns the number of temporaries used by this compiled material.
     virtual Size get_temporary_count() const = 0;
 
@@ -151,7 +135,7 @@ public:
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
-    /// \tparam T               The interface type of the requested element
+    /// \tparam T               The interface type of the requested element.
     /// \param index            The index of the temporary.
     /// \return                 The expression of the temporary, or \c NULL if \p index is out of
     ///                         range.
@@ -333,6 +317,15 @@ public:
     /// \returns true of success, false if the value is not a constant, but depends on parameters
     ///          or complex user expressions
     virtual bool get_cutout_opacity(Float32 *cutout_opacity) const = 0;
+
+    /// Returns true, if the compiled material is valid, false otherwise.
+    ///
+    /// \param context     In case of failure, the execution context can be checked for error
+    ///                    messages. Can be \c NULL.
+    ///
+    /// A compiled material becomes invalid, if any of the modules it uses definitions from has
+    /// has been reloaded.
+    virtual bool is_valid(IMdl_execution_context *context) const = 0;
 
     //@}
 };

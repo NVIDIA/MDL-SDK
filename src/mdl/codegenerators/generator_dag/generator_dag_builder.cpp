@@ -729,6 +729,18 @@ bool Inline_checker::can_inline(IStatement const *stmt)
                     }
                     return true;
                 }
+            case IDeclaration::DK_CONSTANT:
+                {
+                    IDeclaration_constant const *const_decl = cast<IDeclaration_constant>(decl);
+
+                    for (int i = 0, n = const_decl->get_constant_count(); i < n; ++i) {
+                        IExpression const *init = const_decl->get_constant_exp(i);
+
+                        if (init != NULL && !can_inline(init))
+                            return false;
+                    }
+                    return true;
+                }
             default:
                 // all others are unsupported
                 break;
@@ -1134,8 +1146,7 @@ const char *DAG_builder::binary_op_to_name(IExpression_binary::Operator op)
         MDL_ASSERT(!"operator. should not be used");
         break;
     case IExpression_binary::OK_ARRAY_INDEX:
-        MDL_ASSERT(!"operator[] should not be used");
-        break;
+        return "operator[]";
     case IExpression_binary::OK_MULTIPLY:
         return "operator*";
     case IExpression_binary::OK_DIVIDE:
@@ -1198,12 +1209,6 @@ const char *DAG_builder::binary_op_to_name(IExpression_binary::Operator op)
         return "operator,";
     }
     return "<unknown binary operator>";
-}
-
-// Return the name of the ternary operator.
-char const *DAG_builder::ternary_op_to_name()
-{
-    return "operator?";
 }
 
 // Get the definition of the parameter of a function/material at index.
@@ -1290,6 +1295,30 @@ DAG_node const *DAG_builder::var_decl_to_dag(
     return NULL;
 }
 
+// Convert an MDL constant declaration to a DAG IR node.
+DAG_node const *DAG_builder::const_decl_to_dag(
+    IDeclaration_constant const *const_decl)
+{
+    for (int i = 0, n = const_decl->get_constant_count(); i < n; ++i) {
+        IExpression const  *init = const_decl->get_constant_exp(i);
+        ISimple_name const *name = const_decl->get_constant_name(i);
+        IDefinition const  *cdef = name->get_definition();
+        DAG_node const     *expr = NULL;
+
+        if (init != NULL) {
+            expr = exp_to_dag(init);
+        } else {
+            // missing default initializer, happens with "uninitialized" arrays
+            IType const *const_type = const_decl->get_type_name()->get_type();
+
+            expr = default_initializer(const_type);
+        }
+
+        m_tmp_value_map[cdef] = expr;
+    }
+    return NULL;
+}
+
 // Convert an MDL statement to a DAG IR node.
 DAG_node const *DAG_builder::stmt_to_dag(
     IStatement const  *stmt)
@@ -1309,6 +1338,13 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IDeclaration const *decl = cast<IStatement_declaration>(stmt)->get_declaration();
 
             switch (decl->get_kind()) {
+            case IDeclaration::DK_CONSTANT:
+                {
+                    IDeclaration_constant const *const_decl = cast<IDeclaration_constant>(decl);
+
+                    return const_decl_to_dag(const_decl);
+                }
+                break;
             case IDeclaration::DK_TYPE_ALIAS:
             case IDeclaration::DK_TYPE_ENUM:
             case IDeclaration::DK_TYPE_STRUCT:
@@ -1643,28 +1679,13 @@ DAG_node const *DAG_builder::ref_to_dag(
                 }
 
                 // create a call
-                IType_array const *a_type =
-                    cast<IType_array>(param_def->get_type()->skip_type_alias());
-
-                IType const *e_type = a_type->get_element_type()->skip_type_alias();
-
-                m_printer.print(e_type);
-                m_printer.print("[].len(");
-                m_printer.print(e_type);
-                m_printer.print("[])");
-
-                string name(m_printer.get_line());
-
-                if (!tos_module()->is_builtins()) {
-                    if (name[0] != ':')
-                        name = string(tos_module()->get_name(), get_allocator()) + "::" + name;
-                }
-
-                DAG_call::Call_argument args[1] = { { node, "a" } };
+                DAG_call::Call_argument arg(node, "a");
 
                 return m_node_factory.create_call(
-                    name.c_str(), IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
-                    args, 1, m_type_factory.create_int());
+                    "operator_len(<0>[])",
+                    IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
+                    &arg, 1,
+                    m_type_factory.create_int());
             }
             break;
         }
@@ -1687,6 +1708,9 @@ DAG_node const *DAG_builder::ref_to_dag(
         // functions could not be references in error free code
         MDL_ASSERT(!"function referenced in an expression");
         break;
+    case IDefinition::DK_NAMESPACE:
+        MDL_ASSERT(!"namespace alias referenced in an expression");
+        break;
     }
     return NULL;
 }
@@ -1697,7 +1721,7 @@ string DAG_builder::get_unary_name(IExpression_unary const *unary) const
     IExpression_unary::Operator op   = unary->get_operator();
     IExpression const           *arg = unary->get_argument();
 
-    string name(unary_op_to_name(op),get_allocator());
+    string name(unary_op_to_name(op), get_allocator());
     name += '(';
     m_printer.print(arg->get_type()->skip_type_alias());
     name += m_printer.get_line();
@@ -1901,66 +1925,8 @@ string DAG_builder::get_binary_name(IExpression_binary const *binary) const
         }
         break;
     case IExpression_binary::OK_ARRAY_INDEX:
-        {
-            IType const *lt = left->get_type()->skip_type_alias();
-            IType_array const *a_tp = as<IType_array>(lt);
-
-            if (a_tp != NULL) {
-                if (!a_tp->is_immediate_sized()) {
-                    m_printer.print(a_tp->get_element_type()->skip_type_alias());
-                    m_printer.print("[]");
-                } else {
-                    m_printer.print(a_tp);
-                }
-            } else {
-                m_printer.print(lt);
-            }
-
-            m_printer.print("@(");
-            if (a_tp != NULL) {
-                if (!a_tp->is_immediate_sized()) {
-                    m_printer.print(a_tp->get_element_type()->skip_type_alias());
-                    m_printer.print("[]");
-                } else {
-                    m_printer.print(a_tp);
-                }
-            } else {
-                m_printer.print(lt);
-            }
-            m_printer.print(",int)");
-
-            string name(m_printer.get_line());
-
-            // never prefix vector or matrix types, those are builtin
-            if (!is<IType_vector>(lt) && !is<IType_matrix>(lt)) {
-                IModule const *module = tos_module();
-
-                if (!module->is_builtins()) {
-                    if (name[0] == ':' && name[1] == ':') {
-                        // for array index functions, overwrite any existing module prefix with
-                        // the current module name to make the function accessible via Neuray DB
-                        size_t lparen = name.find('(', 2);
-                        if (lparen != name.npos) {
-                            size_t module_colon = name.rfind(':', lparen - 1);
-                            if (module_colon != name.npos)
-                                name = string(module->get_name(), get_allocator()) +
-                                    name.substr(module_colon - 1);
-                            else {
-                                MDL_ASSERT(!"Last colon group before left parenthesis not found");
-                            }
-                        } else {
-                            MDL_ASSERT(!"Left parenthesis not found");
-                        }
-                    }
-                    else
-                        name = string(module->get_name(), get_allocator()) + "::" + name;
-                } else if (name[0] == ':' && name[1] == ':') {
-                    MDL_ASSERT(!"Unexpected builtin name starting with \"::\"\n");
-                }
-            }
-            return name;
-        }
-        break;
+        // one for all
+        return string("operator[](<0>[],int)", get_allocator());
     case IExpression_binary::OK_SEQUENCE:
         // ignore comma operator, left argument is dropped.
         return string(get_allocator());
@@ -2172,12 +2138,6 @@ DAG_node const *DAG_builder::create_vector_insert(
             if (field == NULL) {
                 // not a constant
 
-                // create the name (+ signature) of the index function here
-                string name(v_name);
-                name += "@(";
-                name += v_name;
-                name += ",int)";
-
                 DAG_call::Call_argument call_args[2];
 
                 call_args[0].arg        = c_node;
@@ -2188,7 +2148,9 @@ DAG_node const *DAG_builder::create_vector_insert(
                 call_args[1].param_name = "i";
 
                 field = m_node_factory.create_call(
-                    name.c_str(), IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS, call_args, 2,
+                    "operator[](<0>[],int)",
+                    operator_to_semantic(IExpression::OK_ARRAY_INDEX),
+                    call_args, 2,
                     elem_tp);
             }
         }
@@ -2301,15 +2263,6 @@ DAG_node const *DAG_builder::binary_to_dag(
                 }
             case IType::TK_VECTOR:
                 {
-                    IType_vector const *v_type = cast<IType_vector>(left_type);
-                    string             v_name(type_to_name(v_type));
-
-                    // create the name (+ signature) of the index function here
-                    string name(v_name);
-                    name += "@(";
-                    name += v_name;
-                    name += ",int)";
-
                     char const *fname = symbol->get_name();
 
                     int index = -1;
@@ -2321,7 +2274,10 @@ DAG_node const *DAG_builder::binary_to_dag(
                     default:
                         break;
                     }
-                    MDL_ASSERT(fname[1] == '\0' && 0 <= index && index < v_type->get_size());
+                    MDL_ASSERT(
+                        fname[1] == '\0' &&
+                        0 <= index &&
+                        index < cast<IType_vector>(left_type)->get_size());
 
                     // create an index access
                     DAG_call::Call_argument call_args[2];
@@ -2334,7 +2290,9 @@ DAG_node const *DAG_builder::binary_to_dag(
                     call_args[1].param_name = "i";
 
                     return m_node_factory.create_call(
-                        name.c_str(), IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS, call_args, 2,
+                        "operator[](<0>[],int)",
+                        operator_to_semantic(IExpression::OK_ARRAY_INDEX),
+                        call_args, 2,
                         m_type_factory.import(binary->get_type()));
                 }
             default:
@@ -2353,7 +2311,7 @@ DAG_node const *DAG_builder::binary_to_dag(
             call_args[1].param_name = "i";
             return m_node_factory.create_call(
                 name.c_str(),
-                IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS,
+                operator_to_semantic(IExpression::OK_ARRAY_INDEX),
                 call_args,
                 2,
                 m_type_factory.import(binary->get_type()));
@@ -2491,44 +2449,6 @@ DAG_node const *DAG_builder::binary_to_dag(
     return res;
 }
 
-// Returns the name of a conditional operator.
-string DAG_builder::get_cond_name(IExpression_conditional const *cond) const
-{
-    IType const *arg_type = cond->get_type()->skip_type_alias();
-
-    string name("", get_allocator());
-
-
-    // skip arrays for detection of user types
-    IType const *tp = arg_type;
-    while (IType_array const *a_type = as<IType_array>(tp)) {
-        tp = a_type->get_element_type();
-    }
-
-    if (is_user_type(tp)) {
-        // in case of a user type, the operator is "defined" locally in the module
-        // of the type, extract that from the type name
-
-        m_printer.print(arg_type);
-        name = m_printer.get_line();
-
-        size_t pos = name.rfind("::");
-        MDL_ASSERT(pos != string::npos);
-
-        name = name.substr(0, pos + 2);
-    }
-
-    m_printer.print(ternary_op_to_name());
-    m_printer.print("(bool,");
-    m_printer.print(arg_type);
-    m_printer.print(',');
-    m_printer.print(arg_type);
-    m_printer.print(')');
-    name += m_printer.get_line();
-
-    return name;
-}
-
 // Convert an MDL conditional expression to a DAG expression.
 DAG_node const *DAG_builder::cond_to_dag(
     IExpression_conditional const *cond)
@@ -2549,8 +2469,6 @@ DAG_node const *DAG_builder::cond_to_dag(
 
     IType const *ret_type = m_type_factory.import(cond->get_type());
 
-    string name(get_cond_name(cond));
-
     DAG_call::Call_argument call_args[3];
     call_args[0].arg        = sel;
     call_args[0].param_name = "cond";
@@ -2561,7 +2479,11 @@ DAG_node const *DAG_builder::cond_to_dag(
 
     IDefinition::Semantics sema = operator_to_semantic(op);
     DAG_node const *res = m_node_factory.create_call(
-        name.c_str(), sema, call_args, 3, ret_type);
+        get_ternary_operator_signature(),
+        sema,
+        call_args,
+        dimension_of(call_args),
+        ret_type);
 
     if (DAG_call const *call_res = as<DAG_call>(res)) {
         if (call_res->get_semantic() == sema) {
@@ -2820,10 +2742,9 @@ DAG_node const *DAG_builder::call_to_dag(
         }
 
         // use the magic array constructor name.
-        char const *name = "T[](...)";
-
         return m_node_factory.create_call(
-            name, IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
+            get_array_constructor_signature(),
+            IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
             call_args.data(), n_args, a_type);
     }
     // else not an array constructor ...

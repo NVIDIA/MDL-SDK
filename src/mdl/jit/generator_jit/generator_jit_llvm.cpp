@@ -1037,6 +1037,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_ro_segment(NULL)
 , m_next_ro_data_offset(0)
 , m_ro_data_values(jitted_code->get_allocator())
+, m_scene_data_names(get_allocator())
+, m_scene_data_all_pos_avail(false)
 , m_optix_cp_from_id(NULL)
 , m_captured_args_mdl_types(get_allocator())
 , m_captured_args_type(NULL)
@@ -1075,6 +1077,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_use_ro_data_segment(false)
 , m_link_libdevice(target_lang == TL_PTX && options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE))
 , m_link_libmdlrt(false)
+, m_link_libbsdf_df_handle_slot_mode(parse_df_handle_slot_mode(
+    options.get_string_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE)))
 , m_incremental(incremental)
 , m_texruntime_with_derivs(options.get_bool_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES))
 , m_deriv_infos(NULL)
@@ -1119,7 +1123,10 @@ LLVM_code_generator::LLVM_code_generator(
 , m_int_func_state_call_lambda_float(NULL)
 , m_int_func_state_call_lambda_float3(NULL)
 , m_int_func_state_call_lambda_uint(NULL)
-, m_int_func_state_get_material_ior(NULL)
+, m_int_func_state_get_arg_block_float(NULL)
+, m_int_func_state_get_arg_block_float3(NULL)
+, m_int_func_state_get_arg_block_uint(NULL)
+, m_int_func_state_get_arg_block_bool(NULL)
 , m_int_func_state_get_measured_curve_value(NULL)
 , m_int_func_df_bsdf_measurement_resolution(NULL)
 , m_int_func_df_bsdf_measurement_evaluate(NULL)
@@ -1174,6 +1181,40 @@ LLVM_code_generator::LLVM_code_generator(
     if (target_lang != TL_HLSL) {
         // this option can only be set for HLSL
         m_hlsl_use_resource_data = false;
+    }
+
+    // parse scene data names option if available
+    char const *names = options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES);
+    if (names != NULL && *names) {
+        if (names[0] == '*' && names[1] == 0)
+            m_scene_data_all_pos_avail = true;
+        else {
+            // split the list at ',' and put the names into a set
+            char const *start_ptr = names;
+            char const *ptr = start_ptr;
+            while (*ptr) {
+                if (*ptr == ',') {
+                    size_t len = ptr - start_ptr;
+                    if (len > 0) {
+                        char *buf = static_cast<char *>(m_arena.allocate(len + 1));
+                        memcpy(buf, start_ptr, len);
+                        buf[len] = 0;
+                        m_scene_data_names.insert(buf);
+                    }
+                    start_ptr = ptr + 1;
+                }
+                ++ptr;
+            }
+            if (start_ptr != ptr) {
+                size_t len = ptr - start_ptr;
+                if (len > 0) {
+                    char *buf = static_cast<char *>(m_arena.allocate(len + 1));
+                    memcpy(buf, start_ptr, len);
+                    buf[len] = 0;
+                    m_scene_data_names.insert(buf);
+                }
+            }
+        }
     }
 
     prepare_internal_functions();
@@ -1273,15 +1314,53 @@ void LLVM_code_generator::prepare_internal_functions()
         /*param_types=*/ Array_ref<IType const *>(int_type),
         /*param_names=*/ Array_ref<char const *>("lambda_index"));
 
-    m_int_func_state_get_material_ior = m_arena_builder.create<Internal_function>(
+    m_int_func_state_get_arg_block_float = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
-        "::state::get_material_ior()",
-        "_ZN5state16get_material_iorEv",
-        Internal_function::KI_STATE_GET_MATERIAL_IOR,
-        Internal_function::FL_HAS_EXEC_CTX,
+        "::state::get_arg_block_float(int)",
+        "_ZN5state19get_arg_block_floatEi",
+        Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_float_type(),
+        /*param_types=*/ Array_ref<IType const *>(int_type),
+        /*param_names=*/ Array_ref<char const *>("offset"));
+
+    m_int_func_state_get_arg_block_float3 = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_arg_block_float3(int)",
+        "_ZN5state20get_arg_block_float3Ei",
+        Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT3,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
-        /*param_types=*/ Array_ref<IType const *>(),
-        /*param_names=*/ Array_ref<char const *>());
+        /*param_types=*/ Array_ref<IType const *>(int_type),
+        /*param_names=*/ Array_ref<char const *>("offset"));
+
+    m_int_func_state_get_arg_block_uint = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_arg_block_uint(int)",
+        "_ZN5state18get_arg_block_uintEi",
+        Internal_function::KI_STATE_GET_ARG_BLOCK_UINT,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_int_type(),
+        /*param_types=*/ Array_ref<IType const *>(int_type),
+        /*param_names=*/ Array_ref<char const *>("offset"));
+
+    m_int_func_state_get_arg_block_bool = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::get_arg_block_bool(int)",
+        "_ZN5state18get_arg_block_boolEi",
+        Internal_function::KI_STATE_GET_ARG_BLOCK_BOOL,
+        Internal_function::FL_HAS_STATE |
+        Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
+        Internal_function::FL_HAS_CAP_ARGS | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_bool_type(),
+        /*param_types=*/ Array_ref<IType const *>(int_type),
+        /*param_names=*/ Array_ref<char const *>("offset"));
 
     IType const* measured_param_types[] = { int_type, int_type };
     char const* measured_param_names[] = { "measured_curve_idx", "value_idx" };
@@ -1297,22 +1376,12 @@ void LLVM_code_generator::prepare_internal_functions()
         /*param_types=*/ Array_ref<IType const *>(measured_param_types),
         /*param_names=*/ Array_ref<char const *>(measured_param_names));
 
-    m_int_func_state_get_thin_walled = m_arena_builder.create<Internal_function>(
-        m_arena_builder.get_arena(),
-        "::state::get_thin_walled()",
-        "_ZN5state15get_thin_walledEv",
-        Internal_function::KI_STATE_GET_THIN_WALLED,
-        Internal_function::FL_HAS_EXEC_CTX,
-        /*ret_type=*/ m_type_mapper.get_int_type(),
-        /*param_types=*/ Array_ref<IType const *>(),
-        /*param_names=*/ Array_ref<char const *>());
-
     IType const* resolution_param_types[] = { int_type, int_type };
     char const* resolution_param_names[] = { "bm_index", "part" };
     m_int_func_df_bsdf_measurement_resolution = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::df::bsdf_measurement_resolution(int,int)",
-        "_ZN2df28bsdf_measurement_resolutionEii",
+        "_ZNK5State28bsdf_measurement_resolutionEii",
         Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION,
         Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_int3_type(),
@@ -1326,7 +1395,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_df_bsdf_measurement_evaluate = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::df::bsdf_measurement_evaluate(int,float2,float2,int)",
-        "_ZNK5State25bsdf_measurement_evaluateEi6float2S0_i",
+        "_ZNK5State25bsdf_measurement_evaluateEiRK6float2S2_i",
         Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE,
         Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
@@ -2566,8 +2635,12 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         if (func_deriv_info != NULL && func_deriv_info->args_want_derivatives.test_bit(i + 1)) {
             tp = m_type_mapper.lookup_deriv_type(p_type, arr_size);
 
-            // always pass by reference
-            arg_types.push_back(Type_mapper::get_ptr(tp));
+            // pass by reference if supported by target
+            if (target_supports_pointers()) {
+                arg_types.push_back(Type_mapper::get_ptr(tp));
+            } else {
+                arg_types.push_back(tp);
+            }
         } else {
             tp = lookup_type(p_type, arr_size);
 
@@ -2857,7 +2930,8 @@ LLVM_context_data *LLVM_code_generator::declare_internal_function(
 
     bool is_entry_point = false;
 
-    if ((in_flags & LLVM_context_data::FL_HAS_EXEC_CTX) != 0) {
+    if (target_supports_lambda_results_parameter() &&
+            (in_flags & LLVM_context_data::FL_HAS_EXEC_CTX) != 0) {
         // add execution context parameter
         arg_types.push_back(m_type_mapper.get_exec_ctx_ptr_type());
         flags |= LLVM_context_data::FL_HAS_EXEC_CTX;
@@ -3158,7 +3232,8 @@ void LLVM_code_generator::compile_function_instance(
         mi::mdl::IDefinition const *p_def  = param->get_name()->get_definition();
         mi::mdl::IType const       *p_type = p_def->get_type();
         bool                       by_ref  = is_passed_by_reference(p_type) ||
-            (m_cur_func_deriv_info != NULL &&
+            (target_supports_pointers() &&
+                m_cur_func_deriv_info != NULL &&
                 m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1));
         LLVM_context_data          *p_data;
 
@@ -3184,8 +3259,17 @@ void LLVM_code_generator::compile_function_instance(
     if (mi::mdl::IStatement_compound const *block = as<mi::mdl::IStatement_compound>(body)) {
         for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
             mi::mdl::IStatement const *stmt = block->get_statement(i);
+
             translate_statement(context, stmt);
         }
+    } else if (mi::mdl::IStatement_expression const *e_stmt = as<IStatement_expression>(body)) {
+        // single expression body
+        mi::mdl::IExpression const *expr = e_stmt->get_expression();
+
+        llvm::Type  *return_type = context.get_return_type();
+        llvm::Value *v = translate_expression_value(
+            context, expr, context.is_deriv_type(return_type));
+        context.create_return(v);
     }
 }
 
@@ -3329,6 +3413,7 @@ void LLVM_code_generator::translate_declaration(
     case mi::mdl::IDeclaration::DK_TYPE_STRUCT:
     case mi::mdl::IDeclaration::DK_TYPE_ENUM:
     case mi::mdl::IDeclaration::DK_MODULE:
+    case mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS:
         // generates no code
         return;
 
@@ -3969,7 +4054,7 @@ Expression_result LLVM_code_generator::translate_index_expression(
     llvm::Value             *index,
     mi::mdl::Position const *index_pos)
 {
-    // instantiate type
+    // handle LLVM result with derivatives
     if (m_type_mapper.is_deriv_type(comp.get_value_type())) {
         mi::mdl::IType const *val_type = m_type_mapper.skip_deriv_type(comp_type);
 
@@ -3991,6 +4076,16 @@ Expression_result LLVM_code_generator::translate_index_expression(
             dy_elem.as_value(ctx));
 
         return Expression_result::value(res);
+    }
+
+    // handle LLVM result without derivatives when derivatives are requested
+    if (m_type_mapper.is_deriv_type(comp_type)) {
+        mi::mdl::IType const *val_type = m_type_mapper.skip_deriv_type(comp_type);
+
+        Expression_result res = translate_index_expression(
+            ctx, val_type, comp, index, index_pos);
+        res.ensure_deriv_result(ctx, /*should_be_deriv_value=*/ true);
+        return res;
     }
 
     // instantiate type
@@ -4057,6 +4152,12 @@ Expression_result LLVM_code_generator::translate_index_expression(
         mi::mdl::IType_vector const *v_type = cast<mi::mdl::IType_vector>(comp_type);
         bound = ctx.get_constant(size_t(v_type->get_size()));
         index = adapt_index_for_bounds_check(ctx, index, bound);
+
+        if (llvm::isa<llvm::VectorType>(comp.get_value_type())) {
+            // extracting a vector component
+            llvm::Value *res = ctx->CreateExtractElement(comp.as_value(ctx), index);
+            return Expression_result::value(res);
+        }
 
         elem_ptr = ctx.create_simple_gep_in_bounds(comp.as_ptr(ctx), index);
     }
@@ -5264,6 +5365,20 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     bool derivs = false;
 
     switch (op) {
+    case mi::mdl::IExpression_binary::OK_ARRAY_INDEX:
+        {
+            mi::mdl::IType const *comp_type = bin_expr->get_argument_type(0);
+            Expression_result    comp = bin_expr->translate_argument(*this, ctx, 0, derivs);
+            llvm::Value          *index =
+                bin_expr->translate_argument_value(*this, ctx, 1, /*return_derivs=*/ false);
+            mi::mdl::Position    *index_pos = NULL;
+
+            Expression_result res = translate_index_expression(
+                ctx, comp_type, comp, index, index_pos);
+            return res.as_value(ctx);
+        }
+        break;
+
     case mi::mdl::IExpression_binary::OK_MULTIPLY:
         {
             mi::mdl::IType const *l_type = bin_expr->get_argument_type(0);
@@ -6162,20 +6277,6 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
             }
         }
         break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
-        {
-            mi::mdl::IType const *comp_type = call_expr->get_argument_type(0);
-            Expression_result    comp       = call_expr->translate_argument(*this, ctx, 0, derivs);
-            llvm::Value          *index     =
-                call_expr->translate_argument_value(*this, ctx, 1, /*return_derivs=*/ false);
-            mi::mdl::Position    *index_pos = NULL;
-
-            Expression_result res = translate_index_expression(
-                ctx, comp_type, comp, index, index_pos);
-            res.ensure_deriv_result(ctx, derivs);
-            return res;
-        }
-        break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
     default:
         // Should not happen
@@ -6492,7 +6593,6 @@ Expression_result LLVM_code_generator::translate_call(
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
@@ -6505,6 +6605,51 @@ Expression_result LLVM_code_generator::translate_call(
 
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
         return translate_dag_call_lambda(ctx, call_expr);
+
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
+        if (!m_scene_data_all_pos_avail) {
+            IValue const *name = call_expr->get_const_argument(0);
+            if (name != NULL) {
+                IValue_string const *name_str = as<IValue_string>(name);
+                // is name known to never be available? -> return false
+                if (m_scene_data_names.count(name_str->get_value()) == 0)
+                    return Expression_result::value(ctx.get_constant(false));
+            }
+        }
+
+        // TODO: implement calling renderer runtime. For now just return false
+        return Expression_result::value(ctx.get_constant(false));
+
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        if (!m_scene_data_all_pos_avail) {
+            IValue const *name = call_expr->get_const_argument(0);
+            if (name != NULL) {
+                IValue_string const *name_str = as<IValue_string>(name);
+                // is name known to never be available? -> return default value (second argument)
+                if (m_scene_data_names.count(name_str->get_value()) == 0)
+                    return call_expr->translate_argument(*this, ctx, 1, return_derivs);
+            }
+        }
+
+        // TODO: implement calling renderer runtime. For now just return second argument
+        return call_expr->translate_argument(*this, ctx, 1, return_derivs);
 
     default:
         // try compiler known intrinsic function
@@ -6729,7 +6874,7 @@ llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
         }
 
         if (m_type_mapper.is_passed_by_reference(arg_type) ||
-            m_type_mapper.is_deriv_type(expr_res.get_value_type()))
+            (target_supports_pointers() && m_type_mapper.is_deriv_type(expr_res.get_value_type())))
         {
             // pass by reference
             llvm::Value *ptr = expr_res.as_ptr(ctx);
@@ -8718,6 +8863,10 @@ void LLVM_code_generator::fill_function_info(IGenerated_code_executable *code)
                     exp_func.prototypes[i].c_str());
             }
         }
+
+        for (size_t i = 0, n = exp_func.df_handles.size(); i < n; ++i) {
+            code->add_function_df_handle(index, exp_func.df_handles[i].c_str());
+        }
     }
 }
 
@@ -9410,6 +9559,25 @@ Function_context::Tex_lookup_call_mode LLVM_code_generator::parse_call_mode(char
     if (strcmp(name, "optix_cp") == 0)
         return Function_context::TLCM_OPTIX_CP;
     return Function_context::TLCM_VTABLE;
+}
+
+/// Parse the Df_handle_slot_mode
+mi::mdl::Df_handle_slot_mode LLVM_code_generator::parse_df_handle_slot_mode(char const *name)
+{
+    if (strcmp(name, "none") == 0)
+        return mi::mdl::DF_HSM_NONE;
+    if (strcmp(name, "pointer") == 0)
+        return mi::mdl::DF_HSM_POINTER;
+    if (strcmp(name, "fixed_1") == 0)
+        return mi::mdl::DF_HSM_FIXED_1;
+    if (strcmp(name, "fixed_2") == 0)
+        return mi::mdl::DF_HSM_FIXED_2;
+    if (strcmp(name, "fixed_4") == 0)
+        return mi::mdl::DF_HSM_FIXED_4;
+    if (strcmp(name, "fixed_8") == 0)
+        return mi::mdl::DF_HSM_FIXED_8;
+
+    return mi::mdl::DF_HSM_NONE;
 }
 
 // Get a unique string value object used to represent the string of the value.

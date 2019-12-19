@@ -43,6 +43,7 @@ namespace neuraylib {
 */
 
 class IMaterial_instance;
+class IMdl_execution_context;
 
 /// This interface represents a material definition.
 ///
@@ -139,6 +140,27 @@ public:
     ///       instead of its index.
     virtual const IAnnotation_list* get_parameter_annotations() const = 0;
 
+    /// Returns the resolved file name of the thumbnail image for this material definition.
+    ///
+    /// The function first checks for a thumbnail annotation. If the annotation is provided, 
+    /// it uses the 'name' argument of the annotation and resolves that in the MDL search path.
+    /// If the annotation is not provided or file resolution fails, it checks for a file
+    /// module_name.material_name.png next to the MDL module.
+    /// In case this cannot be found either \c NULL is returned.
+    virtual const char* get_thumbnail() const = 0;
+
+    /// Returns \c true if the definition is valid, \c false otherwise.
+    /// A definition can become invalid if the module it has been defined in
+    /// or another module imported by that module has been reloaded. In the first case,
+    /// the definition can no longer be used. In the second case, the
+    /// definition can be validated by reloading the module it has been
+    /// defined in.
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return     - \c true   The definition is valid.
+    ///             - \c false  The definition is invalid.
+    virtual bool is_valid(IMdl_execution_context* context) const = 0;
+
     /// Creates a new material instance.
     ///
     /// \param arguments    The arguments of the created material instance. \n
@@ -168,19 +190,47 @@ public:
     ///                           argument or default is a call expression and the return type of
     ///                           the called function definition is effectively varying since the
     ///                           function definition itself is varying.
+    ///                     - -9: The material definition is invalid due to a module reload, see
+    ///                           #is_valid() for diagnostics.
     /// \return             The created material instance, or \c NULL in case of errors.
     virtual IMaterial_instance* create_material_instance(
         const IExpression_list* arguments, Sint32* errors = 0) const = 0;
 
-    /// Returns the resolved file name of the thumbnail image for this material definition.
+    /// Returns the direct call expression that represents the body of the material.
+    virtual const IExpression_direct_call* get_body() const = 0;
+
+    /// Returns the number of temporaries used by this material.
+    virtual Size get_temporary_count() const = 0;
+
+    /// Returns the expression of a temporary.
     ///
-    /// The function first checks for a thumbnail annotation. If the annotation is provided, 
-    /// it uses the 'name' argument of the annotation and resolves that in the MDL search path.
-    /// If the annotation is not provided or file resolution fails, it checks for a file
-    /// module_name.material_name.png next to the MDL module.
-    /// In case this cannot be found either \c NULL is returned.
+    /// \param index            The index of the temporary.
+    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    ///                         range.
+    virtual const IExpression* get_temporary( Size index) const = 0;
+
+    /// Returns the expression of a temporary.
     ///
-    virtual const char* get_thumbnail() const = 0;
+    /// This templated member function is a wrapper of the non-template variant for the user's
+    /// convenience. It eliminates the need to call
+    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// on the returned pointer, since the return type already is a pointer to the type \p T
+    /// specified as template parameter.
+    ///
+    /// \tparam T               The interface type of the requested element.
+    /// \param index            The index of the temporary.
+    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    ///                         range.
+    template<class T>
+    const T* get_temporary( Size index) const
+    {
+        const IExpression* ptr_iexpression = get_temporary( index);
+        if ( !ptr_iexpression)
+            return 0;
+        const T* ptr_T = static_cast<const T*>( ptr_iexpression->get_interface( typename T::IID()));
+        ptr_iexpression->release();
+        return ptr_T;
+    }
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

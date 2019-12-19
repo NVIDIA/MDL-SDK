@@ -52,7 +52,7 @@ Definition::Definition(
 , m_type(type)
 , m_decl(NULL)
 , m_loc(loc)
-, m_def_scope(NULL)
+, m_def_scope(parent_scope)
 , m_next(NULL)
 , m_same_prev(NULL)
 , m_same_next(NULL)

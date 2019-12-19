@@ -42,6 +42,7 @@
 #include <mi/mdl_sdk.h>
 
 #include "example_shared.h"
+#include "compiled_material_traverser_base.h"
 
 #include <cuda.h>
 #ifdef OPENGL_INTEROP
@@ -195,6 +196,86 @@ std::string to_string(T val)
     stream << val;
     return stream.str();
 }
+
+// Collects the handles in a compiled material
+class Handle_collector : public Compiled_material_traverser_base
+{
+public:
+    // add all handle appearing in the provided material to the collectors handle list.
+    explicit Handle_collector(
+        mi::neuraylib::ITransaction* transaction,
+        const mi::neuraylib::ICompiled_material* material)
+    : Compiled_material_traverser_base()
+    {
+        traverse(material, transaction);
+    }
+
+    // get the collected handles.
+    const std::vector<std::string>& get_handles() const { return m_handles; }
+
+private:
+    // Called when the traversal reaches a new element.
+    void visit_begin(const mi::neuraylib::ICompiled_material* material,
+                     const Compiled_material_traverser_base::Traversal_element& element,
+                     void* context) override
+    {
+        // look for direct calls
+        if (!element.expression ||
+            element.expression->get_kind() != mi::neuraylib::IExpression::EK_DIRECT_CALL)
+            return;
+
+        // check if it is a distribution function
+        auto transaction = static_cast<mi::neuraylib::ITransaction*>(context);
+
+        const mi::base::Handle<const mi::neuraylib::IExpression_direct_call> expr_dcall(
+            element.expression->get_interface<const mi::neuraylib::IExpression_direct_call
+            >());
+        const mi::base::Handle<const mi::neuraylib::IExpression_list> args(
+            expr_dcall->get_arguments());
+        const mi::base::Handle<const mi::neuraylib::IFunction_definition> func_def(
+            transaction->access<mi::neuraylib::IFunction_definition>(
+            expr_dcall->get_definition()));
+        const mi::neuraylib::IFunction_definition::Semantics semantic = func_def->
+            get_semantic();
+
+        if (semantic < mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_FIRST
+            || semantic > mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_LAST)
+            return;
+
+        // check if the last argument is a handle
+        const mi::base::Handle<const mi::neuraylib::IExpression_list> arguments(
+            expr_dcall->get_arguments());
+
+        mi::Size arg_count = arguments->get_size();
+        const char* name = arguments->get_name(arg_count - 1);
+        if (strcmp(name, "handle") != 0)
+            return;
+
+        // get the handle value
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            arguments->get_expression(arg_count - 1));
+
+        if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+            return; // is an error if 'handle' is a reserved parameter name
+
+        const mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_const(
+            expr->get_interface<const mi::neuraylib::IExpression_constant>());
+
+        const mi::base::Handle<const mi::neuraylib::IValue> value(expr_const->get_value());
+        if (value->get_kind() != mi::neuraylib::IValue::VK_STRING)
+            return;
+
+        const mi::base::Handle<const mi::neuraylib::IValue_string> handle(
+            value->get_interface<const mi::neuraylib::IValue_string>());
+
+        std::string handle_value = handle->get_value() ? std::string(handle->get_value()) : "";
+
+        if (std::find(m_handles.begin(), m_handles.end(), handle_value) == m_handles.end())
+            m_handles.push_back(handle_value);
+    }
+
+    std::vector<std::string> m_handles;
+};
 
 
 //------------------------------------------------------------------------------
@@ -630,7 +711,8 @@ bool Material_gpu_context::prepare_texture(
     mi::neuraylib::ITarget_code::Texture_shape texture_shape =
         code_ptx->get_texture_shape(texture_index);
     if (texture_shape == mi::neuraylib::ITarget_code::Texture_shape_cube ||
-        texture_shape == mi::neuraylib::ITarget_code::Texture_shape_3d) {
+        texture_shape == mi::neuraylib::ITarget_code::Texture_shape_3d ||
+        texture_shape == mi::neuraylib::ITarget_code::Texture_shape_bsdf_data) {
         // Cubemap and 3D texture objects require 3D CUDA arrays
 
         if (texture_shape == mi::neuraylib::ITarget_code::Texture_shape_cube &&
@@ -1267,7 +1349,8 @@ public:
         unsigned num_texture_results,
         bool enable_derivatives,
         bool fold_ternary_on_df,
-        bool enable_auxiliary);
+        bool enable_auxiliary,
+        const std::string df_handle_mode);
 
     // Helper function that checks if the provided name describes an MDLe element.
     static bool is_mdle_name(const std::string& name);
@@ -1314,7 +1397,8 @@ public:
         const std::string& material_name,
         mi::neuraylib::Target_function_description* function_descriptions,
         mi::Size description_count,
-        bool class_compilation = false);
+        bool class_compilation = false,
+        std::vector<std::string>* out_handles = nullptr);
 
     // Generates CUDA PTX target code for the current link unit.
     mi::base::Handle<const mi::neuraylib::ITarget_code> generate_cuda_ptx();
@@ -1344,6 +1428,12 @@ public:
         return m_arg_block_indexes;
     }
 
+    /// Get the set of handles present in added materials.
+    /// Only available after calling 'add_material' at least once.
+    const std::vector<std::string>& get_handles() const { 
+        return m_handles; 
+    }
+
 private:
     // Creates an instance of the given material.
     mi::neuraylib::IMaterial_instance* create_material_instance(
@@ -1365,6 +1455,7 @@ private:
     Material_definition_list  m_material_defs;
     Compiled_material_list    m_compiled_materials;
     std::vector<size_t>       m_arg_block_indexes;
+    std::vector<std::string>  m_handles;
 };
 
 // Constructor.
@@ -1375,7 +1466,8 @@ Material_compiler::Material_compiler(
         unsigned num_texture_results,
         bool enable_derivatives,
         bool fold_ternary_on_df,
-        bool enable_auxiliary)
+        bool enable_auxiliary,
+        const std::string df_handle_mode)
     : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
     , m_be_cuda_ptx(mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_CUDA_PTX))
     , m_transaction(mi::base::make_handle_dup(transaction))
@@ -1412,6 +1504,15 @@ Material_compiler::Material_compiler(
         check_success(m_be_cuda_ptx->set_option("enable_auxiliary", "on") == 0);
     }
 
+
+    // Option "df_handle_slot_mode": Default is "none".
+    // When using light path expressions, individual parts of the distribution functions can be
+    // selected using "handles". The contribution of each of those parts has to be evaluated during
+    // rendering. This option controls how many parts are evaluated with each call into the
+    // generated "evaluate" and "auxiliary" functions and how the data is passed.
+    check_success(m_be_cuda_ptx->set_option("df_handle_slot_mode", df_handle_mode.c_str()) == 0);
+    // The CUDA backend supports pointers, which means an externally managed buffer of arbitrary 
+    // size is used to transport the contributions of each part.
 
     // force experimental to true for now
     m_context->set_option("experimental", true);
@@ -1504,8 +1605,9 @@ mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
     }
 
     // Load mdl module.
-    check_success(m_mdl_compiler->load_module(m_transaction.get(), module_name.c_str(), m_context.get()) >= 0);
-    print_messages(m_context.get());
+    m_mdl_compiler->load_module(
+        m_transaction.get(), module_name.c_str(), m_context.get());
+    check_success(print_messages(m_context.get()));
 
     // get db name
     const char* module_db_name = m_mdl_compiler->get_module_db_name(
@@ -1609,7 +1711,8 @@ bool Material_compiler::add_material(
     const std::string& material_name,
     mi::neuraylib::Target_function_description* function_descriptions,
     mi::Size description_count,
-    bool class_compilation)
+    bool class_compilation,
+    std::vector<std::string>* out_handles)
 {
     if (description_count == 0)
         return false;
@@ -1625,6 +1728,14 @@ bool Material_compiler::add_material(
     m_link_unit->add_material(
         compiled_material.get(), function_descriptions, description_count,
         m_context.get());
+
+    // iterate over the material and collect all handles
+    if (out_handles)
+    {
+        Handle_collector collector(m_transaction.get(), compiled_material.get());
+        auto& handles = m_handles = collector.get_handles();
+        out_handles->insert(out_handles->end(), handles.begin(), handles.end());
+    }
 
     // Note: the same argument_block_index is filled into all function descriptions of a
     //       material, if any function uses it

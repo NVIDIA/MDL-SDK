@@ -33,9 +33,9 @@
 #include <mi/neuraylib/icompiled_material.h>
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
+#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
 #include <api/api/neuray/neuray_transaction_impl.h>
 #include <api/api/neuray/neuray_value_impl.h>
-
 #include "backends_backends.h"
 #include "backends_target_code.h"
 
@@ -222,6 +222,10 @@ void Target_code::finalize(
             else
                 info.m_prototypes.push_back(prototype);
         }
+        for (size_t handle_index = 0, num_handles = code->get_function_df_handle_count(i);
+                handle_index < num_handles; ++handle_index) {
+            info.m_df_handle_name_table.push_back(code->get_function_df_handle(i, handle_index));
+        }
     }
 }
 
@@ -287,6 +291,24 @@ Size Target_code::get_callable_function_argument_block_index( mi::Size index) co
     return ~0;
 }
 
+// Get the number of distribution function handles referenced by a callable function.
+Size Target_code::get_callable_function_df_handle_count(Size func_index) const
+{
+    if( func_index < m_callable_function_infos.size())
+        return m_callable_function_infos[ func_index].m_df_handle_name_table.size();
+    return 0;
+}
+
+// Get the name of a distribution function handle referenced by a callable function.
+const char* Target_code::get_callable_function_df_handle(Size func_index, Size handle_index) const
+{
+    if( func_index >= m_callable_function_infos.size() ||
+            handle_index >= m_callable_function_infos[ func_index].m_df_handle_name_table.size())
+        return NULL;
+
+    return m_callable_function_infos[ func_index].m_df_handle_name_table[ handle_index].c_str();
+}
+
 mi::Size Target_code::get_texture_count() const
 {
     return m_texture_table.size();
@@ -336,6 +358,28 @@ Target_code::Texture_shape Target_code::get_texture_shape( mi::Size index) const
         return m_texture_table[ index].get_texture_shape();
     }
     return Target_code::Texture_shape_invalid;
+}
+
+const mi::Float32* Target_code::get_texture_df_data(
+    mi::Size index,
+    mi::Size &rx,
+    mi::Size &ry,
+    mi::Size &rz) const
+{
+    if (index < m_texture_table.size() &&
+        m_texture_table[index].get_texture_shape() == mi::neuraylib::ITarget_code::Texture_shape_bsdf_data) {
+
+        size_t w=0, h=0, d=0;
+        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+            m_texture_table[index].get_df_data_kind(), w, h, d);
+        rx = w;
+        ry = h;
+        rz = d;
+        size_t s;
+        return reinterpret_cast<const mi::Float32*>(
+            mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(m_texture_table[index].get_df_data_kind(), s));
+    }
+    return nullptr;
 }
 
 mi::Size Target_code::get_light_profile_count() const
@@ -537,7 +581,7 @@ mi::Sint32 Target_code::execute_bsdf_sample(
 
 mi::Sint32 Target_code::execute_bsdf_evaluate(
     mi::Size index,
-    mi::neuraylib::Bsdf_evaluate_data *data,
+    mi::neuraylib::Bsdf_evaluate_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -559,7 +603,7 @@ mi::Sint32 Target_code::execute_bsdf_pdf(
 
 mi::Sint32 Target_code::execute_bsdf_auxiliary(
     mi::Size index,
-    mi::neuraylib::Bsdf_auxiliary_data *data,
+    mi::neuraylib::Bsdf_auxiliary_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -591,7 +635,7 @@ mi::Sint32 Target_code::execute_edf_sample(
 
 mi::Sint32 Target_code::execute_edf_evaluate(
     mi::Size index,
-    mi::neuraylib::Edf_evaluate_data *data,
+    mi::neuraylib::Edf_evaluate_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -613,7 +657,7 @@ mi::Sint32 Target_code::execute_edf_pdf(
 
 mi::Sint32 Target_code::execute_edf_auxiliary(
     mi::Size index,
-    mi::neuraylib::Edf_auxiliary_data *data,
+    mi::neuraylib::Edf_auxiliary_data_base *data,
     const mi::neuraylib::Shading_state_material& state,
     mi::neuraylib::Texture_handler_base* tex_handler,
     const mi::neuraylib::ITarget_argument_block *cap_args) const
@@ -657,10 +701,17 @@ void Target_code::add_texture_index(
     const std::string& name,
     const std::string& mdl_url,
     float gamma,
-    Texture_shape shape)
+    Texture_shape shape,
+    mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
 {
     if( index >= m_texture_table.size()) {
-        m_texture_table.resize( index + 1, Texture_info( "", "", "", 0.0f, Texture_shape_invalid));
+        m_texture_table.resize( index + 1, Texture_info(
+            /*db_name=*/"",
+            /*mdl_url=*/"",
+            /*owner=*/"",
+            /*gamma=*/0.0f,
+            /*texture_shape=*/Texture_shape_invalid,
+            /*df_data_kind=*/ mi::mdl::IValue_texture::BDK_NONE));
     }
     std::string owner, url;
     size_t p = mdl_url.find('|');
@@ -671,7 +722,7 @@ void Target_code::add_texture_index(
     else
         url = mdl_url;
 
-    m_texture_table[ index] = Texture_info( name, url, owner, gamma, shape);
+    m_texture_table[index] = Texture_info(name, url, owner, gamma, shape, df_data_kind);
 }
 
 // Registers a used light profile index.

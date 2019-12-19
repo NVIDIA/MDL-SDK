@@ -418,13 +418,14 @@ protected:
             signature->register_dt(Mdl_material::get_static_descriptor_table());
             if (!signature->finalize()) return false;
             if (!m_pipeline->add_signature_association(signature, true, 
-                {"MdlRadianceHitGroup"})) return false;
+                {"MdlRadianceHitGroup",
+                "MdlRadianceAnyHitProgram_0", "MdlRadianceClosestHitProgram_0"})) return false;
 
             // since the shadow hit also needs access to the MDL material, at least the
             // 'geometry.cutout_opacity' expression, we simply use the same signature.
             // Without alpha blending or cutout support, an empty signature would be sufficient.
             if (!m_pipeline->add_signature_association(signature, false /* owned by group above*/, 
-                {"MdlShadowHitGroup"})) return false;
+                {"MdlShadowHitGroup", "MdlShadowAnyHitProgram_0"})) return false;
 
             // ray tracing settings
             m_pipeline->set_max_payload_size(13 * sizeof(float) + 2 * sizeof(uint32_t));
@@ -489,12 +490,11 @@ protected:
 
                     // target (link unit) specific resources
                     local_root_arguments.target_heap_region_start = 
-                        get_mdl_sdk().get_library()->get_shared_target_code()->
-                            get_descriptor_heap_region();
+                        instance->get_material(part)->get_target_descriptor_heap_region();
 
                     // material specific resources
                     local_root_arguments.material_heap_region_start = 
-                        instance->get_material(part)->get_descriptor_heap_region();
+                        instance->get_material(part)->get_material_descriptor_heap_region();
 
                     // index in the shader binding table
                     // compute the hit record index based on ray-type, 
@@ -598,7 +598,14 @@ protected:
             // render ui only if not hidden
             if (m_show_gui)
             {
-                ImGui::Begin("Rendering Settings", false, ImVec2(400, 350));
+                float w_width = 400.f * get_options()->gui_scale;
+                float w_height = float(get_window()->get_height()) - 20.f;
+                float w_pos_x = float(get_window()->get_width()) - w_width - 10.f;
+                float w_pos_y = 10.f;
+                ImGui::SetNextWindowPos(ImVec2(w_pos_x, w_pos_y), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(w_width, w_height), ImGuiCond_FirstUseEver);
+
+                ImGui::Begin("Rendering Settings");
 
                 ImGui::Text("progressive iteration: %d", 
                             m_scene_constants->data.progressive_iteration);
@@ -846,7 +853,6 @@ protected:
         }
     }
 
-
 private:
  
     Shader_binding_tables* m_shader_binding_table;
@@ -880,24 +886,23 @@ private:
     bool m_take_screenshot;
 };
 
-
 // entry point of the application
-_Use_decl_annotations_
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR command_line_args, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdShow)
 {
     if(AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())
     {
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
+        SetConsoleOutputCP(CP_UTF8);
     }
     Example_dxr_options options;
-    options.window_title = "MDL Direct3D Raytracing";
+    options.window_title = L"MDL Direct3D Raytracing    [Press SPACE to toggle options]";
     options.window_width = 1280;
     options.window_height = 720;
 
     // parse command line options
     int return_code = 0;
-    if (parse_options(options, command_line_args, return_code))
+    if (parse_options(options, lpCmdLine, return_code))
     {
         // run the application
         Demo_rtx app;

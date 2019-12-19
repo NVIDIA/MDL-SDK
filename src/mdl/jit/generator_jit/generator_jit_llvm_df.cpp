@@ -882,11 +882,13 @@ void LLVM_code_generator::create_bsdf_function_types()
     m_type_bsdf_sample_func = llvm::FunctionType::get(ret_tp, arg_types_sample, false);
 
     // BSDF_API void diffuse_reflection_bsdf_evaluate(
-    //     BSDF_evaluate_data *data, Execution_context *ctx, float3 *inherited_normal)
+    //     BSDF_evaluate_data *data, Execution_context *ctx, float3 *inherited_normal,
+    //     float3 *inherited_weight)
 
     llvm::Type *arg_types_eval[] = {
         Type_mapper::get_ptr(m_type_bsdf_evaluate_data),
         second_param_type,
+        float3_struct_ptr_type,
         float3_struct_ptr_type
     };
 
@@ -904,11 +906,13 @@ void LLVM_code_generator::create_bsdf_function_types()
     m_type_bsdf_pdf_func = llvm::FunctionType::get(ret_tp, arg_types_pdf, false);
 
     // BSDF_API void diffuse_reflection_bsdf_auxiliary(
-    //     BSDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal)
+    //     BSDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal,
+    //     float3 *inherited_weight)
 
     llvm::Type *arg_types_auxiliary[] = {
         Type_mapper::get_ptr(m_type_bsdf_auxiliary_data),
         second_param_type,
+        float3_struct_ptr_type,
         float3_struct_ptr_type
     };
 
@@ -937,7 +941,7 @@ void LLVM_code_generator::create_edf_function_types()
         second_param_type = m_type_mapper.get_state_ptr_type(m_state_mode);
     llvm::Type *float3_struct_ptr_type = Type_mapper::get_ptr(m_float3_struct_type);
 
-    // BSDF_API void diffuse_reflection_edf_sample(
+    // BSDF_API void diffuse_edf_sample(
     //     EDF_sample_data *data, Execution_context *ctx, float3 *inherited_normal)
 
     llvm::Type *arg_types_sample[] = {
@@ -948,18 +952,20 @@ void LLVM_code_generator::create_edf_function_types()
 
     m_type_edf_sample_func = llvm::FunctionType::get(ret_tp, arg_types_sample, false);
 
-    // BSDF_API void diffuse_reflection_edf_evaluate(
-    //     EDF_evaluate_data *data, Execution_context *ctx, float3 *inherited_normal)
+    // BSDF_API void diffuse_edf_evaluate(
+    //     EDF_evaluate_data *data, Execution_context *ctx, float3 *inherited_normal,
+    //     float3 *inherited_weight)
 
     llvm::Type *arg_types_eval[] = {
         Type_mapper::get_ptr(m_type_edf_evaluate_data),
         second_param_type,
+        float3_struct_ptr_type,
         float3_struct_ptr_type
     };
 
     m_type_edf_evaluate_func = llvm::FunctionType::get(ret_tp, arg_types_eval, false);
 
-    // BSDF_API void diffuse_reflection_edf_pdf(
+    // BSDF_API void diffuse_edf_pdf(
     //     EDF_pdf_data *data, Execution_context *ctx, float3 *inherited_normal)
 
     llvm::Type *arg_types_pdf[] = {
@@ -970,17 +976,20 @@ void LLVM_code_generator::create_edf_function_types()
 
     m_type_edf_pdf_func = llvm::FunctionType::get(ret_tp, arg_types_pdf, false);
 
-    // BSDF_API void diffuse_reflection_edf_auxiliary(
-    //     EDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal)
+    // BSDF_API void diffuse_edf_auxiliary(
+    //     EDF_auxiliary_data *data, Execution_context *ctx, float3 *inherited_normal,
+    //     float3 *inherited_weight)
 
     llvm::Type *arg_types_auxiliary[] = {
         Type_mapper::get_ptr(m_type_edf_auxiliary_data),
         second_param_type,
+        float3_struct_ptr_type,
         float3_struct_ptr_type
     };
 
     m_type_edf_auxiliary_func = llvm::FunctionType::get(ret_tp, arg_types_auxiliary, false);
 }
+
 
 // Compile a distribution function into an LLVM Module and return the LLVM module.
 llvm::Module *LLVM_code_generator::compile_distribution_function(
@@ -998,6 +1007,10 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
 
     create_captured_argument_struct(m_llvm_context, *root_lambda);
+
+    // must be done before load_and_link_libbsdf() because of calls to texture runtime
+    if (m_texruntime_with_derivs)
+        m_deriv_infos = dist_func.get_derivative_infos();
 
     // create a module for the functions
     if (m_module == NULL) {
@@ -1017,7 +1030,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     }
 
     // load libbsdf into the current module, if it was not initialized, yet
-    if (m_type_bsdf_sample_data == NULL && !load_and_link_libbsdf()) {
+    if (m_type_bsdf_sample_data == NULL && !load_and_link_libbsdf(
+            m_link_libbsdf_df_handle_slot_mode)) {
         // drop the module and give up
         drop_llvm_module(m_module);
         m_dist_func = NULL;
@@ -1051,9 +1065,6 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
     m_texture_results_struct_type = lambda_sched.create_texture_results_type();
     m_lambda_results_struct_type = lambda_sched.create_lambda_results_type();
-
-    if (m_texruntime_with_derivs)
-        m_deriv_infos = dist_func.get_derivative_infos();
 
     size_t expr_lambda_count = m_dist_func->get_expr_lambda_count();
 
@@ -1174,6 +1185,11 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
                 func_kind,
                 m_captured_args_type != NULL ? next_arg_block_index : ~0));
 
+        Exported_function &exp_func = m_exported_func_list.back();
+        for (size_t i = 0, n = dist_func.get_df_handle_count(); i < n; ++i) {
+            exp_func.add_df_handle(dist_func.get_df_handle(i));
+        }
+
         Function_context context(alloc, *this, inst, func, flags);
 
         if (i == DFSTATE_INIT) {
@@ -1245,17 +1261,23 @@ LLVM_code_generator::get_dist_func_state_from_call(llvm::CallInst *call)
 
 // Get the BSDF function for the given semantics and the current distribution function state
 // from the BSDF library.
-llvm::Function *LLVM_code_generator::get_libbsdf_function(
-    IDefinition::Semantics sema,
-    IType::Kind kind)
+llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_call)
 {
+    IDefinition::Semantics sema = dag_call->get_semantic();
+    IType::Kind kind = dag_call->get_type()->get_kind();
+
     std::string func_name;
 
-    std::string kind_suffix = "";
+    std::string suffix = "";
+
+    // check for tint(color, color, bsdf) overload
+    if (sema == IDefinition::DS_INTRINSIC_DF_TINT && dag_call->get_argument_count() == 3)
+        suffix = "_rt";
+
     switch (kind)
     {
-        case IType::Kind::TK_BSDF:  kind_suffix = "_bsdf"; break;
-        case IType::Kind::TK_EDF:  kind_suffix = "_edf"; break;
+        case IType::Kind::TK_BSDF: suffix += "_bsdf"; break;
+        case IType::Kind::TK_EDF:  suffix += "_edf"; break;
         default: break;
     }
 
@@ -1273,6 +1295,8 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
                   "simple_glossy_bsdf")
         SEMA_CASE(DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF,
                   "backscattering_glossy_reflection_bsdf")
+        SEMA_CASE(DS_INTRINSIC_DF_SHEEN_BSDF,
+                  "sheen_bsdf")
         SEMA_CASE(DS_INTRINSIC_DF_MEASURED_BSDF,
                   "measured_bsdf")
 
@@ -1281,14 +1305,14 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
         SEMA_CASE(DS_INTRINSIC_DF_MEASURED_EDF,
                   "measured_edf")
         SEMA_CASE(DS_INTRINSIC_DF_SPOT_EDF,
-                   "spot_edf")
+                  "spot_edf")
 
         // Unsupported: DS_INTRINSIC_DF_ANISOTROPIC_VDF
 
         SEMA_CASE(DS_INTRINSIC_DF_NORMALIZED_MIX,
-                  "normalized_mix" + kind_suffix)
+                  "normalized_mix" + suffix)
         SEMA_CASE(DS_INTRINSIC_DF_CLAMPED_MIX,
-                  "clamped_mix" + kind_suffix)
+                  "clamped_mix" + suffix)
         SEMA_CASE(DS_INTRINSIC_DF_WEIGHTED_LAYER,
                   "weighted_layer")
         SEMA_CASE(DS_INTRINSIC_DF_FRESNEL_LAYER,
@@ -1300,11 +1324,13 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
         SEMA_CASE(DS_INTRINSIC_DF_THIN_FILM,
                   "thin_film")
         SEMA_CASE(DS_INTRINSIC_DF_TINT,
-                  "tint")
+                  "tint" + suffix)
         SEMA_CASE(DS_INTRINSIC_DF_DIRECTIONAL_FACTOR,
                   "directional_factor")
         SEMA_CASE(DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR,
                   "measured_curve_factor")
+        SEMA_CASE(DS_INTRINSIC_DF_MEASURED_FACTOR,
+                  "measured_factor")
 
         // Not a DF: DS_INTRINSIC_DF_LIGHT_PROFILE_POWER
         // Not a DF: DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM
@@ -1322,9 +1348,9 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
         SEMA_CASE(DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF,
                   "ward_geisler_moroder_bsdf")
         SEMA_CASE(DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
-                  "color_normalized_mix" + kind_suffix)
+                  "color_normalized_mix" + suffix)
         SEMA_CASE(DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
-                  "color_clamped_mix" + kind_suffix)
+                  "color_clamped_mix" + suffix)
         SEMA_CASE(DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER,
                   "color_weighted_layer")
         SEMA_CASE(DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,
@@ -1370,6 +1396,18 @@ IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(llvm:
         return IDefinition::DS_INVALID_REF_CONSTRUCTOR;
     if (basename == "black_edf")
         return IDefinition::DS_INVALID_REF_CONSTRUCTOR;
+
+    // df::tint(color, color, bsdf) overload?
+    if (basename == "tint_rt_bsdf")
+        return IDefinition::DS_INTRINSIC_DF_TINT;
+
+    // df::tint(color, edf) overload?
+    if (basename == "tint_edf")
+        return IDefinition::DS_INTRINSIC_DF_TINT;
+
+    // df::tint(color, bsdf) overload?
+    if (basename == "tint_bsdf")
+        return IDefinition::DS_INTRINSIC_DF_TINT;
 
     string builtin_name("::df::", get_allocator());
     builtin_name.append(basename.data(), basename.size());
@@ -1492,12 +1530,39 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             p_data = get_context_data(inst);
             handled = true;
         }
-        else if (demangled_name == "::state::get_material_ior()")
+        else if (demangled_name == "::state::get_arg_block_float(int)")
         {
-            func = get_internal_function(m_int_func_state_get_material_ior);
+            func = get_internal_function(m_int_func_state_get_arg_block_float);
 
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_state_get_material_ior));
+            Function_instance inst(
+                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_float));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_arg_block_float3(int)")
+        {
+            func = get_internal_function(m_int_func_state_get_arg_block_float3);
+
+            Function_instance inst(
+                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_float3));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_arg_block_uint(int)")
+        {
+            func = get_internal_function(m_int_func_state_get_arg_block_uint);
+
+            Function_instance inst(
+                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_uint));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::get_arg_block_bool(int)")
+        {
+            func = get_internal_function(m_int_func_state_get_arg_block_bool);
+
+            Function_instance inst(
+                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_bool));
             p_data = get_context_data(inst);
             handled = true;
         }
@@ -1510,14 +1575,31 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             p_data = get_context_data(inst);
             handled = true;
         }
-        else if (demangled_name == "::state::get_thin_walled()")
+        else if (demangled_name == "::state::tex_resolution_2d(int)")
         {
-            func = get_internal_function(m_int_func_state_get_thin_walled);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_state_get_thin_walled));
-            p_data = get_context_data(inst);
-            handled = true;
+            demangled_name = "::tex::resolution(texture_2d)";
+        }
+        else if (demangled_name == "::state::tex_is_valid_2d(int)")
+        {
+            demangled_name = "::tex::is_valid(texture_2d)";
+        }
+        else if (demangled_name == 
+            "::state::tex_lookup_float3_2d(int,float2,int,int,float2,float2)")
+        {
+            demangled_name = "::tex::lookup_float3(texture_2d,"
+                "float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)";
+        }
+        else if (demangled_name == 
+            "::state::tex_lookup_float_3d(int,float3,int,int,int,float2,float2,float2)")
+        {
+            demangled_name = "::tex::lookup_float(texture_3d,"
+                "float3,::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2)";
+        }
+        else if (demangled_name == 
+            "::state::tex_lookup_float3_3d(int,float3,int,int,int,float2,float2,float2)")
+        {
+            demangled_name = "::tex::lookup_float3(texture_3d,"
+                "float3,::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2)";
         }
         else if (demangled_name == "::state::bsdf_measurement_resolution(int,int)")
         {
@@ -1591,6 +1673,43 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             p_data = get_context_data(inst);
             handled = true;
         }
+        else if (demangled_name == "::state::get_bsdf_data_texture_id(Bsdf_data_kind)")
+        {
+            llvm::Value *kind_val = call->getArgOperand(1);
+            if (llvm::ConstantInt *const_int = llvm::dyn_cast<llvm::ConstantInt>(kind_val)) {
+                IValue_texture::Bsdf_data_kind kind =
+                    IValue_texture::Bsdf_data_kind(const_int->getValue().getZExtValue());
+                mi::base::Handle<ILambda_function> main_ilambda(m_dist_func->get_main_df());
+                Lambda_function const *main_lambda = impl_cast<Lambda_function>(main_ilambda.get());
+                Resource_attr_map const &map = main_lambda->get_resource_attribute_map();
+                llvm::Value *res_val = nullptr;
+                // TODO: Fix slow search for texture
+                for (Resource_attr_map::const_iterator it(map.begin()), end(map.end());
+                        it != end; ++it) {
+                    IValue const *r = it->first;
+                    if (IValue_texture const *tex = as<IValue_texture>(r)) {
+                        if (tex->get_bsdf_data_kind() == kind) {
+                            Expression_result res = translate_value(ctx, r);
+                            res_val = res.as_value(ctx);
+                            break;
+                        }
+                    }
+                }
+
+                // BSDF data not actually used? replace by invalid texture ID
+                if (res_val == nullptr)
+                    res_val = ctx.get_constant(int(0));
+
+                call->replaceAllUsesWith(res_val);
+
+                // Remove old call and let iterator point to instruction before old call
+                ii = --ii->getParent()->getInstList().erase(call);
+                return true;
+            } else {
+                MDL_ASSERT(!"argument to State::get_bsdf_data_texture_id() must be a constant");
+                return false;
+            }
+        }
     }
 
     if (!handled)
@@ -1608,7 +1727,11 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         if (def == NULL)
             return true;  // not one of our modules, maybe a builtin function
 
-        func = get_intrinsic_function(def, /*return_derivs=*/ false);
+        if (m_target_lang == TL_HLSL)
+            func = get_hlsl_intrinsic_function(def, /*return_derivs=*/ false);
+ 
+        if(func == NULL)
+            func = get_intrinsic_function(def, /*return_derivs=*/ false);
 
         // check for MDL function with array return and retrieve array size
         MDL_ASSERT(def->get_type()->get_kind() == IType::TK_FUNCTION);
@@ -1719,33 +1842,48 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         llvm::Type *arg_type = arg->getType();
         llvm::Type *param_type = func_type->getParamType(llvm_args.size());
 
-        // are argument and parameter types identical?
-        if (arg_type == param_type)
+        if (arg_type == param_type) {
             llvm_args.push_back(arg);
-        else {
-            // no, a conversion is required
-            if (llvm::isa<llvm::PointerType>(arg_type) && llvm::isa<llvm::PointerType>(param_type))
-            {
-                // convert from one memory representation to another
-                llvm::PointerType *param_ptr_type = llvm::cast<llvm::PointerType>(param_type);
-                llvm::Value *val = ctx.load_and_convert(param_ptr_type->getElementType(), arg);
-
-                llvm::Value *convert_tmp_ptr = ctx.create_local(
-                    param_ptr_type->getElementType(), "convert_tmp");
-                ctx->CreateStore(val, convert_tmp_ptr);
-
-                llvm_args.push_back(convert_tmp_ptr);
-            } else if (llvm::isa<llvm::PointerType>(arg_type) &&
-                llvm::isa<llvm::VectorType>(param_type))
-            {
-                // load memory representation into a vector
-                llvm::Value *val = ctx.load_and_convert(param_type, arg);
-                llvm_args.push_back(val);
-            } else {
-                MDL_ASSERT(!"Unsupported parameter conversion");
-                return false;
-            }
+            continue;
         }
+
+        // normalize argument to a value
+        if (llvm::isa<llvm::PointerType>(arg_type)) {
+            arg = ctx->CreateLoad(arg);
+            arg_type = arg->getType();
+        }
+
+        llvm::Type *param_elem_type = param_type;
+        if (llvm::isa<llvm::PointerType>(param_type))
+            param_elem_type = param_type->getPointerElementType();
+
+        // need to convert from or to a derivative value?
+        if (ctx.is_deriv_type(arg_type) && !ctx.is_deriv_type(param_elem_type)) {
+            arg = ctx.get_dual_val(arg);
+            arg_type = arg->getType();
+        } else if (!ctx.is_deriv_type(arg_type) && ctx.is_deriv_type(param_elem_type)) {
+            arg = ctx.get_dual(arg);
+            arg_type = arg->getType();
+        }
+
+        if (arg_type == param_type) {
+            llvm_args.push_back(arg);
+            continue;
+        }
+
+        // conversion required
+        llvm::Value *convert_tmp_ptr = ctx.create_local(param_elem_type, "convert_tmp");
+        ctx.convert_and_store(arg, convert_tmp_ptr);
+
+        // function expects a pointer
+        if (llvm::isa<llvm::PointerType>(param_type)) {
+            llvm_args.push_back(convert_tmp_ptr);
+            continue;
+        }
+
+        // function expects a value
+        arg = ctx->CreateLoad(convert_tmp_ptr);
+        llvm_args.push_back(arg);
     }
 
     llvm::Value *res = ctx->CreateCall(func, llvm_args);
@@ -1869,9 +2007,9 @@ LLVM_context_data::Flags LLVM_code_generator::get_df_function_flags(const llvm::
 }
 
 // Load and link libbsdf into the current LLVM module.
-bool LLVM_code_generator::load_and_link_libbsdf()
+bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
 {
-    std::unique_ptr<llvm::Module> libbsdf(load_libbsdf(m_llvm_context));
+    std::unique_ptr<llvm::Module> libbsdf(load_libbsdf(m_llvm_context, hsm));
     MDL_ASSERT(libbsdf != NULL);
 
     // clear target triple to avoid LLVM warning on console about mixing different targets
@@ -1977,6 +2115,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
 
                 llvm::FunctionType *new_func_type;
                 IType::Kind df_kind = IType::TK_ERROR;
+                bool has_inherited_weight = false;
 
                 // bsdf
                 if (df_data_type == m_type_bsdf_sample_data) {
@@ -1986,6 +2125,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 else if (df_data_type == m_type_bsdf_evaluate_data) {
                     new_func_type = m_type_bsdf_evaluate_func;
                     df_kind = IType::TK_BSDF;
+                    has_inherited_weight = true;
                 }
                 else if (df_data_type == m_type_bsdf_pdf_data) {
                     new_func_type = m_type_bsdf_pdf_func;
@@ -1994,6 +2134,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 else if (df_data_type == m_type_bsdf_auxiliary_data) {
                     new_func_type = m_type_bsdf_auxiliary_func;
                     df_kind = IType::TK_BSDF;
+                    has_inherited_weight = true;
                 }
                 // edf
                 else if (df_data_type == m_type_edf_sample_data) {
@@ -2003,6 +2144,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 else if (df_data_type == m_type_edf_evaluate_data) {
                     new_func_type = m_type_edf_evaluate_func;
                     df_kind = IType::TK_EDF;
+                    has_inherited_weight = true;
                 }
                 else if (df_data_type == m_type_edf_pdf_data) {
                     new_func_type = m_type_edf_pdf_func;
@@ -2011,6 +2153,7 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                 else if (df_data_type == m_type_edf_auxiliary_data) {
                     new_func_type = m_type_edf_auxiliary_func;
                     df_kind = IType::TK_EDF;
+                    has_inherited_weight = true;
                 }
                 else
                     new_func_type = NULL;
@@ -2035,6 +2178,68 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                         break;
                 }
 
+                // for HLSL, check for interpreter functions
+                if (m_target_lang == TL_HLSL && func->getName().startswith("mdl_bsdf_")) {
+                    llvm::FunctionType *old_func_type = func->getFunctionType();
+                    if (df_data_type == m_type_bsdf_sample_data) {
+                        MDL_ASSERT(func->getName() == "mdl_bsdf_sample");
+                    } else if (df_data_type == m_type_bsdf_evaluate_data) {
+                        MDL_ASSERT(func->getName() == "mdl_bsdf_evaluate");
+                    } else if (df_data_type == m_type_bsdf_pdf_data) {
+                        MDL_ASSERT(func->getName() == "mdl_bsdf_pdf");
+                    } else {
+                        MDL_ASSERT(!"Unexpected function starting with \"mdl_bsdf_\"");
+                    }
+
+                    llvm::Function::arg_iterator old_arg_it = func->arg_begin();
+                    llvm::Value *old_df_data_param       = old_arg_it++;
+                    llvm::Value *old_state_param         = old_arg_it++;
+                    llvm::Value *old_scratch_space_param = old_arg_it++;
+                    llvm::Value *old_material_param      = old_arg_it++;
+
+                    llvm::Type *arg_types[] = {
+                        Type_mapper::get_ptr(df_data_type),
+                        m_type_mapper.get_state_ptr_type(m_state_mode),
+                        old_func_type->getParamType(2),
+                        old_func_type->getParamType(3)
+                    };
+
+                    llvm::FunctionType *new_interpreter_func_type = llvm::FunctionType::get(
+                        old_func_type->getReturnType(), arg_types, false);
+
+                    llvm::Function *new_func = llvm::Function::Create(
+                        new_interpreter_func_type,
+                        llvm::GlobalValue::InternalLinkage,
+                        "",
+                        m_module);
+                    new_func->takeName(func);
+                    new_func->getBasicBlockList().splice(
+                        new_func->begin(), func->getBasicBlockList());
+
+                    // make sure we don't introduce initialization code before alloca instructions
+                    llvm::BasicBlock::iterator param_init_insert_point = new_func->front().begin();
+                    while (llvm::isa<llvm::AllocaInst>(param_init_insert_point))
+                        ++param_init_insert_point;
+
+                    llvm::Function::arg_iterator new_arg_it = new_func->arg_begin();
+                    llvm::Value *new_df_data_param       = new_arg_it++;
+                    llvm::Value *new_state_param         = new_arg_it++;
+                    llvm::Value *new_scratch_space_param = new_arg_it++;
+                    llvm::Value *new_material_param      = new_arg_it++;
+
+                    // replace all uses of parameters
+                    old_df_data_param->replaceAllUsesWith(new_df_data_param);
+                    old_state_param->replaceAllUsesWith(new llvm::BitCastInst(
+                        new_state_param,
+                        old_state_param->getType(),
+                        "state_cast",
+                        &*param_init_insert_point));
+                    old_scratch_space_param->replaceAllUsesWith(new_scratch_space_param);
+                    old_material_param->replaceAllUsesWith(new_material_param);
+
+                    func->eraseFromParent();
+                    continue;
+                }
 
                 IDefinition::Semantics sema = get_libbsdf_function_semantics(func->getName());
 
@@ -2053,6 +2258,9 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                     llvm::Value *df_data          = old_arg_it++;
                     llvm::Value *exec_ctx         = old_arg_it++;
                     llvm::Value *inherited_normal = old_arg_it++;
+                    llvm::Value *inherited_weight = NULL;
+                    if (has_inherited_weight)
+                        inherited_weight = old_arg_it++;
 
                     llvm::Function *new_func = llvm::Function::Create(
                         new_func_type,
@@ -2075,6 +2283,9 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                     llvm::Value *data_param             = arg_it++;
                     llvm::Value *exec_ctx_param         = arg_it++;
                     llvm::Value *inherited_normal_param = arg_it++;
+                    llvm::Value *inherited_weight_param = NULL;
+                    if (has_inherited_weight)
+                        inherited_weight_param = arg_it++;
 
                     // replace all uses of parameters which will not be removed
                     df_data->replaceAllUsesWith(data_param);
@@ -2084,6 +2295,8 @@ bool LLVM_code_generator::load_and_link_libbsdf()
                         "exec_ctx_cast",
                         &*param_init_insert_point));
                     inherited_normal->replaceAllUsesWith(inherited_normal_param);
+                    if (has_inherited_weight)
+                        inherited_weight->replaceAllUsesWith(inherited_weight_param);
 
                     // introduce local variables for all used DF parameters
                     bool skipped_df_idx_inc = false;
@@ -2588,7 +2801,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
     Function_context                           &ctx,
     llvm::AllocaInst                           *inst,
     llvm::Value                                *weight_array,
-    Df_component_info                        &comp_info,
+    Df_component_info                          &comp_info,
     llvm::SmallVector<llvm::Instruction *, 16> &delete_list)
 {
     // These rewrites are performed:
@@ -2686,18 +2899,24 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     llvm::Function *df_func = comp_info.get_df_function(call_state);
 
                     // convert 64-bit index to 32-bit index
-                    llvm::Value *idx_val = new llvm::TruncInst(
-                        component_idx_val,
-                        m_type_mapper.get_int_type(),
-                        "",
-                        call);
+                    llvm::Value *idx_val = component_idx_val;
+                    if (idx_val->getType() != m_type_mapper.get_int_type()) {
+                        idx_val = new llvm::TruncInst(
+                            component_idx_val,
+                            m_type_mapper.get_int_type(),
+                            "",
+                            call);
+                    }
 
                     // call it with state parameters added
-                    llvm::SmallVector<llvm::Value *, 7> llvm_args;
+                    llvm::SmallVector<llvm::Value *, 5> llvm_args;
                     llvm_args.push_back(call->getArgOperand(0));     // res_pointer
                     llvm_args.push_back(ctx.has_exec_ctx_parameter() ?
                         ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
-                    llvm_args.push_back(call->getArgOperand(2));     // inherited_normal parameter
+                    llvm_args.push_back(call->getArgOperand(2));     // inherited_normal param
+                    if (call_state == Distribution_function_state::DFSTATE_EVALUATE ||
+                        call_state == Distribution_function_state::DFSTATE_AUXILIARY)
+                            llvm_args.push_back(call->getArgOperand(3));  // inherited_weight param
                     if (comp_info.is_switch_function())
                         llvm_args.push_back(idx_val);                // BSDF function index
                     llvm::CallInst::Create(df_func, llvm_args, "", call);
@@ -2770,8 +2989,7 @@ void LLVM_code_generator::handle_df_array_parameter(
 
         // is it a BSDF_component array?
         bool color_df_component = false;
-        if (elem_type->isStructTy() && (
-                !llvm::cast<llvm::StructType>(elem_type)->isLiteral() &&
+        if (elem_type->isStructTy() && !llvm::cast<llvm::StructType>(elem_type)->isLiteral() && (
                 elem_type->getStructName() == "struct.BSDF_component" ||
                 elem_type->getStructName() == "struct.EDF_component" ||
                 (color_df_component = (
@@ -2908,8 +3126,7 @@ void LLVM_code_generator::handle_df_array_parameter(
 
     // is it a BSDF_component array?
     bool color_df_component = false;
-    if (elem_type->isStructTy() && (
-            !llvm::cast<llvm::StructType>(elem_type)->isLiteral() &&
+    if (elem_type->isStructTy() && !llvm::cast<llvm::StructType>(elem_type)->isLiteral() && (
             elem_type->getStructName() == "struct.BSDF_component" ||
             elem_type->getStructName() == "struct.EDF_component" ||
             (color_df_component = (
@@ -3029,7 +3246,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                 case DFSTATE_SAMPLE:    func_type = m_type_edf_sample_func; break;
                 case DFSTATE_EVALUATE:  func_type = m_type_edf_evaluate_func; break;
                 case DFSTATE_PDF:       func_type = m_type_edf_pdf_func; break;
-                case DFSTATE_AUXILIARY:   func_type = m_type_edf_auxiliary_func; break;
+                case DFSTATE_AUXILIARY: func_type = m_type_edf_auxiliary_func; break;
                 default:
                     MDL_ASSERT(!"Invalid edf distribution function state");
                     return NULL;
@@ -3088,12 +3305,19 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
 
         llvm::Value *df_true_func = instantiate_df(dag_call->get_argument(1));
         llvm::Value *df_false_func = instantiate_df(dag_call->get_argument(2));
+        llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
+        llvm::Value *inherited_normal = arg_it;
+        llvm::Value *inherited_weight = NULL;
+        if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY)
+            inherited_weight = ++arg_it;
 
-        llvm::Value *llvm_args[] = {
-            func->arg_begin(),            // res_pointer
-            ctx.has_exec_ctx_parameter() ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter(),
-            ctx.get_first_parameter()   // inherited_normal parameter
-        };
+        llvm::SmallVector<llvm::Value *, 4> llvm_args;
+        llvm_args.push_back(func->arg_begin());            // res_pointer
+        llvm_args.push_back(ctx.has_exec_ctx_parameter()
+            ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
+        llvm_args.push_back(inherited_normal);
+        if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY)
+            llvm_args.push_back(inherited_weight);
 
         // True case
         ctx->SetInsertPoint(cond_true_bb);
@@ -3180,8 +3404,10 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     if (sema == operator_to_semantic(IExpression::OK_TERNARY))
         return instantiate_ternary_df(dag_call);
 
+    bool is_elemental = is_elemental_df_semantics(sema);
     IType::Kind kind = dag_call->get_type()->get_kind();
-    df_lib_func = get_libbsdf_function(sema, kind);
+
+    df_lib_func = get_libbsdf_function(dag_call);
     if (df_lib_func == NULL) {
         MDL_ASSERT(!"BSDF function not supported by libbsdf, yet");
         return NULL;
@@ -3224,6 +3450,39 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
                 ctx.move_to_body_start();
 
+                // special handling for handle parameters
+                if (is_elemental && param_idx == dag_call->get_argument_count() - 1 &&
+                        strcmp(dag_call->get_parameter_name(param_idx), "handle") == 0) {
+                    mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
+                        m_dist_func->get_expr_lambda(lambda_index));
+
+                    MDL_ASSERT(is<DAG_constant>(expr_lambda->get_body())
+                        && "DF handle must be a constant");
+                    if (DAG_constant const *handle_const = as<DAG_constant>(
+                            expr_lambda->get_body())) {
+                        IValue const *handle_val = handle_const->get_value();
+                        IValue_string const *handle_str = as<IValue_string>(handle_val);
+                        MDL_ASSERT(handle_str && "DF handle must be string");
+                        if (handle_str) {
+                            char const *handle_name = handle_str->get_value();
+
+                            int handle_id = -1;
+                            for (size_t i = 0, n = m_dist_func->get_df_handle_count(); i < n; ++i) {
+                                if (strcmp(handle_name, m_dist_func->get_df_handle(i)) == 0) {
+                                    handle_id = i;
+                                    break;
+                                }
+                            }
+
+                            MDL_ASSERT(handle_id != -1);
+                            Expression_result res = Expression_result::value(
+                                ctx.get_constant(handle_id));
+                            inst->replaceAllUsesWith(res.as_ptr(ctx));
+                            continue;
+                        }
+                    }
+                }
+
                 Expression_result res = translate_precalculated_lambda(
                     ctx, lambda_index, elem_type);
                 inst->replaceAllUsesWith(res.as_ptr(ctx));
@@ -3258,12 +3517,14 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                         llvm::Value *param_bsdf_func = instantiate_df(arg);
 
                         // call it with state parameters added
-                        llvm::Value *llvm_args[] = {
-                            call->getArgOperand(0),  // res_pointer
-                            ctx.has_exec_ctx_parameter() ? ctx.get_exec_ctx_parameter()
-                                : ctx.get_state_parameter(),
-                            call->getArgOperand(2)   // inherited_normal parameter
-                        };
+                        llvm::SmallVector<llvm::Value *, 4> llvm_args;
+                        llvm_args.push_back(call->getArgOperand(0));  // res_pointer
+                        llvm_args.push_back(ctx.has_exec_ctx_parameter()
+                            ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
+                        llvm_args.push_back(call->getArgOperand(2));  // inherited_normal
+                        if (m_dist_func_state == DFSTATE_EVALUATE || 
+                            m_dist_func_state == DFSTATE_AUXILIARY)
+                                llvm_args.push_back(call->getArgOperand(3));  // inherited_weight
                         llvm::CallInst::Create(param_bsdf_func, llvm_args, "", call);
 
                         m_dist_func_state = old_state;
@@ -3377,6 +3638,169 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     llvm::Value *normal_buf = ctx.create_local(m_float3_struct_type, "normal_buf");
     ctx.convert_and_store(normal, normal_buf);
 
+    // initialize evaluate and auxiliary data
+    mi::mdl::IType::Kind df_kind = body->get_type()->get_kind();
+    llvm::Constant *zero = ctx.get_constant(0.0f);
+    if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY) {
+
+        llvm::Constant *elems[] = {zero, zero, zero};
+
+        // no handles
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
+            llvm::Value *value_ptr = NULL;
+            if (df_kind == mi::mdl::IType::TK_BSDF) {
+                switch (m_dist_func_state)
+                {
+                    case DFSTATE_EVALUATE: {
+
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(4)) }); // bsdf_diffuse
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(5)) }); // bsdf_glossy
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+                        break;
+                    }
+                    case DFSTATE_AUXILIARY: {
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(3)) }); // albedo
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(4)) }); // normal
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            } else if (df_kind == mi::mdl::IType::TK_EDF && m_dist_func_state == DFSTATE_EVALUATE) {
+                value_ptr = ctx->CreateGEP(
+                    ctx.get_function()->arg_begin(),
+                    { ctx.get_constant(int(0)), ctx.get_constant(int(2)) });        // edf
+                ctx->CreateStore(
+                    llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+            }
+        }
+        // fixed size array or user data
+        else {
+            // number of elements in the buffer/array
+            llvm::Value *handle_count = NULL;
+            if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) { // DF_HSM_POINTER
+                int handle_count_idx = -1;
+                if (df_kind == mi::mdl::IType::TK_BSDF)
+                    handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4;
+                else if (df_kind == mi::mdl::IType::TK_EDF)
+                    handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 2 : -1;
+
+                if(handle_count_idx >=0)
+                    handle_count = ctx->CreateLoad(
+                        ctx.create_simple_gep_in_bounds(
+                            ctx.get_function()->arg_begin(), handle_count_idx));
+            } else {                                                            // DF_HSM_FIXED_X
+                handle_count = ctx.get_constant(
+                    static_cast<int>(m_link_libbsdf_df_handle_slot_mode));
+            }
+            
+            if (handle_count)
+            {
+                // setup a block and index
+                llvm::BasicBlock *loop_block = ctx.create_bb("init_loop");
+                llvm::BasicBlock *loop_block_end = ctx.create_bb("init_loop_end");
+
+                llvm::Value *index_ptr = ctx.create_local(
+                    m_type_mapper.get_int_type(), "init_index");
+                ctx->CreateStore(ctx.get_constant(int(0)), index_ptr);
+
+                // start loop
+                ctx->CreateBr(loop_block);
+                ctx->SetInsertPoint(loop_block);
+                llvm::Value *cur_index = ctx->CreateLoad(index_ptr);
+
+                // git indices of the fields to initialize
+                int value_0_idx = -1;
+                int value_1_idx = -1;
+                if (df_kind == mi::mdl::IType::TK_BSDF) {
+                    value_0_idx = 
+                        m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4; // bsdf_diffuse/albedo
+                    value_1_idx = 
+                        m_dist_func_state == DFSTATE_EVALUATE ? 6 : 5; // bsdf_specular/normal
+                }
+                else if (df_kind == mi::mdl::IType::TK_EDF &&
+                         m_dist_func_state == DFSTATE_EVALUATE) {
+                    value_0_idx = 3;                                  // edf
+                }
+
+                // get pointer and write zeros
+                if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER)
+                {
+                    // for user buffers there is an additional 'handle_count' -> +1
+                    if (value_0_idx >= 0)
+                    {
+                        llvm::Value *result_value_ptr_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(value_0_idx + 1)) });
+                        llvm::Value *result_value_ptr = ctx->CreateLoad(result_value_ptr_ptr);
+                        result_value_ptr = ctx->CreateGEP(result_value_ptr, cur_index);
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+
+                    if (value_1_idx >= 0)
+                    {
+                        llvm::Value *result_value_ptr_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(value_1_idx + 1)) });
+                        llvm::Value *result_value_ptr = ctx->CreateLoad(result_value_ptr_ptr);
+                        result_value_ptr = ctx->CreateGEP(result_value_ptr, cur_index);
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+                }
+                else
+                { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
+                    if (value_0_idx >= 0)
+                    {
+                        llvm::Value *result_value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), 
+                              ctx.get_constant(int(value_0_idx)), 
+                              cur_index });
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+
+                    if (value_1_idx >= 0)
+                    {
+                        llvm::Value *result_value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), 
+                              ctx.get_constant(int(value_1_idx)), 
+                              cur_index });
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+                }
+
+                // increment index, next iteration or end of loop 
+                llvm::Value *new_index = ctx->CreateAdd(cur_index, ctx.get_constant(1));
+                ctx->CreateStore(new_index, index_ptr);
+                llvm::Value *cond = ctx->CreateICmpSLT(new_index, handle_count);
+                ctx->CreateCondBr(cond, loop_block, loop_block_end);
+                ctx->SetInsertPoint(loop_block_end);
+            }
+        }
+    }
+
     // create and initialize execution context
     llvm::Value *exec_ctx = nullptr;
 
@@ -3410,13 +3834,127 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     }
 
     // call the instantiated distribution function
-    llvm::Value *df_args[] = {
-        ctx.get_function()->arg_begin(),  // result pointer
-        exec_ctx ? exec_ctx : ctx.get_state_parameter(),
-        normal_buf
-    };
+    llvm::SmallVector<llvm::Value *, 4> df_args;
+    df_args.push_back(ctx.get_function()->arg_begin());  // result pointer
+    df_args.push_back(exec_ctx ? exec_ctx : ctx.get_state_parameter());
+    df_args.push_back(normal_buf);
+    if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY) {
+        llvm::Value *weight_buf = ctx.create_local(m_float3_struct_type, "weight"); 
+        llvm::Constant *one = ctx.get_constant(1.0f);                   //inherited_weight
+        llvm::Constant *elems[] = { one, one, one };
+        ctx->CreateStore(llvm::ConstantStruct::get(m_float3_struct_type, elems), weight_buf);
+        df_args.push_back(weight_buf);
+    }
     llvm::CallInst *callinst = ctx->CreateCall(df_func, df_args);
 
+    if (df_kind == mi::mdl::IType::TK_BSDF && m_dist_func_state == DFSTATE_AUXILIARY)
+    {
+        // normalize function
+        IDefinition const *norm_def = m_compiler->find_stdlib_signature(
+            "::math", "normalize(float3)");
+        llvm::Function *norm_func = get_intrinsic_function(norm_def, /*return_derivs=*/ false);
+
+        // no handles
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
+        {
+            // find normal in the data structure (element at index 4)
+            llvm::Value *result_normal_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),  // result pointer
+                { ctx.get_constant(int(0)), ctx.get_constant(int(4)) });
+
+            llvm::Value *result_normal = ctx.load_and_convert(
+                m_type_mapper.get_float3_type(), result_normal_ptr);
+
+            llvm::Value *cond_x = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 0), zero);
+            llvm::Value *cond_y = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 1), zero);
+            llvm::Value *cond_z = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 2), zero);
+            llvm::Value *cond_normalize = ctx->CreateOr(cond_x, ctx->CreateOr(cond_y, cond_z));
+
+            // setup a block and index
+            llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero");
+            llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_end");
+
+            ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
+            ctx->SetInsertPoint(if_non_zero_block);
+
+            // if (cond_normalize) 
+            //     result_normalized = normalize(result_normalized)
+            llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
+            ctx.convert_and_store(result_normalized, result_normal_ptr);
+            ctx->CreateBr(if_non_zero_block_end);
+
+            ctx->SetInsertPoint(if_non_zero_block_end);
+
+            return Expression_result::value(callinst);
+        }
+
+        // number of elements in the buffer/array
+        llvm::Value *handle_count = NULL;
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) {
+            handle_count = ctx->CreateLoad(
+                ctx.create_simple_gep_in_bounds(ctx.get_function()->arg_begin(), 4));
+        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
+            handle_count = ctx.get_constant(static_cast<int>(m_link_libbsdf_df_handle_slot_mode));
+        }
+
+        // setup a block and index
+        llvm::BasicBlock *loop_block = ctx.create_bb("normal_loop");
+        llvm::BasicBlock *loop_block_end = ctx.create_bb("normal_loop_end");
+
+        llvm::Value *index_ptr = ctx.create_local(m_type_mapper.get_int_type(), "normal_index");
+        ctx->CreateStore(ctx.get_constant(int(0)), index_ptr);
+
+        // start loop
+        ctx->CreateBr(loop_block);
+        ctx->SetInsertPoint(loop_block);
+        llvm::Value *cur_index = ctx->CreateLoad(index_ptr);
+
+        // get a pointer to the normal at the current index
+        llvm::Value *result_normal_ptr = NULL;
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER)
+        {
+            llvm::Value *result_normal_ptr_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                {ctx.get_constant(int(0)), ctx.get_constant(int(6))});
+            result_normal_ptr = ctx->CreateLoad(result_normal_ptr_ptr);
+            result_normal_ptr = ctx->CreateGEP(result_normal_ptr, cur_index);
+        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
+            result_normal_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                {ctx.get_constant(int(0)), ctx.get_constant(int(5)), cur_index});
+        }
+
+        // load, check if none-zero, normalize, store
+        llvm::Value *result_normal = ctx.load_and_convert(
+            m_type_mapper.get_float3_type(), result_normal_ptr);
+
+        llvm::Value *cond_x = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 0), zero);
+        llvm::Value *cond_y = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 1), zero);
+        llvm::Value *cond_z = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 2), zero);
+        llvm::Value *cond_normalize = ctx->CreateOr(cond_x, ctx->CreateOr(cond_y, cond_z));
+
+        // setup a block and index
+        llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero");
+        llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_end");
+
+        ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
+        ctx->SetInsertPoint(if_non_zero_block);
+
+        // if (cond_normalize) 
+        //     result_normalized = normalize(result_normalized)
+        llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
+        ctx.convert_and_store(result_normalized, result_normal_ptr);
+        ctx->CreateBr(if_non_zero_block_end);
+
+        ctx->SetInsertPoint(if_non_zero_block_end);
+
+        // increment index, next iteration or end of loop 
+        llvm::Value *new_index = ctx->CreateAdd(cur_index, ctx.get_constant(1));
+        ctx->CreateStore(new_index, index_ptr);
+        llvm::Value *cond = ctx->CreateICmpSLT(new_index, handle_count);
+        ctx->CreateCondBr(cond, loop_block, loop_block_end);
+        ctx->SetInsertPoint(loop_block_end);
+    }
     return Expression_result::value(callinst);
 }
 

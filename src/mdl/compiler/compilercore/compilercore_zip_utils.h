@@ -41,6 +41,10 @@ class File_handle;
 class MDL_zip_container;
 class MDL_zip_container_file;
 
+enum Extra_attributes {
+    MDLE_EXTRA_FIELD_ID_MD = 0x444d  // MD
+};
+
 struct MDL_zip_container_header
 {
     char prefix[4];             ///< leader marker, i.e., MDR, MDLE, or ...
@@ -187,6 +191,13 @@ public:
     /// \returns    The absolute MDL url of the resource or NULL.
     char const *get_mdl_url() const MDL_FINAL;
 
+    /// Returns the associated hash of this resource.
+    ///
+    /// \param[out]  get the hash value (16 bytes)
+    ///
+    /// \return true if this resource has an associated hash value, false otherwise
+    bool get_resource_hash(unsigned char hash[16]) MDL_FINAL;
+
     /// Constructor.
     ///
     /// \param alloc             the allocator
@@ -267,7 +278,7 @@ public:
     /// \param[out] md5   the computed hash
     ///
     /// \return true on success, false if the file was not found inside the container
-    bool get_file_hash(char const *name, unsigned char md5[16]) const;
+    bool compute_file_hash(char const *name, unsigned char md5[16]) const;
 
     /// Get the version number of an opened container.
     ///

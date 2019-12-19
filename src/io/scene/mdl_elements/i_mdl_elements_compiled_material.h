@@ -38,8 +38,10 @@
 #include <mi/mdl/mdl_generated_dag.h>
 
 #include <string>
+#include <set>
 
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
+#include "i_mdl_elements_module.h"
 
 namespace mi { namespace mdl { class IGenerated_code_lambda_function; } }
 
@@ -172,6 +174,10 @@ public:
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
     void dump( DB::Transaction* transaction) const;
 
+    bool is_valid(
+        DB::Transaction* transaction,
+        Execution_context* context) const;
+
     // methods of SERIAL::Serializable
 
     const SERIAL::Serializable* serialize( SERIAL::Serializer* serializer) const;
@@ -226,6 +232,8 @@ private:
 
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
+
+    std::set<Mdl_tag_ident> m_module_idents;           ///< module identifiers of all used expressions.
 };
 
 } // namespace MDL

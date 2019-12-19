@@ -32,6 +32,7 @@
 #include "command_queue.h"
 #include "descriptor_heap.h"
 #include "mdl_material.h"
+#include "mdl_sdk.h"
 
 
 namespace mdl_d3d12
@@ -106,7 +107,9 @@ namespace mdl_d3d12
         out_desc = {};
         out_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         out_desc.Format = m_format;
-        out_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        out_desc.ViewDimension = m_depth == 1 
+            ? D3D12_SRV_DIMENSION_TEXTURE2D 
+            : D3D12_SRV_DIMENSION_TEXTURE3D;
         out_desc.Texture2D.MipLevels = 1;
         return true;
     }
@@ -139,15 +142,28 @@ namespace mdl_d3d12
         {
             // non swap chain textures
             CD3DX12_RESOURCE_DESC resource_desc;
-            resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
-                m_format,
-                static_cast<uint64_t>(m_width),
-                static_cast<uint32_t>(m_height),
-                static_cast<uint16_t>(m_depth),
-                static_cast<uint16_t>(1), // mip levels (only one)
-                static_cast<uint16_t>(1), // sample count
-                static_cast<uint32_t>(0), // sample quality
-                D3D12_RESOURCE_FLAG_NONE);
+            if (m_depth == 1)
+            {
+                resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
+                    m_format,
+                    static_cast<uint64_t>(m_width),
+                    static_cast<uint32_t>(m_height),
+                    static_cast<uint16_t>(1),
+                    static_cast<uint16_t>(1), // mip levels (only one)
+                    static_cast<uint16_t>(1), // sample count
+                    static_cast<uint32_t>(0), // sample quality
+                    D3D12_RESOURCE_FLAG_NONE);
+            }
+            else
+            {
+                resource_desc = CD3DX12_RESOURCE_DESC::Tex3D(
+                    m_format,
+                    static_cast<uint64_t>(m_width),
+                    static_cast<uint32_t>(m_height),
+                    static_cast<uint16_t>(m_depth),
+                    static_cast<uint16_t>(1), // mip levels (only one)
+                    D3D12_RESOURCE_FLAG_NONE);
+            }
 
             bool init_with_clear_value = true;
 
@@ -196,7 +212,13 @@ namespace mdl_d3d12
         return true;
     }
 
-    bool Texture::upload(D3DCommandList* command_list, const uint8_t* data)
+    size_t Texture::get_gpu_row_pitch() const
+    {
+        return round_to_power_of_two(
+            m_width * m_pixel_stride_in_byte, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+    }
+
+    bool Texture::upload(D3DCommandList* command_list, const uint8_t* data, size_t data_row_pitch)
     {
         if (!m_resource) {
             log_error("Resource is not valid: " + m_debug_name, SRC);
@@ -211,17 +233,18 @@ namespace mdl_d3d12
         const uint8_t* buffer = data;
 
         // need to enforce alignment?
-        size_t data_row_pitch = m_width * m_pixel_stride_in_byte;
-        size_t row_pitch = round_to_power_of_two(m_width * m_pixel_stride_in_byte,
-                                                 D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+        if(data_row_pitch == -1)
+            data_row_pitch = m_width * m_pixel_stride_in_byte;
 
-        if (row_pitch != data_row_pitch)
+        size_t gpu_row_pitch = get_gpu_row_pitch();
+
+        if (gpu_row_pitch != data_row_pitch)
         {
             buffer = new uint8_t[buffer_size];
             memset((void*) buffer, 0, buffer_size);
 
             for (size_t r = 0; r < m_height; ++r)
-                memcpy((void*) (buffer + r * row_pitch), 
+                memcpy((void*) (buffer + r * gpu_row_pitch), 
                        (void*) (data + r * data_row_pitch), 
                        data_row_pitch);
         }
@@ -244,8 +267,8 @@ namespace mdl_d3d12
 
         D3D12_SUBRESOURCE_DATA subresource_data = {};
         subresource_data.pData = buffer;
-        subresource_data.RowPitch = row_pitch;
-        subresource_data.SlicePitch = buffer_size;
+        subresource_data.RowPitch = gpu_row_pitch;
+        subresource_data.SlicePitch = gpu_row_pitch * m_height;
 
         D3D12_RESOURCE_STATES saved = m_latest_scheduled_state;
         transition_to(command_list, D3D12_RESOURCE_STATE_COPY_DEST);

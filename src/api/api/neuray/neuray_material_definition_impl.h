@@ -97,9 +97,18 @@ public:
 
     const char* get_thumbnail() const NEURAY_FINAL;
 
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
     mi::neuraylib::IMaterial_instance* create_material_instance(
         const mi::neuraylib::IExpression_list* arguments,
         mi::Sint32* errors = 0) const NEURAY_FINAL;
+
+    const mi::neuraylib::IExpression_direct_call* get_body() const NEURAY_FINAL;
+
+    mi::Size get_temporary_count() const NEURAY_FINAL;
+
+    const mi::neuraylib::IExpression* get_temporary( mi::Size index) const NEURAY_FINAL;
+
 };
 
 } // namespace NEURAY

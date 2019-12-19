@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <map>
 #include "archive.h"
 
 namespace mdlm
@@ -174,6 +175,8 @@ namespace mdlm
     protected:
         std::string m_archive;
         std::set<std::string> m_filter_field;
+        std::multimap<std::string, std::string> m_manifest;
+        bool m_report = true;
     private:
         bool list_field(const std::string & field)
         {
@@ -192,12 +195,20 @@ namespace mdlm
             m_filter_field.insert(field);
         }
 
+        const std::multimap<std::string, std::string> & get_manifest()const { return m_manifest; }
+
         /// \return
         ///		- SUCCESS: Success
         ///		- UNSPECIFIED_FAILURE: Unspecified failure.
         ///		- INVALID_ARCHIVE: Invalid input archive
         ///		- INVALID_MDL_PATH: Invalid MDL path
         int execute() override;
+
+        /// Control wheter to report or not the result
+        void set_report(bool report)
+        {
+            m_report = report;
+        }
     };
 
     /// List archive dependencies command
@@ -205,7 +216,12 @@ namespace mdlm
     class List_dependencies : public Show_archive
     {
     public:
+        static const std::string dependency_keyword;
+
+    public:
         List_dependencies(const std::string & archive);
+
+        void get_dependencies(std::multimap<Archive::NAME, Version> & dependencies) const;
     };
 
     /// Extract archive command
@@ -314,8 +330,15 @@ namespace mdlm
 
     /// List command
     /// 
-    class List : public Command
+    class List_cmd : public Command
     {
+    public:
+        typedef enum {
+            UNSPECIFIED_FAILURE = -1
+            , SUCCESS = 0
+
+        } RETURN_CODE;
+
     public:
         class List_result
         {
@@ -328,7 +351,7 @@ namespace mdlm
         List_result m_result;
 
     public:
-        List(const std::string & archive);
+        List_cmd(const std::string & archive);
 
         /// List all the locations for the given Archive
         /// \return
@@ -340,6 +363,37 @@ namespace mdlm
         {
             return m_result;
         }
+    };
+
+    /// Remove command
+    /// 
+    class Remove_cmd : public Command
+    {
+    public:
+        typedef enum {
+            UNSPECIFIED_FAILURE = -10
+            , INVALID_ARCHIVE = -3
+            , ARCHIVE_NOT_FOUND = -2
+            , SUCCESS = 0
+
+        } RETURN_CODE;
+
+    private:
+        std::string m_archive_name;
+    
+    private:
+        int find_archive(Archive & archive);
+
+    public:
+        Remove_cmd(const std::string & archive);
+
+        /// List all the locations for the given Archive
+        /// \return
+        ///		- SUCCESS: Success
+        ///     - ARCHIVE_NOT_FOUND: Archive does not exist
+        ///     - INVALID_ARCHIVE: Archive is not valid
+        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        int execute() override;
     };
 
     /// Command class

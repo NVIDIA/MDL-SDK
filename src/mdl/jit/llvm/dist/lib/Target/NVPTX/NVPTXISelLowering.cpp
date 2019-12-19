@@ -2400,6 +2400,13 @@ SDValue NVPTXTargetLowering::LowerFormalArguments(
           VectorizePTXValueVTs(VTs, Offsets, DL.getABITypeAlignment(Ty));
 
       SDValue Arg = getParamSymbol(DAG, idx, PtrVT);
+
+      // Transformations may take the pointer of the loads we create and use it for
+      // pointer arithmetic, but the pointer can only be taken via a mov instruction.
+      // Ensure we don't run into problems later. We can skip the mov for loads when
+      // creating the machine instructions.
+      Arg = DAG.getNode(NVPTXISD::MoveParam, dl, PtrVT, Arg);
+
       int VecIdx = -1; // Index of the first element of the current vector.
       for (unsigned parti = 0, parte = VTs.size(); parti != parte; ++parti) {
         if (VectorInfo[parti] & PVF_FIRST) {

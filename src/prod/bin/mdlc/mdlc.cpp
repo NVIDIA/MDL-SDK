@@ -575,8 +575,10 @@ bool Mdlc::backend(IModule const *module)
 
             // We support local entity usage inside MDL materials in neuray, but ...
             dag_opts.set_option( MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
-            /// ... we need entries for those in the DB, hence generate them
+            // ... we need entries for those in the DB, hence generate them
             dag_opts.set_option( MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
+            // We enable unsafe math optimizations
+            dag_opts.set_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS, "true");
 
             apply_backend_options(dag_opts);
 

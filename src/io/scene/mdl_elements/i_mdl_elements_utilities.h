@@ -35,17 +35,26 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <thread>
+#include <unordered_map>
+#include <mutex>
 #include <mi/base/ilogger.h>
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_messages.h>
 #include <mi/neuraylib/typedefs.h>
+#include <mi/neuraylib/imdl_loading_wait_handle.h>
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/data/db/i_db_tag.h>
 #include <base/system/stlext/i_stlext_any.h>
 
 namespace mi { namespace neuraylib { class IReader; } }
-namespace mi { namespace mdl { class IMDL_resource_reader; } }
+namespace mi { namespace mdl {
+    class IMDL_resource_reader;
+    class IModule;
+    class IModule_cache;
+    class IModule_cache_wait_handle;
+} }
 
 namespace MI {
 
@@ -70,7 +79,7 @@ class IAnnotation_list;
 class Mdl_compiled_material;
 class Mdl_function_definition;
 class Mdl_material_definition;
-
+class Mdl_module;
 
 // **********  Computation of references to other DB element ***************************************
 
@@ -175,6 +184,24 @@ const char* get_cast_operator_db_name();
 /// Returns the MDL name used for the cast operator.
 const char* get_cast_operator_mdl_name();
 
+/// Returns the DB element name used for the ternary operator.
+const char* get_ternary_operator_db_name();
+
+/// Returns the MDL name used for the ternary operator.
+const char* get_ternary_operator_mdl_name();
+
+/// Returns the DB element name used for the index operator.
+const char* get_index_operator_db_name();
+
+/// Returns the MDL name used for the index operator.
+const char* get_index_operator_mdl_name();
+
+/// Returns the DB element name used for the array length operator.
+const char* get_array_length_operator_db_name();
+
+/// Returns the MDL name used for the array length operator.
+const char* get_array_length_operator_mdl_name();
+
 /// Returns \c true for builtin modules.
 ///
 /// Builtin modules have no underlying file, e.g., "::state".
@@ -184,8 +211,8 @@ bool is_builtin_module( const std::string& module);
 
 
 /// Checks, if the given call definition is valid for use as a prototype for create_functions
-/// MDLE file or presets.
-bool is_supported_prototype(const Mdl_function_definition *fdef, bool for_preset);
+/// MDLE file or variants.
+bool is_supported_prototype(const Mdl_function_definition *fdef, bool for_variant);
 
 /// Returns a default compiled material.
 ///
@@ -292,15 +319,17 @@ class Execution_context
 {
 public:
 
-    #define MDL_CTX_OPTION_INTERNAL_SPACE           "internal_space"
-    #define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT    "meters_per_scene_unit"
-    #define MDL_CTX_OPTION_WAVELENGTH_MIN           "wavelength_min"
-    #define MDL_CTX_OPTION_WAVELENGTH_MAX           "wavelength_max"
-    #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL       "include_geometry_normal"
-    #define MDL_CTX_OPTION_BUNDLE_RESOURCES         "bundle_resources"
-    #define MDL_CTX_OPTION_EXPERIMENTAL             "experimental"
-    #define MDL_CTX_OPTION_RESOLVE_RESOURCES        "resolve_resources"
-    #define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF       "fold_ternary_on_df"
+#define MDL_CTX_OPTION_INTERNAL_SPACE                   "internal_space"
+#define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT            "meters_per_scene_unit"
+#define MDL_CTX_OPTION_WAVELENGTH_MIN                   "wavelength_min"
+#define MDL_CTX_OPTION_WAVELENGTH_MAX                   "wavelength_max"
+#define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL               "include_geometry_normal"
+#define MDL_CTX_OPTION_BUNDLE_RESOURCES                 "bundle_resources"
+#define MDL_CTX_OPTION_EXPERIMENTAL                     "experimental"
+#define MDL_CTX_OPTION_RESOLVE_RESOURCES                "resolve_resources"
+#define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF               "fold_ternary_on_df"
+#define MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY      "loading_wait_handle_factory"
+#define MDL_CTX_OPTION_REPLACE_EXISTING                 "replace_existing"
 
     Execution_context();
 
@@ -338,6 +367,25 @@ public:
 
         const Option& option = m_options[index];
         return STLEXT::any_cast<T> (option.get_value());
+    }
+
+    template<typename T>
+    T* get_interface_option(const std::string& name) const
+    {
+        mi::Size index = get_option_index(name);
+        ASSERT(M_SCENE, index < m_options.size());
+
+        const Option& option = m_options[index];
+
+        mi::base::Handle<mi::base::IInterface> handle = 
+            STLEXT::any_cast<mi::base::Handle<mi::base::IInterface>> (option.get_value());
+
+        if (!handle)
+            return nullptr;
+
+        mi::base::Handle<T> value(handle.get_interface<T>());
+        value->retain();
+        return value.get();
     }
 
     mi::Sint32 get_option(const std::string& name, STLEXT::Any& value) const;
@@ -542,6 +590,20 @@ private:
         const char* material_call_name,
         const IExpression_list* arguments);
 
+    const mi::mdl::DAG_node* int_material_expr_list_to_mdl_dag_node(
+        const mi::mdl::IType* mdl_type,
+        const Mdl_module* module,
+        mi::Uint32 material_definiton_index,
+        const char* material_call_name,
+        const IExpression_list* arguments);
+
+    const mi::mdl::DAG_node* int_function_expr_list_to_mdl_dag_node(
+        const mi::mdl::IType* mdl_type,
+        const Mdl_module* module,
+        mi::Uint32 function_definiton_index,
+        const char* function_call_name,
+        const IExpression_list* arguments);
+
     /// Clones a DAG node.
     ///
     /// \param node  The DAG IR node to clone.
@@ -584,7 +646,7 @@ public:
     /// Constructor.
     ///
     /// \param transaction  the transaction to use for name lookup
-    Mdl_call_resolver( DB::Transaction* transaction) : m_transaction( transaction) { }
+    Mdl_call_resolver(DB::Transaction* transaction) : m_transaction( transaction) { }
 
     virtual ~Mdl_call_resolver();
 
@@ -592,7 +654,7 @@ public:
     ///
     /// \param name   The MDL name of a function definition.
     /// \return       The owning module, or \c NULL in case of failures.
-    const mi::mdl::IModule* get_owner_module( char const* name) const;
+    const mi::mdl::IModule* get_owner_module(char const* name) const;
 
 private:
     DB::Transaction* m_transaction;
@@ -600,6 +662,190 @@ private:
     typedef std::set<const mi::mdl::IModule*> Module_set;
     mutable Module_set m_resolved_modules;
 };
+
+// **********  Mdl_module_wait_queue  **************************************************************
+class Module_cache;
+
+/// Used with module cache in order to allow parallel loading of modules.
+class Mdl_module_wait_queue 
+{
+    class Table;
+
+public:
+    /// For each module to load, an entry is created in the waiting table so threads that
+    /// depend on that module can wait until the loading thread is finished
+    class Entry
+    {
+    public:
+        /// Constructor.
+        ///
+        /// \param name                 The name of the module to load.
+        /// \param cache                The current instance of the module cache.
+        /// \param parent_table         The table this entry belongs to.
+        explicit Entry(
+            const std::string& name,
+            const Module_cache* cache,
+            Table* parent_table);
+
+        /// Destructor.
+        ~Entry();
+
+        /// Called when the module is currently loaded by another threads. 
+        /// The usage count must have already been incremented.
+        /// Blocks until the loading thread calls \c notify.
+        /// Decrements the usage count afterwards and, if this was the last usage of the entry,
+        /// it self-destructs.
+        ///
+        /// \param cache               The current instance of the module cache.
+        /// \return                    The result code the loading thread provided when call \c 
+        ///                            notify. The waiting thread needs to abort it's own loading 
+        ///                            process in case of an error.
+        mi::Sint32 wait(const Module_cache* cache);
+
+        /// Called by the loading thread after loading is done to wake the waiting threads.
+        /// Decrements the usage count afterwards and, if this was the last usage of the entry,
+        /// it self-destructs.
+        ///
+        /// \param cache               The current instance of the module cache.
+        /// \param result_code         The result code that is passed to the waiting threads.
+        void notify(
+            const Module_cache* cache,
+            mi::Sint32 result_code);
+
+        /// Check if this module is loaded by the current thread.
+        ///
+        /// \param cache                The current instance of the module cache.
+        /// \return                     True when the provided cache has the same context id.
+        bool processed_in_current_context(const Module_cache* cache) const;
+
+        /// Increments the usage counter of the entry.
+        void increment_usage_count();
+
+    private:
+        /// Erases this entry from the parent table and self-destructs.
+        void cleanup();
+
+        std::string m_name;
+        size_t m_cache_context_id;
+        mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle> m_handle;
+        Table* m_parent_table;
+        std::mutex m_usage_count_mutex;
+        size_t m_usage_count;
+    };
+
+    //---------------------------------------------------------------------------------------------
+private:
+    /// Table of waiting entries created for each transaction.
+    class Table
+    {
+    public:
+        /// Constructor.
+        explicit Table();
+
+        /// Destructor.
+        ~Table() = default;
+
+        /// Removes an entry from the table.
+        ///
+        /// \param name             The name of the entry (module to load).
+        void erase(const std::string& name);
+
+        /// Get or create a waiting entry for a module to load.
+        /// Assumes that the table is already locked by the current thread.
+        ///
+        /// \param cache        The current module cache.
+        /// \param name         The name of the module to load.
+        /// \param out_created  Will be true after calling when the a new entry was created.
+        /// \return             The entry to call wait on, in case it existed (outside the lock).
+        Entry* get_waiting_entry(
+            const Module_cache* cache,
+            const std::string& name,
+            bool& out_created);
+
+        /// Get the number of entries in the table.
+        mi::Size size() const;
+
+        /// Check if this module is loaded by the current thread.
+        bool processed_in_current_context(
+            const Module_cache* cache,
+            const std::string& name);
+
+    private:
+        std::mutex m_mutex;
+        std::unordered_map<std::string, Entry*> m_elements;
+    };
+
+
+public:
+    //---------------------------------------------------------------------------------------------
+        
+    /// Return structure for the \c lockup method
+    struct Queue_lockup
+    {
+        /// If the module is already in the cache, NULL otherwise
+        mi::mdl::IModule const* cached_module;
+
+        /// If the module is not in the cache, \c wait has to be called on this queue entry
+        /// If this pointer is NULL, too, the current thread is responsible for loading the module.
+        Entry* queue_entry;
+    };
+
+    //---------------------------------------------------------------------------------------------
+    
+    /// Wraps the cache lookup_db and creates a waiting entry for a module to load.
+    ///
+    /// \param cache            The current module cache.
+    /// \param transaction      The current transaction to use.
+    /// \param name             The name of the module to load.
+    /// \return                 The module, a waiting entry, or both NULL which means the module
+    ///                         has to be loaded on this thread.
+    Queue_lockup lookup(
+        const Module_cache* cache, 
+        size_t transaction, 
+        const std::string& name);
+
+    /// Check if this module is loaded by the current thread.
+    /// \param cache            The current module cache.
+    /// \param transaction      The current transaction to use.
+    /// \param name             The name of the module to load.
+    ///
+    /// \return                 True when the module is loaded in the current context.
+    bool processed_in_current_context(
+        const Module_cache* cache,
+        size_t transaction,
+        const std::string& name);
+
+    /// Notify waiting threads about the finishing of the loading process of module.
+    /// This function has to be called after a successfully loaded thread was registered in the
+    /// Database (or a corresponding cache structure) AND also in case of loading failures.
+    ///
+    /// \param cache            The current module cache.
+    /// \param transaction      The current transaction to use.
+    /// \param module_name      The name of the module that has been processed.
+    /// \param result_code      0 in case of success
+    void notify(
+        Module_cache* cache,
+        size_t transaction,
+        const std::string& module_name,
+        int result_code);
+
+    /// Try free this table when the transaction is not used anymore.
+    /// \param transaction      The current transaction that specifies the table to cleanup.
+    void cleanup_table(size_t transaction);
+
+private:
+    std::unordered_map<size_t, Table*> m_tables;
+    std::mutex m_mutex;
+};
+
+/// Adds an error message to the given execution context
+/// \param context  the execution context.
+/// \param message  the message string.
+/// \param result   an error code which will be set as the current context result.
+mi::Sint32 add_context_error(
+    MDL::Execution_context* context,
+    const std::string& message,
+    mi::Sint32 result);
 
 // **********  Resource names **********************************************************************
 

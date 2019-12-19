@@ -99,8 +99,16 @@ public:
     ///
     /// \returns            The symbol.
     ///
-    /// \note use this symbols only for the name of user types!
+    /// \note Use this symbols only for the name of user types!
+    ///       Currently this method is exactly the same as \c create_shared_symbol()
     ISymbol const *create_user_type_symbol(char const *name) MDL_FINAL;
+
+    /// Create a shared symbol (no unique ID).
+    ///
+    /// \param name         The shared symbol name.
+    ///
+    /// \returns            The symbol.
+    ISymbol const *create_shared_symbol(char const *name) MDL_FINAL;
 
     // --------------------------- not interface methods ---------------------------
 
@@ -160,7 +168,16 @@ public:
     /// \param name  the user type name to lookup
     ///
     /// \return the symbol for this user type name, creates one if not exists
+    ///
+    /// \note Currently the same as get_shared_symbol().
     ISymbol const *get_user_type_symbol(char const *name);
+
+    /// Get or create a new shared Symbol for the given name.
+    ///
+    /// \param name  the shared symbol name to lookup
+    ///
+    /// \return the symbol for this  name, creates one if not exists
+    ISymbol const *get_shared_symbol(char const *name);
 
 public:
     /// Constructor.

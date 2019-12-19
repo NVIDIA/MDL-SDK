@@ -46,8 +46,10 @@ namespace mdl_d3d12
         if (window && app)
         {
             for (auto&& callback : window->m_message_callbacks)
-                if (callback(hWnd, message, wParam, lParam))
-                    return 0;
+            {
+                if (LRESULT res = callback(hWnd, message, wParam, lParam))
+                    return res;
+            }
         }
 
         switch (message)
@@ -129,7 +131,7 @@ namespace mdl_d3d12
         windowClass.lpfnWndProc = WindowProc;
         windowClass.hInstance = m_message_pump_interface.get_win32_instance_handle();
         windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        windowClass.lpszClassName = "MDL_d3d12_class";
+        windowClass.lpszClassName = L"MDL_d3d12_class";
         RegisterClassEx(&windowClass);
 
         RECT windowRect = {
@@ -339,7 +341,7 @@ namespace mdl_d3d12
     }
 
     void Window_win32::add_message_callback(
-        std::function<bool(HWND, UINT, WPARAM, LPARAM)> callback)
+        std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> callback)
     {
         m_message_callbacks.push_back(callback);
     }

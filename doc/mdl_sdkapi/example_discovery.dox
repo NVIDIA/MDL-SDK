@@ -79,7 +79,7 @@ This example introduces the MDL Discovery Api that helps to overview the MDL inc
 \section example_discovery Example Source
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/example_discovery.cpp</tt>
+  <tt>examples/mdl_sdk/discovery/example_discovery.cpp</tt>
 
 \include discovery/example_discovery.cpp
 

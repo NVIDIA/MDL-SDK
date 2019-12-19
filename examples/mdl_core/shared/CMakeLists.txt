@@ -49,6 +49,7 @@ create_from_base_preset(
     NAMESPACE mdl_core
     OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
+    WINDOWS_UNICODE
 )
 add_library(mdl_core::shared ALIAS ${PROJECT_NAME})
 

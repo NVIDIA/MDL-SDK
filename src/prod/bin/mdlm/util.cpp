@@ -36,6 +36,7 @@
 #include <iostream>
 #include <ostream>
 #include <fstream>   
+#include <iterator>   
 using namespace mdlm;
 using std::vector;
 using std::string;
@@ -835,3 +836,11 @@ std::string Util::unique_file_in_folder(const std::string & folder)
         }
     }
 }
+
+std::vector<std::string> Util::split(const std::string &s, char delim)
+{
+    std::vector<std::string> elems;
+    mdlm::split(s, delim, std::back_inserter(elems));
+    return elems;
+}
+

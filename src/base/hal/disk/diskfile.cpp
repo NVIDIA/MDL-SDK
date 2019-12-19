@@ -461,7 +461,7 @@ Sint64 File::filesize()
 
 
 //
-// return the system's file desciptor. Don't use this except when third
+// return the system's file descriptor. Don't use this except when third
 // party code (e.g. tifflib) forces it. File provides all functions to
 // access files, which should be used in all other cases.
 //

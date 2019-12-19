@@ -797,6 +797,9 @@ restart:
             case IType_texture::TS_PTEX:
                 print("ptex");
                 break;
+            case IType_texture::TS_BSDF_DATA:
+                print("bsdf_data");
+                break;
             }
             break;
         }
@@ -2133,6 +2136,17 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             print(";");
             break;
         }
+    case IDeclaration::DK_NAMESPACE_ALIAS:
+        {
+            IDeclaration_namespace_alias const *d = cast<IDeclaration_namespace_alias>(decl);
+            keyword("using");
+            print(" ");
+            print(d->get_alias());
+            print(" = ");
+            print_namespace(d->get_namespace());
+            print(";");
+            break;
+        }
     }
 }
 
@@ -2313,6 +2327,9 @@ void Printer::print(IModule const *module)
                         break;
                     case IType_texture::TS_PTEX:
                         typepart("texture_ptex"); print("     ");
+                        break;
+                    case IType_texture::TS_BSDF_DATA:
+                        typepart("texture_bsdf_data"); print("       ");
                         break;
                     }
                 }
@@ -2584,6 +2601,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_6:
                 print(" Since MDL 1.6");
                 break;
+            case IMDL::MDL_VERSION_1_7:
+                print(" Since MDL 1.7");
+                break;
             }
             switch (rem) {
             case IMDL::MDL_VERSION_1_0:
@@ -2605,6 +2625,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_6:
                 print(" Removed in MDL 1.6");
+                break;
+            case IMDL::MDL_VERSION_1_7:
+                print(" Removed in MDL 1.7");
                 break;
             }
             print(insert ? " */" : "\n");
@@ -2664,6 +2687,29 @@ void Printer::show_function_hash_table(bool enable)
     m_show_func_hashes = enable;
 }
 
+// Print namespace.
+void Printer::print_namespace(IQualified_name const *name)
+{
+    for (size_t i = 0, n = name->get_component_count(); i < n; ++i) {
+        if (i > 0)
+            print("::");
+        push_color(C_LITERAL);
+
+        ISymbol const *sym      = name->get_component(i)->get_symbol();
+        bool           valid_id =
+            sym->get_id() == ISymbol::SYM_DOT ||
+            sym->get_id() == ISymbol::SYM_DOTDOT ||
+            MDL::valid_mdl_identifier(sym->get_name());
+
+        if (!valid_id)
+            print('"');
+        print(sym);
+        if (!valid_id)
+            print('"');
+        pop_color();
+    }
+}
+
 // Prints an annotation block.
 void Printer::print_anno_block(
     IAnnotation_block const *block,
@@ -2700,8 +2746,10 @@ public:
         IMDL_exporter_resource_callback *resource_cb)
     : Base(alloc, ostr)
     , m_alloc(alloc)
+    , m_sym_stack(Symbol_stack::container_type(get_allocator()))
     , m_resource_cb(resource_cb)
     , m_module(NULL)
+    , m_global(NULL)
     {
     }
 
@@ -2740,6 +2788,9 @@ public:
     /// \param res   the resource value
     void print_resource(IValue_resource const *res) MDL_FINAL;
 
+    /// Given an imported definition, prints the name of its import scope.
+    void print_import_scope_name(IDefinition const *def);
+
     /// Prints a definition name.
     ///
     /// \param def              the definition
@@ -2762,17 +2813,27 @@ private:
     /// The allocator.
     IAllocator *m_alloc;
 
+    typedef stack<ISymbol const *>::Type Symbol_stack;
+
+    /// Temporary used symbol stack.
+    Symbol_stack m_sym_stack;
+
     /// The resource callback.
     IMDL_exporter_resource_callback *m_resource_cb;
 
     /// The current module.
     Module const *m_module;
+
+    /// The global scope of the current module.
+    Scope const *m_global;
 };
 
 // Prints a module.
 void Sema_printer::print(IModule const *mod)
 {
-    Store<Module const *> store(m_module, impl_cast<Module>(mod));
+    Store<Module const *> m_store(m_module, impl_cast<Module>(mod));
+    Store<Scope const *>  s_store(m_global, m_module->get_definition_table().get_global_scope());
+
     Base::print(mod);
 }
 
@@ -2929,6 +2990,40 @@ void Sema_printer::print_resource(IValue_resource const *res)
     }
 }
 
+// Given an imported definition, prints the name of its import scope.
+void Sema_printer::print_import_scope_name(IDefinition const *idef)
+{
+    Definition const *def = impl_cast<Definition>(idef);
+    Scope const      *scope   = def->get_def_scope();
+
+    if (def->get_kind() == Definition::DK_CONSTRUCTOR) {
+        // constructors live "inside" its type-scope,
+        // skip that to create valid MDL syntax.
+        if (scope != NULL && scope->get_scope_type() != NULL)
+            scope = scope->get_parent();
+    }
+
+    for (; scope != m_global && scope != NULL; scope = scope->get_parent()) {
+        if (ISymbol const *sym = scope->get_scope_name()) {
+            m_sym_stack.push(sym);
+        }
+    }
+
+    bool first = true;
+    while (!m_sym_stack.empty()) {
+        ISymbol const *sym = m_sym_stack.top();
+
+        if (first) {
+            first = false;
+        } else {
+            printf("::");
+        }
+        printf("%s", sym->get_name());
+
+        m_sym_stack.pop();
+    }
+}
+
 // Prints a definition name.
 void Sema_printer::print_def_name(
     IDefinition const *idef,
@@ -2960,6 +3055,7 @@ void Sema_printer::print_def_name(
         case Definition::DK_MEMBER:        ///< This is a field member.
         case Definition::DK_PARAMETER:     ///< This is a parameter.
         case Definition::DK_OPERATOR:      ///< This is an operator.
+        case Definition::DK_NAMESPACE:     ///< This is a namespace.
             push_color(ISyntax_coloring::C_ENTITY);
             break;
         }
@@ -2984,8 +3080,7 @@ void Sema_printer::print_def_name(
                 return print_type(ret_type, NULL);
             }
             // ALWAYS add the full qualified name
-            char const *name = m_module->get_owner_module_name(def);
-            Base::print(name);
+            print_import_scope_name(def);
             first = false;
         } else {
             Scope const *scope = def->get_def_scope();

@@ -272,6 +272,37 @@ void DAG_ir_walker::walk_instance_slot(
     }
 }
 
+// Walk the expressions of a function.
+void DAG_ir_walker::walk_function(
+    Generated_code_dag *dag,
+    int                func_index,
+    IDAG_ir_visitor    *visitor)
+{
+    DAG_node *expr = const_cast<DAG_node *>(dag->get_function_body(func_index));
+
+    Memory_arena arena(m_alloc);
+    Visited_node_set marker(
+        0, Visited_node_set::hasher(), Visited_node_set::key_equal(), &arena);
+    Temp_queue queue(m_alloc);
+
+    do_walk_node(marker, queue, expr, visitor);
+
+    Bitset visited_temps(m_alloc, dag->get_function_temporary_count(func_index));
+
+    while (!queue.empty()) {
+        int temp = queue.front();
+        queue.pop_front();
+
+        if (visited_temps.test_bit(temp))
+            continue;
+        visited_temps.set_bit(temp);
+
+        DAG_node *tmp_init = const_cast<DAG_node *>(dag->get_function_temporary(func_index, temp));
+        do_walk_node(marker, queue, tmp_init, visitor);
+        visitor->visit(temp, tmp_init);
+    }
+}
+
 // Walk a DAG IR node.
 void DAG_ir_walker::walk_node(
     DAG_node        *node,

@@ -43,7 +43,6 @@ set(PROJECT_HEADERS
     "generator_dag_lambda_function.h"
     "generator_dag_serializer.h"
     "generator_dag_tools.h"
-    "generator_dag_type_collector.h"
     "generator_dag_walker.h"
     )
 
@@ -60,7 +59,6 @@ set(PROJECT_SOURCES
     "generator_dag_lambda_function.cpp"
     "generator_dag_serializer.cpp"
     "generator_dag_thin_walled.cpp"
-    "generator_dag_type_collector.cpp"
     "generator_dag_opacity.cpp"
     "generator_dag_walker.cpp"
     ${PROJECT_HEADERS}

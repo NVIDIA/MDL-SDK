@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_calls.cpp
+// examples/mdl_core/calls/example_calls.cpp
 //
 // Uses function calls to create a textured material.
 
@@ -114,7 +114,7 @@ void usage()
     exit(EXIT_FAILURE);
 }
 
-int main(int argc, char *argv[])
+int MAIN_UTF8(int argc, char *argv[])
 {
     // Collect command line parameters
     std::vector<std::string> mdl_paths;
@@ -157,3 +157,6 @@ int main(int argc, char *argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

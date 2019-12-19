@@ -41,13 +41,35 @@
 #include <base/system/main/types.h>
 #include "i_log_assert.h"
 
-namespace MI {
+#include <mi/base/ilogger.h>
 
+
+namespace MI {
 namespace LOG {
+
 
 class ILogger
 {
 public:
+    /// Helper class to allow calling logging functions with either name or Module_id.
+    class Module_name
+    {
+    public:
+        Module_name(SYSTEM::Module_id id)
+        : m_name{SYSTEM::Module::id_to_name(id)}
+        {}
+
+        Module_name(const char* name)
+        : m_name{name}
+        {}
+
+        operator const char*() const { return m_name; }
+
+        const char* name() const { return m_name; }
+    private:
+        const char* m_name;
+    };
+
     /// Severities indicate the importance of a message.
     enum Severity {
         S_FATAL           = 0x0001, ///< fatal errors, almost never happen
@@ -133,35 +155,46 @@ public:
         P_DEFAULT      = 0x0071  ///< default prefix
     };
 
+    virtual ~ILogger() = default;
+
     /// \name Virtual functions to emit log messages of the corresponding severity.
     //@{
 
     virtual void fatal(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void error(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void warning(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void stat(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void vstat(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void progress(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void info(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void debug(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void vdebug(
-        const char* mod, Category cat, const char* fmt, va_list args) = 0;
+        const char* mod, Category cat, const mi::base::Message_details&,
+        const char* fmt, va_list args) = 0;
 
     virtual void assertfailed( const char* mod, const char* fmt, const char* file, int line) = 0;
 
@@ -169,213 +202,218 @@ public:
     /// \name Wrappers for the virtual functions above using an ellipsis instead of va_list.
     //@{
 
-    void fatal( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        fatal( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void error( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        error( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void warning( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        warning( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void stat( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        stat( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void vstat( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        vstat( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void progress( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        progress( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void info( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        info( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void debug( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        debug( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    void vdebug( const char* mod, Category cat, const char* fmt, ...) PRINTFLIKE4
-    {
-        va_list args;
-        va_start( args, fmt);
-        vdebug( mod, cat, fmt, args);
-        va_end( args);
-    }
-
-    //@}
-    /// \name Wrappers for the virtual functions above using an ellipsis instead of va_list and
-    ///       a module ID instead of a module name.
-    //@{
-
     void fatal(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        fatal( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        fatal( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void fatal( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        fatal( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void error(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        error( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        error( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void error( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        error( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void warning(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        warning( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        warning( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void warning( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        warning( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void stat(
-         Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        stat( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        stat( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void stat( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        stat( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void vstat(
-         Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        vstat( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        vstat( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void vstat( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        vstat( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void progress(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        progress( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        progress( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void progress( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        progress( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void info(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        info( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        info( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void info( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        info( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void debug(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        debug( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        debug( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void debug( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        debug( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void vdebug(
-        Module_id mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+            const Module_name& mod, Category cat, const mi::base::Message_details& det,
+            const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        vdebug( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        vdebug( mod.name(), cat, det, fmt, args);
+        va_end( args);
+    }
+
+    void vdebug( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
+    {
+        va_list args;
+        va_start( args, fmt);
+        vdebug( mod.name(), cat, Det{}, fmt, args);
         va_end( args);
     }
 
     void assertfailed(
-        Module_id mod, const char* fmt, const char* file, int line)
+        const Module_name& mod, const char* fmt, const char* file, int line)
     {
-        assertfailed( SYSTEM::Module::id_to_name( mod), fmt, file, line);
+        assertfailed( mod.name(), fmt, file, line);
     }
 
     //@}
-    /// \name Wrappers for the virtual functions above using an ellipsis instead of va_list,
-    ///       a module ID instead of a module name, and an additional unused error number
+    /// \name Legacy overloads with a numeric code. Deprecated.
     //@{
 
     void fatal(
-        Module_id mod, Category cat, int /*code*/, const char* fmt, ...) PRINTFLIKE5
+        Module_id mod, Category cat, int code, const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        fatal( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        fatal( SYSTEM::Module::id_to_name( mod), cat, Det{}.code(code), fmt, args);
         va_end( args);
     }
 
     void error(
-        Module_id mod, Category cat, int /*code*/, const char* fmt, ...) PRINTFLIKE5
+        Module_id mod, Category cat, int code, const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        error( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        error( SYSTEM::Module::id_to_name( mod), cat, Det{}.code(code), fmt, args);
         va_end( args);
     }
 
     void warning(
-        Module_id mod, Category cat, int /*code*/, const char* fmt, ...) PRINTFLIKE5
+        Module_id mod, Category cat, int code, const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        warning( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        warning( SYSTEM::Module::id_to_name( mod), cat, Det{}.code(code), fmt, args);
         va_end( args);
     }
 
     void progress(
-        Module_id mod, Category cat, int /*code*/, const char* fmt, ...) PRINTFLIKE5
+        Module_id mod, Category cat, int code, const char* fmt, ...) PRINTFLIKE5
     {
         va_list args;
         va_start( args, fmt);
-        progress( SYSTEM::Module::id_to_name( mod), cat, fmt, args);
+        progress( SYSTEM::Module::id_to_name( mod), cat, Det{}.code(code), fmt, args);
         va_end( args);
     }
 
     //@}
 
+protected:
+    using Det = mi::base::Message_details;
 };
 
 /// This typedef is for backwards compatibility with old code that used MI::LOG::Mod_log to access

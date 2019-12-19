@@ -160,6 +160,14 @@ int Definition::get_parameter_index() const
     return -1;
 }
 
+// Return the namespace of a namespace alias.
+ISymbol const *Definition::get_namespace() const
+{
+    if (m_kind == DK_NAMESPACE)
+        return m_u.name_space;
+    return NULL;
+}
+
 // Get the prototype declaration of the definition if any.
 IDeclaration const *Definition::get_prototype_declaration() const
 {
@@ -321,6 +329,14 @@ void Definition::set_parameter_index(int index)
 {
     MDL_ASSERT(m_kind == DK_PARAMETER);
     m_u.param_index = index;
+}
+
+// Set the namespace of a namespace alias.
+void Definition::set_namespace(
+    ISymbol const *name_space)
+{
+    MDL_ASSERT(m_kind == DK_NAMESPACE);
+    m_u.name_space = name_space;
 }
 
 // Constructor.
@@ -722,6 +738,9 @@ static void print_def(Printer *printer, Definition const *def)
     case IDefinition::DK_OPERATOR:
         printer->print("operator ");
         break;
+    case IDefinition::DK_NAMESPACE:
+        printer->print("namespace ");
+        break;
     }
 
     printer->print_type(type, name);
@@ -1004,7 +1023,10 @@ Definition_table::Definition_table(Module &owner)
 , m_next_definition_id(0)
 , m_arena(owner.get_allocator())
 , m_builder(m_arena)
-, m_type_scopes(0, Type_scope_map::hasher(), Type_scope_map::key_equal(), owner.get_allocator())
+, m_type_scopes(
+    0, Type_scope_map::hasher(), Type_scope_map::key_equal(), owner.get_allocator())
+, m_namespace_aliases(
+    Namespace_aliases_map::key_compare(), owner.get_allocator())
 , m_definitions(owner.get_allocator())
 {
     std::fill_n(
@@ -1065,6 +1087,7 @@ void Definition_table::serialize_def(
 
     // write the kind
     serializer.write_unsigned(def->m_kind);
+    DOUT(("def kind %u\n", unsigned(def->m_kind)));
 
     // write the unique ID
     serializer.write_encoded_tag(def->m_unique_id);
@@ -1085,10 +1108,12 @@ void Definition_table::serialize_def(
     serializer.write_encoded_tag(sym_tag);
     DOUT(("sym %u (%s)\n", unsigned(sym_tag), def->m_sym->get_name()));
 
-    // write the type of this definition
-    Tag_t type_tag = serializer.get_type_tag(def->m_type);
-    serializer.write_encoded_tag(type_tag);
-    DOUT(("type %u\n", unsigned(type_tag)));
+    if (def->m_kind != Definition::DK_NAMESPACE) {
+        // write the type of this definition
+        Tag_t type_tag = serializer.get_type_tag(def->m_type);
+        serializer.write_encoded_tag(type_tag);
+        DOUT(("type %u\n", unsigned(type_tag)));
+    }
 
     if (def->m_parameter_inits != NULL) {
         // write references to initializer expressions
@@ -1212,6 +1237,14 @@ void Definition_table::serialize_def(
         serializer.write_unsigned(def->m_parameter_deriv_mask);
     }
 
+    // serialize namespace
+    if (def->m_kind== Definition::DK_NAMESPACE) {
+        ISymbol const *name_space = def->get_namespace();
+        Tag_t         sym_tag     = serializer.get_symbol_tag(name_space);
+        serializer.write_encoded_tag(sym_tag);
+        DOUT(("namespace %u (%s)\n", unsigned(sym_tag), name_space->get_name()));
+    }
+
     DEC_SCOPE();
     DOUT(("Def }\n"));
 }
@@ -1229,6 +1262,7 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
 
     // read the kind
     IDefinition::Kind kind = IDefinition::Kind(deserializer.read_unsigned());
+    DOUT(("def kind %u\n", unsigned(kind)));
 
     // read the unique ID
     size_t unique_id = deserializer.read_encoded_tag();
@@ -1249,10 +1283,13 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     ISymbol const *sym = deserializer.get_symbol(sym_tag);
     DOUT(("sym %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
-    // read the type of this definition
-    Tag_t type_tag = deserializer.read_encoded_tag();
-    IType const *type = deserializer.get_type(type_tag);
-    DOUT(("type %u\n", unsigned(type_tag)));
+    IType const *type = NULL;
+    if (kind != Definition::DK_NAMESPACE) {
+        // read the type of this definition
+        Tag_t type_tag = deserializer.read_encoded_tag();
+        type = deserializer.get_type(type_tag);
+        DOUT(("type %u\n", unsigned(type_tag)));
+    }
 
     // no need to deserialize m_def_scope
     // m_own_scope is updated automatically
@@ -1260,21 +1297,33 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     Position *pos = NULL;
 
     Definition *new_def;
-    Definition *curr_def = get_definition(sym);
-    if (curr_def && curr_def->get_def_scope() == m_curr_scope) {
-        // there is already a definition for this symbol, append it
+    if (kind == Definition::DK_NAMESPACE) {
         new_def = m_builder.create<Definition>(
-            kind, m_owner.get_unique_id(), sym, type, pos,
-            m_curr_scope, (Definition *)0, unique_id);
-        new_def->link_same_def(curr_def);
+            kind,
+            m_owner.get_unique_id(),
+            sym,
+            type,
+            pos,
+            /*parant_scope=*/(Scope *)NULL,
+            /*outer_def=*/(Definition *)NULL,
+            unique_id);
     } else {
-        // no definition inside this scope
-        new_def = m_builder.create<Definition>(
-            kind, m_owner.get_unique_id(), sym, type, pos,
-            m_curr_scope, curr_def, unique_id);
-        m_curr_scope->add_definition(new_def);
+        Definition *curr_def = get_definition(sym);
+        if (curr_def && curr_def->get_def_scope() == m_curr_scope) {
+            // there is already a definition for this symbol, append it
+            new_def = m_builder.create<Definition>(
+                kind, m_owner.get_unique_id(), sym, type, pos,
+                m_curr_scope, (Definition *)NULL, unique_id);
+            new_def->link_same_def(curr_def);
+        } else {
+            // no definition inside this scope
+            new_def = m_builder.create<Definition>(
+                kind, m_owner.get_unique_id(), sym, type, pos,
+                m_curr_scope, curr_def, unique_id);
+            m_curr_scope->add_definition(new_def);
+        }
+        set_definition(sym, new_def);
     }
-    set_definition(sym, new_def);
 
     new_def->m_original_unique_id = original_unique_id;
     new_def->m_original_module_import_idx = original_module_import_id;
@@ -1386,6 +1435,14 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     // deserialize parameter derivative mask for functions
     if (new_def->m_kind == Definition::DK_FUNCTION) {
         new_def->m_parameter_deriv_mask = deserializer.read_unsigned();
+    }
+
+    // deserialize namespace
+    if (new_def->m_kind == Definition::DK_NAMESPACE) {
+        size_t sym_tag = deserializer.read_encoded_tag();
+        ISymbol const *name_space = deserializer.get_symbol(sym_tag);
+        DOUT(("namespace %u (%s)\n", unsigned(sym_tag), name_space->get_name()));
+        new_def->set_namespace(name_space);
     }
 
     DEC_SCOPE();
@@ -1735,6 +1792,41 @@ Definition *Definition_table::import_definition(
     return new_def;
 }
 
+// Get a namespace alias.
+Definition const *Definition_table::get_namespace_alias(
+    ISymbol const *alias)
+{
+    Namespace_aliases_map::const_iterator it = m_namespace_aliases.find(alias);
+    if (it != m_namespace_aliases.end())
+        return it->second;
+    return NULL;
+}
+
+// Enter a new namespace alias.
+Definition *Definition_table::enter_namespace_alias(
+    ISymbol const                      *alias,
+    ISymbol const                      *ns,
+    IDeclaration_namespace_alias const *decl)
+{
+    Definition *new_def = m_builder.create<Definition>(
+        Definition::DK_NAMESPACE,
+        m_owner.get_unique_id(),
+        alias,
+        /*type=*/(IType *)NULL,
+        &decl->get_alias()->access_position(),
+        /*parant_scope=*/(Scope *)NULL,
+        /*outer_def=*/(Definition *)NULL,
+        ++m_next_definition_id);
+
+    new_def->set_namespace(ns);
+    new_def->set_declaration(decl);
+
+    bool res = m_namespace_aliases.insert(Namespace_aliases_map::value_type(alias, new_def)).second;
+    MDL_ASSERT(res && "name clash for namespace alias");
+    (void)res;
+    return new_def;
+}
+
 // Walk over all definitions of this definition table.
 void Definition_table::walk(IDefinition_visitor const *visitor) const
 {
@@ -1749,6 +1841,7 @@ void Definition_table::clear()
     m_arena.drop(NULL);
     m_type_scopes.clear();
     m_definitions.clear();
+    m_namespace_aliases.clear();
 
     std::fill_n(
         &m_operator_definitions[0], dimension_of(m_operator_definitions), (Definition *)0);
@@ -1802,10 +1895,28 @@ void Definition_table::serialize(Module_serializer &serializer) const
     DOUT(("Def table %u {\n", unsigned(def_tbl_tag)));
     INC_SCOPE();
 
+    // serialize namespace aliases
+    serializer.write_encoded_tag(m_namespace_aliases.size());
+    for (Namespace_aliases_map::const_iterator
+            it(m_namespace_aliases.begin()), end(m_namespace_aliases.end());
+        it != end;
+        ++it)
+    {
+        ISymbol const    *alias = it->first;
+        Definition const *def = it->second;
+
+        Tag_t alias_tag = serializer.get_symbol_tag(alias);
+        serializer.write_encoded_tag(alias_tag);
+        DOUT(("alias %u (%s)\n", unsigned(alias_tag), alias->get_name()));
+
+        serialize_def(def, serializer);
+    }
+
     // serialize the global scope
     Scope const *s = m_global_scope;
 
     s->serialize(*this, serializer);
+
     DEC_SCOPE();
     DOUT(("Def table }\n"));
 }
@@ -1826,6 +1937,20 @@ void Definition_table::deserialize(Module_deserializer &deserializer)
 
     DOUT(("Def table %u {\n", unsigned(def_tbl_tag)));
     INC_SCOPE();
+
+    // deserialize namespace aliases
+    size_t n_namespaces = deserializer.read_encoded_tag();
+    for (size_t i = 0; i < n_namespaces; ++i) {
+        Tag_t alias_tag = deserializer.read_encoded_tag();
+        ISymbol const *alias = deserializer.get_symbol(alias_tag);
+        DOUT(("alias %u (%s)\n", unsigned(alias_tag), alias->get_name()));
+
+        t = deserializer.read_section_tag();
+        MDL_ASSERT(t == Serializer::ST_DEFINITION);
+
+        Definition *def = deserialize_def(deserializer);
+        m_namespace_aliases.insert(Namespace_aliases_map::value_type(alias, def));
+    }
 
     // must start with a scope
     t = deserializer.read_section_tag();

@@ -110,6 +110,7 @@ mi::Sint32 Mdl_factory_impl::create_variants(
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     std::vector<MDL::Variant_data> mdl_variant_data(variant_count);
+    MDL::Execution_context context;
     for( mi::Size i = 0; i < variant_count; ++i) {
 
         mi::base::Handle<const mi::IStructure> variant(
@@ -138,7 +139,13 @@ mi::Sint32 Mdl_factory_impl::create_variants(
             return -5;
         if (class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
             DB::Access<MDL::Mdl_function_definition> def(tag, db_transaction);
+            if (!def->is_valid(db_transaction, &context))
+                return -5;
             if (!MDL::is_supported_prototype(def.get_ptr(), true))
+                return -5;
+        } else if (class_id == MDL::ID_MDL_MATERIAL_DEFINITION) {
+            DB::Access<MDL::Mdl_material_definition> def(tag, db_transaction);
+            if (!def->is_valid(db_transaction, &context))
                 return -5;
         }
         mdl_variant_data[i].m_prototype_tag = tag;
@@ -152,7 +159,6 @@ mi::Sint32 Mdl_factory_impl::create_variants(
         mdl_variant_data[i].m_annotations = get_internal_annotation_block( annotations.get());
     }
 
-    MDL::Execution_context context;
     return MDL::Mdl_module::create_module(
         db_transaction, module_name, mdl_variant_data.data(), mdl_variant_data.size(), &context);
 }
@@ -165,27 +171,6 @@ mi::Sint32 Mdl_factory_impl::create_materials(
     return 0;
 }
 
-
-namespace {
-
-MDL::Execution_context* unwrap_and_clear(
-    mi::neuraylib::IMdl_execution_context* context,
-    MDL::Execution_context& default_context) {
-
-    if (context)
-    {
-        NEURAY::Mdl_execution_context_impl* context_impl =
-            static_cast<NEURAY::Mdl_execution_context_impl*>(context);
-        if (context_impl) {
-            MDL::Execution_context& wrapped_context = context_impl->get_context();
-            wrapped_context.clear_messages();
-            return &wrapped_context;
-        }
-    }
-    return &default_context;
-}
-
-}
 mi::Sint32 Mdl_factory_impl::create_materials(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,

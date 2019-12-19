@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2012-2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -466,6 +466,9 @@ void AT_check::post_visit(IExpression_call *call_expr)
             // auto-type parameter
             res_mod = supremum(res_mod, a_mod);
         }
+    } else if (f_def->get_kind() == Definition::DK_ERROR) {
+        // already error
+        return;
     } else if (f_def->has_flag(Definition::DEF_IS_VARYING)) {
         // varying function call
         res_mod = IType::MK_VARYING;

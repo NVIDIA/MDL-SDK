@@ -1016,6 +1016,9 @@ void Function_hasher::hash(IDefinition const *def)
             hash(sema);
         }
         return;
+    case IDefinition::DK_NAMESPACE:
+        MDL_ASSERT(!"NYI");
+        return;
     }
     MDL_ASSERT(!"unknown definition kind");
 }

@@ -53,7 +53,7 @@ namespace NEURAY {
 
 Mdl_compatibility_api_impl::Mdl_compatibility_api_impl(mi::neuraylib::INeuray *neuray)
 : m_neuray(neuray)
-, m_mdlc_module( false)
+, m_mdlc_module( true)
 {
 }
 

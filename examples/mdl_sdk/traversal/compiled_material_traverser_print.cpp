@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/compiled_material_traverser_print.cpp
+// examples/mdl_sdk/traversal/compiled_material_traverser_print.cpp
 
 #include "compiled_material_traverser_print.h"
 #include <iostream>
@@ -83,7 +83,7 @@ std::string Compiled_material_traverser_print::print_mdl(
     const mi::neuraylib::ICompiled_material* material,
     Context& context,
     const std::string& original_module_name,
-    const std::string& output_material_name) const
+    const std::string& output_material_name)
 {
     // reset in case of reuse
     context.reset();
@@ -93,7 +93,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 
     // version string
     std::stringstream output;
-    output << "mdl 1.5;\n\n";
+    output << "mdl 1.6;\n\n";
 
     // add required includes
     size_t last_sep_pos = std::string::npos;
@@ -133,7 +133,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 //--------------------------------------------------------------------------------------------------
 
 void Compiled_material_traverser_print::stage_begin(
-    const mi::neuraylib::ICompiled_material* material, Traveral_stage stage, void* context) const
+    const mi::neuraylib::ICompiled_material* material, Traveral_stage stage, void* context)
 {
     Context* ctx = static_cast<Compiled_material_traverser_print::Context*>(context);
     ctx->m_stage = stage;
@@ -159,7 +159,7 @@ void Compiled_material_traverser_print::stage_begin(
 }
 
 void Compiled_material_traverser_print::stage_end(const mi::neuraylib::ICompiled_material* material,
-                                                  Traveral_stage stage, void* context) const
+                                                  Traveral_stage stage, void* context)
 {
     Context* ctx = static_cast<Compiled_material_traverser_print::Context*>(context);
 
@@ -196,7 +196,7 @@ void Compiled_material_traverser_print::stage_end(const mi::neuraylib::ICompiled
 
 void Compiled_material_traverser_print::visit_begin(
     const mi::neuraylib::ICompiled_material* material,
-    const Traversal_element& element, void* context) const
+    const Traversal_element& element, void* context)
 {
     Context* ctx = static_cast<Compiled_material_traverser_print::Context*>(context);
     ctx->m_indent++;
@@ -697,7 +697,7 @@ void Compiled_material_traverser_print::visit_begin(
 void Compiled_material_traverser_print::visit_child(
     const mi::neuraylib::ICompiled_material* /*material*/,
     const Traversal_element& element, mi::Size /*children_count*/,
-    mi::Size child_index, void* context) const
+    mi::Size child_index, void* context)
 {
     Context* ctx = static_cast<Compiled_material_traverser_print::Context*>(context);
 
@@ -733,6 +733,13 @@ void Compiled_material_traverser_print::visit_child(
                     return;
                 }
 
+                if (is_array_index_operator(semantic))
+                {
+                    if (child_index == 1)
+                        ctx->m_print << "[";
+                    return;
+                }
+
                 if (is_binary_operator(semantic))
                 {
                     if (child_index == 1)
@@ -752,12 +759,6 @@ void Compiled_material_traverser_print::visit_child(
                     return;
                 }
 
-                if (is_array_index_operator(semantic))
-                {
-                    if (child_index == 1)
-                        ctx->m_print << "[";
-                    return;
-                }
 
                 // argument lists without line breaks
                 if (is_type_converter(semantic))
@@ -823,7 +824,7 @@ void Compiled_material_traverser_print::visit_child(
 void Compiled_material_traverser_print::visit_end(
     const mi::neuraylib::ICompiled_material* material,
     const Traversal_element& element,
-    void* context) const
+    void* context)
 {
     Context* ctx = static_cast<Compiled_material_traverser_print::Context*>(context);
 
@@ -1264,7 +1265,7 @@ inline bool is_array_constructor(mi::neuraylib::IFunction_definition::Semantics 
 
 inline bool is_array_index_operator(mi::neuraylib::IFunction_definition::Semantics semantic)
 {
-    return semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_INDEX_ACCESS;
+    return semantic == mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX;
 }
 
 inline bool is_unary_operator(mi::neuraylib::IFunction_definition::Semantics semantic)

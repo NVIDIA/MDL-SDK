@@ -118,9 +118,9 @@ void DAG_code_printer::print(Printer *printer, mi::base::IInterface const *code)
         print("\n");
         for (int i = 0; i < import_count; ++i) {
             keyword("import");
-            print(" ");
+            print(" \"");
             print(code_dag->get_import(i));
-            print(";\n");
+            print("\";\n");
         }
     }
 
@@ -154,6 +154,7 @@ static bool is_material_constructor_call(DAG_call const *call)
     return false;
 }
 
+// Print a DAG IR node inside a material or function definition.
 void DAG_code_printer::print_exp(
     int                       depth,
     IGenerated_code_dag const *dag,
@@ -225,10 +226,6 @@ void DAG_code_printer::print_sema(IDefinition::Semantics sema) const
         break;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
         s = "array constructor";
-        be_generated = true;
-        break;
-    case IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
-        s = "operator[] substitute";
         be_generated = true;
         break;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
@@ -623,6 +620,9 @@ void DAG_code_printer::print_mdl_type(
             case IType_texture::TS_PTEX:
                 print("ptex");
                 break;
+            case IType_texture::TS_BSDF_DATA:
+                print("bsdf_data");
+                break;
             }
             pop_color();
             break;
@@ -889,6 +889,27 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
                 print("\n");
             }
             print("]]");
+        }
+
+        if (DAG_node const *body = code_dag->get_function_body(i)) {
+            print(" = ");
+            if (int temporary_count = code_dag->get_function_temporary_count(i)) {
+                keyword("let");
+                print(" {\n");
+                for (int k = 0; k < temporary_count; k++) {
+                    Indent_scope scope(depth);
+
+                    indent(depth);
+                    m_printer->printf("t_%d = ", k);
+                    print_exp(depth, code_dag, -(i+1), code_dag->get_function_temporary(i, k));
+                    print(";\n");
+                }
+                indent(depth);
+                print("} ");
+                keyword("in");
+                print(" ");
+            }
+            print_exp(depth, code_dag, -(i+1), body);
         }
         print(";\n");
     }

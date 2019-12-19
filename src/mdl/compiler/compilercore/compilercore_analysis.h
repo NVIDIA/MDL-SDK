@@ -320,7 +320,7 @@ protected:
     ///
     /// \param kind         a definition kind
     /// \param restriction  a match restriction
-    static bool allow_defition(
+    static bool allow_definition(
         IDefinition::Kind kind,
         Match_restriction restriction);
 
@@ -851,11 +851,15 @@ private:
     /// Enter the relative scope starting at the current scope
     /// of an imported module given by the module name and a prefix skip.
     ///
-    /// \param from_name    absolute name of an imported module
-    /// \param prefix_skip  len of prefix to skip from absolute module name
+    /// \param ns           a namespace name
+    /// \param prefix_skip  len of prefix to skip from name space
+    /// \param ignore_last  if true, ignore the last component
     ///
     /// \note Creates the scope if it does not exists so far.
-    Scope *enter_import_scope(IQualified_name const *from_name, int prefix_skip);
+    Scope *enter_import_scope(
+        IQualified_name const *ns,
+        int                   prefix_skip,
+        bool                  ignore_last);
 
     /// Import a qualified entity or a module.
     ///
@@ -885,12 +889,14 @@ private:
     /// Import a complete module.
     ///
     /// \param from         the module to import
-    /// \param prefix_skip  len of prefix to skip from absolute module name
+    /// \param ns           the namespace under which the entities are imported
+    /// \param prefix_skip  len of prefix to skip from namespace
     /// \param err_pos      position for error messages
     void import_all_definitions(
-        Module const   *from,
-        int            prefix_skip,
-        Position const &err_pos);
+        Module const          *from,
+        IQualified_name const *ns,
+        int                   prefix_skip,
+        Position const        &err_pos);
 
     /// Import a type scope.
     ///
@@ -942,11 +948,13 @@ private:
     ///
     /// \param name         the name of the entity to import
     /// \param imp_mod      the module from which the entity is imported
+    /// \param prefix_skip  len of prefix to skip from name space
     ///
     /// \return true on success
     bool import_qualified_entity(
         IQualified_name const *name,
-        Module const          *imp_mod);
+        Module const          *imp_mod,
+        int                   prefix_skip);
 
     /// Import all exported entities from a module.
     ///
@@ -1123,7 +1131,7 @@ private:
         IType const            *arg_types[],
         size_t                 num_args,
         unsigned               &arg_mask);
-    
+
     /// Find the definition of a binary or unary operator.
     ///
     /// \param op_call    a binary or unary expression
@@ -1597,13 +1605,13 @@ private:
         IType_resource const *type,
         bool                 exists);
 
-    /// Copy the given messages to the current module message.
+    /// Copy the given resolver messages to the current module.
     ///
-    /// \param messages         the messages
-    /// \param map_err_to_warn  if true, map errors to warnings
-    void copy_messages_to_module(
+    /// \param messages     the resolver messages
+    /// \param is_resource  true, if the messages come from resolving a resource
+    void copy_resolver_messages_to_module(
         Messages_impl const &messages,
-        bool                map_err_to_warn);
+        bool is_resource);
 
     /// Try to import a symbol from a given module.
     ///
@@ -1751,6 +1759,8 @@ private:
 
     bool pre_visit(IDeclaration_module *mod_decl) MDL_OVERRIDE;
 
+    bool pre_visit(IDeclaration_namespace_alias *alias) MDL_OVERRIDE;
+
     bool pre_visit(IDeclaration_variable *var_decl) MDL_OVERRIDE;
 
     bool pre_visit(IStatement_compound *block) MDL_OVERRIDE;
@@ -1853,7 +1863,7 @@ private:
     /// If set, we are visiting an annotation on a return type.
     bool m_is_return_annotation;
 
-    /// If true, the current module has the array assignment.
+    /// If true, the current module has the array assignment operator.
     bool m_has_array_assignment;
 
     /// If true, resolve resources and generate errors if resources are missing.
@@ -2153,6 +2163,7 @@ private:
     bool identical_expressions(
         IExpression const *lhs,
         IExpression const *rhs) const;
+
     /// Check if two statements are syntactically identical.
     ///
     /// \param lhs  a statement
@@ -2256,8 +2267,8 @@ private:
     /// Set if an expression with a call was executed.
     bool m_has_call;
 
-    /// Set if we are inside a material body
-    bool m_inside_material_body;
+    /// Set if we are inside a material body or single expression function.
+    bool m_inside_single_expr_body;
 
     /// If set, the current assigned definition.
     Definition const *m_curr_assigned_def;

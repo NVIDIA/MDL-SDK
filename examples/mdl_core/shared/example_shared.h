@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_shared.h
+// examples/mdl_core/shared/example_shared.h
 //
 // Code shared by all examples
 
@@ -447,7 +447,7 @@ public:
     /// \param entity_name    the entity name
     ///
     /// \returns the owning module of this entity if found, nullptr otherwise
-    virtual mi::mdl::IModule const *get_owner_module(char const *entity_name) const override
+    mi::mdl::IModule const *get_owner_module(char const *entity_name) const override
     {
         std::string module_name(get_module_name(entity_name));
 
@@ -472,7 +472,7 @@ public:
     /// \param absname  the absolute name of an MDL module as returned by the module resolver
     ///
     /// \return  If this module is already known, return it, otherwise nullptr.
-    virtual mi::mdl::IModule const *lookup(char const *absname) const override
+    mi::mdl::IModule const *lookup(char const *absname) const override
     {
         // search for the module name
         auto it = m_modules.find(absname);
@@ -481,6 +481,12 @@ public:
             return it->second.get();
         }
 
+        return nullptr;
+    }
+
+    /// Get the module loading callback.
+    mi::mdl::IModule_loaded_callback *get_module_loading_callback() const override
+    {
         return nullptr;
     }
 
@@ -1126,5 +1132,33 @@ protected:
     Msg_context                                    m_msg_context;
     Module_manager                                 m_module_manager;
 };
+
+#ifdef MI_PLATFORM_WINDOWS
+
+#define MAIN_UTF8 main_utf8
+
+#define COMMANDLINE_TO_UTF8 \
+int wmain(int argc, wchar_t* argv[]) { \
+    char** argv_utf8 = new char*[argc]; \
+    for (int i = 0; i < argc; i++) { \
+        LPWSTR warg = argv[i]; \
+        DWORD size = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL); \
+        check_success(size > 0); \
+        argv_utf8[i] = new char[size]; \
+        DWORD result = WideCharToMultiByte(CP_UTF8, 0, warg, -1, argv_utf8[i], size, NULL, NULL); \
+        check_success(result > 0); \
+    } \
+    SetConsoleOutputCP(CP_UTF8); \
+    int result = main_utf8(argc, argv_utf8); \
+    delete[] argv_utf8; \
+    return result; \
+}
+
+#else
+
+#define MAIN_UTF8 main
+#define COMMANDLINE_TO_UTF8
+
+#endif
 
 #endif // MI_EXAMPLE_SHARED_H

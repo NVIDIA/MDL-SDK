@@ -201,6 +201,20 @@ wchar_t const *utf8_to_utf16(wstring &res, char const *src)
     return res.c_str();
 }
 
+// Converts a utf8 encoded string into a utf32 encoded string.
+unsigned const *utf8_to_utf32(u32string &res, char const *src)
+{
+    res.clear();
+
+    while (*src != '\0') {
+        unsigned unicode_char;
+
+        src = utf8_to_unicode_char(src, unicode_char);
+        res.append(unicode_char);
+    }
+    return res.c_str();
+}
+
 // Converts a u32 string into an utf8 encoded string.
 char const *utf32_to_utf8(string &res, unsigned const *src)
 {

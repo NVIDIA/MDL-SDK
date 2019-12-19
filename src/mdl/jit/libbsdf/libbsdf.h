@@ -79,56 +79,94 @@ enum BSDF_event_type
 // be replaced by BSDF functions with the MDL material's IOR
 #define BSDF_USE_MATERIAL_IOR   -1.0f
 
+/// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
+#define BSDF_HSMP -2   ///< renderer defined buffers; not supported by all backends
+#define BSDF_HSMN -1   ///< No slots, handles are ignored completely
+#define BSDF_HSM1  1   ///< fixed size array for processing 1 handle at a time
+#define BSDF_HSM2  2   ///< fixed size array for processing 2 handle at a time
+#define BSDF_HSM4  4   ///< fixed size array for processing 4 handle at a time
+#define BSDF_HSM8  8   ///< fixed size array for processing 8 handle at a time
+
+// define has to be set by the compiler
+#ifndef MDL_DF_HANDLE_SLOT_MODE
+#error "Compile constant 'MDL_DF_HANDLE_SLOT_MODE' not defined."
+#endif
+
 struct BSDF_sample_data
 {
-    // Input fields
-    float3 ior1; // IOR current medium
-    float3 ior2; // IOR other side
-    float3 k1;  // outgoing direction
-    float3 xi;  // pseudo-random sample number
+    float3 ior1;                // mutual input: IOR current medium
+    float3 ior2;                // mutual input: IOR other side
+    float3 k1;                  // mutual input: outgoing direction
 
-    // Output fields
-    float3 k2;            // incoming direction
-    float  pdf;           // pdf (non-projected hemisphere)
-    float3 bsdf_over_pdf; // bsdf * dot(normal, k2) / pdf
-    int event_type;       // BSDF_event_type
+    float3 k2;                  // output:  incoming direction
+    float4 xi;                  // input:   pseudo-random sample numbers
+    
+    float  pdf;                 // output:  pdf (non-projected hemisphere)
+    float3 bsdf_over_pdf;       // output:  bsdf * dot(normal, k2) / pdf
+    int event_type;             // output:  BSDF_event_type
+    int handle;                 // output:  handle of the sampled elemental BSDF (lobe)
 };
 
 struct BSDF_evaluate_data
 {
-    // Input fields
-    float3 ior1;
-    float3 ior2;
-    float3 k1;
-    float3 k2;
+    float3 ior1;                // mutual input: IOR current medium
+    float3 ior2;                // mutual input: IOR other side
+    float3 k1;                  // mutual input: outgoing direction
 
-    // Output fields
-    float3 bsdf;
-    float  pdf;
+    float3 k2;
+    #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+    #endif
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        int handle_count;       // input: number of elements of 'bsdf_diffuse' and 'bsdf_glossy'
+    #endif
+
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
+        float3 bsdf_diffuse;    // output: (diffuse part of the) bsdf * dot(normal, k2)
+        float3 bsdf_glossy;     // output: (glossy part of the) bsdf * dot(normal, k2)
+    #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        float3* bsdf_diffuse;   // output: (diffuse part of the) bsdf * dot(normal, k2)
+        float3* bsdf_glossy;    // output: (glossy part of the) bsdf * dot(normal, k2)
+    #else
+        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; // output: (diffuse) bsdf * dot(normal, k2)
+        float3 bsdf_glossy [MDL_DF_HANDLE_SLOT_MODE]; // output: (glossy) bsdf * dot(normal, k2)
+    #endif
+    float  pdf;                 // output: pdf (non-projected hemisphere)
 };
 
 struct BSDF_pdf_data
 {
-    // Input fields
-    float3 ior1;
-    float3 ior2;
-    float3 k1;
-    float3 k2;
+    float3 ior1;                // mutual input: IOR current medium
+    float3 ior2;                // mutual input: IOR other side
+    float3 k1;                  // mutual input: outgoing direction
 
-    // Output fields
-    float pdf;
+    float3 k2;                  // input:   incoming direction
+    float pdf;                  // output:  pdf (non-projected hemisphere)
 };
 
 struct BSDF_auxiliary_data
 {
-    // Input fields
-    float3 ior1; // IOR current medium
-    float3 ior2; // IOR other side
-    float3 k1;   // outgoing direction
+    float3 ior1;                // mutual input: IOR current medium
+    float3 ior2;                // mutual input: IOR other side
+    float3 k1;                  // mutual input: outgoing direction
 
-    // Output fields
-    float3 albedo;
-    float3 normal;
+    #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+    #endif
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        int handle_count;       // input: number of elements of 'albedo' and 'normal'
+    #endif
+
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
+        float3 albedo;          // output: albedo
+        float3 normal;          // output: normal
+    #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        float3* albedo;         // output: albedo
+        float3* normal;         // output: normal
+    #else
+        float3 albedo[MDL_DF_HANDLE_SLOT_MODE]; // output: albedo
+        float3 normal[MDL_DF_HANDLE_SLOT_MODE]; // output: normal
+    #endif
 };
 
 
@@ -151,42 +189,53 @@ enum EDF_event_type
 
 struct EDF_sample_data
 {
-    // Input fields
-    float3 xi;              // pseudo-random sample number
+    float4 xi;                  // input: pseudo-random sample numbers
 
-    // Output fields
-    float3 k1;              // outgoing direction
-    float pdf;              // pdf (non-projected hemisphere)
-    float3 edf_over_pdf;    // edf * dot(normal,k1) / pdf
+    float3 k1;                  // output: outgoing direction
+    float pdf;                  // output: pdf (non-projected hemisphere)
+    float3 edf_over_pdf;        // output: edf * dot(normal,k1) / pdf
     int event_type;
+    int handle;                 // output: handle of the sampled elemental EDF (lobe)
 };
 
 struct EDF_evaluate_data
 {
-    // Input fields
-    float3 k1;              // outgoing direction
+    float3 k1;                  // input: outgoing direction
+    #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+    #endif
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        int handle_count;       // input: number of elements of 'edf'
+    #endif
 
-    // Output fields
-    float cos;              // dot(normal, k1)
-    float3 edf;             // edf
-    float pdf;              // pdf (non-projected hemisphere)
+    float cos;                  // output: dot(normal, k1)
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
+        float3 edf;             // output: edf
+    #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        float3* edf;            // output: edf
+    #else
+        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; // output: edf
+    #endif
+    float pdf;                  // output: pdf (non-projected hemisphere)
 };
 
 struct EDF_pdf_data
 {
-    // Input fields
-    float3 k1;              // outgoing direction
+    float3 k1;                  // input: outgoing direction
 
-    // Output fields
-    float pdf;              // pdf (non-projected hemisphere)
+    float pdf;                  // output: pdf (non-projected hemisphere)
 };
 
 struct EDF_auxiliary_data
 {
-    // Input fields
-    float3 k1;              // outgoing direction
+    float3 k1;                  // input: outgoing direction
+    #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+    #endif
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        int handle_count;       // input: number of elements of 'output buffer fields'
+    #endif
 
-    // Output fields
     // reserved for future use
 };
 
@@ -199,5 +248,50 @@ typedef void(*mdl_edf_pdf_function)         (EDF_pdf_data *,
 typedef void(*mdl_edf_auxiliary_function)   (EDF_auxiliary_data *,
                                              MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
+enum BSDF_type
+{
+    ELEMENTAL_START,
+
+    DIFFUSE_REFLECTION_BSDF = ELEMENTAL_START,
+    DIFFUSE_TRANSMISSION_BSDF,
+    SPECULAR_BSDF,
+    SIMPLE_GLOSSY_BSDF,
+    MICROFACET_BECKMANN_VCAVITIES_BSDF,
+    MICROFACET_GGX_VCAVITIES_BSDF,
+    MICROFACET_BECKMANN_SMITH_BSDF,
+    MICROFACET_GGX_SMITH_BSDF,
+    BACKSCATTERING_GLOSSY_BSDF,
+    WARD_GEISLER_MORODER_BSDF,
+    SHEEN_BSDF,
+    MEASURED_BSDF,
+    BLACK_BSDF,
+
+    NON_ELEMENTAL_START,
+
+    TINT = NON_ELEMENTAL_START,
+    WEIGHTED_LAYER,
+    COLOR_WEIGHTED_LAYER,
+
+    FRESNEL_LAYER,
+    COLOR_FRESNEL_LAYER,
+    CUSTOM_CURVE_LAYER,
+    COLOR_CUSTOM_CURVE_LAYER,
+    DIRECTIONAL_FACTOR,
+    MEASURED_CURVE_FACTOR,
+    MEASURED_CURVE_LAYER,
+    COLOR_MEASURED_CURVE_LAYER,
+    THIN_FILM,
+    FRESNEL_FACTOR,
+    MEASURED_FACTOR,  // TODO
+
+    MIX_START,
+
+    NORMALIZED_MIX = MIX_START,
+    COLOR_NORMALIZED_MIX,
+    CLAMPED_MIX,
+    COLOR_CLAMPED_MIX,
+
+    TERNARY_OPERATOR,
+};
 
 #endif // MDL_LIBBSDF_H

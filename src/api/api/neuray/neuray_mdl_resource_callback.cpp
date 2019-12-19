@@ -112,16 +112,17 @@ const char* Resource_callback::get_resource_name(
     if( !m_file_paths[tag].empty())
         return m_file_paths[tag].c_str();
 
-    using mi::mdl::is;
-    if( is<mi::mdl::IValue_texture>( resource))
+    switch (resource->get_kind()) {
+    case mi::mdl::IValue::VK_TEXTURE:
         return handle_texture( tag, supports_strict_relative_path, buffer_callback);
-    if( is<mi::mdl::IValue_light_profile>( resource))
+    case mi::mdl::IValue::VK_LIGHT_PROFILE:
         return handle_light_profile( tag, supports_strict_relative_path, buffer_callback);
-    if( is<mi::mdl::IValue_bsdf_measurement>( resource))
+    case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
         return handle_bsdf_measurement( tag, supports_strict_relative_path, buffer_callback);
-
-    ASSERT( M_NEURAY_API, false);
-    return 0;
+    default:
+        ASSERT( M_NEURAY_API, false);
+        return 0;
+    }
 }
 
 const char* Resource_callback::get_resource_name(

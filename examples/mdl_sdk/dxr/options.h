@@ -31,10 +31,12 @@
 #ifndef MDL_D3D12_OPTIONS_H
 #define MDL_D3D12_OPTIONS_H
 
+#include <shellapi.h>
+
 #include "mdl_d3d12/common.h"
 #include "mdl_d3d12/base_application.h"
 #include <example_shared.h>
-
+#include <codecvt>
 namespace mdl_d3d12
 {
     class Example_dxr_options : public Base_options
@@ -109,7 +111,7 @@ namespace mdl_d3d12
         << "--iterations <num>        Number of progressive iterations. In GUI-mode, this is the\n"
         << "                          iterations per frame. In NO-GUI-mode it is the total count.\n"
 
-        << "--no_derivs               Disables automatic derivatives.\n"
+        << "--enable_derivs           Enable automatic derivatives (not used in the ray tracer).\n"
 
         << "--no_firefly_clamp        Disables firefly clamping used to suppress white pixels\n"
         << "                          because of low probability paths at early iterations.\n"
@@ -126,30 +128,40 @@ namespace mdl_d3d12
         log_info(ss.str());
     }
 
+    //--------------------------------------------------------------------------------------
+    // Conversion from wchar_t to utf8
+    //--------------------------------------------------------------------------------------
+    inline std::string to_utf8(wchar_t const *str)
+    {
+        using convert_type = std::codecvt_utf8<wchar_t>;
+        std::wstring_convert<convert_type, wchar_t> converter;
+        return converter.to_bytes(str);
+    }
+
     inline bool parse_options(
-        Example_dxr_options& options, 
-        LPSTR command_line_args, 
+        Example_dxr_options& options,
+        LPWSTR command_line_args,
         int& return_code)
     {
         if (command_line_args && *command_line_args)
         {
-            std::vector<std::string> argv = str_split(command_line_args, ' ');
-            size_t argc = argv.size();
+            int argc;
+            LPWSTR *arg_list = CommandLineToArgvW(command_line_args, &argc);
 
             for (size_t i = 0; i < argc; ++i)
             {
-                const char* opt = argv[i].c_str();
+                LPWSTR opt = arg_list[i];
                 if (opt[0] == '-')
                 {
-                    if (strcmp(opt, "--nocc") == 0)
+                    if (wcscmp(opt, L"--nocc") == 0)
                     {
                         options.use_class_compilation = false;
                     }
-                    if (strcmp(opt, "--noaux") == 0)
+                    else if (wcscmp(opt, L"--noaux") == 0)
                     {
                         options.enable_auxiliary = false;
                     }
-                    else if (strcmp(opt, "--nogui") == 0)
+                    else if (wcscmp(opt, L"--nogui") == 0)
                     {
                         options.no_gui = true;
 
@@ -157,34 +169,34 @@ namespace mdl_d3d12
                         if (options.iterations == 1) 
                             options.iterations = 1000;
                     }
-                    else if (strcmp(opt, "--hide_gui") == 0)
+                    else if (wcscmp(opt, L"--hide_gui") == 0)
                     {
                         options.hide_gui = true;
                     }
-                    else if (strcmp(opt, "--nothreads") == 0)
+                    else if (wcscmp(opt, L"--nothreads") == 0)
                     {
                         options.force_single_theading = true;
                     }
-                    else if (strcmp(opt, "--gui_scale") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--gui_scale") == 0 && i < argc - 1)
                     {
-                        options.gui_scale = static_cast<float>(atof(argv[++i].c_str()));
+                        options.gui_scale = static_cast<float>(_wtof(arg_list[++i]));
                     }
-                    else if (strcmp(opt, "--res") == 0 && i < argc - 2)
+                    else if (wcscmp(opt, L"--res") == 0 && i < argc - 2)
                     {
-                        options.window_width = std::max(atoi(argv[++i].c_str()), 64);
-                        options.window_height = std::max(atoi(argv[++i].c_str()), 48);
+                        options.window_width = std::max(_wtoi(arg_list[++i]), 64);
+                        options.window_height = std::max(_wtoi(arg_list[++i]), 48);
                     }
-                    else if (strcmp(opt, "--iterations") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--iterations") == 0 && i < argc - 1)
                     {
-                        options.iterations = std::max(atoi(argv[++i].c_str()), 1);
+                        options.iterations = std::max(_wtoi(arg_list[++i]), 1);
                     }
-                    else if (strcmp(opt, "--gpu") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--gpu") == 0 && i < argc - 1)
                     {
-                        options.gpu = std::max(atoi(argv[++i].c_str()), -1);
+                        options.gpu = std::max(_wtoi(arg_list[++i]), -1);
                     }
-                    else if (strcmp(opt, "-o") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"-o") == 0 && i < argc - 1)
                     {
-                        options.output_file = argv[++i];
+                        options.output_file = to_utf8(arg_list[++i]);
                         std::replace(options.output_file.begin(), options.output_file.end(), 
                                      '\\', '/');
 
@@ -195,9 +207,9 @@ namespace mdl_d3d12
                             return false;
                         }
                     }
-                    else if (strcmp(opt, "--hdr") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--hdr") == 0 && i < argc - 1)
                     {
-                        std::string environment = argv[++i];
+                        std::string environment = to_utf8(arg_list[++i]);
                         std::replace(environment.begin(), environment.end(), '\\', '/');
 
                         if (!str_remove_quotes(environment))
@@ -209,50 +221,50 @@ namespace mdl_d3d12
 
                         options.user_options["environment"] = environment;
                     }
-                    else if (strcmp(opt, "--hdr_scale") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--hdr_scale") == 0 && i < argc - 1)
                     {
-                        options.hdr_scale = static_cast<float>(atof(argv[++i].c_str()));
+                        options.hdr_scale = static_cast<float>(_wtof(arg_list[++i]));
                     }
-                    else if (strcmp(opt, "--mat") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--mat") == 0 && i < argc - 1)
                     {
-                        options.user_options["override_material"] = argv[++i];
+                        options.user_options["override_material"] = to_utf8(arg_list[++i]);
                     }
-                    else if (strcmp(opt, "--no_firefly_clamp") == 0)
+                    else if (wcscmp(opt, L"--no_firefly_clamp") == 0)
                     {
                         options.firefly_clamp = false;
                     }
-                    else if (strcmp(opt, "--no_derivs") == 0)
+                    else if (wcscmp(opt, L"--no_derivs") == 0)
                     {
-                        options.automatic_derivatives = true;
+                        options.automatic_derivatives = false;
                     }
-                    else if (strcmp(opt, "-h") == 0 || strcmp(opt, "--help") == 0)
+                    else if (wcscmp(opt, L"-h") == 0 || wcscmp(opt, L"--help") == 0)
                     {
                         print_options();
                         return_code = EXIT_SUCCESS;
                         return false;
                     }
-                    else if (strcmp(opt, "-l") == 0 && i < argc - 6)
+                    else if (wcscmp(opt, L"-l") == 0 && i < argc - 6)
                     {
                         options.point_light_enabled = true;
                         options.point_light_position = {
-                            static_cast<float>(atof(argv[++i].c_str())),
-                            static_cast<float>(atof(argv[++i].c_str())),
-                            static_cast<float>(atof(argv[++i].c_str()))
+                            static_cast<float>(_wtof(arg_list[++i])),
+                            static_cast<float>(_wtof(arg_list[++i])),
+                            static_cast<float>(_wtof(arg_list[++i]))
                         };
 
                         options.point_light_intensity = {
-                            static_cast<float>(atof(argv[++i].c_str())),
-                            static_cast<float>(atof(argv[++i].c_str())),
-                            static_cast<float>(atof(argv[++i].c_str()))
+                            static_cast<float>(_wtof(arg_list[++i])),
+                            static_cast<float>(_wtof(arg_list[++i])),
+                            static_cast<float>(_wtof(arg_list[++i]))
                         };
                     }
-                    else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--max_path_length") == 0 && i < argc - 1)
                     {
-                        options.ray_depth = std::max(2, std::min(atoi(argv[++i].c_str()), 100));
+                        options.ray_depth = std::max(2, std::min(_wtoi(arg_list[++i]), 100));
                     }
-                    else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--mdl_path") == 0 && i < argc - 1)
                     {
-                        std::string mdl_path = argv[++i];
+                        std::string mdl_path = to_utf8(arg_list[++i]);
                         if (!str_remove_quotes(mdl_path))
                         {
                             log_error("Unexpected quotes in: '" + mdl_path + "'.", SRC);
@@ -262,17 +274,17 @@ namespace mdl_d3d12
 
                         options.mdl_paths.push_back(mdl_path);
                     }
-                    else if (strcmp(opt, "--z_axis_up") == 0)
+                    else if (wcscmp(opt, L"--z_axis_up") == 0)
                     {
-                    options.handle_z_axis_up = true;
+                        options.handle_z_axis_up = true;
                     }
-                    else if (strcmp(opt, "--upm") == 0 && i < argc - 1)
+                    else if (wcscmp(opt, L"--upm") == 0 && i < argc - 1)
                     {
-                    options.units_per_meter = static_cast<float>(atof(argv[++i].c_str()));
+                        options.units_per_meter = static_cast<float>(_wtof(arg_list[++i]));
                     }
                     else
                     {
-                        log_error("Unknown option: \"" + argv[i] + "\"", SRC);
+                        log_error("Unknown option: \"" + to_utf8(arg_list[i]) + "\"", SRC);
                         print_options();
                         return_code = EXIT_FAILURE;
                         return false;
@@ -281,7 +293,7 @@ namespace mdl_d3d12
                 else
                 {
                     // default argument is the GLTF scene to load
-                    options.scene = argv[i];
+                    options.scene = to_utf8(arg_list[i]);
                     std::replace(options.scene.begin(), options.scene.end(), '\\', '/');
 
                     if (!str_remove_quotes(options.scene))
@@ -292,6 +304,7 @@ namespace mdl_d3d12
                     }
                 }
             }
+            LocalFree(arg_list);
         }
 
         // set log to output

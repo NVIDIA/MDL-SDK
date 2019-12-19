@@ -28,10 +28,10 @@
 
 mdl 1.4;
 
-import df::*;
-import math::*;
-import base::*;
-import anno::*;
+import ::df::*;
+import ::math::*;
+import ::base::*;
+import ::anno::*;
 
 export material gun_metal (
     uniform color base_color  = color(0.08) 

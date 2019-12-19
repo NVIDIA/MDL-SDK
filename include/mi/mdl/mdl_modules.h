@@ -46,6 +46,31 @@ namespace mdl {
 class IModule;
 class IThread_context;
 
+/// The Interface of a module loaded callback.
+///
+/// An implementation can be registered on the IModule_cache to get notified when a module is
+/// successfully loaded. It is used to communicate to the cache that a new entry can be made.
+class IModule_loaded_callback
+{
+public:
+    /// Function that is called when the \c module was loaded successfully so that it can be cached.
+    ///
+    /// \param module   The loaded, valid, module.
+    /// \return         When false is returned, an error is added to the module, which in turn
+    ///                 marks all importing modules invalid, too. True indicate that the module
+    ///                 is registered.
+    virtual bool register_module(IModule const *module) = 0;
+
+    /// Function that is called when a module was not found or when loading failed.
+    virtual void module_loading_failed(char const *module_name) = 0;
+
+    /// Called while loading a module to check if the built-in modules are already registered.
+    ///
+    /// \param absname  the absolute name of the built-in module to check.
+    /// \return         If false, the built-in will be registered shortly after.
+    virtual bool is_builtin_module_registered(char const *absname) const = 0;
+};
+
 /// The Interface of a module cache.
 ///
 /// The MDL compiler itself does neither take ownership of compiled MDL modules nor
@@ -57,14 +82,21 @@ class IThread_context;
 /// IModule_cache if one was passed.
 class IModule_cache {
 public:
+
     /// Lookup a module.
     ///
-    /// \param absname  the absolute name of a MDL module as returns my the module resolver
+    /// \param absname      the absolute name of a MDL module as returned by the module resolver
     ///
-    /// \return  If this module is already known, return it, otherwise NULL.
+    /// \return             If this module is already known, return it, otherwise NULL.
     ///
     /// \note  The module must be returned with increased reference count.
     virtual IModule const *lookup(char const *absname) const = 0;
+
+    /// Get the module loading callback which is used to notify the cache or the integration
+    /// about successfully loaded modules.
+    ///
+    /// \return                 The callback implementation.
+    virtual IModule_loaded_callback *get_module_loading_callback() const = 0;
 };
 
 /// Helper interface to represent an overload resolution result set returned by

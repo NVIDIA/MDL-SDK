@@ -28,9 +28,9 @@
 
 mdl 1.4;
 
-import df::microfacet_ggx_smith_bsdf;
-import df::fresnel_factor;
-import anno::*;
+import ::df::microfacet_ggx_smith_bsdf;
+import ::df::fresnel_factor;
+import ::anno::*;
 
 //first color is n (ior), second is k (extinction coefficient)
 //more data on https://refractiveindex.info/

@@ -106,6 +106,10 @@ bool LLVM_code_generator::load_and_link_libmdlrt(llvm::Module *llvm_module)
 
         // Found a libmdlrt function
 
+        // remove "target-features" attribute to avoid warnings about unsupported PTX features
+        // for non-PTX backends
+        f.removeFnAttr("target-features");
+
         if (m_target_lang == LLVM_code_generator::TL_HLSL) {
             // mark all functions WITH pointer parameters as force-inline
             for (llvm::Argument const &arg : f.args()) {

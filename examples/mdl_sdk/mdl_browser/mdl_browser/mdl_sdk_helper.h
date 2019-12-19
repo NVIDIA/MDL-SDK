@@ -43,7 +43,11 @@ class Mdl_browser_logger : public mi::base::Interface_implement<mi::base::ILogge
 public:
     Mdl_browser_logger(bool trace) : m_trace(trace) {}
 
-    void message(mi::base::Message_severity level, const char* mc, const char* message) override
+    void message(
+        mi::base::Message_severity level,
+        const char* /*category*/,
+        const mi::base::Message_details& /*details*/,
+        const char* message) override
     {
         if ((m_trace) || (level == mi::base::MESSAGE_SEVERITY_ERROR))
             fprintf(stderr, "%s\n", message);

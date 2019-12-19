@@ -113,12 +113,14 @@ Canvas_impl::Canvas_impl(
     m_tiles = 0;
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
+    mi::base::Handle<DISK::File_reader_impl> reader;
+
     if( image_file) {
         image_file2 = make_handle_dup( image_file);
         image_file = 0; // only use image_file2 below
     } else {
-        DISK::File_reader_impl reader;
-        if( !reader.open( m_filename.c_str())) {
+        reader = new DISK::File_reader_impl;
+        if( !reader->open( m_filename.c_str())) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "Failed to open image file \"%s\".", m_filename.c_str());
             *errors = -3;
@@ -133,7 +135,7 @@ Canvas_impl::Canvas_impl(
 
         SYSTEM::Access_module<Image_module> image_module( false);
         mi::neuraylib::IImage_plugin* plugin
-            = image_module->find_plugin_for_import( extension.c_str(), &reader);
+            = image_module->find_plugin_for_import( extension.c_str(), reader.get());
         if( !plugin) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "No image plugin found to handle \"%s\".", m_filename.c_str());
@@ -142,7 +144,7 @@ Canvas_impl::Canvas_impl(
             return;
         }
 
-        image_file2 = plugin->open_for_reading( &reader);
+        image_file2 = plugin->open_for_reading( reader.get());
         if( !image_file2.is_valid_interface()) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to import \"%s\".",

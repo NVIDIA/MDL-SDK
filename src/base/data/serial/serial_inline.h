@@ -62,6 +62,20 @@ inline void Serializer::write(const CONT::Array<T*>& array)
         serialize(array[i]);
 }
 
+template <typename T, typename SWO>
+inline void Serializer::write(const std::set<T, SWO>& set)
+{
+    write_size_t(set.size());
+    write_range(*this, set.begin(), set.end());
+}
+
+template <typename T1, typename T2> 
+inline void Serializer::write(const std::pair<T1, T2>& pair)
+{
+    write(pair.first);
+    write(pair.second);
+}
+
 template <typename T>
 inline void Deserializer::read(CONT::Array<T>* array)
 {
@@ -99,6 +113,28 @@ inline void Deserializer::read(std::vector< std::vector<T, A1>, A2>* array)
             inner[j] = temp;
         }
     }
+}
+
+template <typename T, typename SWO>
+inline void Deserializer::read(std::set<T, SWO>* set)
+{
+    size_t size;
+    set->clear();
+    read_size_t(&size);
+    T value;
+    for (size_t i(0); i != size; ++i) {
+        read(&value);
+        // Values were serialized in sequence, so we can use end position as hint.
+        // This should amount to an O(n) complexity for deserialization.
+        set->insert(set->end(), value);
+    }
+}
+
+template <typename T1, typename T2>
+inline void Deserializer::read(std::pair<T1, T2>* pair)
+{
+    read(&pair->first);
+    read(&pair->second);
 }
 
 template <typename T, typename A1, typename A2>

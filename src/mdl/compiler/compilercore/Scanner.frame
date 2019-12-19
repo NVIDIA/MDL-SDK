@@ -421,12 +421,12 @@ int Buffer::ReadNextStreamChunk() {
 		memcpy(newBuf, buf, bufLen * sizeof(unsigned char));
 		builder.free(buf);
 		buf = newBuf;
-		free = bufLen;
+		free = bufCapacity - bufLen;
 	}
 	int read = 0;
 	if (istream) {
 		for (; read < free; ++read) {
-			char c = istream->read_char();
+			int c = istream->read_char();
 			if (c == -1)
 				break;
 			buf[bufLen + read] = (unsigned char)c;

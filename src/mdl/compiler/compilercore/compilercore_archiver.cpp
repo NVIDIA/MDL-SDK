@@ -1499,6 +1499,7 @@ void Archive_builder::update_manifest(
         case IDefinition::DK_CONSTRUCTOR:
         case IDefinition::DK_ARRAY_SIZE:
         case IDefinition::DK_OPERATOR:
+        case IDefinition::DK_NAMESPACE:
             // ignored so far
             break;
         }
@@ -1566,7 +1567,7 @@ void Archive_extractor::extract(
     // create the archive
     zip_t *za = zip_open_from_source(
         lsrc,
-        ZIP_RDONLY,
+        ZIP_RDONLYNOLASTMOD,
         &ze);
     if (za == NULL) {
         zip_source_free(lsrc);
@@ -2172,19 +2173,19 @@ Manifest *MDL_zip_container_archive::parse_manifest()
 
         File_handle *manifest_fp =
             builder.create<File_handle>(
-                get_allocator(), 
-                File_handle::FH_ARCHIVE, 
-                this, 
-                /*owns_archive=*/false, 
+                get_allocator(),
+                File_handle::FH_ARCHIVE,
+                this,
+                /*owns_archive=*/false,
                 fp);
-        
+
         mi::base::Handle<Buffered_archive_resource_reader> reader(
             builder.create<Buffered_archive_resource_reader>(
             m_alloc,
             manifest_fp,
             "MANIFEST",
             /*mdl_url=*/""));
-        
+
         Manifest *manifest = Archive_tool::parse_manifest(m_alloc, reader.get());
         if (manifest != NULL) {
             string arc_name(get_container_name(), m_alloc);
@@ -2300,6 +2301,8 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
             ver = IMDL::MDL_VERSION_1_5;
         else if (v == "1.6")
             ver = IMDL::MDL_VERSION_1_6;
+        else if (v == "1.7")
+            ver = IMDL::MDL_VERSION_1_7;
         else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }

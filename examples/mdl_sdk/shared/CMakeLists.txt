@@ -29,18 +29,15 @@
 # name of the target and the resulting library
 set(PROJECT_NAME examples-mdl_sdk-shared)
 
-# add dummy-source to create a dummy-lib
-set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
-if(NOT EXISTS ${DUMMY_CPP})
-    file(WRITE ${DUMMY_CPP} "")
-endif()
-
 # collect sources
 set(PROJECT_SOURCES
     "example_cuda_shared.h"
     "example_shared.h"
     "texture_support_cuda.h"
-    ${DUMMY_CPP}
+    "compiled_material_traverser_base.h"
+    "compiled_material_traverser_base.cpp"
+    "lpe.cpp"
+    "lpe.h"
     )
 
 # create target from template
@@ -49,6 +46,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
+    WINDOWS_UNICODE
 )
 add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 

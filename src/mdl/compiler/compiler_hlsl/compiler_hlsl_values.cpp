@@ -31,6 +31,7 @@
 #include <mi/math/function.h>
 #include <mi/base/handle.h>
 #include "mdl/compiler/compilercore/compilercore_streams.h"
+#include "mdl/compiler/compilercore/compilercore_tools.h"
 
 #include "compiler_hlsl_assert.h"
 #include "compiler_hlsl_half.h"
@@ -3213,11 +3214,14 @@ bool Value_factory::Value_equal::operator()(Value *a, Value *b) const
     case Value::VK_MIN16UINT:
         return cast<Value_uint_16>(a)->get_value() == cast<Value_uint_16>(b)->get_value();
     case Value::VK_HALF:
-        return cast<Value_half>(a)->get_value() == cast<Value_half>(b)->get_value();
+        return bit_equal_float(
+            cast<Value_half>(a)->get_value(), cast<Value_half>(b)->get_value());
     case Value::VK_FLOAT:
-        return cast<Value_float>(a)->get_value() == cast<Value_float>(b)->get_value();
+        return bit_equal_float(
+            cast<Value_float>(a)->get_value(), cast<Value_float>(b)->get_value());
     case Value::VK_DOUBLE:
-        return cast<Value_double>(a)->get_value() == cast<Value_double>(b)->get_value();
+        return bit_equal_float(
+            cast<Value_double>(a)->get_value(), cast<Value_double>(b)->get_value());
     case Value::VK_VECTOR:
     case Value::VK_MATRIX:
     case Value::VK_ARRAY:

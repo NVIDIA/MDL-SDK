@@ -122,7 +122,8 @@ public:
         MDL_VERSION_1_4,                        ///< compile MDL 1.4
         MDL_VERSION_1_5,                        ///< compile MDL 1.5
         MDL_VERSION_1_6,                        ///< compile MDL 1.6
-        MDL_LATEST_VERSION = MDL_VERSION_1_5,   ///< always the latest supported version
+        MDL_VERSION_1_7,                        ///< compile MDL 1.7
+        MDL_LATEST_VERSION = MDL_VERSION_1_6,   ///< always the latest supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
 

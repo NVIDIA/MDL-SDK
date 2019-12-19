@@ -84,7 +84,7 @@ public:
 
     const char* get_resource_name(
         const mi::mdl::IValue_resource* resource,
-        bool supports_strict_relative_path);
+        bool supports_strict_relative_path) override;
 
     /// if a callback is provided, exports are written to the provided streams instead of
     /// to file next to the module

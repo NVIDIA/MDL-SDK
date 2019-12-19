@@ -210,6 +210,16 @@ configured search paths.
     </dd>
 </dl>
 
+\section example_mdl_browser Example Source
+
+The source code consists of a lot of source files in <tt>examples/mdl_sdk/mdl_browser</tt>. Below
+we show only the file containing the <tt>main()</tt> function.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/mdl_browser/mdl_browser/mdl_browser.cpp</tt>
+
+\include mdl_browser/mdl_browser/mdl_browser.cpp
+
 <div align="right">
     [\link mi_neuray_example_discovery Previous\endlink]
     [\link mi_neuray_examples Up\endlink]

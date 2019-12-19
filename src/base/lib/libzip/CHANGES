@@ -5,3 +5,10 @@ https://libzip.org/download/
 
 zip.h
     Change: '#include "zipconf.h"' instead of '#include <zipconf.h>'
+
+zip.h
+zip_dirent.c
+zip_int.h
+zip_open.c
+    Introduce ZIP_RDONLYNOLASTMOD open flag to avoid costly local timezone
+    dependent conversions when reading zip directory entries

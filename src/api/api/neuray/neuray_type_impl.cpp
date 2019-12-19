@@ -160,6 +160,8 @@ mi::neuraylib::IType_texture::Shape int_shape_to_ext_shape( MDL::IType_texture::
             return mi::neuraylib::IType_texture::TS_CUBE;
         case MDL::IType_texture::TS_PTEX:
             return mi::neuraylib::IType_texture::TS_PTEX;
+        case MDL::IType_texture::TS_BSDF_DATA:
+            return mi::neuraylib::IType_texture::TS_BSDF_DATA;
         case MDL::IType_texture::TS_FORCE_32_BIT:
             return mi::neuraylib::IType_texture::TS_FORCE_32_BIT;
     }
@@ -179,6 +181,8 @@ MDL::IType_texture::Shape ext_shape_to_int_shape( mi::neuraylib::IType_texture::
             return MDL::IType_texture::TS_CUBE;
         case mi::neuraylib::IType_texture::TS_PTEX:
             return MDL::IType_texture::TS_PTEX;
+        case mi::neuraylib::IType_texture::TS_BSDF_DATA:
+            return MDL::IType_texture::TS_BSDF_DATA;
         case mi::neuraylib::IType_texture::TS_FORCE_32_BIT:
             return MDL::IType_texture::TS_FORCE_32_BIT;
     }

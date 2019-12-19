@@ -93,18 +93,19 @@ public:
         const char* name,
         const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
 
-    mi::neuraylib::ICompiled_material* deprecated_create_compiled_material(
-        mi::Uint32 flags,
-        mi::Float32 mdl_meters_per_scene_unit,
-        mi::Float32 mdl_wavelength_min,
-        mi::Float32 mdl_wavelength_max,
-        mi::Sint32* errors) const;
-
     mi::neuraylib::ICompiled_material* create_compiled_material(
         mi::Uint32 flags,
         mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
 
     bool is_default() const NEURAY_FINAL;
+
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
+    mi_static_assert(sizeof(Compilation_options) == sizeof(mi::Uint32));
+
+    mi::Sint32 repair(
+        mi::Uint32 flags,
+        mi::neuraylib::IMdl_execution_context* context) NEURAY_FINAL;
 };
 
 } // namespace NEURAY

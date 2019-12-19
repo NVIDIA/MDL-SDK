@@ -29,6 +29,7 @@
 #ifndef EXAMPLE_DF_CUDA_H
 #define EXAMPLE_DF_CUDA_H
 
+#include <cstdint>
 #include <vector_types.h>
 #include <texture_types.h>
 
@@ -42,6 +43,8 @@ enum Mdl_test_type {
     MDL_TEST_NO_ENV  = 4,  // no environment sampling
     MDL_TEST_COUNT
 };
+
+const unsigned MAX_DF_HANDLES = 8;
 
 struct Env_accel {
     unsigned int alias;
@@ -99,8 +102,15 @@ struct Df_cuda_material
 
     // pair of target_code_index and function_index for thin_walled
     uint2 thin_walled;
-};
 
+    // maps 'material tags' to 'global tags' for the surface scattering distribution function
+    unsigned int bsdf_mtag_to_gtag_map[MAX_DF_HANDLES];
+    unsigned int bsdf_mtag_to_gtag_map_size;
+
+    // maps 'material tags' to 'global tags' for the emission distribution function
+    unsigned int edf_mtag_to_gtag_map[MAX_DF_HANDLES];
+    unsigned int edf_mtag_to_gtag_map_size;
+};
 
 struct Kernel_params {
     // display
@@ -132,24 +142,38 @@ struct Kernel_params {
     uint2                env_size;
     cudaTextureObject_t  env_tex;
     Env_accel           *env_accel;
+    float                env_intensity;         // scaling factor
+    uint32_t             env_gtag;              // global light group tag for handle 'env'
 
     // point light
     float3 light_pos;
-    float3 light_intensity;
+    float3 light_color;
+    float light_intensity;
+    uint32_t point_light_gtag;                  // global light group tag for handle 'point_light'
 
     // material data
     Target_code_data   *tc_data;
     char const        **arg_block_list;
     unsigned int        current_material;
     Df_cuda_material   *material_buffer;
+
+    // LPE state machine
+    uint32_t            lpe_num_states;         // number of states in the state machine
+    uint32_t            lpe_num_transitions;    // number of possible transitions between 2 states
+    uint32_t           *lpe_state_table;        // actual machine; size: #states x #transitions
+    uint32_t           *lpe_final_mask;         // encodes final states; size: #states
+    uint32_t            default_gtag;           // tag ID for the empty string
+    uint32_t            lpe_ouput_expression;   // the LPE evaluated for output
+                                                // only one here, but additional one analogously
 };
 
-enum class Display_buffer_options
+enum Display_buffer_options
 {
-    Beauty = 0,
-    Albedo,
-    Normal,
-    COUNT
+    DISPLAY_BUFFER_LPE = 0,
+    DISPLAY_BUFFER_ALBEDO,
+    DISPLAY_BUFFER_NORMAL,
+
+    DISPLAY_BUFFER_COUNT
 };
 
 #endif // EXAMPLE_DF_CUDA_H

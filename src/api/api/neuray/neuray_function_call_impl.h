@@ -95,6 +95,12 @@ public:
         const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
 
     bool is_default() const NEURAY_FINAL;
+
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
+    mi::Sint32 repair(
+        mi::Uint32 flags,
+        mi::neuraylib::IMdl_execution_context* context) NEURAY_FINAL;
 };
 
 } // namespace NEURAY

@@ -31,6 +31,9 @@
 #include "buffer.h"
 #include "command_queue.h"
 #include "mdl_material.h"
+#include "mdl_material_description.h"
+#include "mdl_material_library.h"
+#include "mdl_sdk.h"
 
 
 namespace mdl_d3d12
@@ -529,6 +532,9 @@ namespace mdl_d3d12
 
         for (auto& c : m_cameras)
             delete c;
+
+        for (auto& m : m_materials)
+            delete m;
     }
 
     bool Scene::build_scene(const IScene_loader::Scene& scene)
@@ -615,33 +621,40 @@ namespace mdl_d3d12
         // ... in parallel, if not forced otherwise
         std::vector<std::thread> tasks;
         std::atomic_bool success = true;
+        std::mutex mtx;
         for (auto it = handled_materials.begin(); it != handled_materials.end(); ++it)
         {
             // sequentially
             if (m_app->get_options()->force_single_theading)
             {
-                it->second = m_app->get_mdl_sdk().get_library()->create(
-                    scene.materials[it->first], nullptr);
+                Mdl_material_description mdl_material(m_app, scene.materials[it->first]);
+                it->second = m_app->get_mdl_sdk().get_library()->create(mdl_material);
 
                 if (!it->second) {
                     success.store(false);
                     log_error("Failed to create material: " +
                         scene.materials[it->first].name, SRC);
                 }
+
+                m_materials.push_back(it->second);
             }
             // asynchronously
             else
             {
                 tasks.emplace_back(std::thread([&, it]()
                 {
-                    it->second = m_app->get_mdl_sdk().get_library()->create(
-                        scene.materials[it->first], nullptr);
+                    Mdl_material_description mdl_material(m_app, scene.materials[it->first]);
+                    it->second = m_app->get_mdl_sdk().get_library()->create(mdl_material);
 
                     if (!it->second) {
                         success.store(false);
                         log_error("Failed to create material: " +
                             scene.materials[it->first].name, SRC);
+                        return;
                     }
+
+                    std::unique_lock<std::mutex> lock(mtx);
+                    m_materials.push_back(it->second);
                 }));
             }
         }

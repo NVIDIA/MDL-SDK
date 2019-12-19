@@ -42,6 +42,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "execution_native"
     SOURCES ${PROJECT_SOURCES}
+    WINDOWS_UNICODE
 )
 
 # add dependencies

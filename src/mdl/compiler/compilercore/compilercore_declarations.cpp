@@ -979,6 +979,73 @@ protected:
     IAnnotation_block const *m_annotations;
 };
 
+/// A namespace alias declaration.
+class Declaration_namespace_alias : public IDeclaration_namespace_alias
+{
+public:
+    typedef IDeclaration_namespace_alias Base;
+public:
+
+    /// Get the kind of declaration.
+    Kind get_kind() const MDL_FINAL { return Base::s_kind; }
+
+    /// Test if the declaration is exported.
+    bool is_exported() const MDL_FINAL { return false; }
+
+    /// Set the export status of the declaration.
+    void set_export(bool exp) MDL_FINAL {
+        MDL_ASSERT(!exp && "namespace alias cannot be exported");
+    }
+
+    /// Access the position.
+    Position &access_position() MDL_FINAL { return m_pos; }
+
+    /// Access the position.
+    Position const &access_position() const MDL_FINAL { return m_pos; }
+
+    /// Get the alias name of the namespace.
+    ISimple_name const *get_alias() const MDL_FINAL { return m_alias; }
+
+    /// Get the namespace.
+    IQualified_name const *get_namespace() const MDL_FINAL { return m_namespace; }
+
+    /// Set the alias name of the namespace.
+    ///
+    /// \param name  the new namespace alias name
+    void set_name(ISimple_name const *name) MDL_FINAL { m_alias = name; }
+
+    /// Set the namespace.
+    ///
+    /// \param ns  the new namespace
+    void set_namespace(IQualified_name const *ns) MDL_FINAL { m_namespace = ns; }
+
+    /// Constructor.
+    explicit Declaration_namespace_alias(
+        ISimple_name const    *alias,
+        IQualified_name const *ns)
+    : Base()
+    , m_pos(0, 0, 0, 0)
+    , m_alias(alias)
+    , m_namespace(ns)
+    {
+    }
+
+private:
+    // non copyable
+    Declaration_namespace_alias(Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
+    Declaration_namespace_alias &operator=(Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
+
+protected:
+    /// The position of this declaration.
+    Position_impl m_pos;
+
+    /// The alias name of the namespace.
+    ISimple_name const *m_alias;
+
+    /// The namespace itself.
+    IQualified_name const *m_namespace;
+};
+
 // -------------------------------------- declaration factory --------------------------------------
 
 Declaration_factory::Declaration_factory(Memory_arena &arena)
@@ -1195,7 +1262,21 @@ IDeclaration_module *Declaration_factory::create_module(
     int                     end_column)
 {
     IDeclaration_module *result = m_builder.create<Declaration_module>(annotations);
-    set_position(result,start_line, start_column, end_line, end_column);
+    set_position(result, start_line, start_column, end_line, end_column);
+    return result;
+}
+
+// Create a new namespace alias.
+IDeclaration_namespace_alias *Declaration_factory::create_namespace_alias(
+    ISimple_name const    *alias,
+    IQualified_name const *ns,
+    int                   start_line,
+    int                   start_column,
+    int                   end_line,
+    int                   end_column)
+{
+    IDeclaration_namespace_alias *result = m_builder.create<Declaration_namespace_alias>(alias, ns);
+    set_position(result, start_line, start_column, end_line, end_column);
     return result;
 }
 

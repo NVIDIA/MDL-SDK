@@ -110,6 +110,17 @@ public:
 
     const mi::neuraylib::IAnnotation_definition* get_annotation_definition(
         const char *name) const;
+
+    bool is_valid(mi::neuraylib::IMdl_execution_context *context) const;
+
+    mi::Sint32 reload(
+        bool recursive,
+        mi::neuraylib::IMdl_execution_context *context);
+
+    mi::Sint32 reload_from_string(
+        const char* module_source,
+        bool recursive,
+        mi::neuraylib::IMdl_execution_context *context);
 };
 
 } // namespace NEURAY

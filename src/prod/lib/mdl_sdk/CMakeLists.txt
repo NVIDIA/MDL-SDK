@@ -103,3 +103,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
+
+# add tests if available
+add_tests(POST)

@@ -124,18 +124,20 @@ namespace mdl_d3d12
         : m_app(app)
         , m_debug_name(debug_name)
         , m_is_finalized(false)
+        , m_dummy_local_root_signature(nullptr)
         , m_global_root_signature(new Root_signature(app, debug_name + "_GlobalRootSignature"))
     {
     }
 
     Raytracing_pipeline::~Raytracing_pipeline()
     {
-        for(auto&& asso : m_signature_associations)
+        for (auto&& asso : m_signature_associations)
             if (asso.m_owns_root_signature)
                 delete asso.m_root_signature;
 
+        // might not be initialized yet because of failure
+        if (m_dummy_local_root_signature != nullptr) delete m_dummy_local_root_signature;
         delete m_global_root_signature;
-        delete m_dummy_local_root_signature;
     }
 
     bool Raytracing_pipeline::add_library(
@@ -156,7 +158,7 @@ namespace mdl_d3d12
         }
 
         // check that the library does not exist yet
-        for(auto&& libs : m_libraries)
+        for (auto&& libs : m_libraries)
             if (libs.m_dxil_library == dxil_library) {
                 log_error("Tried to add DxIL library multiple times "
                           "to pipeline:" + m_debug_name + ".", SRC);
@@ -254,7 +256,7 @@ namespace mdl_d3d12
                     if (group.m_name == s)
                         found = true;
 
-            if(!found) {
+            if (!found) {
                 log_error("Tried to associate a symbol or hit group '" + wstr_to_str(s) + 
                           " that is unknown to the pipeline:" + m_debug_name + ".", SRC);
                 return false;
@@ -313,6 +315,9 @@ namespace mdl_d3d12
             hitGroup.Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
             hitGroup.pDesc = &group.m_desc;
             subobjects.push_back(std::move(hitGroup));
+
+            // Add hit group as exported symbol
+            m_all_exported_symbols.insert(group.m_name);
         }
 
         // Add a subobject for the shader payload configuration
@@ -325,18 +330,6 @@ namespace mdl_d3d12
         shader_config.Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
         shader_config.pDesc = &shader_config_desc;
         subobjects.push_back(std::move(shader_config));
-
-        // Go through all hit groups and remove the symbols corresponding to intersection, any hit  
-        // and closest hit shader from the symbol set and add the actual hit groups instead
-        for (const auto& group : m_hitgroups) {
-            if (!group.m_any_hit_symbol.empty())
-                m_all_exported_symbols.erase(group.m_any_hit_symbol);
-            if (!group.m_closest_hit_symbol.empty())
-                m_all_exported_symbols.erase(group.m_closest_hit_symbol);
-            if (!group.m_intersection_symbol.empty())
-                m_all_exported_symbols.erase(group.m_intersection_symbol);
-            m_all_exported_symbols.insert(group.m_name);
-        }
 
         // Build a list of all the symbols for ray generation, miss and hit groups
         // All those shader have to be associated with the payload definition
@@ -428,7 +421,7 @@ namespace mdl_d3d12
         pipeline_desc.pSubobjects = subobjects.data();
 
         // Create the state object
-        if(log_on_failure(m_app->get_device()->CreateStateObject(
+        if (log_on_failure(m_app->get_device()->CreateStateObject(
             &pipeline_desc, IID_PPV_ARGS(&m_pipeline_state)),
             "Failed to create raytracing pipeline state object: " + m_debug_name, SRC))
             return false;
@@ -757,7 +750,7 @@ namespace mdl_d3d12
         set_debug_name(m_instance_buffer.Get(), m_debug_name + "_InstanceData");
 
         void *p_mapped_data;
-        if(log_on_failure(m_instance_buffer->Map(0, nullptr, &p_mapped_data),
+        if (log_on_failure(m_instance_buffer->Map(0, nullptr, &p_mapped_data),
            "Failed to upload instance data for: " + m_debug_name, SRC))
             return false;
 

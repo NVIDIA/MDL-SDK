@@ -43,7 +43,7 @@ namespace mi {
 
 namespace MI {
 
-namespace MDL { class IType; }
+namespace MDL { class IType; class Mdl_module_wait_queue; }
 namespace SYSTEM { class Module_registration_entry; }
 namespace SERIAL { class Deserializer; class Serializer; }
 
@@ -127,6 +127,9 @@ public:
     /// Configures, whether casts for compatible types should be inserted by the integration
     /// when needed.
     virtual void set_implicit_cast_enabled(bool v) = 0;
+
+    /// Returns the module wait queue.
+    virtual MDL::Mdl_module_wait_queue* get_module_wait_queue() const = 0;
 };
 
 } // namespace MDLC

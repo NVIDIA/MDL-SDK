@@ -133,7 +133,8 @@ public:
         unsigned                                             num_texture_spaces,
         unsigned                                             num_texture_results,
         bool                                                 enable_debug,
-        mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list);
+        mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+        mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode);
 
     void getAnalysisUsage(llvm::AnalysisUsage &usage) const final;
 
@@ -247,16 +248,25 @@ private:
     hlsl::Expr *translate_constant_data_array(llvm::ConstantDataArray *cv);
 
     /// Translate an LLVM ConstantStruct value to an HLSL expression.
-    hlsl::Expr *translate_constant_struct_expr(llvm::ConstantStruct *cv);
+    /// \param cv         the constant value
+    /// \param is_global  if true, compound expressions will be used,
+    ///                   otherwise constructor calls will be generated where needed
+    hlsl::Expr *translate_constant_struct_expr(llvm::ConstantStruct *cv, bool is_global);
 
     /// Translate an LLVM ConstantVector value to an HLSL Value.
     hlsl::Value *translate_constant_vector(llvm::ConstantVector *cv);
 
     /// Translate an LLVM ConstantArray value to an HLSL compound expression.
-    hlsl::Expr *translate_constant_array(llvm::ConstantArray *cv);
+    /// \param cv         the constant value
+    /// \param is_global  if true, compound expressions will be used,
+    ///                   otherwise constructor calls will be generated where needed
+    hlsl::Expr *translate_constant_array(llvm::ConstantArray *cv, bool is_global);
 
     /// Translate an LLVM ConstantAggregateZero value to an HLSL compound expression.
-    hlsl::Expr *translate_constant_array(llvm::ConstantAggregateZero *cv);
+    /// \param cv         the constant value
+    /// \param is_global  if true, compound expressions will be used,
+    ///                   otherwise constructor calls will be generated where needed
+    hlsl::Expr *translate_constant_array(llvm::ConstantAggregateZero *cv, bool is_global);
 
     /// Translate an LLVM ConstantArray value to an HLSL matrix value.
     hlsl::Value *translate_constant_matrix(llvm::ConstantArray *cv);
@@ -268,7 +278,11 @@ private:
     hlsl::Value *translate_constant(llvm::Constant *ci);
 
     /// Translate an LLVM Constant value to an HLSL expression.
-    hlsl::Expr *translate_constant_expr(llvm::Constant *ci);
+    ///
+    /// \param ci         the constant value
+    /// \param is_global  if true, compound expressions will be used,
+    ///                   otherwise constructor calls will be generated where needed
+    hlsl::Expr *translate_constant_expr(llvm::Constant *ci, bool is_global);
 
     /// Translate an LLVM value to an HLSL expression.
     ///
@@ -661,6 +675,9 @@ private:
     /// The number of texture result entries.
     unsigned m_num_texture_results;
 
+    /// Specified the layout of the BSDF_evaluate_data and BSDF_auxiliary_data structs.
+    mi::mdl::Df_handle_slot_mode m_df_handle_slot_mode;
+
     /// If true, use debug info.
     bool m_use_dbg;
 
@@ -686,6 +703,7 @@ private:
 /// \param[in]  num_texture_spaces   the number of supported texture spaces
 /// \param[in]  num_texture_results  the number of texture result entries
 /// \param[in]  enable_debug         true, if debug info should be generated
+/// \param[in]  df_handle_slot_mode  the layout of the BSDF_{evaluate, auxiliary}_data structs
 /// \param[out] exp_func_list        list of exported functions
 llvm::Pass *createHLSLWriterPass(
     mi::mdl::IAllocator                                  *alloc,
@@ -694,6 +712,7 @@ llvm::Pass *createHLSLWriterPass(
     unsigned                                             num_texture_spaces,
     unsigned                                             num_texture_results,
     bool                                                 enable_debug,
+    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list);
 
 }  // hlsl

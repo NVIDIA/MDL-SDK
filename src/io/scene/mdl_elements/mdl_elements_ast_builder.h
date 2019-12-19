@@ -41,6 +41,8 @@
 #include "i_mdl_elements_expression.h"
 #include "i_mdl_elements_value.h"
 
+#include "mdl_elements_utilities.h"
+
 namespace mi {
 namespace mdl {
 
@@ -82,10 +84,12 @@ public:
     /// \param owner        the MDL module that will own the newly constructed entities
     /// \param transaction  the current transaction
     /// \param args         the arguments for occurring parameter references
+    /// \param name_manger  name mangler, converts namespace and module names to mdl identifiers.
     Mdl_ast_builder(
         mi::mdl::IModule* owner,
         DB::Transaction* transaction,
-        const mi::base::Handle<IExpression_list const>& args);
+        const mi::base::Handle<IExpression_list const>& args,
+        Name_mangler& name_mangler);
 
     /// Create a qualified name from a string.
     ///
@@ -137,6 +141,14 @@ public:
         mi::Size n_params,
         const mi::base::Handle<const IExpression_list>& args,
         bool named_args);
+
+    /// Given a call name and a list of arguments, add a multi_scatter parameter
+    /// and create a call.
+    const mi::mdl::IExpression* add_multiscatter_param(
+        std::string const &callee_name,
+        mi::Size n_params,
+        bool named_args,
+        mi::base::Handle<IExpression_list const> const &args);
 
     /// Transform a MDL expression from neuray representation to MDL representation.
     ///
@@ -251,6 +263,9 @@ private:
     User_type_list m_used_user_types;
 
     mi::mdl::IMDL::MDL_version m_owner_version;
+
+    /// Name mangler.
+    Name_mangler& m_name_mangler;
 };
 
 } // namespace MDL

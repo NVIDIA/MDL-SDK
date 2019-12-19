@@ -229,6 +229,12 @@ function(LLVM_TARGET_SETUP)
                 "-Wno-implicit-fallthrough"
                 "-Wno-unused-but-set-variable"
             )
+        if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "8.0")
+            target_compile_options(${LLVM_TARGET_SETUP_TARGET}
+                PRIVATE
+                    "-Wno-cast-function-type"
+            )
+        endif()
     endif()
 
 

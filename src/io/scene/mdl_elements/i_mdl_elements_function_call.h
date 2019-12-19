@@ -34,6 +34,7 @@
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
+#include "i_mdl_elements_module.h"
 
 namespace mi { namespace mdl { class IGenerated_code_lambda_function; class IType; } }
 
@@ -48,6 +49,7 @@ class IType;
 class IType_factory;
 class IType_list;
 class IValue_factory;
+class Execution_context;
 
 /// The class ID for the #Mdl_function_call class.
 static const SERIAL::Class_id ID_MDL_FUNCTION_CALL = 0x5f4d6663; // '_Mfc'
@@ -66,7 +68,7 @@ public:
     Mdl_function_call(
         DB::Tag module_tag,
         DB::Tag definition_tag,
-        mi::Uint32 function_index,
+        Mdl_ident definition_ident,
         IExpression_list* arguments,
         mi::mdl::IDefinition::Semantics semantic,
         const char* definition_name,
@@ -80,7 +82,7 @@ public:
 
     // methods corresponding to mi::neuraylib::IFunction_call
 
-    DB::Tag get_function_definition() const;
+    DB::Tag get_function_definition(DB::Transaction *transaction) const;
 
     const char* get_mdl_function_definition() const;
 
@@ -103,6 +105,9 @@ public:
 
     mi::Sint32 set_argument(
         DB::Transaction* transaction, const char* name, const IExpression* argument);
+
+    // Get the list of enable_if conditions.
+    const IExpression_list* get_enable_if_conditions() const;
 
     // internal methods
 
@@ -129,6 +134,15 @@ public:
     const mi::mdl::IType* get_mdl_parameter_type(
         DB::Transaction* transaction, mi::Uint32 index) const;
 
+    /// Returns the module tag of the calls' definition. Can be \c NULL for immutable calls.
+    DB::Tag get_module() const;
+
+    /// Returns the identifier of the definition.
+    Mdl_ident get_definition_ident() const { return m_definition_ident; }
+
+    /// Returns the DB name of the definition.
+    const char* get_definition_db_name() const { return m_definition_db_name.c_str(); }
+
     /// Swaps *this and \p other.
     ///
     /// Used by the API to move the content of just constructed DB elements into the already
@@ -151,6 +165,7 @@ public:
     ///                                    - -3: An argument of the function call has an incorrect
     ///                                          type.
     ///                                    - -4: The JIT backend failed to compile the function.
+    ///                                    - -5: The function does not point to a valid definition.
     /// \return                            The corresponding compiled function, or \c NULL in case
     ///                                    of failure.
     mi::mdl::IGenerated_code_lambda_function* create_jitted_function(
@@ -166,8 +181,33 @@ public:
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
     void dump( DB::Transaction* transaction) const;
 
-    // Get the list of enable_if conditions.
-    const IExpression_list* get_enable_if_conditions() const;
+    /// Checks, if the function call and its arguments still refer to valid definitions.
+    bool is_valid(
+        DB::Transaction* transaction,
+        Execution_context* context) const;
+
+    /// Checks, if the function call and its arguments still refer to valid definitions.
+    bool is_valid(
+        DB::Transaction* transaction,
+        DB::Tag_set& tags_seen,
+        Execution_context* context) const;
+
+    /// Attempts to repair an invalid function call by trying to promote its definition
+    /// tag identifier.
+    /// \param transaction              the DB transaction.
+    /// \param repair_invalid_calls     \c true, if invalid calls should be removed.
+    /// \param remove_invalid_calls     \c true, if invalid calls should be repaired.
+    /// \param level                    the recursion level.
+    /// \param context                  will receive error messages.
+    /// \return
+    ///         -  0: Success.
+    ///         - -1: Failure. Consult the context for details.
+    mi::Sint32 repair(
+        DB::Transaction* transaction,
+        bool repair_invalid_calls,
+        bool remove_invalid_calls,
+        mi::Uint32 level,
+        Execution_context* context);
 
     // methods of SERIAL::Serializable
 
@@ -200,15 +240,16 @@ private:
 
     DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding function definition.
-    mi::Uint32 m_function_index;                 ///< The index in the corresponding module. (*)
+    Mdl_ident m_definition_ident;                ///< The corresponding function definition identifier.
     mi::mdl::IDefinition::Semantics m_mdl_semantic; ///< The MDL semantic. (*)
     std::string m_definition_name;               ///< The MDL name of the function definition. (*)
+    std::string m_definition_db_name;            ///< The DB name of the function definition. (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).
 
-    mi::base::Handle<const IType_list> m_parameter_types; // (*)
-    mi::base::Handle<const IType> m_return_type;          // (*)
+    mi::base::Handle<const IType_list> m_parameter_types;            // (*)
+    mi::base::Handle<const IType> m_return_type;                     // (*)
     mi::base::Handle<IExpression_list> m_arguments;
-    mi::base::Handle<const IExpression_list> m_enable_if_conditions;
+    mi::base::Handle<const IExpression_list> m_enable_if_conditions; // (*)
 };
 
 } // namespace MDL

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_execution_native.cpp
+// examples/mdl_sdk/execution_native/example_execution_native.cpp
 //
 // Introduces the execution of generated code for compiled materials for
 // the native (CPU) backend and shows how to manually bake a material
@@ -157,8 +157,8 @@ mi::neuraylib::ITarget_code const *generate_native(
     bool use_custom_tex_runtime,
     bool enable_derivatives)
 {
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        transaction->edit<mi::neuraylib::ICompiled_material>(compiled_material_name));
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->access<mi::neuraylib::ICompiled_material>(compiled_material_name));
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
         mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_NATIVE));
@@ -426,7 +426,7 @@ void usage(char const *prog_name)
 // Main function
 //
 //------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int MAIN_UTF8(int argc, char *argv[])
 {
     // Parse command line options
     Options options;
@@ -476,6 +476,11 @@ int main(int argc, char *argv[])
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
 
     // Configure the MDL SDK
+
+    // Install logger
+    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
+    mdl_compiler->set_logger(logger.get());
+
     // Load plugin required for loading textures
     check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
     // Configure MDL search root
@@ -585,3 +590,6 @@ int main(int argc, char *argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

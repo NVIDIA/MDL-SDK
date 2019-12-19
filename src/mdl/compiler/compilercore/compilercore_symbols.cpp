@@ -124,6 +124,12 @@ ISymbol const *Symbol_table::create_user_type_symbol(char const *name)
     return get_user_type_symbol(name);
 }
 
+// Create a shared symbol (no unique ID).
+ISymbol const *Symbol_table::create_shared_symbol(char const *name)
+{
+    return get_shared_symbol(name);
+}
+
 // Get or create a new Symbol for the given name.
 ISymbol const *Symbol_table::lookup_symbol(char const *name) const
 {
@@ -210,9 +216,9 @@ ISymbol const *Symbol_table::get_operator_symbol(IExpression::Operator op) const
 ISymbol const *Symbol_table::get_predefined_symbol(ISymbol::Predefined_id id)
 {
     switch (id) {
-    case ISymbol::SYM_OPERATOR:                     return NULL; // a set of symbols
-    case ISymbol::SYM_USER_TYPE_NAME:               return NULL; // a set of symbols
-    case ISymbol::SYM_FREE:                         return NULL; // first non-predefined
+    case ISymbol::SYM_OPERATOR:    return NULL; // a set of symbols
+    case ISymbol::SYM_SHARED_NAME: return NULL; // a set of symbols
+    case ISymbol::SYM_FREE:        return NULL; // first non-predefined
 
 #define PREDEF_SYM(sym_name, id, name) case ISymbol::id: return &sym_name;
 #include "compilercore_predefined_symbols.h"
@@ -223,11 +229,17 @@ ISymbol const *Symbol_table::get_predefined_symbol(ISymbol::Predefined_id id)
 // Get or create a new Symbol for the given user type name.
 ISymbol const *Symbol_table::get_user_type_symbol(char const *name)
 {
+    return get_shared_symbol(name);
+}
+
+// Get or create a new shared Symbol for the given name.
+ISymbol const *Symbol_table::get_shared_symbol(char const *name)
+{
     if (ISymbol const *ret = lookup_symbol(name))
         return ret;
 
     name = internalize(name);
-    return enter_symbol(name, ISymbol::SYM_USER_TYPE_NAME);
+    return enter_symbol(name, ISymbol::SYM_SHARED_NAME);
 }
 
 // Create a predefined symbol with a given Id.
@@ -415,7 +427,7 @@ size_t Symbol::get_id() const
 // Returns true if this symbol is predefined.
 bool Symbol::is_predefined() const
 {
-    return m_id < ISymbol::SYM_USER_TYPE_NAME;
+    return m_id < ISymbol::SYM_SHARED_NAME;
 }
 
 // Constructor for an operator symbol.

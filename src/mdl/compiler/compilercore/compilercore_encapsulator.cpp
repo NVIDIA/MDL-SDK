@@ -55,15 +55,13 @@ namespace{
         "MDLE", 4,  // prefix
         1,          // major version
         0);         // minor version
-
-    static zip_uint16_t mdle_extra_field_id_MD = 0x444d; // MD
 } // anonymous
 
 // Open a container file.
 MDL_zip_container_mdle *MDL_zip_container_mdle::open(
-    IAllocator                     *alloc,
-    char const                     *path,
-    MDL_zip_container_error_code  &err)
+    IAllocator                   *alloc,
+    char const                   *path,
+    MDL_zip_container_error_code &err)
 {
     MDL_zip_container_header header_info = header_supported_read_version;
     zip_t* za = MDL_zip_container::open(alloc, path, err, header_info);
@@ -73,8 +71,8 @@ MDL_zip_container_mdle *MDL_zip_container_mdle::open(
         return NULL;
 
     Allocator_builder builder(alloc);
-    auto mdle = builder.create<MDL_zip_container_mdle>(alloc, path, za);
-    if(mdle) 
+    MDL_zip_container_mdle *mdle = builder.create<MDL_zip_container_mdle>(alloc, path, za);
+    if (mdle != NULL)
         mdle->m_header = header_info;
     return mdle;
 }
@@ -86,15 +84,15 @@ MDL_zip_container_mdle::~MDL_zip_container_mdle()
 
 // Constructor.
 MDL_zip_container_mdle::MDL_zip_container_mdle(
-    IAllocator  *alloc,
-    char const  *path,
-    zip_t       *za)
+    IAllocator *alloc,
+    char const *path,
+    zip_t      *za)
 : MDL_zip_container(alloc, path, za)
 {
 }
 
-/// Get the stored top level MD5 hash that allows to compare MDLE files without iterating
-/// over the entire content.
+// Get the stored top level MD5 hash that allows to compare MDLE files without iterating
+// over the entire content.
 bool MDL_zip_container_mdle::get_hash(unsigned char hash[16]) const
 {
     if (m_header.major_version_min == 0 && m_header.minor_version_min == 1)
@@ -254,12 +252,11 @@ void Encapsulate_tool::translate_zip_error(char const *mdle_name, int zip_error)
 
 // Translate container errors.
 void Encapsulate_tool::translate_container_error(
-    MDL_zip_container_error_code   err,
-    char const                     *mdle_name,
-    char const                     *file_name)
+    MDL_zip_container_error_code err,
+    char const                   *mdle_name,
+    char const                   *file_name)
 {
-    switch (err)
-    {
+    switch (err) {
     case EC_OK:
         return;
     case EC_CONTAINER_NOT_EXIST:
@@ -323,27 +320,39 @@ void Encapsulate_tool::translate_container_error(
 }
 
 // Translate zip errors.
-void Encapsulate_tool::translate_zip_error(char const *mdle_name, zip_t *za)
+void Encapsulate_tool::translate_zip_error(
+    char const *mdle_name,
+    zip_t      *za)
 {
     translate_zip_error(mdle_name, zip_get_error(za)->zip_err);
 }
 
 // Translate zip errors
-void Encapsulate_tool::translate_zip_error(char const *mdle_name, zip_error_t const &ze)
+void Encapsulate_tool::translate_zip_error(
+    char const        *mdle_name,
+    zip_error_t const &ze)
 {
     translate_zip_error(mdle_name, ze.zip_err);
 }
 
 // Translate zip errors.
-void Encapsulate_tool::translate_zip_error(char const *mdle_name, zip_file_t *src)
+void Encapsulate_tool::translate_zip_error(
+    char const *mdle_name,
+    zip_file_t *src)
 {
     translate_zip_error(mdle_name, *zip_file_get_error(src));
 }
 
-
-/// Adds a file uncompressed to the given ZIP archive.
-zip_int64_t Encapsulate_tool::add_file_uncompressed(zip_t *za, char const *name, zip_source_t *src)
+// Adds a file uncompressed to the given ZIP archive.
+zip_int64_t Encapsulate_tool::add_file_uncompressed(
+    zip_t        *za,
+    char const   *name,
+    zip_source_t *src)
 {
+    // remove leading "./"
+    if (name[0] == '.' && name[1] == '/')
+        name += 2;
+
     // add the file
     zip_int64_t index = zip_file_add(za, name, src, ZIP_FL_ENC_UTF_8);
     if (index < 0)
@@ -358,14 +367,11 @@ zip_int64_t Encapsulate_tool::add_file_uncompressed(zip_t *za, char const *name,
 
 namespace
 {
-
-    struct MD5_hash
-    {
+    struct MD5_hash {
         unsigned char data[16];
     };
 
-    struct memcmp_string_less
-    {
+    struct memcmp_string_less {
         bool operator()(char const *a, char const *b) const
         {
             size_t la = strlen(a);
@@ -379,16 +385,16 @@ namespace
         }
     };
 
-    typedef map<const char*, MD5_hash, memcmp_string_less>::Type MD5_file_map;
-} // anonymous 
+    typedef map<char const *, MD5_hash, memcmp_string_less>::Type MD5_file_map;
+} // anonymous
 
 bool Encapsulate_tool::add_file_uncompressed(
-    zip_t                               *za,
-    mi::mdl::IMDL_resource_reader       *reader,
-    char const                          *target_name,
-    char const                          *mdle_name,
-    vector<Resource_zip_source*>::Type  &add_sources,
-    unsigned char                       hash[16])
+    zip_t                              *za,
+    mi::mdl::IMDL_resource_reader      *reader,
+    char const                         *target_name,
+    char const                         *mdle_name,
+    vector<Resource_zip_source*>::Type &add_sources,
+    unsigned char                      hash[16])
 {
     // compute MD5 hash
     // it would be nice to do this on the fly when the zip is reading the file
@@ -406,7 +412,7 @@ bool Encapsulate_tool::add_file_uncompressed(
     add_sources.push_back(builder.create<Resource_zip_source>(reader));
 
     zip_error_t ze;
-    zip_source_t* source = add_sources.back()->open(ze);
+    zip_source_t *source = add_sources.back()->open(ze);
     if (source == NULL) {
         translate_zip_error(mdle_name, ze.zip_err);
         return false;
@@ -420,9 +426,9 @@ bool Encapsulate_tool::add_file_uncompressed(
     }
 
     // add checksum for fast duplicate detection
-    if (0 != zip_file_extra_field_set(za, index, mdle_extra_field_id_MD, ZIP_EXTRA_FIELD_NEW,
-        reinterpret_cast<const zip_uint8_t*>(hash), 16, ZIP_FL_LOCAL)) {
-
+    if (0 != zip_file_extra_field_set(za, index, MDLE_EXTRA_FIELD_ID_MD, ZIP_EXTRA_FIELD_NEW,
+        reinterpret_cast<zip_uint8_t const *>(hash), 16, ZIP_FL_LOCAL))
+    {
         translate_zip_error(mdle_name, za);
         return false;
     }
@@ -431,14 +437,11 @@ bool Encapsulate_tool::add_file_uncompressed(
 
 // Create a new encapsulated mdl file from a given module.
 bool Encapsulate_tool::create_encapsulated_module(
-    IModule const                   *module,
-    char const                      *mdle_name,
-    char const                      *dest_path,
-    Mdle_export_description const   &desc)
+    IModule const                 *module,
+    char const                    *mdle_name,
+    char const                    *dest_path,
+    Mdle_export_description const &desc)
 {
-    // parse options
-    bool override_file = m_options.get_bool_option(MDL_ENCAPS_OPTION_OVERWRITE);
-
     string file_name = string(mdle_name, get_allocator());
     file_name.append(".mdle");
 
@@ -446,12 +449,14 @@ bool Encapsulate_tool::create_encapsulated_module(
     MD5_file_map sorted_md5_map(get_allocator());
 
     // create output folder if not present
-    if(dest_path && strcmp(dest_path, "") != 0 && !is_directory_utf8(get_allocator(), dest_path))
-        if (!mkdir_utf8(get_allocator(), dest_path))
-        {
+    if (dest_path != NULL && strcmp(dest_path, "") != 0 &&
+        !is_directory_utf8(get_allocator(), dest_path))
+    {
+        if (!mkdir_utf8(get_allocator(), dest_path)) {
             translate_zip_error(mdle_name, ZIP_ER_WRITE);
             return false;
         }
+    }
 
     // create the writable stream
     zip_error_t ze;
@@ -470,6 +475,9 @@ bool Encapsulate_tool::create_encapsulated_module(
         translate_zip_error(mdle_name, ze);
         return false;
     }
+
+    // parse options
+    bool override_file = m_options.get_bool_option(MDL_ENCAPS_OPTION_OVERWRITE);
 
     // create the archive
     zip_t *za = zip_open_from_source(
@@ -513,7 +521,7 @@ bool Encapsulate_tool::create_encapsulated_module(
     if (0 != zip_file_extra_field_set(
         za,
         index,
-        mdle_extra_field_id_MD,
+        MDLE_EXTRA_FIELD_ID_MD,
         ZIP_EXTRA_FIELD_NEW,
         reinterpret_cast<zip_uint8_t const *>(hash.data),
         16,
@@ -528,7 +536,6 @@ bool Encapsulate_tool::create_encapsulated_module(
 
     // write resources
     for (size_t f = 0, f_n = desc.resource_collector->get_resource_count(); f < f_n; ++f) {
-
         // source
         mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
             desc.resource_collector->get_resource_reader(f));
@@ -541,8 +548,12 @@ bool Encapsulate_tool::create_encapsulated_module(
         // target
         char const *target_name = desc.resource_collector->get_mlde_resource_path(f);
 
+        // remove leading "./"
+        if (target_name[0] == '.' && target_name[1] == '/')
+            target_name += 2;
+
         if (!add_file_uncompressed(
-                za, reader.get(), target_name, mdle_name, added_zip_sources, hash.data)) 
+                za, reader.get(), target_name, mdle_name, added_zip_sources, hash.data))
         {
             has_error = true;
             break;
@@ -554,7 +565,6 @@ bool Encapsulate_tool::create_encapsulated_module(
 
     // write user files specified by file name
     for (size_t i = 0, n = desc.additional_file_count; i < n; ++i) {
-
         // source
         mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
             desc.resource_collector->get_additional_data_reader(
@@ -584,7 +594,7 @@ bool Encapsulate_tool::create_encapsulated_module(
     string author("written by: ", get_allocator());
     author.append(desc.authoring_tool_name_and_version);
 
-    if(zip_set_archive_comment(za, author.c_str(), author.size()) != 0) {
+    if (zip_set_archive_comment(za, author.c_str(), author.size()) != 0) {
         warning(
             MDLE_FAILED_TO_ADD_ZIP_COMMENT,
             Error_params(get_allocator())
@@ -600,19 +610,26 @@ bool Encapsulate_tool::create_encapsulated_module(
     }
 
     // free zip sources
-    for (auto&& s : added_zip_sources)
-        builder.destroy(s);
+    for (vector<Resource_zip_source *>::Type::iterator it(added_zip_sources.begin()),
+        end(added_zip_sources.end());
+        it != end;
+        ++it)
+    {
+        builder.destroy(*it);
+    }
 
     // compute the MDLE top level hash and
     // add checksum for fast duplicate detection
     hasher.restart();
-    for (const auto& it : sorted_md5_map)
+    for (MD5_file_map::const_iterator it(sorted_md5_map.begin()), end(sorted_md5_map.end());
+        it != end;
+        ++it)
     {
-        hasher.update(reinterpret_cast<const unsigned char*>(it.first), strlen(it.first));
-        hasher.update(it.second.data, 16);
+        hasher.update(reinterpret_cast<unsigned char const *>(it->first), strlen(it->first));
+        hasher.update(it->second.data, 16);
     }
     hasher.final(hash.data);
-    
+
     FILE *fp = fopen_utf8(get_allocator(), file_path.c_str(), "rb+");
     if (fp == NULL ||
         fseek(fp, 8, SEEK_SET) != 0 ||
@@ -628,7 +645,6 @@ bool Encapsulate_tool::create_encapsulated_module(
     }
     return true;
 }
-
 
 // Get the content of a file into a memory buffer.
 IMDL_resource_reader *Encapsulate_tool::get_content_buffer(
@@ -671,8 +687,7 @@ IInput_stream *Encapsulate_tool::get_file_content(
     char const *mdle_path,
     char const *file_name)
 {
-    if (file_name == NULL)
-    {
+    if (file_name == NULL) {
         error(
             MDLE_DOES_NOT_CONTAIN_ENTRY,
             Error_params(get_allocator())
@@ -684,8 +699,7 @@ IInput_stream *Encapsulate_tool::get_file_content(
     string afn(convert_os_separators_to_slashes(string(file_name, get_allocator())));
     mi::base::Handle<IMDL_resource_reader> reader(get_content_buffer(mdle_path, afn.c_str()));
 
-    if (!reader.is_valid_interface())
-    {
+    if (!reader.is_valid_interface()) {
         // failed
         return NULL;
     }
@@ -694,15 +708,14 @@ IInput_stream *Encapsulate_tool::get_file_content(
     return builder.create<Resource_Input_stream>(get_allocator(), reader.get());
 }
 
-
-MDL_zip_container_mdle* Encapsulate_tool::open_encapsulated_module(char const *mdle_path)
+// Opens an MDLE zip container for access to its file list and the MD5 hashes.
+MDL_zip_container_mdle* Encapsulate_tool::open_encapsulated_module(
+    char const *mdle_path)
 {
     // open the mdle
-
     MDL_zip_container_error_code err;
     MDL_zip_container_mdle *capsule = MDL_zip_container_mdle::open(get_allocator(), mdle_path, err);
-    if (!capsule)
-    {
+    if (capsule == NULL) {
         error(
             MDLE_FILE_DOES_NOT_EXIST,
             Error_params(get_allocator())
@@ -712,7 +725,6 @@ MDL_zip_container_mdle* Encapsulate_tool::open_encapsulated_module(char const *m
     return capsule;
 }
 
-
 // Checks the MD5 hashes of all files in the MDLE to identify changes from outside
 bool Encapsulate_tool::check_integrity(
     char const *mdle_path)
@@ -720,8 +732,7 @@ bool Encapsulate_tool::check_integrity(
     // open the mdle
     MDL_zip_container_error_code err;
     MDL_zip_container_mdle *capsule = MDL_zip_container_mdle::open(get_allocator(), mdle_path, err);
-    if (!capsule)
-    {
+    if (capsule == NULL) {
         error(
             MDLE_FILE_DOES_NOT_EXIST,
             Error_params(get_allocator())
@@ -738,8 +749,8 @@ bool Encapsulate_tool::check_integrity(
     bool success = true;
     for (int i = 0, n = capsule->get_num_entries(); i < n && success; ++i) {
         char const *file_name = capsule->get_entry_name(i);
-        
-        success &= check_file_content_integrity(capsule, file_name, hash.data);
+
+        success = check_file_content_integrity(capsule, file_name, hash.data);
 
         if (!success)
             break;
@@ -752,13 +763,14 @@ bool Encapsulate_tool::check_integrity(
     capsule->get_version(major_version, minor_version);
 
     // compute the MDLE top level hash
-    if (success && (major_version > 0 || minor_version > 1))
-    {
+    if (success && (major_version > 0 || minor_version > 1)) {
         MD5_hasher hasher;
-        for (const auto& it : sorted_md5_map)
+        for (MD5_file_map::const_iterator it(sorted_md5_map.begin()), end(sorted_md5_map.end());
+            it != end;
+            ++it)
         {
-            hasher.update(reinterpret_cast<const unsigned char*>(it.first), strlen(it.first));
-            hasher.update(it.second.data, 16);
+            hasher.update(reinterpret_cast<unsigned char const *>(it->first), strlen(it->first));
+            hasher.update(it->second.data, 16);
         }
         hasher.final(hash.data);
 
@@ -766,10 +778,8 @@ bool Encapsulate_tool::check_integrity(
         capsule->get_hash(stored_hash.data);
 
         // compare the hashes
-        for (size_t i = 0; i < 16; ++i)
-        {
-            if (hash.data[i] != stored_hash.data[i])
-            {
+        for (size_t i = 0; i < 16; ++i) {
+            if (hash.data[i] != stored_hash.data[i]) {
                 error(
                     MDLE_CONTENT_FILE_INTEGRITY_FAIL,
                     Error_params(get_allocator())
@@ -789,8 +799,8 @@ bool Encapsulate_tool::check_integrity(
 // For each resource, an MD5 hash is stored in the extra fields of the archive files.
 // This method checks if the content matches the hash to identify changes from outside.
 bool Encapsulate_tool::check_file_content_integrity(
-    char const *mdle_path,
-    char const *file_name,
+    char const    *mdle_path,
+    char const    *file_name,
     unsigned char out_hash[16])
 {
     if (file_name == NULL) {
@@ -804,7 +814,7 @@ bool Encapsulate_tool::check_file_content_integrity(
 
     // open the mdle
     MDL_zip_container_mdle *capsule = open_encapsulated_module(mdle_path);
-    if (!capsule)
+    if (capsule == NULL)
         return false;
 
     bool success = true;
@@ -817,12 +827,11 @@ bool Encapsulate_tool::check_file_content_integrity(
 bool Encapsulate_tool::check_file_content_integrity(
     MDL_zip_container_mdle *mdle,
     char const             *file_name,
-    unsigned char           out_hash[16])
+    unsigned char          out_hash[16])
 {
     // read the stored hash
     unsigned char stored_hash[16];
-    if (!get_file_content_hash(mdle, file_name, stored_hash))
-    {
+    if (!get_file_content_hash(mdle, file_name, stored_hash)) {
         error(
             MDLE_CONTENT_FILE_INTEGRITY_FAIL,
             Error_params(get_allocator())
@@ -835,14 +844,14 @@ bool Encapsulate_tool::check_file_content_integrity(
 
     // compute the hash of the file content
     unsigned char computed_hash[16];
-    if (!mdle->get_file_hash(file_name, computed_hash)) {
+    if (!mdle->compute_file_hash(file_name, computed_hash)) {
         error(
             MDLE_DOES_NOT_CONTAIN_ENTRY,
             Error_params(get_allocator())
             .add(mdle->get_container_name())
             .add(file_name));
 
-        memset(out_hash, '\0', 16);
+        memset(out_hash, 0, 16);
         return false;
     }
 
@@ -864,28 +873,30 @@ bool Encapsulate_tool::check_file_content_integrity(
     return true;
 }
 
+// For each resource, an MD5 hash is stored in the extra fields of the archive files.
+// This method reads this hash for a selected file.
 bool Encapsulate_tool::get_file_content_hash(
-    MDL_zip_container_mdle* mdle,
-    char const *file_name,
-    unsigned char out_hash[16])
+    MDL_zip_container_mdle *mdle,
+    char const             *file_name,
+    unsigned char          out_hash[16])
 {
     // read the stored hash
-    size_t length = 0;
-    unsigned char const *stored_hash = NULL;
-
     MDL_zip_container_file *file = mdle->file_open(file_name);
 
-    if(file)
-        stored_hash = file->get_extra_field(mdle_extra_field_id_MD, length);
+    if (file != NULL) {
+        size_t length = 0;
+        unsigned char const *stored_hash =
+            file->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
 
-    bool res = file != NULL && stored_hash != NULL && length == 16;
-    if(res)
-        memcpy(out_hash, stored_hash, 16);
+        bool res = stored_hash != NULL && length == 16;
+        if (res)
+            memcpy(out_hash, stored_hash, 16);
 
-    if (file)
         file->close();
+        return res;
+    }
 
-    return res;
+    return false;
 }
 
 // Access messages of last operation.

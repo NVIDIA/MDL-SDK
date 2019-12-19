@@ -913,6 +913,11 @@ bool NVPTXDAGToDAGISel::tryLoad(SDNode *N) {
   Optional<unsigned> Opcode;
   MVT::SimpleValueType TargetVT = LD->getSimpleValueType(0).SimpleTy;
 
+  // Skip mov of parameter for ld.param
+  if (CodeAddrSpace == NVPTX::PTXLdStInstCode::PARAM && N1->getOpcode() == NVPTXISD::MoveParam) {
+    N1 = N1->getOperand(0);
+  }
+
   if (SelectDirectAddr(N1, Addr)) {
     Opcode = pickOpcodeForVT(
         TargetVT, NVPTX::LD_i8_avar, NVPTX::LD_i16_avar, NVPTX::LD_i32_avar,

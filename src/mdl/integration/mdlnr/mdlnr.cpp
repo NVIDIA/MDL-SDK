@@ -46,6 +46,7 @@
 #include "mdlnr.h"
 #include "mdlnr_search_path.h"
 
+#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <mdl/compiler/compilercore/compilercore_assert.h>
 #include <mdl/compiler/compilercore/compilercore_fatal.h>
 #include <mdl/compiler/compilercore/compilercore_debug_tools.h>
@@ -188,6 +189,7 @@ Mdlc_module_impl::Mdlc_module_impl()
   , m_used_with_mdl_sdk_set(false)
   , m_code_cache(0)
   , m_implicit_cast_enabled(true)
+  , m_module_wait_queue(0)
 {
 }
 
@@ -250,6 +252,7 @@ bool Mdlc_module_impl::init()
 
         m_code_cache = builder.create<mi::mdl::Code_cache>(m_allocator.get(), cache_size);
 
+        m_module_wait_queue = new MDL::Mdl_module_wait_queue();
         return true;
     }
     return false;
@@ -264,6 +267,10 @@ void Mdlc_module_impl::exit()
     if (m_code_cache) {
         m_code_cache->release();
         m_code_cache = NULL;
+    }
+    if (m_module_wait_queue) {
+        delete m_module_wait_queue;
+        m_module_wait_queue = NULL;
     }
 }
 
@@ -359,6 +366,11 @@ bool Mdlc_module_impl::get_implicit_cast_enabled() const
 void Mdlc_module_impl::set_implicit_cast_enabled(bool v)
 {
     m_implicit_cast_enabled = v;
+}
+
+MDL::Mdl_module_wait_queue* Mdlc_module_impl::get_module_wait_queue() const
+{
+    return m_module_wait_queue;
 }
 
 } // namespace MDLC

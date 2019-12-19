@@ -120,7 +120,8 @@ public:
     /// This method is supposed only to be used by the DATA module for log message from remote
     /// hosts. Such messages will not be forwarded to remote targets, only to file or stderr.
     virtual void insert_message(
-        const char* mod, ILogger::Category cat, int sev, const char* pfx, const char* msg) = 0;
+        const char* mod, ILogger::Category, ILogger::Severity, const mi::base::Message_details&,
+        const char* pfx, const char* msg) = 0;
 
     //@{
     /// \name Module system support

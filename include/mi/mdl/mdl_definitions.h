@@ -65,6 +65,7 @@ public:
         DK_PARAMETER,     ///< This is a parameter.
         DK_ARRAY_SIZE,    ///< This is a constant array size.
         DK_OPERATOR,      ///< This is an operator.
+        DK_NAMESPACE,     ///< This is a namespace.
     };
 
     /// Boolean properties of definitions.
@@ -124,6 +125,10 @@ public:
         DS_CONST_EXPR_ANNOTATION,                ///< This is the internal const_expr() annotation.
         DS_DERIVABLE_ANNOTATION,                 ///< This is the internal derivable() annotation.
         DS_NATIVE_ANNOTATION,                    ///< This is the internal native() annotation.
+        DS_EXPERIMENTAL_ANNOTATION,              ///< This is the internal experimental()
+                                                 ///  annotation.
+        DS_LITERAL_PARAM_ANNOTATION,             ///< This is the internal literal_param()
+                                                 ///  annotation.
 
         DS_UNUSED_ANNOTATION,                    ///< This is the unused() annotation.
         DS_NOINLINE_ANNOTATION,                  ///< This is the noinline() annotation.
@@ -312,21 +317,46 @@ public:
         DS_INTRINSIC_DF_FRESNEL_FACTOR,
         DS_INTRINSIC_DF_MEASURED_FACTOR,
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
-        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
+        DS_INTRINSIC_DF_SHEEN_BSDF,
+        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_SHEEN_BSDF,
+
+        // scene module intrinsics
+        DS_INTRINSIC_SCENE_FIRST = 0x0800,
+
+        DS_INTRINSIC_SCENE_DATA_ISVALID = DS_INTRINSIC_SCENE_FIRST,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
+        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
 
         // debug module
-        DS_INTRINSIC_DEBUG_FIRST = 0x0800,
+        DS_INTRINSIC_DEBUG_FIRST = 0x0900,
         DS_INTRINSIC_DEBUG_BREAKPOINT = DS_INTRINSIC_DEBUG_FIRST,
         DS_INTRINSIC_DEBUG_ASSERT,
         DS_INTRINSIC_DEBUG_PRINT,
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsic functions
-        DS_INTRINSIC_DAG_FIRST = 0x0900,
+        DS_INTRINSIC_DAG_FIRST = 0x0A00,
+
         /// This is a structure field access function.
         DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR, ///< This is an array constructor.
-        DS_INTRINSIC_DAG_INDEX_ACCESS,      ///< This is a specific operator[].
         DS_INTRINSIC_DAG_ARRAY_LENGTH,      ///< This is the array length operator.
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
         DS_INTRINSIC_DAG_SET_TRANSFORMS,    ///< Specifies the transform (w2o and o2w) matrices.
@@ -337,7 +367,7 @@ public:
         DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_MAKE_DERIV,
 
         // JIT Backend intrinsic functions
-        DS_INTRINSIC_JIT_LOOKUP = 0x0A00,   ///< Texture result lookup.
+        DS_INTRINSIC_JIT_LOOKUP = 0x8000,   ///< Texture result lookup.
     };
 
     /// Returns the kind of this definition.
@@ -371,6 +401,9 @@ public:
 
     /// Return the parameter index of a parameter.
     virtual int get_parameter_index() const = 0;
+
+    /// Return the namespace of a namespace alias.
+    virtual ISymbol const *get_namespace() const = 0;
 
     /// Get the prototype declaration of the definition if any.
     virtual IDeclaration const *get_prototype_declaration() const = 0;
@@ -513,6 +546,16 @@ inline bool is_df_semantics(IDefinition::Semantics sema)
 }
 
 
+/// Check if the given semantics is from the scene module.
+///
+/// \param sema  the semantics
+inline bool is_scene_semantics(IDefinition::Semantics sema)
+{
+    return
+        IDefinition::DS_INTRINSIC_SCENE_FIRST <= sema &&
+        sema <= IDefinition::DS_INTRINSIC_SCENE_LAST;
+}
+
 /// Check if the given semantics is an elemental distribution function (i.e. not a modifier or
 /// combiner).
 inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
@@ -537,6 +580,7 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
     case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
     case IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
         return true;
 
     case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:

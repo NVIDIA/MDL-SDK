@@ -41,6 +41,7 @@ class DAG_node_factory_impl;
 class File_resolver;
 class Name_printer;
 class IAnnotation;
+class IDeclaration_constant;
 class IDeclaration_function;
 class IDeclaration_variable;
 class IModule;
@@ -211,6 +212,14 @@ public:
     DAG_node const *var_decl_to_dag(
         IDeclaration_variable const *var_decl);
 
+    /// Convert an MDL constant declaration to a DAG IR node.
+    ///
+    /// \param const_decl   The MDL constant declaration to convert.
+    /// \returns            The DAG IR node representing the MDL statement.
+    ///
+    DAG_node const *const_decl_to_dag(
+        IDeclaration_constant const *const_decl);
+
     /// Convert an MDL statement to a DAG IR node.
     ///
     /// \param stmt         The MDL statement to convert.
@@ -275,11 +284,6 @@ public:
     /// \param expr  The MDL expression.
     string get_unary_name(IExpression_unary const *expr) const;
 
-    /// Returns the name of a conditional operator.
-    ///
-    /// \param expr  The MDL expression.
-    string get_cond_name(IExpression_conditional const *expr) const;
-
     /// Convert an unary MDL operator to a name.
     ///
     /// \param op           The unary MDL operator to convert.
@@ -293,11 +297,6 @@ public:
     /// \returns            The name.
     ///
     static char const *binary_op_to_name(IExpression_binary::Operator op);
-
-    /// Return the name of the ternary operator.
-    ///
-    /// \returns   The name.
-    static char const *ternary_op_to_name();
 
     /// Returns true if a conditional operator was created.
     bool cond_created() const { return m_conditional_created; }

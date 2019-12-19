@@ -318,7 +318,7 @@ Function_context::~Function_context()
 
     // optimize function to improve inlining, if requested
     if (m_optimize_on_finalize)
-        m_code_gen.m_func_pass_manager->run(*m_function);
+        m_code_gen.optimize(m_function);
 }
 
 // Get the first (real) parameter of the current function.

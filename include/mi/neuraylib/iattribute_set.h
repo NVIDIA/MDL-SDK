@@ -133,6 +133,7 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b movable \n
 ///   The object may be subject to frequent transformation changes. Render modes might take that
 ///   hint into account and use special data structures to speed up such transformation changes.
+///   This also controls instancing in user mode. See the [:ipmlink rendering Instancing] section for details.
 /// - bool \b reflection_cast \n
 ///   The object is visible as a reflection in reflective objects.
 /// - bool \b reflection_recv \n
@@ -154,11 +155,9 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - const char* \b handle \n
 ///   An object or light ID that is useful in conjunction with Light Path Expressions.
 ///   See #mi::neuraylib::IRender_target_base::get_canvas_name() for details.
-/// - bool \b instancing \n
-///   Controls instancing in user mode. See the [:ipmlink instancing manual] for details.
 /// - bool \b shadow_terminator_offset \n
 ///   Controls the automatic shadow terminator handling.
-///   See the [:ipmlink tessellating_curved_surfaces manual] for details.
+///   See the [:ipmlink physically_plausible_scene_setup Tessellating curved surfaces] section for details.
 /// \par
 /// The following attribute is only meaningful for instances of #mi::neuraylib::ITriangle_mesh,
 /// #mi::neuraylib::IPolygon_mesh, #mi::neuraylib::ISubdivision_surface,
@@ -175,7 +174,7 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b important \n
 ///   A light flagged with this attribute will be given preference before other lights in the case
 ///   that a render mode does not handle all lights.
-/// - :bindertarget light-portal bool \b light_portal \n
+/// - bool \b light_portal \n
 ///   A light flagged with this attribute does not emit any light by itself but acts as hint that
 ///   light is coming from its direction.
 /// \par

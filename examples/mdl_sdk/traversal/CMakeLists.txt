@@ -32,8 +32,6 @@ set(PROJECT_NAME examples-mdl_sdk-traversal)
 # collect sources
 set(PROJECT_SOURCES
     "example_traversal.cpp"
-    "compiled_material_traverser_base.h"
-    "compiled_material_traverser_base.cpp"
     "compiled_material_traverser_print.h"
     "compiled_material_traverser_print.cpp"
     )
@@ -45,6 +43,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "traversal"
     SOURCES ${PROJECT_SOURCES}
+    WINDOWS_UNICODE
 )
 
 # add dependencies

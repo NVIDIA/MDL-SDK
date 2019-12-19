@@ -86,6 +86,16 @@ public:
     /// the constructor. If it returns \c false, no other methods of this class should be called.
     bool is_valid() const;
 
+    /// Indicates whether the material or function definition referenced by this definition wrapper
+    /// matches a definition in its owner module. Definitions might become invalid due to a module
+    /// reload of the owner module itself or another module imported by the owner module.
+    ///
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    ///
+    /// \return \c True, if the definition is valid, \c false otherwise.
+    bool is_valid_definition(IMdl_execution_context* context) const;
+    
     /// Indicates whether the definition wrapper acts on a material definition or on a function
     /// definition.
     ///
@@ -336,6 +346,23 @@ inline bool Definition_wrapper::is_valid() const
     return m_access
         && (m_type == ELEMENT_TYPE_MATERIAL_DEFINITION
         ||  m_type == ELEMENT_TYPE_FUNCTION_DEFINITION);
+}
+
+
+inline bool Definition_wrapper::is_valid_definition(IMdl_execution_context* context) const
+{
+    if (m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
+
+        base::Handle<const IMaterial_definition> md(m_access->get_interface<IMaterial_definition>());
+        return md->is_valid(context);
+    }
+    else if (m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+
+        base::Handle<const IFunction_definition> fd(m_access->get_interface<IFunction_definition>());
+        return fd->is_valid(context);
+    }
+    else
+        return false;
 }
 
 inline Element_type Definition_wrapper::get_type() const
@@ -688,7 +715,7 @@ inline Size Definition_wrapper::get_enable_if_users( Size index) const
         return fd->get_enable_if_users( index);
 
     } else
-        return ~0;
+        return Size(~0);
 }
 
 inline Size Definition_wrapper::get_enable_if_user( Size index, Size u_index) const
@@ -707,7 +734,7 @@ inline Size Definition_wrapper::get_enable_if_user( Size index, Size u_index) co
         return fd->get_enable_if_user( index, u_index);
 
     } else
-        return ~0;
+        return Size(~0);
 }
 
 inline IScene_element* Definition_wrapper::create_instance(

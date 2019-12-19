@@ -372,6 +372,16 @@ public:
 
     // ------------------- non interface methods ---------------------------
 
+    /// Check if a given identifier is a valid MDL identifier.
+    ///
+    /// \param ident  the identifier to check
+    ///
+    /// \note The set of keywords depends on the MDL version. Hence a name that is valid for
+    ///       one version of MDL might be invalid for another. This function checks against a
+    ///       superset of all possible keywords, so it might deny valid names for some MDL
+    ///       versions.
+    static bool valid_mdl_identifier(char const *ident);
+
     /// Check if the compiler supports a requested MDL version.
     ///
     /// \param major                         major number
@@ -586,11 +596,9 @@ private:
     ~MDL();
 
 private:
-    /// Build all builtin modules.
-    void create_builtin_modules();
 
-    /// Build all builtin modules.
-    void create_builtin_modules() const;
+    /// Register built-in modules at a module cache
+    void register_builtin_module_at_cache(IModule_cache *cache);
 
     /// Create all builtin semantics.
     void create_builtin_semantics();
@@ -692,9 +700,6 @@ private:
 
     /// The shared lock for all module's weak import tables.
     mutable mi::base::Lock m_weak_module_lock;
-
-    /// Set once the builtin modules are created.
-    volatile bool m_builtin_modules_created;
 
     /// Set to true after predefined types are created.
     bool m_predefined_types_build;

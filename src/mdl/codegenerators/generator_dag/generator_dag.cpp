@@ -236,6 +236,10 @@ Code_generator_dag::Code_generator_dag(
         MDL_CG_DAG_OPTION_MARK_DAG_GENERATED,
         "true",
         "Mark all DAG backend generated entities");
+    m_options.add_option(
+        MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS,
+        "true",
+        "Enable unsafe math optimizations");
 }
 
 char const *Code_generator_dag::get_target_language() const
@@ -254,6 +258,9 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
 
     if (m_options.get_bool_option(MDL_CG_DAG_OPTION_MARK_DAG_GENERATED))
         options |= Generated_code_dag::MARK_GENERATED_ENTITIES;
+
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS))
+        options |= Generated_code_dag::UNSAFE_MATH_OPTIMIZATIONS;
 
 
     Generated_code_dag *result = m_builder.create<Generated_code_dag>(

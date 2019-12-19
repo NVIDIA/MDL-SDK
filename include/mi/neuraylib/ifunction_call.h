@@ -34,6 +34,7 @@
 #include <cstring>
 
 #include <mi/neuraylib/iexpression.h>
+#include <mi/neuraylib/imdl_factory.h>
 #include <mi/neuraylib/iscene_element.h>
 
 namespace mi {
@@ -43,6 +44,7 @@ namespace neuraylib {
 /** \addtogroup mi_neuray_mdl_elements
 @{
 */
+class IMdl_execution_context;
 
 /// This interface represents a function call.
 ///
@@ -179,6 +181,31 @@ public:
     ///
     /// \return true, if this function call is a default, false otherwise.
     virtual bool is_default() const = 0;
+
+    /// Returns \c true if this function call and all its arguments point to valid
+    /// material and function definitions, \c false otherwise.
+    ///
+    /// \note Material and function definitions can become invalid due to a module reload
+    /// See #mi::neuraylib::IModule::reload. See also #mi::neuraylib::IMaterial_instance::repair().
+    ///
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return 
+    ///      - \c true:  The instance is valid.
+    ///      - \c false: The instance is invalid.
+    virtual bool is_valid(IMdl_execution_context* context) const = 0;
+
+    /// Attempts to repair an invalid function call.
+    ///
+    /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return
+    ///     -   0:   Success.
+    ///     -  -1:   Repair failed. Check the \c context for details.
+    virtual Sint32 repair(
+        Uint32 flags,
+        IMdl_execution_context* context) = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

@@ -964,6 +964,29 @@ public:
         int parameter_index,
         int annotation_index) const = 0;
 
+    /// Get the number of temporaries used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The number of temporaries used by material.
+    virtual int get_function_temporary_count(
+        int function_index) const = 0;
+
+    /// Get the temporary at temporary_index used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \param temporary_index     The index of the temporary variable.
+    /// \returns                   The value of the temporary variable.
+    virtual DAG_node const *get_function_temporary(
+        int function_index,
+        int temporary_index) const = 0;
+
+    /// Get the body of the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The body of the function.
+    virtual DAG_node const *get_function_body(
+        int function_index) const = 0;
+
     /// Get the property flag of the function at function_index.
     ///
     /// \param function_index  The index of the function.

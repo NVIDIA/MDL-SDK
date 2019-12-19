@@ -45,6 +45,7 @@ namespace neuraylib {
 */
 
 class IFunction_call;
+class IMdl_execution_context;
 
 /// This interface represents a function definition.
 ///
@@ -298,11 +299,37 @@ public:
         DS_INTRINSIC_DF_FRESNEL_FACTOR,           ///< The df::fresnel_factor() function.
         DS_INTRINSIC_DF_MEASURED_FACTOR,          ///< The df::measured_factor() function.
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,         ///< The df::chiang_hair_bsdf() function.
+        DS_INTRINSIC_DF_SHEEN_BSDF,               ///< The df::sheen_bsdf() function.
         DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
 
 
+        // ::scene module intrinsics
+        DS_INTRINSIC_SCENE_FIRST = 0x0800,
+
+        DS_INTRINSIC_SCENE_DATA_ISVALID
+            = DS_INTRINSIC_SCENE_FIRST,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,             ///< scene::data_lookup_int()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,            ///< scene::data_lookup_int2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,            ///< scene::data_lookup_int3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4,            ///< scene::data_lookup_int4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT,           ///< scene::data_lookup_float()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2,          ///< scene::data_lookup_float2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3,          ///< scene::data_lookup_float3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4,          ///< scene::data_lookup_float4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR,           ///< scene::data_lookup_color()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,     ///< scene::data_lookup_uniorm_int()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,    ///< scene::data_lookup_uniorm_int2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,    ///< scene::data_lookup_uniorm_int3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,    ///< scene::data_lookup_uniorm_int4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,   ///< scene::data_lookup_uniorm_float()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,  ///< scene::data_lookup_uniorm_float2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,  ///< scene::data_lookup_uniorm_float3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,  ///< scene::data_lookup_uniorm_float4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,   ///< scene::data_lookup_uniorm_color()
+        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
+
         // ::debug module intrinsics
-        DS_INTRINSIC_DEBUG_FIRST = 0x0800,
+        DS_INTRINSIC_DEBUG_FIRST = 0x0900,
 
         DS_INTRINSIC_DEBUG_BREAKPOINT             ///< The debug::breakpoint() function.
             = DS_INTRINSIC_DEBUG_FIRST,
@@ -311,11 +338,10 @@ public:
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsics
-        DS_INTRINSIC_DAG_FIRST = 0x0900,
+        DS_INTRINSIC_DAG_FIRST = 0x0A00,
         /// The structure field access function.
         DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,       ///< The array constructor.
-        DS_INTRINSIC_DAG_INDEX_ACCESS,            ///< The specific operator[].
         DS_INTRINSIC_DAG_ARRAY_LENGTH,            ///< The array length operator.
         DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_ARRAY_LENGTH,
 
@@ -456,8 +482,19 @@ public:
     /// If the annotation is not provided or file resolution fails, it checks for a file
     /// module_name.material_name.png next to the MDL module.
     /// In case this cannot be found either \c NULL is returned.
-    ///
     virtual const char* get_thumbnail() const = 0;
+
+    /// Returns \c true if the definition is valid, \c false otherwise.
+    /// A definition can become invalid if the module it has been defined in
+    /// or another module imported by that module has been reloaded. In the first case,
+    /// the definition can no longer be used. In the second case, the
+    /// definition can be validated by reloading the module it has been
+    /// defined in.
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return     - \c true   The definition is valid.
+    ///             - \c false  The definition is invalid.
+    virtual bool is_valid(IMdl_execution_context* context) const = 0;
 
     /// Creates a new function call.
     ///
@@ -488,9 +525,53 @@ public:
     ///                           argument or default is a call expression and the return type of
     ///                           the called function definition is effectively varying since the
     ///                           function definition itself is varying.
+    ///                     - -9: The function definition is invalid due to a module reload, see
+    ///                           #is_valid() for diagnostics.
     /// \return             The created function call, or \c NULL in case of errors.
     virtual IFunction_call* create_function_call(
         const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+
+    /// Returns the direct call expression that represents the body of the function (if possible).
+    ///
+    /// \note Functions bodies with control flow can not be represented by an expression. For such
+    ///       functions, this method always returns \c NULL. For all other functions, i.e., for
+    ///       functions, whose body is an expression or a plain return statement, the method never
+    ///       returns \c NULL.
+    virtual const IExpression_direct_call* get_body() const = 0;
+
+    /// Returns the number of temporaries used by this function.
+    virtual Size get_temporary_count() const = 0;
+
+    /// Returns the expression of a temporary.
+    ///
+    /// \param index            The index of the temporary.
+    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    ///                         range.
+    virtual const IExpression* get_temporary( Size index) const = 0;
+
+    /// Returns the expression of a temporary.
+    ///
+    /// This templated member function is a wrapper of the non-template variant for the user's
+    /// convenience. It eliminates the need to call
+    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// on the returned pointer, since the return type already is a pointer to the type \p T
+    /// specified as template parameter.
+    ///
+    /// \tparam T               The interface type of the requested element.
+    /// \param index            The index of the temporary.
+    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    ///                         range.
+    template<class T>
+    const T* get_temporary( Size index) const
+    {
+        const IExpression* ptr_iexpression = get_temporary( index);
+        if ( !ptr_iexpression)
+            return 0;
+        const T* ptr_T = static_cast<const T*>( ptr_iexpression->get_interface( typename T::IID()));
+        ptr_iexpression->release();
+        return ptr_T;
+    }
+
 };
 
 mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));

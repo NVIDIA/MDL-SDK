@@ -36,6 +36,7 @@
 
 #include "neuray_compiled_material_impl.h"
 #include "neuray_expression_impl.h"
+#include "neuray_mdl_execution_context_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
 #include "neuray_string_impl.h"
@@ -224,6 +225,14 @@ mi::neuraylib::Material_opacity Compiled_material_impl::get_surface_opacity() co
 bool Compiled_material_impl::get_cutout_opacity(mi::Float32 *cutout_opacity) const
 {
     return get_db_element()->get_cutout_opacity(cutout_opacity);
+}
+
+bool Compiled_material_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    return get_db_element()->is_valid(
+        get_db_transaction(),
+        unwrap_and_clear_context(context, default_context));
 }
 
 void Compiled_material_impl::swap( MDL::Mdl_compiled_material& rhs)

@@ -47,36 +47,50 @@
     using namespace mi::mdl;
 #endif
 
+// for LPE support there different options for the renderer, for CUDA a renderer provided buffer
+// can be used to retrieve the contributions of the individual handles (named lobes)
+// Note, a real renderer would go for one specific option only
+#define DF_HSM_POINTER -2
+#define DF_HSM_NONE    -1
+#define DF_HSM_FIXED_1  1
+#define DF_HSM_FIXED_2  2
+#define DF_HSM_FIXED_4  4
+#define DF_HSM_FIXED_8  8
+// this is the one that is used, 
+// Note, this has to match with code backend option "df_handle_slot_mode"
+#define DF_HANDLE_SLOTS DF_HSM_POINTER
+
+
 #ifdef ENABLE_DERIVATIVES
-typedef Material_expr_function_with_derivs      Mat_expr_func;
-typedef Bsdf_init_function_with_derivs          Bsdf_init_func;
-typedef Bsdf_sample_function_with_derivs        Bsdf_sample_func;
-typedef Bsdf_evaluate_function_with_derivs      Bsdf_evaluate_func;
-typedef Bsdf_pdf_function_with_derivs           Bsdf_pdf_func;
-typedef Bsdf_auxiliary_function_with_derivs     Bsdf_auxiliary_func;
-typedef Edf_init_function_with_derivs           Edf_init_func;
-typedef Edf_sample_function_with_derivs         Edf_sample_func;
-typedef Edf_evaluate_function_with_derivs       Edf_evaluate_func;
-typedef Edf_pdf_function_with_derivs            Edf_pdf_func;
-typedef Edf_auxiliary_function_with_derivs      Edf_auxiliary_func;
-typedef Shading_state_material_with_derivs      Mdl_state;
-typedef Texture_handler_deriv                   Tex_handler;
-#define TEX_VTABLE                              tex_deriv_vtable
+typedef Material_expr_function_with_derivs                  Mat_expr_func;
+typedef Bsdf_init_function_with_derivs                      Bsdf_init_func;
+typedef Bsdf_sample_function_with_derivs                    Bsdf_sample_func;
+typedef Bsdf_evaluate_function_with_derivs                  Bsdf_evaluate_func;
+typedef Bsdf_pdf_function_with_derivs                       Bsdf_pdf_func;
+typedef Bsdf_auxiliary_function_with_derivs                 Bsdf_auxiliary_func;
+typedef Edf_init_function_with_derivs                       Edf_init_func;
+typedef Edf_sample_function_with_derivs                     Edf_sample_func;
+typedef Edf_evaluate_function_with_derivs                   Edf_evaluate_func;
+typedef Edf_pdf_function_with_derivs                        Edf_pdf_func;
+typedef Edf_auxiliary_function_with_derivs                  Edf_auxiliary_func;
+typedef Shading_state_material_with_derivs                  Mdl_state;
+typedef Texture_handler_deriv                               Tex_handler;
+#define TEX_VTABLE                                          tex_deriv_vtable
 #else
-typedef Material_expr_function                  Mat_expr_func;
-typedef Bsdf_init_function                      Bsdf_init_func;
-typedef Bsdf_sample_function                    Bsdf_sample_func;
-typedef Bsdf_evaluate_function                  Bsdf_evaluate_func;
-typedef Bsdf_pdf_function                       Bsdf_pdf_func;
-typedef Bsdf_auxiliary_function                 Bsdf_auxiliary_func;
-typedef Edf_init_function                       Edf_init_func;
-typedef Edf_sample_function                     Edf_sample_func;
-typedef Edf_evaluate_function                   Edf_evaluate_func;
-typedef Edf_pdf_function                        Edf_pdf_func;
-typedef Edf_auxiliary_function                  Edf_auxiliary_func;
-typedef Shading_state_material                  Mdl_state;
-typedef Texture_handler                         Tex_handler;
-#define TEX_VTABLE                              tex_vtable
+typedef Material_expr_function                              Mat_expr_func;
+typedef Bsdf_init_function                                  Bsdf_init_func;
+typedef Bsdf_sample_function                                Bsdf_sample_func;
+typedef Bsdf_evaluate_function                              Bsdf_evaluate_func;
+typedef Bsdf_pdf_function                                   Bsdf_pdf_func;
+typedef Bsdf_auxiliary_function                             Bsdf_auxiliary_func;
+typedef Edf_init_function                                   Edf_init_func;
+typedef Edf_sample_function                                 Edf_sample_func;
+typedef Edf_evaluate_function                               Edf_evaluate_func;
+typedef Edf_pdf_function                                    Edf_pdf_func;
+typedef Edf_auxiliary_function                              Edf_auxiliary_func;
+typedef Shading_state_material                              Mdl_state;
+typedef Texture_handler                                     Tex_handler;
+#define TEX_VTABLE                                          tex_vtable
 #endif
 
 // Custom structure representing the resources used by the generated code of a target code object.
@@ -128,7 +142,6 @@ __constant__ const float4 identity[3] = {
     {0.0f, 1.0f, 0.0f, 0.0f},
     {0.0f, 0.0f, 1.0f, 0.0f}
 };
-
 
 // the material provides pairs for each generated function to evaluate
 // the functions and arg blocks array are indexed by:
@@ -365,7 +378,7 @@ __device__ inline float3 environment_sample(
     // lookup filtered beauty
     const float v = theta * (float)(1.0 / M_PI);
     const float4 t = tex2D<float4>(params.env_tex, u, v);
-    return make_float3(t.x, t.y, t.z) / pdf;
+    return make_float3(t.x, t.y, t.z) * params.env_intensity / pdf;
 }
 
 // evaluate the environment
@@ -381,8 +394,8 @@ __device__ inline float3 environment_eval(
         min((unsigned int)(uv.y * (float)params.env_size.y), params.env_size.y - 1);
 
     pdf = params.env_accel[y * params.env_size.x + x].pdf;
-    const float4 t = tex2D<float4>(params.env_tex, uv.x, uv.y);
-    return make_float3(t.x, t.y, t.z);
+    const float4 t = tex2D<float4>(params.env_tex, uv.x, uv.y) ;
+    return make_float3(t.x, t.y, t.z) * params.env_intensity;
 }
 
 
@@ -406,6 +419,8 @@ __device__ inline float intersect_sphere(
     const float m = fminf(t0, t1);
     return m > 0.0f ? m : fmaxf(t0, t1);
 }
+
+//-------------------------------------------------------------------------------------------------
 
 struct auxiliary_data
 {
@@ -439,22 +454,109 @@ __device__ inline void normalize(auxiliary_data& data)
     data.num = min(1, data.num);
 }
 
+//-------------------------------------------------------------------------------------------------
 
-struct Ray_state {
+struct Ray_state
+{
     float3 contribution;
     float3 weight;
     float3 pos, pos_rx, pos_ry;
     float3 dir, dir_rx, dir_ry;
     bool inside;
     int intersection;
+    uint32_t lpe_current_state;
     auxiliary_data* aux;
 };
+
+//-------------------------------------------------------------------------------------------------
+
+// events that are define a transition between states, along with tag IDs
+enum Transition_type
+{
+    TRANSITION_CAMERA = 0,
+    TRANSITION_LIGHT,
+    TRANSITION_EMISSION,
+    TRANSITION_SCATTER_DR,
+    TRANSITION_SCATTER_DT,
+    TRANSITION_SCATTER_GR,
+    TRANSITION_SCATTER_GT,
+    TRANSITION_SCATTER_SR,
+    TRANSITION_SCATTER_ST,
+
+    TRANSITION_COUNT,
+};
+
+// go to the next state, given the current state and a transition token.
+__device__ inline uint32_t lpe_transition(
+    uint32_t current_state,
+    Transition_type event,
+    uint32_t global_tag_id,
+    const Kernel_params &params)
+{
+    if(current_state == static_cast<uint32_t>(-1)) 
+        return static_cast<uint32_t>(-1);
+
+    return params.lpe_state_table[
+        current_state * params.lpe_num_transitions +
+        static_cast<uint32_t>(TRANSITION_COUNT) * global_tag_id +
+        static_cast<uint32_t>(event)];
+}
+
+// add direct contribution, e.g., for emission, direct light hits
+__device__ inline void accumulate_contribution(
+    Transition_type light_event,
+    uint32_t light_global_tag_id,
+    const float3& contrib,
+    Ray_state &ray_state,
+    const Kernel_params &params)
+{
+    // check if there is a valid transition to that light source
+    uint32_t next_state = lpe_transition(
+        ray_state.lpe_current_state, light_event, light_global_tag_id, params);
+    if (next_state == static_cast<uint32_t>(-1)) return;
+
+    // add contribution the when the reached state is a final state for the selected LPE
+    // here we only have one LPE buffer, but more can be added easily by checking different LPEs
+    if ((params.lpe_final_mask[next_state] & (1 << params.lpe_ouput_expression)) != 0)
+        ray_state.contribution += contrib;
+}
+
+// add contribution for next event estimations
+__device__ inline void accumulate_next_event_contribution(
+    Transition_type scatter_event, uint32_t material_global_tag_id,
+    Transition_type light_event, uint32_t light_global_tag_id,
+    const float3& contrib,
+    Ray_state &ray_state,
+    const Kernel_params &params)
+{
+    // transition following the scatter event
+    uint32_t next_state = lpe_transition(
+        ray_state.lpe_current_state, scatter_event, material_global_tag_id, params);
+    if (next_state == static_cast<uint32_t>(-1)) return;
+
+    // check if there is a valid transition to the light source
+    next_state = lpe_transition(
+        next_state, light_event, light_global_tag_id, params);
+    if (next_state == static_cast<uint32_t>(-1)) return;
+
+    // add contribution the when the reached state is a final state for the selected LPE
+    // here we only have one LPE buffer, but more can be added easily by checking different LPEs
+    if ((params.lpe_final_mask[next_state] & (1 << params.lpe_ouput_expression)) != 0)
+        ray_state.contribution += contrib;
+}
+
+//-------------------------------------------------------------------------------------------------
+
 
 __device__ inline bool trace_sphere(
     Rand_state &rand_state,
     Ray_state &ray_state,
     const Kernel_params &params)
 {
+    // stop at invalid states
+    if (ray_state.lpe_current_state == static_cast<uint32_t>(-1)) 
+        return false;
+
     // intersect with geometry
     const float t = intersect_sphere(ray_state.pos, ray_state.dir, 1.0f);
     if (t < 0.0f) {
@@ -462,7 +564,12 @@ __device__ inline bool trace_sphere(
             // primary ray miss, add environment contribution
             const float2 uv = environment_coords(ray_state.dir);
             const float4 texval = tex2D<float4>(params.env_tex, uv.x, uv.y);
-            ray_state.contribution += make_float3(texval.x, texval.y, texval.z);
+
+            // add contribution, if `CL` is a valid path 
+            accumulate_contribution(
+                TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
+                make_float3(texval.x, texval.y, texval.z) * params.env_intensity,
+                ray_state, params);
         }
         return false;
     }
@@ -572,6 +679,27 @@ __device__ inline bool trace_sphere(
         0
     };
 
+    // for evaluating parts of the BSDF individually, e.g. for implementing LPEs
+    // the MDL SDK provides several options to pass out the BSDF, EDF, and auxiliary data
+    #if DF_HANDLE_SLOTS == DF_HSM_POINTER
+        // application provided memory
+        // the data structs will get only a pointer to a buffer, along with size and offset 
+        const unsigned df_eval_slots = 4;       // number of handles (parts) that can be evaluated
+                                                // at once. 4 is an arbitrary choice. However, it 
+                                                // has to match eval_data.handle_count and 
+                                                // aux_data.handle_count)
+
+        float3 result_buffer_0[df_eval_slots];  // used for bsdf_diffuse, edf, and albedo
+        float3 result_buffer_1[df_eval_slots];  // used for bsdf_specular and normal
+    #elif DF_HANDLE_SLOTS == DF_HSM_NONE
+        // handles are ignored, all parts of the BSDF are returned at once without loops (fastest)
+        const unsigned df_eval_slots = 1;
+    #else
+        // eval_data and auxiliary_data have a fixed size array to pass the data. Only an offset
+        // is required if there are more handles (parts) than slots.
+        const unsigned df_eval_slots = DF_HANDLE_SLOTS;
+    #endif
+
 
     Mdl_function_index func_idx;
 
@@ -599,6 +727,20 @@ __device__ inline bool trace_sphere(
     func_idx = get_mdl_function_index(material.edf);
     if (is_valid(func_idx))
     {
+        // evaluate intensity expression
+        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
+        Mdl_function_index intensity_func_idx = get_mdl_function_index(material.emission_intensity);
+        if (is_valid(intensity_func_idx))
+        {
+            // init for the use of the materials emission intensity
+            mdl_resources.set_target_code_index(params, intensity_func_idx); // init resource handler
+            const char* arg_block = get_arg_block(params, intensity_func_idx); // get material parameters
+            prepare_state(params, intensity_func_idx, state, normal); // init state
+
+            as_expression(intensity_func_idx)(
+                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
+        }
+
         // init for the use of the materials EDF
         mdl_resources.set_target_code_index(params, func_idx); // init resource handler
         const char* arg_block = get_arg_block(params, func_idx); // get material parameters
@@ -606,26 +748,43 @@ __device__ inline bool trace_sphere(
         as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
         // evaluate EDF
-        Edf_evaluate_data eval_data;
+        Edf_evaluate_data<(Df_handle_slot_mode) DF_HANDLE_SLOTS> eval_data;
         eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
-        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
-        // evaluate intensity expression
-        float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
-        func_idx = get_mdl_function_index(material.emission_intensity);
-        if (is_valid(func_idx))
+        #if DF_HANDLE_SLOTS == DF_HSM_POINTER
+            eval_data.edf = result_buffer_0;
+            eval_data.handle_count = df_eval_slots;
+        #endif
+
+        // outer loop in case the are more material tags than slots in the evaluate struct
+        unsigned offset = 0;
+        #if DF_HANDLE_SLOTS != DF_HSM_NONE
+        for (; offset < material.edf_mtag_to_gtag_map_size; offset += df_eval_slots)
         {
-            // init for the use of the materials emission intensity
-            mdl_resources.set_target_code_index(params, func_idx); // init resource handler
-            arg_block = get_arg_block(params, func_idx); // get material parameters
-            prepare_state(params, func_idx, state, normal); // init state
+            eval_data.handle_offset = offset;
+        #endif
 
-            as_expression(func_idx)(
-                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
+            // evaluate the materials EDF 
+            as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
+
+            // iterate over all lobes (tags that appear in the df)
+            for (unsigned lobe = 0; (lobe < df_eval_slots) &&
+                ((offset + lobe) < material.edf_mtag_to_gtag_map_size); ++lobe)
+            {
+                // add emission contribution
+                accumulate_contribution(
+                    TRANSITION_EMISSION, material.edf_mtag_to_gtag_map[offset + lobe],
+                    #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                        eval_data.edf * emission_intensity,
+                    #else
+                        eval_data.edf[lobe] * emission_intensity,
+                    #endif
+                    ray_state, params);
+            }
+
+        #if DF_HANDLE_SLOTS != DF_HSM_NONE
         }
-
-        // add emission
-        ray_state.contribution += emission_intensity * eval_data.edf;
+        #endif
     }
 
 
@@ -644,10 +803,10 @@ __device__ inline bool trace_sphere(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data    sample_data;
-            Bsdf_evaluate_data  eval_data;
-            Bsdf_pdf_data       pdf_data;
-            Bsdf_auxiliary_data aux_data;
+            Bsdf_sample_data                                            sample_data;
+            Bsdf_evaluate_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS>    eval_data;
+            Bsdf_pdf_data                                               pdf_data;
+            Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS>   aux_data;
         };
 
         // for thin_walled materials there is no 'inside'
@@ -671,32 +830,122 @@ __device__ inline bool trace_sphere(
         // if requested, fill auxiliary buffers
         if (params.enable_auxiliary_output && ray_state.intersection == 0)
         {
-            as_bsdf_auxiliary(func_idx)(&aux_data, &state, &mdl_resources.data, NULL, arg_block);
-            ray_state.aux->albedo += aux_data.albedo;
-            ray_state.aux->normal += aux_data.normal;
-            ray_state.aux->num++;
+            #if DF_HANDLE_SLOTS == DF_HSM_POINTER
+                aux_data.albedo = result_buffer_0;
+                aux_data.normal = result_buffer_1;
+                aux_data.handle_count = df_eval_slots;
+            #endif
+
+            // outer loop in case the are more material tags than slots in the evaluate struct
+            unsigned offset = 0;
+            #if DF_HANDLE_SLOTS != DF_HSM_NONE
+            for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+            {
+                aux_data.handle_offset = offset;
+            #endif
+
+                // evaluate the materials auxiliary
+                as_bsdf_auxiliary(func_idx)(&aux_data, &state, &mdl_resources.data, NULL, arg_block);
+
+                // iterate over all lobes (tags that appear in the df)
+                for (unsigned lobe = 0; (lobe < df_eval_slots) &&
+                    ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                {
+                    // to keep it simpler, the individual albedo and normals are averaged
+                    // however, the parts can also be used separately, e.g. for LPEs
+                    #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                        ray_state.aux->albedo += aux_data.albedo;
+                        ray_state.aux->normal += aux_data.normal;
+                    #else
+                        ray_state.aux->albedo += aux_data.albedo[lobe];
+                        ray_state.aux->normal += aux_data.normal[lobe];
+                    #endif
+                    ray_state.aux->num++;
+                }
+
+            #if DF_HANDLE_SLOTS != DF_HSM_NONE
+            }
+            #endif
         }
 
         // compute direct lighting for point light
-        if (params.light_intensity.x > 0.0f ||
-            params.light_intensity.y > 0.0f ||
-            params.light_intensity.z > 0.0f)
+        Transition_type transition_glossy, transition_diffuse; 
+        if (params.light_intensity > 0.0f)
         {
             float3 to_light = params.light_pos - ray_state.pos;
             const float check_sign = squared_length(params.light_pos) < 1.0f ? -1.0f : 1.0f;
+            
             if (dot(to_light, normal) * check_sign > 0.0f)
             {
-
                 const float inv_squared_dist = 1.0f / squared_length(to_light);
+                const float3 f = params.light_color * params.light_intensity * 
+                                 inv_squared_dist * (float) (0.25 / M_PI);
+
+
                 eval_data.k2 = to_light * sqrtf(inv_squared_dist);
+                #if DF_HANDLE_SLOTS == DF_HSM_POINTER
+                    eval_data.bsdf_diffuse = result_buffer_0;
+                    eval_data.bsdf_glossy = result_buffer_1;
+                    eval_data.handle_count = df_eval_slots;
+                #endif
 
-                const float3 f = params.light_intensity * inv_squared_dist * (float) (0.25 / M_PI);
+                // outer loop in case the are more material tags than slots in the evaluate struct
+                unsigned offset = 0;
+                #if DF_HANDLE_SLOTS != DF_HSM_NONE
+                for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+                {
+                    eval_data.handle_offset = offset;
+                #endif
 
-                // evaluate the materials BSDF
-                as_bsdf_evaluate(func_idx)(
-                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                    // evaluate the materials BSDF 
+                    as_bsdf_evaluate(func_idx)(
+                        &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
-                ray_state.contribution += ray_state.weight * f * eval_data.bsdf;
+                    // we know if we reflect or transmit
+                    if (dot(to_light, normal) > 0.0f) {
+                        transition_glossy = TRANSITION_SCATTER_GR;
+                        transition_diffuse = TRANSITION_SCATTER_DR;
+                    } else {
+                        transition_glossy = TRANSITION_SCATTER_GT;
+                        transition_diffuse = TRANSITION_SCATTER_DT;
+                    }
+
+                    // sample weight
+                    const float3 w = ray_state.weight * f;
+
+                    // iterate over all lobes (tags that appear in the df)
+                    for (unsigned lobe = 0; (lobe < df_eval_slots) &&
+                         ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                    {
+                        // get the `global tag` of the lobe
+                        unsigned material_lobe_gtag = material.bsdf_mtag_to_gtag_map[offset + lobe];
+
+                        // add diffuse contribution
+                        accumulate_next_event_contribution(
+                            transition_diffuse, material_lobe_gtag,
+                            TRANSITION_LIGHT, params.point_light_gtag, // light group
+                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                                eval_data.bsdf_diffuse * w,
+                            #else
+                                eval_data.bsdf_diffuse[lobe] * w,
+                            #endif
+                            ray_state, params);
+
+                        // add glossy contribution
+                        accumulate_next_event_contribution(
+                            transition_glossy, material_lobe_gtag,
+                            TRANSITION_LIGHT, params.point_light_gtag, // light group
+                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                                eval_data.bsdf_glossy * w,
+                            #else
+                                eval_data.bsdf_glossy[lobe] * w,
+                            #endif
+                            ray_state, params);
+                    }
+
+                #if DF_HANDLE_SLOTS != DF_HSM_NONE
+                }
+                #endif
             }
         }
 
@@ -716,13 +965,72 @@ __device__ inline bool trace_sphere(
             {
                 eval_data.k2 = light_dir;
 
-                // evaluate the materials BSDF
-                as_bsdf_evaluate(func_idx)(
-                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                #if DF_HANDLE_SLOTS == DF_HSM_POINTER
+                    eval_data.bsdf_diffuse = result_buffer_0;
+                    eval_data.bsdf_glossy = result_buffer_1;
+                    eval_data.handle_count = df_eval_slots;
+                #endif
 
-                const float mis_weight =
-                    (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
-                ray_state.contribution += ray_state.weight * f * eval_data.bsdf * mis_weight;
+                // outer loop in case the are more material tags than slots in the evaluate struct
+                unsigned offset = 0;
+                #if DF_HANDLE_SLOTS != DF_HSM_NONE
+                for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+                {
+                    eval_data.handle_offset = offset;
+                #endif
+
+                    // evaluate the materials BSDF 
+                    as_bsdf_evaluate(func_idx)(
+                        &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+
+                    const float mis_weight =
+                        (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
+
+                    // we know if we reflect or transmit
+                    if (dot(light_dir, normal) > 0.0f) {
+                        transition_glossy = TRANSITION_SCATTER_GR;
+                        transition_diffuse = TRANSITION_SCATTER_DR;
+                    } else {
+                        transition_glossy = TRANSITION_SCATTER_GT;
+                        transition_diffuse = TRANSITION_SCATTER_DT;
+                    }
+
+                    // sample weight
+                    const float3 w = ray_state.weight * f * mis_weight;
+
+                    // iterate over all lobes (tags that appear in the df)
+                    for (unsigned lobe = 0; (lobe < df_eval_slots) &&
+                        ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                    {
+                        // get the `global tag` of the lobe
+                        unsigned material_lobe_gtag = material.bsdf_mtag_to_gtag_map[offset + lobe];
+
+                        // add diffuse contribution
+                        accumulate_next_event_contribution(
+                            transition_diffuse, material_lobe_gtag,
+                            TRANSITION_LIGHT, params.env_gtag, // light group 'env'
+                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                                (eval_data.bsdf - eval_data.bsdf_glossy) * w,
+                            #else
+                                eval_data.bsdf_diffuse[lobe] * w,
+                            #endif
+                            ray_state, params);
+
+                        // add glossy contribution
+                        accumulate_next_event_contribution(
+                            transition_glossy, material_lobe_gtag,
+                            TRANSITION_LIGHT, params.env_gtag, // light group 'env'
+                            #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                                eval_data.bsdf_glossy * w,
+                            #else
+                                eval_data.bsdf_glossy[lobe] * w,
+                            #endif
+                            ray_state, params);
+                    }
+
+                #if DF_HANDLE_SLOTS != DF_HSM_NONE
+                }
+                #endif
             }
         }
 
@@ -731,11 +1039,11 @@ __device__ inline bool trace_sphere(
             sample_data.xi.x = curand_uniform(&rand_state);
             sample_data.xi.y = curand_uniform(&rand_state);
             sample_data.xi.z = curand_uniform(&rand_state);
+            sample_data.xi.w = curand_uniform(&rand_state);
 
 
             // sample the materials BSDF
             as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, NULL, arg_block);
-
 
             if (sample_data.event_type == BSDF_EVENT_ABSORB)
                 return false;
@@ -747,6 +1055,28 @@ __device__ inline bool trace_sphere(
             const bool transmission = (sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0;
             if (transmission)
                 ray_state.inside = !ray_state.inside;
+
+            const bool is_specular = (sample_data.event_type & BSDF_EVENT_SPECULAR) != 0;
+
+            Transition_type next;
+            if (is_specular)
+                next = transmission ? TRANSITION_SCATTER_ST : TRANSITION_SCATTER_SR;
+            else if ((sample_data.event_type & BSDF_EVENT_DIFFUSE) != 0)
+                next = transmission ? TRANSITION_SCATTER_DT : TRANSITION_SCATTER_DR;
+            else
+                next = transmission ? TRANSITION_SCATTER_GT : TRANSITION_SCATTER_GR;
+
+            // move ray to the next sampled state
+            ray_state.lpe_current_state = lpe_transition(
+                ray_state.lpe_current_state, next,
+                #if DF_HANDLE_SLOTS == DF_HSM_NONE
+                    // ill-defined case: the LPE machine expects tags but the renderer ignores them
+                    // -> the resulting image of LPEs with tags is undefined in this case
+                    params.default_gtag, 
+                #else
+                    material.bsdf_mtag_to_gtag_map[sample_data.handle], // sampled lobe
+                #endif
+                params);
 
             if (ray_state.inside)
             {
@@ -777,14 +1107,17 @@ __device__ inline bool trace_sphere(
                 else
                     bsdf_pdf = sample_data.pdf;
 
-                const bool is_specular =
-                    (sample_data.event_type & BSDF_EVENT_SPECULAR) != 0;
                 if (is_specular || bsdf_pdf > 0.0f)
                 {
                     const float mis_weight = is_specular ||
                         (params.mdl_test_type == MDL_TEST_SAMPLE) ? 1.0f :
                             bsdf_pdf / (pdf + bsdf_pdf);
-                    ray_state.contribution += ray_state.weight * f * mis_weight;
+
+                    float3 specular_contrib = ray_state.weight * f * mis_weight;
+                    accumulate_contribution(
+                        TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
+                        specular_contrib,
+                        ray_state, params);
                 }
             }
         }
@@ -835,6 +1168,8 @@ __device__ inline render_result render_sphere(
     ray_state.dir_ry = normalize(
         params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u_ry);
     ray_state.inside = false;
+    ray_state.lpe_current_state = 1; // already at the camera so state 0 to 1 is free as long as
+                                     // there is only one camera
     ray_state.aux = &res.aux;
     const unsigned int max_inters = params.max_path_length - 1;
     for (ray_state.intersection = 0; ray_state.intersection < max_inters; ++ray_state.intersection)
@@ -860,18 +1195,6 @@ __device__ inline unsigned int float3_to_rgba8(float3 val)
     const unsigned int b = (unsigned int) (255.0 * powf(saturate(val.z), 1.0f / 2.2f));
     return 0xff000000 | (r << 16) | (g << 8) | b;
 }
-
-//__device__ inline unsigned int float3_to_rgba8(float3 val)
-//{
-//    const unsigned int r =
-//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.x, 0.0f), (float) (1.0 / 2.2)), 1.0f));
-//    const unsigned int g =
-//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.y, 0.0f), (float) (1.0 / 2.2)), 1.0f));
-//    const unsigned int b =
-//        (unsigned int) (255.0 * fminf(powf(fmaxf(val.z, 0.0f), (float) (1.0 / 2.2)), 1.0f));
-//    return 0xff000000 | (r << 16) | (g << 8) | b;
-//}
-
 
 // exposure + simple Reinhard tonemapper + gamma
 __device__ inline unsigned int display(float3 val, const float tonemap_scale)

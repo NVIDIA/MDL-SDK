@@ -81,4 +81,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         base-util-string_utils
         ${LINKER_END_GROUP}
     )
-    
+
+# add tests if available
+add_tests(POST)

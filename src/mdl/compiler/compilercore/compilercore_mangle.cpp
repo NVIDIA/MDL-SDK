@@ -34,11 +34,347 @@
 #include "compilercore_def_table.h"
 #include "compilercore_function_instance.h"
 #include "compilercore_tools.h"
+#include "compilercore_wchar_support.h"
 
 #include <cstdio>
 
 namespace mi {
 namespace mdl {
+
+// --------------------------- Punycode ---------------------------
+
+/// This class implements a modified Punycode encoder. Originally taken from
+///
+/// punycode-sample.c 2.0.0 (2004-Mar-21-Sun)
+/// http://www.nicemice.net/idn/
+/// Adam M. Costello
+/// http://www.nicemice.net/amc/
+///
+/// This is ANSI C code (C89) implementing Punycode 1.0.x.
+///
+/// This single file contains three sections (an interface, an
+/// implementation, and a wrapper for testing) that would normally belong
+/// in three separate files (punycode.h, punycode.c, punycode-test.c), but
+/// here they are bundled into one file (punycode-sample.c) for convenient
+/// testing.  Anyone wishing to reuse this code will probably want to split
+/// it apart.
+///
+/// Identifiers that contain non-ASCII characters are encoded using the Punycode algorithm
+/// specified in RFC 3492, with the modifications that '_' is used as the encoding delimiter,
+/// and uppercase letters A through J are used in place of digits 0 through 9 in the encoding
+/// character set. (Taken from Swift name mangling to avoid digits in front of a generated
+/// string)
+class Punycode_encoder_swift {
+public:
+    enum punycode_status {
+        punycode_success    = 0,
+        punycode_bad_input  = 1, /* Input is invalid.                       */
+        punycode_big_output = 2, /* Output would exceed the space provided. */
+        punycode_overflow   = 3  /* Wider integers needed to process input. */
+    };
+
+    /// Constructor.
+    Punycode_encoder_swift(
+        IAllocator *alloc)
+    : m_alloc(alloc)
+    {
+    }
+
+    /// Check if given string needs encoding.
+    static bool needs_encoding(
+        char const *s, size_t len)
+    {
+        for (size_t i = 0; i < len; ++i) {
+            if (!is_basic(s[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /// Encode an UTF-8 string.
+    string encode(char const *utf8) {
+        u32string tmp(m_alloc);
+
+        utf8_to_utf32(tmp, utf8);
+
+        string res(m_alloc);
+        punycode_encode(tmp, res);
+        return res;
+    }
+
+    /// Decode an UTF-8 string.
+    string decode(char const *s) {
+        u32string tmp(m_alloc);
+        punycode_decode(strlen(s), s, tmp);
+
+        string res(m_alloc);
+        utf32_to_utf8(res, tmp.c_str());
+        return res;
+    }
+
+private:
+    static unsigned const maxint = 0xffffffff;
+
+    enum {
+        base = 36,
+        tmin = 1,
+        tmax = 26,
+        skew = 38,
+        damp = 700,
+        initial_bias = 72,
+        initial_n = 0x80,
+        delimiter = '_'
+    };
+
+    ///< tests whether cp is a basic code point, in out version an character allowed
+    static bool is_basic(unsigned cp) {
+        if ('a' <= cp && cp <= 'z') return true;
+        if ('A' <= cp && cp <= 'Z') return true;
+        if ('0' <= cp && cp <= '9') return true;
+        if ('_' == cp) return true;
+        return false;
+    }
+
+    /// tests whether cp is a delimiter
+    static bool is_delim(unsigned cp) { return cp == delimiter; }
+
+    /// returns the basic code point whose value
+    /// (when used for representing integers) is d, which needs to be in
+    /// the range 0 to base-1
+    static char encode_digit(unsigned d) {
+        //  0..25 map to ASCII a..z
+        // 26..35 map to ASCII A..J
+        return d + 'A' + (('a' - 'A') * (d < 26));
+    }
+
+    /// returns the numeric value of a basic code point (for use in representing integers)
+    /// in the range 0 to  base-1, or base if cp does not represent a value.
+    static unsigned decode_digit(unsigned cp) {
+        return  (cp - 'A') < 10 ? cp - 'A' + 26 : cp - 'a' < 26 ? cp - 'a' : base;
+    }
+
+    /// Bias adaptation function
+    static unsigned adapt(
+        unsigned delta,
+        unsigned numpoints,
+        int firsttime)
+    {
+        unsigned k;
+
+        delta = firsttime ? delta / damp : delta >> 1;
+        /* delta >> 1 is a faster way of doing delta / 2 */
+        delta += delta / numpoints;
+
+        for (k = 0; delta > ((base - tmin) * tmax) / 2; k += base) {
+            delta /= base - tmin;
+        }
+
+        return k + (base - tmin + 1) * delta / (delta + skew);
+    }
+
+    /// Main encode function
+    static enum punycode_status punycode_encode(
+        u32string const &input,
+        string          &output)
+    {
+        unsigned input_length, n, delta, h, b, bias, j, m, q, k, t;
+        size_t out, max_out;
+
+        /* The Punycode spec assumes that the input length is the same type */
+        /* of integer as a code point, so we need to convert the size_t to  */
+        /* a punycode_uint, which could overflow.                           */
+
+        if (input.length() > maxint)
+            return punycode_overflow;
+        input_length = (unsigned)input.length();
+
+        /* Initialize the state: */
+
+        n = initial_n;
+        delta = 0;
+        out = 0;
+        max_out = 64*1024;    //< 64k identifiers will probably be too long anyway
+        bias = initial_bias;
+
+        /* Handle the basic code points: */
+
+        for (j = 0; j < input_length; ++j) {
+            if (is_basic(input[j])) {
+                if (max_out - out < 2)
+                    return punycode_big_output;
+                output.append((char)input[j]);
+                ++out;
+            }
+            /* else if (input[j] < n) return punycode_bad_input; */
+            /* (not needed for Punycode with unsigned code points) */
+        }
+
+        h = b = (unsigned)out;
+        /* cannot overflow because out <= input_length <= maxint */
+
+        /* h is the number of code points that have been handled, b is the  */
+        /* number of basic code points, and out is the number of ASCII code */
+        /* points that have been output.                                    */
+
+        if (b > 0) {
+            output.append(char(delimiter));
+            ++out;
+        }
+
+        /* Main encoding loop: */
+
+        while (h < input_length) {
+            /* All non-basic code points < n have been     */
+            /* handled already.  Find the next larger one: */
+
+            for (m = maxint, j = 0; j < input_length; ++j) {
+                /* if (basic(input[j])) continue; */
+                /* (not needed for Punycode) */
+                if (input[j] >= n && input[j] < m)
+                    m = input[j];
+            }
+
+            /* Increase delta enough to advance the decoder's    */
+            /* <n,i> state to <m,0>, but guard against overflow: */
+
+            if (m - n > (maxint - delta) / (h + 1))
+                return punycode_overflow;
+            delta += (m - n) * (h + 1);
+            n = m;
+
+            for (j = 0; j < input_length; ++j) {
+                /* Punycode does not need to check whether input[j] is basic: */
+                if (input[j] < n /* || basic(input[j]) */) {
+                    if (++delta == 0)
+                        return punycode_overflow;
+                }
+
+                if (input[j] == n) {
+                    /* Represent delta as a generalized variable-length integer: */
+
+                    for (q = delta, k = base; ; k += base) {
+                        if (out >= max_out)
+                            return punycode_big_output;
+                        t = k <= bias /* + tmin */ ? tmin :     /* +tmin not needed */
+                            k >= bias + tmax ? tmax : k - bias;
+                        if (q < t)
+                            break;
+                        output.append(encode_digit(t + (q - t) % (base - t)));
+                        ++out;
+                        q = (q - t) / (base - t);
+                    }
+
+                    output.append(encode_digit(q));
+                    ++out;
+                    bias = adapt(delta, h + 1, h == b);
+                    delta = 0;
+                    ++h;
+                }
+            }
+
+            ++delta, ++n;
+        }
+
+        return punycode_success;
+    }
+
+    /// Main decode function
+    enum punycode_status punycode_decode(
+        size_t input_length,
+        const char input[],
+        u32string &output)
+    {
+        unsigned n, out, i, max_out, bias, oldi, w, k, digit, t;
+        size_t b, j, in;
+
+        /* Initialize the state: */
+
+        n = initial_n;
+        out = i = 0;
+        max_out = maxint;
+        bias = initial_bias;
+
+        /* Handle the basic code points:  Let b be the number of input code */
+        /* points before the last delimiter, or 0 if there is none, then    */
+        /* copy the first b code points to the output.                      */
+
+        for (b = j = 0; j < input_length; ++j)
+            if (is_delim(input[j]))
+                b = j;
+
+        if (b > max_out)
+            return punycode_big_output;
+
+        for (j = 0; j < b; ++j) {
+            if (!is_basic(input[j]))
+                return punycode_bad_input;
+            output.append(unsigned(input[j]));
+            ++out;
+        }
+
+        /* Main decoding loop:  Start just after the last delimiter if any  */
+        /* basic code points were copied; start at the beginning otherwise. */
+
+        for (in = b > 0 ? b + 1 : 0; in < input_length; ++out) {
+
+            /* in is the index of the next ASCII code point to be consumed, */
+            /* and out is the number of code points in the output array.    */
+
+            /* Decode a generalized variable-length integer into delta,  */
+            /* which gets added to i.  The overflow checking is easier   */
+            /* if we increase i as we go, then subtract off its starting */
+            /* value at the end to obtain delta.                         */
+
+            for (oldi = i, w = 1, k = base; ; k += base) {
+                if (in >= input_length)
+                    return punycode_bad_input;
+                digit = decode_digit(input[in++]);
+                if (digit >= base)
+                    return punycode_bad_input;
+                if (digit > (maxint - i) / w)
+                    return punycode_overflow;
+                i += digit * w;
+                t = k <= bias /* + tmin */ ? tmin :     /* +tmin not needed */
+                    k >= bias + tmax ? tmax : k - bias;
+                if (digit < t)
+                    break;
+                if (w > maxint / (base - t))
+                    return punycode_overflow;
+                w *= (base - t);
+            }
+
+            bias = adapt(i - oldi, out + 1, oldi == 0);
+
+            /* i was supposed to wrap around from out+1 to 0,   */
+            /* incrementing n each time, so we'll fix that now: */
+
+            if (i / (out + 1) > maxint - n)
+                return punycode_overflow;
+            n += i / (out + 1);
+            i %= (out + 1);
+
+            /* Insert n at position i of the output: */
+
+            /* not needed for Punycode: */
+            /* if (basic(n)) return punycode_bad_input; */
+            if (out >= max_out)
+                return punycode_big_output;
+
+            /* cannot overflow because out <= old value of *output_length */
+            if (out + 1 > output.size())
+                output.resize(out + 1);
+            memmove(&output[i + 1], &output[i], (out - i) * sizeof(output[0]));
+            output[i++] = n;
+        }
+
+        output.resize(size_t(out));
+        /* cannot overflow because out <= old value of *output_length */
+        return punycode_success;
+    }
+
+private:
+    IAllocator *m_alloc;
+};
 
 // --------------------------- MDL mangler ---------------------------
 
@@ -196,11 +532,21 @@ void MDL_name_mangler::mangle_source_name(char const *name)
     // <source-name> ::= <positive length number> <identifier>
     // <number> ::= [n] <non-negative decimal integer>
     // <identifier> ::= <unqualified source code identifier>
+    size_t l = strlen(name);
+
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "%u", unsigned(strlen(name)));
-    m_out.append(buf);
-    m_out.append(name);
+    if (Punycode_encoder_swift::needs_encoding(name, l)) {
+        string s = Punycode_encoder_swift(get_allocator()).encode(name);
+
+        snprintf(buf, sizeof(buf), "0%u", unsigned(s.length()));
+        m_out.append(buf);
+        m_out.append(s);
+    } else {
+        snprintf(buf, sizeof(buf), "%u", unsigned(l));
+        m_out.append(buf);
+        m_out.append(name);
+    }
 }
 
 void MDL_name_mangler::mangle_nested_name(
@@ -230,49 +576,29 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
     if (prefix[0] == ':' && prefix[1] == ':')
         prefix += 2;
 
-    // if the prefix starts with a '/', it is a file name (MDLe) that needs encoding
-    if (prefix[0] == '/' || (isalpha(prefix[0]) && prefix[1] == ':' && prefix[2] == '/')) {
-
-        // process characters one by one
-        for (; prefix[0] != '\0';) {
-
-            char utf8_char = prefix[0];
-        
-            if ((utf8_char > 0x2f && utf8_char < 0x3a) ||   // digits
-                (utf8_char > 0x40 && utf8_char < 0x5b) ||   // capital letters
-                (utf8_char > 0x60 && utf8_char < 0x7b) ||   // small letters
-                utf8_char == '_'){                          // C-conform characters
-
-                m_out.append(utf8_char);
-            } else {
-                // encode ASCII characters
-                m_out.append("U2"); // extend this if more than ASCII is required
-                char buf[3];
-                snprintf(buf, sizeof(buf), "%02x", utf8_char);
-                m_out.append(buf);
-            }
-
-            // continue with the next character
-            prefix += 1;
-
-            // skip "::" in the end
-            if (prefix[0] == ':' && prefix[1] == ':' && prefix[2] == '\0')
-                prefix += 2;
-        }
-        return;
-    }
-
     // handle mdl paths
     for (;prefix[0] != '\0';) {
-        unsigned l = 0;
-        while (prefix[l] != ':' && prefix[l] != '\0') ++l;
+        size_t l = 0;
+        for (; prefix[l] != '\0'; ++l) {
+            if (prefix[l] == ':' && prefix[l + 1] == ':')
+                break;
+        }
+
         char buf[16];
-        snprintf(buf, sizeof(buf), "%u", l);
-        m_out.append(buf);
-        m_out.append(prefix, l);
+        if (Punycode_encoder_swift::needs_encoding(prefix, l)) {
+            string p(prefix, prefix + l, get_allocator());
+            string s = Punycode_encoder_swift(get_allocator()).encode(p.c_str());
+
+            snprintf(buf, sizeof(buf), "0%u", unsigned(s.length()));
+            m_out.append(buf);
+            m_out.append(s);
+        } else {
+            snprintf(buf, sizeof(buf), "%u", unsigned(l));
+            m_out.append(buf);
+            m_out.append(prefix, l);
+        }
+
         prefix += l;
-        if (prefix[0] == ':' && prefix[1] == ':')
-            prefix += 2;
         if (prefix[0] == ':' && prefix[1] == ':')
             prefix += 2;
     }
@@ -585,7 +911,7 @@ void MDL_name_mangler::mangle_type(IType_matrix const *type)
     buf[sizeof(buf) - 1] = '\0';
 
     IType_atomic const *e_tp = v_type->get_element_type();
-    char buffer[32];
+    char buffer[38];
     switch (e_tp->get_kind()) {
     case IType::TK_FLOAT:
         snprintf(buffer, sizeof(buffer), "float%s", buf);
@@ -646,6 +972,8 @@ void MDL_name_mangler::mangle_type(IType_reference const *type)
             case IType_texture::TS_PTEX:
                 mangle_source_name("texture_ptex");
                 break;
+            case IType_texture::TS_BSDF_DATA:
+                mangle_source_name("texture_bsdf_data");
             }
         }
         break;
@@ -730,7 +1058,14 @@ bool MDL_name_mangler::demangle_name(char const *&strptr, char const *endptr, st
     if (num_end == NULL || strptr == num_end || num_end + len > endptr)
         return false;
 
-    ref_str.append(num_end, 0, len);
+    bool is_punycode = *strptr == '0';
+    if (is_punycode) {
+        string s(num_end, num_end + len, get_allocator());
+
+        ref_str += Punycode_encoder_swift(get_allocator()).decode(s.c_str());
+    } else {
+        ref_str.append(num_end, 0, len);
+    }
     strptr = num_end + len;
 
     return true;
@@ -823,9 +1158,18 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                 char const *qualifier_start = ptr;
                 int num_qualifiers = 0;
                 int skip_from_qualifier = 0x7fffffff;
-                while (ptr < endptr && (*ptr == 'R' || *ptr == 'K' || *ptr == 'P')) {
+                while (ptr < endptr && (*ptr == 'R' || *ptr == 'K' || *ptr == 'P') || *ptr == 'U') {
                     if (*ptr == 'P') {
                         skip_parameter = true;
+                        skip_from_qualifier = num_qualifiers;
+                    } else if (*ptr == 'U') {
+                        ++ptr;
+                        string qualifier(m_alloc);
+                        if (!demangle_name(ptr, endptr, qualifier))
+                            return false;
+                        m_out += qualifier;
+                        m_out += ' ';
+                        --ptr;
                         skip_from_qualifier = num_qualifiers;
                     }
                     ++ptr, ++num_qualifiers;
@@ -982,6 +1326,16 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     return false;
                 }
 
+                case 'u':
+                {
+                    ++ptr;
+                    if (!demangle_name(ptr, endptr, name))
+                        return false;
+                    add_subst = Arena_strdup(arena, name.c_str());
+                    add_self_subst = true;
+                    break;
+                }
+
                 default:
                     return false;
                 }
@@ -1087,6 +1441,9 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
             break;
         case IMDL::MDL_VERSION_1_6:
             result += "$1.5";
+            break;
+        case IMDL::MDL_VERSION_1_7:
+            result += "$1.6";
             break;
         }
     }

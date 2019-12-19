@@ -52,6 +52,7 @@ const char* Logger::get_log_level(mi::base::Message_severity level)
 void Logger::message(
     mi::base::Message_severity level,
     const char* module_category,
+    const mi::base::Message_details&,
     const char* message)
 {
     if (int(level) < m_level) 

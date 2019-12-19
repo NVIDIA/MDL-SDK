@@ -81,6 +81,8 @@ public:
             IGenerated_code_executable::Function_kind func_kind;
             char const *prototypes[IGenerated_code_executable::PL_NUM_LANGUAGES];
             size_t arg_block_index;
+            size_t num_df_handles;
+            char const **df_handles;
         };
 
         /// Constructor.
@@ -124,6 +126,14 @@ public:
                 sz += strlen(func_infos[i].name) + 1;
                 for (int j = 0 ; j < int(IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
                     sz += strlen(func_infos[i].prototypes[j]) + 1;
+                }
+                if (func_infos[i].num_df_handles != 0) {
+                    // align
+                    sz = (sz + sizeof(char *) - 1) & ~(sizeof(char *) - 1);
+                    sz += func_infos[i].num_df_handles * sizeof(char *);
+                    for (size_t j = 0; j < func_infos[i].num_df_handles; ++j) {
+                        sz += strlen(func_infos[i].df_handles[j]) + 1;
+                    }
                 }
             }
             // align
@@ -400,7 +410,7 @@ public:
     ///                    all roots of a switch function
     virtual void enumerate_resources(
         ILambda_resource_enumerator &enumerator,
-        DAG_node const              *root = NULL) const = 0;
+        DAG_node const              *root = NULL) = 0;
 
     /// Register a texture resource mapping.
     ///
@@ -661,6 +671,17 @@ public:
     /// \returns  the requested expression lambda index or ~0, if the index is invalid or
     ///           the special lambda function has not been set
     virtual size_t get_special_lambda_function_index(Special_kind kind) const = 0;
+
+    /// Returns the number of distribution function handles referenced by this
+    /// distribution function.
+    virtual size_t get_df_handle_count() const = 0;
+
+    /// Returns a distribution function handle referenced by this distribution function.
+    ///
+    /// \param index  the index of the handle to return
+    ///
+    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
+    virtual const char* get_df_handle(size_t index) const = 0;
 };
 
 /// A Link unit used by code generators.
@@ -796,6 +817,9 @@ public:
     /// The name of the option to forbid local functions inside material bodies.
     #define MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS "no_local_func_calls"
 
+    /// The name of the option that enabled unsafe math optimizations.
+    #define MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS "unsafe_math_optimizations"
+
     /// Compile a module.
     /// \param      module  The module to compile.
     /// \returns            The generated code.
@@ -852,6 +876,9 @@ class ICode_generator_jit : public
     /// The name of the option to steer linking of libdevice.
     #define MDL_JIT_OPTION_LINK_LIBDEVICE "jit_link_libdevice"
 
+    /// The name of the option to steer linking version of libbsdf to be linked.
+    #define MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE "jit_link_libbsdf_df_handle_slot_mode"
+
     /// The name of the option to map strings to IDs.
     #define MDL_JIT_OPTION_MAP_STRINGS_TO_IDS "jit_map_strings_to_ids"
 
@@ -882,6 +909,13 @@ class ICode_generator_jit : public
 
     /// The name of the option to enable the HLSL resource data struct argument.
     #define MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA "jit_hlsl_use_resource_data"
+
+    /// The name of the option specifying a comma-separated list of names for which scene data
+    /// may be available in the renderer.
+    /// For names not in the list, scene::data_isvalid will always return false and
+    /// the scene::data_lookup_* functions will always return the provided default value.
+    /// Use "*" to specify that scene data for any name may be available.
+    #define MDL_JIT_OPTION_SCENE_DATA_NAMES "jit_scene_data_names"
 
 public:
     /// The compilation mode for whole module compilation.
@@ -1109,6 +1143,30 @@ public:
     /// \return the library as LLVM bitcode representation
     virtual unsigned char const *get_libdevice_for_gpu(
         size_t   &size) = 0;
+
+    /// Get the resolution of the libbsdf multi-scattering lookup table data.
+    ///
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multiscatter kind
+    /// \param[out] theta       will contain the number of IOR values when data is available
+    /// \param[out] roughness   will contain the number of roughness values when data is available
+    /// \param[out] ior         will contain the number of theta values when data is available
+    ///
+    /// \returns                true if there is data for this semantic (BSDF)
+    virtual bool get_libbsdf_multiscatter_data_resolution(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t &theta,
+        size_t &roughness,
+        size_t &ior) const = 0;
+
+    /// Get access to the libbsdf multi-scattering lookup table data.
+    ///
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multiscatter kind
+    /// \param[out] size       the size of the data
+    ///
+    /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
+    virtual unsigned char const *get_libbsdf_multiscatter_data(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &size) const = 0;
 
     /// Create a link unit.
     ///

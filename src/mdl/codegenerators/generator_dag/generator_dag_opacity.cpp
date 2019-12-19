@@ -251,6 +251,7 @@ private:
 
         case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             break;
 
         default:
@@ -299,6 +300,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
 
             return analyze_glossy_bsdf(bsdf);
 
@@ -376,6 +378,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
 
             return analyze_elemental_bsdf(bsdf);
 

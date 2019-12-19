@@ -174,6 +174,8 @@ public:
     ///                      expression.
     ///                - -5: The material instance or function call referenced by "name" is
     ///                      a parameter default and therefore cannot be used in a call.
+    ///                - -6: The material instance or function call referenced by "name" is
+    ///                      invalid and therefore cannot be used in a call.
     virtual Sint32 set_call( const char* name) = 0;
 };
 

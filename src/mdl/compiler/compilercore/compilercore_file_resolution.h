@@ -503,8 +503,7 @@ class File_handle
     friend class Allocator_builder;
 public:
 
-    enum Kind
-    {
+    enum Kind {
         FH_FILE,
         FH_ARCHIVE,
         FH_MDLE,
@@ -839,6 +838,13 @@ public:
     /// \returns    The absolute MDL url of the resource or NULL.
     char const *get_mdl_url() const MDL_FINAL;
 
+    /// Returns the associated hash of this resource.
+    ///
+    /// \param[out]  get the hash value (16 bytes)
+    ///
+    /// \return true if this resource has an associated hash value, false otherwise
+    bool get_resource_hash(unsigned char hash[16]) MDL_FINAL;
+
     /// Constructor.
     ///
     /// \param alloc             the allocator
@@ -902,6 +908,14 @@ public:
     /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
     /// \returns    The absolute MDL url of the resource or NULL.
     char const *get_mdl_url() const MDL_FINAL;
+
+    /// Returns the associated hash of this resource.
+    ///
+    /// \param[out]  get the hash value (16 bytes)
+    ///
+    /// \return true if this resource has an associated hash value, false otherwise
+    bool get_resource_hash(unsigned char hash[16]) MDL_FINAL;
+
     /// Constructor.
     ///
     /// \param alloc             the allocator

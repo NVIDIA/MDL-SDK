@@ -80,11 +80,18 @@ public:
 
     mdl_d3d12::Scene_node* get_selected_camera() const;
 
+    void set_reload_material_callback(
+        std::function<void(mdl_d3d12::Mdl_material* material)> callback) 
+    {
+        m_reload_material_callback = callback; 
+    }
+
 private:
     mdl_d3d12::Base_application* m_app;
     mdl_d3d12::ComPtr<ID3D12DescriptorHeap> m_ui_heap;
 
     mdl_d3d12::Mdl_material* m_selected_material;
+    std::function<void(mdl_d3d12::Mdl_material* material)> m_reload_material_callback;
 
     std::unordered_map<std::string, mdl_d3d12::Scene_node*> m_camera_map;
     std::string m_selected_camera;

@@ -31,13 +31,6 @@
 #include <string>
 #include <vector>
 
-namespace mi
-{
-    namespace base
-    {
-        enum Message_severity;
-    }
-}
 namespace mdlm
 {
     /// Some utility routines
@@ -153,12 +146,25 @@ namespace mdlm
         static std::string unique_file_in_folder(const std::string & folder);
 
         static std::string temp_directory_path();
+
+        static std::vector<std::string> split(const std::string &s, char delim);
     };
+
     template<class T> std::string to_string(const T & value)
     {
         std::stringstream str;
         str << value;
         return str.str();
+    }
+
+    template<typename Out>
+    void split(const std::string &s, char delim, Out result)
+    {
+        std::stringstream ss(s);
+        std::string item;
+        while (std::getline(ss, item, delim)) {
+            *(result++) = item;
+        }
     }
 
 } // namespace mdlm

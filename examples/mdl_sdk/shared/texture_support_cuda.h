@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/texture_support_cuda.h
+// examples/mdl_sdk/shared/texture_support_cuda.h
 //
 // This file contains the implementations and the vtables of the texture access functions.
 

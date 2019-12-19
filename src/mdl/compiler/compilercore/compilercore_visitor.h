@@ -43,6 +43,7 @@ class IDeclaration_annotation;
 class IDeclaration_constant;
 class IDeclaration_function;
 class IDeclaration_module;
+class IDeclaration_namespace_alias;
 class IDeclaration_import;
 class IDeclaration_invalid;
 class IDeclaration_type_alias;
@@ -246,6 +247,9 @@ public:
     virtual bool pre_visit(IDeclaration_module *mod_decl);
     virtual void post_visit(IDeclaration_module *mod_decl);
 
+    virtual bool pre_visit(IDeclaration_namespace_alias *alias_decl);
+    virtual void post_visit(IDeclaration_namespace_alias *alias_decl);
+
     virtual bool pre_visit(IExpression_invalid *expr);
     virtual void post_visit(IExpression_invalid *expr);
 
@@ -322,6 +326,7 @@ private:
     void do_variable_decl(IDeclaration_variable const *var_decl);
     void do_function_decl(IDeclaration_function const *fkt_decl);
     void do_module_decl(IDeclaration_module const *mod_decl);
+    void do_namespace_alias(IDeclaration_namespace_alias const *alias_decl);
     void do_declaration(IDeclaration const *decl);
     void do_named_argument(IArgument_named const *arg);
     void do_positional_argument(IArgument_positional const *arg);

@@ -191,7 +191,7 @@ public:
 
 
     /** \brief Sets the lowest \c bit_count bits to those provided in \p value. */
-    Bitset(Data_t value);
+    explicit Bitset(Data_t value);
 
 
     /** \brief Accesses the \p bit_index'th bit. */
@@ -223,6 +223,7 @@ public:
      This function checks if this set is a superset of \p mask.
      */
     bool all(const Bitset& mask) const;
+    bool all(Data_t mask) const;
 
 
     /** \brief Checks if any of the bits present in \p mask are present in this set.
@@ -230,6 +231,7 @@ public:
      This function checks if this and \p mask are not disjoint.
      */
     bool any(const Bitset& mask) const;
+    bool any(Data_t mask) const;
 
 
     /** \brief Checks if any bit is set in this set. */
@@ -241,6 +243,7 @@ public:
      This function checks if this and \p mask are disjoint.
      */
     bool none(const Bitset& mask) const;
+    bool none(Data_t mask) const;
 
 
     /** \brief Checks if no bit is set in this set. */

@@ -572,10 +572,10 @@ char const *Module::get_filename() const
     return m_filename;
 }
 
-// Get the language version.
-void Module::get_version(int &major, int &minor) const
+// Convert a MDL version into major, minor pair.
+void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
 {
-    switch (m_mdl_version) {
+    switch (version) {
     case IMDL::MDL_VERSION_1_0:     major = 1; minor = 0; return;
     case IMDL::MDL_VERSION_1_1:     major = 1; minor = 1; return;
     case IMDL::MDL_VERSION_1_2:     major = 1; minor = 2; return;
@@ -583,10 +583,17 @@ void Module::get_version(int &major, int &minor) const
     case IMDL::MDL_VERSION_1_4:     major = 1; minor = 4; return;
     case IMDL::MDL_VERSION_1_5:     major = 1; minor = 5; return;
     case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
+    case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
     }
     MDL_ASSERT(!"MDL version not known");
     major = 0;
     minor = 0;
+}
+
+// Get the language version.
+void Module::get_version(int &major, int &minor) const
+{
+    get_version(m_mdl_version, major, minor);
 }
 
 // Set the language version.
@@ -740,7 +747,7 @@ void Module::add_declaration(IDeclaration const *decl)
     m_is_analyzed = m_is_valid = false;
 }
 
-/// Add an import.
+/// Add an import at the end of all other imports or namespace aliases.
 void Module::add_import(char const *name)
 {
     IQualified_name     *qname              = qname_from_cstring(name);
@@ -748,7 +755,9 @@ void Module::add_import(char const *name)
     import_declaration->add_name(qname);
 
     Declaration_vector::iterator it(m_declarations.begin()), end(m_declarations.end());
-    while (it != end && (*it)->get_kind() == IDeclaration::DK_IMPORT)
+    while (it != end &&
+        ((*it)->get_kind() == IDeclaration::DK_IMPORT ||
+         (*it)->get_kind() == IDeclaration::DK_NAMESPACE_ALIAS))
         ++it;
     m_declarations.insert(it, import_declaration);
 
@@ -1521,6 +1530,7 @@ char const *Module::mangle_dag_name(
         case IDefinition::DK_MEMBER:
         case IDefinition::DK_PARAMETER:
         case IDefinition::DK_ARRAY_SIZE:
+        case IDefinition::DK_NAMESPACE:
             // no mangled name
             return NULL;
         case IDefinition::DK_ANNOTATION:
@@ -2016,7 +2026,11 @@ IExpression *Module::clone_expr(
         {
             IExpression_unary const *unexpr = cast<IExpression_unary>(expr);
             IExpression const *arg = clone_expr(unexpr->get_argument(), modifier);
-            res = m_expr_factory.create_unary(unexpr->get_operator(), arg);
+            IExpression_unary *res_unexpr = m_expr_factory.create_unary(unexpr->get_operator(), arg);
+            if (res_unexpr->get_operator() == IExpression_unary::OK_CAST) {
+                res_unexpr->set_type_name(clone_name(unexpr->get_type_name(), modifier));
+            }
+            res = res_unexpr;
             break;
         }
     case IExpression::EK_BINARY:
@@ -4070,7 +4084,7 @@ int Module::promote_call_arguments(
             return param_index;
         }
     }
-    if (rules & PR_WIDTH_HEIGTH_ADD_UV_TILE) {
+    if (rules & PR_WIDTH_HEIGHT_ADD_UV_TILE) {
         if (param_index == 0) {
             // add int2(0) as 1. argument
             ISymbol const *sym_int2 = m_sym_tab.get_symbol("int2");
@@ -4146,14 +4160,39 @@ int Module::promote_call_arguments(
             IArgument const   *a = call->get_argument(5);
             if (a->get_kind() == IArgument::AK_POSITIONAL) {
                 arg = m_expr_factory.create_positional_argument(hair_call);
-            }
-            else {
+            } else {
                 ISymbol const *sh = m_name_factory.create_symbol("hair");
                 ISimple_name const * sn_hair = m_name_factory.create_simple_name(sh);
                 arg = m_expr_factory.create_named_argument(sn_hair, hair_call);
             }
             call->add_argument(arg);
 
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_GLOSSY_ADD_MULTISCATTER) {
+        if (param_index == 2) {
+            // add color(0) as 3. argument for glossy bsdfs
+            ISymbol const *sym_color = m_sym_tab.get_symbol("color");
+
+            ISimple_name *sn_color = m_name_factory.create_simple_name(sym_color);
+
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn_color);
+
+            IType_name *tn = m_name_factory.create_type_name(qn);
+
+            IExpression_reference *ref = m_expr_factory.create_reference(tn);
+            IExpression_call      *color_call = m_expr_factory.create_call(ref);
+
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e  = m_expr_factory.create_literal(v);
+            IArgument const   *a  = m_expr_factory.create_positional_argument(e);
+
+            color_call->add_argument(a);
+
+            arg = m_expr_factory.create_positional_argument(color_call);
+            call->add_argument(arg);
             return param_index + 1;
         }
     }
@@ -4517,8 +4556,7 @@ static IType_name const *promote_name(
         } else {
             return tn;
         }
-    }
-    else {
+    } else {
         sn               = qn->get_component(n_components -1);
         sym              = sn->get_symbol();
         char const *name = sym->get_name();
@@ -4601,6 +4639,18 @@ static IType_name const *promote_name(
                                 rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
                                 n = "color_fresnel_layer";
                             }
+                        } else if (minor == 5) {
+                            // all functions deprecated after MDL 1.5
+                            if (n == "simple_glossy_bsdf" ||
+                                n == "backscattering_glossy_reflection_bsdf" ||
+                                n == "microfacet_beckmann_smith_bsdf" ||
+                                n == "microfacet_ggx_smith_bsdf" ||
+                                n == "microfacet_beckmann_vcavities_bsdf" ||
+                                n == "microfacet_ggx_vcavities_bsdf" ||
+                                n == "ward_geisler_moroder_bsdf")
+                            {
+                                rules = Module::PR_GLOSSY_ADD_MULTISCATTER;
+                            }
                         }
                     }
                 } else if (strcmp(package->get_name(), "state") == 0) {
@@ -4617,9 +4667,9 @@ static IType_name const *promote_name(
                         if (minor == 3) {
                             // all functions deprecated after MDL 1.3
                             if (n == "width") {
-                                rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
+                                rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
                             } else if (n == "height") {
-                                rules = Module::PR_WIDTH_HEIGTH_ADD_UV_TILE;
+                                rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
                             } else if (n == "texel_float") {
                                 rules = Module::PR_TEXEL_ADD_UV_TILE;
                             } else if (n == "texel_float2") {

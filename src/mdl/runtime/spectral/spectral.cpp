@@ -233,6 +233,12 @@ static float const tf_xyz_to_aces[] = {
      0.000000000000000f,  0.000000000000000f,  0.991252018200499f
 };
 
+static float const tf_xyz_to_acescg[] = {
+     1.64110464846739856f, -0.32481937949200446f, -0.23643640375142377f,
+    -0.66364264630652392f,  1.61528239536072316f,  0.01675583735671893f,
+     0.01172343360382976f, -0.00828552987826917f,  0.98852465086629981f
+};
+
 const float *get_XYZ_to_cs(const Color_space_id cs)
 {
     switch (cs)
@@ -245,6 +251,8 @@ const float *get_XYZ_to_cs(const Color_space_id cs)
             return tf_xyz_to_srgb;
         case CS_ACES:
             return tf_xyz_to_aces;
+        case CS_ACEScg:
+            return tf_xyz_to_acescg;
         case CS_Rec2020:
             return tf_xyz_to_rec2020;
     }
@@ -260,6 +268,12 @@ static float const tf_aces_to_xyz[] = {
     0.952552395938186f, 0.000000000000000f,  0.000093678631660f,
     0.343966449765075f, 0.728166096613486f, -0.072132546378561f,
     0.000000000000000f, 0.000000000000000f,  1.008825184351586f
+};
+
+static float const tf_acescg_to_xyz[] = {
+    0.66242137586444849f, 0.13400828779274149f, 0.15616717971318694f,
+    0.27221523580404405f, 0.67410229616954809f, 0.05368246802640798f,
+   -0.00557437342943430f, 0.00406085720584065f, 1.01020644376967783f
 };
 
 static float const tf_rec2020_to_xyz[] = {
@@ -281,6 +295,8 @@ const float *get_cs_to_XYZ(const Color_space_id cs)
             return tf_srgb_to_xyz;
         case CS_ACES:
             return tf_aces_to_xyz;
+        case CS_ACEScg:
+            return tf_acescg_to_xyz;
         case CS_Rec2020:
             return tf_rec2020_to_xyz;
     }
@@ -393,6 +409,7 @@ void spectrum_to_cs_refl(
             illuminant = D65;
             break;
         case CS_ACES:
+        case CS_ACEScg:
             illuminant = D60;
             break;
     }
@@ -518,6 +535,7 @@ void cs_refl_to_spectrum(
             illum_cs = (float)(1.0 / 3.0);
             break;
         case CS_ACES:
+        case CS_ACEScg:
             chroma_grid_info = &chroma_grid_info_d60;
             chroma_cells = chroma_cells_d60;
             chroma_spectra = chroma_spectra_d60;

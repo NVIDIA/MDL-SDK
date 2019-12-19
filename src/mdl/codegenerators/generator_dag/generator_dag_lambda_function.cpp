@@ -201,6 +201,9 @@ Lambda_function::Lambda_function(
 {
     // CSE is always enabled when creating a lambda function
     m_node_factory.enable_cse(true);
+
+    // FIXME: should we allow unsafe math here?
+    m_node_factory.enable_unsafe_math_opt(false);
 }
 
 // Get the internal space from the execution context.
@@ -499,10 +502,12 @@ public:
     /// \param bsdf_measurements  a list that will be filled with unique found bsdf measurements
     Resource_collector(
         IAllocator *alloc,
+        Lambda_function &lambda_func,
         Resource_list &textures,
         Resource_list &light_profiles,
         Resource_list &bsdf_measurements)
-    : m_textures(textures)
+    : m_lambda_func(lambda_func)
+    , m_textures(textures)
     , m_light_profiles(light_profiles)
     , m_bsdf_measurements(bsdf_measurements)
     , m_found_resources(Resource_set::key_compare(), alloc)
@@ -550,7 +555,46 @@ public:
     /// \param call  the call that is visited
     void visit(DAG_call *call) MDL_FINAL
     {
-        // do nothing
+        // register multiscatter BSDF data textures
+        IValue_texture::Bsdf_data_kind bsdf_data_kind = IValue_texture::BDK_NONE;
+        switch (call->get_semantic()) {
+        case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_GGX_SMITH_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BECKMANN_VC_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_GGX_VC_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_SHEEN_MULTISCATTER;
+            break;
+        default:
+            break;
+        }
+
+        if (bsdf_data_kind != IValue_texture::BDK_NONE) {
+            IValue_factory *vf = m_lambda_func.get_value_factory();
+            IValue const *v = vf->create_bsdf_data_texture(
+                bsdf_data_kind,
+                /*tag_value=*/ 0,
+                /*tag_version=*/ 0);
+            if (m_found_resources.insert(v).second)  // inserted for first time?
+                m_textures.push_back(v);
+        }
     }
 
     /// Post-visit a Parameter.
@@ -572,6 +616,7 @@ public:
     }
 
 private:
+    Lambda_function &m_lambda_func;
     Resource_list &m_textures;
     Resource_list &m_light_profiles;
     Resource_list &m_bsdf_measurements;
@@ -583,7 +628,7 @@ private:
 /// Enumerate all used texture resources of this lambda function.
 void Lambda_function::enumerate_resources(
     ILambda_resource_enumerator &enumerator,
-    DAG_node const              *root) const
+    DAG_node const              *root)
 {
     typedef Resource_collector::Resource_list Res_list;
 
@@ -591,7 +636,8 @@ void Lambda_function::enumerate_resources(
     Res_list           textures(get_allocator());
     Res_list           light_profiles(get_allocator());
     Res_list           bsdf_measurements(get_allocator());
-    Resource_collector collector(get_allocator(), textures, light_profiles, bsdf_measurements);
+    Resource_collector collector(
+        get_allocator(), *this, textures, light_profiles, bsdf_measurements);
 
     if (root != NULL) {
         walker.walk_node(const_cast<DAG_node *>(root), &collector);
@@ -1681,7 +1727,6 @@ bool Lambda_function::may_use_varying_state(
                 switch (sema) {
                 case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
                 case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
-                case mi::mdl::IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
                 case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
                     // those never access the state
                     break;
@@ -2232,6 +2277,7 @@ public:
     , m_node_info_map(0, Node_info_map::hasher(), Node_info_map::key_equal(), alloc)
     , m_flags(FL_NONE)
     , m_allow_double_expr_lambdas(allow_double_expr_lambdas)
+    , m_handle_name_map(0, Handle_name_map::hasher(), Handle_name_map::key_equal(), alloc)
     {
     }
 
@@ -2276,6 +2322,28 @@ public:
 
                     if (needs_ior(sema))
                         m_flags |= FL_NEEDS_MATERIAL_IOR;
+
+                    if (is_elemental_df_semantics(sema)) {
+                        DAG_node const *handle_node = call->get_argument("handle");
+                        MDL_ASSERT(handle_node && is<DAG_constant>(handle_node) &&
+                            "Elemental DF must have a constant handle argument");
+                        if (handle_node != NULL && is<DAG_constant>(handle_node)) {
+                            DAG_constant const *handle_const = cast<DAG_constant>(handle_node);
+                            IValue const *handle_val = handle_const->get_value();
+                            IValue_string const *handle_str = as<IValue_string>(handle_val);
+                            MDL_ASSERT(handle_str != NULL && "DF handle must be string");
+                            if (handle_str != NULL) {
+                                char const *handle_name = handle_str->get_value();
+                                Handle_name_map::const_iterator it =
+                                    m_handle_name_map.find(handle_name);
+                                if (it == m_handle_name_map.end()) {
+                                    // the handle is not known, yet -> register it
+                                    m_handle_name_map[handle_name] =
+                                        m_dist_func.add_df_handle(handle_name);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 res = is_eval_state_dependent_direct(call);
@@ -2727,6 +2795,7 @@ private:
             case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
             case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
             case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+            case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
                 return true;
 
@@ -2754,6 +2823,7 @@ private:
             case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
             case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
             case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+            case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
                 return true;
 
@@ -2920,6 +2990,16 @@ private:
 
     /// If true, expression lambdas may be created for double values.
     bool m_allow_double_expr_lambdas;
+
+    typedef hash_map<
+        char const *,
+        size_t,
+        cstring_hash,
+        cstring_equal_to
+    >::Type Handle_name_map;
+
+    /// Maps from handle names to DF local handle IDs.
+    Handle_name_map m_handle_name_map;
 };
 
 
@@ -3095,6 +3175,7 @@ Distribution_function::Distribution_function(
     , m_expr_lambdas(alloc)
     , m_deriv_infos_calculated(false)
     , m_deriv_infos(alloc)
+    , m_df_handles(alloc)
 {
     Lambda_function *lambda = impl_cast<Lambda_function>(m_main_df.get());
 
@@ -3179,6 +3260,20 @@ size_t Distribution_function::get_special_lambda_function_index(Special_kind kin
 {
     MDL_ASSERT(kind < SK_NUM_KINDS);
     return m_special_lambdas[kind];
+}
+
+// Returns the number of distribution function handles referenced by this distribution function.
+size_t Distribution_function::get_df_handle_count() const
+{
+    return m_df_handles.size();
+}
+
+// Returns a distribution function handle referenced by this distribution function.
+char const *Distribution_function::get_df_handle(size_t index) const
+{
+    if (index >= m_df_handles.size())
+        return NULL;
+    return m_df_handles[index];
 }
 
 // Get the derivative information if they were requested during initialization.

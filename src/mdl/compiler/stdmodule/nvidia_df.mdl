@@ -30,7 +30,7 @@
 // additional BSDF models support by NVIDIA Iray
 //
 
-mdl 1.5;
+mdl 1.6;
 
 using ::anno import hard_range;
 import ::df::*;
@@ -149,23 +149,26 @@ export bsdf legacy_mcp_glossy_bsdf(
 ) [[ intrinsic() ]];
 
 
-export bsdf microfacet_sin_k_smith_bsdf(
-    float                    roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
-    float                    roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
-    color                    tint        = color(1.0),
-    float3                   tangent_u   = state::texture_tangent_u(0),
-    color                    multiscatter_tint = color(1.0),
-    uniform string           handle      = ""
-) [[ intrinsic() ]];
-
 export bsdf microfacet_sin_k_vcavities_bsdf(
     float                    roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                    roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                    tint        = color(1.0),
     float3                   tangent_u   = state::texture_tangent_u(0),
-    color                    multiscatter_tint = color(1.0),
+    color                    multiscatter_tint = color(0.0),
     uniform string           handle      = ""
 ) [[ intrinsic() ]];
+
+export bsdf microfacet_multiscatter_test_bsdf(
+    float                    roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
+    float                    roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                    tint        = color(1.0),
+    float3                   tangent_u   = state::texture_tangent_u(0),
+    int                      type        = 0           [[ hard_range(0, 4) ]],
+    uniform df::scatter_mode mode        = df::scatter_reflect,
+    color                    multiscatter_tint = color(0.0),
+    uniform string           handle      = ""
+) [[ intrinsic() ]];
+
 
 
 

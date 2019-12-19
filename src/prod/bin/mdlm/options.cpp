@@ -180,7 +180,7 @@ void Option::output_usage(ostream & ostr) const
 
     cout << endl << "Command \"" << get_command_string() << "\" help:" << endl;
     cout << string(indent, ' ') << std::left
-        << "mdlm [<option> ...] "
+        << "mdlm [<Global option> ...] "
         << get_command_string() << endl << endl;
 
     const vector<string> & hs = get_help_strings();
@@ -196,7 +196,7 @@ void Option::output_usage(ostream & ostr) const
     {
         cout << endl;
 
-        cout << string(indent * 2, ' ') << "Options:" << endl;
+        cout << string(indent * 2, ' ') << "Global options:" << endl;
 
         const Option_set & options = op->get_known_options();
         options.output_usage(ostr, false/*commands*/, indent * 4);
@@ -354,7 +354,7 @@ void Option_parser::output_usage(ostream & ostr) const
     // col 1 + col 2 < maxline
     int maxline = 120;
     ostringstream str;
-    str << "Usage: " << Application::theApp().name() << " [<option> ...] <command> [<arg> ...]";
+    str << "Usage: " << Application::theApp().name() << " [<Global option> ...] <command> [<arg> ...]";
     class Line
     {
         size_t m_maxlen;// for each line
@@ -405,11 +405,19 @@ void Option_parser::output_usage(ostream & ostr) const
     ostr << line.str() << endl << endl;
 
     //Options :
-    ostr << "Options:" << endl;
+    ostr << "Global options:" << endl;
 
     m_known_options.output_usage(ostr, false/*commands*/, indent);
 
     ostr << endl;
+
+    //Local Options :
+    ostr << endl;
+    ostr << "Local command options:" << endl;
+    line.reset();
+    line.indent(indent);
+    line.add_text("For descriptions of individual local command options use \"help <command>\"");
+    ostr << line.str() << endl << endl;
 
     //Commands:
     ostr << "Commands:" << endl;
@@ -514,7 +522,7 @@ MDLM_option_parser::MDLM_option_parser()
         option.add_help_string("New and old archives have same versions: No install, warning");
         option.add_help_string("New and old archives have incompatible versions: No install, warning");
         option.set_command_string(
-            "install [<options>] <archive> <SYSTEM | USER | directory>");
+            "install [<Local options>] <archive> <SYSTEM | USER | directory>");
         m_known_options.push_back(option);
     }
     option = Option(COMPATIBILITY);
@@ -541,7 +549,7 @@ MDLM_option_parser::MDLM_option_parser()
         option.add_option(key);
         option.add_help_string(
             "Create archive from the files contained in the given search path root directory");
-        option.set_command_string("create [<options>] <search-path-root> <archive>");
+        option.set_command_string("create [<Local options>] <search-path-root> <archive>");
         m_known_options.push_back(option);
     }
 
@@ -555,32 +563,29 @@ MDLM_option_parser::MDLM_option_parser()
     option.set_command_string("show <archive>");
     m_known_options.push_back(option);
 
-    //option = Option(LIST_ALL);
-    //option.set_number_of_parameters(0);
-    //option.add_name("list");
-    //option.set_is_command(true);
-    //option.add_help_string("List all installed archives");
-    //option.add_help_string("WARNING: Not implemented yet");
-    //option.set_command_string("list");
-    //m_known_options.push_back(option);
+    option = Option(LIST_ALL);
+    option.set_number_of_parameters(0);
+    option.add_name("list");
+    option.set_is_command(true);
+    option.add_help_string("List all installed archives");
+    option.set_command_string("list");
+    m_known_options.push_back(option);
 
-    //option = Option(LIST);
-    //option.set_number_of_parameters(1);
-    //option.add_name("list");
-    //option.set_is_command(true);
-    //option.add_help_string("List locations for the given archive");
-    //option.add_help_string("WARNING: Not implemented yet");
-    //option.set_command_string("list <archive>");
-    //m_known_options.push_back(option);
+    option = Option(LIST);
+    option.set_number_of_parameters(1);
+    option.add_name("list");
+    option.set_is_command(true);
+    option.add_help_string("List locations for the given archive");
+    option.set_command_string("list <archive>");
+    m_known_options.push_back(option);
 
-    //option = Option(REMOVE);
-    //option.set_number_of_parameters(1);
-    //option.add_name("remove");
-    //option.set_is_command(true);
-    //option.add_help_string("Uninstall the given archive");
-    //option.add_help_string("WARNING: Not implemented yet");
-    //option.set_command_string("remove <archive>");
-    //m_known_options.push_back(option);
+    option = Option(REMOVE);
+    option.set_number_of_parameters(1);
+    option.add_name("remove");
+    option.set_is_command(true);
+    option.add_help_string("Uninstall the given archive");
+    option.set_command_string("remove <archive>");
+    m_known_options.push_back(option);
 
     option = Option(DEPENDS);
     option.set_number_of_parameters(1);
@@ -622,9 +627,8 @@ MDLM_option_parser::MDLM_option_parser()
         option.set_is_command(true);
         option.add_option(user_file);
         option.add_help_string(
-            "Create an MDLE from a qualified material. "
-            "Additional files can be added using the '--file' option");
-        option.set_command_string("create-mdle [<options>] <qualified material name> <mdle path>");
+            "Create an MDLE from a qualified material. ");
+        option.set_command_string("create-mdle [<Local options>] <qualified material name> <mdle path>");
         m_known_options.push_back(option);
     }
 
@@ -634,7 +638,7 @@ MDLM_option_parser::MDLM_option_parser()
         option.add_name("check-mdle");
         option.set_is_command(true);
         option.add_help_string(
-            "Checks the integrity of an MDLE file. ");
+            "Check the integrity of an MDLE file. ");
         option.set_command_string("check-mdle <mdle path>");
         m_known_options.push_back(option);
     }

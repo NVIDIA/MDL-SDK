@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_df_cuda.cpp
+// examples/mdl_sdk/df_cuda/example_df_cuda.cpp
 //
 // Simple renderer using compiled BSDFs with a material parameter editor GUI.
 
@@ -39,7 +39,9 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+// shared example helpers
 #include "example_df_cuda.h"
+#include "lpe.h"
 
 // Enable this to dump the generated PTX code to stdout.
 // #define DUMP_PTX
@@ -76,6 +78,12 @@ inline float3 normalize(const float3 &d)
 {
     const float inv_len = 1.0f / length(d);
     return make_float3(d.x * inv_len, d.y * inv_len, d.z * inv_len);
+}
+
+inline float3 operator/(const float3& d, float s)
+{
+    const float inv_s = 1.0f / s;
+    return make_float3(d.x * inv_s, d.y * inv_s, d.z * inv_s);
 }
 
 
@@ -261,9 +269,9 @@ static std::string to_string(Display_buffer_options option)
 {
     switch (option)
     {
-        case Display_buffer_options::Beauty: return "Beauty";
-        case Display_buffer_options::Albedo: return "Albedo";
-        case Display_buffer_options::Normal: return "Normal";
+        case DISPLAY_BUFFER_LPE: return "Selected LPE";
+        case DISPLAY_BUFFER_ALBEDO: return "Albedo";
+        case DISPLAY_BUFFER_NORMAL: return "Normal";
         default: return "";
     }
 }
@@ -500,6 +508,42 @@ static void create_environment(
     free(env_accel_host);
 }
 
+
+static void upload_lpe_state_machine(
+    Kernel_params& kernel_params, 
+    LPE_state_machine& lpe_state_machine)
+{
+    uint32_t num_trans = lpe_state_machine.get_transition_count();
+    uint32_t num_states = lpe_state_machine.get_state_count();
+    kernel_params.lpe_num_transitions = num_trans;
+    kernel_params.lpe_num_states = num_states;
+
+    // free old data
+    if (kernel_params.lpe_state_table) 
+        check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(kernel_params.lpe_state_table)));
+    if (kernel_params.lpe_final_mask)
+        check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(kernel_params.lpe_final_mask)));
+
+    // state table
+    CUdeviceptr state_table = 0;
+    check_cuda_success(cuMemAlloc(&state_table, num_states * num_trans * sizeof(uint32_t)));
+    check_cuda_success(cuMemcpyHtoD(state_table, lpe_state_machine.get_state_table().data(),
+                       num_states * num_trans * sizeof(uint32_t)));
+    kernel_params.lpe_state_table = reinterpret_cast<uint32_t*>(state_table);
+
+    // final state masks
+    CUdeviceptr final_mask = 0;
+    check_cuda_success(cuMemAlloc(&final_mask, num_states * sizeof(uint32_t)));
+    check_cuda_success(cuMemcpyHtoD(final_mask, lpe_state_machine.get_final_state_masks().data(),
+                       num_states * sizeof(uint32_t)));
+    kernel_params.lpe_final_mask = reinterpret_cast<uint32_t*>(final_mask);
+
+    // tag ID for light sources as they don't store tags in this examples
+    kernel_params.default_gtag = lpe_state_machine.handle_to_global_tag("");
+    kernel_params.point_light_gtag = lpe_state_machine.handle_to_global_tag("point_light");
+    kernel_params.env_gtag = lpe_state_machine.handle_to_global_tag("env");
+}
+
 // Save current result image to disk
 static void save_result(
     const CUdeviceptr cuda_buffer,
@@ -563,7 +607,7 @@ struct Options {
     , fov(96.0f)
     , exposure(0.0f)
     , cam_pos(make_float3(0, 0, 3))
-    , light_pos(make_float3(0, 0, 0))
+    , light_pos(make_float3(10, 0, 5))
     , light_intensity(make_float3(0, 0, 0))
     , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
     , outputfile("output.exr")
@@ -961,7 +1005,8 @@ static void render_scene(
     Material_compiler::Material_definition_list const    &material_defs,
     Material_compiler::Compiled_material_list const      &compiled_materials,
     std::vector<size_t> const                            &arg_block_indices,
-    std::vector<Df_cuda_material> const                  &material_bundle)
+    std::vector<Df_cuda_material> const                  &material_bundle,
+    LPE_state_machine                                    &lpe_state_machine)
 {
     Window_context window_context;
     memset(&window_context, 0, sizeof(Window_context));
@@ -1025,7 +1070,12 @@ static void render_scene(
     memset(&kernel_params, 0, sizeof(Kernel_params));
     kernel_params.cam_focal = 1.0f / tanf(options.fov / 2 * float(2 * M_PI / 360));
     kernel_params.light_pos = options.light_pos;
-    kernel_params.light_intensity = options.light_intensity;
+    kernel_params.light_intensity = fmaxf(
+        options.light_intensity.x, fmaxf(options.light_intensity.y, options.light_intensity.z));
+    kernel_params.light_color = kernel_params.light_intensity > 0.0f
+        ? options.light_intensity / kernel_params.light_intensity 
+        : make_float3(1.0f, 0.9f, 0.5f);
+    kernel_params.env_intensity = 1.0f;
     kernel_params.iteration_start = 0;
     kernel_params.iteration_num = options.samples_per_iteration;
     kernel_params.mdl_test_type = options.mdl_test_type;
@@ -1035,6 +1085,10 @@ static void render_scene(
     kernel_params.use_derivatives = options.enable_derivatives;
     kernel_params.enable_auxiliary_output = options.enable_auxiliary_output;
     kernel_params.display_buffer_index = 0;
+
+    kernel_params.lpe_ouput_expression = 0;
+    kernel_params.lpe_state_table = nullptr;
+    kernel_params.lpe_final_mask = nullptr;
 
     // Setup camera
     float base_dist = length(options.cam_pos);
@@ -1076,10 +1130,13 @@ static void render_scene(
         image_api, options.hdrfile.c_str());
     kernel_params.env_accel = reinterpret_cast<Env_accel *>(env_accel);
 
+    // Setup GPU runtime of the LPE state machine
+    upload_lpe_state_machine(kernel_params, lpe_state_machine);
+
     // Setup file name for nogl mode
     std::string next_filename_base;
     std::string filename_base, filename_ext;
-    size_t dot_pos = options.outputfile.rfind(".");
+    size_t dot_pos = options.outputfile.rfind('.');
     if (dot_pos == std::string::npos) {
         filename_base = options.outputfile;
     } else {
@@ -1305,7 +1362,10 @@ static void render_scene(
                 if (anno_block) {
                     mi::neuraylib::Annotation_wrapper annos(anno_block.get());
                     mi::Size anno_index =
-                        annos.get_annotation_index("::anno::hard_range(float,float)");
+                        annos.get_annotation_index("::anno::soft_range(float,float)");
+                    if (anno_index == mi::Size(-1)) {
+                        anno_index = annos.get_annotation_index("::anno::hard_range(float,float)");
+                    }
                     if (anno_index != mi::Size(-1)) {
                         annos.get_annotation_param_value(anno_index, 0, param_info.range_min());
                         annos.get_annotation_param_value(anno_index, 1, param_info.range_max());
@@ -1416,7 +1476,7 @@ static void render_scene(
                 // Create material parameter editor window
                 ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
                 ImGui::SetNextWindowSize(
-                    ImVec2(360 * options.gui_scale, 475 * options.gui_scale),
+                    ImVec2(360 * options.gui_scale, 600 * options.gui_scale),
                     ImGuiCond_FirstUseEver);
                 ImGui::Begin("Settings");
                 ImGui::SetWindowFontScale(options.gui_scale);
@@ -1432,11 +1492,30 @@ static void render_scene(
                     ImGui::Text("Display options");
                     ImGui::Separator();
 
+                    std::string current_lpe_name = lpe_state_machine.get_expression_name(
+                        kernel_params.lpe_ouput_expression);
+                    if (ImGui::BeginCombo("LPE", current_lpe_name.c_str()))
+                    {
+                        for (uint32_t i = 0; i < lpe_state_machine.get_expression_count(); ++i)
+                        {
+                            const char* name = lpe_state_machine.get_expression_name(i);
+                            bool is_selected = (i == kernel_params.lpe_ouput_expression);
+                            if (ImGui::Selectable(name, is_selected))
+                            {
+                                kernel_params.lpe_ouput_expression = i;
+                                kernel_params.iteration_start = 0;
+                            }
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
                     std::string current_display_buffer =
                         to_string((Display_buffer_options) kernel_params.display_buffer_index);
                     if (ImGui::BeginCombo("buffer", current_display_buffer.c_str()))
                     {
-                        for (unsigned i = 0; i < (unsigned) Display_buffer_options::COUNT; ++i)
+                        for (unsigned i = 0; i < (unsigned) DISPLAY_BUFFER_COUNT; ++i)
                         {
                             const std::string &name = to_string((Display_buffer_options) i);
                             bool is_selected = (current_display_buffer == name);
@@ -1451,6 +1530,21 @@ static void render_scene(
                         ImGui::EndCombo();
                     }
                 }
+
+                ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                ImGui::Text("Light parameters");
+                ImGui::Separator();
+
+                if (ImGui::ColorEdit3("Point Light Color", &kernel_params.light_color.x))
+                    kernel_params.iteration_start = 0;
+
+                if (ImGui::SliderFloat("Point Light Intensity", 
+                    &kernel_params.light_intensity, 0.0f, 50000.0f))
+                        kernel_params.iteration_start = 0;
+
+                if (ImGui::SliderFloat("Environment Intensity Scale",
+                    &kernel_params.env_intensity, 0.0f, 10.0f))
+                        kernel_params.iteration_start = 0;
 
                 ImGui::Dummy(ImVec2(0.0f, 3.0f));
                 ImGui::Text("Material parameters");
@@ -1772,8 +1866,8 @@ static void render_scene(
                 // Update texture
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, display_buffer);
                 glBindTexture(GL_TEXTURE_2D, display_tex);
-                glTexImage2D(
-                    GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 
+                             width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
@@ -1810,6 +1904,8 @@ static void render_scene(
     check_cuda_success(cuMemFree(aux_albedo_buffer));
     check_cuda_success(cuMemFree(aux_normal_buffer));
     check_cuda_success(cuMemFree(material_buffer));
+    check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(kernel_params.lpe_state_table)));
+    check_cuda_success(cuMemFree(reinterpret_cast<CUdeviceptr>(kernel_params.lpe_final_mask)));
     check_cuda_success(cuModuleUnload(cuda_module));
     uninit_cuda(cuda_context);
 
@@ -1867,7 +1963,31 @@ Df_cuda_material create_cuda_material(
     mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
     mat.thin_walled.y = static_cast<unsigned int>(descs[4].function_index);
 
+    // init tag maps with zeros (optional)
+    memset(mat.bsdf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
+    memset(mat.edf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
     return mat;
+}
+
+void create_cuda_material_handles(
+    Df_cuda_material& mat, 
+    const mi::neuraylib::ITarget_code* target_code,
+    LPE_state_machine& lpe_state_machine)
+{
+    // fill tag ID list.
+    // allows to map from local per material Tag IDs to global per scene Tag IDs
+    // Note, calling 'LPE_state_machine::handle_to_global_tag(...)' registers the string handles
+    // present in the MDL in our 'scene' 
+    mat.bsdf_mtag_to_gtag_map_size = target_code->get_callable_function_df_handle_count(mat.bsdf.y);
+    for (mi::Size i = 0; i < mat.bsdf_mtag_to_gtag_map_size; ++i)
+        mat.bsdf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
+            target_code->get_callable_function_df_handle(mat.bsdf.y, i));
+
+    // same for all other distribution functions
+    mat.edf_mtag_to_gtag_map_size = target_code->get_callable_function_df_handle_count(mat.edf.y);
+    for (mi::Size i = 0; i < mat.edf_mtag_to_gtag_map_size; ++i)
+        mat.edf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
+            target_code->get_callable_function_df_handle(mat.edf.y, i));
 }
 
 static void usage(const char *name)
@@ -1909,7 +2029,7 @@ static void usage(const char *name)
     exit(EXIT_FAILURE);
 }
 
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     // Parse commandline options
     Options options;
@@ -1988,6 +2108,11 @@ int main(int argc, char* argv[])
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
 
     // Configure the MDL SDK
+
+    // Install logger
+    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
+    mdl_compiler->set_logger(logger.get());
+
     // Load plugin required for loading textures
     check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
 
@@ -2013,6 +2138,54 @@ int main(int argc, char* argv[])
     mi::Sint32 result = neuray->start();
     check_start_success(result);
 
+    // LPE state machine for rendering into multiple buffers
+    LPE_state_machine lpe_state_machine;
+    lpe_state_machine.handle_to_global_tag("point_light");  // register handles before building
+    lpe_state_machine.handle_to_global_tag("env");          // the state machine
+
+     // register other handles in the scene, e.g.: for object instances
+    lpe_state_machine.handle_to_global_tag("sphere");       // for illustration, not used currently
+    
+    // Add some common and custom LPEs       
+    lpe_state_machine.add_expression("Beauty", LPE::create_common(LPE::Common::Beauty));
+
+    lpe_state_machine.add_expression("Diffuse", LPE::create_common(LPE::Common::Diffuse));
+    lpe_state_machine.add_expression("Glossy", LPE::create_common(LPE::Common::Glossy));
+    lpe_state_machine.add_expression("Specular", LPE::create_common(LPE::Common::Specular));
+    lpe_state_machine.add_expression("SSS", LPE::create_common(LPE::Common::SSS));
+    lpe_state_machine.add_expression("Transmission", LPE::create_common(LPE::Common::Transmission));
+
+    lpe_state_machine.add_expression("Beauty-Env", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter()),
+        LPE::light("env") }));  // only light with the name 'env'
+
+    lpe_state_machine.add_expression("Beauty-PointLight", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter()),
+        LPE::light("point_light") })); // only light with the name 'point_light'
+
+    lpe_state_machine.add_expression("Beauty-Emission", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter()),
+        LPE::emission() })); // only emission
+
+
+    lpe_state_machine.add_expression("Beauty-Base", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter("base")),
+        LPE::light()})); // no emission
+
+    lpe_state_machine.add_expression("Beauty-Coat", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter("coat")),
+        LPE::light()})); // no emission
+        
+    lpe_state_machine.add_expression("Beauty-^Coat", LPE::sequence({
+        LPE::camera(),
+        LPE::zero_or_more(LPE::any_scatter("coat", false)),
+        LPE::any_light()})); // emission or light source
+
     {
         // Create a transaction
         mi::base::Handle<mi::neuraylib::IDatabase> database(
@@ -2030,7 +2203,8 @@ int main(int argc, char* argv[])
                 16,
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
-                options.enable_auxiliary_output);
+                options.enable_auxiliary_output,
+                /*df_handle_mode*/ "pointer");
 
             // List of materials in the scene
             std::vector<Df_cuda_material> material_bundle;
@@ -2109,9 +2283,17 @@ int main(int argc, char* argv[])
             mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
                 mc.generate_cuda_ptx());
 
+            // convert handles to tag IDs
+            for (auto& mat : material_bundle)
+                create_cuda_material_handles(mat, target_code.get(), lpe_state_machine);
+
             // Acquire image API needed to prepare the textures
             mi::base::Handle<mi::neuraylib::IImage_api> image_api(
                 neuray->get_api_component<mi::neuraylib::IImage_api>());
+
+            // when all scene elements that have handles are loaded and all handles as well as
+            // light path expressions are registered, the state machine can be constructed.
+            lpe_state_machine.build();
 
             // Render
             render_scene(
@@ -2123,7 +2305,8 @@ int main(int argc, char* argv[])
                 mc.get_material_defs(),
                 mc.get_compiled_materials(),
                 mc.get_argument_block_indices(),
-                material_bundle);
+                material_bundle,
+                lpe_state_machine);
         }
 
         transaction->commit();
@@ -2142,4 +2325,7 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8
 

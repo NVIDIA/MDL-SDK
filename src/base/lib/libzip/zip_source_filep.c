@@ -244,7 +244,9 @@ static int
 create_temp_output(struct read_file *ctx) {
     char *temp;
     int tfd;
+#ifndef __linux__
     mode_t mask;
+#endif
     FILE *tfp;
 
     if ((temp = (char *)malloc(strlen(ctx->fname) + 8)) == NULL) {

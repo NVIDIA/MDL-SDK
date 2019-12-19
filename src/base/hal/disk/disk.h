@@ -213,6 +213,9 @@ bool mkdir(
 bool rmdir(
     const char* path);
 
+bool rmdir_r(
+    const char* path);
+
 /// Set the current working directory.
 /// \param path the path
 /// \return success

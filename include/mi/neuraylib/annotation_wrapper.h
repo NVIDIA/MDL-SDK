@@ -83,10 +83,14 @@ public:
     /// Get the index of an annotation based on its name for one of the annotations.
     ///
     /// \param anno_name    The name of the annotation
+    /// \param offset       The first index to be considered in the search. If zero, the entire
+    ///                     annotation block is searched. 
     /// \return
     ///                  -  index:  of the annotation in case of success.
     ///                  -  -1:     If there is none with that name.
-    mi::Size get_annotation_index( const char* anno_name ) const;
+    mi::Size get_annotation_index(
+        const char* anno_name,
+        mi::Size offset = 0) const;
 
     /// Get the number of parameters of an annotation.
     ///
@@ -184,12 +188,14 @@ inline const char* Annotation_wrapper::get_annotation_name(mi::Size anno_index) 
     return anno->get_name();
 }
 
-inline mi::Size Annotation_wrapper::get_annotation_index(const char* anno_name) const
+inline mi::Size Annotation_wrapper::get_annotation_index(
+    const char* anno_name,
+    mi::Size offset) const
 {
     if (!m_anno_block)
         return static_cast<mi::Size>(-1);
 
-    for (mi::Size i = 0, n = get_annotation_count(); i < n; ++i)
+    for (mi::Size i = offset, n = get_annotation_count(); i < n; ++i)
         if (strcmp(anno_name, get_annotation_name(i)) == 0)
             return i;
 

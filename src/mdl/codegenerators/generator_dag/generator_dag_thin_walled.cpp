@@ -147,7 +147,7 @@ private:
             return ev->get_value() > 0;
         }
         // cannot fold
-        return assume_bad;        
+        return assume_bad;
     }
 
     /// Check bsdf components for no transmission.
@@ -259,6 +259,7 @@ private:
 
         switch (bsdf->get_semantic()) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             // no transmission at all
             return true;
 
@@ -792,6 +793,7 @@ private:
         // same call: check for equal structure
         switch (sema) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             // no transmission at all
             return true;
 

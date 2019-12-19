@@ -331,6 +331,10 @@ public:
 
     // ------------------- non-interface methods -------------------
 
+    /// Print namespace.
+    /// \param  ns    The namespace to print.
+    void print_namespace(IQualified_name const *name);
+
     /// Prints an annotation block.
     ///
     /// \param block   the annotation block or NULL

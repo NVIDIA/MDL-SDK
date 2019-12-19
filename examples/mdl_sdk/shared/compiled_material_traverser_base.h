@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/compiled_material_traverser_base.h
+// examples/mdl_sdk/shared/compiled_material_traverser_base.h
 //
 // Utility class for traversing compiled materials.
 // Derived classes override virtual functions to implement their logic.   
@@ -168,7 +168,7 @@ protected:
     //
     // Param:          material    The material that is traversed.
     // Param: [in,out] context     User defined context that is passed through without changes.
-    void traverse(const mi::neuraylib::ICompiled_material* material, void* context) const;
+    void traverse(const mi::neuraylib::ICompiled_material* material, void* context);
 
 
     // Called at the beginning of each traversal stage: Parameters, Temporaries and Body.
@@ -177,7 +177,7 @@ protected:
     // Param:          stage       The stage that was entered.
     // Param: [in,out] context     User defined context that is passed through without changes.
     virtual void stage_begin(const mi::neuraylib::ICompiled_material* material,
-                             Traveral_stage stage, void* context) const = 0;
+                             Traveral_stage stage, void* context) {};
 
 
     // Called at the end of each traversal stage: Parameters, Temporaries and Body.
@@ -186,7 +186,7 @@ protected:
     // Param:          stage       The stage that was finished.
     // Param: [in,out] context     User defined context that is passed through without changes.
     virtual void stage_end(const mi::neuraylib::ICompiled_material* material,
-                           Traveral_stage stage, void* context) const = 0;
+                           Traveral_stage stage, void* context) {};
 
 
     // Called when the traversal reaches a new element.
@@ -195,7 +195,7 @@ protected:
     // Param:          element     The element that was reached.
     // Param: [in,out] context     User defined context that is passed through without changes.
     virtual void visit_begin(const mi::neuraylib::ICompiled_material* material,
-                             const Traversal_element& element, void* context) const = 0;
+                             const Traversal_element& element, void* context) {};
 
 
 
@@ -211,7 +211,7 @@ protected:
     virtual void visit_child(const mi::neuraylib::ICompiled_material* material,
                              const Traversal_element& element,
                              mi::Size children_count, mi::Size child_index,
-                             void* context) const = 0;
+                             void* context) {};
 
 
 
@@ -221,7 +221,7 @@ protected:
     // Param:          element     The element that is finished.
     // Param: [in,out] context     User defined context that is passed through without changes.
     virtual void visit_end(const mi::neuraylib::ICompiled_material* material,
-                           const Traversal_element& element, void* context) const = 0;
+                           const Traversal_element& element, void* context) {};
 
 
 
@@ -256,7 +256,7 @@ private:
     // Param:          element     The element that is currently visited.
     // Param: [in,out] context     User defined context that is passed through without changes.
     void traverse(const mi::neuraylib::ICompiled_material* material,
-                  const Traversal_element& element, void* context) const;
+                  const Traversal_element& element, void* context);
 };
 
 #endif // COMPILED_MATERIAL_TRAVERSER_BASE_H

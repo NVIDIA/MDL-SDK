@@ -62,7 +62,6 @@ class MDL;
 class MDL_binary_serializer;
 class DAG_serializer;
 class DAG_deserializer;
-class Type_collector;
 class Dependence_node;
 
 ///
@@ -97,6 +96,8 @@ public:
         INCLUDE_LOCAL_ENTITIES        = 0x0002,
         /// If set, mark DAG backend generated entities.
         MARK_GENERATED_ENTITIES       = 0x0004,
+        /// If set, allow unsafe math optimizations.
+        UNSAFE_MATH_OPTIMIZATIONS     = 0x0008,
     };
 
     /// Bit set of compile options.
@@ -321,6 +322,8 @@ public:
         , m_parameters(alloc)
         , m_annotations(alloc)
         , m_return_annos(alloc)
+        , m_temporaries(alloc)
+        , m_body(NULL)
         , m_refs(alloc)
         , m_hash()
         , m_properties(0u)
@@ -339,6 +342,15 @@ public:
 
         /// Add a return annotation.
         void add_return_annotation(DAG_node const *anno) { m_return_annos.push_back(anno); }
+
+        /// Add a temporary.
+        size_t add_temporary(DAG_node const *temp) {
+            m_temporaries.push_back(temp);
+            return m_temporaries.size() - 1;
+        }
+
+        /// Set the material body.
+        void set_body(DAG_node const *body) { m_body = body; }
 
         /// Set the function properties.
         void set_properties(unsigned props) { m_properties = props; }
@@ -383,6 +395,15 @@ public:
         /// Get the return annotation at index.
         DAG_node const *get_return_annotation(size_t idx) const { return m_return_annos[idx]; }
 
+        /// Get the temporary count.
+        size_t get_temporary_count() const { return m_temporaries.size(); }
+
+        /// Get the temporary at index.
+        DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
+
+        /// Get the material body.
+        DAG_node const *get_body() const { return m_body; }
+
         /// Get the references count.
         size_t get_ref_count() const { return m_refs.size(); }
 
@@ -404,6 +425,8 @@ public:
         Param_vector          m_parameters;    ///< The material parameters.
         Dag_vector            m_annotations;   ///< The annotations of the function.
         Dag_vector            m_return_annos;  ///< The return annotations of the function.
+        Dag_vector            m_temporaries;   ///< The function temporaries.
+        DAG_node const        *m_body;         ///< The IR body of the function.
         String_vector         m_refs;          ///< The references of a function.
         DAG_hash              m_hash;          ///< The function hash value.
         unsigned              m_properties;    ///< The property flags of this function.
@@ -873,11 +896,13 @@ public:
 
         /// Creates a clone of a this material instance.
         ///
-        /// \param alloc  the allocator for the clone
-        /// \param flags  set of Clone_flags
+        /// \param alloc            the allocator for the clone
+        /// \param flags            set of Clone_flags
+        /// \param unsafe_math_opt  enable unsafe math optimizations
         Material_instance *clone(
             IAllocator  *alloc,
-            Clone_flags flags) const;
+            Clone_flags flags,
+            bool        unsafe_math_opt) const;
 
         /// Dump the material instance DAG to "<name>_DAG.gv".
         ///
@@ -887,15 +912,17 @@ public:
     private:
         /// Constructor.
         ///
-        /// \param mdl             The MDL compiler interface.
-        /// \param alloc           The allocator.
-        /// \param material_index  The index of the material that creates this instance.
-        /// \param internal_space  The internal space for which to compile.
+        /// \param mdl                        The MDL compiler interface.
+        /// \param alloc                      The allocator.
+        /// \param material_index             The index of the material that creates this instance.
+        /// \param internal_space             The internal space for which to compile.
+        /// \param unsafe_math_optimizations  If true, allow unsafe math optimizations.
         Material_instance(
             IMDL        *mdl,
             IAllocator  *alloc,
             int          material_index,
-            char const  *internal_space);
+            char const  *internal_space,
+            bool        unsafe_math_optimizations);
 
     private:
         /// Set the material constructor.
@@ -1534,6 +1561,29 @@ public:
         int parameter_index,
         int annotation_index) const MDL_FINAL;
 
+    /// Get the number of temporaries used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The number of temporaries used by material.
+    int get_function_temporary_count(
+        int function_index) const MDL_FINAL;
+
+    /// Get the temporary at temporary_index used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \param temporary_index     The index of the temporary variable.
+    /// \returns                   The value of the temporary variable.
+    DAG_node const *get_function_temporary(
+        int function_index,
+        int temporary_index) const MDL_FINAL;
+
+    /// Get the body of the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The body of the function.
+    DAG_node const *get_function_body(
+        int function_index) const MDL_FINAL;
+
     /// Get the number of annotations of the material at material_index.
     /// \param material_index      The index of the material.
     /// \returns                   The number of annotations.
@@ -2025,16 +2075,6 @@ private:
     /// \param def   The definition.
     bool need_signature_suffix(IDefinition const *def) const;
 
-    /// Initialize code generator members from a definition.
-    ///
-    /// \param module          the (top-level) module
-    /// \param def             the definition
-    /// \param collector       the collector for indexable types
-    void collect_types(
-        IModule const     *module,
-        IDefinition const *def,
-        Type_collector    &collector);
-
     /// Compile the given entity to the DAG representation.
     ///
     /// \param dag_builder  the DAG builder to be used
@@ -2229,15 +2269,39 @@ private:
         Function_info        &func,
        Dependence_node const *node);
 
-    /// Build temporaries by traversing the DAG and creating them for nodes with phen-out > 1.
-    void build_temporaries();
-
-    /// Add a temporary.
+    /// Build temporaries for a material by traversing the DAG and creating them
+    /// for nodes with phen-out > 1.
     ///
+    /// \param mat_index   the index of the processed material
+    void build_material_temporaries(int mat_index);
+
+    /// Build temporaries for a function by traversing the DAG and creating them
+    /// for nodes with phen-out > 1.
+    ///
+    /// \param func_index  the index of the processed function
+    void build_function_temporaries(int func_index);
+
+    /// Add a material temporary.
+    ///
+    /// \param mat_index    The index of the material.
     /// \param node         The IR node defining the temporary.
+    ///
     /// \returns            The index of the temporary.
     ///
-    int add_temporary(DAG_node const *node);
+    int add_material_temporary(
+        int            mat_index,
+        DAG_node const *node);
+
+    /// Add a function temporary.
+    ///
+    /// \param func_index   The index of the function.
+    /// \param node         The IR node defining the temporary.
+    ///
+    /// \returns            The index of the temporary.
+    ///
+    int add_function_temporary(
+        int            func_index,
+        DAG_node const *node);
 
     /// Create a default enum.
     ///
@@ -2506,6 +2570,9 @@ private:
 
     /// The index of the current material.
     int m_current_material_index;
+
+    /// The index of the current function.
+    int m_current_function_index;
 
     /// If true, the "::anno" module must be additionally imported.
     bool m_needs_anno;

@@ -675,6 +675,9 @@ void Generated_code_executable_base<I>::set_function_prototype(
     char const *prototype)
 {
     MDL_ASSERT(index < m_func_infos.size());
+    if (index >= m_func_infos.size())
+        return;
+
     if (lang >= m_func_infos[index].m_prototypes.size()) {
         m_func_infos[index].m_prototypes.resize(lang + 1, string(this->get_allocator()));
     }
@@ -697,6 +700,44 @@ size_t Generated_code_executable_base<I>::add_function_info(
             arg_block_index));
 
     return m_func_infos.size() - 1;
+}
+
+// Get the number of distribution function handles referenced by a function.
+template <class I>
+size_t Generated_code_executable_base<I>::get_function_df_handle_count(size_t func_index) const
+{
+    if (func_index >= m_func_infos.size()) {
+        return 0;
+    }
+    return m_func_infos[func_index].m_df_handle_name_table.size();
+}
+
+// Get the name of a distribution function handle referenced by a function.
+template <class I>
+char const *Generated_code_executable_base<I>::get_function_df_handle(
+    size_t func_index, size_t handle_index) const
+{
+    if (func_index >= m_func_infos.size() ||
+            handle_index >= m_func_infos[func_index].m_df_handle_name_table.size()) {
+        return NULL;
+    }
+    return m_func_infos[func_index].m_df_handle_name_table[handle_index].c_str();
+}
+
+// Add the name of a distribution function handle referenced by a function.
+template <class I>
+size_t Generated_code_executable_base<I>::add_function_df_handle(
+    size_t func_index,
+    char const *handle_name)
+{
+    MDL_ASSERT(func_index < m_func_infos.size());
+    if (func_index >= m_func_infos.size())
+        return ~0;
+
+    m_func_infos[func_index].m_df_handle_name_table.push_back(
+        string(handle_name, this->get_allocator()));
+
+    return m_func_infos[func_index].m_df_handle_name_table.size() - 1;
 }
 
 // ----------------------------------- Generated_code_jit -----------------------------------

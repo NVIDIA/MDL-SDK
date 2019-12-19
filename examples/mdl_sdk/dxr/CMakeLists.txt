@@ -45,8 +45,12 @@ set(PROJECT_HEADERS
     "mdl_d3d12/descriptor_heap.h"
     "mdl_d3d12/gltf.h"
     "mdl_d3d12/mdl_d3d12.h"
-    "mdl_d3d12/mdl_material_info.h"
     "mdl_d3d12/mdl_material.h"
+    "mdl_d3d12/mdl_material_description.h"
+    "mdl_d3d12/mdl_material_info.h"
+    "mdl_d3d12/mdl_material_library.h"
+    "mdl_d3d12/mdl_material_target.h"
+    "mdl_d3d12/mdl_sdk.h"
     "mdl_d3d12/raytracing_pipeline.h"
     "mdl_d3d12/scene.h"
     "mdl_d3d12/shader.h"
@@ -67,6 +71,10 @@ set(PROJECT_SOURCES
     "mdl_d3d12/descriptor_heap.cpp"
     "mdl_d3d12/gltf.cpp"
     "mdl_d3d12/mdl_material.cpp"
+    "mdl_d3d12/mdl_material_description.cpp"
+    "mdl_d3d12/mdl_material_library.cpp"
+    "mdl_d3d12/mdl_material_target.cpp"
+    "mdl_d3d12/mdl_sdk.cpp"
     "mdl_d3d12/raytracing_pipeline.cpp"
     "mdl_d3d12/scene.cpp"
     "mdl_d3d12/shader.cpp"
@@ -87,7 +95,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME} WIN32
-    TYPE EXECUTABLE
+    TYPE WIN_EXECUTABLE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "dxr"
     SOURCES 
@@ -96,6 +104,7 @@ create_from_base_preset(
     ADDITIONAL_INCLUDE_DIRS
         "../../thirdparty/d3dx12"
         "../../thirdparty/gltf"
+    WINDOWS_UNICODE
 )
 
 # add dependencies
@@ -132,7 +141,7 @@ set(PROJECT_NAME examples-mdl_sdk-dxr_parallel)
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME} WIN32
-    TYPE EXECUTABLE
+    TYPE WIN_EXECUTABLE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "dxr_parallel"
     VS_PROJECT_NAME "dxr_parallel"
@@ -142,6 +151,7 @@ create_from_base_preset(
     ADDITIONAL_INCLUDE_DIRS
         "../../thirdparty/d3dx12"
         "../../thirdparty/gltf"
+    WINDOWS_UNICODE
 )
 
 # add dependencies

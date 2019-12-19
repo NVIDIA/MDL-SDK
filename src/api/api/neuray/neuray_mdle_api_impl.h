@@ -84,19 +84,19 @@ public:
     /// \return The MDL name of this resource value.
     char const *get_resource_name(
         const mi::mdl::IValue_resource* v,
-        bool support_strict_relative_path);
+        bool support_strict_relative_path) override;
 
     /// Number of resources files to encapsulate.
-    size_t get_resource_count() const;
+    size_t get_resource_count() const override;
 
     /// Get the resource path that should be used in the MDLE main module.
-    char const *get_mlde_resource_path(size_t index) const;
+    char const *get_mlde_resource_path(size_t index) const override;
 
     /// Get a stream reader interface that gives access to the requested resource data.
-    mi::mdl::IMDL_resource_reader *get_resource_reader(size_t index) const;
+    mi::mdl::IMDL_resource_reader *get_resource_reader(size_t index) const override;
 
     // Get a stream reader interface that gives access to the requested addition data file.
-    mi::mdl::IMDL_resource_reader *get_additional_data_reader(char const* path);
+    mi::mdl::IMDL_resource_reader *get_additional_data_reader(char const* path) override;
 
 private:
 

@@ -1434,13 +1434,7 @@ void Factory_impl::dump(
         case mi::IUuid::IID::hash32: {
             mi::base::Handle<const mi::IUuid> uuid( data->get_interface<mi::IUuid>());
             mi::base::Uuid u = uuid->get_uuid();
-            char buffer[65];
-            snprintf( buffer, sizeof( buffer),
-             "0x%08u,0x%04u,0x%04u,0x%02u,0x%02u,0x%02u,0x%02u,0x%02u,0x%02u,0x%02u,0x%02u",
-             u.m_id1, u.m_id2 & 0xffff, u.m_id2 >> 16,
-             u.m_id3 & 0xff, (u.m_id3 >> 8) & 0xff, (u.m_id3 >> 16) & 0xff, (u.m_id3 >> 24) & 0xff,
-             u.m_id4 & 0xff, (u.m_id4 >> 8) & 0xff, (u.m_id4 >> 16) & 0xff, (u.m_id4 >> 24) & 0xff);
-            s << buffer;
+            s << m_class_factory->uuid_to_string( u);
             return;
         }
 

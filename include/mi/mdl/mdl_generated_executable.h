@@ -304,6 +304,33 @@ public:
         Distribution_kind dist_kind,
         Function_kind func_kind,
         size_t arg_block_index) = 0;
+
+    /// Get the number of distribution function handles referenced by a function.
+    ///
+    /// \param func_index   the index of the function
+    ///
+    /// \return The number of distribution function handles referenced or \c 0, if the
+    ///         function is not a distribution function.
+    virtual size_t get_function_df_handle_count(size_t func_index) const = 0;
+
+    /// Get the name of a distribution function handle referenced by a function.
+    ///
+    /// \param func_index     The index of the function.
+    /// \param handle_index   The index of the handle.
+    ///
+    /// \return The name of the distribution function handle or \c NULL, if the
+    ///         function is not a distribution function or \p index is invalid.
+    virtual char const *get_function_df_handle(size_t func_index, size_t handle_index) const = 0;
+
+    /// Add the name of a distribution function handle referenced by a function.
+    ///
+    /// \param func_index     The index of the function.
+    /// \param handle_name    The name of the handle.
+    ///
+    /// \return The index of the added handle, or ~0, if the \p func_index was invalid.
+    virtual size_t add_function_df_handle(
+        size_t func_index,
+        char const *handle_name) = 0;
 };
 
 /// A handler for MDL runtime exceptions.

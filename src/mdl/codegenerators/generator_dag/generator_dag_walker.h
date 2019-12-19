@@ -104,6 +104,16 @@ public:
         Generated_code_dag::Material_instance::Slot slot,
         IDAG_ir_visitor                             *visitor);
 
+    /// Walk the IR nodes of a function, including temporaries.
+    ///
+    /// \param dag         the code DAG that will be visited
+    /// \param func_index  the index of the function to walk
+    /// \param visitor     the visitor
+    void walk_function(
+        Generated_code_dag *dag,
+        int                func_index,
+        IDAG_ir_visitor    *visitor);
+
     /// Walk a DAG IR node.
     ///
     /// \param node       the DAG IR node that will be visited

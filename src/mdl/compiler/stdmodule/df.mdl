@@ -25,11 +25,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.5;
+mdl 1.6;
 
-using anno import hard_range;
-using state import texture_tangent_u, normal, transform_vector, coordinate_space;
-import math::PI;
+using ::anno import hard_range;
+using ::state import texture_tangent_u, normal, transform_vector, coordinate_space;
+import ::math::PI;
 
 export enum scatter_mode {
     scatter_reflect,
@@ -61,7 +61,17 @@ export bsdf simple_glossy_bsdf(
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,6) ]];
+
+export bsdf simple_glossy_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode mode              = scatter_reflect,
+    uniform string       handle            = ""
+) [[ intrinsic(),since(1,6) ]];
 
 export bsdf backscattering_glossy_reflection_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -69,7 +79,16 @@ export bsdf backscattering_glossy_reflection_bsdf(
     color                tint        = color(1.0),
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform string       handle      = ""
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,6) ]];
+
+export bsdf backscattering_glossy_reflection_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform string       handle            = ""
+) [[ intrinsic(), since(1,6) ]];
 
 export bsdf measured_bsdf(
     uniform bsdf_measurement measurement,
@@ -85,7 +104,17 @@ export bsdf microfacet_beckmann_smith_bsdf(
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,6) ]];
+
+export bsdf microfacet_beckmann_smith_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode mode              = scatter_reflect,
+    uniform string       handle            = ""
+) [[ intrinsic(), since(1,6) ]];
 
 // anisotropic GGX distribution
 export bsdf microfacet_ggx_smith_bsdf(
@@ -95,7 +124,17 @@ export bsdf microfacet_ggx_smith_bsdf(
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,6) ]];
+
+export bsdf microfacet_ggx_smith_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode mode              = scatter_reflect,
+    uniform string handle                  = ""
+) [[ intrinsic(), since(1,6) ]];
 
 export bsdf microfacet_beckmann_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -104,7 +143,17 @@ export bsdf microfacet_beckmann_vcavities_bsdf(
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,6) ]];
+
+export bsdf microfacet_beckmann_vcavities_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode mode              = scatter_reflect,
+    uniform string       handle            = ""
+) [[ intrinsic(), since(1,6) ]];
 
 export bsdf microfacet_ggx_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -113,7 +162,17 @@ export bsdf microfacet_ggx_vcavities_bsdf(
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,6) ]];
+
+export bsdf microfacet_ggx_vcavities_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform scatter_mode mode              = scatter_reflect,
+    uniform string       handle            = ""
+) [[ intrinsic(), since(1,6) ]];
 
 export bsdf ward_geisler_moroder_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
@@ -121,7 +180,24 @@ export bsdf ward_geisler_moroder_bsdf(
     color                tint        = color(1.0),
     float3               tangent_u   = state::texture_tangent_u(0),
     uniform string       handle      = ""
-) [[ intrinsic(), since(1,1) ]];
+) [[ intrinsic(), since(1,1), removed(1,6) ]];
+
+export bsdf ward_geisler_moroder_bsdf(
+    float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
+    float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
+    color                tint              = color(1.0),
+    color                multiscatter_tint = color(0.0),
+    float3               tangent_u         = state::texture_tangent_u(0),
+    uniform string       handle            = ""
+) [[ intrinsic(), since(1,6) ]];
+
+
+export bsdf sheen_bsdf(
+    float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
+    color tint              = color(1.0),
+    color multiscatter_tint = color(0.0),
+    uniform string handle   = ""
+)  [[ intrinsic(), since(1,6) ]];
 
 export edf diffuse_edf (
     uniform string handle = ""
@@ -174,9 +250,17 @@ export vdf anisotropic_vdf (
 ) [[ intrinsic() ]];
 
 // recoloring of bsdf and edf
-export bsdf tint( color tint, bsdf base) [[ intrinsic() ]];
+export bsdf tint(color tint, bsdf base) [[ intrinsic() ]];
+
+export bsdf tint(
+    color reflection_tint,
+    color transmission_tint,
+    bsdf  base
+)  [[ intrinsic(), since(1,6) ]];
 
 export edf tint(uniform color tint, edf base) [[ intrinsic() ]];
+
+export hair_bsdf tint(color tint, hair_bsdf base) [[ intrinsic(), since(1,6) ]];
 
 // thin film effect modifier
 export bsdf thin_film( float thickness, color ior, bsdf base) [[ intrinsic() ]];

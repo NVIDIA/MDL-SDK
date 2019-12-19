@@ -316,14 +316,15 @@ bool is_path_absolute(
 string simplify_path(
     IAllocator   *alloc,
     string const &file_path,
-    char         sep)
+    string const &sep)
 {
     MDL_ASSERT(!file_path.empty());
 
     vector<string>::Type directory_names(alloc);
 
-    size_t start  = 0;
+    size_t start = 0;
     size_t length = file_path.size();
+    size_t sep_length = sep.size();
 
     size_t slash;
     do {
@@ -342,16 +343,17 @@ string simplify_path(
             } else {
                 directory_names.pop_back();
             }
-        } else if (!directory_name.empty()) {
+        }
+        else if (!directory_name.empty()) {
             directory_names.push_back(directory_name);
         }
-        start = slash + 1;
+        start = slash + sep_length;
     } while (slash != length);
 
     string result(alloc);
-    if (file_path[0] == sep) {
+    if (file_path.find(sep) == 0) {
         result += sep;
-        if (length > 1 && file_path[1] == sep) {
+        if (file_path.find(sep, sep_length) == sep_length) {
             // handle '//' at start
             result += sep;
         }
@@ -361,10 +363,22 @@ string simplify_path(
     for (size_t i = 1, n = directory_names.size(); i < n; ++i) {
         result += sep + directory_names[i];
     }
-    if (file_path[length - 1] == sep && (result.length() != 1 || result[0] != sep))
-        result += sep;
+    if (file_path.find(sep, length - sep_length) == (length - sep_length) && 
+        (result.length() != sep_length || result.find(sep, 0) != 0))
+            result += sep;
 
     return result;
+}
+
+// Simplifies a file path.
+string simplify_path(
+    IAllocator   *alloc,
+    string const &file_path,
+    char         sep)
+{
+    string sep_string(alloc);
+    sep_string.append(sep);
+    return simplify_path(alloc, file_path, sep_string);
 }
 
 // Converts OS-specific directory separators into slashes.

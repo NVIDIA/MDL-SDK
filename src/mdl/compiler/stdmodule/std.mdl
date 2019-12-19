@@ -25,13 +25,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.5;
+mdl 1.6;
 
-export using limits import *;
-export using anno import *;
-export using state import *;
-export using math import *;
-export using tex import *;
-export using noise import *;
-export using df import *;
-export using debug import *;
+export using ::limits import *;
+export using ::anno import *;
+export using ::state import *;
+export using ::math import *;
+export using ::tex import *;
+export using ::noise import *;
+export using ::df import *;
+export using ::scene import *;
+export using ::debug import *;

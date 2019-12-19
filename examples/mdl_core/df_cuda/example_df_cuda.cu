@@ -546,8 +546,9 @@ __device__ inline bool trace_sphere(
         as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
         // evaluate EDF
-        Edf_evaluate_data eval_data;
+        Edf_evaluate_data<DF_HSM_NONE> eval_data;
         eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
+        eval_data.edf = make_float3(0.0, 0.0, 0.0);
         as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
         // evaluate intensity expression
@@ -584,9 +585,9 @@ __device__ inline bool trace_sphere(
         // reuse memory for function data
         union
         {
-            Bsdf_sample_data   sample_data;
-            Bsdf_evaluate_data eval_data;
-            Bsdf_pdf_data      pdf_data;
+            Bsdf_sample_data                sample_data;
+            Bsdf_evaluate_data<DF_HSM_NONE> eval_data;
+            Bsdf_pdf_data                   pdf_data;
         };
 
         // initialize shared fields
@@ -613,15 +614,18 @@ __device__ inline bool trace_sphere(
             {
 
                 const float inv_squared_dist = 1.0f / squared_length(to_light);
-                eval_data.k2 = to_light * sqrtf(inv_squared_dist);
-
                 const float3 f = params.light_intensity * inv_squared_dist * (float) (0.25 / M_PI);
+
+                eval_data.k2 = to_light * sqrtf(inv_squared_dist);
+                eval_data.bsdf_diffuse = make_float3(0.0f, 0.0f, 0.0f);
+                eval_data.bsdf_glossy = make_float3(0.0f, 0.0f, 0.0f);
 
                 // evaluate the materials BSDF
                 as_bsdf_evaluate(func_idx)(
                     &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
-                ray_state.contribution += ray_state.weight * f * eval_data.bsdf;
+                ray_state.contribution += ray_state.weight * f * 
+                                          (eval_data.bsdf_diffuse + eval_data.bsdf_glossy);
             }
         }
 
@@ -640,6 +644,8 @@ __device__ inline bool trace_sphere(
             if (cos_theta > 0.0f && pdf > 0.0f)
             {
                 eval_data.k2 = light_dir;
+                eval_data.bsdf_diffuse = make_float3(0.0f, 0.0f, 0.0f);
+                eval_data.bsdf_glossy = make_float3(0.0f, 0.0f, 0.0f);
 
                 // evaluate the materials BSDF
                 as_bsdf_evaluate(func_idx)(
@@ -647,7 +653,8 @@ __device__ inline bool trace_sphere(
 
                 const float mis_weight =
                     (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
-                ray_state.contribution += ray_state.weight * f * eval_data.bsdf * mis_weight;
+                ray_state.contribution += ray_state.weight * f * mis_weight * 
+                                          (eval_data.bsdf_diffuse + eval_data.bsdf_glossy);
             }
         }
 
@@ -656,6 +663,7 @@ __device__ inline bool trace_sphere(
             sample_data.xi.x = curand_uniform(&rand_state);
             sample_data.xi.y = curand_uniform(&rand_state);
             sample_data.xi.z = curand_uniform(&rand_state);
+            sample_data.xi.w = curand_uniform(&rand_state);
 
 
             // sample the materials BSDF

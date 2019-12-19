@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_start_shutdown.cpp
+// examples/mdl_sdk/start_shutdown/example_start_shutdown.cpp
 //
 // Obtain an INeuray interface, start the MDL SDK and shut it down.
 
@@ -37,7 +37,7 @@
 
 // The main function initializes the MDL SDK, starts it, and shuts it down after waiting for
 // user input.
-int main( int /*argc*/, char* /*argv*/[])
+int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 {
     // Get the INeuray interface in a suitable smart pointer.
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
@@ -102,3 +102,6 @@ int main( int /*argc*/, char* /*argv*/[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

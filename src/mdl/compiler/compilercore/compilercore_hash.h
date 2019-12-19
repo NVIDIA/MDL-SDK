@@ -57,7 +57,12 @@ public:
     void update(char c) { update((unsigned char const *)&c, 1); }
 
     /// Update the MD5 sum by a string.
-    void update(char const *s) { update((unsigned char const *)s, strlen(s)); }
+    void update(char const *s) {
+        if (s == NULL)
+            update(char(0));
+        else
+            update((unsigned char const *)s, strlen(s));
+    }
 
     /// Update the MD5 sum by an unsigned 32bit.
     void update(mi::Uint32 v) {

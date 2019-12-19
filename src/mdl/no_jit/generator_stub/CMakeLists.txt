@@ -32,6 +32,7 @@ set(PROJECT_NAME mdl-no_jit-generator_stub)
 # collect sources
 set(PROJECT_SOURCES 
     "generator_stub.cpp"
+    "libbsdf_multiscatter_tables_stub.cpp"
     )
 
 # create target from template

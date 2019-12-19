@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_execution_cuda.cpp
+// examples/mdl_sdk/execution_cuda/example_execution_cuda.cpp
 //
 // Introduces execution of the generated code for compiled material sub-expressions
 // for the PTX backend with CUDA.
@@ -186,7 +186,7 @@ void usage(char const *prog_name)
 //
 //------------------------------------------------------------------------------
 
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     // Parse command line options
     Options options;
@@ -249,6 +249,11 @@ int main(int argc, char* argv[])
         neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
 
     // Configure the MDL SDK
+
+    // Install logger
+    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
+    mdl_compiler->set_logger(logger.get());
+
     // Load plugin required for loading textures
     check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
     // Configure MDL search root
@@ -281,7 +286,8 @@ int main(int argc, char* argv[])
                 /*num_texture_results=*/ 0,
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
-                /*enable_axuiliary_output*/ false);
+                /*enable_axuiliary_output*/ false,
+                /*df_handle_mode*/ "none");
 
             for (std::size_t i = 0, n = options.material_names.size(); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {
@@ -332,4 +338,7 @@ int main(int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8
 

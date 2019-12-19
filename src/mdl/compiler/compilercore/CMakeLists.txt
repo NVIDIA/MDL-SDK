@@ -225,6 +225,7 @@ set(_STANDARD_MDL
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/tex.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/noise.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/df.mdl
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/scene.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/builtins.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/debug.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../shaders/mdl/base/base.mdl

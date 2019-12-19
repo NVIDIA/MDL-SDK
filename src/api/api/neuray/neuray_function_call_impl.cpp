@@ -36,6 +36,7 @@
 
 #include "neuray_function_call_impl.h"
 #include "neuray_expression_impl.h"
+#include "neuray_mdl_execution_context_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
 
@@ -74,8 +75,11 @@ mi::neuraylib::Element_type Function_call_impl::get_element_type() const
 
 const char* Function_call_impl::get_function_definition() const
 {
-    DB::Tag tag = get_db_element()->get_function_definition();
-    return get_db_transaction()->tag_to_name( tag);
+    DB::Transaction* db_transaction = get_db_transaction();
+    DB::Tag tag = get_db_element()->get_function_definition(db_transaction);
+    if (!tag.is_valid())
+        return 0;
+    return db_transaction->tag_to_name( tag);
 }
 
 const char* Function_call_impl::get_mdl_function_definition() const
@@ -185,6 +189,35 @@ bool Function_call_impl::is_default() const
 {
     return get_db_element()->is_immutable();
 }
+
+bool Function_call_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+
+    return get_db_element()->is_valid(get_db_transaction(), mdl_context);
+}
+
+mi::Sint32 Function_call_impl::repair(
+    mi::Uint32 flags,
+    mi::neuraylib::IMdl_execution_context* context
+)
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+
+    mi::Sint32 r = get_db_element()->repair(
+        get_db_transaction(),
+        flags & mi::neuraylib::MDL_REPAIR_INVALID_ARGUMENTS,
+        flags & mi::neuraylib::MDL_REMOVE_INVALID_ARGUMENTS,
+        /*level=*/0,
+        mdl_context);
+
+    if (r == 0)
+        add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return r;
+}
+
 
 } // namespace NEURAY
 

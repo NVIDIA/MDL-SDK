@@ -27,12 +27,12 @@
  *****************************************************************************/
 mdl 1.4;
 
-import df::*;
-import base::*;
-import math::*;
-import state::*;
-import anno::*;
-import tex::*;
+import ::df::*;
+import ::base::*;
+import ::math::*;
+import ::state::*;
+import ::anno::*;
+import ::tex::*;
 import ::nvidia::core_definitions::*;
 
 

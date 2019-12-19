@@ -34,7 +34,7 @@
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <io/scene/scene/i_scene_scene_element.h>
-
+#include "i_mdl_elements_module.h"
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
 
 namespace mi { namespace mdl { class IGenerated_code_dag; class IType; } }
@@ -45,6 +45,7 @@ namespace NEURAY { class Function_definition_impl; }
 
 namespace MDL {
 
+class Execution_context;
 class IAnnotation_block;
 class IAnnotation_list;
 class IExpression;
@@ -70,9 +71,11 @@ public:
     ///
     /// \param transaction            The DB transaction to access the module and to resolved MDL
     ///                               resources.
-    /// \param module_tag             The module this definition belongs to.
     /// \param function_tag           The tag this definition will eventually get (needed to pass
     ///                               on to function calls later).
+    /// \param function_ident         The identifier of this definition will be used to check if it
+    ///                               is still valid and has not been removed/altered due to a module
+    ///                               reload.
     /// \param code_dag               The DAG representation of \p module_tag.
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
@@ -81,8 +84,8 @@ public:
     ///                               (if referenced in the parameter defaults).
     Mdl_function_definition(
         DB::Transaction* transaction,
-        DB::Tag module_tag,
         DB::Tag function_tag,
+        Mdl_ident function_ident,
         const mi::mdl::IGenerated_code_dag* code_dag,
         mi::Uint32 function_index,
         const char* module_filename,
@@ -127,6 +130,12 @@ public:
 
     const IAnnotation_list* get_parameter_annotations() const;
 
+    const IExpression_direct_call* get_body( DB::Transaction* transaction) const;
+
+    mi::Size get_temporary_count( DB::Transaction* transaction) const;
+
+    const IExpression* get_temporary( DB::Transaction* transaction, mi::Size index) const;
+
     const char* get_thumbnail() const;
 
     Mdl_function_call* create_function_call(
@@ -138,8 +147,9 @@ public:
 
     /// Internal variant of #create_function_call().
     ///
-    /// See #create_array_constructor_call_internal() for array constructors and
-    /// #create_cast_call_internal for cast operators.
+    /// See #create_array_constructor_call_internal() for array constructors,
+    /// #create_cast_call_internal for cast operators, and
+    /// #create_ternary_operator_call_internal for ternary operators.
     ///
     /// \param allow_ek_parameter If set to \c true, expressions of type EK_PARAMETER are also
     ///                           permitted as arguments. This flag may only be set by the MDL
@@ -149,8 +159,8 @@ public:
     Mdl_function_call* create_function_call_internal(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
-       bool allow_ek_parameter = false,
-       bool immutable = false,
+       bool allow_ek_parameter,
+       bool immutable,
        mi::Sint32* errors = 0) const;
 
     /// Internal variant of #create_function_call(), special case for cast operators
@@ -160,7 +170,37 @@ public:
     Mdl_function_call* create_cast_call_internal(
         DB::Transaction* transaction,
         const IExpression_list* arguments,
-        bool immutable = false,
+        bool immutable,
+        mi::Sint32* errors = 0) const;
+
+    /// Internal variant of #create_function_call(), special case for ternary operators
+    ///
+    /// \param immutable          If set to \c true, the created function call is flagged as
+    ///                           immutable.
+    Mdl_function_call* create_ternary_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
+        mi::Sint32* errors = 0) const;
+
+    /// Internal variant of #create_function_call(), special case for index operators
+    ///
+    /// \param immutable          If set to \c true, the created function call is flagged as
+    ///                           immutable.
+    Mdl_function_call*create_index_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
+        mi::Sint32* errors = 0) const;
+
+    /// Internal variant of #create_function_call(), special case for array length operators
+    ///
+    /// \param immutable          If set to \c true, the created function call is flagged as
+    ///                           immutable.
+    Mdl_function_call* create_array_length_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
         mi::Sint32* errors = 0) const;
 
     /// Internal variant of #create_function_call(), special case for array constructors
@@ -170,7 +210,7 @@ public:
     Mdl_function_call* create_array_constructor_call_internal(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
-       bool immutable = false,
+       bool immutable,
        mi::Sint32* errors = 0) const;
 
     /// Returns the MDL semantic of this definition.
@@ -204,6 +244,17 @@ public:
 
     /// Return a function hash if available.
     mi::base::Uuid get_function_hash() const { return m_function_hash; }
+
+    /// Returns true if the definition still exists in the module.
+    bool is_valid(
+        DB::Transaction* transaction,
+        Execution_context* context) const;
+
+    /// Checks if this definition is compatible to the given definition.
+    bool is_compatible(const Mdl_function_definition& other) const;
+
+    /// Returns the identifier of this function definition.
+    Mdl_ident get_ident() const;
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
@@ -244,10 +295,11 @@ private:
 
     std::string m_module_db_name;                ///< The DB name of the corresponding module.
     DB::Tag m_function_tag;                      ///< The tag of this function definition.
-    mi::Uint32 m_function_index;                 ///< The index in the corresponding module.
+    Mdl_ident m_function_ident;                  ///< The identifier of this function definition.
     mi::mdl::IDefinition::Semantics m_mdl_semantic;  ///< The MDL semantic.
     mi::neuraylib::IFunction_definition::Semantics m_semantic;  ///< The semantic.
     std::string m_name;                          ///< The MDL name of this function definition.
+    std::string m_db_name;                       ///< The DB name of this function definition.
     std::string m_original_name;                 ///< The original MDL function name (or empty).
     std::string m_thumbnail;                     ///< The thumbnail image for this definition.
     DB::Tag m_prototype_tag;                     ///< The prototype of this fct. def. (or inv. tag).

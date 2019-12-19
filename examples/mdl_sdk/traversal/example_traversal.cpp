@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_traversal.cpp
+// examples/mdl_sdk/traversal/example_traversal.cpp
 //
 // Instantiates the materials in a given module, compiles them and recovers mdl code from
 // the compiled material. This shows how to traverse a compiled material.
@@ -55,7 +55,7 @@ std::string g_qualified_module_name = MODULE_TO_TRAVERSE;
 bool g_use_class_compilation = true;
 bool g_keep_compiled_structure = false;
 
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     // Read command line settings to global variables
     if (!consume_cmd_options(argc, argv))
@@ -361,3 +361,6 @@ bool consume_cmd_options(int argc, char *argv[])
     std::cout << "\n";
     return true;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

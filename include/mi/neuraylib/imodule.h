@@ -43,6 +43,7 @@ namespace neuraylib {
 class IAnnotation_block;
 class IAnnotation_definition;
 class IExpression_list;
+class IMdl_execution_context;
 class IType_list;
 class IType_resource;
 class IValue_list;
@@ -330,6 +331,42 @@ public:
     virtual const IArray* get_function_overloads(
         const char* name, const char* param_sig) const = 0;
 
+    /// Returns true if all imports of the module are valid.
+    /// \param context     In case of failure, the execution context can be checked for error
+    ///                    messages. Can be \c NULL.
+    virtual bool is_valid(IMdl_execution_context* context) const = 0;
+
+    /// Reload the module from disk.
+    ///
+    /// \note This function works for file-based modules, only.
+    ///
+    /// \param context     In case of failure, the execution context can be checked for error
+    ///                    messages. Can be \c NULL.
+    /// \param recursive   If true, all imported file based modules are reloaded
+    ///                    prior to this one.
+    /// \return
+    ///               -     0: Success
+    ///               -    -1: Reloading failed, check the context for details.
+    virtual Sint32 reload(bool recursive, IMdl_execution_context* context) = 0;
+
+    /// Reload the module from string.
+    ///
+    /// \note This function works for string/memory-based modules, only. Standard modules and
+    /// the built-in \if MDL_SOURCE_RELEASE module mdl::base \else modules \c mdl::base and
+    /// \c mdl::nvidia::distilling_support \endif cannot be reloaded.
+    ///
+    /// \param module_source The module source code.
+    /// \param context       In case of failure, the execution context can be checked for error
+    ///                      messages. Can be \c NULL.
+    /// \param recursive     If true, all imported file based modules are reloaded
+    ///                      prior to this one.
+    /// \return
+    ///               -     0: Success
+    ///               -    -1: Reloading failed, check the context for details.
+    virtual Sint32 reload_from_string(
+        const char* module_source,
+        bool recursive,
+        IMdl_execution_context* context) = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements
@@ -339,3 +376,4 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IMODULE_H
+

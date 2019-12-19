@@ -157,6 +157,10 @@ private:
     unsigned long parse_sequence_id(char const *&strptr, char const *endptr);
 
 private:
+    /// Get the allocator.
+    IAllocator *get_allocator() const { return m_alloc; }
+
+private:
     /// The allocator.
     IAllocator *m_alloc;
 

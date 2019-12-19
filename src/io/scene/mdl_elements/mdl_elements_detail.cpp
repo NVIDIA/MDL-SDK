@@ -51,6 +51,7 @@
 #include <base/lib/path/i_path.h>
 #include <base/data/db/i_db_transaction.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
+#include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/texture/i_texture.h>
@@ -58,6 +59,9 @@
 namespace MI {
 
 namespace MDL {
+
+using mi::mdl::as;
+using mi::mdl::cast;
 
 namespace DETAIL {
 
@@ -294,20 +298,30 @@ DB::Tag mdl_resource_to_tag(
     const char* module_filename,
     const char* module_name)
 {
-    const mi::mdl::IValue_texture* texture = as<mi::mdl::IValue_texture>( value);
-    if( texture)
-        return mdl_texture_to_tag( transaction, texture, module_filename, module_name);
+    switch (value->get_kind()) {
+    case mi::mdl::IValue::VK_TEXTURE:
+        {
+            const mi::mdl::IValue_texture* texture = cast<mi::mdl::IValue_texture>(value);
+            return mdl_texture_to_tag(transaction, texture, module_filename, module_name);
+        }
 
-    const mi::mdl::IValue_light_profile* lp = as<mi::mdl::IValue_light_profile>( value);
-    if( lp)
-        return mdl_light_profile_to_tag( transaction, lp, module_filename, module_name);
+    case mi::mdl::IValue::VK_LIGHT_PROFILE:
+        {
+            const mi::mdl::IValue_light_profile* lp = cast<mi::mdl::IValue_light_profile>(value);
+            return mdl_light_profile_to_tag(transaction, lp, module_filename, module_name);
+        }
 
-    const mi::mdl::IValue_bsdf_measurement* bsdfm = as<mi::mdl::IValue_bsdf_measurement>( value);
-    if( bsdfm)
-        return mdl_bsdf_measurement_to_tag( transaction, bsdfm, module_filename, module_name);
+    case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
+        {
+            const mi::mdl::IValue_bsdf_measurement* bsdfm =
+                cast<mi::mdl::IValue_bsdf_measurement>( value);
+            return mdl_bsdf_measurement_to_tag( transaction, bsdfm, module_filename, module_name);
+        }
 
-    ASSERT( M_SCENE, false);
-    return DB::Tag();
+    default:
+        ASSERT( M_SCENE, false);
+        return DB::Tag();
+    }
 }
 
 DB::Tag mdl_texture_to_tag(
@@ -386,12 +400,13 @@ DB::Tag mdl_light_profile_to_tag(
     const char* module_name)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
-    const char* file_path = value->get_string_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
     // Resources in compiled materials typically do not have the string value set.
     if( tag_uint32)
         return DB::Tag( tag_uint32);
+
+    const char* file_path = value->get_string_value();
 
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])
@@ -456,12 +471,13 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const char* module_name)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
-    const char* file_path = value->get_string_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
     // Resources in compiled materials typically do not have the string value set.
     if( tag_uint32)
         return DB::Tag( tag_uint32);
+
+    const char* file_path = value->get_string_value();
 
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])

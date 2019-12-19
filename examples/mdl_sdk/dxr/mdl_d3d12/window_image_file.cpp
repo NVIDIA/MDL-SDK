@@ -31,7 +31,7 @@
 #include "base_application.h"
 #include "command_queue.h"
 #include "descriptor_heap.h"
-#include "mdl_material.h"
+#include "mdl_sdk.h"
 
 namespace mdl_d3d12
 {

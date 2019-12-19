@@ -37,7 +37,9 @@ def xxd(filename, fout):
 	i = 0
 	fout.write("\t")
 	for byte in bytes:
-		fout.write("0x%02x, " % ord(byte))
+		if isinstance(byte, str):
+			byte = ord(byte)
+		fout.write("0x%02x, " % byte)
 		if i == 7:
 			fout.write("\n\t")
 			i = 0
@@ -61,7 +63,7 @@ def main(args):
 	bc_name  = "libdevice.%u.bc" % (version)
 	out_name = "glue_libdevice.h"
 
-	print "Stripping", bc_name, "..."
+	print("Stripping %s ..." % bc_name)
 	cmd_line = (filter +
 		" \"" + LIBDEVICE_DIR + "/" + bc_name + "\" \"" +
 		IntDir + "/" + bc_name + "\"")
@@ -70,7 +72,7 @@ def main(args):
 		sys.stderr.write ("ERROR: command %s exited unexpectedly, exitcode %d\n" % (cmd_line, exit_code))
 		sys.exit (1)
 
-	print "Generating", out_name, "...\n"
+	print("Generating %s ..." % out_name)
 	f = open(IntDir + "/" + out_name, "w")
 	f.write("static unsigned char const glue_bitcode[] = {\n")
 	xxd(IntDir + "/" + bc_name, f)

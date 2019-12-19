@@ -789,5 +789,28 @@ std::string convert_to_forward_slashes(
     return fs;
 }
 
+bool rmdir_r(const char* path)
+{
+    if (!is_directory(path))
+        return false;
+
+    Directory dir;
+    if (!dir.open(path))
+        return false;
+
+    std::string next = dir.read();
+    bool success = true;
+    while (!next.empty())
+    {
+        if (is_directory(next.c_str()))
+            success &= rmdir_r(next.c_str());
+        else
+            success &= file_remove(next.c_str());
+
+        next = dir.read();
+    }
+    return success && rmdir(path);
+}
+
 }
 }

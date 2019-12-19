@@ -485,7 +485,9 @@ inline size_t dynamic_memory_consumption (const set<T>& the_set)
 #elif defined(MI_PLATFORM_MACOSX_USING_NODE)
     size_t total = the_set.size() * sizeof(std::__tree_node<T, void*>);
 #elif defined(MI_PLATFORM_WINDOWS)
-    size_t total = the_set.size() * sizeof(Set_type::_Node);
+    // subclass to get access to _Node type
+    struct Sub : public set<T> { typedef set<T>::_Node _Node; };
+    size_t total = the_set.size() * sizeof(Sub::_Node);
 #endif
 
     // additional dynamic size of the set elements

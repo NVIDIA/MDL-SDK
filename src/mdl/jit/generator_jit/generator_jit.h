@@ -504,6 +504,29 @@ public:
     /// \return the library as LLVM bitcode representation
     unsigned char const *get_libdevice_for_gpu(
         size_t   &size) MDL_FINAL;
+    
+    /// Get the resolution of the libbsdf multi-scattering lookup table data.
+    ///
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multiscatter kind
+    /// \param out_theta        will contain the number of theta values when data is available
+    /// \param out_roughness    will contain the number of roughness values when data is available
+    /// \param out_ior          will contain the number of IOR values when data is available
+    /// \returns                true if there is data for this semantic (BSDF)
+    bool get_libbsdf_multiscatter_data_resolution(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t &out_theta,
+        size_t &out_roughness,
+        size_t &out_ior) const MDL_FINAL;
+
+    /// Get access to the libbsdf multi-scattering lookup table data.
+    ///
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multiscatter kind
+    /// \param[out] size       the size of the data
+    ///
+    /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
+    unsigned char const *get_libbsdf_multiscatter_data(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &size) const MDL_FINAL;
 
     /// Create a link unit.
     ///

@@ -67,7 +67,7 @@ namespace mdl_d3d12
         IWindow::Mode get_window_mode() const override { return m_mode; }
 
         // low level interfaces to the applications message pump
-        void add_message_callback(std::function<bool(HWND, UINT, WPARAM, LPARAM)> callback);
+        void add_message_callback(std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> callback);
 
         // low level interfaces to application window
         HWND get_window_handle() const { return m_window_handle; }
@@ -90,7 +90,7 @@ namespace mdl_d3d12
         std::vector<UINT64> m_swap_fence_handles;
         std::vector<Descriptor_heap_handle> m_render_target_views_heap_indices;
 
-        std::vector<std::function<bool(HWND, UINT, WPARAM, LPARAM)>> m_message_callbacks;
+        std::vector<std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)>> m_message_callbacks;
         bool m_close;
     };
 }

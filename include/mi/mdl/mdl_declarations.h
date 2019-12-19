@@ -58,7 +58,8 @@ public:
         DK_TYPE_ENUM,       ///< An enum type declaration.
         DK_VARIABLE,        ///< A variable declaration.
         DK_FUNCTION,        ///< A function declaration.
-        DK_MODULE           ///< A module declaration.
+        DK_MODULE,          ///< A module declaration.
+        DK_NAMESPACE_ALIAS  ///< A namespace alias declaration.
     };
 
     /// Get the kind of declaration.
@@ -115,7 +116,6 @@ public:
     ///
     /// \param name  the qualified name of the entity (or module) to import
     virtual void add_name(IQualified_name const *name) = 0;
-
 };
 
 /// The interface of a function, annotation, or material parameter inside the MDL AST.
@@ -193,7 +193,6 @@ public:
     ///
     /// \param parameter  the parameter to add
     virtual void add_parameter(IParameter const *parameter) = 0;
-
 };
 
 /// A constant declaration in the MDL AST.
@@ -559,6 +558,30 @@ public:
     virtual void set_annotation(IAnnotation_block const *annotations) = 0;
 };
 
+/// A namespace alias declaration inside the MDL AST.
+class IDeclaration_namespace_alias : public IDeclaration
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = DK_NAMESPACE_ALIAS;
+
+    /// Get the alias name of the namespace.
+    virtual ISimple_name const *get_alias() const = 0;
+
+    /// Get the namespace.
+    virtual IQualified_name const *get_namespace() const = 0;
+
+    /// Set the alias name of the namespace.
+    ///
+    /// \param name  the new namespace alias name
+    virtual void set_name(ISimple_name const *name) = 0;
+
+    /// Set the namespace.
+    ///
+    /// \param ns  the new namespace
+    virtual void set_namespace(IQualified_name const *ns) = 0;
+};
+
 /// Cast to subtype or return null if types do not match.
 template<typename T>
 T *as(IDeclaration *decl) {
@@ -818,6 +841,23 @@ public:
         int                     start_column = 0,
         int                     end_line = 0,
         int                     end_column = 0) = 0;
+
+    /// Create a new namespace alias.
+    ///
+    /// \param alias            The alias name of the namespace.
+    /// \param ns               The namespace.
+    /// \param start_line       The line on which the declaration begins.
+    /// \param start_column     The column on which the declaration begins.
+    /// \param end_line         The line on which the declaration ends.
+    /// \param end_column       The column on which the declaration ends.
+    /// \returns                The created declaration.
+    virtual IDeclaration_namespace_alias *create_namespace_alias(
+        ISimple_name const    *alias,
+        IQualified_name const *ns,
+        int                   start_line = 0,
+        int                   start_column = 0,
+        int                   end_line = 0,
+        int                   end_column = 0) = 0;
 };
 
 }  // mdl

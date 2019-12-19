@@ -61,6 +61,46 @@ COMPILER mdl
 
     IAnnotation_factory *m_annotation_factory;
 
+    // Create a error name.
+    ISimple_name *error_name()
+    {
+        ISymbol const *sym = m_name_factory->create_symbol("<ERROR>");
+        return m_name_factory->create_simple_name(
+            sym,
+            t->line,
+            t->col,
+            t->line,
+            t->col + wcslen(t->val) - 1);
+    }
+
+    // RAII like class to handle invalid names.
+    class Check_sname {
+    public:
+        /// Constructor.
+        Check_sname(
+            Parser             &parser,
+            ISimple_name const *&name)
+        : m_parser(parser)
+        , m_name(name)
+        {
+            name = NULL;
+        }
+
+        /// Destructor.
+        ~Check_sname() { m_name = check(m_name); }
+
+        /// Check the name.
+        ISimple_name const *check(ISimple_name const *name) {
+            if (name == NULL)
+                name = m_parser.error_name();
+            return name;
+        }
+
+    private:
+        Parser             &m_parser;
+        ISimple_name const *&m_name;
+    };
+
     void set_imdl(IAllocator *alloc, MDL *imdl)
     {
         m_alloc = alloc;
@@ -217,6 +257,18 @@ COMPILER mdl
             x = scanner->Peek();
         }
         return (x->kind == _IMPORT) || (x->kind == _USING);
+    }
+
+    // Check for ident '='
+    bool is_namespace_alias()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind != _IDENT) {
+            return false;
+        }
+        x = scanner->Peek();
+        return x->kind == _EQUAL;
     }
 
     // If we see a type followed by an identifier during lookahead,
@@ -384,7 +436,7 @@ COMPILER mdl
     }
 
     // Check if we see '::' and IDENT
-    bool is_scope_ident()
+    bool is_scope_name()
     {
         scanner->ResetPeek();
         Token *x = la;
@@ -406,6 +458,14 @@ COMPILER mdl
                     t->col,
                     t->line,
                     t->col + wcslen(t->val) - 1);
+    }
+
+    // Create a simple name from a utf8 string and a position.
+    ISimple_name const *to_simple(char const *utf8_s, int sl, int sc, int el, int ec)
+    {
+        ISymbol const *symbol = m_name_factory->create_symbol(utf8_s);
+        return m_name_factory->create_simple_name(
+            symbol, sl, sc, el, ec);
     }
 
     // Create a qualified name from a simple name.
@@ -1261,14 +1321,24 @@ floating_literal<double &value,int &sl,int &sc,int &el,int &ec,bool &is_float,bo
                                     .)
     .
 
-string_literal<wchar_t const *&value,int &sl,int &sc,int &el,int &ec>
-    = STRING_LITERAL                (.
-                                        value = t->val;
-                                        sl = t->line;
-                                        sc = t->col;
-                                        el = t->line;
-                                        ec = t->col + wcslen(t->val) - 1;
-                                    .)
+string_literal<string &utf8, int &sl, int &sc, int &el, int &ec>
+    =
+        STRING_LITERAL
+        (.
+            utf8 = convert_escape_sequences_skip_quotes(t->val);
+            sl = t->line;
+            sc = t->col;
+            el = t->line;
+            ec = t->col + wcslen(t->val) - 1;
+        .)
+    {
+        STRING_LITERAL
+        (.
+            utf8 += convert_escape_sequences_skip_quotes(t->val);
+            el = t->line;
+            ec = t->col + wcslen(t->val) - 1;
+        .)
+    }
     .
 
 mdl_version
@@ -1302,6 +1372,58 @@ simple_name<ISimple_name const *&value>
     = IDENT                         (. value = to_simple(t); .)
     .
 
+utf8_name<ISimple_name const *&value>
+    =
+    (. Check_sname checker(*this, value); .)
+    (
+        IDENT
+        (. value = to_simple(t); .)
+        |
+        (.
+            string utf8(m_alloc);
+            int sl = 0, sc = 0, el = 0, ec = 0;
+        .)
+        string_literal<utf8, sl, sc, el, ec>
+        (.
+            value = to_simple(utf8.c_str(), sl, sc, el, ec);
+        .)
+    )
+    .
+
+qualified_utf8_name<IQualified_name *&value>
+    =
+                                        (.
+                                            value = m_name_factory->create_qualified_name();
+                                            ISimple_name const *simp_name = NULL;
+                                        .)
+        [
+            '.'                         (. value->add_component(to_simple(t)); .)
+            "::"
+            |
+            ".."                        (. value->add_component(to_simple(t)); .)
+            "::"
+            {
+                ".."                    (. value->add_component(to_simple(t)); .)
+                "::"
+            }
+            |
+            "::"                        (. value->set_absolute(); .)
+        ]
+        utf8_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        {
+            "::"
+            utf8_name<simp_name>
+                                        (.
+                                            value->add_component(simp_name);
+                                        .)
+        }
+    .
+
+
+
 qualified_import<IQualified_name *&value>
     =
                                         (.
@@ -1325,7 +1447,7 @@ qualified_import<IQualified_name *&value>
                                         (.
                                             value->add_component(simp_name);
                                         .)
-        { IF(is_scope_ident())
+        { IF(is_scope_name())
             "::"
             simple_name<simp_name>
                                         (.
@@ -1622,6 +1744,67 @@ argument_list<Argument_owner &arg_owner>
         ')'
     .
 
+using_alias<IDeclaration const *&declaration, int sl, int sc>
+    =
+        (.
+            ISimple_name const *alias     = NULL;
+            declaration = ERR_DECL;
+        .)
+        simple_name<alias>
+        '='
+        (. IQualified_name *qname =  m_name_factory->create_qualified_name(); .)
+        qualified_utf8_name<qname>
+        SYNC ';'
+        (. declaration = m_declaration_factory->create_namespace_alias(alias, qname); .)
+    .
+
+using_import<IDeclaration const *&declaration, bool exported>
+    =
+        (.
+            IQualified_name *module_name = NULL;
+            ISimple_name const *simp_name = NULL;
+        .)
+
+        "using"
+                                                (. int sl = t->line, sc = t->col; .)
+        (
+            IF(is_namespace_alias())
+                using_alias<declaration, sl, sc>
+            |
+            qualified_import_prefix<module_name>                                /// @break@tab
+                                                (.
+                                                    IDeclaration_import *import
+                                                        = m_declaration_factory
+                                                            ->create_import(module_name,
+                                                                            exported,
+                                                                            sl,
+                                                                            sc);
+                                                .)
+            "import"
+                ( '*'
+                                                (. import->add_name(to_qualified(to_simple(t))); .)
+                | simple_name<simp_name>
+                                                (.
+                                                    import->add_name(to_qualified(simp_name));
+                                                .)
+                    {
+                        WEAK ','
+                        simple_name<simp_name>
+                                                (.
+                                                    import->add_name(to_qualified(simp_name));
+                                                .)
+                    }
+                )
+            SYNC ';'
+                                            (.
+                                                Position &pos = import->access_position();
+                                                pos.set_end_line(t->line);
+                                                pos.set_end_column(t->col);
+                                                declaration = import;
+                                            .)
+        )
+.
+
 import<IDeclaration const *&declaration>
     =
         "import"
@@ -1651,43 +1834,7 @@ import<IDeclaration const *&declaration>
         [
             "export"                            (. exported = true; .)
         ]
-                                                (.
-                                                    IQualified_name *module_name = NULL;
-                                                    ISimple_name const *simp_name = NULL;
-                                                .)
-        "using"
-                                                (. int sl = t->line, sc = t->col; .)
-        qualified_import_prefix<module_name>                                /// @break@tab
-                                                (.
-                                                    IDeclaration_import *import
-                                                        = m_declaration_factory
-                                                            ->create_import(module_name,
-                                                                            exported,
-                                                                            sl,
-                                                                            sc);
-                                                .)
-        "import"
-            ( '*'
-                                                (. import->add_name(to_qualified(to_simple(t))); .)
-            | simple_name<simp_name>
-                                                (.
-                                                    import->add_name(to_qualified(simp_name));
-                                                .)
-                {
-                    WEAK ','
-                    simple_name<simp_name>
-                                                (.
-                                                    import->add_name(to_qualified(simp_name));
-                                                .)
-                }
-            )
-            SYNC ';'
-                                                (.
-                                                    Position &pos = import->access_position();
-                                                    pos.set_end_line(t->line);
-                                                    pos.set_end_column(t->col);
-                                                    declaration = import;
-                                                .)
+        using_import<declaration, exported>
     .
 
 module_declaration<IDeclaration const *&declaration>
@@ -2677,27 +2824,16 @@ literal_expression<IExpression const *&exp>
     |
                                             (.
                                                 exp = ERR_EXPR;
-                                                wchar_t const *string_value;
                                                 int sl = 0, sc = 0, el = 0, ec = 0;
-                                                string result(m_alloc);
+                                                string utf8(m_alloc);
                                             .)
-      string_literal<string_value,sl,sc,el,ec>
-                                            (.
-                                                result += convert_escape_sequences_skip_quotes(string_value);
-                                            .)
-      {
-                                            (. int dsl = 0, dsc = 0; .)
-        string_literal<string_value,dsl,dsc,el,ec>
-                                            (.
-                                                result += convert_escape_sequences_skip_quotes(string_value);
-                                            .)
-      }
+      string_literal<utf8, sl, sc, el, ec>
                                             (.
                                                 exp = m_expression_factory
                                                         ->create_literal(
                                                             m_value_factory
-                                                                ->create_string(result.c_str()),
-                                                            sl,sc,el,ec);
+                                                                ->create_string(utf8.c_str()),
+                                                            sl, sc, el, ec);
                                             .)
     .
 

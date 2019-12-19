@@ -111,6 +111,7 @@ public:
         EC_PARAMETER         = 5,   ///< parameter argument could not be found
         EC_MEMORY_EXHAUSTED  = 6,   ///< Memory size threshold reached
         EC_CYCLES_EXHAUSTED  = 7,   ///< computational time threshold reached
+        EC_INVALID_CALL      = 8,   ///< call points to invalid definition
     };
 
 public:
@@ -496,7 +497,11 @@ public:
                     return m_value_fact.create_bad();
                 }
                 DB::Access<MI::MDL::Mdl_function_call> fcall(tag, m_trans);
-                DB::Tag def_tag = fcall->get_function_definition();
+                DB::Tag def_tag = fcall->get_function_definition(m_trans);
+                if (!def_tag.is_valid()) {
+                    set_error(EC_INVALID_CALL);
+                    return m_value_fact.create_bad();
+                }
                 DB::Access<MI::MDL::Mdl_function_definition> def(def_tag, m_trans);
 
                 mi::base::Handle<MI::MDL::IExpression_list const> args(
@@ -523,7 +528,11 @@ public:
             {
                 mi::base::Handle<MI::MDL::IExpression_direct_call const> dcall(
                     expr->get_interface<MI::MDL::IExpression_direct_call>());
-                DB::Tag tag = dcall->get_definition();
+                DB::Tag tag = dcall->get_definition(m_trans);
+                if (!tag.is_valid()) {
+                    set_error(EC_INVALID_CALL);
+                    return m_value_fact.create_bad();
+                }
                 SERIAL::Class_id class_id = m_trans->get_class_id(tag);
 
                 if (class_id != MI::MDL::Mdl_function_definition::id) {
@@ -599,6 +608,13 @@ public:
             break;
         case MI::MDL::IValue::VK_STRING:
             {
+                {
+                    mi::base::Handle<MI::MDL::IValue_string_localized const> s(
+                        value->get_interface<MI::MDL::IValue_string_localized >());
+                    if (s) {
+                        return m_value_fact.create_string(s->get_original_value());
+                    }
+                }
                 mi::base::Handle<MI::MDL::IValue_string const> s(
                     value->get_interface<MI::MDL::IValue_string>());
 
@@ -1030,6 +1046,8 @@ public:
                     return m_type_fact.create_texture(mi::mdl::IType_texture::TS_CUBE);
                 case MI::MDL::IType_texture::TS_PTEX:
                     return m_type_fact.create_texture(mi::mdl::IType_texture::TS_PTEX);
+                case MI::MDL::IType_texture::TS_BSDF_DATA:
+                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_BSDF_DATA);
                 case MI::MDL::IType_texture::TS_FORCE_32_BIT:
                     break;
                 }
@@ -1109,7 +1127,7 @@ private:
 
 Mdl_evaluator_api_impl::Mdl_evaluator_api_impl(mi::neuraylib::INeuray *neuray)
 : m_neuray(neuray)
-, m_mdlc_module( false)
+, m_mdlc_module( true)
 {
 }
 
@@ -1177,6 +1195,7 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_material_parameter_
         case Evaluator::EC_UNSUPPORTED:
         case Evaluator::EC_NON_FUNCTION_CALL:
         case Evaluator::EC_PARAMETER:
+        case Evaluator::EC_INVALID_CALL:
             *error = -4;
             break;
         case Evaluator::EC_MEMORY_EXHAUSTED:
@@ -1249,6 +1268,7 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_
         case Evaluator::EC_UNSUPPORTED:
         case Evaluator::EC_NON_FUNCTION_CALL:
         case Evaluator::EC_PARAMETER:
+        case Evaluator::EC_INVALID_CALL:
             *error = -4;
             break;
         case Evaluator::EC_MEMORY_EXHAUSTED:

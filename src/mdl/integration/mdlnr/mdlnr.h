@@ -84,6 +84,8 @@ public:
 
     void set_implicit_cast_enabled(bool v);
 
+    MDL::Mdl_module_wait_queue* get_module_wait_queue() const;
+
 private:
 
     /// Pointer to the MDL interface.
@@ -103,6 +105,9 @@ private:
 
     /// Flag that indicates weather the integration should insert casts when needed (and possible).
     bool m_implicit_cast_enabled;
+
+    /// The module wait queue.
+    MDL::Mdl_module_wait_queue *m_module_wait_queue;
 };
 
 } // namespace MDLC

@@ -64,7 +64,7 @@ namespace mdl_d3d12
     {
     public:
         explicit Base_options()
-            : window_title("MDL D3D12 Example Application")
+            : window_title(L"MDL D3D12 Example Application")
             , window_width(1280)
             , window_height(720)
             , mdl_paths()
@@ -79,14 +79,14 @@ namespace mdl_d3d12
             , iterations(1)
             , share_target_code(true)
             , enable_auxiliary(true)
-            , automatic_derivatives(true)
+            , automatic_derivatives(false)
             , handle_z_axis_up(false)
             , units_per_meter(1.0f)
             , gpu(-1)
         {
         }
         virtual ~Base_options() = default;
-        std::string window_title;
+        std::wstring window_title;
         size_t window_width;
         size_t window_height;
         std::vector<std::string> mdl_paths;

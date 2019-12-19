@@ -160,6 +160,7 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_execution_context.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_factory.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_i18n_configuration.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_loading_wait_handle.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdle_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imodule.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ineuray.h"

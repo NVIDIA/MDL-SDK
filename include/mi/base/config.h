@@ -256,7 +256,7 @@
 
 #if !defined(MI_ARCH_POWERPC_64)
 #define MI_ARCH_POWERPC_64
-#endif // !defined( MI_ARCH_ARCH_POWERPC_64)
+#endif // !defined( MI_ARCH_POWERPC_64)
 
 #if !defined(__LITTLE_ENDIAN__)
 #error Architecture POWERPC_64 is only supported in little endian mode.
@@ -266,9 +266,23 @@
 #define MI_ARCH_LITTLE_ENDIAN
 #endif // !defined(MI_ARCH_LITTLE_ENDIAN)
 
+#elif defined(__aarch64__)
+
+#if !defined(MI_ARCH_ARM_64)
+#define MI_ARCH_ARM_64
+#endif // !defined( MI_ARCH_ARM_64)
+
+#if !defined(__AARCH64EL__)
+#error Architecture ARM_64 is only supported in little endian mode.
 #endif
 
-#if defined(MI_ARCH_X86_64) || defined(MI_ARCH_SPARC_64) || defined(MI_ARCH_POWERPC_64)
+#if !defined(MI_ARCH_LITTLE_ENDIAN)
+#define MI_ARCH_LITTLE_ENDIAN
+#endif // !defined(MI_ARCH_LITTLE_ENDIAN)
+
+#endif
+
+#if defined(MI_ARCH_X86_64) || defined(MI_ARCH_SPARC_64) || defined(MI_ARCH_POWERPC_64) || defined(MI_ARCH_ARM_64)
 #define MI_ARCH_64BIT
 #endif // defined(MI_ARCH_X86_64) ...
 

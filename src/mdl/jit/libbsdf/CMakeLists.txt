@@ -37,11 +37,17 @@ project(${PROJECT_NAME})
 
 # Files to generate
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-set(_GENERATED_SOURCES 
-    ${_GENERATED_DIR}/libbsdf.bc
-    ${_GENERATED_DIR}/libbsdf.d     # dependency file
-    ${_GENERATED_DIR}/libbsdf.ll    # useful for debugging
+set(DF_HANDLE_SLOT_MODES "hsmp" "hsmn" "hsm1" "hsm2" "hsm4" "hsm8")
+set(_GENERATED_SOURCES "")
+foreach(HS ${DF_HANDLE_SLOT_MODES})
+    # .d is a dependency file
+    # .ll is useful for debugging
+    list(APPEND _GENERATED_SOURCES
+        ${_GENERATED_DIR}/libbsdf_${HS}.bc
+        ${_GENERATED_DIR}/libbsdf_${HS}.d
+        ${_GENERATED_DIR}/libbsdf_${HS}.ll
     )
+endforeach()
 
 # add dummy-source to create a dummy-lib
 set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
@@ -50,21 +56,18 @@ if(NOT EXISTS ${DUMMY_CPP})
 endif()
 
 # collect sources
-set(PROJECT_HEADERS
+set(PROJECT_SOURCES
     "libbsdf.h"
     "libbsdf_internal.h"
+    "libbsdf_multiscatter.h"
     "libbsdf_runtime.h"
     "libbsdf_utilities.h"
-    )
-
-set(PROJECT_SOURCES
     "libbsdf.cpp"
-    ${PROJECT_HEADERS}
     )
 
 
 # disable compiling by the main compiler (only clang will)
-set_source_files_properties("libbsdf.cpp" PROPERTIES HEADER_FILE_ONLY ON)
+set_source_files_properties(${PROJECT_SOURCES} PROPERTIES HEADER_FILE_ONLY ON)
 
 # mark files as generated to disable the check for existence during configure
 set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
@@ -88,22 +91,27 @@ setup_ide(TARGET ${PROJECT_NAME} SOURCES ${PROJECT_SOURCES})
 # get clang
 target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL clang)
 
-add_custom_command(
-    OUTPUT
-        ${_GENERATED_DIR}/libbsdf.bc
-        ${_GENERATED_DIR}/libbsdf.d
-        ${_GENERATED_DIR}/libbsdf.ll
-    COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf bytecode using clang ..."
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
-    COMMAND ${clang_PATH} 
-        -emit-llvm -c -O2 -ffast-math -target x86_64-pc-win32 ${CLANG_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
-        -o ${_GENERATED_DIR}/libbsdf.bc -MD -MT ${_GENERATED_DIR}/libbsdf.bc -MP -MF ${_GENERATED_DIR}/libbsdf.d.tmp
-    COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf.d.tmp ${_GENERATED_DIR}/libbsdf.d
-    COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf.d.tmp
-    COMMAND ${clang_PATH} 
-        -emit-llvm -S -O2 -ffast-math -target x86_64-pc-win32 ${CLANG_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
-        -o ${_GENERATED_DIR}/libbsdf.ll
-    DEPENDS
-        ${PROJECT_SOURCES}
-    VERBATIM
+foreach(HS ${DF_HANDLE_SLOT_MODES})
+    string(TOUPPER ${HS} HS_UPPER)
+    set(CLANG_FLAGS_EX ${CLANG_FLAGS} "-D MDL_DF_HANDLE_SLOT_MODE=BSDF_${HS_UPPER}")
+
+    add_custom_command(
+        OUTPUT
+            ${_GENERATED_DIR}/libbsdf_${HS}.bc
+            ${_GENERATED_DIR}/libbsdf_${HS}.d
+            ${_GENERATED_DIR}/libbsdf_${HS}.ll
+        COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_${HS} bytecode using clang ..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${clang_PATH} 
+            -emit-llvm -c -O3 -ffast-math -fno-vectorize -target nvptx-pc-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_${HS}.bc -MD -MT ${_GENERATED_DIR}/libbsdf_${HS}.bc -MP -MF ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
+        COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp ${_GENERATED_DIR}/libbsdf_${HS}.d
+        COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
+        COMMAND ${clang_PATH} 
+            -emit-llvm -S -O3 -ffast-math -fno-vectorize -target nvptx-pc-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_${HS}.ll
+        DEPENDS
+            ${PROJECT_SOURCES}
+        VERBATIM
     )
+endforeach()

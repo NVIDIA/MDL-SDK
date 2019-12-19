@@ -74,6 +74,13 @@ public:
         fflush( stderr);
 #endif
     }
+
+    void message(
+        mi::base::Message_severity level, const char* mod_cat, const mi::base::Message_details&,
+        const char* message)
+    {
+        this->message(level, mod_cat, message);
+    }
 };
 
 Logger::Logger()
@@ -141,7 +148,8 @@ namespace LOG {
 
 class Logger : public ILogger
 {
-    void fatal( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void fatal( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -151,7 +159,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_FATAL, "MDL", buf);
     }
 
-    void error( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void error( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -160,7 +169,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_ERROR, "MDL", buf);
     }
 
-    void warning( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void warning( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                  const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -169,7 +179,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_WARNING, "MDL", buf);
     }
 
-    void stat( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void stat( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+               const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -178,7 +189,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_VERBOSE, "MDL", buf);
     }
 
-    void vstat( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void vstat( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -187,7 +199,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_VERBOSE, "MDL", buf);
     }
 
-    void progress( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void progress( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                   const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -196,7 +209,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_VERBOSE, "MDL", buf);
     }
 
-    void info( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void info( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+               const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -205,7 +219,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "MDL", buf);
     }
 
-    void debug( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args)
+    void debug( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);
@@ -214,7 +229,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_DEBUG, "MDL", buf);
     }
 
-    void vdebug( const char* /*mod*/, Category /*cat*/, const char* fmt, va_list args) //-V524 PVS
+    void vdebug( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
+                 const char* fmt, va_list args) //-V524 PVS
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);

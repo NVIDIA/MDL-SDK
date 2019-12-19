@@ -127,9 +127,17 @@ public:
 
     /// Enable optimization.
     ///
-    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
     /// \return      The old value of the flag.
     bool enable_opt(bool flag) { bool res = m_opt_enabled; m_opt_enabled = flag; return res; }
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_unsafe_math_opt(bool flag) {
+        bool res = m_unsafe_math_opt; m_unsafe_math_opt = flag; return res;
+    }
 
     /// Enable ignoring no-inline annotations of functions.
     ///
@@ -447,6 +455,9 @@ private:
     /// The value factory.
     Value_factory &m_value_factory;
 
+    /// The symbol table to share call signatures.
+    Symbol_table &m_sym_tab;
+
     /// The internal space for which to compile.
     char const *m_internal_space;
 
@@ -457,31 +468,34 @@ private:
     size_t m_next_id;
 
     /// If set, CSE is enabled.
-    bool m_cse_enabled;
+    unsigned m_cse_enabled : 1;
 
     /// If set, optimizations are enabled.
-    bool m_opt_enabled;
+    unsigned m_opt_enabled : 1;
+
+    /// If set, unsafe math optimizations are enabled.
+    unsigned m_unsafe_math_opt : 1;
 
     /// If set, inlining is allowed.
-    bool m_inline_allowed;
+    unsigned m_inline_allowed : 1;
 
     /// If set, no-inline annotations will be ignored.
-    bool m_noinline_ignored;
+    unsigned m_noinline_ignored : 1;
 
     /// If set, the state module must be imported due to some transformations.
-    bool m_needs_state_import;
+    unsigned m_needs_state_import : 1;
 
     /// If set, the nvidia::df module must be imported due to some transformations.
-    bool m_needs_nvidia_df_import;
+    unsigned m_needs_nvidia_df_import : 1;
 
     /// If set, texture constructors with non-const gamma argument are avoided.
-    bool m_avoid_non_const_gamma;
+    unsigned m_avoid_non_const_gamma : 1;
 
     /// If set, scene unit conversion functions are folded.
-    bool m_enable_scene_conv_fold;
+    unsigned m_enable_scene_conv_fold : 1;
 
     /// If set, state::wavelenth_[min|max]() functions are folded.
-    bool m_enable_wavelength_fold;
+    unsigned m_enable_wavelength_fold : 1;
 
 
     /// The meter/scene unit conversion value.

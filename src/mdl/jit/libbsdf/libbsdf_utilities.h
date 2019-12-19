@@ -39,7 +39,6 @@ BSDF_INLINE void absorb(BSDF_sample_data *data)
 BSDF_INLINE void absorb(BSDF_evaluate_data *data)
 {
     data->pdf  = 0.0f;
-    data->bsdf = make_float3(0.0f, 0.0f, 0.0f);
 }
 
 BSDF_INLINE void absorb(BSDF_pdf_data *data)
@@ -47,10 +46,8 @@ BSDF_INLINE void absorb(BSDF_pdf_data *data)
     data->pdf  = 0.0f;
 }
 
-BSDF_INLINE void absorb(BSDF_auxiliary_data *data, const float3& normal)
+BSDF_INLINE void absorb(BSDF_auxiliary_data *data)
 {
-    data->albedo = make_float3(0.0f, 0.0f, 0.0f);
-    data->normal = normal;
 }
 
 BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
@@ -75,7 +72,6 @@ BSDF_INLINE void no_emission(EDF_evaluate_data *data)
 {
     // keep cos if set
     data->pdf = 0.f;
-    data->edf = make_float3(0.0f, 0.0f, 0.0f);
 }
 
 BSDF_INLINE void no_emission(EDF_pdf_data *data)
@@ -113,19 +109,18 @@ template<> BSDF_INLINE void no_contribution(BSDF_evaluate_data* data, const floa
     absorb(data); }
 template<> BSDF_INLINE void no_contribution(BSDF_pdf_data* data, const float3& normal) { 
     absorb(data); }
+template<> BSDF_INLINE void no_contribution(BSDF_auxiliary_data* data, const float3& normal) { 
+    absorb(data); }
 template<> BSDF_INLINE void no_contribution(EDF_sample_data* data, const float3& normal) { 
     no_emission(data); }
 template<> BSDF_INLINE void no_contribution(EDF_evaluate_data* data, const float3& normal) { 
     no_emission(data); }
 template<> BSDF_INLINE void no_contribution(EDF_pdf_data* data, const float3& normal) { 
     no_emission(data); }
-template<> BSDF_INLINE void no_contribution(BSDF_auxiliary_data* data, const float3& normal) { 
-    absorb(data, normal); }
 template<> BSDF_INLINE void no_contribution(EDF_auxiliary_data* data, const float3& normal) {
     no_emission(data); }
 
-// using color IORs would require some sort of spectral rendering, as of now libbsdf
-// reduces that to scalar by averaging
+// obtain IOR values on both sides of the surface
 template<typename Data>
 BSDF_INLINE float2 process_ior(Data *data, State *state)
 {
@@ -134,6 +129,8 @@ BSDF_INLINE float2 process_ior(Data *data, State *state)
     if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
         data->ior2 = get_material_ior(state);
 
+    // using color IORs would require some sort of spectral rendering, as of now libbsdf
+    // reduces that to scalar by averaging
     float2 ior = make_float2(
         (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0),
         (data->ior2.x + data->ior2.y + data->ior2.z) * (float)(1.0 / 3.0));
@@ -149,6 +146,87 @@ BSDF_INLINE float2 process_ior(Data *data, State *state)
     return ior;
 }
 
+BSDF_INLINE void compute_eta(float &eta, const float3 &ior1, const float3 &ior2)
+{
+    eta = (ior2.x + ior2.y + ior2.z) / (ior1.x + ior1.y + ior1.z);
+}
+
+BSDF_INLINE void compute_eta(float3 &eta, const float3 &ior1, const float3 &ior2)
+{
+    eta = ior2 / ior1;
+}
+
+// variant of the above for Fresnel layering, replaces one of the IORs by
+// the parameter of the layerer for weight computation
+template<typename Data>
+BSDF_INLINE float2 process_ior_fresnel_layer(Data *data, State *state, const float ior_param)
+{
+    const float3 material_ior = get_material_ior(state);
+    
+    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+        data->ior1 = material_ior;
+    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+        data->ior2 = material_ior;
+
+    //!! this property should be communicated by the renderer
+    const bool outside =
+        (material_ior.x == data->ior2.x) &&
+        (material_ior.y == data->ior2.y) &&
+        (material_ior.z == data->ior2.z);
+
+    float2 ior = make_float2(
+        outside ? (data->ior1.x + data->ior1.y + data->ior1.z) * (float)(1.0 / 3.0) : ior_param,
+        outside ? ior_param : (data->ior2.x + data->ior2.y + data->ior2.z) * (float)(1.0 / 3.0));
+
+    const float IOR_THRESHOLD = 1e-4f;
+    const float ior_diff = ior.y - ior.x;
+    if (math::abs(ior_diff) < IOR_THRESHOLD) {
+        ior.y = ior.x + copysignf(IOR_THRESHOLD, ior_diff);
+    }
+
+    return ior;
+}
+
+// variant of the above for color Fresnel layering, replaces one of the IORs by
+// the parameter of the layerer for weight computation
+struct Color_fresnel_ior {
+    float2 ior;
+    float3 eta;
+};
+template<typename Data>
+BSDF_INLINE Color_fresnel_ior process_ior_color_fresnel_layer(Data *data, State *state, const float3 &ior_param)
+{
+    const float3 material_ior = get_material_ior(state);
+    
+    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+        data->ior1 = material_ior;
+    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+        data->ior2 = material_ior;
+
+    //!! this property should be communicated by the renderer
+    const bool outside =
+        (material_ior.x == data->ior2.x) &&
+        (material_ior.y == data->ior2.y) &&
+        (material_ior.z == data->ior2.z);
+
+    const float3 ior1 = outside ? data->ior1 : ior_param;
+    const float3 ior2 = outside ? ior_param : data->ior2;
+
+    Color_fresnel_ior ret_val;
+    ret_val.eta = ior2 / ior1;
+        
+    ret_val.ior = make_float2(
+        (ior1.x + ior1.y + ior1.z) * (float)(1.0 / 3.0),
+        (ior2.x + ior2.y + ior2.z) * (float)(1.0 / 3.0));
+
+    const float IOR_THRESHOLD = 1e-4f;
+    const float ior_diff = ret_val.ior.y - ret_val.ior.x;
+    if (math::abs(ior_diff) < IOR_THRESHOLD) {
+        ret_val.ior.y = ret_val.ior.x + copysignf(IOR_THRESHOLD, ior_diff);
+    }
+
+    return ret_val;
+}
 
 // uniformly sample projected hemisphere
 BSDF_INLINE float3 cosine_hemisphere_sample(
@@ -382,14 +460,13 @@ BSDF_INLINE float3 compute_half_vector(
     const float3 &k2,
     const float3 &shading_normal,
     const float2 &ior,
-    const float nk1,
     const float nk2,
     const bool transmission,
-    const bool thin_walled)
+    const bool no_refraction)
 {
     float3 h;
     if (transmission) {
-        if (thin_walled) {
+        if (no_refraction) {
             h = k1 + (shading_normal * (nk2 + nk2) + k2); // use corresponding reflection direction
         } else {
             h = k2 * ior.y + k1 * ior.x; // points into thicker medium
@@ -401,6 +478,24 @@ BSDF_INLINE float3 compute_half_vector(
     }
     return math::normalize(h);
 }
+
+// compute half vector (convention: pointing to outgoing direction, like shading normal),
+// without actual refraction
+BSDF_INLINE float3 compute_half_vector(
+    const float3 &k1,
+    const float3 &k2,
+    const float3 &shading_normal,
+    const float nk2,
+    const bool transmission)
+{
+    float3 h;
+    if (transmission)
+        h = k1 + (shading_normal * (nk2 + nk2) + k2);
+    else
+        h = k1 + k2;
+    return math::normalize(h);
+}
+
 
 // evaluate anisotropic Phong half vector distribution on the non-projected hemisphere
 BSDF_INLINE float hvd_phong_eval(
@@ -437,6 +532,34 @@ BSDF_INLINE float3 hvd_phong_sample(
             ((samples.x < 0.75f) && (samples.x >= 0.25f)) ? -tttv : tttv,
             1.0f,
             ((samples.x >= 0.5f)                          ? -tttu : tttu)));
+}
+
+// evaluate anisotropic sheen half vector distribution on the non-projected hemisphere
+BSDF_INLINE float hvd_sheen_eval(
+    const float inv_roughness,
+    const float nh)     // dot(shading_normal, h)
+{
+    const float sin_theta2 = math::max(0.0f, 1.0f - nh * nh);
+    const float sin_theta = math::sqrt(sin_theta2);
+    return (inv_roughness + 2.0f) * math::pow(sin_theta, inv_roughness) * (float) (0.5 / M_PI) * nh;
+}
+
+// sample half vector according to anisotropic sheen distribution
+BSDF_INLINE float3 hvd_sheen_sample(
+    const float2 &samples,
+    const float inv_roughness)
+{
+    const float phi = (float) (2.0 * M_PI) * samples.x;
+    float sin_phi, cos_phi;
+    math::sincos(phi, &sin_phi, &cos_phi);
+
+    const float sin_theta = math::pow(1.0f - samples.y, 1.0f / (inv_roughness + 2.0f));
+    const float cos_theta = math::sqrt(1.0f - sin_theta * sin_theta);
+
+    return math::normalize(make_float3(
+        cos_phi * sin_theta,
+        cos_theta,
+        sin_phi * sin_theta));
 }
 
 // evaluate anisotropic Beckmann distribution on the non-projected hemisphere
@@ -881,8 +1004,8 @@ BSDF_INLINE float3 thin_film_factor(
     const float nk2 = math::abs(math::dot(k2, normal));
 
     const float3 h = compute_half_vector(
-        k1, k2, normal, ior, nk1, nk2,
-        transmission, thin_walled);
+        k1, k2, normal, nk2,
+        transmission);
 
     const float kh = math::abs(math::dot(k1, h));
 

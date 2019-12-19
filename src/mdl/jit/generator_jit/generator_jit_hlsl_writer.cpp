@@ -63,7 +63,8 @@ HLSLWriterPass::HLSLWriterPass(
     unsigned                                             num_texture_spaces,
     unsigned                                             num_texture_results,
     bool                                                 enable_debug,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list)
+    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode)
 : llvm::ModulePass(ID)
 , m_alloc(alloc)
 , m_type_mapper(type_mapper)
@@ -91,6 +92,7 @@ HLSLWriterPass::HLSLWriterPass(
 , m_out_def(nullptr)
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
+, m_df_handle_slot_mode(df_handle_slot_mode)
 , m_use_dbg(enable_debug)
 , m_cur_data_layout(nullptr)
 , m_ref_fnames(0, Ref_fname_id_map::hasher(), Ref_fname_id_map::key_equal(), alloc)
@@ -920,11 +922,9 @@ llvm::Value *HLSLWriterPass::process_pointer_address_recurse(
     llvm::Value *base_pointer;
 
     // skip bitcasts
-    while (llvm::BitCastInst *bitcast = llvm::dyn_cast<llvm::BitCastInst>(pointer)) {
-        pointer = bitcast->getOperand(0);
-    }
+    pointer = pointer->stripPointerCasts();
 
-    if (llvm::GetElementPtrInst *gep = llvm::dyn_cast<llvm::GetElementPtrInst>(pointer)) {
+    if (llvm::GEPOperator *gep = llvm::dyn_cast<llvm::GEPOperator>(pointer)) {
         base_pointer = process_pointer_address_recurse(stack, gep->getPointerOperand(), write_size);
         if (base_pointer == nullptr)
             return nullptr;
@@ -1034,9 +1034,14 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
             type_kind == hlsl::Type::TK_MATRIX)
         {
             if (type_kind == hlsl::Type::TK_VECTOR &&
-                    llvm::isa<llvm::ConstantInt>(stack[i].field_index_val)) {
-                llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
-                unsigned idx_imm = unsigned(idx->getZExtValue()) + stack[i].field_index_offs;
+                    (stack[i].field_index_val == nullptr ||
+                        llvm::isa<llvm::ConstantInt>(stack[i].field_index_val))) {
+                unsigned idx_imm;
+                if (stack[i].field_index_val) {
+                    llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
+                    idx_imm = unsigned(idx->getZExtValue()) + stack[i].field_index_offs;
+                } else
+                    idx_imm = stack[i].field_index_offs;
                 cur_expr = create_vector_access(cur_expr, idx_imm);
             } else {
                 hlsl::Expr *array_index;
@@ -1107,10 +1112,16 @@ bool HLSLWriterPass::move_to_next_compound_elem(Type_walk_stack &stack)
 {
     Type_walk_element *cur_elem = &stack.back();
     while (true) {
-        MDL_ASSERT(llvm::isa<llvm::ConstantInt>(cur_elem->field_index_val) &&
-            "field_index_val must be a constant to move to next compound element");
-        llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(cur_elem->field_index_val);
-        unsigned index = unsigned(idx->getZExtValue()) + cur_elem->field_index_offs;
+        unsigned index;
+        if (cur_elem->field_index_val) {
+            MDL_ASSERT(llvm::isa<llvm::ConstantInt>(cur_elem->field_index_val) &&
+                "field_index_val must be a constant to move to next compound element");
+            llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(cur_elem->field_index_val);
+            index = unsigned(idx->getZExtValue()) + cur_elem->field_index_offs;
+        } else {
+            index = cur_elem->field_index_offs;
+        }
+
         if (is_valid_composite_index(cur_elem->llvm_type, index + 1)) {
             llvm::CompositeType *comp_type =
                 llvm::cast<llvm::CompositeType>(cur_elem->llvm_type);
@@ -1239,9 +1250,10 @@ bool HLSLWriterPass::translate_intrinsic_call(
             if (bitcast_dst == nullptr)
                 return false;
 
-            // expect the source pointer to be a bitcast
-            llvm::BitCastInst *bitcast_src = llvm::dyn_cast<llvm::BitCastInst>(call->getOperand(1));
-            if (bitcast_src == nullptr)
+            // expect the source pointer to be a bitcast (may be a bitcast instruction or value
+            // (in case of a constant))
+            llvm::Operator *bitcast_src = llvm::dyn_cast<llvm::Operator>(call->getOperand(1));
+            if (bitcast_src->getOpcode() != llvm::Instruction::BitCast)
                 return false;
 
             // only allow constant size
@@ -1465,10 +1477,10 @@ void HLSLWriterPass::translate_store(
             } else {
                 MDL_ASSERT(expr_elem_type == lval->get_type());
                 rhs = create_vector_access(expr, cur_vector_index++);
+                expr = translate_expr(value, nullptr);   // create new AST for the expression
             }
 
             stmts.push_back(create_assign_stmt(lval, rhs));
-            expr = translate_expr(value, nullptr);   // create new AST for the expression
         }
 
         Type_walk_element &cur_elem = stack.back();
@@ -1498,9 +1510,21 @@ void HLSLWriterPass::translate_store(
 // Translate an LLVM ConstantInt value to an HLSL value.
 hlsl::Value *HLSLWriterPass::translate_constant_int(llvm::ConstantInt *ci)
 {
-    switch (ci->getBitWidth()) {
+    unsigned int bit_width = ci->getBitWidth();
+    if (bit_width > 1 && bit_width < 16) {
+        // allow comparison of "trunc i32 %Y to i2" with "i2 -1"
+        // TODO: sign
+        return m_value_factory.get_int16(int16_t(ci->getSExtValue()) & ((1 << bit_width) - 1));
+    }
+
+    if (bit_width > 16 && bit_width < 32) {
+        // allow comparison of "trunc i32 %Y to i2" with "i2 -1"
+        // TODO: sign
+        return m_value_factory.get_int32(int32_t(ci->getSExtValue()) & ((1 << bit_width) - 1));
+    }
+
+    switch (bit_width) {
     case 1:
-    case 8:
         return m_value_factory.get_bool(!ci->isZero());
     case 16:
         // TODO: sign
@@ -1719,17 +1743,22 @@ hlsl::Expr *HLSLWriterPass::translate_constant_data_array(llvm::ConstantDataArra
 }
 
 // Translate an LLVM ConstantStruct value to an HLSL expression.
-hlsl::Expr *HLSLWriterPass::translate_constant_struct_expr(llvm::ConstantStruct *cv)
+hlsl::Expr *HLSLWriterPass::translate_constant_struct_expr(llvm::ConstantStruct *cv, bool is_global)
 {
     size_t num_elems = size_t(cv->getNumOperands());
     Small_VLA<hlsl::Expr *, 8> agg_elems(m_alloc, num_elems);
 
     for (size_t i = 0; i < num_elems; ++i) {
         llvm::Constant *elem = cv->getOperand(i);
-        agg_elems[i] = translate_constant_expr(elem);
+        agg_elems[i] = translate_constant_expr(elem, is_global);
     }
 
     hlsl::Type *res_type = convert_type(cv->getType());
+    if (is_global) {
+        hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, agg_elems);
+        res->set_type(res_type);
+        return res;
+    }
     return create_constructor_call(res_type, agg_elems, zero_loc);
 }
 
@@ -1749,14 +1778,14 @@ hlsl::Value *HLSLWriterPass::translate_constant_vector(llvm::ConstantVector *cv)
 }
 
 // Translate an LLVM ConstantArray value to an HLSL compound expression.
-hlsl::Expr *HLSLWriterPass::translate_constant_array(llvm::ConstantArray *cv)
+hlsl::Expr *HLSLWriterPass::translate_constant_array(llvm::ConstantArray *cv, bool is_global)
 {
     size_t num_elems = size_t(cv->getNumOperands());
     Small_VLA<hlsl::Expr *, 8> values(m_alloc, num_elems);
 
     for (size_t i = 0; i < num_elems; ++i) {
         llvm::Constant *elem = cv->getOperand(i);
-        values[i] = translate_constant_expr(elem);
+        values[i] = translate_constant_expr(elem, is_global);
     }
 
     hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, values);
@@ -1765,21 +1794,19 @@ hlsl::Expr *HLSLWriterPass::translate_constant_array(llvm::ConstantArray *cv)
 }
 
 // Translate an LLVM ConstantAggregateZero value to an HLSL compound expression.
-hlsl::Expr *HLSLWriterPass::translate_constant_array(llvm::ConstantAggregateZero *cv)
+hlsl::Expr *HLSLWriterPass::translate_constant_array(
+    llvm::ConstantAggregateZero *cv, bool is_global)
 {
     llvm::ArrayType *at = llvm::cast<llvm::ArrayType>(cv->getType());
     size_t num_elems = size_t(at->getArrayNumElements());
-    Small_VLA<hlsl::Expr *, 8> values(m_alloc, num_elems);
-
-    hlsl::Type *elem_type = convert_type(cv->getType()->getArrayElementType());
+    Small_VLA<hlsl::Expr *, 8> agg_elems(m_alloc, num_elems);
 
     for (size_t i = 0; i < num_elems; ++i) {
-        values[i] = m_expr_factory.create_literal(
-            zero_loc,
-            m_value_factory.get_zero_initializer(elem_type));
+        llvm::Constant *elem = cv->getElementValue(i);
+        agg_elems[i] = translate_constant_expr(elem, is_global);
     }
 
-    hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, values);
+    hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, agg_elems);
     res->set_type(convert_type(cv->getType()));
     return res;
 }
@@ -1853,7 +1880,7 @@ hlsl::Value *HLSLWriterPass::translate_constant(llvm::Constant *c)
 }
 
 // Translate an LLVM Constant value to an HLSL expression.
-hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c)
+hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c, bool is_global)
 {
     if (llvm::GlobalVariable *gv = llvm::dyn_cast<llvm::GlobalVariable>(c)) {
         if (gv->isConstant() && gv->hasInitializer()) {
@@ -1866,7 +1893,7 @@ hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c)
     }
 
     if (llvm::ConstantStruct *cv = llvm::dyn_cast<llvm::ConstantStruct>(c)) {
-        return translate_constant_struct_expr(cv);
+        return translate_constant_struct_expr(cv, is_global);
     }
 
     if (llvm::StructType *st = llvm::dyn_cast<llvm::StructType>(c->getType())) {
@@ -1876,10 +1903,16 @@ hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c)
 
             for (size_t i = 0; i < num_elems; ++i) {
                 llvm::Constant *elem = cv->getElementValue(i);
-                agg_elems[i] = translate_constant_expr(elem);
+                agg_elems[i] = translate_constant_expr(elem, is_global);
             }
 
-            return create_constructor_call(convert_type(st), agg_elems, zero_loc);
+            hlsl::Type *res_type = convert_type(st);
+            if (is_global) {
+                hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, agg_elems);
+                res->set_type(res_type);
+                return res;
+            }
+            return create_constructor_call(res_type, agg_elems, zero_loc);
         }
 
         if (llvm::UndefValue *undef = llvm::dyn_cast<llvm::UndefValue>(c)) {
@@ -1888,10 +1921,16 @@ hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c)
 
             for (size_t i = 0; i < num_elems; ++i) {
                 llvm::Constant *elem = undef->getElementValue(i);
-                agg_elems[i] = translate_constant_expr(elem);
+                agg_elems[i] = translate_constant_expr(elem, is_global);
             }
 
-            return create_constructor_call(convert_type(st), agg_elems, zero_loc);
+            hlsl::Type *res_type = convert_type(st);
+            if (is_global) {
+                hlsl::Expr *res = m_expr_factory.create_compound(zero_loc, agg_elems);
+                res->set_type(res_type);
+                return res;
+            }
+            return create_constructor_call(res_type, agg_elems, zero_loc);
         }
     }
 
@@ -1901,10 +1940,10 @@ hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c)
                 return translate_constant_data_array(cv);
             }
             if (llvm::ConstantArray *cv = llvm::dyn_cast<llvm::ConstantArray>(c)) {
-                return translate_constant_array(cv);
+                return translate_constant_array(cv, is_global);
             }
             if (llvm::ConstantAggregateZero *cv = llvm::dyn_cast<llvm::ConstantAggregateZero>(c)) {
-                return translate_constant_array(cv);
+                return translate_constant_array(cv, is_global);
             }
         }
     }
@@ -1966,8 +2005,15 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
             result = translate_expr_store(llvm::cast<llvm::StoreInst>(inst));
             break;
 
-        // TODO
-        // case llvm::Instruction::GetElementPtr:
+        case llvm::Instruction::GetElementPtr:
+            {
+                llvm::GetElementPtrInst *gep = llvm::cast<llvm::GetElementPtrInst>(inst);
+                MDL_ASSERT(gep->hasAllZeroIndices());
+
+                // treat as pointer cast, skip it
+                return translate_expr(gep->getOperand(0), dst_var);
+            }
+
 
         case llvm::Instruction::PHI:
             {
@@ -2040,7 +2086,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
                 return result;
             }
         }
-        auto result = translate_constant_expr(ci);
+        auto result = translate_constant_expr(ci, /*is_global=*/ false);
         if (dst_var != nullptr)
             return create_assign_expr(dst_var, result);
         return result;
@@ -2541,6 +2587,23 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
         }
 
     case llvm::Instruction::Trunc:
+        {
+            hlsl::Type *hlsl_type = convert_type(inst->getType());
+            if (expr->get_type() == hlsl_type)
+                return expr;
+
+            hlsl::Expr *casted_expr = create_cast(hlsl_type, expr);
+            if (llvm::IntegerType *dest_int_type = llvm::dyn_cast<llvm::IntegerType>(dest_type)) {
+                int trunc_mask = (1 << dest_int_type->getBitWidth()) - 1;
+                hlsl::Expr *trunk_mask_expr = m_expr_factory.create_literal(
+                    zero_loc, m_value_factory.get_int32(trunc_mask));
+                return m_expr_factory.create_binary(
+                    Expr_binary::OK_BITWISE_AND, casted_expr, trunk_mask_expr);
+            }
+            MDL_ASSERT(!"Probably unsupported trunc instruction");
+            return casted_expr;
+        }
+
     case llvm::Instruction::FPToUI:
     case llvm::Instruction::FPToSI:
     case llvm::Instruction::UIToFP:
@@ -3310,14 +3373,20 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
         return m_type_factory.get_double();
     case llvm::Type::IntegerTyID:
         {
-            llvm::IntegerType *int_type = cast<llvm::IntegerType>(type);
+            llvm::IntegerType *int_type = llvm::cast<llvm::IntegerType>(type);
+            unsigned int bit_width = int_type->getBitWidth();
+
+            // Support such constructs
+            // %X = trunc i32 %Y to i2
+            // %Z = icmp i2 %X, 1
+            if (bit_width > 1 && bit_width <= 16)
+                return m_type_factory.get_min16int();
+            if (bit_width > 16 && bit_width <= 32)
+                return m_type_factory.get_int();
+
             switch (int_type->getBitWidth()) {
             case 1:
-            case 8:
                 return m_type_factory.get_bool();
-            case 16:
-                return m_type_factory.get_min16int();
-            case 32:
             case 64:  // TODO: maybe not a good idea
                 return m_type_factory.get_int();
             default:
@@ -3326,11 +3395,11 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
             }
         }
     case llvm::Type::StructTyID:
-        return convert_struct_type(cast<llvm::StructType>(type));
+        return convert_struct_type(llvm::cast<llvm::StructType>(type));
 
     case llvm::Type::ArrayTyID:
         {
-            llvm::ArrayType *array_type = cast<llvm::ArrayType>(type);
+            llvm::ArrayType *array_type = llvm::cast<llvm::ArrayType>(type);
             size_t          n_elem      = array_type->getNumElements();
 
             if (n_elem == 0) {
@@ -3701,22 +3770,25 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_sample_data_struct_types(llvm::St
 {
     hlsl::Type_scalar *float_type = m_type_factory.get_float();
     hlsl::Type_vector *float3_type = m_type_factory.get_vector(float_type, 3);
+    hlsl::Type_vector *float4_type = m_type_factory.get_vector(float_type, 4);
     hlsl::Type_scalar *int_type = m_type_factory.get_int();
 
     hlsl::Declaration_struct *decl_struct = m_decl_factory.create_struct(zero_loc);
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Bsdf_sample_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[8];
+    hlsl::Type_struct::Field fields[9];
 
     fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
     fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
     fields[2] = add_struct_field(decl_struct, float3_type, "k1");
-    fields[3] = add_struct_field(decl_struct, float3_type, "xi");
-    fields[4] = add_struct_field(decl_struct, float3_type, "k2");
+
+    fields[3] = add_struct_field(decl_struct, float3_type, "k2");
+    fields[4] = add_struct_field(decl_struct, float4_type, "xi");
     fields[5] = add_struct_field(decl_struct, float_type,  "pdf");
     fields[6] = add_struct_field(decl_struct, float3_type, "bsdf_over_pdf");
     fields[7] = add_struct_field(decl_struct, int_type,    "event_type");
+    fields[8] = add_struct_field(decl_struct, int_type,    "handle");
 
     hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
     m_type_cache[type] = res;
@@ -3736,16 +3808,42 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_evaluate_data_struct_types(llvm::
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Bsdf_evaluate_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[6];
+    MDL_ASSERT(m_df_handle_slot_mode != mi::mdl::DF_HSM_POINTER &&
+               "df_handle_slot_mode POINTER is not supported for HLSL");
 
-    fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
-    fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
-    fields[2] = add_struct_field(decl_struct, float3_type, "k1");
-    fields[3] = add_struct_field(decl_struct, float3_type, "k2");
-    fields[4] = add_struct_field(decl_struct, float3_type, "bsdf");
-    fields[5] = add_struct_field(decl_struct, float_type,  "pdf");
+    hlsl::Type_struct *res;
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
+    {
+        hlsl::Type_struct::Field fields[7];
 
-    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+        fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
+        fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
+        fields[2] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[3] = add_struct_field(decl_struct, float3_type, "k2");
+        fields[4] = add_struct_field(decl_struct, float3_type, "bsdf_diffuse");
+        fields[5] = add_struct_field(decl_struct, float3_type, "bsdf_glossy");
+        fields[6] = add_struct_field(decl_struct, float_type,  "pdf");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+    else // DF_HSM_FIXED (no pointers in HLSL)
+    {
+        size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
+        hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
+        hlsl::Type_scalar *int_type = m_type_factory.get_int();
+
+        hlsl::Type_struct::Field fields[8];
+
+        fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
+        fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
+        fields[2] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[3] = add_struct_field(decl_struct, float3_type, "k2");
+        fields[4] = add_struct_field(decl_struct, int_type, "handle_offset");
+        fields[5] = add_struct_field(decl_struct, float3_array_type, "bsdf_diffuse");
+        fields[6] = add_struct_field(decl_struct, float3_array_type, "bsdf_glossy");
+        fields[7] = add_struct_field(decl_struct, float_type, "pdf");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+
     m_type_cache[type] = res;
 
     // do not add to the unit to avoid printing it
@@ -3789,15 +3887,34 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_auxiliary_data_struct_types(llvm:
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Bsdf_auxiliary_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[5];
+    hlsl::Type_struct *res;
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
+    {
+        hlsl::Type_struct::Field fields[5];
 
-    fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
-    fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
-    fields[2] = add_struct_field(decl_struct, float3_type, "k1");
-    fields[3] = add_struct_field(decl_struct, float3_type, "albedo");
-    fields[4] = add_struct_field(decl_struct, float3_type, "normal");
+        fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
+        fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
+        fields[2] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[3] = add_struct_field(decl_struct, float3_type, "albedo");
+        fields[4] = add_struct_field(decl_struct, float3_type, "normal");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+    else // DF_HSM_FIXED (no pointers in HLSL)
+    {
+        size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
+        hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
+        hlsl::Type_scalar *int_type = m_type_factory.get_int();
 
-    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+        hlsl::Type_struct::Field fields[6];
+
+        fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
+        fields[1] = add_struct_field(decl_struct, float3_type, "ior2");
+        fields[2] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[3] = add_struct_field(decl_struct, int_type, "handle_offset");
+        fields[4] = add_struct_field(decl_struct, float3_array_type, "albedo");
+        fields[5] = add_struct_field(decl_struct, float3_array_type, "normal");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
     m_type_cache[type] = res;
 
     // do not add to the unit to avoid printing it
@@ -3810,19 +3927,21 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_sample_data_struct_types(llvm::Str
 {
     hlsl::Type_scalar *float_type = m_type_factory.get_float();
     hlsl::Type_vector *float3_type = m_type_factory.get_vector(float_type, 3);
+    hlsl::Type_vector *float4_type = m_type_factory.get_vector(float_type, 4);
     hlsl::Type_scalar *int_type = m_type_factory.get_int();
 
     hlsl::Declaration_struct *decl_struct = m_decl_factory.create_struct(zero_loc);
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Edf_sample_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[5];
+    hlsl::Type_struct::Field fields[6];
 
-    fields[0] = add_struct_field(decl_struct, float3_type, "xi");
+    fields[0] = add_struct_field(decl_struct, float4_type, "xi");
     fields[1] = add_struct_field(decl_struct, float3_type, "k1");
     fields[2] = add_struct_field(decl_struct, float_type,  "pdf");
     fields[3] = add_struct_field(decl_struct, float3_type, "edf_over_pdf");
     fields[4] = add_struct_field(decl_struct, int_type,    "event_type");
+    fields[5] = add_struct_field(decl_struct, int_type,    "handle");
 
     hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
     m_type_cache[type] = res;
@@ -3842,14 +3961,36 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_evaluate_data_struct_types(llvm::S
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Edf_evaluate_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[4];
+    MDL_ASSERT(m_df_handle_slot_mode != mi::mdl::DF_HSM_POINTER &&
+               "df_handle_slot_mode POINTER is not supported for HLSL");
 
-    fields[0] = add_struct_field(decl_struct, float3_type, "k1");
-    fields[1] = add_struct_field(decl_struct, float_type,  "cos");
-    fields[2] = add_struct_field(decl_struct, float3_type, "edf");
-    fields[3] = add_struct_field(decl_struct, float_type,  "pdf");
+    hlsl::Type_struct *res;
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
+    {
+        hlsl::Type_struct::Field fields[4];
 
-    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+        fields[0] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[1] = add_struct_field(decl_struct, float_type, "cos");
+        fields[2] = add_struct_field(decl_struct, float3_type, "edf");
+        fields[3] = add_struct_field(decl_struct, float_type, "pdf");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+    else // DF_HSM_FIXED (no pointers in HLSL)
+    {
+        size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
+        hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
+        hlsl::Type_scalar *int_type = m_type_factory.get_int();
+
+        hlsl::Type_struct::Field fields[5];
+
+        fields[0] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[1] = add_struct_field(decl_struct, int_type, "handle_offset");
+        fields[2] = add_struct_field(decl_struct, float_type, "cos");
+        fields[3] = add_struct_field(decl_struct, float3_array_type, "edf");
+        fields[4] = add_struct_field(decl_struct, float_type, "pdf");
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+    
     m_type_cache[type] = res;
 
     // do not add to the unit to avoid printing it
@@ -3890,11 +4031,26 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_auxiliary_data_struct_types(llvm::
     hlsl::Symbol *struct_sym = m_symbol_table.get_symbol("Edf_auxiliary_data");
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
-    hlsl::Type_struct::Field fields[1];
+    hlsl::Type_struct *res;
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
+    {
+        hlsl::Type_struct::Field fields[1];
 
-    fields[0] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[0] = add_struct_field(decl_struct, float3_type, "k1");
 
-    hlsl::Type_struct *res = m_type_factory.get_struct(fields, struct_sym);
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
+    else // DF_HSM_FIXED (no pointers in HLSL)
+    {
+        hlsl::Type_scalar *int_type = m_type_factory.get_int();
+
+        hlsl::Type_struct::Field fields[2];
+
+        fields[0] = add_struct_field(decl_struct, float3_type, "k1");
+        fields[1] = add_struct_field(decl_struct, int_type, "handle_offset");
+
+        res = m_type_factory.get_struct(fields, struct_sym);
+    }
     m_type_cache[type] = res;
 
     // do not add to the unit to avoid printing it
@@ -4572,7 +4728,7 @@ hlsl::Def_variable *HLSLWriterPass::create_local_const(llvm::Constant *cv)
     add_array_specifiers(init_decl, cnst_type);
     decl_cnst->add_init(init_decl);
 
-    init_decl->set_initializer(translate_constant_expr(cv));
+    init_decl->set_initializer(translate_constant_expr(cv, /*is_global=*/ false));
 
     hlsl::Def_variable *cnst_def = m_def_tab.enter_variable_definition(
         cnst_sym, cnst_type, &var_name->get_location());
@@ -4612,7 +4768,7 @@ hlsl::Def_variable *HLSLWriterPass::create_global_const(llvm::Constant *cv)
     add_array_specifiers(init_decl, cnst_type);
     decl_cnst->add_init(init_decl);
 
-    init_decl->set_initializer(translate_constant_expr(cv));
+    init_decl->set_initializer(translate_constant_expr(cv, /*is_global=*/ true));
 
     hlsl::Def_variable *cnst_def = m_def_tab.enter_variable_definition(
         cnst_sym, cnst_type, &var_name->get_location());
@@ -4743,6 +4899,7 @@ llvm::Pass *createHLSLWriterPass(
     unsigned                                             num_texture_spaces,
     unsigned                                             num_texture_results,
     bool                                                 enable_debug,
+    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list)
 {
     return new HLSLWriterPass(
@@ -4752,7 +4909,8 @@ llvm::Pass *createHLSLWriterPass(
         num_texture_spaces,
         num_texture_results,
         enable_debug,
-        exp_func_list);
+        exp_func_list,
+        df_handle_slot_mode);
 }
 
 }  // hlsl

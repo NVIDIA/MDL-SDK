@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_compilation.cpp
+// examples/mdl_sdk/compilation/example_compilation.cpp
 //
 // Introduces compiled materials and highlights differences between different compilation modes.
 
@@ -208,8 +208,8 @@ void generate_llvm_ir(
     const char* path,
     const char* fname)
 {
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        transaction->edit<mi::neuraylib::ICompiled_material>( compiled_material_name));
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_llvm_ir(
         mdl_compiler->get_backend( mi::neuraylib::IMdl_compiler::MB_LLVM_IR));
@@ -236,8 +236,8 @@ void generate_cuda_ptx(
     const char* path,
     const char* fname)
 {
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        transaction->edit<mi::neuraylib::ICompiled_material>( compiled_material_name));
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_cuda_ptx(
         mdl_compiler->get_backend( mi::neuraylib::IMdl_compiler::MB_CUDA_PTX));
@@ -264,8 +264,8 @@ void generate_hlsl(
     const char* path,
     const char* fname)
 {
-    mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        transaction->edit<mi::neuraylib::ICompiled_material>( compiled_material_name));
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_hlsl(
         mdl_compiler->get_backend( mi::neuraylib::IMdl_compiler::MB_HLSL));
@@ -298,7 +298,7 @@ void usage( char const *prog_name)
     exit( EXIT_FAILURE);
 }
 
-int main( int argc, char* argv[])
+int MAIN_UTF8( int argc, char* argv[])
 {
     // Parse command line options
     Options options;
@@ -432,4 +432,7 @@ int main( int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8
 

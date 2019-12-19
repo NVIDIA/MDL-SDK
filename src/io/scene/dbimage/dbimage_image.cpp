@@ -36,11 +36,9 @@
 
 #include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
-#include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
 #include <base/data/serial/i_serializer.h>
-#include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
@@ -420,15 +418,6 @@ const std::string& Image::get_resolved_container_membername(mi::Uint32 uvtile_id
 
 const std::string& Image::get_original_filename() const
 {
-    if( m_original_filename.empty() && !m_uvtiles[0].m_mdl_file_path.empty()) {
-        SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
-        const CONFIG::Config_registry& registry = config_module->get_configuration();
-        bool flag = false;
-        registry.get_value( "deprecated_mdl_file_path_as_original_filename", flag);
-        if( flag)
-            return m_mdl_file_path;
-    }
-
     return m_original_filename;
 }
 
@@ -958,9 +947,9 @@ mi::neuraylib::ICanvas* Image_set::get_canvas(mi::Size i) const
     return NULL;
 }
 
-bool Image_set::is_uvtile() const 
+bool Image_set::is_uvtile() const
 { 
-    return true; 
+    return false;
 }
 
 bool Image_set::is_mdl_container() const

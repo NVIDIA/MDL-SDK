@@ -102,6 +102,7 @@ public:
     , m_gamma_mode(mi::mdl::IValue_texture::gamma_default)
     , m_shape(mi::mdl::IType_texture::TS_2D)
     , m_dib(nullptr)
+    , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
     , m_depth(0)
@@ -111,15 +112,22 @@ public:
     /// Constructor from an MDL IValue_texture.
     Texture_data(
         mi::mdl::IValue_texture const *tex,
+        mi::mdl::ICode_generator_jit *jit_be,
         mi::mdl::IEntity_resolver *resolver)
     : m_path(tex->get_string_value())
     , m_gamma_mode(tex->get_gamma_mode())
     , m_shape(tex->get_type()->get_shape())
     , m_dib(nullptr)
+    , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
     , m_depth(0)
     {
+        if (tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE) {
+            load_bsdf_data(tex, jit_be);
+            return;
+        }
+
         // FreeImage only supports 2D textures
         if (m_shape != mi::mdl::IType_texture::TS_2D)
             return;
@@ -135,6 +143,7 @@ public:
     , m_gamma_mode(mi::mdl::IValue_texture::gamma_default)
     , m_shape(mi::mdl::IType_texture::TS_2D)
     , m_dib(nullptr)
+    , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
     , m_depth(0)
@@ -152,7 +161,7 @@ public:
     }
 
     /// Returns true, if the texture was loaded successfully.
-    bool is_valid() const { return m_dib != nullptr; }
+    bool is_valid() const { return m_dib != nullptr || m_bsdf_data != nullptr; }
 
     /// Get the texture width.
     mi::Uint32 get_width() const { return m_width; }
@@ -171,6 +180,9 @@ public:
 
     /// Get the texture image data.
     FIBITMAP *get_dib() const { return m_dib; }
+
+    /// Get the bsdf texture data if present.
+    unsigned char const *get_bsdf_data() const { return m_bsdf_data; }
 
 private:
     /// Load the image and get the meta data.
@@ -211,11 +223,32 @@ private:
         m_depth = 1;
     }
 
+    /// Load the bsdf data.
+    void load_bsdf_data(mi::mdl::IValue_texture const *tex, mi::mdl::ICode_generator_jit *jit_be)
+    {
+        size_t res_theta = 0, res_roughness = 0, res_ior = 0;
+        if (!jit_be->get_libbsdf_multiscatter_data_resolution(
+                tex->get_bsdf_data_kind(),
+                res_theta, res_roughness, res_ior))
+            return;
+
+        size_t data_size = 0;
+        m_bsdf_data = jit_be->get_libbsdf_multiscatter_data(
+            tex->get_bsdf_data_kind(), data_size);
+        if (m_bsdf_data == nullptr)
+            return;
+
+        m_width = res_theta;
+        m_height = res_roughness;
+        m_depth = res_ior;
+    }
+
 private:
     std::string m_path;
     mi::mdl::IValue_texture::gamma_mode m_gamma_mode;
     mi::mdl::IType_texture::Shape m_shape;
     FIBITMAP *m_dib;
+    unsigned char const *m_bsdf_data;
     mi::Uint32 m_width;
     mi::Uint32 m_height;
     mi::Uint32 m_depth;
@@ -309,8 +342,9 @@ class Resource_collection : public mi::mdl::ILambda_resource_enumerator,
 {
 public:
     /// Constructor.
-    Resource_collection(mi::mdl::IMDL *mdl)
-    : m_entity_resolver(mdl->create_entity_resolver(nullptr))
+    Resource_collection(mi::mdl::IMDL *mdl, mi::mdl::ICode_generator_jit *jit_be)
+    : m_jit_be(jit_be, mi::base::DUP_INTERFACE)
+    , m_entity_resolver(mdl->create_entity_resolver(nullptr))
     , m_cur_lambda()
     , m_textures()
     , m_texture_map()
@@ -462,13 +496,15 @@ private:
         Texture_data *tex;
         size_t index;
 
-        std::string path = std::string(tex_val->get_string_value());
-        auto it = m_texture_map.find(path);
+        std::string cache_key = std::string(tex_val->get_string_value());
+        cache_key += "_" + std::to_string(tex_val->get_gamma_mode());
+        cache_key += "_" + std::to_string(tex_val->get_bsdf_data_kind());
+        auto it = m_texture_map.find(cache_key);
         if (it == m_texture_map.end()) {
-            tex = new Texture_data(tex_val, m_entity_resolver.get());
+            tex = new Texture_data(tex_val, m_jit_be.get(), m_entity_resolver.get());
             m_textures.push_back(tex);
             index = m_textures.size() - 1;
-            m_texture_map[path] = unsigned(index);
+            m_texture_map[cache_key] = unsigned(index);
         } else {
             index = size_t(it->second);
             tex = m_textures[index];
@@ -497,6 +533,9 @@ private:
     Resource_collection &operator=(Resource_collection const &) = delete;
 
 private:
+    /// The MDL JIT backend to retrieve BSDF texture data.
+    mi::base::Handle<mi::mdl::ICode_generator_jit> m_jit_be;
+
     /// The MDL entity resolver for accessing resources.
     mi::base::Handle<mi::mdl::IEntity_resolver> m_entity_resolver;
 
@@ -1072,6 +1111,67 @@ bool Material_gpu_context::prepare_texture(
 
     unsigned width = tex->get_width(), height = tex->get_height();
 
+    if (unsigned char const *bsdf_data = tex->get_bsdf_data()) {
+        // currently only 3D BSDF data supported
+        if (tex->get_shape() != mi::mdl::IType_texture::TS_BSDF_DATA)
+            return false;
+
+        unsigned depth = tex->get_depth();
+
+        cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float>();
+        cudaResourceDesc res_desc;
+        memset(&res_desc, 0, sizeof(res_desc));
+
+        cudaArray_t device_tex_data;
+        cudaExtent extent = make_cudaExtent(width, height, depth);
+        check_cuda_success(cudaMalloc3DArray(&device_tex_data, &channel_desc, extent));
+
+        cudaMemcpy3DParms copy_params = { 0 };
+        copy_params.srcPtr = make_cudaPitchedPtr(
+            const_cast<unsigned char *>(bsdf_data), width * sizeof(float), width, height);
+        copy_params.dstArray = device_tex_data;
+        copy_params.extent = extent;
+        copy_params.kind = cudaMemcpyHostToDevice;
+        check_cuda_success(cudaMemcpy3D(&copy_params));
+
+        res_desc.resType = cudaResourceTypeArray;
+        res_desc.res.array.array = device_tex_data;
+
+        m_all_texture_arrays.push_back(device_tex_data);
+
+        // Create filtered texture object
+        cudaTextureDesc tex_desc;
+        memset(&tex_desc, 0, sizeof(tex_desc));
+        tex_desc.addressMode[0]   = cudaAddressModeClamp;
+        tex_desc.addressMode[1]   = cudaAddressModeClamp;
+        tex_desc.addressMode[2]   = cudaAddressModeClamp;
+        tex_desc.filterMode       = cudaFilterModeLinear;
+        tex_desc.readMode         = cudaReadModeElementType;
+        tex_desc.normalizedCoords = 1;
+
+        cudaTextureObject_t tex_obj = 0;
+        check_cuda_success(cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, nullptr));
+
+        // Create unfiltered texture object and use a black border for access outside of the texture
+        cudaTextureObject_t tex_obj_unfilt = 0;
+        tex_desc.addressMode[0]   = cudaAddressModeBorder;
+        tex_desc.addressMode[1]   = cudaAddressModeBorder;
+        tex_desc.addressMode[2]   = cudaAddressModeBorder;
+        tex_desc.filterMode       = cudaFilterModePoint;
+
+        check_cuda_success(cudaCreateTextureObject(
+            &tex_obj_unfilt, &res_desc, &tex_desc, nullptr));
+
+        // Store texture infos in result vector
+        textures.push_back(Texture(
+            tex_obj,
+            tex_obj_unfilt,
+            make_uint3(tex->get_width(), tex->get_height(), tex->get_depth())));
+        m_all_textures.push_back(textures.back());
+        return true;
+    }
+
+
     // For simplicity, the texture access functions are only implemented for float4 and gamma
     // is pre-applied here (all images are converted to linear space).
 
@@ -1349,12 +1449,13 @@ public:
     Material_ptx_compiler(
         mi::mdl::IMDL       *mdl_compiler,
         unsigned             num_texture_results,
-        bool                 enable_derivatives=false)
+        bool                 enable_derivatives,
+        const std::string    df_handle_mode)
     : Material_compiler(mdl_compiler)
     , m_jit_be(mi::base::make_handle(mdl_compiler->load_code_generator("jit"))
         .get_interface<mi::mdl::ICode_generator_jit>())
     , m_link_unit()
-    , m_res_col(mdl_compiler)
+    , m_res_col(mdl_compiler, m_jit_be.get())
     , m_enable_derivatives(enable_derivatives)
     , m_gen_base_name_suffix_counter(0)
     {
@@ -1377,6 +1478,13 @@ public:
 
         // Option "jit_map_strings_to_ids": Default is off.
         options.set_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS, "true");
+
+        // Option "df_handle_slot_mode": Default is "none".
+        // When using light path expressions, individual parts of the distribution functions can be
+        // selected using "handles". The contribution of each of those parts has to be evaluated 
+        // during rendering. This option controls how many parts are evaluated with each call into 
+        // the generated "evaluate" and "auxiliary" functions and how the data is passed.
+        options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, df_handle_mode.c_str());
 
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(

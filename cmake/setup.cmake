@@ -67,6 +67,10 @@ define_property(TARGET PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO
     BRIEF_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release with debug info builds only."
     FULL_DOCS "List of paths that are added to the Visual Studio debugger environment PATH for Release with debug info builds only. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
     )
+define_property(TARGET PROPERTY VS_DEBUGGER_ENV_VARS
+    BRIEF_DOCS "List of environment variables that are added to the Visual Studio debugger."
+    FULL_DOCS "List of environment variables that are added to the Visual Studio debugger. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
+    )
 
 # set platform variable
 set(WINDOWS FALSE)

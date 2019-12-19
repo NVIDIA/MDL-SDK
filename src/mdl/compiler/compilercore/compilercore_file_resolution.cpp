@@ -59,10 +59,18 @@ typedef Store<Position const *> Position_store;
 FILE *File_handle::get_file() { return u.fp; }
 
 // Get the archive if this object represents a file inside a MDL archive.
-MDL_zip_container *File_handle::get_container() { return m_container; }
+MDL_zip_container *File_handle::get_container()
+{
+    return m_container;
+}
 
 // Get the compressed file handle if this object represents a file inside a MDL archive.
-MDL_zip_container_file *File_handle::get_container_file() { return u.z_fp; }
+MDL_zip_container_file *File_handle::get_container_file()
+{
+    if (m_kind == FH_FILE)
+        return NULL;
+    return u.z_fp;
+}
 
 // Open a file handle.
 File_handle *File_handle::open(
@@ -260,6 +268,13 @@ char const *File_resource_reader::get_filename() const
 char const *File_resource_reader::get_mdl_url() const
 {
     return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
+}
+
+// Returns the associated hash of this resource.
+bool File_resource_reader::get_resource_hash(unsigned char hash[16])
+{
+    // not supported on ordinary files
+    return false;
 }
 
 // Constructor.
@@ -1108,7 +1123,15 @@ bool File_resolver::check_consistency(
                     resolved_file_system_location[len - 1] == 'r' &&
                     resolved_file_system_location[len - 2] == 'd' &&
                     resolved_file_system_location[len - 3] == 'm' &&
-                    resolved_file_system_location[len - 4] == '.')
+                    resolved_file_system_location[len - 4] == '.') ||
+                (len > 5 &&
+                    resolved_file_system_location[len]     == ':' &&
+                    resolved_file_system_location[len - 1] == 'e' &&
+                    resolved_file_system_location[len - 2] == 'l' &&
+                    resolved_file_system_location[len - 3] == 'd' &&
+                    resolved_file_system_location[len - 4] == 'm' &&
+                    resolved_file_system_location[len - 5] == '.')
+
             )
         ) {
             return true;
@@ -1783,7 +1806,8 @@ string File_resolver::resolve_filename(
         string file(m_alloc);
 
         if (is_resource) {
-            file = simplify_path(url_mask, os_separator());
+            file = convert_slashes_to_os_separators(url_mask);
+            file = simplify_path(file, os_separator());
             if (!is_url_absolute(file.c_str())) {
                 // for MDLE, the current working directory is the MDLE file
                 file = current_working_directory + ':' + file;
@@ -1939,7 +1963,7 @@ IMDL_import_result *File_resolver::resolve_import(
         import_file[l - 1] == 'e') {
 
         // undo 'to_url' and remove the leading 'module ::' when handling MDLE
-        if(import_name[0] == ':' && import_name[1] == ':')
+        if (import_name[0] == ':' && import_name[1] == ':')
             import_file = import_name + 2;
 
         // use forward slashes to detect absolute filenames correctly
@@ -2201,6 +2225,22 @@ char const *Buffered_archive_resource_reader::get_filename() const
 char const *Buffered_archive_resource_reader::get_mdl_url() const
 {
     return m_mdl_url.empty() ? NULL : m_mdl_url.c_str();
+}
+
+// Returns the associated hash of this resource.
+bool Buffered_archive_resource_reader::get_resource_hash(unsigned char hash[16])
+{
+    if (MDL_zip_container_file *z_f = m_file->get_container_file()) {
+        size_t length = 0;
+        unsigned char const *stored_hash =
+            z_f->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
+
+        if (stored_hash != NULL && length == 16) {
+            memcpy(hash, stored_hash, 16);
+            return true;
+        }
+    }
+    return false;
 }
 
 // Constructor.
@@ -2668,21 +2708,44 @@ IInput_stream *MDL_import_result::open(Thread_context &ctx) const
 
     MDL_zip_container_error_code  err;
     File_handle *file = File_handle::open(alloc, resolved.c_str(), err);
+
+    Position_impl zero(0, 0, 0, 0);
+    switch (err) {
+        case EC_OK:
+            break;
+
+        // load a pre-released version (0.2) will probably get an error at some point in time
+        case EC_PRE_RELEASE_VERSION:
+        {
+            string msg(ctx.access_messages_impl().format_msg(
+                MDLE_PRE_RELEASE_VERSION, 'E', Error_params(alloc).add(m_os_file_name)));
+            ctx.access_messages_impl().add_warning_message(
+                MDLE_PRE_RELEASE_VERSION, 'E', 0, &zero, msg.c_str());
+            break;
+        }
+
+        case EC_CRC_ERROR:
+        {
+            string msg(ctx.access_messages_impl().format_msg(
+                MDLE_CRC_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
+            ctx.access_messages_impl().add_error_message(
+                MDLE_CRC_ERROR, 'E', 0, &zero, msg.c_str());
+            break;
+        }
+
+        default:
+        {
+            string msg(ctx.access_messages_impl().format_msg(
+                MDLE_IO_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
+            ctx.access_messages_impl().add_error_message(
+                MDLE_IO_ERROR, 'E', 0, &zero, msg.c_str());
+            break;
+        }
+    }
+
     if (file == NULL) {
         return NULL;
     }
-
-    // load a pre-released version (0.2) will probably get an error at some point in time
-    if (err == EC_PRE_RELEASE_VERSION)
-    {
-        Position_impl zero(0, 0, 0, 0);
-
-        string msg(ctx.access_messages_impl().format_msg(
-            MDLE_PRE_RELEASE_VERSION, 'E', Error_params(alloc).add(m_os_file_name)));
-        ctx.access_messages_impl().add_warning_message(
-            MDLE_PRE_RELEASE_VERSION, 'E', 0, &zero, msg.c_str());
-    }
-
 
     Allocator_builder builder(alloc);
 
@@ -2813,9 +2876,9 @@ Messages const &Entity_resolver::access_messages() const
 
 // Open a resource file read-only.
 IMDL_resource_reader *open_resource_file(
-    IAllocator                     *alloc,
-    const char                     *abs_mdl_path,
-    char const                     *resource_path,
+    IAllocator                    *alloc,
+    char const                    *abs_mdl_path,
+    char const                    *resource_path,
     MDL_zip_container_error_code  &err)
 {
     File_handle *file = File_handle::open(alloc, resource_path, err);

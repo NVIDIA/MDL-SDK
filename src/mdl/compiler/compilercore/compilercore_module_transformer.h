@@ -264,6 +264,11 @@ private:
     IExpression_reference *simple_name_to_reference(
         ISimple_name const* name);
 
+    /// Creates a "::anno" annotation.
+    /// \param anno_name    annotation name
+    IAnnotation *create_anno(
+        char const *anno_name) const;
+
     /// Creates a one parameter "::anno" string annotation annotation.
     /// \param anno_name    annotation name
     /// \param value        annotation value

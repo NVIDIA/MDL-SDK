@@ -55,15 +55,16 @@ namespace neuraylib {
 /// requested during import.
 ///
 /// Importers should use the message severities according to the following guidelines:
-/// - #mi::base::MESSAGE_SEVERITY_FATAL \n
+/// - #mi::base::details::MESSAGE_SEVERITY_FATAL \n
 ///   The importer is no longer usable.
-/// - #mi::base::MESSAGE_SEVERITY_ERROR \n
+/// - #mi::base::details::MESSAGE_SEVERITY_ERROR \n
 ///   The file contains errors and not all elements could be imported.
-/// - #mi::base::MESSAGE_SEVERITY_WARNING \n
+/// - #mi::base::details::MESSAGE_SEVERITY_WARNING \n
 ///   The file contains minor errors.
-/// - #mi::base::MESSAGE_SEVERITY_INFO \n
+/// - #mi::base::details::MESSAGE_SEVERITY_INFO \n
 ///   A normal operational message.
-/// - #mi::base::MESSAGE_SEVERITY_VERBOSE and #mi::base::MESSAGE_SEVERITY_DEBUG \n
+/// - #mi::base::details::MESSAGE_SEVERITY_VERBOSE and
+///   #mi::base::details::MESSAGE_SEVERITY_DEBUG \n
 ///   These message severities should be avoided by importers.
 /// \endif
 class IImport_result :
@@ -104,8 +105,8 @@ public:
     ///
     /// It is possible to query the message numbers of all messages, see
     /// #get_messages_length() and #get_message_number(mi::Size)const. This method just reports the
-    /// number of the first message of severity #mi::base::MESSAGE_SEVERITY_ERROR or above, or 0
-    /// if there is no such message.
+    /// number of the first message of severity #mi::base::details::MESSAGE_SEVERITY_ERROR or above,
+    /// or 0 if there is no such message.
     virtual Uint32 get_error_number() const = 0;
 
     /// Returns the message of the first error.
@@ -113,10 +114,10 @@ public:
     /// A message describing the error condition corresponding to the error reported from
     /// #get_error_number().
     ///
-    /// It is possible to query the all messages, see
-    /// #get_messages_length() and #get_message(mi::Size)const. This method just reports the the
-    /// first message of severity #mi::base::MESSAGE_SEVERITY_ERROR or above, or \c NULL if there
-    /// is no such message.
+    /// It is possible to query the all messages, see #get_messages_length() and
+    /// #get_message(mi::Size)const. This method just reports the the first message of severity
+    /// #mi::base::details::MESSAGE_SEVERITY_ERROR or above, or \c NULL if there is no such
+    /// message.
     virtual const char* get_error_message() const = 0;
 
     /// Returns the number of messages.

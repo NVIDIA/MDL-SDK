@@ -351,6 +351,8 @@ mi::neuraylib::ICanvas* Image_module_impl::copy_canvas( const mi::neuraylib::ICa
     bool is_cubemap = get_canvas_is_cubemap( other);
     mi::neuraylib::ICanvas* canvas = create_canvas( pixel_type,
         canvas_width, canvas_height, tile_width, tile_height, nr_of_layers, is_cubemap, gamma);
+    if (!canvas)
+        return nullptr;
 
     mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
     mi::Size count = static_cast<mi::Size>( tile_width) * tile_height * bytes_per_pixel;
@@ -483,50 +485,68 @@ void Image_module_impl::adjust_gamma(
     if( !canvas || new_gamma <= 0.0f)
         return;
 
-    Pixel_type pixel_type = convert_pixel_type_string_to_enum( canvas->get_type());
-    if( pixel_type == PT_UNDEF)
-        return;
-
-    mi::Float32 old_gamma = canvas->get_gamma();
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum( canvas->get_type());
+    const mi::Float32 old_gamma = canvas->get_gamma();
     if( old_gamma <= 0.0f || new_gamma == old_gamma)
         return;
 
-    mi::Float32 exponent = old_gamma/new_gamma;
+    const mi::Float32 exponent = old_gamma/new_gamma;
 
-    mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
-    mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
-    mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
-    mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
-    mi::Uint32 nr_of_layers  = canvas->get_layers_size();
-    mi::Size   nr_of_pixels  = tile_width * tile_height;
+    const mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
+    const mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
+    const mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
+    const mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
+    const mi::Uint32 nr_of_layers  = canvas->get_layers_size();
+    const mi::Size   nr_of_pixels  = tile_width * tile_height;
 
-    if( pixel_type == PT_COLOR || pixel_type == PT_RGB_FP) {
-
-        mi::Uint32 components = pixel_type == PT_COLOR ? 4 : 3;
-        for( mi::Uint32 z = 0; z < nr_of_layers; ++z)
-            for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
-                for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
-                    mi::base::Handle<mi::neuraylib::ITile> tile(
-                        canvas->get_tile( x*tile_width, y*tile_height, z));
-                    mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
-                    IMAGE::adjust_gamma( data, nr_of_pixels, components, exponent);
+    switch (pixel_type) {
+        case PT_COLOR:
+        case PT_RGB_FP:
+        case PT_FLOAT32:
+        case PT_FLOAT32_2:
+        case PT_FLOAT32_3:
+        case PT_FLOAT32_4: {
+            const mi::Uint32 components = get_components_per_pixel(pixel_type);
+            for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
+                for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y) {
+                    for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
+                        mi::base::Handle<mi::neuraylib::ITile> tile(
+                                canvas->get_tile( x*tile_width, y*tile_height, z));
+                        ASSERT(M_IMAGE, tile->get_resolution_x() == tile_width);
+                        ASSERT(M_IMAGE, tile->get_resolution_y() == tile_height);
+                        mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
+                        IMAGE::adjust_gamma( data, nr_of_pixels, components, exponent);
+                    }
                 }
-
-    } else {
-
-        mi::Float32* buffer = new mi::Float32[4*nr_of_pixels];
-        for( mi::Uint32 z = 0; z < nr_of_layers; ++z)
-            for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
-                for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
-                    mi::base::Handle<mi::neuraylib::ITile> tile(
-                        canvas->get_tile( x*tile_width, y*tile_height, z));
-                    void* data = tile->get_data();
-                    convert( data, buffer, pixel_type, PT_COLOR, nr_of_pixels);
-                    IMAGE::adjust_gamma( buffer, nr_of_pixels, 4, exponent);
-                    convert( buffer, data, PT_COLOR, pixel_type, nr_of_pixels);
+            }
+            break;
+        }
+        case PT_SINT8:  case PT_RGB:    case PT_RGBA:
+        case PT_SINT32: case PT_RGB_16: case PT_RGBA_16:
+            LOG::mod_log->warning(M_IMAGE, LOG::Mod_log::C_IO,
+                "Adjusting gamma to integer format %s, which can lead to banding/quantization artifacts.",
+                canvas->get_type());
+            ASSERT(M_IMAGE, !"Trying to adjust gamma for an integer format");
+            // fall through in release builds
+        case PT_RGBE:
+        case PT_RGBEA: {
+            std::vector<mi::Float32> buffer(4*nr_of_pixels);
+            for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
+                for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y) {
+                    for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
+                        mi::base::Handle<mi::neuraylib::ITile> tile(
+                            canvas->get_tile( x*tile_width, y*tile_height, z));
+                        void* data = tile->get_data();
+                        convert( data, buffer.data(), pixel_type, PT_COLOR, nr_of_pixels);
+                        IMAGE::adjust_gamma( buffer.data(), nr_of_pixels, 4, exponent);
+                        convert( buffer.data(), data, PT_COLOR, pixel_type, nr_of_pixels);
+                    }
                 }
-        delete[] buffer;
-
+            }
+            break;
+        }
+        case PT_UNDEF:
+            return;
     }
 
     canvas->set_gamma( new_gamma);

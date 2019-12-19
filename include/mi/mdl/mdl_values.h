@@ -561,6 +561,20 @@ public:
         gamma_srgb
     };
 
+    /// The kind of BSDF data in case of BSDF data textures (otherwise BDK_NONE).
+    /// For BSDF data textures, the string value is an empty string.
+    enum Bsdf_data_kind {
+        BDK_NONE,
+        BDK_SIMPLE_GLOSSY_MULTISCATTER,
+        BDK_BACKSCATTERING_GLOSSY_MULTISCATTER,
+        BDK_BECKMANN_SMITH_MULTISCATTER,
+        BDK_GGX_SMITH_MULTISCATTER,
+        BDK_BECKMANN_VC_MULTISCATTER,
+        BDK_GGX_VC_MULTISCATTER,
+        BDK_WARD_GEISLER_MORODER_MULTISCATTER,
+        BDK_SHEEN_MULTISCATTER,
+    };
+
     /// The kind of this subclass.
     static Kind const s_kind = VK_TEXTURE;
 
@@ -569,6 +583,9 @@ public:
 
     /// Get the gamma mode.
     virtual gamma_mode get_gamma_mode() const = 0;
+
+    /// Get the BSDF data kind for BSDF data textures.
+    virtual Bsdf_data_kind get_bsdf_data_kind() const = 0;
 };
 
 /// A light profile value.
@@ -821,17 +838,27 @@ public:
 
     /// Create a new texture value.
     ///
-    /// \param type         The type of the texture.
-    /// \param value        The string value of the texture, NULL is not allowed.
-    /// \param gamma        The gamma override value of the texture.
-    /// \param tag_value    The tag value of the texture.
-    /// \param tag_version  The version of the tag value.
+    /// \param type            The type of the texture.
+    /// \param value           The string value of the texture, NULL is not allowed.
+    /// \param gamma           The gamma override value of the texture.
+    /// \param tag_value       The tag value of the texture.
+    /// \param tag_version     The version of the tag value.
     virtual IValue_texture const *create_texture(
-        IType_texture const        *type,
-        const char                 *value,
-        IValue_texture::gamma_mode gamma,
-        int                        tag_value,
-        unsigned                   tag_version) = 0;
+        IType_texture const            *type,
+        const char                     *value,
+        IValue_texture::gamma_mode     gamma,
+        int                            tag_value,
+        unsigned                       tag_version) = 0;
+
+    /// Create a new bsdf_data texture value.
+    ///
+    /// \param bsdf_data_kind  The BSDF data kind.
+    /// \param tag_value       The tag value of the texture.
+    /// \param tag_version     The version of the tag value.
+    virtual IValue_texture const *create_bsdf_data_texture(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        int                            tag_value,
+        unsigned                       tag_version) = 0;
 
     /// Create a new string light profile value.
     ///

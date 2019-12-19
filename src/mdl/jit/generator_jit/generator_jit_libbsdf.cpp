@@ -39,19 +39,65 @@
 
 #include "generator_jit_llvm.h"
 
-#include "libbsdf_bitcode.h"
+#include "libbsdf_bitcode_hsmp.h"
+#include "libbsdf_bitcode_hsmn.h"
+#include "libbsdf_bitcode_hsm1.h"
+#include "libbsdf_bitcode_hsm2.h"
+#include "libbsdf_bitcode_hsm4.h"
+#include "libbsdf_bitcode_hsm8.h"
 
 namespace mi {
 namespace mdl {
 
 // Load the libbsdf LLVM module.
 std::unique_ptr<llvm::Module> LLVM_code_generator::load_libbsdf(
-    llvm::LLVMContext &llvm_context)
+    llvm::LLVMContext &llvm_context, mdl::Df_handle_slot_mode hsm)
 {
+    unsigned char const *bitcode;
+    size_t bitcode_size;
+    switch (hsm)
+    {
+        case DF_HSM_POINTER:
+            bitcode = libbsdf_bitcode_hsmp;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmp);
+            break;
+
+        case DF_HSM_NONE:
+            bitcode = libbsdf_bitcode_hsmn;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmn);
+            break;
+
+        case DF_HSM_FIXED_1:
+            bitcode = libbsdf_bitcode_hsm1;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm1);
+            break;
+
+        case DF_HSM_FIXED_2:
+            bitcode = libbsdf_bitcode_hsm2;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm2);
+            break;
+
+        case DF_HSM_FIXED_4:
+            bitcode = libbsdf_bitcode_hsm4;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm4);
+            break;
+
+        case DF_HSM_FIXED_8:
+            bitcode = libbsdf_bitcode_hsm8;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm8);
+            break;
+
+        default:
+            MDL_ASSERT(!"Loading libbsdf bytecode version failed");
+            return nullptr;
+    }
+
     std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
-        llvm::StringRef((char const *) libbsdf_bitcode, dimension_of(libbsdf_bitcode)),
+        llvm::StringRef((char const *) bitcode, bitcode_size),
         "libbsdf",
         /*RequiresNullTerminator=*/ false));
+
+
     auto mod = llvm::parseBitcodeFile(*mem.get(), llvm_context);
     if (!mod) {
         error(PARSING_LIBBSDF_MODULE_FAILED, Error_params(get_allocator()));

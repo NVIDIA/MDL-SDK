@@ -88,20 +88,26 @@ function(TARGET_BUILD_SETUP)
                 "/MT$<$<CONFIG:Debug>:d>"
                 "/MP"
                 "/wd4267"   # Suppress Warning C4267	'argument': conversion from 'size_t' to 'int', possible loss of data
-                "/permissive-"  # show more errors
             )
+
+        if(MSVC_VERSION GREATER 1900)
+            target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+                PRIVATE
+                    "/permissive-"  # show more errors
+                )
+        endif()
     endif()
 
     # LINUX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PUBLIC
                 "MI_PLATFORM=\"linux-x86-64-gcc\"" #todo add major version number
                 "MI_PLATFORM_UNIX"
             )
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "-fPIC"   # position independent code since we will build a shared object
                 "-m64"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
@@ -569,6 +575,7 @@ endfunction()
 #
 function(CREATE_FROM_BASE_PRESET)
     set(options WIN32)
+    set(options WINDOWS_UNICODE)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -577,7 +584,7 @@ function(CREATE_FROM_BASE_PRESET)
     if(CREATE_FROM_BASE_PRESET_VERSION)
         project(${CREATE_FROM_BASE_PRESET_TARGET} VERSION ${CREATE_FROM_BASE_PRESET_VERSION}) 
     else()
-        project(${CREATE_FROM_BASE_PRESET_TARGET}) 
+        project(${CREATE_FROM_BASE_PRESET_TARGET})
     endif()
 
     # default type is STATIC library
@@ -601,18 +608,28 @@ function(CREATE_FROM_BASE_PRESET)
         set(EXEC_TYPE WIN32)
     endif()
 
+    # add /D_UNICODE on Windows
+    if(${CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE})
+        if(WINDOWS)
+            add_definitions(-D_UNICODE -DUNICODE)
+        endif()
+    endif()
+
     # create target and alias
     if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
         add_library(${CREATE_FROM_BASE_PRESET_TARGET} ${CREATE_FROM_BASE_PRESET_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
         add_library(${CREATE_FROM_BASE_PRESET_NAMESPACE}::${CREATE_FROM_BASE_PRESET_TARGET} ALIAS ${CREATE_FROM_BASE_PRESET_TARGET})
-    elseif(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE")
+    elseif(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
         add_executable(${CREATE_FROM_BASE_PRESET_TARGET} ${EXEC_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
-
+        #set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES WIN32_EXECUTABLE ON)
         # inject compile constant that contains the binary name
-        target_compile_definitions(${PROJECT_NAME} 
+        target_compile_definitions(${PROJECT_NAME}
             PUBLIC
                 "BINARY_NAME=\"${CREATE_FROM_BASE_PRESET_OUTPUT_NAME}\""
             )
+        if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
+            set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES WIN32_EXECUTABLE ON)
+        endif()
     else()
         message(FATAL_ERROR "Unexpected Type for target '${CREATE_FROM_BASE_PRESET_TARGET}': ${CREATE_FROM_BASE_PRESET_TYPE}.")
     endif()
@@ -626,7 +643,7 @@ function(CREATE_FROM_BASE_PRESET)
     target_print_log_header(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} VERSION ${CREATE_FROM_BASE_PRESET_VERSION})
 
     # add include directories
-    target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET} 
+    target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET}
         PUBLIC
             $<BUILD_INTERFACE:${MDL_INCLUDE_FOLDER}>
         PRIVATE
@@ -636,8 +653,8 @@ function(CREATE_FROM_BASE_PRESET)
         )
 
     # add system dependencies
-    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE")
-        target_add_dependencies(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} 
+    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
+        target_add_dependencies(TARGET ${CREATE_FROM_BASE_PRESET_TARGET}
             DEPENDS
                 system
             )
@@ -651,7 +668,7 @@ function(CREATE_FROM_BASE_PRESET)
                 ${CREATE_FROM_BASE_PRESET_EMBED_RC}
             )
 
-        target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET} 
+        target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET}
             PRIVATE
                 ${MDL_SRC_FOLDER}/base/system/version # for the version.h
             )
@@ -923,6 +940,37 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
     set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO ${_ENV_PATHS_RELWITHDEBINFO})
 endfunction()
 
+
+# -------------------------------------------------------------------------------------------------
+# Add a variable to the visual studio environment for the debugger.
+# requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' to actually create the user settings file.
+function(TARGET_ADD_VS_DEBUGGER_ENV_VAR)
+    set(options)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs VARS)
+    cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_VAR "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET
+    # - TARGET_ADD_VS_DEBUGGER_ENV_VAR_VARS
+
+    if(NOT WINDOWS)
+        return()
+    endif()
+
+    # read current property value
+    get_property(_ENV_VARS TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS)
+    
+    foreach(_VAR ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_VARS})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- add property:   Visual Studio Debugger Environment Variable ${_VAR}")
+        endif()
+        list(APPEND _ENV_VARS ${_VAR}\n)
+    endforeach()
+
+    # update property value
+    set_property(TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS ${_ENV_VARS})
+endfunction()
+
 # -------------------------------------------------------------------------------------------------
 # Creates a visual studio user settings file to set environment variables for the debugger.
 # This should only be called after the dependencies of an executable target are added.
@@ -948,20 +996,24 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
     get_property(_ENV_PATHS_DEBUG TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_DEBUG)
     get_property(_ENV_PATHS_RELEASE TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELEASE)
     get_property(_ENV_PATHS_RELWITHDEBINFO TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO)
+    get_property(_ENV_VARS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS)
 
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SETTINGS_FILE}
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"	
         "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='Debug'\">\n"
-        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_DEBUG};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_DEBUG};${_ENV_PATHS};%PATH%\n${_ENV_VARS}"
+        "       </LocalDebuggerEnvironment>\n"
         "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
         "   </PropertyGroup>\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='Release'\">\n"
-        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_RELEASE};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_RELEASE};${_ENV_PATHS};%PATH%\n${_ENV_VARS}"
+        "       </LocalDebuggerEnvironment>\n"
         "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
         "   </PropertyGroup>\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='RelWithDebInfo'\">\n"
-        "       <LocalDebuggerEnvironment>PATH=${_ENV_PATHS_RELWITHDEBINFO};${_ENV_PATHS};%PATH%</LocalDebuggerEnvironment>\n"
+        "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_RELWITHDEBINFO};${_ENV_PATHS};%PATH%\n${_ENV_VARS}"
+        "       </LocalDebuggerEnvironment>\n"
         "       <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>\n"
         "   </PropertyGroup>\n"
         "</Project>\n"
@@ -979,7 +1031,7 @@ if(MDL_ENABLE_TESTS)
         --output-log ${CMAKE_BINARY_DIR}/Testing/log.txt    # test log in one file, individual logs are platform dependent
         --parallel 1                                        # run tests in serial 
         )
-    set_target_properties(check PROPERTIES 
+    set_target_properties(check PROPERTIES
         PROJECT_LABEL   "check"
         FOLDER          "tests"
         )

@@ -32,6 +32,8 @@
 #include "mdl_d3d12/scene.h"
 #include "mdl_d3d12/mdl_material.h"
 #include "mdl_d3d12/mdl_material_info.h"
+#include "mdl_d3d12/mdl_material_library.h"
+#include "mdl_d3d12/mdl_sdk.h"
 #include "mdl_d3d12/window_win32.h"
 
 #include <imgui.h>
@@ -330,6 +332,7 @@ Gui::Gui(Base_application* app)
     : m_app(app)
     , m_camera_controls(app)
     , m_selected_material(nullptr)
+    , m_reload_material_callback(nullptr)
     , m_selected_camera("")
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -443,7 +446,13 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
     if (!show_gui)
         return reset_rendering;
 
-    ImGui::Begin("Scene Settings", false, ImVec2(400, 350));
+    float w_width = 400.f * m_app->get_options()->gui_scale;
+    float w_height = float(m_app->get_window()->get_height()) - 20.f;
+    float w_pos_x = 10.f;
+    float w_pos_y = 10.f;
+    ImGui::SetNextWindowPos(ImVec2(w_pos_x, w_pos_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(w_width, w_height), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Scene Settings");
 
     // show camera selection combo box
     if (m_camera_map.size() > 0)
@@ -519,6 +528,12 @@ bool Gui::update(mdl_d3d12::Scene* scene, const mdl_d3d12::Update_args& args, bo
                 });
 
             ImGui::EndCombo();
+        }
+
+        if (m_selected_material)
+        {
+            if (m_reload_material_callback != nullptr && ImGui::Button("Reload"))
+                m_reload_material_callback(m_selected_material);
         }
 
         // Show editable material parameters if available

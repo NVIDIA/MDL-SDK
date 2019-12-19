@@ -689,10 +689,28 @@ IValue_light_profile* Value_factory::create_light_profile( DB::Tag value) const
     return new Value_light_profile( type.get(), value);
 }
 
+IValue_light_profile* Value_factory::create_light_profile(
+    DB::Tag value,
+    const char *unresolved_mdl_url,
+    const char *owner_module) const
+{
+    mi::base::Handle<const IType_light_profile> type(m_type_factory->create_light_profile());
+    return new Value_light_profile(type.get(), value, unresolved_mdl_url, owner_module);
+}
+
 IValue_bsdf_measurement* Value_factory::create_bsdf_measurement( DB::Tag value) const
 {
     mi::base::Handle<const IType_bsdf_measurement> type( m_type_factory->create_bsdf_measurement());
     return new Value_bsdf_measurement( type.get(), value);
+}
+
+IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
+    DB::Tag value,
+    const char *unresolved_mdl_url,
+    const char *owner_module) const
+{
+    mi::base::Handle<const IType_bsdf_measurement> type(m_type_factory->create_bsdf_measurement());
+    return new Value_bsdf_measurement(type.get(), value, unresolved_mdl_url, owner_module);
 }
 
 IValue_invalid_df* Value_factory::create_invalid_df( const IType_reference* type) const
@@ -874,12 +892,18 @@ IValue* Value_factory::clone( const IValue* value) const
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(
                 value->get_interface<IValue_light_profile>());
-            return create_light_profile( value_light_profile->get_value());
+            return create_light_profile(
+                value_light_profile->get_value(),
+                value_light_profile->get_unresolved_mdl_url(),
+                value_light_profile->get_owner_module());
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             mi::base::Handle<const IValue_bsdf_measurement> value_bsdf_measurement(
                 value->get_interface<IValue_bsdf_measurement>());
-            return create_bsdf_measurement( value_bsdf_measurement->get_value());
+            return create_bsdf_measurement(
+                value_bsdf_measurement->get_value(),
+                value_bsdf_measurement->get_unresolved_mdl_url(),
+                value_bsdf_measurement->get_owner_module());
         }
         case IValue::VK_INVALID_DF: {
             mi::base::Handle<const IType_reference> type_reference(
@@ -1453,18 +1477,25 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             mi::base::Handle<const IValue_texture> value_texture(
                 value->get_interface<IValue_texture>());
             serializer->write( value_texture->get_value());
+            serializer->write(value_texture->get_unresolved_mdl_url());
+            serializer->write(value_texture->get_owner_module());
+            serializer->write(value_texture->get_gamma());
             return;
         }
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(
                 value->get_interface<IValue_light_profile>());
             serializer->write( value_light_profile->get_value());
+            serializer->write(value_light_profile->get_unresolved_mdl_url());
+            serializer->write(value_light_profile->get_owner_module());
             return;
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             mi::base::Handle<const IValue_bsdf_measurement> value_bsdf_measurement(
                 value->get_interface<IValue_bsdf_measurement>());
             serializer->write( value_bsdf_measurement->get_value());
+            serializer->write(value_bsdf_measurement->get_unresolved_mdl_url());
+            serializer->write(value_bsdf_measurement->get_owner_module());
             return;
         }
         case IValue::VK_INVALID_DF: {
@@ -1593,19 +1624,36 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
                 m_type_factory->deserialize<IType_texture>( deserializer));
             DB::Tag value;
             deserializer->read( &value);
-            IValue* result = create_texture( type.get(), value);
+            std::string unresoved_resource_url;
+            deserializer->read( &unresoved_resource_url);
+            std::string owner_module;
+            deserializer->read( &owner_module);
+            mi::Float32 gamma;
+            deserializer->read( &gamma);
+            IValue* result = create_texture(
+                type.get(),value, unresoved_resource_url.c_str(), owner_module.c_str(), gamma);
             return result;
         }
         case IValue::VK_LIGHT_PROFILE: {
             DB::Tag value;
             deserializer->read( &value);
-            IValue* result = create_light_profile( value);
+            std::string unresoved_resource_url;
+            deserializer->read( &unresoved_resource_url);
+            std::string owner_module;
+            deserializer->read( &owner_module);
+            IValue* result = create_light_profile(
+                value, unresoved_resource_url.c_str(), owner_module.c_str());
             return result;
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             DB::Tag value;
             deserializer->read( &value);
-            IValue* result = create_bsdf_measurement( value);
+            std::string unresoved_resource_url;
+            deserializer->read( &unresoved_resource_url);
+            std::string owner_module;
+            deserializer->read( &owner_module);
+            IValue* result = create_bsdf_measurement(
+                value, unresoved_resource_url.c_str(), owner_module.c_str());
             return result;
         }
         case IValue::VK_INVALID_DF: {

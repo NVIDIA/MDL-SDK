@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,8 @@
 #include <iostream>
 #include <set>
 #include <iomanip>
+
+#include "example_shared.h"
 
 /// Checks, if the given character is a valid MDL letter.
 bool is_mdl_letter(char c) 
@@ -102,8 +104,10 @@ std::string make_valid_mdl_identifier(
         const char c = id[index];
         if (is_mdl_digit(c) || is_mdl_letter(c) || c == '_')
             result.push_back(c);
-        else
-            result.push_back('_');
+        else {
+            if (result[result.size()-1] != '_')
+                result.push_back('_');
+        }
     }
 
     // check, if identifier is mdl keyword
@@ -113,17 +117,21 @@ std::string make_valid_mdl_identifier(
         return result;
 }
 
-int main( int argc, char* argv[])
+
+int MAIN_UTF8(int argc, char* argv[])
 {
     if (argc < 2)
         std::cout << "Usage: " << argv[0] <<
         " <identifier_1> [<identifier_2> ...<identifier_n>]" << std::endl;
-    
+
     for (int i = 1; i < argc; ++i) {
 
-        std::cout << std::left << std::setw(25) << argv[i]  << " --> " << make_valid_mdl_identifier(argv[i]) << std::endl;
+        std::cout << std::left << std::setw(25) << argv[i] << " --> " << make_valid_mdl_identifier(argv[i]) << std::endl;
     }
     std::cout << std::endl;
 
     return 0;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

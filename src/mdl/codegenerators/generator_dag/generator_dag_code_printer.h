@@ -57,7 +57,7 @@ public:
     void print(Printer *printer, mi::base::IInterface const *code) const MDL_FINAL;
 
 private:
-    /// Print a DAG IR node inside a material definition.
+    /// Print a DAG IR node inside a material or function definition.
     ///
     /// \param depth            The indentation depth.
     /// \param dag              The generated code dag this expression belongs to.

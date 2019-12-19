@@ -42,12 +42,12 @@ This example demonstrates the traversal of compiled materials.
 It thereby allows investigating the structure of expression graphs based on an example 
 application that reconstructs compilable MDL code.
 
-\section example_calls_new New Topics
+\section example_traversal_new New Topics
 
   - Traversal of a compiled material
   - Generating MDL code
 
-\section example_calls_descr Detailed Description
+\section example_traversal_descr Detailed Description
 
 <dl>
     <dt><b>Basic traversal of a compiled material</b></dt>
@@ -217,16 +217,16 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
     </dd>
 </dl>
 
-\section example_calls Example Source
+\section example_traversal Example Source
 
 <b>Source Code Location:</b><br>
   <tt>examples/mdl_sdk/traversal/example_traversal.cpp</tt><br>
-  <tt>examples/mdl_sdk/traversal/compiled_material_traverser_base.h</tt><br>
-  <tt>examples/mdl_sdk/traversal/compiled_material_traverser_base.cpp</tt><br>
+  <tt>examples/mdl_sdk/shared/compiled_material_traverser_base.h</tt><br>
+  <tt>examples/mdl_sdk/shared/compiled_material_traverser_base.cpp</tt><br>
   <tt>examples/mdl_sdk/traversal/compiled_material_traverser_print.h</tt><br>
   <tt>examples/mdl_sdk/traversal/compiled_material_traverser_print.cpp</tt>
 
-\include traversal/compiled_material_traverser_base.h
+\include shared/compiled_material_traverser_base.h
 
 <div align="right">
 \if MDL_BIN_RELEASE

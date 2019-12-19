@@ -34,13 +34,20 @@
 # left-right direction. Other diagrams are untouched.
 #*****************************************************************************
 
-# The home of GraphViz dot need to be passed into this script as environment variable
+# The home of GraphViz dot can be passed into this script as environment variable.
+# Try a default location if not passed in.
+case $PLATFORM in
+    macosx-x86*) ;;
+    *)           if [ -z "${GRAPHVIZ_DOT_HOME+x}" -a -x /usr/bin/dot ]; then
+                     GRAPHVIZ_DOT_HOME=/usr/bin
+                 fi ;;
+esac
 if [ -z ${GRAPHVIZ_DOT_HOME+x} ]; then
     echo 'Error: $GRAPHVIZ_DOT_HOME is not set.'
     exit 1
 fi
 if [ ! -x ${GRAPHVIZ_DOT_HOME}/dot ]; then
-    echo 'Error: $GRAPHVIZ_DOT_HOME/dot is not executable as expected for GraphVis dot.'
+    echo 'Error: $GRAPHVIZ_DOT_HOME/dot is not executable as expected for GraphViz dot.'
     exit 1
 fi
 
@@ -60,14 +67,14 @@ rm $FILENAME.bak
 
 # Use alternate direction for some inheritance diagrams.
 FILENAME_ONLY=${FILENAME##*/}
-if [ $FILENAME_ONLY = classmi_1_1base_1_1IInterface__inherit__graph.dot \
-  -o $FILENAME_ONLY = classmi_1_1base_1_1Interface__declare__inherit__graph.dot ]; then
-	DIRECTION=-Grankdir=LR
-	# Add line break after "mi::base::Interface_declare< ...,", i.e., with explicit last argument.
-	sed $sed_i 's/mi::base::Interface_declare\\< ...,/mi::base::Interface_declare\\<\\l ...,/g' $FILENAME
-        rm $FILENAME.bak
+if [   $FILENAME_ONLY = classmi_1_1base_1_1IInterface__inherit__graph.dot \
+  	-o $FILENAME_ONLY = classmi_1_1base_1_1Interface__declare__inherit__graph.dot ]; then
+    DIRECTION=-Grankdir=LR
+    # Add line break after "mi::base::Interface_declare< ...,", i.e., with explicit last argument.
+    sed $sed_i 's/mi::base::Interface_declare\\< ...,/mi::base::Interface_declare\\<\\l ...,/g' $FILENAME
+    rm $FILENAME.bak
 else
-	DIRECTION=-Grankdir=TB
+  	DIRECTION=-Grankdir=TB
 fi
 
 # echo $DIRECTION $FILENAME

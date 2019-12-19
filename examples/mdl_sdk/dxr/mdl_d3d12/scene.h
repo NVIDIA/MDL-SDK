@@ -244,7 +244,6 @@ namespace mdl_d3d12
 
         };
 
-
         class Scene
         {
         public:
@@ -494,14 +493,14 @@ namespace mdl_d3d12
         /// can be used with the material library for instance.
         virtual size_t get_target_code_id() const = 0;
 
+        /// get the GPU handle of to the first resource of the target in the descriptor heap
+        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;
+
         /// get the GPU handle of to the first resource of this material in the descriptor heap
-        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const = 0;
+        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const = 0;
 
         // get material flags e.g. for optimization
         virtual Flags get_flags() const = 0;
-
-        // set material flags e.g. for optimization
-        virtual void set_flags(Flags flag_mask) = 0;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -560,6 +559,7 @@ namespace mdl_d3d12
 
         std::vector<Camera*> m_cameras;
         std::vector<Mesh*> m_meshes;
+        std::vector<IMaterial*> m_materials;
 
         Scene_node m_root;
         Raytracing_acceleration_structure* m_acceleration_structure;

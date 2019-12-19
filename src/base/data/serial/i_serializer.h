@@ -240,6 +240,9 @@ public:
     template <typename T, typename A1, typename A2>
     void write(const std::vector< std::vector<T, A1>, A2>& array);
 
+    template <typename T1, typename T2> void write(const std::pair<T1, T2>& pair);
+    template <typename T, typename SWO> void write(const std::set<T, SWO>& set);
+
     /// Write a serializable object to the stream.
     virtual void write(const Serializable& object) = 0;
 
@@ -366,6 +369,8 @@ public:
     template <typename T> void read(CONT::Array<T*>* array);
     template <typename T, typename A1, typename A2>
     void read(std::vector< std::vector<T, A1>, A2>* array);
+    template <typename T, typename SWO> void read(std::set<T, SWO>* set);
+    template <typename T1, typename T2> void read(std::pair<T1, T2>* pair);
 
     /// Read back a serializable object from the stream.
     virtual void read(Serializable* object) = 0;

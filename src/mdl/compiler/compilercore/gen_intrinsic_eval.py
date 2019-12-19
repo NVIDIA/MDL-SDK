@@ -254,7 +254,7 @@ class SignatureParser:
 		"""get the type code"""
 		try:
 			return self.m_types[s]
-		except KeyError, e:
+		except KeyError as e:
 			error("Unsupported type '" + s + "' found")
 			sys.exit(1)
 		
@@ -489,7 +489,7 @@ class SignatureParser:
 		signature = self.create_signature(ret_type, args)
 
 		if self.debug:
-			print decl, signature
+			print("%s %s" % (decl, signature))
 
 		if self.is_supported(self.curr_module, name, signature):
 			# insert the new signature for the given name
@@ -525,10 +525,10 @@ class SignatureParser:
 					if not decl:
 						continue
 					if self.debug:
-						print decl
+						print(decl)
 					sig = self.get_signature(decl)
 					if self.debug:
-						print sig
+						print(sig)
 
 	def gen_condition(self, f, params, as_assert, pre_if = ""):
 		"""Generate the condition for the parameter type check."""
@@ -945,10 +945,11 @@ class SignatureParser:
 			n_params = len(sig_token) - 1
 			
 			l.setdefault(n_params, []).append(sig)
-			
-		if len(l.keys()) == 1:
+
+		k = list(l.keys())
+		if len(k) == 1:
 			# typical case: all signatures have the same length
-			n_param = l.keys()[0]
+			n_param = k[0]
 			if self.strict:
 				self.write(f, "if (n_arguments == %d) {\n" % n_param)
 				self.indent += 1
@@ -956,7 +957,7 @@ class SignatureParser:
 				# create just an assertion
 				self.write(f, "MDL_ASSERT(n_arguments == %d);\n" % n_param)
 
-			for n_param in l.keys():
+			for n_param in k:
 				self.handle_signatures(f, intrinsic, l[n_param])
 
 			if self.strict:
@@ -965,7 +966,7 @@ class SignatureParser:
 		else:
 			# overloads with different signature length
 			self.write(f, "switch (n_arguments) {\n")
-			n_params = l.keys()
+			n_params = k
 			n_params.sort()
 			for n_param in n_params:
 				self.write(f, "case %d:\n" % n_param)
@@ -1064,7 +1065,7 @@ class SignatureParser:
 			
 	def create_signature_checker(self, f):
 		"""Create all signature checker functions."""
-		signatures = self.m_signatures.keys()
+		signatures = list(self.m_signatures.keys())
 		signatures.sort()
 		for sig in signatures:
 			params = sig.split('_')
@@ -1127,7 +1128,7 @@ class SignatureParser:
 		
 		self.write(f, "switch (sema) {\n")
 
-		keys = self.m_intrinsics.keys()
+		keys = list(self.m_intrinsics.keys())
 		keys.sort()
 		
 		for intrinsic in keys:
@@ -1165,7 +1166,7 @@ class SignatureParser:
 		
 def usage(args):
 	"""print usage info and exit"""
-	print "Usage: %s stdlib_directory outputfile" % args[0]
+	print("Usage: %s stdlib_directory outputfile" % args[0])
 	return 1
 
 def main(args):
@@ -1182,7 +1183,7 @@ def main(args):
 		parser.parse("math")
 		parser.finalize()
 		
-	except IOError, e:
+	except IOError as e:
 		error(str(e))
 		return 1
 	return 0

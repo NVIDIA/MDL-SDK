@@ -421,6 +421,7 @@ public:
                         case IType_texture::TS_3D:
                         case IType_texture::TS_CUBE:
                         case IType_texture::TS_PTEX:
+                        case IType_texture::TS_BSDF_DATA:
                             // not supported
                             break;
                         }
@@ -787,7 +788,6 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
 
     // Handle DAG intrinsics first
     switch (unsigned(call->get_semantic())) {
-    case IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS:
     case IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
         // want-derivatives only applies to the first argument, if set
         if (want_derivatives) {
@@ -806,6 +806,13 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
             arg_derivs.set_bit(0);  // mark as any derivatives requested
             arg_derivs.set_bit(2);
             arg_derivs.set_bit(3);
+        }
+        return arg_derivs;
+    case IDefinition::Semantics(IDefinition::DS_OP_BASE + IExpression::OK_ARRAY_INDEX):
+        // want-derivatives only applies to the first argument, if set
+        if (want_derivatives) {
+            arg_derivs.set_bit(0);  // mark as any derivatives requested
+            arg_derivs.set_bit(1);
         }
         return arg_derivs;
     default:

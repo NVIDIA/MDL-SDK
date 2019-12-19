@@ -100,7 +100,7 @@ This example uses function calls to create a textured material.
 \section example_calls Example Source
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/example_calls.cpp</tt>
+  <tt>examples/mdl_sdk/calls/example_calls.cpp</tt>
 
 \include calls/example_calls.cpp
 

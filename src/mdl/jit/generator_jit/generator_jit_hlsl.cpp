@@ -31,6 +31,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Pass.h>
 #include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/IRPrintingPasses.h>
@@ -46,125 +47,282 @@ namespace mi {
 namespace mdl {
 
 /// This pass removes any memory PHIs where all input values are the same or undefined.
-class RemoveMemPHIs : public llvm::FunctionPass
+class HandlePointerValues : public llvm::FunctionPass
 {
 public:
     static char ID;
 
 public:
-    RemoveMemPHIs();
+    HandlePointerValues();
 
     void getAnalysisUsage(llvm::AnalysisUsage &usage) const final;
 
     bool runOnFunction(llvm::Function &function) final;
+
+    void handlePointerPHI(
+        llvm::PHINode &phi,
+        llvm::SmallVector<llvm::Instruction *, 4> &to_remove);
+
+    void handlePointerSelect(
+        llvm::SelectInst &select,
+        llvm::SmallVector<llvm::Instruction *, 4> &to_remove);
 
     llvm::StringRef getPassName() const final {
         return "RemoveMemPHIs";
     }
 };
 
-RemoveMemPHIs::RemoveMemPHIs()
+HandlePointerValues::HandlePointerValues()
 : FunctionPass( ID )
 {
 }
 
-void RemoveMemPHIs::getAnalysisUsage(llvm::AnalysisUsage &usage) const
+void HandlePointerValues::getAnalysisUsage(llvm::AnalysisUsage &usage) const
 {
 }
 
-bool RemoveMemPHIs::runOnFunction(llvm::Function &function)
+void HandlePointerValues::handlePointerPHI(
+    llvm::PHINode &phi,
+    llvm::SmallVector<llvm::Instruction *, 4> &to_remove)
 {
-    bool changed = false;
-    llvm::SmallVector<llvm::PHINode *, 4> to_remove;
+    bool all_values_same = true;
+    bool clone_gep_chain = false;
+    llvm::Value *first_value = nullptr;
+    llvm::Instruction *base_inst = nullptr;
+    unsigned opcode = 0;
+    unsigned num_operands = 0;
+    for (llvm::Value *cur_val : phi.incoming_values()) {
+        if (llvm::isa<llvm::UndefValue>(cur_val))
+            continue;
 
-    // always insert new blocks after "end" to avoid iterating over them
-    for (llvm::Function::iterator it = function.begin(), end = function.end(); it != end; ++it) {
-        for (llvm::PHINode &phi : it->phis()) {
-            if (!llvm::isa<llvm::PointerType>(phi.getType()))
-                continue;
+        // for the comparison, skip any bitcast
+        if (llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(cur_val)) {
+            cur_val = cast->getOperand(0);
+        }
 
-            bool all_values_same = true;
-            llvm::Value *first_value = nullptr;
-            llvm::Instruction *base_inst = nullptr;
-            unsigned opcode = 0;
-            unsigned num_operands = 0;
-            for (llvm::Value *cur_val : phi.incoming_values()) {
-                if (llvm::isa<llvm::UndefValue>(cur_val))
-                    continue;
+        if (first_value == nullptr) {
+            first_value = cur_val;
 
-                if (first_value == nullptr) {
-                    first_value = cur_val;
+            if ((base_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) != nullptr) {
+                opcode = base_inst->getOpcode();
+                num_operands = base_inst->getNumOperands();
+            }
+        }
+        else if (first_value != cur_val) {
+            // not an undef and does not point to the exact same value object?
+            // compare instruction kind and operands (only one level)
 
-                    // for the comparison, skip any bitcast
-                    if (llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(cur_val)) {
-                        cur_val = cast->getOperand(0);
-                    }
-
-                    if ((base_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) != nullptr) {
-                        opcode = base_inst->getOpcode();
-                        num_operands = base_inst->getNumOperands();
-                    }
+            if (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
+                if (cur_inst->getOpcode() != opcode ||
+                    cur_inst->getNumOperands() != num_operands)
+                {
+                    all_values_same = false;
+                    break;
                 }
-                else if (first_value != cur_val) {
-                    // not an undef and does not point to the exact same value object?
-                    // compare instruction kind and operands (only one level)
 
-                    // for the comparison, skip any bitcast
-                    if (llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(cur_val)) {
-                        cur_val = cast->getOperand(0);
-                    }
-
-                    if (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
-                        if (cur_inst->getOpcode() != opcode ||
-                            cur_inst->getNumOperands() != num_operands)
-                        {
-                            all_values_same = false;
-                            break;
-                        }
-
-                        for (unsigned i = 0; i < num_operands; ++i) {
-                            if (cur_inst->getOperand(i) != base_inst->getOperand(i)) {
-                                all_values_same = false;
-                                break;
-                            }
-                        }
-                    } else {
+                for (unsigned i = 0; i < num_operands; ++i) {
+                    if (cur_inst->getOperand(i) != base_inst->getOperand(i)) {
                         all_values_same = false;
                         break;
                     }
                 }
-                if (!all_values_same)
-                    break;
+
+                if (!all_values_same && llvm::isa<llvm::GetElementPtrInst>(cur_inst)) {
+                    all_values_same = true;
+                    llvm::GetElementPtrInst *gep_1 =
+                        llvm::cast<llvm::GetElementPtrInst>(cur_inst);
+                    llvm::GetElementPtrInst *gep_2 =
+                        llvm::cast<llvm::GetElementPtrInst>(base_inst);
+                    while (true) {
+                        for (unsigned i = 1, n = gep_1->getNumOperands(); i < n; ++i) {
+                            if (gep_1->getOperand(i) != gep_2->getOperand(i)) {
+                                all_values_same = false;
+                                break;
+                            }
+                        }
+                        if (!all_values_same)
+                            break;
+
+                        // found equal base of GEP chain? -> done, consider as same
+                        if (gep_1->getOperand(0) == gep_2->getOperand(0)) {
+                            clone_gep_chain = true;
+                            break;
+                        }
+
+                        gep_1 = llvm::dyn_cast<llvm::GetElementPtrInst>(
+                            gep_1->getOperand(0));
+                        gep_2 = llvm::dyn_cast<llvm::GetElementPtrInst>(
+                            gep_2->getOperand(0));
+                        if (gep_1 == nullptr || gep_2 == nullptr ||
+                                gep_1->getNumOperands() != gep_2->getNumOperands()) {
+                            all_values_same = false;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                all_values_same = false;
+                break;
+            }
+        }
+        if (!all_values_same)
+            break;
+    }
+
+    if (all_values_same) {
+        // if no value found, all incoming values must be undef -> take the first undef
+        if (first_value == nullptr) {
+            first_value = phi.getIncomingValue(0);
+        }
+
+        // materialize the instruction after all PHIs in this block.
+        // if any of the operands is not post-dominated by this block,
+        // we also need to materials those operands
+        if (llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(first_value)) {
+            // TODO: handle operands not being post-dominated by this block!
+
+            llvm::IRBuilder<> ir_builder(&*phi.getParent()->getFirstInsertionPt());
+            llvm::Instruction *clone;
+            if (clone_gep_chain) {
+                // build index list from end to start, adding first and last indices
+                // of "adjacent" GEPs together
+
+                llvm::SmallVector<llvm::Value *, 8> idxs;
+                llvm::Value *cur_base = inst;
+                while (llvm::GetElementPtrInst *gep =
+                        llvm::dyn_cast<llvm::GetElementPtrInst>(cur_base)) {
+                    unsigned gep_num_ops = gep->getNumOperands();
+                    for (unsigned i = gep_num_ops - 1; i > 0; --i) {
+                        llvm::Value *cur_op = gep->getOperand(i);
+
+                        // normalize to 32-bit indices
+                        if (cur_op->getType()->getIntegerBitWidth() != 32) {
+                            cur_op = ir_builder.CreateTrunc(
+                                cur_op, llvm::IntegerType::get(
+                                    phi.getParent()->getParent()->getContext(), 32));
+                        }
+
+                        if (i == gep_num_ops - 1 && !idxs.empty()) {
+                            // %Y = gep %X, a, b
+                            // %Z = gep %Y, c, d
+                            // -> %Z = gep %X, a, b + c, d
+                            idxs[0] = ir_builder.CreateAdd(cur_op, idxs[0]);
+                        } else
+                            idxs.insert(idxs.begin(), cur_op);
+                    }
+
+                    cur_base = gep->getOperand(0);
+                }
+
+                clone = llvm::GetElementPtrInst::Create(nullptr, cur_base, idxs);
+            } else {
+                clone = inst->clone();
+            }
+            if (inst->hasName())
+                clone->setName(inst->getName() + ".rmemphi");
+            phi.getParent()->getInstList().insert(ir_builder.GetInsertPoint(), clone);
+
+            llvm::Value *clone_value = clone;
+            if (phi.getType() != clone_value->getType())
+                clone_value = ir_builder.CreatePointerCast(clone_value, phi.getType());
+
+            phi.replaceAllUsesWith(clone_value);
+        } else {
+            // not an instruction, may be a parameter
+            llvm::Value *replacement = first_value;
+            if (phi.getType() != replacement->getType()) {
+                // insert cast at end of entry block
+                llvm::IRBuilder<> ir_builder(
+                    phi.getParent()->getParent()->getEntryBlock().getTerminator());
+
+                replacement = ir_builder.CreatePointerCast(replacement, phi.getType());
             }
 
-            if (all_values_same) {
-                // if no value found, all incoming values must be undef -> take the first undef
-                if (first_value == nullptr) {
-                    first_value = phi.getIncomingValue(0);
-                }
+            phi.replaceAllUsesWith(replacement);
+        }
+        to_remove.push_back(&phi);
+    } else {
+        MDL_ASSERT(!"Pointer PHI could not be eliminated");
+    }
+}
 
-                // materialize the instruction after all PHIs in this block.
-                // if any of the operands is not post-dominated by this block,
-                // we also need to materials those operands
-                if (llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(first_value)) {
-                    // TODO: handle operands not being post-dominated by this block!
+void HandlePointerValues::handlePointerSelect(
+    llvm::SelectInst &select,
+    llvm::SmallVector<llvm::Instruction *, 4> &to_remove)
+{
+    // %ptr_x = select %cond, %ptr_A, %ptr_B
+    // load %ptr_x  / store %val, %ptr_x
+    //
+    // ->
+    //
+    // br %cond, case_A, case_B
 
-                    llvm::Instruction *clone = inst->clone();
-                    if (inst->hasName())
-                        clone->setName(inst->getName() + ".rmemphi");
-                    it->getInstList().insert(it->getFirstInsertionPt(), clone);
-                    phi.replaceAllUsesWith(clone);
-                } else {
-                    phi.replaceAllUsesWith(first_value);
-                }
-                to_remove.push_back(&phi);
+    llvm::Value *cond = select.getCondition();
+    llvm::Value *ptr_true = select.getTrueValue();
+    llvm::Value *ptr_false = select.getFalseValue();
+
+    llvm::IRBuilder<> ir_builder(&select);
+
+    for (auto user : select.users()) {
+        if (llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(user)) {
+            llvm::TerminatorInst *then_term = nullptr;
+            llvm::TerminatorInst *else_term = nullptr;
+
+            SplitBlockAndInsertIfThenElse(cond, load, &then_term, &else_term);
+
+            ir_builder.SetInsertPoint(then_term);
+            llvm::LoadInst *then_val = ir_builder.CreateLoad(ptr_true);
+
+            ir_builder.SetInsertPoint(else_term);
+            llvm::LoadInst *else_val = ir_builder.CreateLoad(ptr_false);
+
+            ir_builder.SetInsertPoint(load);
+            llvm::PHINode *phi = ir_builder.CreatePHI(load->getType(), 2);
+            phi->addIncoming(then_val, then_val->getParent());
+            phi->addIncoming(else_val, else_val->getParent());
+
+            load->replaceAllUsesWith(phi);
+            to_remove.push_back(load);
+        } else if (llvm::StoreInst *store = llvm::dyn_cast<llvm::StoreInst>(user)) {
+            if (store->getPointerOperand() == &select) {
+                llvm::TerminatorInst *then_term = nullptr;
+                llvm::TerminatorInst *else_term = nullptr;
+
+                SplitBlockAndInsertIfThenElse(cond, store, &then_term, &else_term);
+
+                ir_builder.SetInsertPoint(then_term);
+                ir_builder.CreateStore(store->getValueOperand(), ptr_true);
+
+                ir_builder.SetInsertPoint(else_term);
+                ir_builder.CreateStore(store->getValueOperand(), ptr_false);
+
+                to_remove.push_back(store);
+            }
+        }
+    }
+}
+
+bool HandlePointerValues::runOnFunction(llvm::Function &function)
+{
+    bool changed = false;
+    llvm::SmallVector<llvm::Instruction *, 4> to_remove;
+
+    // always insert new blocks after "end" to avoid iterating over them
+    for (llvm::Function::iterator BI = function.begin(); BI != function.end(); ++BI) {
+        for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
+            if (llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(II)) {
+                if (llvm::isa<llvm::PointerType>(phi->getType()))
+                    handlePointerPHI(*phi, to_remove);
+            } else if (llvm::SelectInst *select = llvm::dyn_cast<llvm::SelectInst>(II)) {
+                if (llvm::isa<llvm::PointerType>(select->getType()))
+                    handlePointerSelect(*select, to_remove);
             }
         }
     }
 
     if (!to_remove.empty()) {
-        for (llvm::PHINode *phi : to_remove) {
-            phi->eraseFromParent();
+        for (llvm::Instruction *inst : to_remove) {
+            inst->eraseFromParent();
         }
         changed = true;
     }
@@ -172,11 +330,11 @@ bool RemoveMemPHIs::runOnFunction(llvm::Function &function)
     return changed;
 }
 
-char RemoveMemPHIs::ID = 0;
+char HandlePointerValues::ID = 0;
 
-llvm::Pass *createRemoveMemPHIsPass()
+llvm::Pass *createHandlePointerValuesPass()
 {
-    return new RemoveMemPHIs();
+    return new HandlePointerValues();
 }
 
 
@@ -214,11 +372,13 @@ void LLVM_code_generator::hlsl_compile(llvm::Module *module, string &code)
         mpm.add(llvm::hlsl::createControlledNodeSplittingPass());  // resolve irreducible CF
         mpm.add(llvm::createCFGSimplificationPass(     // eliminate dead blocks created by CNS
             1, false, false, true, false, /*AvoidPointerPHIs=*/ true));
+        mpm.add(llvm::hlsl::createUnswitchPass());     // get rid of all switch instructions
         mpm.add(llvm::createLoopSimplifyCFGPass());    // ensure all exit blocks are dominated by
                                                        // the loop header
         mpm.add(llvm::hlsl::createLoopExitEnumerationPass());  // ensure all loops have <= 1 exits
         mpm.add(llvm::hlsl::createUnswitchPass());     // get rid of all switch instructions
-        mpm.add(createRemoveMemPHIsPass());
+                                                       // introduced by the loop exit enumeration
+        mpm.add(createHandlePointerValuesPass());
         mpm.add(llvm::hlsl::createASTComputePass(m_type_mapper));
         mpm.add(hlsl::createHLSLWriterPass(
             get_allocator(),
@@ -227,6 +387,7 @@ void LLVM_code_generator::hlsl_compile(llvm::Module *module, string &code)
             m_num_texture_spaces,
             m_num_texture_results,
             m_enable_full_debug,
+            m_link_libbsdf_df_handle_slot_mode,
             m_exported_func_list));
         mpm.run(*module);
     }
@@ -247,10 +408,11 @@ char const *LLVM_code_generator::get_hlsl_tex_type_func_suffix(IDefinition const
     func_type->get_parameter(0, tex_param_type, tex_sym);
 
     switch (cast<IType_texture>(tex_param_type->skip_type_alias())->get_shape()) {
-    case IType_texture::TS_2D:   return "_2d";
-    case IType_texture::TS_3D:   return "_3d";
-    case IType_texture::TS_CUBE: return "_cube";
-    case IType_texture::TS_PTEX: return "_ptex";
+    case IType_texture::TS_2D:        return "_2d";
+    case IType_texture::TS_3D:        return "_3d";
+    case IType_texture::TS_CUBE:      return "_cube";
+    case IType_texture::TS_PTEX:      return "_ptex";
+    case IType_texture::TS_BSDF_DATA: return "_3d";  // map to 3D
     }
 
     MDL_ASSERT(!"Unexpected texture shape");
@@ -326,24 +488,58 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
 
         if (is_tex) {
             if (is_texruntime_with_derivs()) {
+                bool supports_derivatives = false;
+
                 switch (def->get_semantics()) {
-                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
-                    func_name = "lookup_deriv_float";
-                    break;
-                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
-                    func_name = "lookup_deriv_float2";
-                    break;
-                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
-                    func_name = "lookup_deriv_float3";
-                    break;
-                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
-                    func_name = "lookup_deriv_float4";
-                    break;
                 case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
-                    func_name = "lookup_deriv_color";
-                    break;
+                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+                case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+                    {
+                        IType const *tex_param_type = nullptr;
+                        ISymbol const *tex_param_sym = nullptr;
+                        as<IType_function>(def->get_type())->get_parameter(
+                            0, tex_param_type, tex_param_sym);
+                        if (IType_texture const *tex_type = as<IType_texture>(tex_param_type)) {
+                            switch (tex_type->get_shape()) {
+                            case IType_texture::TS_2D:
+                                supports_derivatives = true;
+                                break;
+                            case IType_texture::TS_3D:
+                            case IType_texture::TS_CUBE:
+                            case IType_texture::TS_PTEX:
+                            case IType_texture::TS_BSDF_DATA:
+                                // not supported
+                                break;
+                            }
+                        }
+                        break;
+                    }
                 default:
                     break;
+                }
+
+                if (supports_derivatives) {
+                    switch (def->get_semantics()) {
+                    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+                        func_name = "lookup_deriv_float";
+                        break;
+                    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+                        func_name = "lookup_deriv_float2";
+                        break;
+                    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+                        func_name = "lookup_deriv_float3";
+                        break;
+                    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+                        func_name = "lookup_deriv_float4";
+                        break;
+                    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+                        func_name = "lookup_deriv_color";
+                        break;
+                    default:
+                        break;
+                    }
                 }
             }
             func->setName("tex_" + llvm::Twine(func_name) + get_hlsl_tex_type_func_suffix(def));

@@ -35,14 +35,12 @@
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
-#include <base/lib/config/config.h>
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
 #include <base/lib/path/i_path.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
-#include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h>
@@ -294,15 +292,6 @@ const std::string& Lightprofile::get_filename() const
 
 const std::string& Lightprofile::get_original_filename() const
 {
-   if( m_original_filename.empty() && !m_mdl_file_path.empty()) {
-        SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
-        const CONFIG::Config_registry& registry = config_module->get_configuration();
-        bool flag = false;
-        registry.get_value( "deprecated_mdl_file_path_as_original_filename", flag);
-        if( flag)
-            return m_mdl_file_path;
-    }
-
     return m_original_filename;
 }
 

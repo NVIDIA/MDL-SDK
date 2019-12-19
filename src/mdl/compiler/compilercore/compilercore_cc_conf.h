@@ -68,7 +68,6 @@
 /// Use to mark functions as uncallable.
 #if (__cplusplus >= 201103L) || __has_feature(cxx_deleted_functions) \
     || (defined(_MSC_VER) && _MSC_VER >= 1900)
-// No version of MSVC currently supports this.
 #define MDL_DELETED_FUNCTION = delete
 #else
 #define MDL_DELETED_FUNCTION

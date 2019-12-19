@@ -31,9 +31,11 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_generated_dag.h>
+#include <mi/neuraylib/imaterial_instance.h>
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_type.h" // needed by Visual Studio
+#include "i_mdl_elements_module.h" 
 
 namespace mi { namespace mdl { class IType; } }
 
@@ -67,7 +69,7 @@ public:
     Mdl_material_instance(
         DB::Tag module_tag,
         DB::Tag definition_tag,
-        mi::Uint32 material_index,
+        Mdl_ident definition_ident,
         IExpression_list* arguments,
         const char* definition_name,
         const IType_list* parameter_types,
@@ -79,7 +81,7 @@ public:
 
     // methods corresponding to mi::neuraylib::IMaterial_instance
 
-    DB::Tag get_material_definition() const;
+    DB::Tag get_material_definition(DB::Transaction *transaction) const;
 
     const char* get_mdl_material_definition() const;
 
@@ -151,6 +153,12 @@ public:
     const mi::mdl::IType* get_mdl_parameter_type(
         DB::Transaction* transaction, mi::Uint32 index) const;
 
+    /// Returns the identifier of the definition.
+    Mdl_ident get_definition_ident() const { return m_definition_ident; }
+
+    /// Returns the DB name of the definition.
+    const char* get_definition_db_name() const { return m_definition_db_name.c_str(); }
+
     /// Swaps *this and \p other.
     ///
     /// Used by the API to move the content of just constructed DB elements into the already
@@ -164,6 +172,36 @@ public:
 
     /// Get the list of enable_if conditions.
     const IExpression_list* get_enable_if_conditions() const;
+
+    /// Checks, if the material and its arguments still refer to valid definitions.
+    bool is_valid(
+        DB::Transaction* transaction,
+        Execution_context* context) const;
+
+    /// Checks, if the material and its arguments still refer to valid definitions.
+    bool is_valid(
+        DB::Transaction* transaction,
+        DB::Tag_set& tags_seen,
+        Execution_context* context) const;
+
+    /// Attempts to repair an invalid material instance by trying to promote its definition
+    /// tag identifier.
+    /// \param transaction              the DB transaction.
+    /// \param repair_invalid_calls     \c true, if invalid calls should be removed.
+    /// \param remove_invalid_calls     \c true, if invalid calls should be repaired.
+    /// \param level                    the recursion level.
+    /// \param context                  will receive error messages.
+    /// \return
+    ///         -  0: Success.
+    ///         - -1: Failure. Consult the context for details.
+    mi::Sint32 repair(
+        DB::Transaction* transaction,
+        bool repair_invalid_calls,
+        bool remove_invalid_calls,
+        mi::Uint32 level,
+        Execution_context* context);
+
+    DB::Tag get_module() const;
 
     // methods of SERIAL::Serializable
 
@@ -196,14 +234,15 @@ private:
 
     DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding material definition.
-    mi::Uint32 m_material_index;                 ///< The index in the corresponding module. (*)
+    Mdl_ident m_definition_ident;                ///< The corresponding material definition identifier.
     std::string m_definition_name;               ///< The MDL name of the material definition. (*)
+    std::string m_definition_db_name;            ///< The DB name of the material definition. (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).
 
-    mi::base::Handle<const IType_list> m_parameter_types; // (*)
+    mi::base::Handle<const IType_list> m_parameter_types;            // (*)
     mi::base::Handle<IExpression_list> m_arguments;
 
-    mi::base::Handle<const IExpression_list> m_enable_if_conditions;
+    mi::base::Handle<const IExpression_list> m_enable_if_conditions; // (*)
 };
 
 } // namespace MDL

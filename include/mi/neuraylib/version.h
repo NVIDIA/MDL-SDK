@@ -51,7 +51,7 @@
 ///
 /// A change in this version number indicates that the binary compatibility
 /// of the interfaces offered through the shared library have changed.
-#define MI_NEURAYLIB_API_VERSION  38
+#define MI_NEURAYLIB_API_VERSION  39
 
 // The following three to four macros define the API version.
 // The macros thereafter are defined in terms of the first four.
@@ -64,7 +64,7 @@
 /// \NeurayApiName minor version number
 ///
 /// \see \ref mi_base_intro_versioning
-#define MI_NEURAYLIB_VERSION_MINOR  0
+#define MI_NEURAYLIB_VERSION_MINOR  1
 
 /// \NeurayApiName version qualifier
 ///
@@ -95,11 +95,11 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2019.1.4"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2019.2"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
-#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v29"
+#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v30"
 
 // Enables features that were deprecated with version 9.1.
 //#define MI_NEURAYLIB_DEPRECATED_9_1
@@ -148,6 +148,10 @@
 
 #ifdef MI_NEURAYLIB_DEPRECATED_8_1
 #warning Support for macro MI_NEURAYLIB_DEPRECATED_8_1 has been removed
+#endif
+
+#ifdef MI_NEURAYLIB_DEPRECATED_9_1
+#warning Support for macro MI_NEURAYLIB_DEPRECATED_9_1 has been removed
 #endif
 
 /*@}*/ // end group mi_neuray_version

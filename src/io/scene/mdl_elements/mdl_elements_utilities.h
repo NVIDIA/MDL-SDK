@@ -34,28 +34,37 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
 #include <base/data/db/i_db_tag.h>
+#include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ifunction_definition.h>
+#include <mi/neuraylib/imdl_loading_wait_handle.h>
 
 #include "i_mdl_elements_expression.h"
+#include "i_mdl_elements_module.h"
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_value.h"
 
 namespace mi {
     namespace neuraylib { class IReader; }
     namespace base      { struct Uuid; }
+    namespace mdl       { class IMDL; }
 }
 
 namespace MI {
 
-namespace DB { class Transaction; }
+    namespace DB { class Transaction; class Tag; }
 
 namespace MDL {
 
 class Mdl_compiled_material;
+class Mdl_module_wait_queue;
+class Name_mangler;
 
 // ********** Conversion from mi::mdl to mi::neuraylib *********************************************
 
@@ -94,6 +103,33 @@ typedef std::vector<std::vector<const mi::mdl::DAG_node*> > Mdl_annotation_block
 const IType* mdl_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
+    const Mdl_annotation_block* annotations = 0,
+    const Mdl_annotation_block_vector* member_annotations = 0);
+
+
+/// Converts mi::mdl::IType_enum to MI::MDL::IType_enum and checks,
+/// if the type conflicts with an existing type.
+///
+/// \param tf                   The type factory to use.
+/// \param type                 The type to convert.
+/// \param annotations          The annotations of the enum.
+/// \param member_annotations   The annotations of the values/fields.
+bool mdl_type_enum_to_int_type_test(
+    IType_factory* tf,
+    const mi::mdl::IType_enum* type,
+    const Mdl_annotation_block* annotations = 0,
+    const Mdl_annotation_block_vector* member_annotations = 0);
+
+/// Converts mi::mdl::IType_struct to MI::MDL::IType_struct and checks,
+/// if the type conflicts with an existing type.
+///
+/// \param tf                   The type factory to use.
+/// \param type                 The type to convert.
+/// \param annotations          The annotations of the enum.
+/// \param member_annotations   The annotations of the values/fields.
+bool mdl_type_struct_to_int_type_test(
+    IType_factory* tf,
+    const mi::mdl::IType_struct* type,
     const Mdl_annotation_block* annotations = 0,
     const Mdl_annotation_block_vector* member_annotations = 0);
 
@@ -176,7 +212,9 @@ public:
     ///                               with relative filenames).
     /// \param module_name            The fully-qualified MDL module name.
     /// \param prototype_tag          The prototype_tag if relevant.
-    /// \param load_resources         True, if resources are supposed to be loaded into the DB
+    /// \param load_resources         \c True, if resources are supposed to be loaded into the DB
+    /// \param user_modules_seen      If non - \c NULL, visited user module tags and identifiers
+    ///                               are put here.
     Mdl_dag_converter(
         IExpression_factory* ef,
         DB::Transaction* transaction,
@@ -185,7 +223,8 @@ public:
         const char* module_filename,
         const char* module_name,
         DB::Tag prototype_tag,
-        bool load_resources);
+        bool load_resources,
+        std::set<Mdl_tag_ident>* user_modules_seen);
 
     /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
     ///
@@ -243,6 +282,8 @@ private:
     const char* m_module_name;
     DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
     bool        m_load_resources;
+    mutable std::set<Mdl_tag_ident>*
+                m_user_modules_seen;
 };
 
 // ********** Conversion from MI::MDL to mi::mdl ***************************************************
@@ -266,7 +307,8 @@ const mi::mdl::IExpression* int_expr_to_mdl_ast_expr(
     DB::Transaction* transaction,
     mi::mdl::IModule* module,
     const mi::mdl::IType* mdl_type,
-    const IExpression* expr);
+    const IExpression* expr,
+    Name_mangler* name_mangler);
 
 /// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
 const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
@@ -361,6 +403,42 @@ mi::Uint32 get_hash(
 /// Returns a reader for the given string.
 mi::neuraylib::IReader* create_reader( const std::string& data);
 
+/// Checks, if the material definition with the given \p definition_db_name is valid, meaning a
+/// definition with that name and a matching identifier exists in its module.
+/// \param transaction        transaction to use
+/// \param module_tag         the tag of the module that owns the definition. Can be \c NULL for
+///                           immutable calls. In that case definition_db_name is used to get the
+///                           module name and access the module.
+/// \param definition_id      the definition identifier.
+/// \param definition_db_name the DB name of the definition.
+///
+/// \return \c true, if a definition with the given name and identifier still exists in the module,
+///         \c false otherwise.
+bool is_valid_material_definition(
+    DB::Transaction* transaction,
+    DB::Tag module_tag,
+    Mdl_ident definition_id,
+    const std::string& definition_db_name);
+
+/// Checks, if the function definition with the given \p definition_db_name is valid, meaning a
+/// definition with that name and a matching identifier exists in its module.
+/// \param transaction        transaction to use
+/// \param module_tag         the tag of the module that owns the definition. Can be \c NULL for
+///                           immutable calls. In that case definition_db_name is used to get the
+///                           module name and access the module.
+/// \param definition_id      the definition identifier.
+/// \param definition_db_name the DB name of the definition.
+///
+/// \return \c true, if a definition with the given name and identifier still exists in the module,
+///         \c false otherwise.
+bool is_valid_function_definition(
+    DB::Transaction* transaction,
+    DB::Tag module_tag,
+    Mdl_ident definition_id,
+    const std::string& definition_db_name);
+
+/// Extracts the module db name from a fully qualified definition db name.
+std::string get_module_db_name(const std::string& definition_db_name);
 
 // **********  Traversal of types, values, and expressions *****************************************
 
@@ -444,9 +522,10 @@ const mi::mdl::IType_compound* convert_deferred_sized_into_immediate_sized_array
 ///
 /// \param module                 The module on which the qualified name is created.
 /// \param signature              The signature.
+/// \param signature              The name mangler.
 /// \return                       The MDL AST expression reference for the signature.
 const mi::mdl::IExpression_reference* signature_to_reference(
-    mi::mdl::IModule* module, const char* signature);
+    mi::mdl::IModule* module, const char* signature, Name_mangler* name_mangler);
 
 /// Creates an MDL AST expression reference for a given MDL type.
 ///
@@ -515,6 +594,32 @@ void collect_function_references(
 
 // ********** Symbol_importer **********************************************************************
 
+/// A simple name mangler.
+class Name_mangler
+{
+
+public:
+    Name_mangler(
+        mi::mdl::IMDL* imdl);
+
+    const char* mangle(const char* sym);
+
+    using Name_map = std::map<std::string, std::string>;
+
+    const Name_map& get_names() { return m_unicode_to_alias; }
+
+private:
+
+    std::string make_unique(const std::string& ident) const;
+private:
+
+    mi::base::Handle<mi::mdl::IMDL> m_mdl;
+
+    Name_map m_unicode_to_alias;
+
+    std::set<std::string> m_alias;
+};
+
 class Name_importer;
 
 /// Helper class to create imports from entities references by AST expressions.
@@ -559,18 +664,102 @@ private:
 /// Adapts the DB (or rather a transaction) to the IModule_cache interface.
 class Module_cache : public mi::mdl::IModule_cache
 {
+private:
+    static std::atomic<size_t> s_context_counter;
+
 public:
-   Module_cache( DB::Transaction* transaction) : m_transaction( transaction) { }
+    /// Default implementation of the IMdl_loading_wait_handle interface.
+    /// Used by the \c Wait_handle_factory if no other factory is registered at the module cache.
+    class Wait_handle 
+        : public mi::base::Interface_implement<mi::neuraylib::IMdl_loading_wait_handle>
+    {
+    public:
+        explicit Wait_handle();
 
-   virtual ~Module_cache();
+        void wait() override;
+        void notify(mi::Sint32 result_code) override;
+        mi::Sint32 get_result_code() const override;
 
-   /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
-   const mi::mdl::IModule* lookup( const char* module_name) const;
+    private:
+        std::condition_variable m_conditional;
+        std::mutex m_conditional_mutex;
+        bool m_processed;
+        int m_result_code;
+    };
+
+    /// Default implementation of the IMdl_loading_wait_handle_factory interface.
+    /// Uses \c Wait_handles if no other factory is registered at the module cache.
+    class Wait_handle_factory
+        : public mi::base::Interface_implement<mi::neuraylib::IMdl_loading_wait_handle_factory>
+    {
+    public:
+        explicit Wait_handle_factory() {}
+
+        mi::neuraylib::IMdl_loading_wait_handle* create_wait_handle() const override;
+    };
+
+    explicit Module_cache(
+        DB::Transaction* transaction,
+        Mdl_module_wait_queue* queue,
+        const DB::Tag_set& module_ignore_list);
+
+    virtual ~Module_cache();
+
+    /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
+    /// In case of access from multiple threads, only the first thread that wants to load
+    /// module will return \c NULL immediately, further threads will block until notify was called
+    /// by the loading thread. In case loading failed on a different thread, \c lookup will also 
+    /// return \c NULL after returning from waiting. The caller can check weather the current
+    /// thread is supposed to load the module by calling \c processed_on_this_thread.
+    const mi::mdl::IModule* lookup(const char* module_name) const override;
+
+    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    const mi::mdl::IModule* lookup_db(const char* module_name) const;
+
+    /// Check if this module is loading was started in the current context. I.e., on the thread 
+    /// that created this module cache instance.
+    /// Note, this assumes a light weight implementation of the Cache. One instance for each
+    /// call to \c load module.
+    ///
+    /// \param module_name      The name of the module that is been processed.
+    /// \return                 True if the module loading was initialized with this instance.
+    bool loading_process_started_in_current_context(const char* module_name) const;
+
+    /// Notify waiting threads about the finishing of the loading process of module.
+    /// This function has to be called after a successfully loaded module was registered in the
+    /// Database (or a corresponding cache structure) AND also in case of loading failures.
+    ///
+    /// \param module_name      The name of the module that has been processed.
+    /// \param result_code      Return code of the loading process. 0 in case of success.
+    virtual void notify(const char* module_name, int result_code);
+
+    /// Get the module loading callback
+    mi::mdl::IModule_loaded_callback* get_module_loading_callback() const override;
+
+    /// Set the module loading callback.
+    void set_module_loading_callback(mi::mdl::IModule_loaded_callback* callback);
+
+    /// Get the module cache wait handle factory.
+    const mi::neuraylib::IMdl_loading_wait_handle_factory* get_wait_handle_factory() const;
+
+    /// Set the module cache wait handle factory.
+    void set_wait_handle_factory(mi::neuraylib::IMdl_loading_wait_handle_factory* factory);
+
+    /// Get an unique identifier for the context in which the current module is loaded.
+    ///
+    /// \return                 The identifier.
+    size_t get_loading_context_id() const { return m_context_id; }
 
 private:
-    DB::Transaction* m_transaction;
-};
 
+    size_t m_context_id;
+    DB::Transaction* m_transaction;
+    Mdl_module_wait_queue* m_queue;
+    mi::mdl::IModule_loaded_callback* m_module_load_callback;
+    mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle_factory> m_default_wait_handle_factory;
+    mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle_factory> m_user_wait_handle_factory;
+    DB::Tag_set m_ignore_list;
+};
 
 // ********** Call_evaluator ***********************************************************************
 
@@ -711,6 +900,31 @@ void read(SERIAL::Deserializer* deserializer, mi::base::Uuid& uuid);
 
 /// Converts a hash from the MDL API representation to the base API representation.
 mi::base::Uuid convert_hash( mi::mdl::DAG_hash const &hash);
+
+/// Generates a unique ID.
+Uint64 generate_unique_id();
+
+/// Repairs the given argument list according to the given rules.
+/// \param transaction  the transaction.
+/// \param arguments    the arguments to repair.
+/// \param defaults     argument defaults.
+/// \param repair_calls if \c true, invalid calls will be repaired, if possible.
+/// \param remove_calls if \c true, invalid calls will be replaced by a default. In case \p
+///                     repair_calls is \c true, the call will be removed if the repair
+///                     failed.
+/// \param level        recursion level
+/// \param context      execution context to propagate error messages.
+/// \return 
+///      -  0:   Success
+///      - -1:   Repairing failed. See the context for details.
+mi::Sint32 repair_arguments(
+    DB::Transaction* transaction,
+    IExpression_list* arguments,
+    const IExpression_list* defaults,
+    bool repair_calls,
+    bool remove_calls,
+    mi::Uint32 level,
+    Execution_context* context);
 
 } // namespace MDL
 

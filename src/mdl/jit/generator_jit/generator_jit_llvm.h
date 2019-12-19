@@ -211,9 +211,11 @@ public:
         KI_STATE_CALL_LAMBDA_FLOAT,             ///< Kind of state::call_lambda_float(int)
         KI_STATE_CALL_LAMBDA_FLOAT3,            ///< Kind of state::call_lambda_float3(int)
         KI_STATE_CALL_LAMBDA_UINT,              ///< Kind of state::call_lambda_uint(int)
-        KI_STATE_GET_MATERIAL_IOR,              ///< Kind of state::get_material_ior()
+        KI_STATE_GET_ARG_BLOCK_FLOAT,           ///< Kind of state::get_arg_block_float(int)
+        KI_STATE_GET_ARG_BLOCK_FLOAT3,          ///< Kind of state::get_arg_block_float3(int)
+        KI_STATE_GET_ARG_BLOCK_UINT,            ///< Kind of state::get_arg_block_uint(int)
+        KI_STATE_GET_ARG_BLOCK_BOOL,            ///< Kind of state::get_arg_block_bool(int)
         KI_STATE_GET_MEASURED_CURVE_VALUE,      ///< Kind of state::get_measured_curve_value()
-        KI_STATE_GET_THIN_WALLED,               ///< Kind of state::get_thin_walled()
 
         /// Kind of df::bsdf_measurement_resolution(int,int)
         KI_DF_BSDF_MEASUREMENT_RESOLUTION,
@@ -1003,6 +1005,7 @@ public:
         // The name may later be updated by the actual target code generator.
         string                                         name;
         vector<string>::Type                           prototypes;
+        vector<string>::Type                           df_handles;
 
         Exported_function(
             IAllocator                                    *alloc,
@@ -1016,6 +1019,7 @@ public:
         , arg_block_index(arg_block_index)
         , name(func->getName().begin(), func->getName().end(), alloc)
         , prototypes(alloc)
+        , df_handles(alloc)
         {
         }
 
@@ -1027,6 +1031,11 @@ public:
                 prototypes.resize(size_t(lang) + 1, string(prototypes.get_allocator()));
             }
             prototypes[size_t(lang)] = prototype;
+        }
+
+        void add_df_handle(char const *handle_name)
+        {
+            df_handles.push_back(string(handle_name, df_handles.get_allocator()));
         }
     };
 
@@ -2257,11 +2266,10 @@ private:
     /// \param call  the LLVM call instruction calling a BSDF member function
     Distribution_function_state get_dist_func_state_from_call(llvm::CallInst *call);
 
-    /// Get the BSDF function for the given semantics and the current distribution function state
+    /// Get the BSDF function for the given DAG call and the current distribution function state
     /// from the BSDF library.
     llvm::Function *get_libbsdf_function(
-        IDefinition::Semantics sema, 
-        IType::Kind kind);
+        DAG_call const *dag_call);
 
     /// Generate a call to an expression lambda function.
     ///
@@ -2911,7 +2919,8 @@ private:
     /// Load the libbsdf LLVM module.
     ///
     /// \param llvm_context  the context for the loader
-    std::unique_ptr<llvm::Module> load_libbsdf(llvm::LLVMContext &llvm_context);
+    std::unique_ptr<llvm::Module> load_libbsdf(
+        llvm::LLVMContext &llvm_context, mdl::Df_handle_slot_mode hsm);
 
     /// Load the libmdlrt LLVM module.
     ///
@@ -2962,9 +2971,10 @@ private:
     /// Load and link libbsdf into the current LLVM module.
     /// It maps the types from libbsdf to our types and resolves referenced API functions
     /// to our intrinsics.
+    /// \param hsm       df handle type to use, which will be used to select the libbsdf version
     ///
     /// \returns false if there was any error.
-    bool load_and_link_libbsdf();
+    bool load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm);
 
     /// Returns the set of context data flags to use for functions used with distribution functions.
     LLVM_context_data::Flags get_df_function_flags(const llvm::Function *func);
@@ -3002,6 +3012,11 @@ private:
     ///
     /// \param name  a valid call mode name
     static Function_context::Tex_lookup_call_mode parse_call_mode(char const *name);
+
+    /// Parse the Df_handle_slot_mode
+    ///
+    /// \param name  a valid Df_handle_slot_mode name
+    static mi::mdl::Df_handle_slot_mode parse_df_handle_slot_mode(char const *name);
 
     /// Get a unique string value object used to represent the string of the value.
     ///
@@ -3249,6 +3264,15 @@ private:
     /// The list of all values that goes into the RO data segment.
     Value_list m_ro_data_values;
 
+    typedef hash_set<char const *, cstring_hash, cstring_equal_to>::Type String_set;
+
+    /// The set of names for which scene data may be available in the renderer.
+    String_set m_scene_data_names;
+
+    /// If true, all scene data names have to be treated as referencing possibly available
+    /// scene data.
+    bool m_scene_data_all_pos_avail;
+
     /// The option rt_callable_program_from_id(_64) function once created.
     llvm::Function *m_optix_cp_from_id;
 
@@ -3356,6 +3380,9 @@ private:
 
     /// If true, link libmdlrt.
     bool m_link_libmdlrt;
+
+    /// The selected version of libbsdf that will be linked to the ouput.
+    mdl::Df_handle_slot_mode m_link_libbsdf_df_handle_slot_mode;
 
     /// If true, this code generator will allow incremental compilation.
     bool m_incremental;
@@ -3477,7 +3504,7 @@ private:
     /// The internal state::get_texture_results() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_texture_results;
 
-    /// The internal state::get_texture_results() function, only available for libbsdf.
+    /// The internal state::get_arg_block() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_arg_block;
 
     /// The internal state::get_ro_data_segment() function, only available for libbsdf.
@@ -3495,14 +3522,20 @@ private:
     /// The internal state::call_lambda_uint(int) function, only available for libbsdf.
     Internal_function *m_int_func_state_call_lambda_uint;
 
-    /// The internal state::get_material_ior() function, only available for libbsdf.
-    Internal_function *m_int_func_state_get_material_ior;
+    /// The internal state::get_arg_block_float(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_arg_block_float;
+
+    /// The internal state::get_arg_block_float3(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_arg_block_float3;
+
+    /// The internal state::get_arg_block_uint(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_arg_block_uint;
+
+    /// The internal state::get_arg_block_bool(int) function, only available for libbsdf.
+    Internal_function *m_int_func_state_get_arg_block_bool;
 
     /// The internal state::get_measured_curve_value() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_measured_curve_value;
-
-    /// The internal state::get_thin_walled() function, only available for libbsdf.
-    Internal_function *m_int_func_state_get_thin_walled;
 
     /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
     Internal_function *m_int_func_df_bsdf_measurement_resolution;

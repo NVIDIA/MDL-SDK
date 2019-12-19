@@ -27,11 +27,11 @@
  *****************************************************************************/
 mdl 1.4;
 
-import df::specular_bsdf;
-import df::measured_bsdf;
-import df::fresnel_layer;
-import df::scatter_mode;
-import anno::*;
+import ::df::specular_bsdf;
+import ::df::measured_bsdf;
+import ::df::fresnel_layer;
+import ::df::scatter_mode;
+import ::anno::*;
 
     
 export material carpaint_red(

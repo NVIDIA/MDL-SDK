@@ -356,7 +356,6 @@ void Deserializer_impl::read(DB::Tag* value_pointer)
     *value_pointer = DB::Tag(tag);
 }
 
-
 void Deserializer_impl::read(char** value_pointer)
 {
     size_t size;

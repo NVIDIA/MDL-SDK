@@ -1126,6 +1126,9 @@ public:
     /// Get the tag version.
     unsigned get_tag_version() const MDL_FINAL { return m_tag_version; }
 
+    /// Get the BSDF data kind for BSDF data textures.
+    Bsdf_data_kind get_bsdf_data_kind() const MDL_FINAL { return m_bsdf_data_kind; }
+
     /// Constructor.
     explicit Value_texture(
         Memory_arena        *arena,
@@ -1139,6 +1142,23 @@ public:
     , m_gamma_mode(gamma)
     , m_tag_value(tag_value)
     , m_tag_version(tag_version)
+    , m_bsdf_data_kind(BDK_NONE)
+    {
+    }
+
+    /// Constructor for bsdf data texture.
+    explicit Value_texture(
+        Memory_arena        *arena,
+        IType_texture const *type,
+        Bsdf_data_kind      kind,
+        int                 tag_value,
+        unsigned            tag_version)
+    : Base(type)
+    , m_string_value("")
+    , m_gamma_mode(gamma_linear)
+    , m_tag_value(tag_value)
+    , m_tag_version(tag_version)
+    , m_bsdf_data_kind(kind)
     {
     }
 
@@ -1151,6 +1171,8 @@ private:
     int const m_tag_value;
     /// The tag version.
     unsigned m_tag_version;
+    /// The BSDF data kind.
+    Bsdf_data_kind m_bsdf_data_kind;
 };
 
 /// Implementation of the "string" valued IValue_light_profile class.
@@ -2767,15 +2789,33 @@ IValue_struct const *Value_factory::create_struct(
 
 // Create a new texture value.
 IValue_texture const *Value_factory::create_texture(
-    IType_texture const        *type,
-    char const                 *value,
-    IValue_texture::gamma_mode gamma,
-    int                        tag_value,
-    unsigned                   tag_version)
+    IType_texture const            *type,
+    char const                     *value,
+    IValue_texture::gamma_mode     gamma,
+    int                            tag_value,
+    unsigned                       tag_version)
 {
     MDL_ASSERT(value != NULL && "<NULL> textures are not allowed");
     IValue_texture *v = m_builder.create<Value_texture>(
         m_builder.get_arena(), type, value, gamma, tag_value, tag_version);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    if (!res.second) {
+        m_builder.get_arena()->drop(v);
+        return cast<IValue_texture>(*res.first);
+    }
+    return v;
+}
+
+// Create a new bsdf_data texture value.
+IValue_texture const *Value_factory::create_bsdf_data_texture(
+    IValue_texture::Bsdf_data_kind bsdf_data_kind,
+    int                            tag_value,
+    unsigned                       tag_version)
+{
+    MDL_ASSERT(bsdf_data_kind != IValue_texture::BDK_NONE && "NONE kind is not allowed");
+    IType_texture const *type = m_tf.create_texture(IType_texture::TS_BSDF_DATA);
+    IValue_texture *v = m_builder.create<Value_texture>(
+        m_builder.get_arena(), type, bsdf_data_kind, tag_value, tag_version);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
@@ -2995,6 +3035,11 @@ IValue const *Value_factory::import(IValue const *value)
             IValue_texture const *v  = cast<IValue_texture>(value);
             IType_texture const  *tp =
                 static_cast<IType_texture const *>(m_tf.import(v->get_type()));
+            if (tp->get_shape() == IType_texture::TS_BSDF_DATA) {
+                return create_bsdf_data_texture(
+                    v->get_bsdf_data_kind(), v->get_tag_value(), v->get_tag_version());
+
+            }
             return create_texture(
                 tp, v->get_string_value(), v->get_gamma_mode(),
                 v->get_tag_value(), v->get_tag_version());
@@ -3172,36 +3217,6 @@ static size_t hash_string(char const *s)
     for (; *s; ++s)
         h = 5 * h + *s;
     return h;
-}
-
-/// Check, if two float values are BITWISE identical.
-static bool bit_equal_float(float a, float b)
-{
-    union { size_t z; float f; } u1, u2;
-
-    u1.z = 0;
-    u1.f = a;
-
-    u2.z = 0;
-    u2.f = b;
-
-    return u1.z == u2.z;
-}
-
-/// Check, if two float values are BITWISE identical.
-static bool bit_equal_float(double a, double b)
-{
-    union { size_t z[2]; double d; } u1, u2;
-
-    u1.z[0] = 0;
-    u1.z[1] = 0;
-    u1.d    = a;
-
-    u2.z[0] = 0;
-    u2.z[1] = 0;
-    u2.d    = b;
-
-    return u1.z[0] == u2.z[0] && u1.z[1] == u2.z[1];
 }
 
 size_t Value_factory::IValue_hash::operator() (IValue const *value) const

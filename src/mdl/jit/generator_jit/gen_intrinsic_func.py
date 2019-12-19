@@ -281,10 +281,11 @@ class SignatureParser:
 	def get_texture_shape(self, type_code):
 		"""If type_code is a texture type, return its shape, else None."""
 		cases = {
-			"texture_2d"   : "mi::mdl::IType_texture::TS_2D",
-			"texture_3d"   : "mi::mdl::IType_texture::TS_3D",
-			"texture_cube" : "mi::mdl::IType_texture::TS_CUBE",
-			"texture_ptex" : "mi::mdl::IType_texture::TS_PTEX",
+			"texture_2d"        : "mi::mdl::IType_texture::TS_2D",
+			"texture_3d"        : "mi::mdl::IType_texture::TS_3D",
+			"texture_cube"      : "mi::mdl::IType_texture::TS_CUBE",
+			"texture_ptex"      : "mi::mdl::IType_texture::TS_PTEX",
+			"texture_bsdf_data" : "mi::mdl::IType_texture::TS_BSDF_DATA",
 		}
 		return cases.get(self.m_inv_types[type_code], None)
 
@@ -398,7 +399,7 @@ class SignatureParser:
 		"""get the type code"""
 		try:
 			return self.m_types[s]
-		except KeyError, e:
+		except KeyError:
 			error("Unsupported type '" + s + "' found")
 			sys.exit(1)
 
@@ -406,7 +407,7 @@ class SignatureParser:
 		"""get the type suffix"""
 		try:
 			return self.m_type_suffixes[s]
-		except KeyError, e:
+		except KeyError:
 			error("Unsupported type '" + s + "' found")
 			sys.exit(1)
 
@@ -549,7 +550,8 @@ class SignatureParser:
 				name == "color_measured_curve_layer" or
 				name == "fresnel_factor" or
 				name == "measured_factor" or
-				name == "chiang_hair_bsdf"):
+				name == "chiang_hair_bsdf" or
+				name == "sheen_bsdf"):
 			self.unsupported_intrinsics[name] = "unsupported"
 			return True;
 		if (name == "light_profile_power" or name == "light_profile_maximum" or
@@ -896,7 +898,7 @@ class SignatureParser:
 		signature = self.create_signature(ret_type, args)
 
 		if self.debug:
-			print decl, signature
+			print("%s %s" % (decl, signature))
 
 		if self.is_supported(self.curr_module, name, signature):
 			# insert the new signature for the given name
@@ -935,7 +937,7 @@ class SignatureParser:
 					if not decl:
 						continue
 					if self.debug:
-						print decl
+						print(decl)
 					self.get_signature(decl)
 
 	def parse_file(self, f):
@@ -1071,7 +1073,7 @@ class SignatureParser:
 
 		mode = self.intrinsic_modes.get(intrinsic + signature)
 		if mode == None:
-			print "error: ", intrinsic + signature
+			error("%s%s" % (intrinsic, signature))
 
 		params = { "mode" : "::" + self.m_intrinsic_mods[intrinsic] }
 		if params["mode"] == "::":
@@ -2002,7 +2004,7 @@ class SignatureParser:
 					if (tmp->getType() != res_tp) {
 						// convert bool type
 						res = llvm::UndefValue::get(res_tp);
-						for (int i = 1; i < %(size)d; ++i) {
+						for (int i = 0; i < %(size)d; ++i) {
 							llvm::Value *idx  = ctx.get_constant(i);
 							llvm::Value *elem = ctx->CreateExtractElement(tmp, idx);
 							// map the i1 vector result to the bool type representation
@@ -2424,9 +2426,14 @@ class SignatureParser:
 						llvm::Value *a_elem = ctx.create_extract_allow_deriv(a, i);
 						tmp = ctx.create_deriv_add(base_type, tmp, ctx.create_deriv_mul(base_type, a_elem, a_elem));
 					}
-					llvm::Value *tmp_var = ctx.create_local(tmp->getType(), "tmp");
-					ctx->CreateStore(tmp, tmp_var);
-					res = ctx->CreateCall(sqrt_deriv_func, tmp_var);
+					llvm::Value *sqrt_arg;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						sqrt_arg = ctx.create_local(tmp->getType(), "tmp");
+						ctx->CreateStore(tmp, sqrt_arg);
+					} else {
+						sqrt_arg = tmp;
+					}
+					res = ctx->CreateCall(sqrt_deriv_func, sqrt_arg);
 				} else {
 					llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
 
@@ -2450,9 +2457,14 @@ class SignatureParser:
 						"::math", "abs(%(type)s)");
 					llvm::Function *abs_deriv_func = get_intrinsic_function(abs_def, /*return_derivs=*/ true);
 
-					llvm::Value *tmp_var = ctx.create_local(a->getType(), "tmp");
-					ctx->CreateStore(a, tmp_var);
-					res = ctx->CreateCall(abs_deriv_func, tmp_var);
+					llvm::Value *abs_arg;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						abs_arg = ctx.create_local(a->getType(), "tmp");
+						ctx->CreateStore(a, abs_arg);
+					} else {
+						abs_arg = a;
+					}
+					res = ctx->CreateCall(abs_deriv_func, abs_arg);
 				} else {
 					llvm::Function *abs_func = get_runtime_func(%(abs_name)s);
 					res = ctx->CreateCall(abs_func, a);
@@ -2554,9 +2566,15 @@ class SignatureParser:
 						"::math", "length(%(type)s)");
 					llvm::Function *length_deriv_func = get_intrinsic_function(length_def, /*return_derivs=*/ true);
 
-					llvm::Value *tmp_var = ctx.create_local(diff->getType(), "tmp");
-					ctx->CreateStore(diff, tmp_var);
-					res = ctx->CreateCall(length_deriv_func, tmp_var);
+					llvm::Value *length_arg;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						length_arg = ctx.create_local(diff->getType(), "tmp");
+						ctx->CreateStore(diff, length_arg);
+					} else {
+						length_arg = diff;
+					}
+
+					res = ctx->CreateCall(length_deriv_func, length_arg);
 				} else {
 					llvm::Function *sqrt_func = get_runtime_func(%(sqrt_name)s);
 
@@ -2585,9 +2603,14 @@ class SignatureParser:
 						"::math", "abs(%(type)s)");
 					llvm::Function *abs_deriv_func = get_intrinsic_function(abs_def, /*return_derivs=*/ true);
 
-					llvm::Value *tmp_var = ctx.create_local(diff->getType(), "tmp");
-					ctx->CreateStore(diff, tmp_var);
-					res = ctx->CreateCall(abs_deriv_func, tmp_var);
+					llvm::Value *abs_arg;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						abs_arg = ctx.create_local(diff->getType(), "tmp");
+						ctx->CreateStore(diff, abs_arg);
+					} else {
+						abs_arg = diff;
+					}
+					res = ctx->CreateCall(abs_deriv_func, abs_arg);
 				} else {
 					llvm::Function *abs_func = get_runtime_func(%(abs_name)s);
 					res = ctx->CreateFSub(a, b);
@@ -2640,7 +2663,7 @@ class SignatureParser:
 					"::math", "%(intrinsic)s(%(param_types)s)");
 				llvm::Function *a_func = get_intrinsic_function(a_def, /*return_derivs=*/ true);
 				llvm::Value *a_args[%(len_params)d];
-				llvm::Value *a_arg_vars[%(len_params)d];
+				llvm::Value *a_arg_vars[%(len_params)d] = { 0 };
 				llvm::Value *a_res[%(n_elems)d];
 				llvm::Value *tmp;
 			""" % {
@@ -2671,20 +2694,28 @@ class SignatureParser:
 
 						if i == 0:
 							self.format_code(f,
-							"""a_arg_vars[%(idx)d] = ctx.create_local(tmp->getType(), "%(p_name)s");
-							a_args[%(idx)d] = a_arg_vars[%(idx)d];
+							"""if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+								a_arg_vars[%(idx)d] = ctx.create_local(tmp->getType(), "%(p_name)s");
+								a_args[%(idx)d] = a_arg_vars[%(idx)d];
+								ctx->CreateStore(tmp, a_arg_vars[%(idx)d]);
+							} else {
+								a_args[%(idx)d] = tmp;
+							}
 							""" % {
 								"p_name": p_name,
 								"idx": idx
 							})
-
-						self.format_code(f,
-						"""ctx->CreateStore(tmp, a_arg_vars[%(idx)d]);
-						""" % {
-							"p_name": p_name,
-							"elem": i,
-							"idx": idx
-						})
+						else:
+							self.format_code(f,
+							"""if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+								ctx->CreateStore(tmp, a_arg_vars[%(idx)d]);
+							} else {
+								a_args[%(idx)d] = tmp;
+							}
+							""" % {
+								"p_name": p_name,
+								"idx": idx
+							})
 					self.write(f, "++arg_it;\n")
 
 				self.write(f, "a_res[%d] = ctx->CreateCall(a_func, a_args);\n" % i)
@@ -3764,11 +3795,16 @@ class SignatureParser:
 					}
 
 					llvm::Type  *f2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
-					llvm::Value *coord   = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+				    if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u  = ctx.create_local(f2_type, "crop_u");
 					llvm::Value *crop_v  = ctx.create_local(f2_type, "crop_v");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
 					llvm::Value *args[] = { res_data, a, coord, c, d, crop_u, crop_v };
@@ -3793,11 +3829,16 @@ class SignatureParser:
 					llvm::Type  *res_type  = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Type  *crop_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp       = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord     = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+				    if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u    = ctx.create_local(crop_type,  "crop_u");
 					llvm::Value *crop_v    = ctx.create_local(crop_type,  "crop_v");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
 					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v };
@@ -3817,12 +3858,17 @@ class SignatureParser:
 
 					llvm::Type  *f2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Type  *f3_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
-					llvm::Value *coord   = ctx.create_local(f3_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(f3_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u  = ctx.create_local(f2_type, "crop_u");
 					llvm::Value *crop_v  = ctx.create_local(f2_type, "crop_v");
 					llvm::Value *crop_w  = ctx.create_local(f2_type, "crop_w");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
@@ -3842,12 +3888,17 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u     = ctx.create_local(crop_type,  "crop_u");
 					llvm::Value *crop_v     = ctx.create_local(crop_type,  "crop_v");
 					llvm::Value *crop_w     = ctx.create_local(crop_type,  "crop_w");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
@@ -3867,9 +3918,13 @@ class SignatureParser:
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_CUBE);
 
 					llvm::Type  *f3_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
-					llvm::Value *coord   = ctx.create_local(f3_type, "coord");
-
-					ctx.convert_and_store(b, coord);
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(f3_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *args[] = { res_data, a, coord };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
@@ -3885,9 +3940,14 @@ class SignatureParser:
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 
-					ctx.convert_and_store(b, coord);
 					llvm::Value *args[] = { tmp, self, a, coord };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
@@ -3964,11 +4024,16 @@ class SignatureParser:
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(size)s_type();
 					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u     = ctx.create_local(crop_type,  "crop_u");
 					llvm::Value *crop_v     = ctx.create_local(crop_type,  "crop_v");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
 					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, crop_u, crop_v };
@@ -3995,11 +4060,16 @@ class SignatureParser:
 					llvm::Type  *res_type  = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
 					llvm::Type  *crop_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp       = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord     = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u    = ctx.create_local(crop_type,  "crop_u");
 					llvm::Value *crop_v    = ctx.create_local(crop_type,  "crop_v");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
 					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v };
@@ -4018,12 +4088,17 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u     = ctx.create_local(crop_type, "crop_u");
 					llvm::Value *crop_v     = ctx.create_local(crop_type, "crop_v");
 					llvm::Value *crop_w     = ctx.create_local(crop_type, "crop_w");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
@@ -4045,12 +4120,17 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Type  *crop_type  = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 					llvm::Value *crop_u     = ctx.create_local(crop_type,  "crop_u");
 					llvm::Value *crop_v     = ctx.create_local(crop_type,  "crop_v");
 					llvm::Value *crop_w     = ctx.create_local(crop_type,  "crop_w");
 
-					ctx.convert_and_store(b, coord);
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
@@ -4069,9 +4149,14 @@ class SignatureParser:
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(size)s_type();
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 
-					ctx.convert_and_store(b, coord);
 					llvm::Value *args[] = { tmp, res_data, a, coord };
 					ctx->CreateCall(lookup_func, args);
 
@@ -4089,9 +4174,14 @@ class SignatureParser:
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
-					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					llvm::Value *coord;
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+						coord   = ctx.create_local(coord_type, "coord");
+						ctx.convert_and_store(b, coord);
+					} else {
+						coord = b;
+					}
 
-					ctx.convert_and_store(b, coord);
 					llvm::Value *args[] = { tmp, self, a, coord };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
@@ -4851,9 +4941,10 @@ class SignatureParser:
 
 			l.setdefault(n_params, []).append(sig)
 
-		if len(l.keys()) == 1:
+		keys = list(l.keys())
+		if len(keys) == 1:
 			# typical case: all signatures have the same length
-			n_param = l.keys()[0]
+			n_param = keys[0]
 			if self.strict:
 				self.write(f, "if (n_params == %d) {\n" % n_param)
 				self.indent += 1
@@ -4861,7 +4952,7 @@ class SignatureParser:
 				# create just an assertion
 				self.write(f, "MDL_ASSERT(n_params == %d);\n" % n_param)
 
-			for n_param in l.keys():
+			for n_param in keys:
 				self.handle_signatures(f, intrinsic, l[n_param])
 
 			if self.strict:
@@ -4870,7 +4961,7 @@ class SignatureParser:
 		else:
 			# overloads with different signature length
 			self.write(f, "switch (n_params) {\n")
-			n_params = l.keys()
+			n_params = list(l.keys())
 			n_params.sort()
 			for n_param in n_params:
 				self.write(f, "case %d:\n" % n_param)
@@ -4894,7 +4985,7 @@ class SignatureParser:
 		for param in params:
 			try:
 				type_name = self.m_inv_types[param]
-			except KeyError, e:
+			except KeyError:
 				error("Unknown type_code '%s' found" % param)
 				sys.exit(1)
 			res.append(type_name)
@@ -5032,7 +5123,7 @@ class SignatureParser:
 
 	def create_signature_checker(self, f):
 		"""Create all signature checker functions."""
-		signatures = self.m_signatures.keys()
+		signatures = list(self.m_signatures.keys())
 		signatures.sort()
 		for sig in signatures:
 			if sig == '':
@@ -5402,7 +5493,7 @@ class SignatureParser:
 		last = None
 		self.write(f, "RT_C_FIRST,\n")
 		init = " = RT_C_FIRST"
-		keys = self.m_c_runtime_functions.keys()
+		keys = list(self.m_c_runtime_functions.keys())
 		keys.sort()
 		for func in keys:
 			enum_value = "RT_" + func
@@ -5414,7 +5505,7 @@ class SignatureParser:
 
 		self.write(f, "RT_MDL_FIRST,\n")
 		init = " = RT_MDL_FIRST"
-		keys = self.m_mdl_runtime_functions.keys()
+		keys = list(self.m_mdl_runtime_functions.keys())
 		keys.sort()
 		for func in keys:
 			enum_value = "RT_" + func
@@ -5444,7 +5535,7 @@ class SignatureParser:
 
 		self.write(f, "switch (code) {\n")
 
-		for name, signature in self.m_c_runtime_functions.iteritems():
+		for name, signature in self.m_c_runtime_functions.items():
 			enum_value = "RT_" + name
 			enum_value = enum_value.upper()
 			self.write(f, "case %s:\n" % enum_value)
@@ -5453,7 +5544,7 @@ class SignatureParser:
 			self.write(f, "break;\n")
 			self.indent -= 1
 
-		for name, signature in self.m_mdl_runtime_functions.iteritems():
+		for name, signature in self.m_mdl_runtime_functions.items():
 			enum_value = "RT_" + name
 			enum_value = enum_value.upper()
 			self.write(f, "case %s:\n" % enum_value)
@@ -5611,7 +5702,7 @@ class SignatureParser:
 
 				l.setdefault(n_params, []).append(sig)
 
-			n_params = l.keys()
+			n_params = list(l.keys())
 			n_params.sort()
 			for n_param in n_params:
 				signatures = l[n_param]
@@ -5807,6 +5898,8 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_get_texture_results(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::get_arg_block()\n")
 		self.write(f, "llvm::Function *create_state_get_arg_block(Internal_function const *int_func);\n\n")
+		self.write(f, "/// Generate LLVM IR for state::get_arg_block_float/float3/uint/bool()\n")
+		self.write(f, "llvm::Function *create_state_get_arg_block_value(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::get_ro_data_segment()\n")
 		self.write(f, "llvm::Function *create_state_get_ro_data_segment(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::object_id()\n")
@@ -5931,7 +6024,7 @@ class SignatureParser:
 
 				l.setdefault(n_params, []).append(sig)
 
-			n_params = l.keys()
+			n_params = list(l.keys())
 			n_params.sort()
 			for n_param in n_params:
 				sigs_same_len = l[n_param]
@@ -5948,7 +6041,7 @@ class SignatureParser:
 
 def usage(args):
 	"""print usage info and exit"""
-	print "Usage: %s stdlib_directory outputfile" % args[0]
+	print("Usage: %s stdlib_directory outputfile" % args[0])
 	return 1
 
 def main(args):
@@ -5975,7 +6068,7 @@ def main(args):
 			""")
 		parser.finalize()
 
-	except IOError, e:
+	except IOError as e:
 		error(str(e))
 		return 1
 	return 0

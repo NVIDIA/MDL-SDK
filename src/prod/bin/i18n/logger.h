@@ -55,6 +55,7 @@ namespace i18n
         void message(
             mi::base::Message_severity level,
             const char* module_category,
+            const mi::base::Message_details&,
             const char* message);
     };
 

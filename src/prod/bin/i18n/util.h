@@ -31,13 +31,6 @@
 #include <string>
 #include <vector>
 
-namespace mi
-{
-namespace base
-{
-enum Message_severity;
-}
-}
 namespace i18n
 {
 /// Some utility routines

@@ -55,9 +55,30 @@ namespace mi {
 namespace mdl {
 namespace hlsl {
 
+// on x86 and NV hardware, quiet NaNs are encoded with a "is silent" bit
+#define QNAN_BIT    0x00400000
+#define QNAN_VALUE  0x7FC00000
+
+
 inline bool isfinite(double v)
 {
     return -HUGE_VAL < v && v < HUGE_VAL;
+}
+
+/// Decode a float values as an unsigned integer.
+unsigned int decode_value_as_uint(float value)
+{
+    union {
+        float s;
+        unsigned int t;
+    } bin_conv;
+    bin_conv.s = value;
+    return bin_conv.t;
+}
+
+bool is_encoded_value(float value)
+{
+    return (int)decode_value_as_uint(value) > (int)QNAN_VALUE;
 }
 
 #define C_PREPROCESSOR C_ANNOTATION
@@ -543,6 +564,10 @@ void Printer::print_value(Value *value)
                 print("(+1.0/0.0)");
             } else if (f == -HUGE_VAL) {
                 print("(-1.0/0.0)");
+            } else if (is_encoded_value(f)) {
+                print("asfloat(");
+                print(decode_value_as_uint(f));
+                print("u)");
             } else {
                 print("(0.0/0.0)");
             }

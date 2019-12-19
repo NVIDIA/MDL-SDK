@@ -28,20 +28,20 @@
  
 mdl 1.4;
 
-import df::fresnel_layer;
-import df::weighted_layer;
-import df::microfacet_ggx_smith_bsdf;
-import nvidia::core_definitions::scratched_metal;
-import nvidia::core_definitions::apply_clearcoat;
-import nvidia::core_definitions::file_texture;
-import nvidia::core_definitions::file_bump_texture;
-import nvidia::core_definitions::perlin_noise_bump_texture;
-import nvidia::core_definitions::mono_mode;
-import nvidia::core_definitions::texture_return;
-import base::anisotropy_conversion;
-import base::anisotropy_return;
-import tex::gamma_mode;
-import anno::*;
+import ::df::fresnel_layer;
+import ::df::weighted_layer;
+import ::df::microfacet_ggx_smith_bsdf;
+import ::nvidia::core_definitions::scratched_metal;
+import ::nvidia::core_definitions::apply_clearcoat;
+import ::nvidia::core_definitions::file_texture;
+import ::nvidia::core_definitions::file_bump_texture;
+import ::nvidia::core_definitions::perlin_noise_bump_texture;
+import ::nvidia::core_definitions::mono_mode;
+import ::nvidia::core_definitions::texture_return;
+import ::base::anisotropy_conversion;
+import ::base::anisotropy_return;
+import ::tex::gamma_mode;
+import ::anno::*;
 
 
 export material carbon_composite (

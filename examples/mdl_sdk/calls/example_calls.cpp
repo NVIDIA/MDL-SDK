@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_calls.cpp
+// examples/mdl_sdk/calls/example_calls.cpp
 //
 // Uses function calls to create a textured material.
 
@@ -204,7 +204,7 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
     transaction->commit();
 }
 
-int main( int argc, char* argv[])
+int MAIN_UTF8( int argc, char* argv[])
 {
 
     // Access the MDL SDK
@@ -231,3 +231,6 @@ int main( int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

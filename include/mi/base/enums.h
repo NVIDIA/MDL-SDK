@@ -39,6 +39,10 @@ namespace mi {
 
 namespace base {
 
+/// Namespace for details of the Base API.
+/// \ingroup mi_base
+namespace details {
+
 /** \addtogroup mi_base_ilogger
 @{
 */
@@ -69,7 +73,12 @@ mi_static_assert( sizeof( Message_severity) == 4);
 
 /*@}*/ // end group mi_base_ilogger
 
+}
+
+using namespace details;
+
 } // namespace base
+
 } // namespace mi
 
 #endif // MI_BASE_ENUMS_H

@@ -41,8 +41,8 @@
 
 #include "generator_dag_dep_graph.h"
 #include "generator_dag_builder.h"
-#include "generator_dag_type_collector.h"
 #include "generator_dag_generated_dag.h"
+#include "generator_dag_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -467,7 +467,7 @@ private:
             // add a reference to the DAG array constructor here
             IType_factory   *fact = m_module->get_type_factory();
             Dependence_node *node = m_dg.get_node(
-                "T[](...)",
+                get_array_constructor_signature(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
                 IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
@@ -561,7 +561,6 @@ private:
                 params,
                 flags);
         } else if (op == IExpression_binary::OK_ARRAY_INDEX) {
-            // the index operator is mapped to DS_INTRINSIC_DAG_INDEX_ACCESS
             IExpression const *right = expr->get_right_argument();
             IType const       *r_tp = right->get_type()->skip_type_alias();
 
@@ -573,7 +572,7 @@ private:
                 name.c_str(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
-                IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS,
+                operator_to_semantic(op),
                 expr->get_type()->skip_type_alias(),
                 params,
                 flags);
@@ -658,9 +657,6 @@ private:
             return;
         }
 
-        string name(m_dag_builder.get_cond_name(expr));
-        unsigned flags = is_local_operator(name) ? 0 : Dependence_node::FL_IS_BUILTIN;
-
         IExpression const *cond = expr->get_condition();
         IExpression const *t_expr = expr->get_true();
         IExpression const *f_expr = expr->get_false();
@@ -677,13 +673,13 @@ private:
         };
 
         Dependence_node *node = m_dg.get_node(
-            name.c_str(),
+            get_ternary_operator_signature(),
             /*dag_alias_name=*/NULL,
             /*dag_preset_name=*/NULL,
             operator_to_semantic(IExpression::OK_TERNARY),
             expr->get_type()->skip_type_alias(),
             params,
-            flags);
+            Dependence_node::FL_IS_BUILTIN);
 
         m_curr->add_edge(m_arena, node, m_inside_parameter);
     }
@@ -749,28 +745,11 @@ private:
             return;
         }
 
-        ISymbol const *symbol = def->get_symbol();
-
         // The only source of array sizes here should be parameters (and temporaries?).
         // Find the parameter.
-        IDefinition const *param_def = find_parameter_for_size(symbol);
-        MDL_ASSERT(param_def != NULL && "could not find parameter for array size");
-
-        if (param_def != NULL) {
-            IType_array const *a_type = as<IType_array>(param_def->get_type());
-            IType const       *e_type = a_type->get_element_type()->skip_type_alias();
-
-            IModule const *module    = m_dag_builder.tos_module();
-            char const    *this_name = module->is_builtins() ? NULL : module->get_name();
-
-            Dependence_node *node = m_dg.create_dag_array_len_operator(
-                e_type,
-                this_name,
-                ref_expr->get_type()->skip_type_alias(),
-                /*is_exported=*/false);
-
-            m_curr->add_edge(m_arena, node, m_inside_parameter);
-        }
+        MDL_ASSERT(
+            find_parameter_for_size(def->get_symbol()) != NULL &&
+            "could not find parameter for array size");
     }
 
     // Find a parameter for a given array size.
@@ -1249,7 +1228,6 @@ DAG_dependence_graph::DAG_dependence_graph(
     IAllocator           *alloc,
     Generated_code_dag   &dag,
     DAG_builder          &dag_builder,
-    Type_collector const &collector,
     ISymbol const        *invisible_sym,
     bool                 include_locals)
 : m_arena(alloc)
@@ -1292,49 +1270,24 @@ DAG_dependence_graph::DAG_dependence_graph(
 
     // generate DAG intrinsic functions first, so they are available for all
     // functions of the module
-    {
-        char const    *this_name = module->is_builtins() ? NULL : module->get_name();
-        IType_factory *fact      = module->get_type_factory();
-        IType const   *int_type  = fact->create_int();
+    if (module->is_builtins()) {
+        IType_factory *fact           = module->get_type_factory();
+        IType const   *int_type       = fact->create_int();
+        IType const   *bool_type      = fact->create_bool();
+        IType const   *indexable_type = int_type;  // FIXME
+        IType const   *any_type       = int_type;  // FIXME
+        IType const   *array_type     = int_type;  // FIXME
 
-        // generate index functions. These are owned by the module.
-        for (size_t i = 0, n = collector.indexable_type_size(); i < n; ++i) {
-            Indexable const &indexable = collector.get_indexable(i);
-
-            create_dag_index_function(
-                indexable,
-                this_name,
-                int_type);
-        }
-
-        // Generate array length "operators".
-        for (size_t i = 0, n = collector.array_constructor_type_size(); i < n; ++i) {
-            IType const *e_type = collector.get_array_constructor_type(i);
-
-            create_dag_array_len_operator(
-                e_type,
-                this_name,
-                int_type,
-                /*is_exported=*/true);
-        }
-
-        // Generate ternary operators.
-        IType const *bool_type = fact->create_bool();
-        for (size_t i = 0, n = collector.defined_type_size(); i < n; ++i) {
-            IType const *dt = collector.get_defined_type(i);
-
-            create_dag_ternary_operator(
-                dt,
-                this_name,
-                bool_type);
-        }
-
-        if (module->is_builtins()) {
-            // Generate the array constructor.
-            create_dag_array_constructor(int_type);
-            // Generate the cast operator.
-            create_dag_cast_operator(int_type);
-        }
+        // Generate the array constructor.
+        create_dag_array_constructor(array_type);
+        // Generate the cast operator.
+        create_dag_cast_operator(any_type);
+        // Generate the ternary operator
+        create_dag_ternary_operator(any_type, bool_type);
+        // Generate the index operator
+        create_dag_index_function(indexable_type, int_type);
+        // Generate the array length operator
+        create_dag_array_len_operator(array_type, int_type);
     }
 
     DG_creator creator(m_arena, *this, m_def_node_map, !m_include_locals);
@@ -1481,9 +1434,7 @@ Dependence_node *DAG_dependence_graph::get_node(
     Array_ref<Dependence_node::Parameter> const &params,
     unsigned                                    flags)
 {
-    MDL_ASSERT(
-        sema != operator_to_semantic(IExpression::OK_SELECT) &&
-        sema != operator_to_semantic(IExpression::OK_ARRAY_INDEX));
+    MDL_ASSERT(sema != operator_to_semantic(IExpression::OK_SELECT));
 
     Name_node_map::iterator it = m_name_node_map.find(dag_name);
 
@@ -1790,182 +1741,46 @@ void DAG_dependence_graph::create_exported_nodes(
 
 // Create a DAG intrinsic index function node.
 void DAG_dependence_graph::create_dag_index_function(
-    Indexable const &indexable,
-    char const      *this_name,
-    IType const     *int_type)
+    IType const *indexable_type,
+    IType const *int_type)
 {
-    IAllocator *alloc = m_arena.get_allocator();
-    IType const *return_type = NULL;
-    string name(alloc);
-
-    IType const *tp = indexable.get_type();
-
-    // FIXME: this is a very ugly work-around for neuray that should be scrapped:
-    // The MDL elements implementation expects array index access to take an array
-    // AND one int. It strips the MDL array size and creates a "dynamic array".
-    // We do not have such things in MDL.
-    // Because we generate ONLY one array index access for all deferred arrays,
-    // we need an extra "dynamic array" type here.
-    // We work-around this by creating a deferred size array whose size is "invisible",
-    // i.e. the symbol name is "".
-    if (indexable.is_array_element_type()) {
-        Type_factory &fact = m_dag_builder.get_type_factory();
-        tp = fact.create_array(tp, m_invisible_sym, m_invisible_sym);
-    }
-
-    // note: the indexable set does not contain alias types, hence it is safe to
-    // switch directly.
-    switch (tp->get_kind()) {
-    case IType::TK_VECTOR:
-        {
-            // on vector types, operator[] returns the element type
-            IType_vector const *vt = cast<IType_vector>(tp);
-            return_type = vt->get_element_type();
-            name += m_dag_builder.type_to_name(vt);
-        }
-        break;
-    case IType::TK_MATRIX:
-        {
-            // on matrix types, operator[] returns the element type
-            IType_matrix const *mt = cast<IType_matrix>(tp);
-            return_type = mt->get_element_type();
-            name += m_dag_builder.type_to_name(mt);
-        }
-        break;
-    case IType::TK_ARRAY:
-        {
-            // on array types, operator[] returns the element type,
-            // but beware, there might be arrays of aliased element types
-            IType_array const *at = cast<IType_array>(tp);
-
-            return_type = at->get_element_type()->skip_type_alias();
-            name += m_dag_builder.type_to_name(at);
-
-            // for array index functions, overwrite any existing module prefix with this_name
-            // to make the function accessible via Neuray DB
-            // TODO: is an !is_builtins() check required on "current" module as done in
-            //       DAG_builder.get_binary_name()?
-            if (name[0] == ':' && name[1] == ':') {
-                size_t next_colon = name.find(':', 2);
-                if (next_colon != name.npos)
-                    name = string(this_name, alloc) + name.substr(next_colon);
-                else {
-                    MDL_ASSERT(!"Second colon group not found");
-                }
-            }
-        }
-        break;
-    case IType::TK_ALIAS:
-        MDL_ASSERT(!"Forbidden alias type in indexable set");
-        // fall through
-    default:
-        return;
-    }
-
-    if (this_name != NULL) {
-        if (name[0] == ':' && name[1] == ':') {
-            size_t l = strlen(this_name);
-
-            if (strncmp(this_name, name.c_str(), l) != 0) {
-                // this type is not originated from this module, i.e.
-                // ::df::bsdf_component used inside std
-                // We have two possibilities here: either remap the name, i.e.
-                // make it accessible as ::std::bsdf_component, OR
-                // suppress it ...
-                // Because everywhere the type names are used as original, suppress
-                // it here ...
-                return;
-            }
-        }
-    }
-
-    name += "@(";
-    name += m_dag_builder.type_to_name(tp);
-    name += ",int)";
-
-    if (this_name != NULL) {
-        if (name[0] != ':')
-            name = string(this_name, alloc) + "::" + name;
-    }
+    IType const *tmpl_type   = int_type; // FIXME
+    IType const *return_type = int_type; // FIXME
 
     Dependence_node::Parameter params[2] = {
-        Dependence_node::Parameter(tp,       "a"),
-        Dependence_node::Parameter(int_type, "i"),
+        Dependence_node::Parameter(tmpl_type, "a"),
+        Dependence_node::Parameter(int_type,  "i"),
     };
 
-    bool is_exported = indexable.is_exported();
-
     Dependence_node *n = get_node(
-        name.c_str(),
+        "operator[](<0>[],int)",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
-        IDefinition::DS_INTRINSIC_DAG_INDEX_ACCESS,
+        operator_to_semantic(IExpression::OK_ARRAY_INDEX),
         return_type,
         params,
-        is_exported || m_is_builtins ?
-            Dependence_node::FL_IS_EXPORTED : Dependence_node::FL_IS_BUILTIN);
+        Dependence_node::FL_IS_EXPORTED);
 
-    if (is_exported)
-        m_exported_nodes.push_back(n);
+    m_exported_nodes.push_back(n);
 }
 
 // Create a DAG intrinsic array length function.
 Dependence_node *DAG_dependence_graph::create_dag_array_len_operator(
-    IType const *e_type,
-    char const  *this_name,
     IType const *int_type,
-    bool        is_exported)
+    IType const *type)
 {
-    IAllocator *alloc = m_arena.get_allocator();
-    string name = m_dag_builder.type_to_name(e_type);
-
-    // only jump out if we try to create a local one
-    if (is_exported && this_name != NULL) {
-        if (name[0] == ':' && name[1] == ':') {
-            size_t l = strlen(this_name);
-
-            if (strncmp(this_name, name.c_str(), l) != 0) {
-                // this type is not originated from this module, i.e.
-                // ::df::bsdf_component used inside std
-                // We have two possibilities here: either remap the name, i.e.
-                // make it accessible as ::std::bsdf_component, OR
-                // suppress it ...
-                // Because everywhere the type names are used as original, suppress
-                // it here ...
-                return NULL;
-            }
-        }
-    }
-
-    Type_factory &fact = m_dag_builder.get_type_factory();
-    e_type = fact.import(e_type);
-    IType const *a_type = fact.create_array(
-        e_type, m_invisible_sym, m_invisible_sym);
-
-    name += "[].len(";
-    name += m_dag_builder.type_to_name(e_type);
-    name += "[])";
-
-    if (this_name != NULL) {
-        if (name[0] != ':')
-            name = string(this_name, alloc) + "::" + name;
-    }
-
-    // built the array length function
-    // int T[].len(array_type)
-    Dependence_node::Parameter param(a_type, "a");
+    Dependence_node::Parameter param(type, "a");
 
     Dependence_node *n = get_node(
-        name.c_str(),
+        "operator_len(<0>[])",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
         int_type,
         param,
-        is_exported ? Dependence_node::FL_IS_EXPORTED : 0);
+        Dependence_node::FL_IS_EXPORTED);
 
-    if (is_exported)
-        m_exported_nodes.push_back(n);
+    m_exported_nodes.push_back(n);
 
     return n;
 }
@@ -1973,24 +1788,9 @@ Dependence_node *DAG_dependence_graph::create_dag_array_len_operator(
 // Create a DAG intrinsic ternary operator function node.
 void DAG_dependence_graph::create_dag_ternary_operator(
     IType const *type,
-    char const  *this_name,
     IType const *bool_type)
 {
-    IAllocator *alloc = m_arena.get_allocator();
-
-    string name(DAG_builder::ternary_op_to_name(), alloc);
-    name += '(';
-    name += m_dag_builder.type_to_name(bool_type);
-    name += ',';
-    name += m_dag_builder.type_to_name(type);
-    name += ',';
-    name += m_dag_builder.type_to_name(type);
-    name += ')';
-
-    if (this_name != NULL) {
-        if (name[0] != ':')
-            name = string(this_name, alloc) + "::" + name;
-    }
+    MDL_ASSERT(m_is_builtins);
 
     Dependence_node::Parameter params[] = {
         Dependence_node::Parameter(bool_type, "cond"),
@@ -1999,30 +1799,30 @@ void DAG_dependence_graph::create_dag_ternary_operator(
     };
 
     Dependence_node *n = get_node(
-        name.c_str(),
+        get_ternary_operator_signature(),
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         operator_to_semantic(IExpression::OK_TERNARY),
         type,
         params,
         Dependence_node::FL_IS_EXPORTED);
-
     m_exported_nodes.push_back(n);
 }
 
 // Create the one-and-only array constructor.
-void DAG_dependence_graph::create_dag_array_constructor(IType const *int_type)
+void DAG_dependence_graph::create_dag_array_constructor(
+    IType const *any_type)
 {
     MDL_ASSERT(m_is_builtins);
 
     // Create the magic array constructor. There is only one now.
     Dependence_node *n = get_node(
-        "T[](...)",
+        get_array_constructor_signature(),
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         // Arg, no way to express "Any array type" here, but we need one return type.
-        int_type,
+        any_type,
         Array_ref<Dependence_node::Parameter>(),
         Dependence_node::FL_IS_EXPORTED);
     m_exported_nodes.push_back(n);
@@ -2035,7 +1835,7 @@ void DAG_dependence_graph::create_dag_cast_operator(IType const *int_type)
 
     // Create the magic cast operator. There is only one.
     Dependence_node *n = get_node(
-        "operator_cast()",
+        "operator_cast(<0>)",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         operator_to_semantic(IExpression::OK_CAST),
@@ -2044,7 +1844,6 @@ void DAG_dependence_graph::create_dag_cast_operator(IType const *int_type)
         Array_ref<Dependence_node::Parameter>(),
         Dependence_node::FL_IS_EXPORTED);
     m_exported_nodes.push_back(n);
-
 }
 
 } // mdl

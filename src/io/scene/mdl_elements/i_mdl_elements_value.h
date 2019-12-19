@@ -495,7 +495,17 @@ public:
 
     virtual IValue_light_profile* create_light_profile( DB::Tag value) const = 0;
 
+    virtual IValue_light_profile* create_light_profile(
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module) const = 0;
+
     virtual IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const = 0;
+
+    virtual IValue_bsdf_measurement* create_bsdf_measurement(
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module) const = 0;
 
     virtual IValue_invalid_df* create_invalid_df( const IType_reference* type) const = 0;
 

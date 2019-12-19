@@ -260,7 +260,7 @@ public:
     /// Add a declaration.
     void add_declaration(IDeclaration const *decl) MDL_FINAL;
 
-    /// Add an import.
+    /// Add an import at the end of all other imports or namespace aliases.
     void add_import(char const *name);
 
     /// Get the name factory.
@@ -527,6 +527,13 @@ public:
 
     /// Get the language version.
     IMDL::MDL_version get_version() const { return m_mdl_version; }
+
+    /// Convert a MDL version into major, minor pair.
+    ///
+    /// \param[in] version  the MDL version
+    /// \param[out] major   the major version
+    /// \param[out] minor   the minor version
+    static void get_version(IMDL::MDL_version version, int &major, int &minor);
 
     /// Set the language version if possible.
     ///
@@ -919,15 +926,17 @@ public:
 
     /// Possible MDL version promotion rules.
     enum Promotion_rules {
-        PR_NO_CHANGE                    = 0x00,
-        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x01, ///< add a spread param to spot_edf()
-        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x02, ///< add a multiplier param to measured_edf()
-        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x04, ///< add a tangent_u param to measured_edf()
-        PR_FRESNEL_LAYER_TO_COLOR       = 0x08, ///< convert fresnel_layer() to color_*()
-        PR_WIDTH_HEIGTH_ADD_UV_TILE     = 0x10, ///< add an uv_tile param to width()/height()
-        PR_TEXEL_ADD_UV_TILE            = 0x20, ///< add an uv_tile param to texel_*()
-        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x40, ///< add roundness param to rounded_corner_normal
-        PR_MATERIAL_ADD_HAIR            = 0x80, ///< add hair bsdf to material constructor
+        PR_NO_CHANGE                    = 0x000,
+        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x001, ///< add a spread param to spot_edf()
+        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x002, ///< add a multiplier param to measured_edf()
+        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x004, ///< add a tangent_u param to measured_edf()
+        PR_FRESNEL_LAYER_TO_COLOR       = 0x008, ///< convert fresnel_layer() to color_*()
+        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x010, ///< add an uv_tile param to width()/height()
+        PR_TEXEL_ADD_UV_TILE            = 0x020, ///< add an uv_tile param to texel_*()
+        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x040, ///< add roundness param to rounded_corner_normal
+        PR_MATERIAL_ADD_HAIR            = 0x080, ///< add hair bsdf to material constructor
+        PR_GLOSSY_ADD_MULTISCATTER      = 0x100, ///< add a multiscatter_tint param to
+                                                 ///  all glossy bsdfs()
     };
 
     /// Alters one call argument according to the given promotion rules.
@@ -1278,7 +1287,7 @@ private:
     Definition_table m_def_tab;
 
     /// The type of vectors of declarations.
-    typedef Arena_vector<const IDeclaration *>::Type Declaration_vector;
+    typedef Arena_vector<IDeclaration const *>::Type Declaration_vector;
 
     /// The vector of declarations.
     Declaration_vector m_declarations;

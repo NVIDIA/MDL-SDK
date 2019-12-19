@@ -1143,7 +1143,11 @@ struct IValue_less {
                     if (g_v != g_w)
                         return g_v < g_w;
 
-                    return r_v->get_tag_value() < r_w->get_tag_value();
+                    int tag_v = r_v->get_tag_value();
+                    int tag_w = r_w->get_tag_value();
+                    if (tag_v != tag_w)
+                        return tag_v < tag_w;
+                    return r_v->get_bsdf_data_kind() < r_w->get_bsdf_data_kind();
                 }
 
             case IValue::VK_LIGHT_PROFILE:
@@ -1429,6 +1433,7 @@ void Factory_serializer::write_value(IValue const *v)
             write_db_tag(rv->get_tag_value());
             write_unsigned(rv->get_tag_version());
             write_int(rv->get_gamma_mode());
+            write_int(rv->get_bsdf_data_kind());
         }
         DEC_SCOPE();
         break;
@@ -2094,6 +2099,21 @@ void Module_serializer::write_decl(
         }
         DEC_SCOPE();
         break;
+
+    case IDeclaration::DK_NAMESPACE_ALIAS:
+        DOUT(("Namespace_alias\n"));
+        INC_SCOPE();
+        {
+            IDeclaration_namespace_alias const *n_decl = cast<IDeclaration_namespace_alias>(decl);
+
+            ISimple_name const *alias = n_decl->get_alias();
+            write_name(alias);
+
+            IQualified_name const *ns = n_decl->get_namespace();
+            write_name(ns);
+        }
+        DEC_SCOPE();
+        break;
     }
 
     Position const *pos = &decl->access_position();
@@ -2372,6 +2392,10 @@ void Module_serializer::write_expr(IExpression const *expr)
             IExpression_unary::Operator op = u_expr->get_operator();
             write_unsigned(op);
             DOUT(("op %u\n", unsigned(op)));
+
+            if (op == IExpression_unary::OK_CAST) {
+                write_name(u_expr->get_type_name());
+            }
         }
         DEC_SCOPE();
         break;
@@ -3283,7 +3307,11 @@ IValue const *Factory_deserializer::read_value(Value_factory &vf)
             unsigned    vv_tag = read_db_tag();
             unsigned    vv_ver = read_unsigned();
             IValue_texture::gamma_mode gamma = IValue_texture::gamma_mode(read_int());
-            IValue const *v = vf.create_texture(rt, vv, gamma, vv_tag, vv_ver);
+            IValue_texture::Bsdf_data_kind bsdf_data_kind =
+                IValue_texture::Bsdf_data_kind(read_int());
+            IValue const *v = rt->get_shape() == IType_texture::TS_BSDF_DATA ?
+                vf.create_bsdf_data_texture(bsdf_data_kind, vv_tag, vv_ver) :
+                vf.create_texture(rt, vv, gamma, vv_tag, vv_ver);
 
             register_value(value_tag, v);
             DEC_SCOPE();
@@ -3693,12 +3721,24 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
         break;
 
     case IDeclaration::DK_MODULE:
-        DOUT(("module_decl\n"));
+        DOUT(("Module_decl\n"));
         INC_SCOPE();
         {
             IAnnotation_block const *annos = read_annos(mod);
             IDeclaration_module *m_decl = df->create_module(annos);
             decl = m_decl;
+        }
+        DEC_SCOPE();
+        break;
+
+    case IDeclaration::DK_NAMESPACE_ALIAS:
+        DOUT(("Namespace_alias\n"));
+        INC_SCOPE();
+        {
+            ISimple_name const    *alias = read_sname(mod);
+            IQualified_name const *ns    = read_qname(mod);
+            IDeclaration_namespace_alias *a_decl = df->create_namespace_alias(alias, ns);
+            decl = a_decl;
         }
         DEC_SCOPE();
         break;
@@ -3992,7 +4032,11 @@ IExpression *Module_deserializer::read_expr(Module &mod)
             IExpression_unary::Operator op = IExpression_unary::Operator(read_unsigned());
             DOUT(("op %u\n", unsigned(op)));
 
-            expr = ef->create_unary(op, children[0]);
+            IExpression_unary *u_expr = ef->create_unary(op, children[0]);
+            if (op == IExpression_unary::OK_CAST) {
+                u_expr->set_type_name(read_tname(mod));
+            }
+            expr = u_expr;
         }
         DEC_SCOPE();
         break;
@@ -4340,17 +4384,23 @@ void Module_deserializer::read_pos(Position &pos)
     DOUT(("pos %d,%d %d,%d %u\n", sl, sc, el, ec, unsigned(id)));
 }
 
-#if 0
+}  // mdl
+}  // mi
 
-static unsigned indent = 0;
+#if 0
 
 #include <cstdarg>
 #include <cstdio>
 
+namespace mi {
+namespace mdl {
+
+static unsigned indent = 0;
+
 void dprintf(char const *fmt, ...)
 {
     va_list ap;
-    
+
     va_start(ap, fmt);
     for (unsigned i = 0, n = indent; i < n; ++i)
         printf(" ");
@@ -4371,7 +4421,7 @@ void dprintf_decscope()
     --indent;
 }
 
-#endif
-
 }  // mdl
 }  // mi
+
+#endif

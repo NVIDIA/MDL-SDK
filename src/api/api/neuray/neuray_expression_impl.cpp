@@ -37,7 +37,8 @@
 #include <io/scene/mdl_elements/i_mdl_elements_expression.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
-
+#include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
+#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
@@ -203,12 +204,18 @@ mi::Sint32 Expression_call::set_call( const char* name)
         DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
         if (call->is_immutable())
             return -5; // prevent user-calls to default functions
+        MDL::Execution_context context;
+        if (!call->is_valid(db_transaction, &context))
+            return -6; // prevent user-calls to invalid functions
         actual_type = call->get_return_type();
     }
     else if( class_id == MDL::Mdl_material_instance::id) {
         DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
         if (m->is_immutable())
             return -5; // prevent user-calls to default materials
+        MDL::Execution_context context;
+        if (!m->is_valid(db_transaction, &context))
+            return -6; // prevent user-calls to invalid materials
         actual_type = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
         }
     else
@@ -226,7 +233,9 @@ const char* Expression_direct_call::get_definition() const
 {
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    DB::Tag tag = m_expr->get_definition();
+    DB::Tag tag = m_expr->get_definition(db_transaction);
+    if (!tag.is_valid())
+        return 0;
     return db_transaction->tag_to_name( tag);
 }
 
@@ -481,12 +490,18 @@ mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* na
         DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
         if( call->is_immutable())
             return 0; // prevent user-calls to default functions
+        MDL::Execution_context context;
+        if (!call->is_valid(db_transaction, &context))
+            return 0; // prevent user-calls to invalid functions
         type_int = call->get_return_type();
     } else if( class_id == MDL::Mdl_material_instance::id) {
 
         DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
         if( m->is_immutable())
             return 0; // prevent user-calls to default materials
+        MDL::Execution_context context;
+        if (!m->is_valid(db_transaction, &context))
+            return 0; // prevent user-calls to invalid materials
         mi::base::Handle<MDL::IValue_factory> vf( m_ef->get_value_factory());
         mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
         type_int = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
@@ -523,13 +538,21 @@ mi::neuraylib::IExpression_direct_call* Expression_factory::create_direct_call(
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
     mi::base::Handle<const MDL::IType> type_int;
-    if( class_id == MDL::Mdl_function_call::id) {
-        DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
-        type_int = call->get_return_type();
-    } else if( class_id == MDL::Mdl_material_instance::id) {
+    DB::Tag module_tag;
+    MDL::Mdl_ident def_ident;
+    if( class_id == MDL::Mdl_function_definition::id) {
+        DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
+        type_int = def->get_return_type();
+        module_tag = def->get_module(db_transaction);
+        def_ident = def->get_ident();
+    } else if( class_id == MDL::Mdl_material_definition::id) {
         mi::base::Handle<MDL::IValue_factory> vf( m_ef->get_value_factory());
         mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
         type_int = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
+
+        DB::Access<MDL::Mdl_material_definition> def(tag, db_transaction);
+        module_tag = def->get_module(db_transaction);
+        def_ident = def->get_ident();
     } else
         return 0;
 
@@ -540,7 +563,10 @@ mi::neuraylib::IExpression_direct_call* Expression_factory::create_direct_call(
     mi::base::Handle<MDL::IExpression_list> arguments_int(
         get_internal_expression_list( arguments));
     mi::base::Handle<MDL::IExpression_direct_call> result_int(
-        m_ef->create_direct_call( type_int.get(), tag, arguments_int.get()));
+        m_ef->create_direct_call(
+            type_int.get(), module_tag,
+            MDL::Mdl_tag_ident(tag, def_ident), name , arguments_int.get()));
+
     return new Expression_direct_call( this, m_transaction.get(), result_int.get(), /*owner*/ 0);
 }
 

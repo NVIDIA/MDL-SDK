@@ -151,9 +151,22 @@ namespace mdl_d3d12
         return std::move(first_handle);
     }
 
+    size_t Descriptor_heap::get_block_size(const Descriptor_heap_handle& handle)
+    {
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
+
+        if (!handle.is_valid())
+        {
+            log_error("Heap Handle invalid while getting block size.", SRC);
+            return 0;
+        }
+
+        return m_entries[handle].alloc_block_size;
+    }
+
     void Descriptor_heap::print_debug_infos()
     {
-        m_entries_mutex.lock();
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         std::string msg = "Heap Information: " + m_debug_name;
         for (size_t i = 0; i < m_entries.size(); ++i)
         {
@@ -174,7 +187,6 @@ namespace mdl_d3d12
 
             msg += "] " + e.resource_name;
         }
-        m_entries_mutex.unlock();
         log_info(msg);
     }
 
@@ -191,7 +203,7 @@ namespace mdl_d3d12
 
         D3D12_SHADER_RESOURCE_VIEW_DESC desc;
         if (!texture->get_srv_description(desc))
-            return Descriptor_heap_handle();
+            return false;
 
         m_entries[handle].resource_name = texture->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::SRV;

@@ -41,7 +41,11 @@
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_mdl.h>
+#include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/imdl_compiler.h>
+#include <mi/neuraylib/itile.h>
+
+#include <io/scene/dbimage/i_dbimage.h>
 
 namespace mi {
 namespace mdl { class IType_struct; class IType; }
@@ -51,6 +55,8 @@ namespace neuraylib { class ITarget_code; }
 namespace MI {
 
 namespace DB { class Transaction; }
+namespace DBIMAGE { class Image_set; }
+
 namespace MDL {
     class Execution_context;
     class Mdl_compiled_material;
@@ -395,6 +401,232 @@ private:
 
     /// If true, string argument values are mapped to string identifiers.
     bool m_strings_mapped_to_ids;
+};
+
+/// Helper class to store bsdf data textures into the neuray database.
+class Df_data_helper
+{
+public:
+
+    Df_data_helper(
+        DB::Transaction *transaction)
+        : m_transaction(transaction)
+    {
+    }
+
+    /// Creates and stores bsdf data textures in the database.
+    void store_df_data(mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
+
+    /// Returns the database name for the given df data kind.
+    static const char* get_texture_db_name(mi::mdl::IValue_texture::Bsdf_data_kind kind);
+
+private:
+
+    class Df_data_tile : public mi::base::Interface_implement<mi::neuraylib::ITile>
+    {
+
+    public:
+
+        /// Constructor
+        Df_data_tile(mi::Uint32 rx, mi::Uint32 ry, const float* data)
+            : m_resolution_x(rx)
+            , m_resolution_y(ry)
+            , m_data(data)
+        {
+        }
+
+        // methods of mi::neuraylib::ITile
+        void get_pixel(
+            mi::Uint32 x_offset,
+            mi::Uint32 y_offset,
+            mi::Float32* floats) const
+        {
+            mi::Uint32 p = ((y_offset * m_resolution_x) + x_offset);
+            floats[0] = m_data[p];
+        }
+
+        void set_pixel(
+            mi::Uint32 x_offset,
+            mi::Uint32 y_offset,
+            const  mi::Float32* floats)
+        {
+            // pixel data cannot be changed.
+            return;
+        }
+
+        const char* get_type() const
+        {
+            return "Float32";
+        }
+
+        mi::Uint32 get_resolution_x() const
+        {
+            return m_resolution_x;
+        }
+
+        mi::Uint32 get_resolution_y() const
+        {
+            return m_resolution_y;
+        }
+
+        const void* get_data() const
+        {
+            return m_data;
+        }
+
+        virtual void* get_data()
+        {
+            // pixel data cannot be changed.
+            return nullptr;
+        }
+
+    private:
+
+        mi::Uint32 m_resolution_x;      ///< resolution in x
+        mi::Uint32 m_resolution_y;      ///< resolution in y
+
+        const float* m_data;            ///< data
+    };
+
+    class Df_data_canvas : public mi::base::Interface_implement<mi::neuraylib::ICanvas>
+    {
+    public:
+
+        /// Constructor
+        Df_data_canvas(mi::Uint32 rx, mi::Uint32 ry, mi::Uint32 rz, const float *data)
+        {
+            m_tiles.resize(rz);
+            mi::Uint32 offset = rx * ry;
+            for (mi::Size i = 0; i < rz; ++i) {
+                m_tiles[i] = new Df_data_tile(rx, ry, &data[i*offset]);
+            }
+        }
+
+        // methods of mi::neuraylib::ICanvas_base
+
+        mi::Uint32 get_resolution_x() const
+        {
+            return m_tiles[0]->get_resolution_x();
+        }
+
+        mi::Uint32 get_resolution_y() const
+        {
+            return m_tiles[0]->get_resolution_y();
+        }
+
+        const char* get_type() const
+        {
+            return "Float32";
+        }
+
+        mi::Uint32 get_layers_size() const
+        {
+            return m_tiles.size();
+        }
+
+        mi::Float32 get_gamma() const
+        {
+            return 1.0f;
+        }
+
+        void set_gamma(mi::Float32)
+        {
+            // gamma cannot be changed.
+        }
+
+        // methods of mi::neuraylib::ICanvas
+
+        mi::Uint32 get_tile_resolution_x() const
+        {
+            return m_tiles[0]->get_resolution_x();
+        }
+
+        mi::Uint32 get_tile_resolution_y() const
+        {
+            return m_tiles[0]->get_resolution_y();
+        }
+
+        mi::Uint32 get_tiles_size_x() const
+        {
+            return 1;
+        }
+
+        mi::Uint32 get_tiles_size_y() const
+        {
+            return 1;
+        }
+
+        const mi::neuraylib::ITile* get_tile(mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) const
+        {
+            if (layer >= m_tiles.size() ||
+                pixel_x >= m_tiles[0]->get_resolution_x() ||
+                pixel_y >= m_tiles[0]->get_resolution_y())
+                return nullptr;
+
+            m_tiles[layer]->retain();
+            return m_tiles[layer].get();
+        }
+
+        mi::neuraylib::ITile* get_tile(mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0)
+        {
+            if (layer >= m_tiles.size() ||
+                pixel_x >= m_tiles[0]->get_resolution_x() ||
+                pixel_y >= m_tiles[0]->get_resolution_y())
+                return nullptr;
+
+            m_tiles[layer]->retain();
+            return m_tiles[layer].get();
+        }
+
+    private:
+
+        std::vector<mi::base::Handle<Df_data_tile>> m_tiles;
+    };
+
+    class Df_image_set : public DBIMAGE::Image_set
+    {
+    public:
+
+        Df_image_set(mi::neuraylib::ICanvas* canvas)
+            : m_canvas(mi::base::make_handle_dup(canvas)) { }
+
+        // methods from DBIMAGE::Image_set
+        mi::Size get_length() const
+        {
+            return 1;
+        }
+
+        bool get_uv_mapping(mi::Size i, mi::Sint32& /*u*/, mi::Sint32& /*v*/) const
+        {
+            return false;
+        }
+
+        virtual mi::neuraylib::ICanvas* get_canvas(mi::Size i) const
+        {
+            if (i == 0) {
+                m_canvas->retain();
+                return m_canvas.get();
+            }
+            return nullptr;
+        }
+    private:
+        mi::base::Handle <mi::neuraylib::ICanvas> m_canvas;
+    };
+
+    mi::Sint32 store_texture(
+        mi::Uint32 rx,
+        mi::Uint32 ry,
+        mi::Uint32 rz,
+        const float *data,
+        const std::string& tex_name);
+
+private:
+
+    static mi::base::Lock m_lock;
+    using Df_data_map = std::map <mi::mdl::IValue_texture::Bsdf_data_kind,std::string>;
+    static Df_data_map m_df_data_to_name;
+
+    DB::Transaction *m_transaction;
 };
 
 } // namespace BACKENDS

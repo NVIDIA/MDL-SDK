@@ -134,11 +134,12 @@ Neuray_impl::~Neuray_impl()
     
     // Unregister API components that are always available,
     // other API components are unregistered in shutdown()
+    unregister_api_component<NEURAY::Mdl_i18n_configuration_impl>();
+    unregister_api_component<NEURAY::Mdl_configuration_impl>();
+    unregister_api_component<mi::neuraylib::IVersion>();
     unregister_api_component<mi::neuraylib::IMdl_compiler>();
     unregister_api_component<mi::neuraylib::IFactory>();
     unregister_api_component<mi::neuraylib::IDebug_configuration>();
-    unregister_api_component<mi::neuraylib::IVersion>();
-    unregister_api_component<NEURAY::Mdl_i18n_configuration_impl>();
 
     // Unit tests with a failing check usually hit this assertion because in such a case the
     // library is not properly shut down.
@@ -259,7 +260,6 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     unregister_api_component<mi::neuraylib::IMdl_evaluator_api>();
     unregister_api_component<mi::neuraylib::IMdl_archive_api>();
     unregister_api_component<mi::neuraylib::IMdl_compatibility_api>();
-    unregister_api_component<mi::neuraylib::IMdl_configuration>();
     unregister_api_component<mi::neuraylib::IMdl_discovery_api>();
     unregister_api_component<mi::neuraylib::IMdl_factory>();
     unregister_api_component<mi::neuraylib::IImage_api>();

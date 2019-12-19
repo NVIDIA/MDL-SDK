@@ -197,8 +197,8 @@ public:
         SYM_PARAM_LAST = SYM_PARAM_BIG_N,
 
         // These two MUST be last in the given order.
-        SYM_USER_TYPE_NAME,     ///< the Id of ALL type names (fully qualified)
-        SYM_FREE                ///< First free id.
+        SYM_SHARED_NAME,   ///< the Id of ALL shared symbols (including fully qualified type names)
+        SYM_FREE           ///< First free id.
     };
 
     /// Get the name of the symbol.
@@ -233,7 +233,15 @@ public:
     /// \returns            The symbol.
     ///
     /// \note Use this symbols only for the name of user types!
+    ///       Currently this method is exactly the same as \c create_shared_symbol()
     virtual ISymbol const *create_user_type_symbol(char const *name) = 0;
+
+    /// Create a shared symbol (no unique ID).
+    ///
+    /// \param name         The shared symbol name.
+    ///
+    /// \returns            The symbol.
+    virtual ISymbol const *create_shared_symbol(char const *name) = 0;
 };
 
 }  // mdl

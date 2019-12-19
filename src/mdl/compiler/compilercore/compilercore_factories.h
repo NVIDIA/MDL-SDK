@@ -171,6 +171,15 @@ public:
         int                     end_line = 0,
         int                     end_column = 0) MDL_FINAL;
 
+    /// Create a new namespace alias.
+    IDeclaration_namespace_alias *create_namespace_alias(
+        ISimple_name const    *alias,
+        IQualified_name const *ns,
+        int                   start_line = 0,
+        int                   start_column = 0,
+        int                   end_line = 0,
+        int                   end_column = 0) MDL_FINAL;
+
 public:
     /// Constructor.
     ///
@@ -1116,17 +1125,27 @@ public:
 
     /// Create a new texture value.
     ///
-    /// \param type         The type of the texture.
-    /// \param value        The string value of the texture, NULL is not allowed.
-    /// \param gamma        The gamma override value of the texture.
-    /// \param tag_value    The tag value of the texture.
-    /// \param tag_version  The version of the tag value.
+    /// \param type            The type of the texture.
+    /// \param value           The string value of the texture, NULL is not allowed.
+    /// \param gamma           The gamma override value of the texture.
+    /// \param tag_value       The tag value of the texture.
+    /// \param tag_version     The version of the tag value.
     IValue_texture const *create_texture(
-        IType_texture const        *type,
-        char const                 *value,
-        IValue_texture::gamma_mode gamma,
-        int                        tag_value,
-        unsigned                   tag_version) MDL_FINAL;
+        IType_texture const            *type,
+        char const                     *value,
+        IValue_texture::gamma_mode     gamma,
+        int                            tag_value,
+        unsigned                       tag_version) MDL_FINAL;
+
+    /// Create a new bsdf_data texture value.
+    ///
+    /// \param bsdf_data_kind  The BSDF data kind.
+    /// \param tag_value       The tag value of the texture.
+    /// \param tag_version     The version of the tag value.
+    IValue_texture const *create_bsdf_data_texture(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        int                            tag_value,
+        unsigned                       tag_version) MDL_FINAL;
 
     /// Create a new string light profile value.
     ///

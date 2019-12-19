@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_execution_cuda.cu
+// examples/mdl_core/execution_cuda/example_execution_cuda.cu
 //
 // This file contains the CUDA kernel used to evaluate the material sub-expressions.
 

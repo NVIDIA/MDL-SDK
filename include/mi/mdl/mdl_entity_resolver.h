@@ -98,6 +98,13 @@ public:
     ///
     /// \returns    The absolute MDL URL of the resource or NULL.
     virtual char const *get_mdl_url() const = 0;
+
+    /// Returns the associated hash of this resource.
+    ///
+    /// \param[out] hash  get the hash value (16 bytes)
+    ///
+    /// \return true if this resource has an associated hash value, false otherwise
+    virtual bool get_resource_hash(unsigned char hash[16]) = 0;
 };
 
 /// An interface describing an module import result.

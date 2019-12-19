@@ -39,6 +39,8 @@ namespace mdlm
     class Archive
     {
     public:
+        typedef std::string NAME;
+    public:
         /// Helpers
         static const std::string extension; // ".mdr"
         /// If input has the .mdr extension, return input unchanged

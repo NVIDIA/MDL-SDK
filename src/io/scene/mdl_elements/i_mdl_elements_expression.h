@@ -36,6 +36,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include "i_mdl_elements_value.h"
+#include "i_mdl_elements_module.h"
 
 namespace mi { class IString; }
 
@@ -143,9 +144,15 @@ class IExpression_direct_call : public
 public:
     static const Kind s_kind = EK_DIRECT_CALL;
 
-    virtual DB::Tag get_definition() const = 0;
+    virtual DB::Tag get_definition(DB::Transaction *transaction) const = 0;
 
-    virtual mi::Sint32 set_definition( DB::Tag tag) = 0;
+    virtual DB::Tag get_module() const = 0;
+
+    virtual Mdl_ident get_definition_ident() const = 0;
+
+    virtual const char* get_definition_db_name() const = 0;
+
+    virtual mi::Sint32 set_definition(Mdl_tag_ident definition_ident) = 0;
 
     virtual const IExpression_list* get_arguments() const = 0;
 };
@@ -316,7 +323,11 @@ public:
     virtual IExpression_parameter* create_parameter( const IType* type, mi::Size index) const = 0;
 
     virtual IExpression_direct_call* create_direct_call(
-        const IType* type, DB::Tag tag, IExpression_list* arguments) const = 0;
+        const IType* type,
+        DB::Tag module_tag,
+        Mdl_tag_ident definition_ident,
+        const std::string& definition_db_name,
+        IExpression_list* arguments) const = 0;
 
     virtual IExpression_temporary* create_temporary( const IType* type, mi::Size index) const = 0;
 

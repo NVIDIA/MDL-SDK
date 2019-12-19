@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_mdle.cpp
+// examples/mdl_sdk/mdle/example_mdle.cpp
 //
 // Access the MDLE API and create MDLE files from existing mdl materials or functions.
 
@@ -36,7 +36,7 @@
 // Include code shared by all examples.
 #include "example_shared.h"
 
-int main( int /*argc*/, char* /*argv*/[])
+int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 {
     // Access the MDL SDK
     mi::base::Handle<mi::neuraylib::INeuray> neuray(load_and_get_ineuray());
@@ -315,3 +315,6 @@ int main( int /*argc*/, char* /*argv*/[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

@@ -78,6 +78,10 @@ namespace mdl_d3d12
         /// Used to create handles that then be used with the `create_*_view(...)` methods.
         Descriptor_heap_handle reserve_views(size_t count);
 
+        /// Returns the size of the block a given handle belongs to.
+        /// The block size corresponds to the 'count' that was passed to 'reserve_views'.
+        size_t get_block_size(const Descriptor_heap_handle& handle);
+
         /// Create an Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
             Buffer* buffer, bool raw, const Descriptor_heap_handle& handle);

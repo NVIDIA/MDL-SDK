@@ -33,6 +33,7 @@
 #include "i_mdl_elements_utilities.h"
 #include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_function_call.h"
+#include "i_mdl_elements_module.h"
 #include "mdl_elements_utilities.h"
 
 #include <sstream>
@@ -101,7 +102,8 @@ Mdl_compiled_material::Mdl_compiled_material(
         module_filename,
         module_name,
         /*prototype_tag*/ DB::Tag(),
-        load_resources);
+        load_resources,
+        &m_module_idents);
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
     mi::base::Handle<IExpression> body(
@@ -147,6 +149,11 @@ Mdl_compiled_material::Mdl_compiled_material(
     if (mi::mdl::IValue_float const *v_cutout = instance->get_cutout_opacity()) {
         m_has_cutout_opacity = true;
         m_cutout_opacity = v_cutout->get_value();
+    }
+    if (module_name) {
+        DB::Tag module_tag = transaction->name_to_tag(add_mdl_db_prefix(module_name).c_str());
+        DB::Access<Mdl_module> module(module_tag, transaction);
+        m_module_idents.insert(Mdl_tag_ident(module_tag, module->get_ident()));
     }
 }
 
@@ -298,6 +305,7 @@ void Mdl_compiled_material::swap( Mdl_compiled_material& other)
     std::swap( m_surface_opacity, other.m_surface_opacity);
     std::swap( m_cutout_opacity, other.m_cutout_opacity);
     std::swap( m_has_cutout_opacity, other.m_has_cutout_opacity);
+    std::swap( m_module_idents, other.m_module_idents);
 }
 
 const IExpression* Mdl_compiled_material::lookup_sub_expression(
@@ -429,9 +437,10 @@ const SERIAL::Serializable* Mdl_compiled_material::serialize(
     serializer->write( m_properties);
     serializer->write( m_internal_space);
     serializer->write( static_cast<mi::Uint32>( m_opacity));
-    //serializer->write( static_cast<mi::Uint32>( m_surface_opacity));
+    serializer->write( static_cast<mi::Uint32>( m_surface_opacity));
     serializer->write( m_cutout_opacity);
     serializer->write( m_has_cutout_opacity);
+    serializer->write(m_module_idents);
     return this + 1;
 }
 
@@ -458,11 +467,12 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     mi::Uint32 opacity_as_uint32;
     deserializer->read(&opacity_as_uint32);
     m_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
-    //deserializer->read(&opacity_as_uint32);
-    //m_surface_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
-    m_surface_opacity = mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+    deserializer->read(&opacity_as_uint32);
+    m_surface_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
     deserializer->read( &m_cutout_opacity);
     deserializer->read( &m_has_cutout_opacity);
+    deserializer->read( &m_module_idents);
+
     return this + 1;
 }
 
@@ -516,6 +526,26 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     LOG::mod_log->info(M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 
+bool Mdl_compiled_material::is_valid(
+    DB::Transaction* transaction,
+    Execution_context* context) const
+{
+    for (const auto& id : m_module_idents) {
+
+        DB::Access<Mdl_module> module(id.first, transaction);
+        if (module->get_ident() != id.second) {
+            std::string message = "The identifier of the imported module '"
+                + add_mdl_db_prefix(module->get_mdl_name())
+                + "' has changed.";
+            add_context_error(context, message, -1);
+            return false;
+        }
+        if (!module->is_valid(transaction, context))
+            return false;
+    }
+    return true;
+}
+
 size_t Mdl_compiled_material::get_size() const
 {
     return sizeof( *this)
@@ -523,7 +553,8 @@ size_t Mdl_compiled_material::get_size() const
             - sizeof( SCENE::Scene_element<Mdl_compiled_material, Mdl_compiled_material::id>)
         + dynamic_memory_consumption( m_body)
         + dynamic_memory_consumption( m_temporaries)
-        + dynamic_memory_consumption( m_arguments);
+        + dynamic_memory_consumption( m_arguments)
+        + dynamic_memory_consumption( m_module_idents);
 }
 
 DB::Journal_type Mdl_compiled_material::get_journal_flags() const

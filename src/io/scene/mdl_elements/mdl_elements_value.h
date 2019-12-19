@@ -372,6 +372,16 @@ class Value_light_profile : public Value_base<IValue_light_profile, IType_light_
 public:
     Value_light_profile( const Type* type, DB::Tag value) : Base( type), m_value( value) { }
 
+    Value_light_profile(
+        const Type* type,
+        DB::Tag value,
+        const char* unresolved_mdl_url,
+        const char *owner_module)
+        : Base(type)
+        , m_value(value)
+        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
+        , m_owner_module(owner_module ? owner_module : "") { }
+
     DB::Tag get_value() const { return m_value; }
 
     void set_value( DB::Tag value) { m_value = value; }
@@ -401,6 +411,16 @@ class Value_bsdf_measurement
 {
 public:
     Value_bsdf_measurement( const Type* type, DB::Tag value) : Base( type), m_value( value) { }
+
+    Value_bsdf_measurement(
+        const Type* type,
+        DB::Tag value,
+        const char* unresolved_mdl_url,
+        const char *owner_module)
+        : Base(type)
+        , m_value(value)
+        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
+        , m_owner_module(owner_module ? owner_module : "") { }
 
     DB::Tag get_value() const { return m_value; }
 
@@ -519,7 +539,17 @@ public:
 
     IValue_light_profile* create_light_profile( DB::Tag value) const;
 
+    IValue_light_profile* create_light_profile(
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module) const;
+
     IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const;
+
+    IValue_bsdf_measurement* create_bsdf_measurement(
+        DB::Tag value,
+        const char *unresolved_mdl_url,
+        const char *owner_module) const;
 
     IValue_invalid_df* create_invalid_df( const IType_reference* type) const;
 

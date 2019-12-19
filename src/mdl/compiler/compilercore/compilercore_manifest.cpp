@@ -595,6 +595,7 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
     case IMDL::MDL_VERSION_1_4: s = "1.4"; break;
     case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
     case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
+    case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
     }
     printer->printf("%s = \"%s\"\n", manifest->get_key(IArchive_manifest::PK_MDL), s);
 

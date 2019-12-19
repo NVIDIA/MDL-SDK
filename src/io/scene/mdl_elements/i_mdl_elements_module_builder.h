@@ -65,6 +65,7 @@ namespace MI
         class IExpression;
         class IExpression_list;
         class IType_list;
+        class Name_mangler;
         class Mdl_data;
         class Parameter_data;
         class Symbol_importer;
@@ -91,7 +92,7 @@ public:
     /// \param version                  The MDL version the module will have.
     /// \param allow_compatible_types   True, if arguments can be of different but compatible
     ///                                 types w.r.t the parameter types.
-    /// \param allow_compatible_types   True, if MDLE imports need to be inlined into the
+    /// \param inline_mdle              True, if MDLE imports need to be inlined into the
     ///                                 target module.
     /// \param[inout] context           Execution context used to pass options to and store
     ///                                 messages.
@@ -106,33 +107,15 @@ public:
 
     virtual ~Mdl_module_builder();
 
-    /// Adds a prototype (material or function definition) to the target module.
+    /// Adds a prototype-based material or function to the target module.
     ///
     /// \param prototype_tag    The tag of the prototype to add.
-    /// \param name             If NULL, the original name of the prototype.
+    /// \param name             The intended name of the funtion or material. If NULL, the name of
+    //                          the prototype is used.
     /// \param defaults         Default values to set. If NULL, the defaults of the original
     ///                         function or material are used. Pass an empty list to remove all
-    ///                         parameters, which is valid if the original material has defaults
+    ///                         defaults, which is valid if the original material has defaults
     ///                         for all parameters.
-    /// \param annotations      Annotations to set. If NULL, the annotations of the original
-    ///                         function or material are used. Pass an empty block to remove all
-    ///                         annotations.
-    /// \param is_exported      If true, the added function/material will have the exported keyword.
-    /// \param[inout] context   Execution context used to pass options to and store messages.
-    /// \return                 Index of the added material, function or -1 in case of failure.
-    mi::Sint32 add_prototype(
-        const MI::DB::Tag prototype_tag,
-        const char* name,
-        const MI::MDL::IExpression_list* defaults,
-        const MI::MDL::IAnnotation_block* annotations,
-        bool is_exported,
-        MI::MDL::Execution_context* context);
-
-    /// Adds a variant of a prototype (material or function definition) to the target module.
-    ///
-    /// \param prototype_tag    The tag of the prototype to add.
-    /// \param name             Name of the variant (unique and different from the prototype).
-    /// \param defaults         Default values to set. NULL is note allowed.
     /// \param annotations      Annotations to set. If NULL, the annotations of the original
     ///                         function or material are used. Pass an empty block to remove all
     ///                         annotations.
@@ -141,8 +124,8 @@ public:
     ///                         annotations.
     /// \param is_exported      If true, the added function/material will have the exported keyword.
     /// \param[inout] context   Execution context used to pass options to and store messages.
-    /// \return                 Index of the variant or -1 in case of failure.
-    mi::Sint32 add_variant(
+    /// \return                 Index of the added material, function or -1 in case of failure.
+    mi::Sint32 add_material_or_function(
         const MI::DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
@@ -151,11 +134,11 @@ public:
         bool is_exported,
         MI::MDL::Execution_context* context);
 
-    /// Adds a variant of a prototype that has already been added to the target module.
+    /// Adds a variant of a prototype (material or function definition) to the target module.
     ///
-    /// \param index            Index of the added material, function or variant returned by add_*.
+    /// \param prototype_tag    The tag of the prototype to add.
     /// \param name             Name of the variant (unique and different from the prototype).
-    /// \param defaults         Default values to set. NULL is note allowed.
+    /// \param defaults         Default values to set. NULL is not allowed.
     /// \param annotations      Annotations to set. If NULL, the annotations of the original
     ///                         function or material are used. Pass an empty block to remove all
     ///                         annotations.
@@ -166,7 +149,7 @@ public:
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the variant or -1 in case of failure.
     mi::Sint32 add_variant(
-        const mi::Sint32 index,
+        const MI::DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
         const MI::MDL::IAnnotation_block* annotations,
@@ -179,7 +162,6 @@ public:
     /// \param variant_data     Information and data to describe the variant to add,
     ///                         including name, prototype tag, arguments and annotations.
     ///                         For details see Variant_data.
-    ///
     /// \param is_exported      If true, the added function/material will have the exported keyword.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the added variant or -1 in case of failure.
@@ -192,8 +174,7 @@ public:
     ///
     /// \param mdl_data         Information and data to describe the function to add,
     ///                         including name, prototype tag, arguments and annotations.
-    ///                         For details see Material_data.
-    ///
+    ///                         For details see Mdl_data.
     /// \param is_exported      If true, the added function will have the exported keyword.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the added variant or -1 in case of failure.
@@ -206,8 +187,7 @@ public:
     ///
     /// \param mdl_data         Information and data to describe the material to add,
     ///                         including name, prototype tag, arguments and annotations.
-    ///                         For details see Material_data.
-    ///
+    ///                         For details see Mdl_data.
     /// \param is_exported      If true, the added material will have the exported keyword.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the added variant or -1 in case of failure.
@@ -216,10 +196,10 @@ public:
         bool is_exported,
         MI::MDL::Execution_context* context);
 
-    /// Replace all current annotations of the material/function, by the provided block.
+    /// Set annotations of the material/function by the provided block.
     ///
     /// \param index            Index of the added material, function or variant returned by add_*.
-    /// \param annotations      Annotations to add.
+    /// \param annotations      Annotations to set.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 True in case of access. If false, see the context for errors.
     bool set_annotations(
@@ -227,10 +207,10 @@ public:
         const MI::MDL::IAnnotation_block* annotations,
         MI::MDL::Execution_context* context);
 
-    /// Add an annotations to the added material, function or variant.xc
+    /// Add an annotation to the added material, function or variant.
     ///
     /// \param index            Index of the added material, function or variant returned by add_*.
-    /// \param annotation       The Annotation to add.
+    /// \param annotation       The annotation to add.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 True in case of access. If false, see the context for errors.
     bool add_annotation(
@@ -238,10 +218,10 @@ public:
         const MI::MDL::IAnnotation* annotation,
         MI::MDL::Execution_context* context);
 
-    /// Set/change the return value annotations of an added material, function or variant.
+    /// Set the return value annotations of an added material, function or variant.
     ///
     /// \param index            Index of the added material, function or variant returned by add_*.
-    /// \param annotations      Annotations to add.
+    /// \param annotations      Annotations to set.
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 True in case of access. If false, see the context for errors.
     bool set_return_annotations(
@@ -255,7 +235,7 @@ public:
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 The built module in case of success.
     ///                         If NULL, see the context for errors.
-    mi::mdl::IModule const* build(
+    const mi::mdl::IModule* build(
         MI::MDL::Execution_context* context);
 
     /// helper functions
@@ -266,42 +246,44 @@ public:
 
 private:
 
-        /// Helper class to express on (new) argument.
-        class New_parameter {
-        public:
+    /// Helper class to express an (new) argument.
+    class New_parameter
+    {
+    public:
 
-            /// Constructor.
-            New_parameter(
-                const mi::mdl::ISymbol* sym,
-                const mi::base::Handle<const MI::MDL::IExpression>& init,
-                mi::base::Handle<const MI::MDL::IAnnotation_block> annos,
-                bool is_uniform);
+        /// Constructor.
+        New_parameter(
+            const mi::mdl::ISymbol* sym,
+            const mi::base::Handle<const MI::MDL::IExpression>& init,
+            const mi::base::Handle<const MI::MDL::IAnnotation_block> annos,
+            bool is_uniform);
 
-            /// Get the symbol.
-            const mi::mdl::ISymbol* get_sym() const { return m_sym; }
+        /// Get the symbol.
+        const mi::mdl::ISymbol* get_sym() const { return m_sym; }
 
-            /// Get the init expression.
-            const mi::base::Handle<const MI::MDL::IExpression>& get_init() const { return m_init; }
+        /// Get the init expression.
+        const mi::base::Handle<const MI::MDL::IExpression>& get_init() const { return m_init; }
 
-            /// Get the annotations.
-            const mi::base::Handle<const MI::MDL::IAnnotation_block>& get_annos() const { return m_annos; }
+        /// Get the annotations.
+        const mi::base::Handle<const MI::MDL::IAnnotation_block>& get_annos() const { return m_annos; }
 
-            /// Get the uniform flag.
-            bool is_uniform() const { return m_is_uniform; }
+        /// Get the uniform flag.
+        bool is_uniform() const { return m_is_uniform; }
 
-        private:
-            /// The symbol of net new parameter.
-            const mi::mdl::ISymbol* m_sym;
+    private:
+        /// The symbol of net new parameter.
+        const mi::mdl::ISymbol* m_sym;
 
-            /// The (init) expression of the new parameter.
-            mi::base::Handle<const MI::MDL::IExpression> m_init;
+        /// The (init) expression of the new parameter.
+        const mi::base::Handle<const MI::MDL::IExpression> m_init;
 
-            /// Annotations for this new parameter.
-            mi::base::Handle<const MI::MDL::IAnnotation_block> m_annos;
+        /// Annotations for this new parameter.
+        const mi::base::Handle<const MI::MDL::IAnnotation_block> m_annos;
 
-            /// True if the new parameter must be uniform.
-            bool m_is_uniform;
-        };
+        /// True if the new parameter must be uniform.
+        bool m_is_uniform;
+    };
+
 private:
 
     bool clear_and_check_valid(MI::MDL::Execution_context* context);
@@ -311,14 +293,9 @@ private:
         MI::DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
+        const MI::MDL::IAnnotation_block* annotations,
+        const MI::MDL::IAnnotation_block* return_annotations,
         bool is_variant,
-        bool is_exported,
-        MI::MDL::Execution_context* context);
-
-    mi::Sint32 add_variant_intern(
-        mi::Sint32 index,
-        const char* name,
-        const MI::MDL::IExpression_list* defaults,
         bool is_exported,
         MI::MDL::Execution_context* context);
 
@@ -332,20 +309,20 @@ private:
     bool create_annotations(
         const MI::MDL::IAnnotation_block* annotation_block,
         mi::mdl::IAnnotation_block* &mdl_annotation_block,
-        MI::MDL::Execution_context* context);
+        MI::MDL::Execution_context* context,
+        bool skip_unused);
 
-    // copied from mdl_elements_nodules and (signature altered only)
     mi::Sint32 create_annotations(
         const MI::MDL::IAnnotation_block* annotation_block,
-        mi::mdl::IAnnotation_block* &mdl_annotation_block);
+        mi::mdl::IAnnotation_block* &mdl_annotation_block,
+        bool skip_unused);
 
-    // copied from mdl_elements_nodules and (signature altered only) 
     mi::Sint32 add_annotation(
         mi::mdl::IAnnotation_block* mdl_annotation_block,
         const char* annotation_name,
         const MI::MDL::IExpression_list* annotation_args);
 
-    // validates and setups parameters
+    // validates and sets up parameters
     mi::Sint32 prepare_parameters(
         const Parameter_data* in_parameters,
         mi::Size param_count,
@@ -368,6 +345,7 @@ private:
     mi::base::Handle<mi::mdl::IModule> m_module;
 
     Symbol_importer* m_symbol_importer;
+    Name_mangler *m_name_mangler;
 
     // functions, materials and variants that are about to be added to the material (in build())
     mi::mdl::vector<mi::mdl::IDeclaration_function*>::Type m_added_functions;

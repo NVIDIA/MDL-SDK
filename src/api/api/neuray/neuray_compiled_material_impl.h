@@ -111,6 +111,8 @@ public:
 
     bool get_cutout_opacity(mi::Float32 *cutout_opacity) const NEURAY_FINAL;
 
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+
     // own methods
 
     /// Swaps the internal DB class with \p rhs.

@@ -81,6 +81,7 @@
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/imdl_factory.h>
 #include <mi/neuraylib/imdl_i18n_configuration.h>
+#include <mi/neuraylib/imdl_loading_wait_handle.h>
 #include <mi/neuraylib/imodule.h>
 #include <mi/neuraylib/imdle_api.h>
 #include <mi/neuraylib/ineuray.h>

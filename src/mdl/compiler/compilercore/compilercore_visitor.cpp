@@ -172,6 +172,9 @@ void Module_visitor::post_visit(IDeclaration_function *fkt_decl) {}
 bool Module_visitor::pre_visit(IDeclaration_module *mod_decl) { return true; }
 void Module_visitor::post_visit(IDeclaration_module *mod_decl) {}
 
+bool Module_visitor::pre_visit(IDeclaration_namespace_alias *alias_decl) { return true; }
+void Module_visitor::post_visit(IDeclaration_namespace_alias *alias_decl) {}
+
 // ----------------------- expressions -----------------------
 
 bool Module_visitor::pre_visit(IExpression *stmt) { return true; }
@@ -1057,6 +1060,18 @@ void Module_visitor::do_module_decl(IDeclaration_module const *mod)
     post_visit(d);
 }
 
+void Module_visitor::do_namespace_alias(
+    IDeclaration_namespace_alias const *alias_decl)
+{
+    IDeclaration_namespace_alias *d = const_cast<IDeclaration_namespace_alias *>(alias_decl);
+
+    if (pre_visit(d)) {
+        do_simple_name(d->get_alias());
+        do_qualified_name(d->get_namespace());
+    }
+    post_visit(d);
+}
+
 void Module_visitor::do_declaration(IDeclaration const *decl)
 {
     switch (decl->get_kind()) {
@@ -1120,6 +1135,13 @@ void Module_visitor::do_declaration(IDeclaration const *decl)
         {
             IDeclaration_module const *m = static_cast<IDeclaration_module const *>(decl);
             do_module_decl(m);
+            break;
+        }
+    case IDeclaration::DK_NAMESPACE_ALIAS:
+        {
+            IDeclaration_namespace_alias const *a =
+                static_cast<IDeclaration_namespace_alias const *>(decl);
+            do_namespace_alias(a);
             break;
         }
     }

@@ -83,6 +83,12 @@ public:
     /// \note  The module must be returned with increased reference count.
     IModule const *lookup(char const *absname) const MDL_FINAL;
 
+    /// Get the module loading callback
+    IModule_loaded_callback *get_module_loading_callback() const MDL_FINAL {
+        MDL_ASSERT(!"That part of the IModule_cache interface is not implemented.");
+        return NULL;
+    }
+
     /// Enters a module into the cache.
     void enter(IModule const *module);
 
@@ -1006,6 +1012,7 @@ void Comparator::compare_modules()
         case IDefinition::DK_PARAMETER:
         case IDefinition::DK_ARRAY_SIZE:
         case IDefinition::DK_OPERATOR:
+        case IDefinition::DK_NAMESPACE:
             break;
         }
     }
@@ -1785,6 +1792,7 @@ bool Comparator::compare_definitions(
     case IDefinition::DK_PARAMETER:
     case IDefinition::DK_ARRAY_SIZE:
     case IDefinition::DK_OPERATOR:
+    case IDefinition::DK_NAMESPACE:
         // so far we check "syntactical", so this should be enough
         return true;
     }

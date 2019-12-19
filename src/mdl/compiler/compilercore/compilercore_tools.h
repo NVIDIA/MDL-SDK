@@ -221,6 +221,35 @@ static inline IValue const *create_int2_zero(
     return vf.create_zero(int2_tp);
 }
 
+/// Check, if two float values are BITWISE identical.
+static inline bool bit_equal_float(float a, float b)
+{
+    union { size_t z; float f; } u1, u2;
+
+    u1.z = 0;
+    u1.f = a;
+
+    u2.z = 0;
+    u2.f = b;
+
+    return u1.z == u2.z;
+}
+
+/// Check, if two float values are BITWISE identical.
+static inline bool bit_equal_float(double a, double b)
+{
+    union { size_t z[2]; double d; } u1, u2;
+
+    u1.z[0] = 0;
+    u1.z[1] = 0;
+    u1.d = a;
+
+    u2.z[0] = 0;
+    u2.z[1] = 0;
+    u2.d = b;
+
+    return u1.z[0] == u2.z[0] && u1.z[1] == u2.z[1];
+}
 }  // mdl
 }  // mi
 

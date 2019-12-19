@@ -30,7 +30,7 @@
 #include "command_queue.h"
 #include "descriptor_heap.h"
 #include "dxgidebug.h"
-#include "mdl_material.h"
+#include "mdl_sdk.h"
 #include "window.h"
 #include "window_image_file.h"
 #include "window_win32.h"

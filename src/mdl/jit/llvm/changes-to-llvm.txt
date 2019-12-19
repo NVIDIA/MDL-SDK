@@ -1,0 +1,35 @@
+Base version: LLVM 7.0.0 (2018-09-19)
+
+Changes:
+ - remove "test" folder
+ - remove all targets except NVPTX and X86:
+   - remove corresponding subfolders in lib/Target
+   - remove entries in lib/Target/LLVMBuild.txt
+   - remove entries CMake variables LLVM_ALL_TARGETS and LLVM_TARGETS_WITH_JIT in CMakeLists.txt
+ - Warnings fixed (multi-line due to templates involved):
+   - DenseMap.h:358 (getMinBucketToReserveForEntries), added cast to unsigned
+   - IntrTypes.h:1354 (getNumOperandBundles), added cast to unsigned
+   - GetElementPtrTypeIterator.h:38 (enum Value Unbounded) replaced -1ull by ~0ull
+ - add missing forwarded options LLVM_ENABLE_DIA_SDK, PYTHON_EXECUTABLE and LLVM_INCLUDE_TESTS
+   to cross compile project in cmake/modules/CrossCompile.cmake
+ - llvm::dbgs() writes to stderr and additionally to DebugOutputStr() on windows for easier debugging
+ - removed sm_72 (no such thing), add sm_75 (turing), and ptx62, ptx63 (necessary for sm_75)
+ - add isStorePointerAlignedForValue() checks in lib/Transforms/InstCombine/InstCombineLoadStoreAlloca.cpp
+   to avoid introducing unaligned memory accesses with <3 x float> stores
+ - fix missing padding for global vector constants in bufferLEByte in lib/Target/NVPTX/NVPTXAsmPrinter.cpp
+ - removed global counter for call sequences, put it into the NVPTXTargetLowering instance,
+   so compiling the same input leads to the same PTX output
+ - applied llvm-svn commit 345269 "[DEBUG_INFO][NVPTX]Fix processing of DBG_VALUES."
+ - applied llvm-svn commit 349982 "[NVPTX] Reduce stack size in NVPTXAsmPrinter::doInitialization()."
+ - disabled selection of special library functions for Mac in TargetLoweringBase::InitLibcalls()
+   in lib/CodeGen/TargetLoweringBase.cpp
+ - disabled std::call_once usage on Linux in include/llvm/Support/Theading.h
+ - add an "AvoidPointerPHIs" option to SimplifyCFGPass to allow avoid introducing PHIs of pointer types
+   for HLSL. Option also made available via PassManagerBuilder.
+ - applied llvm-svn commit 339521 "[Support][JSON][NFC] Silence GCC warning about broken strict aliasing rules"
+ - fix pointer arithmetic on parameters by adding a MoveParam node in NVPTXISelLowering.cpp and
+   skipping it for ld.param in NVPTXISelDAGToDAG.cpp.
+   fixes translation of "%2 = extractelement <2 x i32> %param_a, i32 %1"
+ - disable multithreaded symbol lookup in ExecutionEngine/Orc/Core.cpp if std::call_once is disabled
+ - set cmake policy CMP0075 to NEW in top-level CMakeLists.txt
+

@@ -432,11 +432,34 @@ Texture_2d::Texture_2d(
         // for derivative mode, convert to linear first, if necessary.
         // Note: for non-derivative mode, the gamma is still (incorrectly) applied after filtering
         if (use_derivatives && m_gamma[i] != 1.0f) {
+            // Choose pixel format. For non-float formats, convert to float format
+            // with same number of channels
+            MI::IMAGE::Pixel_type pixel_type =
+                MI::IMAGE::convert_pixel_type_string_to_enum(base_canvas->get_type());
+            switch (pixel_type) {
+            case MI::IMAGE::PT_RGB:
+            case MI::IMAGE::PT_RGBE:
+            case MI::IMAGE::PT_RGB_16:
+                pixel_type = MI::IMAGE::PT_RGB_FP;
+                break;
+            case MI::IMAGE::PT_RGBA:
+            case MI::IMAGE::PT_RGBEA:
+            case MI::IMAGE::PT_RGBA_16:
+                pixel_type = MI::IMAGE::PT_COLOR;
+                break;
+            case MI::IMAGE::PT_SINT8:
+            case MI::IMAGE::PT_SINT32:
+                pixel_type = MI::IMAGE::PT_FLOAT32;
+                break;
+            default:
+                break;
+            }
+
             // Copy canvas and adjust gamma from "effective gamma" to 1
             mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
                 image_module->convert_canvas(
                     base_canvas.get(),
-                    MI::IMAGE::convert_pixel_type_string_to_enum(base_canvas->get_type())));
+                    pixel_type));
             gamma_canvas->set_gamma(m_gamma[i]);
             image_module->adjust_gamma(gamma_canvas.get(), 1.0f);
             base_canvas = gamma_canvas;

@@ -32,6 +32,10 @@
 #include <cstdlib>
 #include <cmath>
 
+#if !defined(WIN_NT) && !(defined(__GNUC__) && (defined(__i386__) || defined(__x86_64)))
+#include <csignal>
+#endif
+
 #include <base/system/stlext/i_stlext_restore.h>
 
 #include <vector>
@@ -3268,6 +3272,67 @@ llvm::Function *MDL_runtime_creator::create_state_get_arg_block(
     return func;
 }
 
+// Generate LLVM IR for state::get_arg_block_float/float3/uint/bool()
+llvm::Function *MDL_runtime_creator::create_state_get_arg_block_value(
+    Internal_function const *int_func)
+{
+    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+    llvm::Function    *func     = ctx_data->get_function();
+    unsigned          flags     = ctx_data->get_function_flags();
+
+    Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+    llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
+    llvm::Value *a = load_by_value(ctx, arg_it);
+    llvm::Value *res;
+
+    if (m_code_gen.target_supports_pointers()) {
+        res = ctx.get_cap_args_parameter();
+        res = ctx->CreateInBoundsGEP(res, a);
+        res = ctx->CreateBitCast(res, ctx_data->get_return_type()->getPointerTo());
+        res = ctx->CreateLoad(res);
+    } else {
+        llvm::Value *state = ctx.get_state_parameter();
+        llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
+            state, ctx.get_constant(
+            m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_ARG_BLOCK_OFFSET)));
+        llvm::Value *arg_block_offs = ctx->CreateLoad(adr);
+        llvm::Value *offs = ctx->CreateAdd(arg_block_offs, a);
+
+        switch (int_func->get_kind()) {
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT:
+            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_float, offs);
+            break;
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT3:
+            res = llvm::UndefValue::get(ctx_data->get_return_type());
+            for (unsigned i = 0; i < 3; ++i) {
+                if (i > 0) {
+                    offs = ctx->CreateAdd(offs, ctx.get_constant(4));
+                }
+                res = ctx.create_insert(
+                    res,
+                    ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_float, offs),
+                    i);
+            }
+            break;
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_UINT:
+            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_uint, offs);
+            break;
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_BOOL:
+            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_bool, offs);
+            break;
+        default:
+            MDL_ASSERT(!"Unexpected get_arg_block_* kind");
+            res = llvm::Constant::getNullValue(ctx_data->get_return_type());
+            ctx.create_return(res);
+            return func;
+        }
+    }
+
+    ctx.create_return(res);
+    return func;
+}
+
 // Generate LLVM IR for state::get_ro_data_segment()
 llvm::Function *MDL_runtime_creator::create_state_get_ro_data_segment(
     Internal_function const *int_func)
@@ -3320,28 +3385,6 @@ llvm::Function *MDL_runtime_creator::create_state_object_id(
         res = llvm::Constant::getNullValue(ret_tp);
     }
     ctx.create_return(res);
-    return func;
-}
-
-// Generate LLVM IR for state::get_material_ior().
-llvm::Function *MDL_runtime_creator::create_state_get_material_ior(
-    Internal_function const *int_func)
-{
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
-    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
-    llvm::Function    *func     = ctx_data->get_function();
-    MDL_ASSERT(!"MDL_runtime_creator function for 'get_material_ior' not implemented.");
-    return func;
-}
-
-// Generate LLVM IR for state::get_thin_walled().
-llvm::Function *MDL_runtime_creator::create_state_get_thin_walled(
-    Internal_function const *int_func)
-{
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
-    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
-    llvm::Function    *func     = ctx_data->get_function();
-    MDL_ASSERT(!"MDL_runtime_creator function for 'get_thin_walled' not implemented.");
     return func;
 }
 
@@ -3801,12 +3844,11 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
             break;
         }
 
-        case Internal_function::KI_STATE_GET_MATERIAL_IOR:
-            m_internal_funcs[kind] = create_state_get_material_ior(int_func);
-            break;
-
-        case Internal_function::KI_STATE_GET_THIN_WALLED:
-            m_internal_funcs[kind] = create_state_get_thin_walled(int_func);
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT:
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT3:
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_UINT:
+        case Internal_function::KI_STATE_GET_ARG_BLOCK_BOOL:
+            m_internal_funcs[kind] = create_state_get_arg_block_value(int_func);
             break;
 
         case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
@@ -4039,7 +4081,8 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
         }
 
         if (m_type_mapper.is_passed_by_reference(arg_type) ||
-                m_type_mapper.is_deriv_type(expr_res.get_value_type())) {
+                (target_supports_pointers() &&
+                    m_type_mapper.is_deriv_type(expr_res.get_value_type()))) {
             // pass by reference
             args.push_back(expr_res.as_ptr(ctx));
         } else {
@@ -4644,4 +4687,3 @@ llvm::Value *LLVM_code_generator::call_rt_func(
 
 } // mdl
 } // mi
-

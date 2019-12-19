@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-// examples/example_archives.cpp
+// examples/mdl_sdk/archives/example_archives.cpp
 //
 // Creates an MDL archive, extracts an MDL archive, or queries the manifest of an MDL archive.
 //
@@ -236,7 +236,7 @@ void query( mi::neuraylib::IMdl_archive_api* mdl_archive_api, int argc, char* ar
         fprintf( stderr, "Invalid mode \"%s\".\n", mode.c_str());
 }
 
-int main( int argc, char* argv[])
+int MAIN_UTF8( int argc, char* argv[])
 {
     // Collect command line parameters
     if( argc == 1) {
@@ -256,6 +256,13 @@ int main( int argc, char* argv[])
     // Access the neuray library
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
     check_success( neuray.is_valid_interface());
+    
+    // Install logger
+    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
+        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    mi::base::Handle<mi::base::ILogger> logger( new Default_logger());
+    mdl_compiler->set_logger( logger.get());
+    mdl_compiler = 0;
 
     // Start the neuray library
     mi::Sint32 result = neuray->start();
@@ -283,3 +290,6 @@ int main( int argc, char* argv[])
     keep_console_open();
     return EXIT_SUCCESS;
 }
+
+// Convert command line arguments to UTF8 on Windows
+COMMANDLINE_TO_UTF8

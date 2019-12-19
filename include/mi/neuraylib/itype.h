@@ -474,6 +474,8 @@ public:
         TS_3D           = 1,            ///< Three-dimensional texture.
         TS_CUBE         = 2,            ///< Cube map texture.
         TS_PTEX         = 3,            ///< PTEX texture.
+        TS_BSDF_DATA    = 4,            ///< Three-dimensional texture representing
+                                        ///  a BSDF data table.
         TS_FORCE_32_BIT = 0xffffffffU   //   Undocumented, for alignment only.
     };
 

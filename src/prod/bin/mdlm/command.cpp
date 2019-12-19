@@ -33,6 +33,8 @@
 #include "version.h"
 #include "search_path.h"
 #include <base/util/string_utils/i_string_utils.h>
+#include <base/hal/hal/i_hal_ospath.h>
+#include <base/hal/disk/disk.h>
 #include <map>
 #include <iostream>
 using namespace mdlm;
@@ -862,17 +864,40 @@ int Show_archive::execute()
         if (list_field(key))
         {
             const char* value = manifest->get_value(i);
-            mdlm::report(key + string(" = \"") + value + string("\""));
+            if (m_report)
+            {
+                mdlm::report(key + string(" = \"") + value + string("\""));
+            }
+            m_manifest.insert(std::pair<string, string>(key, value));
         }
     }
 
     return SUCCESS;
 }
 
+const std::string List_dependencies::dependency_keyword = "dependency";
+
 List_dependencies::List_dependencies(const std::string & archive)
     : Show_archive(Archive::with_extension(archive))
 {
-    add_filter_field("dependency");
+    add_filter_field(dependency_keyword);
+}
+
+void List_dependencies::get_dependencies(std::multimap<Archive::NAME, Version> & dependencies) const
+{
+    std::pair<std::multimap<std::string, std::string>::const_iterator, std::multimap<std::string, std::string>::const_iterator> ret;
+    ret = m_manifest.equal_range(dependency_keyword);
+    for (std::multimap<std::string, std::string>::const_iterator it = ret.first; it != ret.second; ++it)
+    {
+        string archiveAndVersion(it->second);
+        vector<string> tmp(Util::split(archiveAndVersion, ' '));
+        if (tmp.size() == 2)
+        {
+            std::string archiveName(tmp[0]);
+            std::string archiveVersion(tmp[1]);
+            dependencies.insert(std::pair<Archive::NAME, Version>(archiveName, Version(archiveVersion)));
+        }
+    }
 }
 
 Extract::Extract(const std::string & archive, const std::string & path)
@@ -1218,48 +1243,148 @@ int Help::execute()
     return 0;
 }
 
-List::List(const std::string & archive)
+List_cmd::List_cmd(const std::string & archive)
     : m_archive_name(Archive::with_extension(archive))
 {}
 
-int List::execute()
+int List_cmd::execute()
 {
     // Initialize
     m_result = List_result();
+    Search_path sp(mdlm::neuray());
+    sp.snapshot();
 
-    // 
+    // Look for all archives
     if (m_archive_name.empty())
     {
         // List all archives installed
-        Util::log_warning("TODO Implement...");
-        return 0;
+        for (auto& directory : sp.paths())
+        {
+            MI::DISK::Directory d;
+            if (d.open(directory.c_str()))
+            {
+                std::string testFile;
+                while (!(testFile = d.read()).empty())
+                {
+                    Archive testArchive(Util::path_appends(directory, testFile));
+                    if (testArchive.is_valid())
+                    {
+                        m_result.m_archives.push_back(testArchive);
+                        Util::log_report("Found archive: " + Util::normalize(testArchive.full_name()));
+                    }
+                }
+            }
+        }
+        return SUCCESS;
     }
 
-    Search_path sp(mdlm::neuray());
-    sp.snapshot();
+    // Look for specific archive names
     bool found(false);
     for (auto& directory : sp.paths())
     {
-        std::string archive = Util::path_appends(directory, m_archive_name);
-        Util::File file(archive);
-
-        if (file.exist())
+        Archive testArchive(Util::path_appends(directory, m_archive_name));
+        if (testArchive.is_valid())
         {
-            string archive_file_name = archive;
             if (found == true)
             {
                 // Already found one installed archive report a warning
                 Util::log_warning("Found shadowed archive (inconsistent installation): " + 
-                    Util::normalize(archive_file_name));
+                    Util::normalize(testArchive.full_name()));
             }
             found = true;
-            m_result.m_archives.push_back(Archive(archive_file_name));
-            Util::log_verbose("Found archive: " + Util::normalize(archive_file_name));
-
-            Util::log_report("Found archive: " + Util::normalize(archive_file_name));
+            m_result.m_archives.push_back(testArchive);
+            Util::log_report("Found archive: " + Util::normalize(testArchive.full_name()));
         }
     }
-    return 0;
+    return SUCCESS;
+}
+
+Remove_cmd::Remove_cmd(const std::string & archive)
+    : m_archive_name(Archive::with_extension(archive))
+{}
+
+ int Remove_cmd::find_archive(Archive & archive)
+{
+    archive = Archive(m_archive_name);
+    if (archive.is_valid())
+    {
+        return SUCCESS;
+    }
+    List_cmd list(m_archive_name);
+    if (list.execute() != List_cmd::SUCCESS)
+    {
+        Util::log_error("Unable to list archive: " + m_archive_name);
+        return UNSPECIFIED_FAILURE;
+    }
+    List_cmd::List_result archives(list.get_result());
+    if (archives.m_archives.empty())
+    {
+        Util::log_error("Can not find archive: " + m_archive_name);
+        return ARCHIVE_NOT_FOUND;
+    }
+
+    if (archives.m_archives.size() > 1)
+    {
+        Util::log_warning("Found multiple installations of archive: " + m_archive_name);
+        Util::log_warning("Considering: " + archives.m_archives[0].full_name());
+    }
+
+    archive = archives.m_archives[0];
+    return SUCCESS;
+}
+
+int Remove_cmd::Remove_cmd::execute()
+{
+    Archive toRemove("");
+    int rtn;
+    if ((rtn = find_archive(toRemove)) != SUCCESS)
+    {
+        return rtn;
+    }
+    
+    // Look for dependencies on the archive being uninstalled
+    Util::log_verbose("Looking for dependencies on archive: " + toRemove.full_name());
+    List_cmd listAll("");
+    listAll.execute();
+    List_cmd::List_result allArchives(listAll.get_result());
+    for (auto & a : allArchives.m_archives)
+    {
+        if (a.full_name() == toRemove.full_name())
+        {
+            // Do not test self
+            continue;
+        }
+        List_dependencies dependsCmd(a.full_name());
+        dependsCmd.set_report(false);
+        if (dependsCmd.execute() != List_dependencies::SUCCESS)
+        {
+            Util::log_error("Unable to list archive dependencies: " + m_archive_name);
+            return UNSPECIFIED_FAILURE;
+        }
+
+        std::multimap<Archive::NAME, Version> depends;
+        dependsCmd.get_dependencies(depends);
+
+        std::pair<std::multimap<Archive::NAME, Version>::const_iterator, std::multimap<Archive::NAME, Version>::const_iterator> ret;
+        ret = depends.equal_range(toRemove.stem()/* remove the .mdr extension*/);
+
+        for (std::multimap<Archive::NAME, Version>::const_iterator it = ret.first; it != ret.second; ++it)
+        {
+            if (toRemove.get_version() == it->second)
+            {
+                string archiveWithDependencies(it->first);
+                Util::log_warning(a.stem() + " depends on archive " + toRemove.stem() + ". Can not remove.");
+                return SUCCESS;
+            }
+        }
+    }
+
+    // All tests passed, we can remove the archive
+    Util::log_report("Removing archive: " + Util::normalize(toRemove.full_name()));
+
+    Util::delete_file_or_directory(Util::normalize(toRemove.full_name()));
+         
+    return SUCCESS;
 }
 
 Command * Command_factory::build_command(const Option_set & option)
@@ -1285,11 +1410,11 @@ Command * Command_factory::build_command(const Option_set & option)
             }
             else if (it->id() == MDLM_option_parser::LIST)
             {
-                return new List(it->value()[0]);
+                return new List_cmd(it->value()[0]);
             }
             else if (it->id() == MDLM_option_parser::LIST_ALL)
             {
-                return new List("");
+                return new List_cmd("");
             }
             else if (it->id() == MDLM_option_parser::INSTALL_ARCHIVE)
             {
@@ -1361,7 +1486,7 @@ Command * Command_factory::build_command(const Option_set & option)
             }
             else if (it->id() == MDLM_option_parser::REMOVE)
             {
-                Util::log_warning("Command not implemented...");
+                return new Remove_cmd(it->value()[0]);
             }
             else if (it->id() == MDLM_option_parser::CREATE_MDLE)
             {

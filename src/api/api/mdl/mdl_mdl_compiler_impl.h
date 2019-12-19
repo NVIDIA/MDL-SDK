@@ -103,11 +103,6 @@ public:
 
     const mi::IString* get_resource_path( mi::Size index) const NEURAY_OVERRIDE;
 
-    mi::Sint32 deprecated_load_module(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IMap* options) NEURAY_OVERRIDE;
-
     mi::Sint32 load_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
@@ -117,12 +112,6 @@ public:
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
-
-    mi::Sint32 deprecated_load_module_from_string(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const char* module_source,
-        const mi::IMap* options) NEURAY_OVERRIDE;
 
     mi::Sint32 load_module_from_string(
         mi::neuraylib::ITransaction* transaction,
@@ -134,23 +123,11 @@ public:
         const char* module_name,
         const char* module_source) NEURAY_OVERRIDE;
 
-    mi::Sint32 deprecated_export_module(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const char* filename,
-        const mi::IMap* options) NEURAY_OVERRIDE;
-
     mi::Sint32 export_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const char* filename,
         mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
-
-    mi::Sint32 deprecated_export_module_to_string(
-        mi::neuraylib::ITransaction* transaaction,
-        const char* module_name,
-        mi::IString* exported_module,
-        const mi::IMap* options) NEURAY_OVERRIDE;
 
     mi::Sint32 export_module_to_string(
         mi::neuraylib::ITransaction* transaaction,

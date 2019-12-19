@@ -1,5 +1,29 @@
 /******************************************************************************
- * Copyright 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 #ifndef MDL_TARGET_CODE_TYPES_HLSLI
@@ -8,6 +32,10 @@
 // compiler constants defined from outside:
 // - MDL_NUM_TEXTURE_RESULTS
 // - USE_DERIVS
+// - MDL_DF_HANDLE_SLOT_MODE (-1, 1, 2, 4, or 8)
+#ifndef MDL_DF_HANDLE_SLOT_MODE
+    #define MDL_DF_HANDLE_SLOT_MODE -1
+#endif
 
 #ifdef USE_DERIVS
  // Used by the texture runtime.
@@ -212,103 +240,114 @@ enum Mbsdf_part
 
 /// Input and output structure for BSDF sampling data.
 struct Bsdf_sample_data {
-    // Input fields
-    float3           ior1;           ///< IOR current medium
-    float3           ior2;           ///< IOR other side
-    float3           k1;             ///< outgoing direction
-    float3           xi;             ///< pseudo-random sample number
+    float3 ior1;                    ///< mutual input: IOR current medium
+    float3 ior2;                    ///< mutual input: IOR other side
+    float3 k1;                      ///< mutual input: outgoing direction
 
-    // Output fields
-    float3           k2;             ///< incoming direction
-    float            pdf;            ///< pdf (non-projected hemisphere)
-    float3           bsdf_over_pdf;  ///< bsdf * dot(normal, k2) / pdf
-    Bsdf_event_type  event_type;     ///< the type of event for the generated sample
+    float3 k2;                      ///< output: incoming direction
+    float4 xi;                      ///< input: pseudo-random sample numbers
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    float3 bsdf_over_pdf;           ///< output: bsdf * dot(normal, k2) / pdf
+    Bsdf_event_type event_type;     ///< output: the type of event for the generated sample
+    int handle;                     ///< output: handle of the sampled elemental BSDF (lobe)
 };
 
 /// Input and output structure for BSDF evaluation data.
 struct Bsdf_evaluate_data {
-    // Input fields
-    float3       ior1;           ///< IOR current medium
-    float3       ior2;           ///< IOR other side
-    float3       k1;             ///< outgoing direction
-    float3       k2;             ///< incoming direction
+    float3 ior1;                    ///< mutual input: IOR current medium
+    float3 ior2;                    ///< mutual input: IOR other side
+    float3 k1;                      ///< mutual input: outgoing direction
 
-    // Output fields
-    float3       bsdf;           ///< bsdf * dot(normal, k2)
-    float        pdf;            ///< pdf (non-projected hemisphere)
+    float3 k2;                      ///< input: incoming direction
+    #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
+                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+    #endif
+    #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+        float3 bsdf_diffuse;        ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+        float3 bsdf_glossy;         ///< output: (glossy part of the) bsdf * dot(normal, k2)
+    #else
+        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) bsdf * dot(normal, k2)
+        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
+    #endif
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
 struct Bsdf_pdf_data {
-    // Input fields
-    float3       ior1;           ///< IOR current medium
-    float3       ior2;           ///< IOR other side
-    float3       k1;             ///< outgoing direction
-    float3       k2;             ///< incoming direction
+    float3 ior1;                    ///< mutual input: IOR current medium
+    float3 ior2;                    ///< mutual input: IOR other side
+    float3 k1;                      ///< mutual input: outgoing direction
 
-    // Output fields
-    float        pdf;            ///< pdf (non-projected hemisphere)
+    float3 k2;                      ///< input: incoming direction
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
 struct Bsdf_auxiliary_data {
-    // Input fields
-    float3       ior1;           ///< IOR current medium
-    float3       ior2;           ///< IOR other side
-    float3       k1;             ///< outgoing direction
+    float3 ior1;                    ///< mutual input: IOR current medium
+    float3 ior2;                    ///< mutual input: IOR other side
+    float3 k1;                      ///< mutual input: outgoing direction
  
-    // Output fields
-    float3       albedo;         ///< albedo
-    float3       normal;         ///< normal
+    #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
+                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+    #endif
+    #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+        float3 albedo;              ///< output: albedo
+        float3 normal;              ///< output: normal
+    #else
+        float3 albedo[MDL_DF_HANDLE_SLOT_MODE]; ///< output: albedo
+        float3 normal[MDL_DF_HANDLE_SLOT_MODE]; ///< output: normal
+    #endif
 };
-
 
 /// Input and output structure for EDF sampling data.
 struct Edf_sample_data
 {
-    // Input fields
-    float3          xi;             ///< pseudo-random sample number
-
-    // Output fields
-    float3          k1;             ///< outgoing direction
-    float           pdf;            ///< pdf (non-projected hemisphere)
-    float3          edf_over_pdf;   ///< edf * dot(normal,k1) / pdf
-    Edf_event_type  event_type;     ///< the type of event for the generated sample
+    float4 xi;                      ///< input: pseudo-random sample numbers
+    float3 k1;                      ///< output: outgoing direction
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
+    float3 edf_over_pdf;            ///< output: edf * dot(normal,k1) / pdf
+    Edf_event_type event_type;      ///< output: the type of event for the generated sample
+    int handle;                     ///< output: handle of the sampled elemental EDF (lobe)
 };
 
 /// Input and output structure for EDF evaluation data.
 struct Edf_evaluate_data
 {
-    // Input fields
-    float3          k1;             ///< outgoing direction
-
-    // Output fields
-    float           cos;            ///< dot(normal, k1)
-    float3          edf;            ///< edf
-    float           pdf;            ///< pdf (non-projected hemisphere)
+    float3 k1;                      ///< input: outgoing direction
+    #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
+                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+    #endif
+    float cos;                      ///< output: dot(normal, k1)
+    #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+        float3 edf;                 ///< output: edf
+    #else
+        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< output: edf
+    #endif
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.
 struct Edf_pdf_data
 {
-    // Input fields
-    float3          k1;             ///< outgoing direction
-
-    // Output fields
-    float           pdf;            ///< pdf (non-projected hemisphere)
+    float3 k1;                      ///< input: outgoing direction
+    float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF PDF calculation data.
 struct Edf_auxiliary_data
 {
-    // Input fields
-    float3          k1;             ///< outgoing direction
+    float3 k1;                      ///< input: outgoing direction
+    #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+        int handle_offset;          ///< output: handle offset to allow the evaluation of more then
+                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+    #endif
 
-    // Output fields
     // reserved for future use
 };
-
-
 
 // Modifies state.normal with the result of "geometry.normal" of the material.
 /*void Bsdf_init_function(

@@ -438,6 +438,7 @@ IDeclaration const *Optimizer::local_opt(IDeclaration const *c_decl)
     case IDeclaration::DK_TYPE_ENUM:
     case IDeclaration::DK_FUNCTION:
     case IDeclaration::DK_MODULE:
+    case IDeclaration::DK_NAMESPACE_ALIAS:
         // do nothing
         return decl;
     case IDeclaration::DK_VARIABLE:

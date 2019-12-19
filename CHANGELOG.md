@@ -1,5 +1,164 @@
 Change Log
 ==========
+MDL SDK 2019.2 (325000.1814): 18 Dec 2019
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2019.2 (325000.1814) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.6 Language Specification
+
+    - The file path resolution algorithm has been changed to treat weak relative
+      paths the same as strict relative paths if the referring MDL
+      module has an MDL version of 1.6 or higher. Furthermore,
+      the error checks have been simplified to only protect relative paths from
+      referring to files in other search paths.
+    - The import of standard library modules has been changed in all examples
+      to use absolute path imports.
+    - An additional way of defining functions has been added using an expression
+      instead of a procedural function body.
+    - Let-expression can also be applied to functions defined using an expression.
+    - The limitation has been removed that package names and module names can
+      only be identifiers.
+    - The new using `alias` declaration has been added to enable the use of Unicode
+      names for module names and package names.
+    - The description has been clarified that standard module names shadow only
+      modules of the same fully qualified name while modules in subpackages can have
+      a standard module name as their unqualified name.
+    - The new `scene` standard library module has been added with
+      `data_isvalid`, `data_lookup_ltype`, and
+      `data_lookup_uniform_ltype` functions.
+    - The new `multiscatter_tint` parameter has been added to all glossy BSDF
+      models to enable energy loss compensation at higher roughness values.
+    - The new `df::sheen_bsdf` bidirectional scattering distribution function has
+      been added.
+    - The new `df::tint` modifier overload has been added for the hair bidirectional
+      scattering distribution function.
+    - The new `df::tint` modifier overload has been added for the separate tinting
+      of the reflective and transmissive light paths of a base BSDF.
+
+- General
+
+    - The new API functions
+         - `mi::neuraylib::IModule::reload()`
+         - `mi::neuraylib::IModule::reload_from_string()`
+         - `mi::neuraylib::IModule::is_valid()`
+         - `mi::neuraylib::IMaterial_definition::is_valid()`
+         - `mi::neuraylib::IFunction_definition::is_valid()`
+         - `mi::neuraylib::IMaterial_instance::is_valid()`
+         - `mi::neuraylib::IMaterial_instance::repair()`
+         - `mi::neuraylib::IFunction_call::is_valid()`
+         - `mi::neuraylib::IFunction_call::repair()`
+         - `mi::neuraylib::ICompiled_material::is_valid()`
+      have been added to support reloading of MDL modules.
+    - The requirements on MDL module names have been relaxed according to the MDL 1.6
+      Specification to allow loading of modules with Unicode names.
+    - The new API functions
+        - `mi::neuraylib::ITarget_code::get_callable_function_df_handle_count()` and
+        - `mi::neuraylib::ITarget_code::get_callable_function_df_handle()`
+      have been added.
+    - The new API function `mi::neuraylib::ITarget_code::get_texture_df_data()`
+      has been added.
+    - `mi::neuraylib::IMdl_compiler::load_module()` can now be called from multiple
+      threads to allow loading modules in parallel. To support custom thread blocking
+      the new interfaces
+        - `mi::neuraylib::IMdl_loading_wait_handle ` and
+        - ` mi::neuraylib::IMdl_loading_wait_handle_factory`
+      have been added.
+    - The new API functions
+        - `mi::neuraylib::IMaterial_definition::get_body()`
+        - `mi::neuraylib::IMaterial_definition::get_temporary_count()`
+        - `mi::neuraylib::IMaterial_definition::get_temporary()`
+        - `mi::neuraylib::IFunction_definition::get_body()`
+        - `mi::neuraylib::IFunction_definition::get_temporary_count()`
+        - `mi::neuraylib::IFunction_definition::get_temporary()`
+      have been added.
+    - The signature of the function `mi::base::ILogger::message()` has been changed.
+    - The API function `mi::neuraylib::ITransaction::edit()` has been adapted to disallow
+      editing of database elements of type `mi::neuraylib::IMaterial_definition` and
+      `mi::neuraylib::IFunction_definition`.
+    - Support for multiple occurrence of the same annotation has been added to
+      `mi::neuraylib::Annotation_wrapper`.
+    - Support for deprecated features guarded by `MI_NEURAYLIB_DEPRECATED_8_1` and
+      `MI_NEURAYLIB_DEPRECATED_9_1` has been removed.
+
+- MDL Compiler and Backends
+
+    - Support for MDL 1.6 has been added to the MDL core compiler.
+    - Limited support for MDL 1.6 features has been added to the backends, in
+      particular, the `scene` module is supported, but currently no code is generated
+      for interrogating the renderer, hence always the default value is returned.
+    - Support for MDL 1.6 has been added to the generated code for distribution
+      functions, that is `df::tint(reflection_tint, transmission_tint)`,
+      `df::sheen_bsdf()`, the `multiscatter_tint` parameter of all BSDFs exposing this
+      in MDL 1.6 (note that this requires that all four dimensions of
+      `Bsdf_sample_data::xi` are set).
+    - For evaluating parts of distribution functions that are named by handles,
+      `Bsdf_evaluate_data` and `Bsdf_auxiliary_data` are adapted to select individual
+      handles.
+    - A new backend option `df_handle_slot_mode` to select how evaluate and auxiliary
+      data is passed between the generated code and the render has been added.
+    - The `bsdf` field of `Bsdf_evaluate_data` is split into `bsdf_diffuse` and
+      `bsdf_glossy`.
+    - The `Bsdf_sample_data` structure now requires a 4th uniform random number and
+      returns the handle of the sampled distribution part.
+    - Inlining of functions containing constant declarations into the DAG has been
+      implemented.
+    - Support for light-path-expressions in generated code for distribution functions
+      via handles has been added.
+    - Support for retrieving albedo and normal in generated code for distribution
+      functions via generated auxiliary functions has been added.
+    - The entity resolver has been sped up for built-in modules in some cases where it
+      is clear that the module can only be read from the MDL root.
+    - The memory size of the DAG representation has been slightly reduced by
+      internalizing all DAG signatures.
+    - The DAG representation now uses unsafe math operations, especially `x * 0 = 0`
+      for floating point values.
+
+- MDL SDK examples
+
+    - Example `df_cuda` has been adapted to illustrate how to evaluate parts of the
+      distribution functions named by handles via light path expressions (LPEs).
+    - All examples have been adapted to support processing of Unicode command line
+      arguments.
+
+**Fixed Bugs**
+
+- General
+
+    - An issue in the light profile parser has been fixed: For IESNA LM-63-2002 files
+     the `ballast-lamp` value incorrectly acted as multiplier for the intensity.
+
+- MDL Compiler and Backends
+
+    - Several issues in the generated code for distribution functions have been fixed:
+        - Bugs in the computation of the pdf and eval functions of
+          `df::ward_geisler_moroder_bsdf` have been fixed.
+        - Incorrect pdf computation (for `sample`, `eval`, and `pdf` functions) in
+          `df::ward_geisler_moroder_bsdf` and `df::backscattering_glossy_reflection_bsdf`
+          have been fixed.
+        - Fixed a missing re-scale of pseudorandom numbers for v-cavities based masking,
+          leading to biased results for `df::scatter_reflect_transmit`.
+        - Only use refraction-based half vector for Fresnel-layering, not for all curve
+          layering operations.
+        - Add simple inside/outside material support based on IOR comparison to determine
+          which IOR to override in Fresnel layering. This fixes incorrect rendering when
+          BSDFs of type `df::scatter_reflect` and `df::scatter_transmit` are layered using
+          `df::fresnel_layer`, in particular missing total internal reflection.
+    - The implementation of `math::isnan()` and `math::isfinite()` has been fixed for
+      vector types.
+    - Printing of quiet NaNs for HLSL has been fixed.
+    - A crash in the MDL core compiler that could occur if exported types contain errors
+      in their default initializers has been fixed.
+    - Wrong function names generated from `debug::assert()` calls when placed after a
+      while loop have been fixed.
+    - The name of the `anno::deprecated()` parameter has been fixed, it is `description`,
+      not `message`.
+    - The export of MDL modules containing relative imports has been fixed, access to
+      the imported entities is now generated correctly.
+
 
 MDL SDK 2019.1.4 (317500.5028): 27 Aug 2019
 -----------------------------------------------

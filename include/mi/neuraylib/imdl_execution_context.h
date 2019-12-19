@@ -33,6 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/base/enums.h>
+#include <mi/base/handle.h>
 
 namespace mi {
 
@@ -177,6 +178,42 @@ public:
     ///                          - -2: The option type does not match the value type.
     virtual Sint32 get_option(const char* name, bool& value) const = 0;
 
+    /// Get an interface option.
+    /// \param name     option name
+    /// \param value    pointer the option value is written to.
+    /// \return
+    ///                          -  0: Success.
+    ///                          - -1: Invalid option name.
+    ///                          - -2: The option type does not match the value type.
+    virtual Sint32 get_option(const char* name, base::IInterface** value) const = 0;
+
+    /// Get an interface option.
+    /// \param name         option name
+    /// \param return_code
+    ///                          -  0: Success.
+    ///                          - -1: Invalid option name.
+    ///                          - -2: The option type does not match the value type.
+    /// \return             The interface value or NULL.
+    template<typename T>
+    T* get_option(const char* name, Sint32& return_code)
+    {
+        base::IInterface* pointer;
+        return_code = get_option(name, &pointer);
+        if (!pointer)
+            return NULL;
+
+        base::Handle<base::IInterface> handle(pointer);
+        base::Handle<T> handle_typed(handle->get_interface<T>());
+        if (!handle_typed)
+        {
+            return_code = -2;
+            return NULL;
+        }
+        handle->retain(); // use this handle for the retain so T has not to be cast
+        return handle_typed.get();
+    }
+
+
     /// Set a string option.
     /// \param name     option name
     /// \param value    option value.
@@ -204,6 +241,16 @@ public:
     ///                          - -2: The option type does not match the value type.
     ///                          - -3: The value is invalid in the context of the option.
     virtual Sint32 set_option(const char* name, bool value) = 0;
+
+    /// Set an interface option.
+    /// \param name     option name
+    /// \param value    option value.
+    /// \return
+    ///                          -  0: Success.
+    ///                          - -1: Invalid option name.
+    ///                          - -2: The option type does not match the value type.
+    ///                          - -3: The value is invalid in the context of the option.
+    virtual Sint32 set_option(const char* name, base::IInterface* value) = 0;
 };
 
 
