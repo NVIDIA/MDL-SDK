@@ -27,13 +27,12 @@
  *****************************************************************************/
 #include "pch.h"
 #include "i18n_db.h"
-using namespace MI::MDL::I18N;
-using MI::MDL::I18N::Database;
 
 #include <vector>
 #include <clocale>
 #include <map>
 #include <set>
+#include <memory>
 #include <base/lib/tinyxml2/tinyxml2.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/path/i_path.h>
@@ -52,14 +51,13 @@ using std::string;
 using std::vector;
 using std::map;
 using std::set;
-using namespace MI;
 using tinyxml2::XMLElement;
 using tinyxml2::XMLDocument;
 
 typedef string Qualified_name;
 typedef string Folder;
 
-bool has_ending(string const & full_string, string const & ending)
+bool has_ending(const string & full_string, const string & ending)
 {
     if (full_string.length() >= ending.length())
     {
@@ -82,7 +80,7 @@ void replace_all(string & str, const string& from, const string& to)
     }
 }
 
-bool has_beginning(string const & full_string, string const & beginning)
+bool has_beginning(const string & full_string, const string & beginning)
 {
     if (full_string.length() >= beginning.length())
     {
@@ -107,21 +105,21 @@ public:
         , string prefix = "" // File name must match some of this prefix
     ) const
     {
-        string path = HAL::Ospath::normpath_v2(folder);
+        string path = MI::HAL::Ospath::normpath_v2(folder);
 
-        if (!DISK::access(path.c_str(), false))
+        if (!MI::DISK::access(path.c_str(), false))
             return;
 
         // Collect all archives
-        DISK::Directory dir;
+        MI::DISK::Directory dir;
         if (!dir.open(path.c_str()))
             return;
 
         string entry = dir.read();
         while (!entry.empty())
         {
-            string entry_path(HAL::Ospath::join(path, entry));
-            if (DISK::is_file(entry_path.c_str()))
+            string entry_path(MI::HAL::Ospath::join(path, entry));
+            if (MI::DISK::is_file(entry_path.c_str()))
             {
                 // Search for pattern in the filename
                 if (has_ending(entry_path, suffix))
@@ -143,7 +141,7 @@ public:
                     }
                 }
             }
-            else if (recursive && DISK::is_directory(entry_path.c_str()))
+            else if (recursive && MI::DISK::is_directory(entry_path.c_str()))
             {
                 discover(suffix, entry_path, filenames, recursive);
             }
@@ -159,7 +157,7 @@ public:
         , bool recursive = false
     ) const
     {
-        for (auto& folder : folders)
+        for (const string & folder : folders)
         {
             discover(pattern, folder, filenames, recursive);
         }
@@ -242,8 +240,8 @@ public:
     }
     const vector<string> & get_paths() const
     {
-        SYSTEM::Access_module<PATH::Path_module> path_module(false);
-        return path_module->get_search_path(PATH::MDL);
+        MI::SYSTEM::Access_module<MI::PATH::Path_module> path_module(false);
+        return path_module->get_search_path(MI::PATH::MDL);
     }
     bool is_root(const string & folder)
     {
@@ -255,9 +253,9 @@ public:
         // Get MDL path roots
         const vector<string> & roots = get_paths();
 
-        std::string test = HAL::Ospath::normpath_v2(folder);
+        string test = MI::HAL::Ospath::normpath_v2(folder);
         bool is_root(false);
-        for (auto& f : roots)
+        for (const string & f : roots)
         {
             if (f == test)
             {
@@ -278,11 +276,11 @@ public:
         string qname("::");
         if (!is_root(folder))
         {
-            std::string test_path = HAL::Ospath::normpath_v2(folder);
+            string test_path = MI::HAL::Ospath::normpath_v2(folder);
             const vector<string> & folders = get_paths();
-            for (auto& f : folders)
+            for (const string & f : folders)
             {
-                std::string sp_path = HAL::Ospath::normpath_v2(f);
+                string sp_path = MI::HAL::Ospath::normpath_v2(f);
 
                 string package(test_path);
                 string MDL_root(sp_path);
@@ -294,10 +292,10 @@ public:
                         string sub(package.substr(MDL_root.length()));
 
                         vector<string> tokens;
-                        MI::STRING::split(sub, HAL::Ospath::sep(), tokens);
+                        MI::STRING::split(sub, MI::HAL::Ospath::sep(), tokens);
 
                         qname = "";
-                        for (auto& t : tokens)
+                        for (const string & t : tokens)
                         {
                             if (!t.empty())
                             {
@@ -316,24 +314,24 @@ public:
     string qualified_name_to_folder(const Qualified_name & name)
     {
         string folder(name);
-        replace_all(folder, "::", HAL::Ospath::sep());
+        replace_all(folder, "::", MI::HAL::Ospath::sep());
         return folder;
     }
 };
 
-class Dictionary : public std::map<std::string, std::string>
+class Dictionary : public map<string, string>
 {
 public:
-    bool translate(const std::string & source, std::string & target) const;
+    bool translate(const string & source, string & target) const;
 };
 
-class Context_dictionaries : public std::map<Qualified_name, Dictionary>
+class Context_dictionaries : public map<Qualified_name, Dictionary>
 {
 public:
     bool translate(
-        const std::string & context
-        , const std::string & source
-        , std::string & target
+        const string & context
+        , const string & source
+        , string & target
     ) const;
 };
 
@@ -372,7 +370,7 @@ public:
     {
         if (is_archive())
         {
-            SYSTEM::Access_module<MI::MDLC::Mdlc_module> mdlc_module;
+            MI::SYSTEM::Access_module<MI::MDLC::Mdlc_module> mdlc_module;
             mdlc_module.set();
             mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
 
@@ -387,7 +385,7 @@ public:
         }
         else
         {
-            return DISK::is_file(m_filename.c_str());
+            return MI::DISK::is_file(m_filename.c_str());
         }
         return false;
     }
@@ -503,7 +501,7 @@ protected:
         return m_archives[path];
     }
 public:
-    File_iterator(Qualified_name qualified_name, const string & locale)
+    File_iterator(const Qualified_name & qualified_name, const string & locale)
         : m_qualified_name(qualified_name)
         , m_locale(locale)
         , m_paths(Mdl_search_path::get().get_paths())
@@ -535,12 +533,12 @@ public:
             string archive_file;
             if (archives.get_next_archive(archive_file))
             {
-                string filename = HAL::Ospath::join(m_folder_name, m_locale + ".xlf");
+                string filename = MI::HAL::Ospath::join(m_folder_name, m_locale + ".xlf");
 
-                if (filename.find(HAL::Ospath::sep()) == 0)
+                if (filename.find(MI::HAL::Ospath::sep()) == 0)
                 {
                     // remove leading '/'
-                    filename = filename.substr(HAL::Ospath::sep().size());
+                    filename = filename.substr(MI::HAL::Ospath::sep().size());
                 }
 
                 file = helper::File(filename, archive_file);
@@ -549,8 +547,8 @@ public:
             else
             {
                 // look for folders
-                string folder(HAL::Ospath::join(path, m_folder_name));
-                file = HAL::Ospath::join(folder, m_locale + ".xlf");
+                string folder(MI::HAL::Ospath::join(path, m_folder_name));
+                file = MI::HAL::Ospath::join(folder, m_locale + ".xlf");
                 rtn = true;
                 m_index++;
             }
@@ -583,10 +581,10 @@ public:
             {
                 string filename(m_module_prefix + "_" + m_locale + ".xlf");
 
-                if (filename.find(HAL::Ospath::sep()) == 0)
+                if (filename.find(MI::HAL::Ospath::sep()) == 0)
                 {
                     // remove leading '/'
-                    filename = filename.substr(HAL::Ospath::sep().size());
+                    filename = filename.substr(MI::HAL::Ospath::sep().size());
                 }
 
                 file = helper::File(filename, archive_file);
@@ -595,7 +593,7 @@ public:
             else
             {
                 // look for folders
-                string prefix(HAL::Ospath::join(path, m_module_prefix));
+                string prefix(MI::HAL::Ospath::join(path, m_module_prefix));
                 file = prefix + "_" + m_locale + ".xlf";
                 rtn = true;
             }
@@ -640,11 +638,12 @@ bool XLIFF_loader::load_file(const string & filename)
     m_filename = filename;
 
     // TODO: More checks for NULL ptrs and invalid data...
-    XMLDocument* document = new XMLDocument();
-    if (document->LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS)
+    XMLDocument document;
+
+    if (document.LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS)
     {
         ::MI::LOG::mod_log->error(
-            M_I18N
+            MI::M_I18N
             , MI::LOG::ILogger::C_PLUGIN
             , "Failed to load file: %s"
             , filename.c_str()
@@ -652,13 +651,12 @@ bool XLIFF_loader::load_file(const string & filename)
         return false;
     }
     ::MI::LOG::mod_log->info(
-        M_I18N
+        MI::M_I18N
         , MI::LOG::ILogger::C_PLUGIN
         , "Successfully loaded file: %s"
         , filename.c_str()
     );
-    bool rtn = parse_document(*document);
-    delete document;
+    bool rtn = parse_document(document);
     return rtn;
 }
 
@@ -666,7 +664,7 @@ bool XLIFF_loader::load_file_from_archive(const string & filename, const string 
 {
     m_filename = filename;
 
-    SYSTEM::Access_module<MI::MDLC::Mdlc_module> mdlc_module;
+    MI::SYSTEM::Access_module<MI::MDLC::Mdlc_module> mdlc_module;
     mdlc_module.set();
     mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
 
@@ -687,23 +685,22 @@ bool XLIFF_loader::load_file_from_archive(const string & filename, const string 
             buffer += c;
         }
 
-        XMLDocument* document = new XMLDocument();
-        if (document->Parse(buffer.c_str()) != tinyxml2::XML_SUCCESS)
+        XMLDocument document;
+        if (document.Parse(buffer.c_str()) != tinyxml2::XML_SUCCESS)
         {
             return false;
         }
-        rtn = parse_document(*document);
-        delete document;
+        rtn = parse_document(document);
     }
     return rtn;
 }
 
 bool XLIFF_loader::parse_document(const XMLDocument & document)
 {
-    const XMLElement* root =
+    const XMLElement * root =
         document.RootElement()->FirstChildElement("file")->FirstChildElement("body");
     // process child elements
-    for (const XMLElement* child = root->FirstChildElement();
+    for (const XMLElement * child = root->FirstChildElement();
          child != nullptr;
          child = child->NextSiblingElement())
     {
@@ -712,7 +709,7 @@ bool XLIFF_loader::parse_document(const XMLDocument & document)
         if (child_name && string(child_name) == "trans-unit")
         {
             // Global XMLElement
-            const XMLElement* source_elt = child->FirstChildElement("source");
+            const XMLElement * source_elt = child->FirstChildElement("source");
             const char * source = source_elt->GetText();
             const XMLElement* target_elt = source_elt->NextSiblingElement();
             const char * target = target_elt->GetText();
@@ -723,10 +720,10 @@ bool XLIFF_loader::parse_document(const XMLDocument & document)
         }
         else if (child_name && string(child_name) == "group")
         {
-            const char* context = child->Attribute("resname");
+            const char * context = child->Attribute("resname");
             if (context)
             {
-                for (const XMLElement* child2 = child->FirstChildElement();
+                for (const XMLElement * child2 = child->FirstChildElement();
                      child2 != nullptr;
                      child2 = child2->NextSiblingElement())
                 {
@@ -735,9 +732,9 @@ bool XLIFF_loader::parse_document(const XMLDocument & document)
                     if (child_name && string(child_name) == "trans-unit")
                     {
                         // Global dictionary
-                        const XMLElement* source_elt = child2->FirstChildElement("source");
+                        const XMLElement * source_elt = child2->FirstChildElement("source");
                         const char * source = source_elt->GetText();
-                        const XMLElement* target_elt = source_elt->NextSiblingElement();
+                        const XMLElement * target_elt = source_elt->NextSiblingElement();
                         const char * target = target_elt->GetText();
                         if (source && target)
                         {
@@ -797,14 +794,14 @@ class Flexible_database_impl : public MI::MDL::I18N::Database_impl
                 if (!m_filename.empty())
                 {
                     ::MI::LOG::mod_log->error(
-                        M_I18N
+                        MI::M_I18N
                         , MI::LOG::ILogger::C_PLUGIN
                         , "Error in file: %s"
                         , m_filename.c_str()
                     );
                 }
                 ::MI::LOG::mod_log->error(
-                    M_I18N
+                    MI::M_I18N
                     , MI::LOG::ILogger::C_PLUGIN
                     , "Ignoring translation of: %s. Context does not match package: %s"
                     , context.c_str()
@@ -813,7 +810,7 @@ class Flexible_database_impl : public MI::MDL::I18N::Database_impl
             }
         }
 
-        bool translate(Mdl_translator_module::Translation_unit & sentence) const
+        bool translate(MI::MDL::I18N::Mdl_translator_module::Translation_unit & sentence) const
         {
             // Try with context
             string translation;
@@ -886,7 +883,7 @@ private:
     }
 
     bool do_translate(
-        const helper::Module & module, Mdl_translator_module::Translation_unit & sentence)
+        const helper::Module & module, MI::MDL::I18N::Mdl_translator_module::Translation_unit & sentence)
     {
         // Find DB for this module and attempt to translate
         string locale(sentence.get_locale());
@@ -901,7 +898,7 @@ private:
     }
 
     bool do_translate(
-        const helper::Package & package, Mdl_translator_module::Translation_unit & sentence)
+        const helper::Package & package, MI::MDL::I18N::Mdl_translator_module::Translation_unit & sentence)
     {
         // Find DB for this package and attempt to translate
         string locale(sentence.get_locale());
@@ -916,7 +913,7 @@ private:
     }
 
 public:
-    Sint32 translate(Mdl_translator_module::Translation_unit & sentence) override
+    MI::Sint32 translate(MI::MDL::I18N::Mdl_translator_module::Translation_unit & sentence) override
     {
         if (!sentence.get_module_name())
         {
@@ -954,7 +951,7 @@ public:
         return translated ? 0 : -1;
     }
 
-    Sint32 cleanup() override
+    MI::Sint32 cleanup() override
     {
         m_module_dictionaries.clear();
         m_package_dictionaries.clear();
@@ -992,22 +989,22 @@ bool Context_dictionaries::translate(
     return translated;
 }
 
-Database::Database()
+MI::MDL::I18N::Database::Database()
 {
     m_translation_db = new Flexible_database_impl();
 }
 
-Database::~Database()
+MI::MDL::I18N::Database::~Database()
 {
     delete m_translation_db;
 }
 
-Sint32 Database::translate(Mdl_translator_module::Translation_unit & sentence) const
+MI::Sint32 MI::MDL::I18N::Database::translate(MI::MDL::I18N::Mdl_translator_module::Translation_unit & sentence) const
 {
     return m_translation_db->translate(sentence);
 }
 
-Sint32 Database::cleanup()
+MI::Sint32 MI::MDL::I18N::Database::cleanup()
 {
     Mdl_search_path::get().cleanup();
     return m_translation_db->cleanup();

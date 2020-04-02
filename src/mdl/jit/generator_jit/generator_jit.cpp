@@ -664,6 +664,8 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
     // Enable the read-only data segment
     code_gen.enable_ro_data_segment();
 
+    code_gen.set_resource_tag_map(&lambda->get_resource_tag_map());
+
     llvm::Function *func = code_gen.compile_switch_lambda(
         /*incremental=*/false, *lambda, resolver, /*next_arg_block_index=*/0);
     if (func != NULL) {

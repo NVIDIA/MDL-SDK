@@ -104,28 +104,33 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
     m_render_args.backbuffer_width = m_window->get_width();
     m_render_args.backbuffer_height = m_window->get_height();
 
-    // load the applications content
-    if (!load()) return -1;
+    int return_code = 0;
+    // load the applications content and then run the main loop
+    if (load())
+    {
+        // show the window and run the message loop
+        int return_code = m_window->show(nCmdShow);
+        if (return_code != 0)
+            log_warning("Applications main loop stopped with issues.", SRC);
 
-    // show the window and run the message loop
-    int return_code = m_window->show(nCmdShow);
-    if (return_code != 0)
-        log_warning("Applications main loop stopped with issues.", SRC);
-
-    // complete the current work load
-    flush_command_queues();
+        // complete the current work load
+        flush_command_queues();
+    }
+    else
+        log_error("Loading Applications failed. Freeing already loaded content.", SRC);
 
     // unload the application
-    if (!unload()) return -1;
+    if (!unload())
+        log_error("Unloading Applications failed.", SRC);
 
     // release base application resources
     for (auto&& queue : m_command_queues)
         delete queue.second;
 
-    delete m_mdl_sdk;
+    delete m_window;
     delete m_resource_descriptor_heap;
     delete m_render_target_descriptor_heap;
-    delete m_window;
+    delete m_mdl_sdk;
     m_device = nullptr;
     m_factory = nullptr;
 

@@ -221,7 +221,7 @@ public:
     /// \param lambda   the lambda function
     static int calc_lambda_cost(IAllocator *alloc, Lambda_function &lambda)
     {
-        DAG_ir_walker walker(alloc);
+        DAG_ir_walker walker(alloc, /*as_tree=*/false);
         Cost_calculator calculator;
 
         size_t num_exprs = lambda.get_root_expr_count();

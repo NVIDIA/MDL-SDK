@@ -50,7 +50,6 @@
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_value.h"
-#include "i_mdl_elements_resource_map.h"
 
 namespace mi {
     namespace neuraylib { class IReader; }
@@ -157,49 +156,6 @@ const mi::mdl::IType* int_type_to_mdl_type(
     const IType *type,
     mi::mdl::IType_factory &tf);
 
-/// Converts mi::mdl::IValue to MI::MDL::IValue.
-///
-/// \param vf                     The value factory to use.
-/// \param transaction            The DB transaction to use.
-/// \param type_int               The expected type of the return value. Used to control whether
-///                               array arguments are converted to immediate-sized or deferred-sized
-///                               arrays. If \c NULL, the type of \p value is used.
-/// \param value                  The value to convert.
-/// \param module_filename        The filename of the module (used for string-based resources with
-///                               relative filenames).
-/// \param module_name            The fully-qualified MDL module name.
-/// \param load_resources         If true, resources are loaded into the database.
-/// \return                       The converted value, or \c NULL in case of failures.
-IValue* mdl_value_to_int_value(
-    IValue_factory* vf,
-    DB::Transaction* transaction,
-    const IType* type_int,
-    const mi::mdl::IValue* value,
-    const char* module_filename,
-    const char* module_name,
-    bool load_resources);
-
-/// Converts mi::mdl::IValue to MI::MDL::IValue.
-///
-/// Template version of the function above.
-template <class T>
-IValue* mdl_value_to_int_value(
-    IValue_factory* vf,
-    DB::Transaction* transaction,
-    const IType* type_int,
-    const mi::mdl::IValue* value,
-    const char* module_filename,
-    const char* module_name,
-    bool load_resources)
-{
-    mi::base::Handle<IValue> ptr_value(
-        mdl_value_to_int_value(
-            vf, transaction, type_int, value, module_filename, module_name, load_resources));
-    if( !ptr_value)
-        return 0;
-    return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
-}
-
 /// Converts mi::mdl::DAG_node to MI::MDL::IExpression and MI::MDL::IAnnotation
 class Mdl_dag_converter
 {
@@ -208,6 +164,7 @@ public:
     ///
     /// \param ef                     The expression factory to use.
     /// \param transaction            The DB transaction to use.
+    /// \param tagger                 The resource tagger to be used.
     /// \param immutable_callees      \c true for defaults, \c false for arguments
     /// \param create_direct_calls    \c true creates EK_DIRECT_CALLs, \c false creates EK_CALLs
     /// \param module_filename        The filename of the module (used for string-based resources
@@ -220,6 +177,7 @@ public:
     Mdl_dag_converter(
         IExpression_factory* ef,
         DB::Transaction* transaction,
+        mi::mdl::IResource_tagger* tagger,
         bool immutable_callees,
         bool create_direct_calls,
         const char* module_filename,
@@ -227,6 +185,17 @@ public:
         DB::Tag prototype_tag,
         bool load_resources,
         std::set<Mdl_tag_ident>* user_modules_seen);
+
+    /// Converts mi::mdl::IValue to MI::MDL::IValue.
+    ///
+    /// \param type_int               The expected type of the return value. Used to control whether
+    ///                               array arguments are converted to immediate-sized or deferred-sized
+    ///                               arrays. If \c NULL, the type of \p value is used.
+    /// \param value                  The value to convert.
+    /// \return                       The converted value, or \c NULL in case of failures.
+    IValue* mdl_value_to_int_value(
+        const IType* type_int,
+        const mi::mdl::IValue* value) const;
 
     /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
     ///
@@ -245,19 +214,11 @@ public:
         const Mdl_annotation_block& mdl_annotations,
         const char* qualified_name) const;
 
-    /// Fill the resource tag map from an material instance.
-    ///
-    /// \param[in]  instance     The instance.
-    /// \param[out] res_tag_map  An additional resource tag map that is filled.
-    void fill_resource_tag_map(
-        mi::mdl::IGenerated_code_dag::IMaterial_instance const *instance,
-        Resource_tag_map                                       &res_tag_map);
-
 private:
 
     /// Find the tag for a given resource.
     DB::Tag find_resource_tag(
-        IValue_resource const *res) const;
+        mi::mdl::IValue_resource const *res) const;
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
     /// (creates IExpression_direct_call)
@@ -287,9 +248,8 @@ private:
     mi::base::Handle<IValue_factory> m_vf;
     mi::base::Handle<IType_factory> m_tf;
 
-    Resource_tag_map m_resource_tag_map;
-
     DB::Transaction* m_transaction;
+    mi::mdl::IResource_tagger* m_tagger;
     bool m_immutable_callees;
     bool m_create_direct_calls;
 
@@ -608,47 +568,6 @@ private:
 };
 
 /// Helper class to associate all resource literals inside a material instance with their DB tags.
-/// Handles also bodies of called functions.
-class Resource_updater_instance {
-public:
-    /// Constructor.
-    /// \param transaction            The DB transaction to use (to retrieve resource tags).
-    /// \param resolver               The call name resolver.
-    /// \param instance               The material instance to update.
-    /// \param module_filename        The file name of the module.
-    /// \param module_name            The fully-qualified MDL module name.
-    Resource_updater_instance(
-        DB::Transaction                                  *transaction,
-        mi::mdl::ICall_name_resolver                     &resolver,
-        mi::mdl::IGenerated_code_dag::IMaterial_instance *instance,
-        char const                                       *module_filename,
-        char const                                       *module_name);
-
-    /// Associates all resource literals inside a code DAG with their DB tags.
-    void update_resource_literals();
-
-    /// Update one resource in the current context.
-    void update_resource(mi::mdl::IValue_resource const *resource);
-
-private:
-    /// Associates all resource literals inside a subtree of a code DAG with its DB tags.
-    ///
-    /// \param node             The subtree of \p code_dag to traverse.
-    void update_resource_literals(
-        const mi::mdl::DAG_node* node);
-
-private:
-    DB::Transaction                                  *m_transaction;
-    mi::mdl::ICall_name_resolver                     &m_resolver;
-    mi::mdl::IGenerated_code_dag::IMaterial_instance *m_instance;
-    char const                                       *m_module_filename;
-    char const                                       *m_module_name;
-
-    typedef std::map<mi::mdl::IValue_resource const *, DB::Tag> Resource_tag_cache;
-
-    Resource_tag_cache m_resorce_tag_cache;
-};
-
 /// Collects all call references in a material body.
 ///
 /// \param transaction            The DB transaction to use (needed to convert strings into tags).

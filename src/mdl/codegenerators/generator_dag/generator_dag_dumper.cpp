@@ -46,7 +46,7 @@ DAG_dumper::DAG_dumper(
     IAllocator           *alloc,
     IOutput_stream       *out)
 : m_next_node_id(0)
-, m_walker(alloc)
+, m_walker(alloc, /*as_tree=*/false)
 , m_printer()
 , m_node_to_is_map(0, Node_to_id_map::hasher(), Node_to_id_map::key_equal(), alloc)
 {

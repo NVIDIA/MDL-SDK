@@ -770,7 +770,7 @@ static mi::mdl::IMDL::MDL_version get_version(
 mi::Sint32 Mdl_module::create_module(
     DB::Transaction* transaction,
     const char* module_name,
-    const Variant_data* variant_data,
+    Variant_data* variant_data,
     mi::Size variant_count,
     Execution_context* context)
 {
@@ -800,7 +800,9 @@ mi::Sint32 Mdl_module::create_module(
     // Detect the MDL version we need.
     mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
     for (mi::Size i = 0; i < variant_count; ++i) {
+
         const Variant_data& pd = variant_data[i];
+
         SERIAL::Class_id class_id = transaction->get_class_id(pd.m_prototype_tag);
         DB::Tag module_tag;
         if (class_id == ID_MDL_MATERIAL_DEFINITION) {
@@ -830,6 +832,14 @@ mi::Sint32 Mdl_module::create_module(
                     version = v;
             }
         }
+    }
+
+    // Prepare annotation blocks for module builder (replace nullptr by empty annotation blocks).
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
+    for (mi::Size i = 0; i < variant_count; ++i) {
+        Variant_data& pd = variant_data[i];
+        if( !pd.m_annotations)
+            pd.m_annotations = ef->create_annotation_block();
     }
 
     // Create builder
@@ -1296,6 +1306,18 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
             m_local_types->add_type(full_name.c_str(), type_int.get());
     }
 
+    Mdl_dag_converter converter(
+        m_ef.get(),
+        transaction,
+        m_code_dag->get_resource_tagger(),
+        /*immutable*/ true,
+        /*create_direct_calls*/ false,
+        m_file_name.c_str(),
+        m_name.c_str(),
+        /*prototype_tag*/ DB::Tag(),
+        load_resources,
+        /*user_modules_seen*/ nullptr);
+
     // convert constants
     m_constants = m_vf->create_value_list();
 
@@ -1304,22 +1326,11 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
         const char* name = m_code_dag->get_constant_name(i);
         const mi::mdl::DAG_constant* constant = m_code_dag->get_constant_value(i);
         const mi::mdl::IValue* value = constant->get_value();
-        mi::base::Handle<IValue> value_int(mdl_value_to_int_value(
-            m_vf.get(), transaction, /*type_int*/ 0, value, m_file_name.c_str(), m_name.c_str(), load_resources));
+        mi::base::Handle<IValue> value_int(
+            converter.mdl_value_to_int_value(/*type_int*/ nullptr, value));
         std::string full_name = m_name + "::" + name;
         m_constants->add_value(full_name.c_str(), value_int.get());
     }
-
-    Mdl_dag_converter anno_converter(
-        m_ef.get(),
-        transaction,
-        /*immutable*/ true,
-        /*create_direct_calls*/ false,
-        m_file_name.c_str(),
-        m_name.c_str(),
-        /*prototype_tag*/ DB::Tag(),
-        load_resources,
-        /*user_modules_seen*/ nullptr);
 
     // convert annotation definitions
     m_annotation_definitions = m_ef->create_annotation_definition_list();
@@ -1349,7 +1360,7 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
             const mi::mdl::DAG_node* default_
                 = m_code_dag->get_annotation_parameter_default(i, p);
             if (default_) {
-                mi::base::Handle<IExpression> default_int(anno_converter.mdl_dag_node_to_int_expr(
+                mi::base::Handle<IExpression> default_int(converter.mdl_dag_node_to_int_expr(
                     default_, type_int.get()));
                 ASSERT(M_SCENE, default_int);
                 parameter_defaults->add_expression(parameter_name, default_int.get());
@@ -1361,7 +1372,7 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
         for (int a = 0; a < annotation_annotation_count; ++a) {
             annotations[a] = m_code_dag->get_annotation_annotation(i, a);
         }
-        mi::base::Handle<IAnnotation_block> annotations_int(anno_converter.mdl_dag_node_vector_to_int_annotation_block(
+        mi::base::Handle<IAnnotation_block> annotations_int(converter.mdl_dag_node_vector_to_int_annotation_block(
             annotations, m_name.c_str()));
 
         bool is_exported = m_code_dag->get_annotation_property(i, mi::mdl::IGenerated_code_dag::AP_IS_EXPORTED);
@@ -1386,7 +1397,7 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
     Mdl_annotation_block annotations(annotation_count);
     for (mi::Uint32 i = 0; i < annotation_count; ++i)
         annotations[i] = m_code_dag->get_module_annotation(i);
-    m_annotations = anno_converter.mdl_dag_node_vector_to_int_annotation_block(
+    m_annotations = converter.mdl_dag_node_vector_to_int_annotation_block(
         annotations, m_name.c_str());
 
     // collect referenced resources

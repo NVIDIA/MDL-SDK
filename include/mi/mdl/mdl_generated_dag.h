@@ -280,6 +280,16 @@ public:
     virtual int get_index() const = 0;
 };
 
+/// An interface to interrogate tag values for resource values.
+class IResource_tagger : public Interface_owned {
+public:
+    /// Get a tag,for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    virtual int get_resource_tag(
+        IValue_resource const *res) const = 0;
+};
+
 /// A Builder for DAG graphs.
 ///
 /// This interface is implemented by various entities that can build DAG IR
@@ -720,6 +730,9 @@ public:
         ///
         /// \param index  the index of the resource map entry.
         virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
+
+        /// Get the resource tagger for this material instance.
+        virtual IResource_tagger *get_resource_tagger() const = 0;
     };
 
     // -------------------------- methods --------------------------
@@ -1422,6 +1435,9 @@ public:
     ///
     /// \param index  the index of the resource map entry.
     virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
+
+    /// Get the resource tagger for this code DAG.
+    virtual IResource_tagger *get_resource_tagger() const = 0;
 };
 
 /// Check if a DAG node is of a certain type.

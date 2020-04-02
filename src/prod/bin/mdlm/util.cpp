@@ -53,12 +53,15 @@ bool Util::File::Test()
 {
     string new_filename;
     {
-        std::string folder("c:\\temp");
-        Util::File file(folder);
+        std::string folder_name("c:\\temp");
+        Util::File folder(folder_name);
         std::string newtempfile;
-        if (file.is_directory())
+        if (folder.is_directory())
         {
-            newtempfile = Util::unique_file_in_folder(file.get_directory());
+            check_success3(true == folder.is_writable(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
+            check_success3(true == folder.is_readable(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
+
+            newtempfile = Util::unique_file_in_folder(folder.get_directory());
             Util::File file(newtempfile);
             check_success3(false == file.exist(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
@@ -69,6 +72,8 @@ bool Util::File::Test()
                 dummy.close();
             }
             check_success3(true == file.exist(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
+            check_success3(true == file.is_readable(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
+            check_success3(true == file.is_writable(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
             check_success3(true == file.is_file(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
             check_success3(false == file.is_directory(), Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
@@ -78,17 +83,17 @@ bool Util::File::Test()
             bool equivalent(Util::equivalent("c:\\temp\\..\\temp\\foobar", "c:\\temp\\foobar"));
             check_success3(true == equivalent, Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
-            std::string new_folder(path_appends(folder, "F2435087-4819-4415-911E-22BB8E6C1DC9"));
-            if (Util::create_directory(new_folder))
+            std::string new_folder_name(path_appends(folder_name, "F2435087-4819-4415-911E-22BB8E6C1DC9"));
+            if (Util::create_directory(new_folder_name))
             {
-                Util::File file(new_folder);
-                is_empty = file.is_empty();
+                Util::File new_folder(new_folder_name);
+                is_empty = new_folder.is_empty();
                 check_success3(true == is_empty, Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
-                bool sucess = Util::copy_file(newtempfile, new_folder);
+                bool sucess = Util::copy_file(newtempfile, new_folder_name);
                 check_success3(true == sucess, Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
-                file.remove();
+                new_folder.remove();
                 check_success3(true == is_empty, Errors::ERR_UNIT_TEST, "Util::File::Test()");
             }
             file.remove();
@@ -164,17 +169,13 @@ bool Util::File::is_readable() const
     bool readable = false;
     if (is_directory())
     {
-        Util::log_warning("+++++++++++++TODO: Implement Util::File::is_readable() for directories");
+        MI::DISK::Directory directory;
+        readable = directory.open(m_path.c_str());
     }
     else if(is_file())
     {
-        std::ifstream file(
-            m_path.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
-        if (file.is_open())
-        {
-            readable = true;
-            file.close();
-        }
+        MI::DISK::File diskfile;
+        readable = diskfile.open(m_path);
     }
     return readable;
 }
@@ -187,26 +188,29 @@ bool Util::File::is_writable() const
         // try to write in the location
         //std::string filePath = Util::path_appends(m_path, Util::unique_path("%%%%-%%%%-%%%%-%%%%"/*model*/));
         std::string filePath = Util::unique_file_in_folder(m_path);
-        Util::File temp_directory(filePath);
-        std::ofstream outfile(filePath.c_str());
-        outfile << "Test write" << std::endl;
-        outfile.close();
-        if (!outfile.fail() && !outfile.bad())
+        Util::File temp_file(filePath);
+
+        MI::DISK::File diskfile;
+        if (diskfile.open(filePath.c_str(), MI::DISK::IFile::Mode::M_WRITE))
         {
-            writable = true;
+            const char* line("line");
+            if (diskfile.writeline(line))
+            {
+                writable = true;
+            }
+            diskfile.close();
         }
-        temp_directory.remove();
+        temp_file.remove();
         Util::log_debug(
             m_path + (writable ? " is writable" : " is not writable"));
     }
     else if (is_file())
     {
-        std::ifstream file(
-            m_path, std::ios::out | std::ios::binary | std::ios::ate);
-        if (file.is_open())
+        MI::DISK::File diskfile;
+        if (diskfile.open(m_path, MI::DISK::IFile::Mode::M_WRITE))
         {
             writable = true;
-            file.close();
+            diskfile.close();
         }
     }
     return writable;
@@ -654,7 +658,61 @@ bool Util::is_valid_mdl_identifier(const std::string & identifier)
 
 //-----------------------------------------------------------------------------
 // Following code comes from:
-// svn+ssh://svnserver.mi.nvidia.com/neuray/trunk/research/mdl_rix/mdl_util.h
+// src/io/scene/mdl_elements/mdl_elements_utilities.cpp
+bool is_valid_simple_package_or_module_name(const std::string& name)
+{
+    size_t n = name.size();
+    if (n == 0)
+        return false;
+
+    for (size_t i = 0; i < n; ++i) {
+
+        unsigned char c = name[i];
+        // These characters are not permitted per MDL spec.
+        if (c == '/' || c == '\\' || c < 32 || c == 127 || c == ':')
+            return false;
+        // These characters are currently not supported due to technical limitations.
+        if (c == ',' || c == '(' || c == ')' || c == '[' || c == ']')
+            return false;
+    }
+
+    return true;
+}
+
+bool is_valid_module_name(const std::string& name)
+{
+    if (name[0] != ':' || name[1] != ':')
+        return false;
+
+    size_t start = 2;
+    size_t end = name.find("::", start);
+
+    while (end != std::string::npos) {
+        if (!is_valid_simple_package_or_module_name(name.substr(start, end - start)))
+            return false;
+        start = end + 2;
+        end = name.find("::", start);
+    }
+
+    if (!is_valid_simple_package_or_module_name(name.substr(start)))
+        return false;
+
+    return true;
+}
+
+bool Util::is_valid_module_name(const std::string & identifier)
+{
+    return ::is_valid_module_name(identifier);
+}
+
+bool Util::is_valid_archive_name(const std::string & identifier)
+{
+    return ::is_valid_simple_package_or_module_name(identifier);
+}
+
+//-----------------------------------------------------------------------------
+//
+//
 
 #ifdef _WIN32
 #include <Shlobj.h>

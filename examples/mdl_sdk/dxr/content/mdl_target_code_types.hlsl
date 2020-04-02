@@ -276,11 +276,11 @@ struct Bsdf_evaluate_data {
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     #endif
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 bsdf_diffuse;        ///< in/out: (diffuse part of the) bsdf * dot(normal, k2)
-        float3 bsdf_glossy;         ///< in/out: (glossy part of the) bsdf * dot(normal, k2)
+        float3 bsdf_diffuse;        ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+        float3 bsdf_glossy;         ///< output: (glossy part of the) bsdf * dot(normal, k2)
     #else
-        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< in/out: (diffuse) bsdf * dot(normal, k2)
-        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< in/out: (glossy) bsdf * dot(normal, k2)
+        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) bsdf * dot(normal, k2)
+        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
     #endif
     float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
@@ -335,9 +335,9 @@ struct Edf_evaluate_data
     #endif
     float cos;                      ///< output: dot(normal, k1)
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 edf;                 ///< in/out: edf
+        float3 edf;                 ///< output: edf
     #else
-        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< in/out: edf
+        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< output: edf
     #endif
     float pdf;                      ///< output: pdf (non-projected hemisphere)
 };

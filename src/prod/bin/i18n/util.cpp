@@ -664,8 +664,8 @@ bool Util::is_valid_mdl_identifier(const std::string & identifier)
 }
 
 //-----------------------------------------------------------------------------
-// Following code comes from:
-// svn+ssh://svnserver.mi.nvidia.com/neuray/trunk/research/mdl_rix/mdl_util.h
+//
+//
 
 #ifdef _WIN32
 #include <Shlobj.h>

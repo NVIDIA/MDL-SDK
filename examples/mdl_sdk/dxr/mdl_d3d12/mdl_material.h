@@ -91,12 +91,6 @@ namespace mdl_d3d12
         const std::string& get_material_compiled_db_name() const { return m_compiled_db_name; }
         const std::string& get_material_compiled_hash() const { return m_compiled_hash; }
 
-        /// iterate over all qualified module names this material depends on.
-        bool visit_module_dependencies(std::function<bool(const std::string&)> action);
-
-        /// check if this material depends on a certain module.
-        bool depends(const std::string& module_db_name) const;
-
         /// set the per target code constants in the materials constant buffer.
         void set_target_interface(
             Mdl_material_target* target,
@@ -166,9 +160,6 @@ namespace mdl_d3d12
         /// combination of material db name and the compiled material hash to detect
         /// materials that only differ in their parameters values.
         std::string m_compiled_hash;
-
-        /// set of qualified module names that this material depends on.
-        std::deque<std::string> m_module_dependencies;
 
         /// contains the actual shader code for material.
         Mdl_material_target* m_target;

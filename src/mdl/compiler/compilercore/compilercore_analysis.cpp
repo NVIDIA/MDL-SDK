@@ -5466,10 +5466,6 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
                     visit(stmt);
                 }
-                if (m_can_throw_bounds)
-                    f_def->set_flag(Definition::DEF_CAN_THROW_BOUNDS);
-                if (m_can_throw_divzero)
-                    f_def->set_flag(Definition::DEF_CAN_THROW_DIVZERO);
             } else if (is<IStatement_invalid>(body)) {
                 // an invalid statement, we are ready
                 visit(body);
@@ -5492,6 +5488,11 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                         Error_params(*this));
                 }
             }
+
+            if (m_can_throw_bounds)
+                f_def->set_flag(Definition::DEF_CAN_THROW_BOUNDS);
+            if (m_can_throw_divzero)
+                f_def->set_flag(Definition::DEF_CAN_THROW_DIVZERO);
         } else {
             // declaration only
             if (!has_error)

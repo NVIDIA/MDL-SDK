@@ -301,6 +301,9 @@ private:
 
     /// Set to true if extra files in the source directory are allowed (and ignored).
     bool const m_allow_extra_files;
+
+    /// Set if a package or module name was found that requires at least MDL 1.6.
+    bool m_mdl_16_names;
 };
 
 /// Helper class for extracting an archive.
@@ -819,6 +822,7 @@ Archive_builder::Archive_builder(
 , m_ignored_files(m_alloc)
 , m_overwrite(overwrite)
 , m_allow_extra_files(allow_extra_files)
+, m_mdl_16_names(false)
 {
     // Fill the uncompressed suffix set with known suffixes from the MDL spec that
     // should NEVER be compressed
@@ -898,12 +902,10 @@ bool Archive_builder::collect(
         }
 
         if (!m_compiler->is_valid_mdl_identifier(package_name.c_str())) {
-            error(
-                PACKAGE_NAME_INVALID,
-                Error_params(m_alloc).add(package_name.c_str())
-            );
-            return false;
+            // need at least MDL 1.6 because of non valid MDL identifier
+            m_mdl_16_names = true;
         }
+
         if (!m_archive_name.empty())
             m_archive_name.append('.');
         m_archive_name.append(package_name);
@@ -1029,8 +1031,9 @@ void Archive_builder::collect_from_dir(
             // found a subdirectory
             m_directory_list.push_back(file);
 
-            if (!m_compiler->is_valid_mdl_identifier(e.c_str()))
-                valid_mdl_package = false;
+            if (!m_compiler->is_valid_mdl_identifier(e.c_str())) {
+                m_mdl_16_names = true;
+            }
 
             collect_from_dir(sub, file, valid_mdl_package, string(m_alloc));
             sub.close();
@@ -1045,16 +1048,12 @@ void Archive_builder::collect_from_dir(
                             .add(e.c_str()));
                 } else {
                     string base_name(e.substr(0, e.length() - 4));
+
                     if (!m_compiler->is_valid_mdl_identifier(base_name.c_str())) {
-                        error(
-                            MDL_FILENAME_NOT_IDENTIFIER,
-                            Error_params(m_alloc)
-                            .add(path.empty() ? "." : path.c_str())
-                            .add(e.c_str()));
-                    } else {
-                        // found valid MDL file
-                        m_module_list.push_back(file);
+                        m_mdl_16_names = true;
                     }
+                    // found valid file
+                    m_module_list.push_back(file);
                 }
             } else {
                 m_resource_list.push_back(file);
@@ -1204,6 +1203,11 @@ bool Archive_builder::compile_modules()
         Semantic_version const &ver  = it->second;
 
         m_manifest->add_dependency(name.c_str(), ver);
+    }
+
+    if (m_mdl_16_names) {
+        // requires at least MDL 1.6
+        m_manifest->add_mdl_version(IMDL::MDL_VERSION_1_6);
     }
     return res;
 }

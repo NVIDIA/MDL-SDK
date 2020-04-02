@@ -43,8 +43,11 @@ namespace mi {
 namespace mdl {
 
 // Constructor.
-DAG_ir_walker::DAG_ir_walker(IAllocator *alloc)
+DAG_ir_walker::DAG_ir_walker(
+    IAllocator *alloc,
+    bool       as_tree)
 : m_alloc(alloc)
+, m_as_tree(as_tree)
 {
 }
 
@@ -323,9 +326,11 @@ void DAG_ir_walker::do_walk_node(
     DAG_node         *node,
     IDAG_ir_visitor  *visitor)
 {
-    if (marker.find(node) != marker.end())
-        return;
-    marker.insert(node);
+    if (!m_as_tree) {
+        if (marker.find(node) != marker.end())
+            return;
+        marker.insert(node);
+    }
 
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:

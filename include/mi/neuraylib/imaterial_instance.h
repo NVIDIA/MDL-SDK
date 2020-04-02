@@ -193,6 +193,7 @@ public:
     ///                                    - bool "fold_ternary_on_df": Fold all ternary operators
     ///                                      of *df types, even in class compilation mode.
     ///                                      Default: false.
+    ///                                    .
     ///                                    During material compilation, messages like errors and
     ///                                    warnings will be passed to the context for later
     ///                                    evaluation by the caller.

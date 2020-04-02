@@ -778,7 +778,7 @@ void Lambda_function::enumerate_resources(
     ILambda_resource_enumerator &enumerator,
     DAG_node const              *root) const
 {
-    DAG_ir_walker      walker(get_allocator());
+    DAG_ir_walker      walker(get_allocator(), /*as_tree=*/false);
     Resource_list      textures(get_allocator());
     Resource_list      light_profiles(get_allocator());
     Resource_list      bsdf_measurements(get_allocator());
@@ -1264,7 +1264,7 @@ DAG_node const *Lambda_function::set_uniform_context(
     Float4_struct const       object_to_world[4],
     int                       object_id)
 {
-    DAG_ir_walker        walker(get_allocator());
+    DAG_ir_walker        walker(get_allocator(), /*as_tree=*/false);
     Uniform_state_usage  visitor(*name_resolver);
 
     walker.walk_node(const_cast<DAG_node *>(expr), &visitor);
@@ -1790,7 +1790,7 @@ bool Lambda_function::analyze(
     ICall_name_resolver const *resolver,
     Analysis_result           &result) const
 {
-    DAG_ir_walker        walker(get_allocator());
+    DAG_ir_walker        walker(get_allocator(), /*as_tree=*/false);
     State_usage_analysis analysis(get_allocator(), *resolver, result);
 
     walker.walk_node(const_cast<DAG_node *>(expr), &analysis);
@@ -1834,7 +1834,8 @@ void Lambda_function::update_hash() const
     MD5_hasher md5_hasher;
     Dag_hasher dag_hasher(md5_hasher);
 
-    DAG_ir_walker walker(get_allocator());
+    // Important: walk as a tree here
+    DAG_ir_walker walker(get_allocator(), /*as_tree=*/true);
 
     for (size_t i = 0, n = get_parameter_count(); i < n; ++i) {
         char const  *name = get_parameter_name(i);
@@ -2013,6 +2014,20 @@ int Lambda_function::get_resource_tag(IValue_resource const *r) const
         tag = r->get_tag_value();
     }
     return tag;
+}
+
+// Get the number of entires in the resource map.
+size_t Lambda_function::get_resource_entries_count() const
+{
+    return m_resource_tag_map.size();
+}
+
+// Get the i'th entry of the resource map.
+Resource_tag_tuple const *Lambda_function::get_resource_entry(size_t index) const
+{
+    if (index < m_resource_tag_map.size())
+        return &m_resource_tag_map[index];
+    return NULL;
 }
 
 // Find the resource tag of a resource.
@@ -3135,6 +3150,14 @@ private:
         }
 
         lambda->set_body(import_mat_expr(lambda.get(), node, eval_state));
+
+        // for now, copy the resource table to every lambda
+        mi::base::Handle<ILambda_function> main_df(m_dist_func.get_main_df());
+        for (size_t i = 0, n = main_df->get_resource_entries_count(); i < n; ++i) {
+            Resource_tag_tuple const *e = main_df->get_resource_entry(i);
+
+            lambda->set_resource_tag(e->m_kind, e->m_url, e->m_tag);
+        }
         return lambda;
     }
 

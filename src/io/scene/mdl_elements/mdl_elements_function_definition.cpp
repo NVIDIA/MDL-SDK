@@ -138,6 +138,7 @@ Mdl_function_definition::Mdl_function_definition(
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ false,
         module_filename,
@@ -371,6 +372,7 @@ const IExpression_direct_call* Mdl_function_definition::get_body( DB::Transactio
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         /*module_filename*/ nullptr,
@@ -425,6 +427,7 @@ const IExpression* Mdl_function_definition::get_temporary(
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         /*module_filename*/ nullptr,
@@ -668,19 +671,20 @@ Mdl_function_call* Mdl_function_definition::create_cast_call_internal(
     }
 
     // check names
-    if (strcmp(arguments->get_name(0), "cast") != 0 ||
-        strcmp(arguments->get_name(1), "cast_return") != 0)
-    {
+    mi::Size index_cast        = arguments->get_index( "cast");
+    mi::Size index_cast_return = arguments->get_index( "cast_return");
+    if(    index_cast        == static_cast<mi::Size>( -1)
+        || index_cast_return == static_cast<mi::Size>( -1)) {
         *errors = -3;
         return NULL;
     }
 
     mi::base::Handle<const IExpression> cast_from(
-        arguments->get_expression(mi::Size(0)));
+        arguments->get_expression(index_cast));
     mi::base::Handle<const IType> cast_from_type(cast_from->get_type());
 
     mi::base::Handle<const IExpression> cast_to(
-        arguments->get_expression(1));
+        arguments->get_expression(index_cast_return));
     mi::base::Handle<const IType> cast_to_type(cast_to->get_type());
 
     if (m_tf->is_compatible(cast_from_type.get(), cast_to_type.get()) < 0) {
@@ -745,24 +749,26 @@ Mdl_function_call* Mdl_function_definition::create_ternary_operator_call_interna
     }
 
     // check names
-    if (strcmp(arguments->get_name(0), "cond") != 0 ||
-        strcmp(arguments->get_name(1), "true_exp") != 0 ||
-        strcmp(arguments->get_name(2), "false_exp") != 0)
-    {
+    mi::Size index_cond      = arguments->get_index( "cond");
+    mi::Size index_true_exp  = arguments->get_index( "true_exp");
+    mi::Size index_false_exp = arguments->get_index( "false_exp");
+    if(    index_cond      == static_cast<mi::Size>( -1)
+        || index_true_exp  == static_cast<mi::Size>( -1)
+        || index_false_exp == static_cast<mi::Size>( -1)) {
         *errors = -3;
         return NULL;
     }
 
     mi::base::Handle<const IExpression> cond(
-        arguments->get_expression(mi::Size(0)));
+        arguments->get_expression(index_cond));
     mi::base::Handle<const IType> cond_type(cond->get_type());
 
     mi::base::Handle<const IExpression> true_exp(
-        arguments->get_expression(1));
+        arguments->get_expression(index_true_exp));
     mi::base::Handle<const IType> true_type(true_exp->get_type());
 
     mi::base::Handle<const IExpression> false_exp(
-        arguments->get_expression(2));
+        arguments->get_expression(index_false_exp));
     mi::base::Handle<const IType> false_type(false_exp->get_type());
 
     if (m_tf->compare(true_type.get(), false_type.get()) != 0) {
@@ -835,20 +841,21 @@ Mdl_function_call* Mdl_function_definition::create_index_operator_call_internal(
     }
 
     // check names
-    if (strcmp(arguments->get_name(0), "a") != 0 ||
-        strcmp(arguments->get_name(1), "i") != 0)
-    {
+    mi::Size index_a = arguments->get_index( "a");
+    mi::Size index_i = arguments->get_index( "i");
+    if(    index_a == static_cast<mi::Size>( -1)
+        || index_i == static_cast<mi::Size>( -1)) {
         *errors = -3;
         return NULL;
     }
 
     mi::base::Handle<const IExpression> base_expr(
-        arguments->get_expression(mi::Size(0)));
+        arguments->get_expression(index_a));
     mi::base::Handle<const IType> base_type(base_expr->get_type());
     mi::base::Handle<const IType> s_base_type(base_type->skip_all_type_aliases());
 
     mi::base::Handle<const IExpression> index_expr(
-        arguments->get_expression(1));
+        arguments->get_expression(index_i));
     mi::base::Handle<const IType> index_type(index_expr->get_type());
     mi::base::Handle<const IType> s_index_type(index_type->skip_all_type_aliases());
 
@@ -954,13 +961,14 @@ Mdl_function_call* Mdl_function_definition::create_array_length_operator_call_in
     }
 
     // check names
-    if (strcmp(arguments->get_name(0), "a") != 0) {
+    mi::Size index_a = arguments->get_index( "a");
+    if( index_a == static_cast<mi::Size>( -1)) {
         *errors = -3;
         return NULL;
     }
 
     mi::base::Handle<const IExpression> arr_expr(
-        arguments->get_expression(mi::Size(0)));
+        arguments->get_expression(index_a));
     mi::base::Handle<const IType> arr_type(arr_expr->get_type());
     mi::base::Handle<const IType> s_arr_type(arr_type->skip_all_type_aliases());
 

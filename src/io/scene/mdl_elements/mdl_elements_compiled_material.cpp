@@ -90,7 +90,6 @@ Mdl_compiled_material::Mdl_compiled_material(
 , m_body()
 , m_temporaries()
 , m_arguments()
-, m_resource_tag_map()
 , m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit)
 , m_mdl_wavelength_min(mdl_wavelength_min)
 , m_mdl_wavelength_max(mdl_wavelength_max)
@@ -103,6 +102,7 @@ Mdl_compiled_material::Mdl_compiled_material(
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        instance->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         module_filename,
@@ -110,8 +110,6 @@ Mdl_compiled_material::Mdl_compiled_material(
         /*prototype_tag*/ DB::Tag(),
         load_resources,
         &m_module_idents);
-
-    converter.fill_resource_tag_map(instance, m_resource_tag_map);
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
     mi::base::Handle<IExpression> body(
@@ -131,13 +129,12 @@ Mdl_compiled_material::Mdl_compiled_material(
         m_temporaries->add_expression( name.c_str(), temporary.get());
     }
 
-    n = instance->get_parameter_count();
     m_arguments = m_vf->create_value_list();
-    for( mi::Size i = 0; i < n; ++i) {
+    for (mi::Size i = 0, n = instance->get_parameter_count(); i < n; ++i) {
         const char* name = instance->get_parameter_name( i);
         const mi::mdl::IValue* mdl_argument = instance->get_parameter_default( i);
-        mi::base::Handle<const IValue> argument( mdl_value_to_int_value(
-            m_vf.get(), transaction, 0, mdl_argument, module_filename, module_name, load_resources));
+        mi::base::Handle<const IValue> argument( converter.mdl_value_to_int_value(
+            nullptr, mdl_argument));
         ASSERT( M_SCENE, argument);
         m_arguments->add_value( name, argument.get());
     }
@@ -166,6 +163,12 @@ Mdl_compiled_material::Mdl_compiled_material(
         DB::Tag module_tag = transaction->name_to_tag(add_mdl_db_prefix(module_name).c_str());
         DB::Access<Mdl_module> module(module_tag, transaction);
         m_module_idents.insert(Mdl_tag_ident(module_tag, module->get_ident()));
+    }
+
+    // copy the resource tag table
+    for (size_t i = 0, n = instance->get_resource_tag_map_entries_count(); i < n; ++i) {
+        mi::mdl::Resource_tag_tuple const *e = instance->get_resource_tag_map_entry(i);
+        add_resource_tag(e->m_kind, e->m_url, e->m_tag);
     }
 }
 
@@ -306,6 +309,14 @@ const Resource_tag_tuple *Mdl_compiled_material::get_resource_entry(size_t index
     if (index < m_resource_tag_map.size())
         return &m_resource_tag_map[index];
     return NULL;
+}
+
+void Mdl_compiled_material::add_resource_tag(
+    mi::mdl::Resource_tag_tuple::Kind kind,
+    char const                        *url,
+    int                               tag)
+{
+    m_resource_tag_map.emplace_back(Resource_tag_tuple(kind, url, tag));
 }
 
 const IExpression_list* Mdl_compiled_material::get_temporaries() const

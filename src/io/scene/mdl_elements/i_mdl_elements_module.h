@@ -219,7 +219,8 @@ public:
     ///                        allowed explicitly as long the resulting path is not exceeding the 
     ///                        root.
     /// \param variant_data    An array with the data for each variant to be created. For details
-    ///                        #see Variant_data.
+    ///                        see #Variant_data. Array elements which are \c NULL are replaced by
+    ///                        empty ennotation blocks.
     /// \param variant_count   The length of \p variant_data.
     /// \param[inout] context  Execution context used to pass options to and store messages from
     ///                        the MDL compiler.
@@ -245,7 +246,7 @@ public:
     static mi::Sint32 create_module(
         DB::Transaction* transaction,
         const char* module_name,
-        const Variant_data* variant_data,
+        Variant_data* variant_data,
         mi::Size variant_count,
         Execution_context* context);
 

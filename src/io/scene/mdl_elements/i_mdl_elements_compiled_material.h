@@ -147,6 +147,12 @@ public:
     /// Get the i'th resource table entry.
     const Resource_tag_tuple *get_resource_entry(size_t index) const;
 
+    // Adds a tag for a given resource url.
+    void add_resource_tag(
+        mi::mdl::Resource_tag_tuple::Kind kind,
+        char const                        *url,
+        int                               tag);
+
     const IExpression_list* get_temporaries() const;
 
     /// Swaps *this and \p other.

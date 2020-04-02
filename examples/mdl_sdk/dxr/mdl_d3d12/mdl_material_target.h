@@ -180,8 +180,6 @@ namespace mdl_d3d12
         bool visit_materials(std::function<bool(Mdl_material*)> action);
 
     private:
-
-
         Base_application* m_app;
         Mdl_sdk* m_sdk;
         const size_t m_id;

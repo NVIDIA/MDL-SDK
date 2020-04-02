@@ -794,7 +794,7 @@ public:
     /// \param alloc     the allocator
     /// \param n_params  number of parameters
     Condition_compute(IAllocator *alloc, size_t n_params)
-    : m_walker(alloc)
+    : m_walker(alloc, /*as_tree=*/false)
     , m_dependencies(Dependency_set::key_compare(), alloc)
     , m_controls(alloc)
     {
@@ -812,8 +812,29 @@ private:
     vector<Dependency_set>::Type m_controls;
 };
 
-
 }  // anonymous
+
+
+// Get a tag,for a resource constant that might be reachable from this DAG.
+int Resource_tagger::get_resource_tag(
+    IValue_resource const *res) const
+{
+    int tag = res->get_tag_value();
+    if (tag != 0)
+        return tag;
+
+    Resource_tag_tuple::Kind kind = kind_from_value(res);
+
+    // for now, linear search
+    char const *url = res->get_string_value();
+    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        if (e.m_kind == kind && strcmp(e.m_url, url) == 0)
+            return e.m_tag;
+    }
+    return 0;
+}
 
 // Constructor.
 Generated_code_dag::Generated_code_dag(
@@ -852,6 +873,7 @@ Generated_code_dag::Generated_code_dag(
 , m_needs_anno(false)
 , m_mark_generated((options & MARK_GENERATED_ENTITIES) != 0)
 , m_resource_tag_map(alloc)
+, m_resource_tagger(m_resource_tag_map)
 {
     m_node_factory.enable_unsafe_math_opt((options & UNSAFE_MATH_OPTIMIZATIONS) != 0);
     m_node_factory.enable_expose_names_of_let_expressions((options & EXPOSE_NAMES_OF_LET_EXPRESSIONS) != 0);
@@ -2504,7 +2526,7 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
-    DAG_ir_walker walker(get_allocator());
+    DAG_ir_walker walker(get_allocator(), /*as_tree=*/false);
     Calc_phen_out phen_counter(phen_outs);
 
     walker.walk_material(this, mat_index, &phen_counter);
@@ -2570,7 +2592,7 @@ void Generated_code_dag::build_function_temporaries(int func_index)
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
-    DAG_ir_walker walker(get_allocator());
+    DAG_ir_walker walker(get_allocator(), /*as_tree=*/false);
     Calc_phen_out phen_counter(phen_outs);
 
     walker.walk_function(this, func_index, &phen_counter);
@@ -3161,6 +3183,7 @@ Generated_code_dag::Material_instance::Material_instance(
 , m_properties(0)
 , m_referenced_scene_data(alloc)
 , m_resource_tag_map(alloc)
+, m_resource_tagger(m_resource_tag_map)
 {
     m_node_factory.enable_unsafe_math_opt(unsafe_math_optimizations);
 
@@ -3219,21 +3242,7 @@ DAG_constant const *Generated_code_dag::Material_instance::create_temp_constant(
 int Generated_code_dag::Material_instance::find_resource_tag(
     IValue_resource const *res) const
 {
-    int tag = res->get_tag_value();
-    if (tag != 0)
-        return tag;
-
-    Resource_tag_tuple::Kind kind = kind_from_value(res);
-
-    // for now, linear search
-    char const *url = res->get_string_value();
-    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
-        Resource_tag_tuple const &e = m_resource_tag_map[i];
-
-        if (e.m_kind == kind && strcmp(e.m_url, url) == 0)
-            return e.m_tag;
-    }
-    return 0;
+    return m_resource_tagger.get_resource_tag(res);
 }
 
 // Adds a tag, version pair for a given resource.
@@ -3507,6 +3516,12 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
     if (use_temporaries)
         build_temporaries();
+
+    // add all resource entries from the code DAG
+    for (size_t i = 0, n = code_dag->get_resource_tag_map_entries_count(); i < n; ++i) {
+        Resource_tag_tuple const *t = code_dag->get_resource_tag_map_entry(i);
+        m_resource_tag_map.push_back(*t);
+    }
 
     calc_hashes();
 
@@ -4138,7 +4153,7 @@ void Generated_code_dag::Material_instance::build_temporaries()
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
-    DAG_ir_walker walker(get_allocator());
+    DAG_ir_walker walker(get_allocator(), /*as_tree=*/false);
     Calc_phen_out phen_counter(phen_outs);
 
     walker.walk_instance(this, &phen_counter);
@@ -4157,7 +4172,8 @@ void Generated_code_dag::Material_instance::calc_hashes()
     MD5_hasher md5_hasher;
     Dag_hasher dag_hasher(md5_hasher);
 
-    DAG_ir_walker walker(get_allocator());
+    // Important: Walk as Tree here
+    DAG_ir_walker walker(get_allocator(), /*as_tree=*/true);
 
     for (int i = 0; i <= MS_LAST; ++i) {
         walker.walk_instance_slot(this, Slot(i), &dag_hasher);
@@ -4414,6 +4430,12 @@ Resource_tag_tuple const *Generated_code_dag::Material_instance::get_resource_ta
     if (index < m_resource_tag_map.size())
         return &m_resource_tag_map[index];
     return NULL;
+}
+
+// Get the resource tagger for this code DAG.
+IResource_tagger *Generated_code_dag::Material_instance::get_resource_tagger() const
+{
+    return &m_resource_tagger;
 }
 
 // Creates a new error message.
@@ -5787,25 +5809,17 @@ Resource_tag_tuple const *Generated_code_dag::get_resource_tag_map_entry(size_t 
     return NULL;
 }
 
+// Get the resource tagger for this code DAG.
+IResource_tagger *Generated_code_dag::get_resource_tagger() const
+{
+    return &m_resource_tagger;
+}
+
 // Find the tag for a given resource.
 int Generated_code_dag::find_resource_tag(
     IValue_resource const *res) const
 {
-    int tag = res->get_tag_value();
-    if (tag != 0)
-        return tag;
-
-    Resource_tag_tuple::Kind kind = kind_from_value(res);
-
-    // for now, linear search
-    char const *url = res->get_string_value();
-    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
-        Resource_tag_tuple const &e = m_resource_tag_map[i];
-
-        if (e.m_kind == kind && strcmp(e.m_url, url) == 0)
-            return e.m_tag;
-    }
-    return 0;
+    return m_resource_tagger.get_resource_tag(res);
 }
 
 // Adds a tag, version pair for a given resource.

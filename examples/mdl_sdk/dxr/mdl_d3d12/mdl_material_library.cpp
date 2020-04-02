@@ -35,6 +35,8 @@
 #include "mdl_sdk.h"
 #include "texture.h"
 
+#include "example_shared.h"
+
 namespace mdl_d3d12
 {
     
@@ -146,70 +148,120 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    namespace
+    {
+        // helper to check if a value is in an container
+        template <typename TValue, typename Alloc, template <typename, typename> class TContainer>
+        inline bool contains(TContainer<TValue, Alloc>& vector, const TValue& value)
+        {
+            return std::find(vector.begin(), vector.end(), value) != vector.end();
+        }
+
+
+        // helper to push back values into a compatible container only if the value is not already
+        // in that container
+        template <typename TValue, typename Alloc, template <typename, typename> class TContainer>
+        inline bool push_back_uniquely(TContainer<TValue, Alloc>& vector, const TValue& value)
+        {
+            if (!contains(vector, value))
+            {
+                vector.push_back(value);
+                return true;
+            }
+            return false;
+        }
+    } // anonymous
+
     bool Mdl_material_library::reload_material(Mdl_material* material, bool& targets_changed)
     {
-        // iterate over the dependencies and store in reverse order for reloading
-        // the 'deepest' imports first
-        std::stack<std::string> load_order;
-        material->visit_module_dependencies([&](const std::string& module_db_name)
-        {
-            load_order.push(module_db_name);
-            return true; // continue visiting
-        }); 
+        // collect all modules to reload
+        std::vector<std::string> dependencies;
+        std::deque<std::string> to_process;
 
-        // reload all the modules this material depends on
-        while (!load_order.empty())
+        // add the module of the selected material to be reloaded
+        const std::string module_db_name =
+            get_module_name(material->get_material_definition_db_name());
+        to_process.push_back(module_db_name);
         {
-            if(!reload_module(load_order.top(), targets_changed))
-               return false;
-            load_order.pop();
+            std::lock_guard<std::mutex> lock(m_module_dependencies_mtx);
+
+            // It is not enough to reload just the one module, imported modules could have changed
+            // too. Each module that actually was releaded could be imported by other modules as
+            // well. These modules also have to be reloaded in order to get a consistant state.
+            std::function<void(const std::string&)> add_modules_to_load =
+                [&](const std::string& db_name)
+            {
+                auto found = m_module_dependencies.find(db_name);
+
+                // Iterate over the imports first to make sure they are updated first
+                for (auto i_name : found->second.imports)
+                    add_modules_to_load(i_name);
+
+                // then add the current module
+                push_back_uniquely(dependencies, db_name);
+
+                // If this materials module is imported by another material, it has to be updated, too.
+                // Add all modules that import the current one to be processed afterwards.
+
+                for (auto i_name : found->second.is_imported_by)
+                    if(!contains(dependencies, i_name) && !contains(to_process, i_name))
+                        to_process.push_back(i_name);
+            };
+
+            // process all modules until there are no further dependencies
+            while (!to_process.empty())
+            {
+                add_modules_to_load(to_process.front());
+                to_process.pop_front();
+            }
         }
-        return true;
+
+        // reload the collected the module
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
+        for (auto& module_name : dependencies)
+        {
+            mi::base::Handle<mi::neuraylib::IModule> module(
+                m_sdk->get_transaction().edit<mi::neuraylib::IModule>(module_name.c_str()));
+
+            // invalid db name
+            if (!module)
+            {
+                log_error("Reloading failed: " + module_name + " is not known to the DB.", SRC);
+                return false;
+            }
+
+            // do the actual reload of the module
+            log_info("Reloading module: " + module_name);
+            module->reload(false, context.get());
+            if (!m_sdk->log_messages(context.get()))
+                return false;
+
+            // reflect changed imports
+            update_module_dependencies(module_name);
+        }
+
+        // update the material instances
+        return recompile_materials(targets_changed);
     }
 
     // --------------------------------------------------------------------------------------------
 
-    bool Mdl_material_library::reload_module(
-        const std::string& module_db_name, 
-        bool& targets_changed)
+    bool Mdl_material_library::recompile_materials(bool& targets_changed)
     {
         targets_changed = false;
-
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
 
-        mi::base::Handle<mi::neuraylib::IModule> module(
-            m_sdk->get_transaction().edit<mi::neuraylib::IModule>(module_db_name.c_str()));
-
-        // these modules should not change during runtime
-        if (module->is_standard_module() || module_db_name == "mdl::base")
-            return true;
-
-        if (!module)
-        {
-            log_error("Reloading failed: " + module_db_name + " is not known to the DB.", SRC);
-            return false;
-        }
-
-        // do the actual reload of the module
-        module->reload(false, context.get());
-        if (!m_sdk->log_messages(context.get()))
-            return false;
- 
         // update material instances and compiled materials
         std::vector<Mdl_material*> changed_materials;
         std::set<std::string> old_hashes;
         visit_materials([&](Mdl_material* material) // could be done in parallel if compiling
         {                                           // becomes a bottleneck
-            // ignore materials that do not depend on the reloaded module
-            if (!material->depends(module_db_name))
-                return true;
-
             // recompile the material and check if the hash changed
             const std::string current_hash = material->get_material_compiled_hash();
 
             if (!material->recompile_material(context.get()))
             {
-                log_error("Reloading to recompile: " + material->get_name(), SRC);
+                log_error("Failed to recompile: " + material->get_name(), SRC);
                 m_sdk->log_messages(context.get());
                 return false;
             }
@@ -380,6 +432,9 @@ namespace mdl_d3d12
             // make sure there is no other error, should not happen
             if (!m_sdk->log_messages(context) || !module_db_name)
                 return "";
+
+            // keep track of dependencies to be able to reload
+            update_module_dependencies(module_db_name);
         }
 
         return module_db_name;
@@ -403,6 +458,64 @@ namespace mdl_d3d12
         return visit_target_codes([&](Mdl_material_target* tc) {
             return tc->visit_materials(action);
         });
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    void Mdl_material_library::update_module_dependencies(const std::string& module_db_name)
+    {
+        std::lock_guard<std::mutex> lock(m_module_dependencies_mtx);
+
+        std::function<void(const mi::neuraylib::IModule*, const std::string&)> update_recursively =
+            [&](const mi::neuraylib::IModule* current_module, const std::string& current_db_name)
+        {
+            // find/create the entry for this module
+            Mdl_module_dependency* dep_info = &m_module_dependencies[current_db_name];
+
+            // TODO check if the module changed since that last update
+            // without this check updates are done multiple times when loading scenes
+            // with many materials that use the same imports
+            // if (dep_info.version == current_module.version)
+            //     return;
+
+            std::vector<std::string> updated_dependencies;
+            for (mi::Size i = 0, n = current_module->get_import_count(); i < n; ++i)
+            {
+                std::string imported_db_name = current_module->get_import(i);
+                mi::base::Handle<const mi::neuraylib::IModule> imported_module(
+                    m_sdk->get_transaction().access<mi::neuraylib::IModule>(
+                        imported_db_name.c_str()));
+
+                // these modules should not change during runtime
+                if (imported_module->is_standard_module() ||
+                    imported_db_name == "mdl::base" ||
+                    imported_db_name == "mdl::<builtins>")
+                    continue;
+
+                updated_dependencies.push_back(imported_db_name);
+
+                // register usages
+                m_module_dependencies[imported_db_name].is_imported_by.insert(current_db_name);
+
+                // go on recursively
+                update_recursively(imported_module.get(), imported_db_name);
+            }
+
+            // handle removed imports
+            for (const auto& i_name : dep_info->imports)
+                if (std::find(updated_dependencies.begin(), updated_dependencies.end(),
+                    i_name) == updated_dependencies.end())
+                    m_module_dependencies[i_name].is_imported_by.erase(module_db_name);
+
+            // replace import list
+            dep_info->imports = updated_dependencies;
+        };
+
+        mi::base::Handle<const mi::neuraylib::IModule> mod(
+            m_sdk->get_transaction().access<mi::neuraylib::IModule>(module_db_name.c_str()));
+
+        update_recursively(mod.get(), module_db_name);
+        return;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -467,13 +580,16 @@ namespace mdl_d3d12
                                 ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
                         break;
 
+                    // TODO
+                    // currently all 3D textures we have are multi-scatter lookup tables
+                    // which are float32 textures. so this is hard-coded for now
                     case Texture_dimension::Texture_3D:
                         set.entries[tile_id].resource = Texture::create_texture_3d(
                             m_app, GPU_access::shader_resource,
                             canvas->get_resolution_x(),
                             canvas->get_resolution_y(),
                             canvas->get_layers_size(),
-                            DXGI_FORMAT_R32G32B32A32_FLOAT, // TODO
+                            DXGI_FORMAT_R32_FLOAT, 
                             set.is_udim_tiled 
                                 ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
                         break;
@@ -520,7 +636,7 @@ namespace mdl_d3d12
             // Convert to linear color space if necessary
             float gamma = texture->get_effective_gamma();
             char const* image_type = image->get_type();
-            if (gamma != 1.0f)
+            if (dimension == Texture_dimension::Texture_2D && gamma != 1.0f)
             {
                 // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
                 mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
@@ -529,7 +645,9 @@ namespace mdl_d3d12
                 m_sdk->get_image_api().adjust_gamma(gamma_canvas.get(), 1.0f);
                 canvas = gamma_canvas;
             }
-            else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
+            else if (dimension == Texture_dimension::Texture_2D &&
+                strcmp(image_type, "Color") != 0 && 
+                strcmp(image_type, "Float32<4>") != 0)
             {
                 // Convert to expected format
                 canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");

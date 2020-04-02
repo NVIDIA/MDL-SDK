@@ -1,5 +1,57 @@
 Change Log
 ==========
+MDL SDK 2020.0.1 (327300.3640): 30 Mar 2020
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2020.0.1 (327300.3640) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+- General
+
+    - The standalone tools mdlm and i18n have been extended to support Unicode package/module
+      names.
+    - On Windows, we recommend Visual Studio 2017 or 2019. Visual Studio 2015 is still the minimum
+      requirement.
+
+- MDL SDK examples
+
+    - `example_dxr`:
+        - Enhanced dependency tracking when reloading materials to also update indirectly affected
+          materials.
+        - Only the compiled material hash is considered to detect reusable generated code which
+          allows to reuse existing materials for structurally equal instances.
+        - Skip format conversion for multi-scatter lookup data.
+        - Added support for larger glTF scenes up to 2GB.
+        - Improved cleanup when loading erroneous scenes.
+
+**Fixed Bugs**
+- General
+
+    - Fixed handling of resources inside function bodies. Previously, these resources were not
+      found under some conditions, causing black textures for instance.
+    - Fixed too strict error checks for creation of function calls of the array index operator, the
+      ternary operator, and the cast operator.
+    - Fixed creation of variants without specifying any annotations where the annotations of the
+      prototype were erroneously copied to the variants.
+    - Fixed loading of string-based modules with absolute file paths for resources.
+    - Fixed documentation of generated code interfaces: The results of eval functions are
+      output-only, not in/out.
+
+- MDL Compiler and Backends
+
+    - Fixed a subtle bug in one of the code caches, which caused ignored argument changes under
+      some complex conditions. Typically, boolean parameters were vulnerable, but could happen to
+      parameters of any type.
+    - Fixed MDL archive tool failures with Unicode package names. The MDL version of such archives
+      is now automatically set to MDL 1.6 as lowest necessary version.
+    - A bug in the resource handling was fixed that previously caused resources to be resolved and
+      loaded more that once, possibly leading to failures if search paths had been changed in
+      between.
+    - Fixed the MDL core compiler's analysis pass. Some analysis info was computed but not
+      annotated, causing JIT failures on functions that consists of a single expression body only.
+
+
 MDL SDK 2020 (327300.2022): 22 Feb 2020
 -----------------------------------------------
 

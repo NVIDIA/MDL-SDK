@@ -235,11 +235,10 @@ bool Archive::is_valid_archive_name() const
     {
         return false;
     }
-    // Split around '.' and check validity for each term
     std::vector<std::string> vec = Util::split(stem(), '.');
     for (auto& elem : vec)
     {
-        if (!Util::is_valid_mdl_identifier(elem))
+        if (!Util::is_valid_archive_name(elem))
         {
             return false;
         }

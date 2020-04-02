@@ -68,6 +68,25 @@ namespace mdl_d3d12
             std::mutex m_mutex;
         };
 
+        /// Import relationships between loaded modules.
+        struct Mdl_module_dependency
+        {
+            explicit Mdl_module_dependency() 
+                : imports()
+                , is_imported_by()
+            {}
+
+            /// List of modules that this module depends on.
+            /// Contains all modules that are imported directly or indirectly.
+            /// Note, this list is only filled when the module is loaded directly, i.e.,
+            /// calling load_module for it. Otherwise it's empty as the info is not needed.
+            std::vector<std::string> imports;
+
+            /// List of all modules that depend on this module directly or indirectly.
+            /// All modules that have to reloaded when this module is changed.
+            std::unordered_set<std::string> is_imported_by;
+        };
+
     public:
         /// Constructor.
         explicit Mdl_material_library(
@@ -83,8 +102,8 @@ namespace mdl_d3d12
         /// reload all modules required by a certain material.
         bool reload_material(Mdl_material* material, bool& targets_changed);
 
-        /// reload an individual module (already loaded) module.
-        bool reload_module(const std::string& module_db_name, bool& targets_changed);
+        /// recompile all materials that got invalid after a reload.
+        bool recompile_materials(bool& targets_changed);
 
         /// Creates or updates the generated HLSL code and the compiled DXIL libraries.
         bool generate_and_compile_targets();
@@ -104,6 +123,9 @@ namespace mdl_d3d12
         ///
         /// \returns        false if the iteration was aborted, true otherwise.
         bool visit_materials(std::function<bool(Mdl_material*)> action);
+
+        /// Updates the depencies between modules after loading or reloading a module.
+        void update_module_dependencies(const std::string& module_db_name);
 
         /// get access to the texture data by the texture database name and create a resource.
         /// if there resource is loaded already, no loading is required
@@ -141,6 +163,10 @@ namespace mdl_d3d12
         // TODO: use ref counting when considering dynamic loading and unloading of materials
         std::map<std::string, Mdl_resource_set> m_resources;
         std::mutex m_resources_mtx;
+
+        /// depencies between loaded modules
+        std::unordered_map<std::string, Mdl_module_dependency> m_module_dependencies;
+        std::mutex m_module_dependencies_mtx;
     };
 }
 

@@ -2206,11 +2206,12 @@ const IType_enum* create_enum(
     // note: annotations cannot contain resources, hence we can safely ignore the mode
     Mdl_dag_converter anno_converter(
         ef,
-        /*transaction*/ 0,
+        /*transaction*/ nullptr,
+        /*resource_tagger*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        /*module_filename*/ 0,
-        /*module_name*/ 0,
+        /*module_filename*/ nullptr,
+        /*module_name*/ nullptr,
         /*prototype_tag*/ DB::Tag(),
         /*load_resources*/ false,
         /*user_modules_seen*/ nullptr);
@@ -2262,11 +2263,12 @@ const IType_struct* create_struct(
     // note: annotations cannot contain resources, hence we can safely ignore the mode
     Mdl_dag_converter anno_converter(
         ef,
-        /*transaction*/ 0,
+        /*transaction*/ nullptr,
+        /*resource_tagger*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        /*module_filename*/ 0,
-        /*module_name*/ 0,
+        /*module_filename*/ nullptr,
+        /*module_name*/ nullptr,
         /*prototype_tag*/ DB::Tag(),
         /*load_resources*/ false,
         /*user_modules_seen*/ nullptr);
@@ -2441,14 +2443,9 @@ const IType* mdl_type_to_int_type(
     return 0;
 }
 
-IValue* mdl_value_to_int_value(
-    IValue_factory* vf,
-    DB::Transaction* transaction,
+IValue* Mdl_dag_converter::mdl_value_to_int_value(
     const IType* type_int,
-    const mi::mdl::IValue* value,
-    const char* module_filename,
-    const char* module_name,
-    bool load_resources)
+    const mi::mdl::IValue* value) const
 {
     mi::mdl::IValue::Kind kind = value->get_kind();
 
@@ -2458,46 +2455,43 @@ IValue* mdl_value_to_int_value(
             return 0;
         case mi::mdl::IValue::VK_BOOL: {
             const mi::mdl::IValue_bool* value_bool = cast<mi::mdl::IValue_bool>( value);
-            return vf->create_bool( value_bool->get_value());
+            return m_vf->create_bool( value_bool->get_value());
         }
         case mi::mdl::IValue::VK_INT: {
             const mi::mdl::IValue_int* value_int = cast<mi::mdl::IValue_int>( value);
-            return vf->create_int( value_int->get_value());
+            return m_vf->create_int( value_int->get_value());
         }
         case mi::mdl::IValue::VK_ENUM: {
             const mi::mdl::IValue_enum* value_enum = cast<mi::mdl::IValue_enum>( value);
             const mi::mdl::IType_enum* type_enum = value_enum->get_type();
-            mi::base::Handle<IType_factory> tf( vf->get_type_factory());
             mi::base::Handle<const IType_enum> type_enum_int(
-                mdl_type_to_int_type<IType_enum>( tf.get(), type_enum));
-            return vf->create_enum( type_enum_int.get(), value_enum->get_index());
+                mdl_type_to_int_type<IType_enum>( m_tf.get(), type_enum));
+            return m_vf->create_enum( type_enum_int.get(), value_enum->get_index());
         }
         case mi::mdl::IValue::VK_FLOAT: {
             const mi::mdl::IValue_float* value_float = cast<mi::mdl::IValue_float>( value);
-            return vf->create_float( value_float->get_value());
+            return m_vf->create_float( value_float->get_value());
         }
         case mi::mdl::IValue::VK_DOUBLE: {
             const mi::mdl::IValue_double* value_double = cast<mi::mdl::IValue_double>( value);
-            return vf->create_double( value_double->get_value());
+            return m_vf->create_double( value_double->get_value());
         }
         case mi::mdl::IValue::VK_STRING: {
             const mi::mdl::IValue_string* value_string = cast<mi::mdl::IValue_string>( value);
-            return vf->create_string( value_string->get_value());
+            return m_vf->create_string( value_string->get_value());
         }
         case mi::mdl::IValue::VK_VECTOR: {
             const mi::mdl::IValue_vector* value_vector = cast<mi::mdl::IValue_vector>( value);
             const mi::mdl::IType_vector* type_vector = value_vector->get_type();
-            mi::base::Handle<IType_factory> tf( vf->get_type_factory());
             mi::base::Handle<const IType_vector> type_vector_int(
-                mdl_type_to_int_type<IType_vector>( tf.get(), type_vector));
-            IValue_vector* value_vector_int = vf->create_vector( type_vector_int.get());
+                mdl_type_to_int_type<IType_vector>( m_tf.get(), type_vector));
+            IValue_vector* value_vector_int = m_vf->create_vector( type_vector_int.get());
             mi::Size n = value_vector->get_component_count();
             for( mi::Size i = 0; i < n; ++i) {
                 const mi::mdl::IValue* component
                     = value_vector->get_value( static_cast<mi::Uint32>( i));
                 mi::base::Handle<IValue> component_int( mdl_value_to_int_value(
-                    vf, transaction, /* type not relevant */ 0, component, module_filename,
-                    module_name, load_resources));
+                    /* type not relevant */ nullptr, component));
                 mi::Sint32 result = value_vector_int->set_value( i, component_int.get());
                 ASSERT( M_SCENE, result == 0);
                 boost::ignore_unused( result);
@@ -2507,17 +2501,15 @@ IValue* mdl_value_to_int_value(
         case mi::mdl::IValue::VK_MATRIX: {
             const mi::mdl::IValue_matrix* value_matrix = cast<mi::mdl::IValue_matrix>( value);
             const mi::mdl::IType_matrix* type_matrix = value_matrix->get_type();
-            mi::base::Handle<IType_factory> tf( vf->get_type_factory());
             mi::base::Handle<const IType_matrix> type_matrix_int(
-                mdl_type_to_int_type<IType_matrix>( tf.get(), type_matrix));
-            IValue_matrix* value_matrix_int = vf->create_matrix( type_matrix_int.get());
+                mdl_type_to_int_type<IType_matrix>( m_tf.get(), type_matrix));
+            IValue_matrix* value_matrix_int = m_vf->create_matrix( type_matrix_int.get());
             mi::Size n = value_matrix->get_component_count();
             for( mi::Size i = 0; i < n; ++i) {
                 const mi::mdl::IValue* component
                     = value_matrix->get_value( static_cast<mi::Uint32>( i));
                 mi::base::Handle<IValue> component_int( mdl_value_to_int_value(
-                    vf, transaction, /* type not relevant */ 0, component, module_filename,
-                    module_name, load_resources));
+                    /* type not relevant */ nullptr, component));
                 mi::Sint32 result = value_matrix_int->set_value( i, component_int.get());
                 ASSERT( M_SCENE, result == 0);
                 boost::ignore_unused( result);
@@ -2533,10 +2525,9 @@ IValue* mdl_value_to_int_value(
                 ASSERT( M_SCENE, type_array_int);
             } else { // else compute it from the value
                 const mi::mdl::IType_array* type_array = value_array->get_type();
-                mi::base::Handle<IType_factory> tf( vf->get_type_factory());
-                type_array_int = mdl_type_to_int_type<IType_array>( tf.get(), type_array);
+                type_array_int = mdl_type_to_int_type<IType_array>( m_tf.get(), type_array);
             }
-            IValue_array* value_array_int = vf->create_array( type_array_int.get());
+            IValue_array* value_array_int = m_vf->create_array( type_array_int.get());
             mi::Size n = value_array->get_component_count();
             if( !type_array_int->is_immediate_sized())
                 value_array_int->set_size( n);
@@ -2545,8 +2536,7 @@ IValue* mdl_value_to_int_value(
                 const mi::mdl::IValue* component
                     = value_array->get_value( static_cast<mi::Uint32>( i));
                 mi::base::Handle<IValue> component_int( mdl_value_to_int_value(
-                    vf, transaction, component_type_int.get(), component, module_filename,
-                    module_name, load_resources));
+                    component_type_int.get(), component));
                 mi::Sint32 result = value_array_int->set_value( i, component_int.get());
                 ASSERT( M_SCENE, result == 0);
                 boost::ignore_unused( result);
@@ -2559,7 +2549,7 @@ IValue* mdl_value_to_int_value(
             mi::Float32 red   = value_rgb_color->get_value( 0)->get_value();
             mi::Float32 green = value_rgb_color->get_value( 1)->get_value();
             mi::Float32 blue  = value_rgb_color->get_value( 2)->get_value();
-            return vf->create_color( red, green, blue);
+            return m_vf->create_color( red, green, blue);
         }
         case mi::mdl::IValue::VK_STRUCT: {
             const mi::mdl::IValue_struct* value_struct = cast<mi::mdl::IValue_struct>( value);
@@ -2570,10 +2560,9 @@ IValue* mdl_value_to_int_value(
                 ASSERT( M_SCENE, type_struct_int);
             } else { // else compute it from the value
                 const mi::mdl::IType_struct* type_struct = value_struct->get_type();
-                mi::base::Handle<IType_factory> tf( vf->get_type_factory());
-                type_struct_int = mdl_type_to_int_type<IType_struct>( tf.get(), type_struct);
+                type_struct_int = mdl_type_to_int_type<IType_struct>( m_tf.get(), type_struct);
             }
-            IValue_struct* value_struct_int = vf->create_struct( type_struct_int.get());
+            IValue_struct* value_struct_int = m_vf->create_struct( type_struct_int.get());
             mi::Size n = value_struct->get_component_count();
             for( mi::Size i = 0; i < n; ++i) {
                 const mi::mdl::IValue* component
@@ -2581,8 +2570,7 @@ IValue* mdl_value_to_int_value(
                 mi::base::Handle<const IType> component_type_int(
                     type_struct_int->get_field_type( i));
                 mi::base::Handle<IValue> component_int( mdl_value_to_int_value(
-                    vf, transaction, component_type_int.get(), component, module_filename,
-                    module_name, load_resources));
+                    component_type_int.get(), component));
                 mi::Sint32 result = value_struct_int->set_value( i, component_int.get());
                 ASSERT( M_SCENE, result == 0);
                 boost::ignore_unused( result);
@@ -2600,104 +2588,77 @@ IValue* mdl_value_to_int_value(
                 const mi::mdl::IType_texture* type_texture
                     = as<mi::mdl::IType_texture>( type_resource);
                 if( type_texture) {
-                    mi::base::Handle<IType_factory> tf( vf->get_type_factory());
                     mi::base::Handle<const IType_texture> type_texture_int(
-                        mdl_type_to_int_type<IType_texture>( tf.get(), type_texture));
-                    return vf->create_texture( type_texture_int.get(), DB::Tag());
+                        mdl_type_to_int_type<IType_texture>( m_tf.get(), type_texture));
+                    return m_vf->create_texture( type_texture_int.get(), DB::Tag());
                 }
                 if( mi::mdl::is<mi::mdl::IType_light_profile>( type_resource))
-                    return vf->create_light_profile( DB::Tag());
+                    return m_vf->create_light_profile( DB::Tag());
                 if( mi::mdl::is<mi::mdl::IType_bsdf_measurement>( type_resource))
-                    return vf->create_bsdf_measurement( DB::Tag());
+                    return m_vf->create_bsdf_measurement( DB::Tag());
                 ASSERT( M_SCENE, false);
             }
-            mi::base::Handle<IType_factory> tf( vf->get_type_factory());
             mi::base::Handle<const IType_reference> type_reference_int(
-                mdl_type_to_int_type<IType_reference>( tf.get(), type_reference));
-            return vf->create_invalid_df( type_reference_int.get());
+                mdl_type_to_int_type<IType_reference>( m_tf.get(), type_reference));
+            return m_vf->create_invalid_df( type_reference_int.get());
         }
         case mi::mdl::IValue::VK_TEXTURE: {
-            const mi::mdl::IValue_texture* value_texture
-                = cast<mi::mdl::IValue_texture>( value);
-            const mi::mdl::IType_texture* type_texture
-                = value_texture->get_type();
-            mi::base::Handle<IType_factory> tf( vf->get_type_factory());
+            const mi::mdl::IValue_texture* value_texture = cast<mi::mdl::IValue_texture>( value);
+            const mi::mdl::IType_texture* type_texture = value_texture->get_type();
             mi::base::Handle<const IType_texture> type_texture_int(
-                mdl_type_to_int_type<IType_texture>( tf.get(), type_texture));
+                mdl_type_to_int_type<IType_texture>( m_tf.get(), type_texture));
             DB::Tag tag;
             Float32 gamma = 0.0f;
-            std::string string_value_buf;
-            const char* string_value = value_texture->get_string_value();
             bool needs_owner = false;
-            if (load_resources) {
-                tag = DETAIL::mdl_texture_to_tag(
-                    transaction, value_texture, module_filename, module_name);
+            std::string string_value_buf;
+            if (m_load_resources) {
+                tag = find_resource_tag(value_texture);
                 if (tag.is_valid()) {
-                    DB::Access<TEXTURE::Texture> tex(tag, transaction);
-                    gamma = tex->get_effective_gamma(transaction);
+                    DB::Access<TEXTURE::Texture> tex(tag, m_transaction);
+                    gamma = tex->get_effective_gamma(m_transaction);
                 }
-            }
-            else {
+            }  else {
+                string_value_buf = value_texture->get_string_value();
                 tag = DB::Tag(value_texture->get_tag_value());
                 gamma = value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_default ? 0.0f :
                     (value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
-                string_value_buf = string_value;
                 auto p = string_value_buf.find('|');
                 if (p != std::string::npos) {
                     needs_owner = true;
-                    string_value = &string_value_buf[p + 1];
+                    string_value_buf = string_value_buf.substr(p + 1);
                 }
             }
-            return vf->create_texture( type_texture_int.get(), tag, string_value, needs_owner ? module_name : nullptr, gamma);
+            return m_vf->create_texture(
+                type_texture_int.get(), tag, string_value_buf.c_str(),
+                needs_owner ? m_module_name : nullptr, gamma);
         }
         case mi::mdl::IValue::VK_LIGHT_PROFILE: {
             const mi::mdl::IValue_light_profile* value_light_profile
                 = cast<mi::mdl::IValue_light_profile>( value);
-            DB::Tag tag = load_resources ? DETAIL::mdl_light_profile_to_tag(
-                transaction, value_light_profile, module_filename, module_name) : DB::Tag(value_light_profile->get_tag_value());
-            return vf->create_light_profile( tag);
+            DB::Tag tag = m_load_resources ?
+                find_resource_tag(value_light_profile) :
+                DB::Tag(value_light_profile->get_tag_value());
+            return m_vf->create_light_profile( tag);
         }
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT: {
             const mi::mdl::IValue_bsdf_measurement* value_bsdf_measurement
                 = cast<mi::mdl::IValue_bsdf_measurement>( value);
-            DB::Tag tag = load_resources ? DETAIL::mdl_bsdf_measurement_to_tag(
-                transaction, value_bsdf_measurement, module_filename, module_name) : DB::Tag(value_bsdf_measurement->get_tag_value());
-            return vf->create_bsdf_measurement( tag);
+            DB::Tag tag = m_load_resources ?
+                find_resource_tag(value_bsdf_measurement) :
+                DB::Tag(value_bsdf_measurement->get_tag_value());
+            return m_vf->create_bsdf_measurement( tag);
         }
     }
 
     ASSERT( M_SCENE, false);
-    return 0;
-}
-
-/// Converts mi::mdl::DAG_parameter to MI::MDL::IExpression
-static IExpression* mdl_parameter_to_int_expr(
-    IExpression_factory* ef,
-    const mi::mdl::DAG_parameter* parameter)
-{
-    mi::base::Handle<IValue_factory> vf( ef->get_value_factory());
-    mi::base::Handle<IType_factory> tf( vf->get_type_factory());
-    mi::base::Handle<const IType> type( mdl_type_to_int_type( tf.get(), parameter->get_type()));
-    mi::Size index = parameter->get_index();
-    return ef->create_parameter( type.get(), index);
-}
-
-/// Converts mi::mdl::DAG_temporary to MI::MDL::IExpression
-static IExpression* mdl_temporary_to_int_expr(
-    IExpression_factory* ef,
-    const mi::mdl::DAG_temporary* temporary)
-{
-    mi::base::Handle<IValue_factory> vf( ef->get_value_factory());
-    mi::base::Handle<IType_factory> tf( vf->get_type_factory());
-    mi::base::Handle<const IType> type( mdl_type_to_int_type( tf.get(), temporary->get_type()));
-    mi::Size index = temporary->get_index();
-    return ef->create_temporary( type.get(), index);
+    return nullptr;
 }
 
 /// Converts mi::mdl::Dag_node to MI::MDL::IExpression/MI::MDL::IAnnotation.
 Mdl_dag_converter::Mdl_dag_converter(
     IExpression_factory* ef,
     DB::Transaction* transaction,
+    mi::mdl::IResource_tagger* tagger,
     bool immutable_callees,
     bool create_direct_calls,
     const char* module_filename,
@@ -2708,8 +2669,8 @@ Mdl_dag_converter::Mdl_dag_converter(
     : m_ef(make_handle_dup(ef))
     , m_vf(m_ef->get_value_factory())
     , m_tf(m_vf->get_type_factory())
-    , m_resource_tag_map()
     , m_transaction(transaction)
+    , m_tagger(tagger)
     , m_immutable_callees(immutable_callees)
     , m_create_direct_calls(create_direct_calls)
     , m_module_filename(module_filename)
@@ -2719,58 +2680,14 @@ Mdl_dag_converter::Mdl_dag_converter(
     , m_user_modules_seen(user_modules_seen)
 {
 }
-
-/// Convert a resource value into a resource-tag-tuple kind.
-static mi::mdl::Resource_tag_tuple::Kind kind_from_value(IValue_resource const *res)
-{
-    switch (res->get_kind()) {
-    case IValue::VK_TEXTURE:
-        {
-            mi::base::Handle<IValue_texture const> tex(res->get_interface<IValue_texture>());
-            Float32 gamma = tex->get_gamma();
-            if (gamma == 1.0f) {
-                return mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR;
-            } else if (gamma == 2.2f) {
-                return mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB;
-            } else {
-                ASSERT(M_SCENE, gamma == 0.0f && "unsupported gamma mode");
-                return mi::mdl::Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
-            }
-        }
-        break;
-    case IValue::VK_LIGHT_PROFILE:
-        return mi::mdl::Resource_tag_tuple::RK_LIGHT_PROFILE;
-    case IValue::VK_BSDF_MEASUREMENT:
-        return mi::mdl::Resource_tag_tuple::RK_BSDF_MEASUREMENT;
-    case IValue::VK_STRING:
-        return mi::mdl::Resource_tag_tuple::RK_STRING;
-    default:
-        break;
-    }
-    ASSERT(M_SCENE, !"unexpected resource value kind");
-    return mi::mdl::Resource_tag_tuple::RK_INVALID_REF;
-
-}
-
 // Find the tag for a given resource.
 DB::Tag Mdl_dag_converter::find_resource_tag(
-    IValue_resource const *res) const
+    mi::mdl::IValue_resource const *res) const
 {
-    DB::Tag tag = res->get_value();
-    if (tag.is_valid())
-        return tag;
-
-    mi::mdl::Resource_tag_tuple::Kind kind = kind_from_value(res);
-
-    // for now, linear search
-    std::string url(res->get_unresolved_mdl_url());
-    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
-        Resource_tag_tuple const &e = m_resource_tag_map[i];
-
-        if (e.m_kind == kind && e.m_url == url)
-            return DB::Tag(e.m_tag);
-    }
-    return DB::Tag();
+    int tag = res->get_tag_value();
+    if (tag == 0 && m_tagger != nullptr)
+        tag = m_tagger->get_resource_tag(res);
+    return DB::Tag(tag);
 }
 
 /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
@@ -2782,49 +2699,7 @@ IExpression* Mdl_dag_converter::mdl_dag_node_to_int_expr(
         {
             const mi::mdl::DAG_constant* constant = cast<mi::mdl::DAG_constant>(node);
             const mi::mdl::IValue* value = constant->get_value();
-            mi::base::Handle<IValue> value_int(mdl_value_to_int_value(
-                m_vf.get(), m_transaction, type_int, value,
-                m_module_filename, m_module_name, m_load_resources));
-
-            // check if resource tags have to be entered
-            switch (value_int->get_kind()) {
-            case IValue::VK_TEXTURE:
-                {
-                    mi::base::Handle<IValue_texture> tex(
-                        value_int.get_interface<IValue_texture>());
-                    DB::Tag tag = find_resource_tag(tex.get());
-
-                    if (tag.is_valid()) {
-                        mi::base::Handle<IType_texture const> tp(tex->get_type());
-                        value_int = mi::base::make_handle(m_vf->create_texture(tp.get(), tag));
-                    }
-                }
-                break;
-            case IValue::VK_LIGHT_PROFILE:
-                {
-                    mi::base::Handle<IValue_light_profile> lp(
-                        value_int.get_interface<IValue_light_profile>());
-                    DB::Tag tag = find_resource_tag(lp.get());
-
-                    if (tag.is_valid()) {
-                        value_int = mi::base::make_handle(m_vf->create_light_profile(tag));
-                    }
-                }
-                break;
-            case IValue::VK_BSDF_MEASUREMENT:
-                {
-                    mi::base::Handle<IValue_bsdf_measurement> bm(
-                        value_int.get_interface<IValue_bsdf_measurement>());
-                    DB::Tag tag = find_resource_tag(bm.get());
-
-                    if (tag.is_valid()) {
-                        value_int = mi::base::make_handle(m_vf->create_bsdf_measurement(tag));
-                    }
-                }
-                break;
-            default:
-                break;
-            }
+            mi::base::Handle<IValue> value_int(mdl_value_to_int_value(type_int, value));
 
             return m_ef->create_constant(value_int.get());
         }
@@ -2838,12 +2713,18 @@ IExpression* Mdl_dag_converter::mdl_dag_node_to_int_expr(
     case mi::mdl::DAG_node::EK_PARAMETER:
         {
             const mi::mdl::DAG_parameter* parameter = cast<mi::mdl::DAG_parameter>(node);
-            return mdl_parameter_to_int_expr(m_ef.get(), parameter);
+            mi::base::Handle<const IType> type(
+                mdl_type_to_int_type(m_tf.get(), parameter->get_type()));
+            mi::Size index = parameter->get_index();
+            return m_ef->create_parameter(type.get(), index);
         }
     case mi::mdl::DAG_node::EK_TEMPORARY:
         {
             const mi::mdl::DAG_temporary* temporary = cast<mi::mdl::DAG_temporary>(node);
-            return mdl_temporary_to_int_expr(m_ef.get(), temporary);
+            mi::base::Handle<const IType> type(
+                mdl_type_to_int_type(m_tf.get(), temporary->get_type()));
+            mi::Size index = temporary->get_index();
+            return m_ef->create_temporary(type.get(), index);
         }
     }
 
@@ -3130,31 +3011,6 @@ IAnnotation_block* Mdl_dag_converter::mdl_dag_node_vector_to_int_annotation_bloc
     }
 
     return block;
-}
-
-// Fill the resource tag map from an material instance.
-void Mdl_dag_converter::fill_resource_tag_map(
-    mi::mdl::IGenerated_code_dag::IMaterial_instance const *instance,
-    Resource_tag_map                                        &res_tag_map)
-{
-    size_t l = instance->get_resource_tag_map_entries_count();
-
-    m_resource_tag_map.clear();
-    m_resource_tag_map.reserve(l);
-
-    res_tag_map.clear();
-    res_tag_map.reserve(l);
-
-    for (size_t i = 0; i < l; ++i) {
-        mi::mdl::Resource_tag_tuple const *e = instance->get_resource_tag_map_entry(i);
-
-        std::string url(e->m_url != NULL ? e->m_url : "");
-        m_resource_tag_map.emplace_back(
-            MI::MDL::Resource_tag_tuple(e->m_kind, url, e->m_tag));
-
-        res_tag_map.emplace_back(
-            MI::MDL::Resource_tag_tuple(e->m_kind, url, e->m_tag));
-    }
 }
 
 // Converts mi::mdl::DAG_call to MI::MDL::IAnnotation.
@@ -5174,115 +5030,6 @@ void Resource_updater::update_resource_literals()
     }
 }
 
-// Constructor.
-Resource_updater_instance::Resource_updater_instance(
-    DB::Transaction                                  *transaction,
-    mi::mdl::ICall_name_resolver                     &resolver,
-    mi::mdl::IGenerated_code_dag::IMaterial_instance *instance,
-    char const                                       *module_filename,
-    char const                                       *module_name)
-: m_transaction(transaction)
-, m_resolver(resolver)
-, m_instance(instance)
-, m_module_filename(module_filename)
-, m_module_name(module_name)
-, m_resorce_tag_cache()
-{
-}
-
-// Update one resource in the current context.
-void Resource_updater_instance::update_resource(mi::mdl::IValue_resource const *resource)
-{
-    Resource_tag_cache::const_iterator it = m_resorce_tag_cache.find(resource);
-    if (it == m_resorce_tag_cache.end()) {
-        // loads the resource
-        DB::Tag tag = DETAIL::mdl_resource_to_tag(
-            m_transaction, resource, m_module_filename, m_module_name);
-        it = m_resorce_tag_cache.insert(Resource_tag_cache::value_type(resource, tag)).first;
-    }
-
-    if (DB::Tag tag = it->second) {
-        m_instance->set_resource_tag(resource, tag.get_uint());
-    }
-}
-
-// Associates all resource literals inside a subtree of a code DAG with its DB tags.
-void Resource_updater_instance::update_resource_literals(
-    mi::mdl::DAG_node const *node)
-{
-    switch (node->get_kind()) {
-    case mi::mdl::DAG_node::EK_CONSTANT:
-        {
-            mi::mdl::DAG_constant    const *constant = cast<mi::mdl::DAG_constant>(node);
-            mi::mdl::IValue_resource const *resource
-                = as<mi::mdl::IValue_resource>(constant->get_value());
-            if (resource) {
-                DB::Tag tag = DETAIL::mdl_resource_to_tag(
-                    m_transaction, resource, m_module_filename, m_module_name);
-                if (tag) {
-                    m_instance->set_resource_tag(resource, tag.get_uint());
-                }
-            }
-        }
-        return;
-    case mi::mdl::DAG_node::EK_PARAMETER:
-        return;
-    case mi::mdl::DAG_node::EK_TEMPORARY:
-        return; // the referenced temporary will be traversed explicitly
-    case mi::mdl::DAG_node::EK_CALL:
-        {
-            mi::mdl::DAG_call const *call = cast<mi::mdl::DAG_call>(node);
-            mi::Uint32 n = call->get_argument_count();
-            for (mi::Uint32 i = 0; i < n; ++i) {
-                update_resource_literals(call->get_argument(i));
-            }
-
-            if (call->get_semantic() == mi::mdl::IDefinition::DS_UNKNOWN) {
-                char const *signature = call->get_name();
-
-                mi::base::Handle<mi::mdl::IModule const> mod(
-                    m_resolver.get_owner_module(signature));
-
-                if (mod.is_valid_interface()) {
-                    mi::mdl::Module const *owner = mi::mdl::impl_cast<mi::mdl::Module>(mod.get());
-
-                    mi::mdl::IDefinition const *def =
-                        owner->find_signature(signature, /*only_exported=*/false);
-                    if (def != NULL && def->get_declaration() != NULL) {
-                        Resource_AST_collector<Resource_updater_instance> collector(*this);
-                        collector.process(owner, def);
-                    }
-                }
-            }
-        }
-        return;
-    }
-}
-
-void Resource_updater_instance::update_resource_literals()
-{
-    // traverse parameters
-    mi::Uint32 parameter_count = m_instance->get_parameter_count();
-    for (mi::Uint32 j = 0; j < parameter_count; ++j) {
-        mi::mdl::IValue_resource const *p_def =
-            as<mi::mdl::IValue_resource>(m_instance->get_parameter_default(j));
-        if (p_def != NULL) {
-            update_resource(p_def);
-        }
-    }
-
-    // traverse body
-    mi::mdl::DAG_node const *body = m_instance->get_constructor();
-    update_resource_literals(body);
-
-    // traverse temporaries
-    mi::Uint32 temporary_count = m_instance->get_temporary_count();
-    for (mi::Uint32 j = 0; j < temporary_count; ++j) {
-        mi::mdl::DAG_node const *temporary = m_instance->get_temporary_value(j);
-        update_resource_literals(temporary);
-    }
-}
-
 namespace {
 
 /// Collects all call references in a DAG node.
@@ -7207,8 +6954,8 @@ mi::Sint32 repair_arguments(
     mi::Uint32 level,
     Execution_context* context)
 {
-    mi::base::Handle <IExpression_factory> ef(get_expression_factory());
-    mi::base::Handle <IValue_factory> vf(get_value_factory());
+    mi::base::Handle<IExpression_factory> ef(get_expression_factory());
+    mi::base::Handle<IValue_factory> vf(get_value_factory());
 
     for (mi::Size i = 0, n = arguments->get_size(); i < n; ++i) {
 

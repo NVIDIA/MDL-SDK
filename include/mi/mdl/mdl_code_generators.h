@@ -607,6 +607,12 @@ public:
     ///
     /// \param r  the resource
     virtual int get_resource_tag(IValue_resource const *r) const = 0;
+
+    /// Get the number of resource map entries.
+    virtual size_t get_resource_entries_count() const = 0;
+
+    /// Get the i'th resource table entry.
+    virtual Resource_tag_tuple const *get_resource_entry(size_t index) const = 0;
 };
 
 /// An interface used to manage the DF and non-DF parts of an MDL material surface.

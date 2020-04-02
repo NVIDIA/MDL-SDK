@@ -1197,7 +1197,7 @@ bool Comparator::compare_types(
             IType_function const *funcB = cast<IType_function>(typeB);
 
             IType const *retA = funcA->get_return_type();
-            IType const *retB = funcA->get_return_type();
+            IType const *retB = funcB->get_return_type();
 
             int n_params = funcA->get_parameter_count();
             if (n_params != funcB->get_parameter_count())

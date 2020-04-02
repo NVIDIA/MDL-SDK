@@ -614,9 +614,9 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
     tct_float3       k2;             ///< input: incoming direction
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
                                      ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
-    tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< in/out: (diffuse part of the)
+    tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of the)
                                                            ///  bsdf * dot(normal, k2)
-    tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< in/out: (glossy part of the)
+    tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of the)
                                                            ///  bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
@@ -632,8 +632,8 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many 
                                      ///  handles using in multiple steps
     tct_int          handle_count;   ///< input: number of elements of 'bsdf_diffuse', 'bsdf_glossy'
-    tct_float3*      bsdf_diffuse;   ///< in/out: (diffuse part of the) bsdf * dot(normal, k2)
-    tct_float3*      bsdf_glossy;    ///< in/out: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+    tct_float3*      bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
@@ -645,8 +645,8 @@ struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< input: incoming direction
-    tct_float3       bsdf_diffuse;   ///< in/out: (diffuse part of the) bsdf * dot(normal, k2)
-    tct_float3       bsdf_glossy;    ///< in/out: (glossy part of the) bsdf * dot(normal, k2)
+    tct_float3       bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
+    tct_float3       bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
@@ -957,7 +957,7 @@ struct Edf_evaluate_data : public Edf_evaluate_data_base
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     tct_float       cos;                            ///< output: dot(normal, k1)
-    tct_float3      edf[static_cast<size_t>(N)];    ///< in/out: edf
+    tct_float3      edf[static_cast<size_t>(N)];    ///< output: edf
     tct_float       pdf;                            ///< output: pdf (non-projected hemisphere)
 };
 
@@ -969,7 +969,7 @@ struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     tct_int         handle_count;   ///< input: number of elements of 'edf'
     tct_float       cos;            ///< output: dot(normal, k1)
-    tct_float3*     edf;            ///< in/out: edf
+    tct_float3*     edf;            ///< output: edf
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
@@ -978,7 +978,7 @@ struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_float       cos;            ///< output: dot(normal, k1)
-    tct_float3      edf;            ///< in/out: edf
+    tct_float3      edf;            ///< output: edf
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 

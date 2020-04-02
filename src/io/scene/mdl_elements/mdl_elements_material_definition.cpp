@@ -125,6 +125,7 @@ Mdl_material_definition::Mdl_material_definition(
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ false,
         module_filename,
@@ -316,6 +317,7 @@ const IExpression_direct_call* Mdl_material_definition::get_body( DB::Transactio
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         /*module_filename*/ nullptr,
@@ -370,6 +372,7 @@ const IExpression* Mdl_material_definition::get_temporary(
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
+        code_dag->get_resource_tagger(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         /*module_filename*/ nullptr,

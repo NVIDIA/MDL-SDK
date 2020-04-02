@@ -72,7 +72,8 @@ the examples.
 The build with the following x64-platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10:**     Microsoft Visual Studio 2015 (msvc v140)
+-   **Windows 10:**     Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142) 
+    are recommended. Visual Studio 2015 (msvc v140) is the minimum requirement.
 -   **Ubuntu 18.04:**   gcc/g++6 and gcc/g++7
 -   **Mac OS X 10.13:** Xcode 8.3.3 (Apple Clang 8.1)
 
@@ -131,9 +132,12 @@ libraries. These additional libraries are:
     To build with Qt support on Linux, your system's GLIBC needs to be release 
     2.14 or later.
 
--   **DirectX Raytracing support**
-    To build the DXR example, Windows 10 version 1809 and the corresponding 
-    SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
+-   **DirectX Raytracing support**  
+    Building the DXR example requires:  
+    - Windows 10 version 1809 and the corresponding SDK 10.0.17763.0 or
+    - Windows 10 version 1909 and the corresponding SDK 10.0.18362.0
+
+    Additionally the optional *Graphic Tools* feature has to be installed.
 
 <a name="doc-build-tools"></a>
 Required tools to build the documentation:
@@ -222,9 +226,10 @@ Required tools to build the documentation:
     directory.
 
 7.  For Visual Studio 2015, you may have to adapt the `Target Platform Version` under
-    `General` in the `dxr` project properties to `10.0.17763.0` to avoid getting
-    build errors. For newer Visual Studio versions, CMake will use the correct
-    platform version.
+    `General` in the example and third-party project properties to avoid getting build errors.
+    CMake is configured to select the latest SDK installed. Select `10.0.18362.0`
+    manually if you have the SDK installed. Otherwise, select version `10.0.17763.0`.
+    For later Visual Studio versions, CMake will use the correct platform version.
 
 8.  Use Visual Studio to build the MDL SDK library, the MDL Core library,
     and the examples. When running the examples using the Visual Studio debugger,

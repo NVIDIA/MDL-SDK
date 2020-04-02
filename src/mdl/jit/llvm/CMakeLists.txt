@@ -133,7 +133,7 @@ set(LLVM_NATIVE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/dist/NATIVE CACHE PATH "Binary
 
 # speed up build is not working properly on all platforms and configurations
 if(WINDOWS)
-    set(_ENABLE_LLVM_NATIVE_BUILD ON)   # speed up build
+    set(_ENABLE_LLVM_NATIVE_BUILD OFF)  # turn ON to speed up build (currently not reliable on windows, too)
 else()
     set(_ENABLE_LLVM_NATIVE_BUILD OFF)  # not working reliably (debug builds could work)
                                         # but, it makes sense to not use an entirely different build for release

@@ -65,7 +65,7 @@ bool DAG_ir_checker::check_instance(Generated_code_dag::Material_instance const 
     Store<Type_factory const *>          type_fact(m_tf,        &inst->get_type_factory());
     Store<Value_factory const *>         value_fact(m_vf,       &inst->get_value_factory());
 
-    DAG_ir_walker walker(m_alloc);
+    DAG_ir_walker walker(m_alloc, /*as_tree=*/false);
 
     m_errors = 0;
 

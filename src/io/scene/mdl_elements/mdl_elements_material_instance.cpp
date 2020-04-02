@@ -434,17 +434,6 @@ Mdl_material_instance::create_dag_material_instance(
         return 0;
     }
 
-    if (load_resources) {
-        Resource_updater_instance updater(
-            transaction,
-            resolver,
-            instance.get(),
-            code_dag->get_module_file_name(),
-            code_dag->get_module_name());
-
-        updater.update_resource_literals();
-    }
-
     instance->retain();
     return instance.get();
 }

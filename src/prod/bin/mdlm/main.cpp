@@ -38,7 +38,7 @@
 
 using namespace mdlm;
 
-int main(int argc, char *argv[])
+int run(int argc, char *argv[])
 {
     check_success2(Application::theApp().initialize(argc, argv) == 0, Errors::ERR_INIT_FAILURE);
     Util::log_info("Application started");
@@ -51,8 +51,8 @@ int main(int argc, char *argv[])
 #endif
 
     Command * command = Application::theApp().get_command();
-    
-    if(!command)
+
+    if (!command)
     {
         Util::log_error("Unknown command, missing command or invalid number of parameters");
         return -1;
@@ -64,3 +64,73 @@ int main(int argc, char *argv[])
 
     return rtn_code;
 }
+
+#ifdef MI_PLATFORM_WINDOWS
+#include <string>
+#include <vector>
+
+#include <mi/base/miwindows.h>
+
+namespace {
+
+    template<typename T>
+    class Array_holder {
+    public:
+        Array_holder(size_t size) : m_arr(new T[size]) {}
+        ~Array_holder() { delete[] m_arr; }
+        T &operator[](size_t index) { return m_arr[index]; }
+        T *data() { return m_arr; }
+    private:
+        T *m_arr;
+    };
+}
+
+int wmain(int argc, wchar_t *argvwc[])
+{
+    std::vector<std::string> utf8_args(argc);
+    Array_holder<char *> argv_utf8(argc);
+
+    for (int i = 0; i < argc; ++i) {
+        wchar_t *warg = argvwc[i];
+        DWORD size = WideCharToMultiByte(
+            CP_UTF8,
+            0,
+            warg,
+            -1,
+            NULL,
+            0,
+            NULL,
+            NULL);
+        if (size > 0) {
+            std::string res(size, '\0');
+            DWORD result = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                warg,
+                -1,
+                const_cast<char *>(res.c_str()),
+                size,
+                NULL,
+                NULL);
+            if (result == size) {
+                utf8_args[i] = res;
+                argv_utf8[i] = const_cast<char *>(utf8_args[i].c_str());
+            }
+            else {
+                argv_utf8[i] = const_cast<char *>("");
+            }
+        }
+    }
+    SetConsoleOutputCP(CP_UTF8);
+
+    char** argv = argv_utf8.data();
+
+    return run(argc, argv);
+}
+
+#else
+int main(int argc, char *argv[])
+{
+    return run(argc, argv);
+}
+#endif

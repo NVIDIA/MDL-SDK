@@ -547,10 +547,10 @@ namespace
         m_scene.root.kind = Node::Kind::Empty;
         m_scene.root.index = static_cast<size_t>(-1);
 
-        // extend quotas to 1 GB
+        // extend quotas to 2 GB
         fx::gltf::ReadQuotas quotas;
-        quotas.MaxFileSize *= 32;
-        quotas.MaxBufferByteLength *= 32;
+        quotas.MaxFileSize *= 64;
+        quotas.MaxBufferByteLength *= 64;
 
         fx::gltf::Document doc;
         try

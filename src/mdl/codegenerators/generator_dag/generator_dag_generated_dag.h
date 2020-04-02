@@ -64,6 +64,32 @@ class DAG_serializer;
 class DAG_deserializer;
 class Dependence_node;
 
+typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+///
+/// Helper class to implement the IResource_tagger interface form a Resource_tag_map.
+///
+class Resource_tagger : public IResource_tagger {
+public:
+    /// Get a tag,for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    int get_resource_tag(
+        IValue_resource const *res) const MDL_FINAL;
+
+public:
+    /// Constructor.
+    ///
+    /// \param resource_map  the resource map
+    Resource_tagger(Resource_tag_map const &resource_map)
+    : m_resource_tag_map(resource_map)
+    {
+    }
+
+private:
+    Resource_tag_map const &m_resource_tag_map;
+};
+
 ///
 // Implementation of generated code for DAGs.
 ///
@@ -896,6 +922,9 @@ public:
         /// \param index  the index of the resource map entry.
         Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const MDL_FINAL;
 
+        /// Get the resource tagger for this code DAG.
+        IResource_tagger *get_resource_tagger() const MDL_FINAL;
+
         // ------------------- non-interface methods -------------------
 
         /// Get the node factory of this instance.
@@ -1333,10 +1362,11 @@ public:
         /// The scene data names referenced by this instance.
         String_vector m_referenced_scene_data;
 
-        typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
-
         /// The resource tag map, mapping accessible resources to tags.
         Resource_tag_map m_resource_tag_map;
+
+        /// The resource tagger, using the resource to tag map;
+        mutable Resource_tagger m_resource_tagger;
     };
 
 private:
@@ -2044,6 +2074,9 @@ public:
     /// Get the i'th resource tag tag map entry or NULL if the index is out of bounds;
     Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const MDL_FINAL;
 
+    /// Get the resource tagger for this code DAG.
+    IResource_tagger *get_resource_tagger() const MDL_FINAL;
+
     // --------------------------- non interface methods ---------------------------
 
     /// Get the value factory of this code.
@@ -2711,6 +2744,9 @@ private:
 
     /// The resource tag map, mapping accessible resources to tags.
     Resource_tag_map m_resource_tag_map;
+
+    /// The resource tagger, using the resource to tag map;
+    mutable Resource_tagger m_resource_tagger;
 };
 
 }  // mdl

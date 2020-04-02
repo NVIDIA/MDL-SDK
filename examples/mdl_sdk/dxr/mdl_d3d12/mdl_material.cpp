@@ -51,7 +51,6 @@ namespace mdl_d3d12
         , m_name(name)
         , m_flags(IMaterial::Flags::None)
         , m_compiled_hash("")
-        , m_module_dependencies()
         , m_target(nullptr)
         , m_scene_data_name_map()
         , m_constants(m_app, m_name + "_Constants")
@@ -147,7 +146,10 @@ namespace mdl_d3d12
 
             // for now, the reason is reported to the log and reload fails
             if (!m_sdk->log_messages(context))
+            {
+                log_error("Failed to repair material instance: " + get_name());
                 return false;
+            }
 
             material_instance = material_instance_edit;
         }
@@ -180,60 +182,12 @@ namespace mdl_d3d12
         // generate the hash compiled material hash
         // this is used to check if a new target is required or if an existing one can be reused.
         const mi::base::Uuid hash = compiled_material->get_hash();
-        m_compiled_hash = m_defintion_db_name + "_";
-        m_compiled_hash += std::to_string(hash.m_id1);
+        m_compiled_hash  = std::to_string(hash.m_id1);
         m_compiled_hash += std::to_string(hash.m_id2);
         m_compiled_hash += std::to_string(hash.m_id3);
         m_compiled_hash += std::to_string(hash.m_id4);
 
-        // update the dependencies
-        // remove old infos
-        m_module_dependencies.clear();
-
-        // get the material definition from the database
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            m_sdk->get_transaction().access<mi::neuraylib::IMaterial_definition>(
-                m_defintion_db_name.c_str()));
-        const char* module_db_name = material_definition->get_module();
-        
-        // collect all imported modules recursively
-        std::function<void(const char*)> collect_recursively =
-            [&](const char* db_name)
-        {
-            mi::base::Handle<const mi::neuraylib::IModule> mod(
-                m_sdk->get_transaction().access<mi::neuraylib::IModule>(db_name));
-            
-            if (std::find(m_module_dependencies.begin(), m_module_dependencies.end(), db_name) == 
-                m_module_dependencies.end())
-            {
-                m_module_dependencies.push_back(db_name);
-
-                for (mi::Size i = 0, n = mod->get_import_count(); i < n; ++i)
-                    collect_recursively(mod->get_import(i));
-            }
-        };
-
-        collect_recursively(module_db_name);
         return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    bool Mdl_material::visit_module_dependencies(std::function<bool(const std::string&)> action)
-    {
-        for (auto& dep : m_module_dependencies)
-            if (!action(dep))
-                return false;
-        return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    bool Mdl_material::depends(const std::string& module_db_name) const
-    {
-        auto found = std::find(
-            m_module_dependencies.begin(), m_module_dependencies.end(), module_db_name);
-        return found != m_module_dependencies.end();
     }
 
     // --------------------------------------------------------------------------------------------

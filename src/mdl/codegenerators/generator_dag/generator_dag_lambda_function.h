@@ -385,17 +385,18 @@ public:
     /// \param r  the resource
     int get_resource_tag(IValue_resource const *r) const MDL_FINAL;
 
-    // --------------- non-interface members ---------------
-
     /// Get the number of entires in the resource map.
-    size_t get_resource_entries_count() const { return m_resource_tag_map.size(); }
+    size_t get_resource_entries_count() const MDL_FINAL;
 
     /// Get the i'th entry of the resource map.
-    Resource_tag_tuple const *get_resource_entry(size_t index) const {
-        if (index < m_resource_tag_map.size())
-            return &m_resource_tag_map[index];
-        return NULL;
-    }
+    Resource_tag_tuple const *get_resource_entry(size_t index) const MDL_FINAL;
+
+    // --------------- non-interface members ---------------
+
+    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+    /// Get the resource tag map.
+    Resource_tag_map const &get_resource_tag_map() const { return m_resource_tag_map; }
 
     /// Get the derivative information if they have been initialized.
     Derivative_infos const *get_derivative_infos() const;
@@ -642,8 +643,6 @@ private:
 
     /// The derivative analysis information, if requested during initialization.
     Derivative_infos m_deriv_infos;
-
-    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
 
     /// The resource tag map, mapping resource values to (tag, version) pair.
     Resource_tag_map m_resource_tag_map;

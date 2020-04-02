@@ -39,8 +39,8 @@ a[name] { text-decoration: none; }
 .chapter_name { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; font-weight: normal; font-size: 1.2em; padding-bottom: .125em; }
 .uplink { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; float:right; font-weight:normal; font-style: italic; font-size: 1rem; }
 .api_symbol_container { padding: .2em 0em 0em 1em; }
-.api_symbol { font-family: 'Source Code Pro', monospace; font-size: 102%;; padding: 0; line-height: 1.3; text-indent: -2em; padding-left: 2em; }
-.badlink { background-color: #FFDDDD; border-color: #FF0000; border-style: solid; padding: 0px; color: black; font-family: 'Source Code Pro', monospace; font-size: 102%;; }
+.api_symbol { font-family: 'Source Code Pro', monospace;; padding: 0; line-height: 1.3; text-indent: -2em; padding-left: 2em; }
+.badlink { background-color: #FFDDDD; border-color: #FF0000; border-style: solid; padding: 0px; color: black; font-family: 'Source Code Pro', monospace;; }
 .ziplink { font-style: italic; padding-left: 1em; display: inline-block; font-size: 80%; }
 .target { display: inline; }
 .green { background-color: rgb(80%,100%,85%); }
@@ -106,7 +106,7 @@ th { text-align: center; font-weight: normal; }
 .rfont { font-family: 'Libre Baskerville', serif;; }
 .ifont { font-style: italic; }
 .bfont { font-weight: bold; }
-.tfont { font-family: 'Source Code Pro', monospace; font-size: 102%;; }
+.tfont { font-family: 'Source Code Pro', monospace;; }
 .sfont { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; }
 .lhpos { text-align: left; }
 .chpos { text-align: center; }
@@ -133,7 +133,7 @@ td.rotate > div { transform: rotate(-60deg); width: 3px; transform-origin: left 
 td.rotate > div > span { }
 .cell_yes_color { background-color: #AAAAAA; }
 .check { background-color: #EEE; text-align: center; vertical-align: middle; width: 1em; }
-.simpletable { border: 0px; cellpadding: 0px; }
+.simpletable { border: 0px; padding: 0px; }
 .simpletable tr td { padding: 0px; padding-right: 8px; line-height: 1.3; }
 html, body { font-family: 'Libre Baskerville', serif; line-height: 1.5; }
 ol, ul { line-height: 1.5; }
@@ -146,21 +146,21 @@ ol, ul { line-height: 1.5; }
 .sansserifbold { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; }
 .menuitem { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: normal; font-size: 115%; }
 .small { font-size: smaller; }
-tt, pre, .monospace { font-family: 'Source Code Pro', monospace; font-size: 102%; }
-.monospace { font-family: 'Source Code Pro', monospace; font-size: 102%; font-weight: normal; font-style: normal; }
+tt, pre, .monospace { font-family: 'Source Code Pro', monospace; }
+.monospace { font-family: 'Source Code Pro', monospace; font-weight: normal; font-style: normal; }
 .regularfont { font-style: normal; }
-.regularmono { font-style: normal; font-family: 'Source Code Pro', monospace; font-size: 102%; }
+.regularmono { font-style: normal; font-family: 'Source Code Pro', monospace; }
 .s1font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.5em; }
 .s2font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.35em; }
 .s3font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.2em; }
-img { padding: 0; margin: 0; }
+.nopad, img { padding: 0; margin: 0; }
 .rimg-outline { border: solid 1px black; }
 .rimg-box { margin: 1em 0 0.5em 0; line-height: 0; }
 .rgrid-box { margin-left: auto; margin-right: auto; width: 100%; margin: 1em 0 1em 0; }
 .rimg-box, .rgrid-box { text-align: center; vertical-align: top; }
 .rimg-nocaption { margin-bottom: 1em; }
 .rimg-ingrid { margin-bottom: 1em; }
-.rimg-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: .75em 0 0 0; }
+.rimg-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: .75em 0 0 0; text-align: center; }
 .rimg-cell-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: .15em 0 .25em 0; }
 .rimg-table-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: 0; margin: 0; }
 .rimg-inline { display: inline-block; vertical-align: top; text-align: center; }
@@ -168,9 +168,20 @@ img { padding: 0; margin: 0; }
 .rimg-row { vertical-align: top; padding: 0; margin: 0; border: 0; margin-left: auto; margin-right: auto; overflow: hidden; display: block; text-align: center; margin: .75vw 0 .25vw 0; }
 .rimg-row .rimg-inline { padding: 0 .5vw; vertical-align: top; }
 .rimg-margin { margin: 2em 3em 0em 0em; clear: both; }
+.s-caption { font-style: italic; font-size: 90%; line-height: 1.4; margin: 12px 0 0 0; text-align: center; word-wrap: break-word; }
+.s-border { border: solid 2px black; }
+.s-center { margin-left: auto; margin-right: auto; display: block; }
+.s-inblock { display: inline-block; }
+.s-imgmargin { margin: 8px 0 6px 0; }
+.s-inline { vertical-align: -1px; margin: 0 2px 0 2px; }
+.s-cell { vertical-align: top; margin: 2px 6px 2px 6px; display: inline-block; }
+.s-cell-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: .15em 0 .25em 0; text-align: center; }
+.s-row { line-height: 0; vertical-align: top; padding: 0; margin: 0; border: 0; overflow: hidden; display: block; text-align: center; }
+.s-table-caption { font-style: italic; font-size: 90%; line-height: 1.4; padding: 0; margin: 0 0 8px 0; display: inline-block; }
+.s-side { vertical-align: middle; padding: 0; margin: 0; }
 pre { padding:0; margin:0; border:0; overflow: auto; }
 .code { line-height: 1.4; margin: .75em 0 .75em 0em; overflow-x: auto; white-space: pre; }
-.anno { padding: 0 0 0 16px; vertical-align: middle; font-size: 90%; }
+.anno { padding: 0 0 0 16px; vertical-align: middle; }
 .box { border: solid black 1px; padding: 1em; clear:both; margin: 1.0em 0; overflow: auto; }
 .box a { opacity: 1.0; }
 .linenumber, .numberedline { display: inline; line-height: 1.3; }
@@ -184,7 +195,7 @@ video { margin-left: 2em; }
 body { }
 html { margin: 0px; box-sizing: border-box; }
 #folder { clear: both; margin:0; padding:0; background-color: white; }
-#navigation { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; width: 0px; cursor: default; float: left; white-space: nowrap; position: absolute; overflow: auto; overflow-x: hidden; background-color: white; padding: 0; line-height: 1.3; font-size: .95em; }
+#navigation { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; width: 200px; cursor: default; float: left; white-space: nowrap; position: absolute; overflow: auto; overflow-x: hidden; background-color: white; padding: 0; line-height: 1.3; font-size: .95em; }
 #toctop { padding-top: 1em; }
 #slider { width: 8px; }
 .ui-resizable-handle { background-color: rgb(220,225,220); width: 8px; padding: 0; margin: 0; position: absolute; border-width: 0 1px 0 1px; border-style: solid; border-collapse: collapse; }
@@ -308,12 +319,6 @@ body > #content { border: 0; }
    overflow: hidden;
 /*  box-sizing: border-box;*/
 }            
-
-.annotatebox pre, 
-.annotatebox .monospace, 
-.annotatebox tt {
-  font-size: 98%;
-}
 
 .codecaption {
     /* padding: 6px 6px 6px 10px; */

@@ -73,8 +73,12 @@ class DAG_ir_walker {
 public:
     /// Constructor.
     ///
-    /// \param alloc  an allocator for temporary memory
-    explicit DAG_ir_walker(IAllocator *alloc);
+    /// \param alloc    an allocator for temporary memory
+    /// \param as_tree  if true, walk the DAG as a Tree, NOT as a DAG, i.e. a node that has several
+    ///                 users will be visited more than one.
+    explicit DAG_ir_walker(
+        IAllocator *alloc,
+        bool       as_tree);
 
     /// Walk the IR nodes of a material, including temporaries.
     ///
@@ -141,6 +145,9 @@ private:
 private:
     /// The allocator.
     IAllocator *m_alloc;
+
+    /// If true, walk as a Tree.
+    bool m_as_tree;
 };
 
 /// Helper class: hashes a DAG.
